@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { type BuildingPlan, Library, type Role, blueprintOf, rand, seedOf } from "@gaia/schema";
 import { PRIMITIVES } from "@gaia/primitives";
 import { realize } from "@gaia/realize";
-import { BUILDINGS, LANDMARKS } from "../../../tools/proving-looks.ts";
 import { landmark, structure } from "@gaia/kinds";
+import { sweep } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
 import { type BuildingComposition, type Composition, INKS, MARK_REACH, type MarkBox, drawBuilding, drawLandmark } from "./marks.ts";
 
@@ -70,13 +70,13 @@ function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][]
 }
 
 const lib = new Library(PRIMITIVES);
-/** The proving ground's buildings and landmarks. */
-const buildings: [string, BuildingComposition][] = Object.entries(BUILDINGS).map(([name, blueprint]) => {
-  const built = realize(blueprint, structure, lib, { seed: seedOf(name), facts: {} });
-  return [name, { blueprint, palette: built.palette, plan: built.slots.get("footprint")?.output as BuildingPlan }];
+/** Every part of a building and of a landmark, swept, as the proving ground stands them. */
+const buildings: [string, BuildingComposition][] = sweep(structure, lib).blueprints.map((blueprint, i) => {
+  const built = realize(blueprint, structure, lib, { seed: seedOf(`building ${i}`), facts: {} });
+  return [`building ${i}`, { blueprint, palette: built.palette, plan: built.slots.get("footprint")?.output as BuildingPlan }];
 });
 // A landmark's mark reads only its words and colors, so an empty palette draws it in its own defaults.
-const landmarks: [string, Composition][] = Object.entries(LANDMARKS).map(([name, blueprint]) => [name, { blueprint, palette: { swatches: {} } }]);
+const landmarks: [string, Composition][] = sweep(landmark, lib).blueprints.map((blueprint, i) => [`landmark ${i}`, { blueprint, palette: { swatches: {} } }]);
 
 describe("a mark composed from a blueprint", () => {
   const SCALE = 2;
@@ -112,7 +112,7 @@ describe("a mark composed from a blueprint", () => {
     }
   });
 
-  it.each([1, 0.5, 0.05])("draws each of the proving ground's buildings and landmarks at vitality %s inside the box it reports and the reach every mark keeps to, which names keep off", (v) => {
+  it.each([1, 0.5, 0.05])("draws every swept building and landmark at vitality %s inside the box it reports and the reach every mark keeps to, which names keep off", (v) => {
     for (const [name, b] of buildings) {
       const { ctx, points } = recorder();
       const box = drawBuilding(ctx, 200, 200, SCALE, b, v, name);

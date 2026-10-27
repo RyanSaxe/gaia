@@ -22,7 +22,7 @@
 import type { HeightField, Landform, PondBed, StreamBed, ValleyCourse, ValleyNet } from "@gaia/schema";
 import { bedBend, fbm, troughOffset } from "@gaia/primitives";
 import { RELIEF_BUDGET } from "./budget.ts";
-import { BUILDING_MARGIN, withinLand } from "./edge.ts";
+import { BUILDING_MARGIN, pastTheEdge, withinLand } from "./edge.ts";
 import { BANK, HEAD, POND_REACH } from "./water.ts";
 import type { WorldSpec } from "./world.ts";
 
@@ -574,8 +574,9 @@ export function routeRivers(
       }
       cells.push(k);
       const next = down[k] as number;
-      // At the land's edge the rim rises: the river sinks away into the ground there.
-      if (next < 0) {
+      // At the land's edge the rim rises: the river sinks away into the ground there. The routing grid runs to the
+      // land's rectangle, so a river running into a corner sinks where the corner's rounded rim rises, as far in.
+      if (next < 0 || pastTheEdge(spec, at(next % n), at(Math.floor(next / n))) > -RIVERS.margin) {
         seep = true;
         break;
       }

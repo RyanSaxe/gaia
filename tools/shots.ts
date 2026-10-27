@@ -4,11 +4,13 @@
 // (`docs/proving-ground.md`). Each stop of its tour, one stop for each kind of
 // building and landmark, and one thing standing as each tree, bush, stone and
 // flower form are seen at vitality 1, 0.5 and 0.1 at 15:30, and at 1 at 22:00.
+// The first stop is seen again under each sky the sweep holds (`__lab.terrain.sky`),
+// whole at 15:30, as `sky-K.jpg`.
 // The one-file lab opens in a hidden Electron window (the app's own Chromium,
 // drawing on the GPU) from a browser profile of its own, so the far forms bake
 // as on a first visit, and the run fails on any WebGL error the page reports.
 // Each shot goes to shots/ as a JPEG named for its stop.
-// Usage: pnpm shots [WORD...]  (only the stops whose names hold one of the words, such as `pnpm shots watermill`)
+// Usage: pnpm shots [WORD...]  (only the stops whose names hold one of the words, such as `pnpm shots watermill` or `pnpm shots sky`)
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -158,6 +160,25 @@ async function take() {
     }
     say(stop.name);
   }
+  // The first stop under each of the sweep's skies, looking up a little so the sky shows; then the proving ground's own.
+  const first = (await run("window.__shots.stops([])"))[0];
+  const skies = await run("window.__lab.terrain.sky(0)");
+  for (let k = 0; first !== undefined && k < skies; k++) {
+    const name = "sky " + k;
+    if (words.length > 0 && !words.some((w) => name.includes(w.toLowerCase()))) continue;
+    await run("window.__lab.terrain.sky(" + k + ")");
+    const up = first.walk === undefined ? first : { ...first, walk: [first.walk[0], first.walk[1], first.walk[2], Math.max(first.walk[3], 6)] };
+    if (!(await run("window.__shots.go(" + JSON.stringify(up) + ")"))) continue;
+    await run("window.__shots.settle()");
+    await run("window.__lab.hour(15.5)");
+    await run("window.__shots.vitality(1)");
+    const file = "sky-" + k + ".jpg";
+    const image = await win.webContents.capturePage();
+    writeFileSync(out + "/" + file, image.resize({ width, quality: "best" }).toJPEG(quality));
+    saved.push(file);
+    say(name);
+  }
+  await run("window.__lab.terrain.sky(0)");
   writeFileSync(result, JSON.stringify({ saved, messages }));
 }
 app.whenReady().then(take).then(

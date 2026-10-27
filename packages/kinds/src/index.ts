@@ -1,4 +1,6 @@
 export * from "./flora.ts";
+export * from "./tree.ts";
+export * from "./bush.ts";
 export * from "./biome.ts";
 export * from "./world.ts";
 export * from "./structure.ts";

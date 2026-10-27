@@ -10,9 +10,10 @@ import * as THREE from "three";
 import { FLORA_PRESETS, type Realized } from "@gaia/realize";
 import { settleVitality } from "@gaia/render";
 import { clearanceAt, fordBeside, footingAt, frameOf, groundHeightAt, heightAt, junctionVitality, placeAt, planTrip, stanceAt, standAt, stoodBy, type StoodSpot, type Stride, TRAVEL, trailWay, travelFrom, travelStep, wadingAt, WALK_TO, walkStep, type Walker, waterDepthAt, wayVitalityAt, wayWear } from "@gaia/terrain";
-import { groundVitality } from "@gaia/world";
+import { groundVitality, sweep } from "@gaia/world";
 import { contentHash } from "./far-store.ts";
 import { CLIP } from "./land.ts";
+import { COMPOSING } from "./looks.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { groundVitalityAt } from "./vitality.ts";
@@ -456,6 +457,17 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   }
 
   return {
+    /**
+     * Shows the sweep's sky `k`, of every light, sky and wind Jev composes skies from (`sweep`), until the next world
+     * opens; the proving ground stands the first. Gives how many skies the sweep holds.
+     */
+    sky: (k: number): number => {
+      const skies = sweep(COMPOSING.world, COMPOSING.lib).blueprints;
+      const sky = skies[k];
+      if (sky === undefined) throw new Error(`The sweep holds ${skies.length} skies, numbered from 0: there is no sky ${k}.`);
+      world.skyWorld = sky;
+      return skies.length;
+    },
     /** Each standing landmark: its name, site, height and triangles. */
     landmarks: () =>
       world.ways.sites.map((s, i) => ({ name: world.landmarks[s.landmark]?.name, ...s.site, height: world.landmarkViews[i]?.height, triangles: world.landmarkViews[i]?.triangles })),

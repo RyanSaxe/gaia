@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { Library, seedOf } from "@gaia/schema";
-import { FLORA_PRIMITIVES } from "@gaia/primitives";
-import { flora } from "@gaia/kinds";
-import { FLORA_PRESETS, type Realized, realize, shownVitality } from "@gaia/realize";
+import { TREE_PRIMITIVES } from "@gaia/primitives";
+import { tree } from "@gaia/kinds";
+import { sweep } from "@gaia/world";
+import { type Realized, realize, shownVitality } from "@gaia/realize";
 import { type FarForm, createFarCards, createSceneLight, farChoice, settleVitality } from "@gaia/render";
 import { FAR, GONE, type PassSize, TURN, createCopies, createFarForms, farness, goneAt } from "./woods.ts";
 
@@ -52,7 +53,10 @@ describe("a crown too small to see", () => {
 });
 
 describe("a copy turning far", () => {
-  const plant = realize((FLORA_PRESETS[0] as (typeof FLORA_PRESETS)[number]).blueprint, flora, new Library(FLORA_PRIMITIVES), { seed: seedOf("woods-test/tree"), facts: { scale: 1, age: 120 } });
+  const treeLib = new Library(TREE_PRIMITIVES);
+  // The first tree of a sweep of a tree's parts.
+  const firstTree = sweep(tree, treeLib).blueprints[0]!;
+  const plant = realize(firstTree, tree, treeLib, { seed: seedOf("woods-test/tree"), facts: { scale: 1, age: 120 } });
   const light = createSceneLight();
   const forms = createFarForms();
   const far = forms.add(plant);

@@ -6,3 +6,4 @@ export * from "./code-world.ts";
 export * from "./definitions.ts";
 export * from "./journal.ts";
 export * from "./judging.ts";
+export * from "./sweep.ts";

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { type BuildingPlan, type Built, type FilledSlot, Library, blueprintOf, rand, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, fieldAt } from "@gaia/primitives";
-import { biome, flora, structure } from "@gaia/kinds";
-import { validate } from "@gaia/world";
+import { BIOME_PRIMITIVES, BUSH_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, TREE_PRIMITIVES, fieldAt } from "@gaia/primitives";
+import { biome, bush, structure, tree } from "@gaia/kinds";
+import { sweep, validate } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
-import { FLORA_PRESETS, type Realized, realize } from "@gaia/realize";
+import { type Realized, realize } from "@gaia/realize";
 import {
   BANKED,
   COVER_TAPS,
@@ -503,15 +503,20 @@ describe("terrain", { timeout: 20_000 }, () => {
 
   it("grounds plants: every point of a trunk's bottom ring is at or under the ground", () => {
     const floraLib = new Library(FLORA_PRIMITIVES);
+    // Every tree's and every bush's frame, each with every crown, but a bramble's: its canes bow back to the soil
+    // metres from its root, so it meets the ground across its whole spread, never on a trunk.
+    const plants = [tree, bush].flatMap((k) =>
+      sweep(k, new Library(k === tree ? TREE_PRIMITIVES : BUSH_PRIMITIVES), { pairs: [["form", "crown"]] }).blueprints.flatMap((blueprint) => (blueprint.slots.form?.use === "bramble@1" ? [] : [{ k, blueprint }])),
+    );
     // The trunk's base is every bark vertex at the ground, however many sides or lobes the trunk has.
-    const bases = FLORA_PRESETS.map(({ blueprint }) => {
-      const bark = realize(blueprint, flora, floraLib, { seed: seedOf("p"), facts: { scale: 1, age: 1 } }).parts.find((p) => p.swatch === "bark")!;
+    const bases = plants.map(({ k, blueprint }) => {
+      const bark = realize(blueprint, k, floraLib, { seed: seedOf("p"), facts: { scale: 1, age: 1 } }).parts.find((p) => p.swatch === "bark")!;
       const ring: (readonly [number, number, number])[] = [];
       for (let k = 0; k < bark.positions.length; k += 3) if (bark.positions[k + 1]! < 0.05) ring.push([bark.positions[k]!, bark.positions[k + 1]!, bark.positions[k + 2]!]);
       return ring;
     });
     for (const ring of bases) expect(ring.length, "the origin is the trunk base").toBeGreaterThanOrEqual(3);
-    for (const t of baked.slice(0, 8)) {
+    baked.slice(0, 8).forEach((t, w) => {
       // Spots a tree could stand on: dry, gentle ground across the land, every 23 m.
       const spots: { x: number; z: number }[] = [];
       const half = t.spec.size / 2 - 20;
@@ -520,7 +525,7 @@ describe("terrain", { timeout: 20_000 }, () => {
       }
       expect(spots.length).toBe(16);
       spots.forEach((s, i) => {
-        const ring = bases[i % bases.length]!;
+        const ring = bases[(w * spots.length + i) % bases.length]!;
         const radius = Math.max(...ring.map((v) => Math.hypot(v[0], v[2])));
         const y = groundedBase(t.lattice, s.x, s.z, radius);
         const turn = i * 1.7;
@@ -533,7 +538,7 @@ describe("terrain", { timeout: 20_000 }, () => {
           expect(g - (y + vy), "not sunk deep").toBeLessThan(0.8);
         }
       });
-    }
+    });
   });
 });
 

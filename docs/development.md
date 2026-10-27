@@ -74,6 +74,7 @@ catch changes that only appear in a large composition.
 | --- | --- |
 | `pnpm shots` | Captures all proving-ground stops into `shots/` |
 | `pnpm shots willow` | Captures stops matching the supplied word |
+| `pnpm shots sky` | Captures the first stop under each of the sweep's skies |
 | `pnpm readme-shots` | Updates the journal and map images in `docs/images/` |
 | `pnpm brand` | Regenerates the app's brand images and macOS icon |
 
@@ -101,8 +102,15 @@ To add a primitive:
    Fill every vitality channel and describe its closed parameters for Jev.
 2. Register it in `library.ts`. Shared contract tests cover determinism,
    parameter ranges, channel ranges, triangle budgets and vitality response.
-3. Add coverage to `tools/proving.ts` or `tools/proving-looks.ts`, regenerate
-   with `pnpm proving`, and inspect the result in the app and screenshots.
+3. Regenerate the proving ground with `pnpm proving`. Its sky, lands,
+   buildings, landmarks and trails are sweeps of the parts Jev composes them
+   from (`sweep` in [`@gaia/world`](../packages/world/src/sweep.ts)), so a new
+   part of one stands there with each of its options, thriving, tired and in
+   ruin. The generator fails and names what is missing while the plan in
+   `tools/proving.ts` has no place for it, such as an area with running water;
+   add a directory to the plan then. Trees, bushes, stones and flowers stand as
+   the forms in `app/renderer/terrain/looks.ts`. Inspect the result in the app
+   and screenshots.
 4. Add an ink renderer in `app/renderer/immersive/marks.ts` if the primitive
    contributes to a building or landmark's map symbol.
 
@@ -111,7 +119,7 @@ The lab's fixture bundles live in `app/renderer/terrain/fixtures/`:
 | Bundle | Source and regeneration |
 | --- | --- |
 | `gaia-*` | A frozen graph, judgments and design answers for Gaia's own code. `tools/graph-snapshot.ts` and `tools/jev-world.ts` generate them. |
-| `proving*` | The hand-authored coverage plan in `tools/proving.ts`; `pnpm proving` regenerates its facts and judgments. |
+| `proving*` | The made-up codebase planned in `tools/proving.ts` and the sweeps it stands; `pnpm proving` regenerates its facts and judgments. |
 | `showcase*` | Source bundles and saved judgments for the [showcase](showcase.md). |
 
 Frozen graphs contain code metadata from the commit they picture. Their
