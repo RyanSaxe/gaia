@@ -557,6 +557,7 @@ export function crownsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere): 
 const CARD_VERT = /* glsl */ `
 attribute vec4 aSpot; // x, y, z, yaw
 attribute vec4 aMore; // scale, vitality, seed
+attribute vec2 aSlope; // the ground's slope under the copy, which shears it as its near form is sheared
 attribute vec4 aCrown; // what its size on screen is measured by (crownsOf)
 uniform vec3 uEye;
 ${FAR_CHOICE_GLSL}
@@ -640,6 +641,7 @@ void main() {
   float give = uWind * uSway;
   if (give > 0.0) p = bendUp(p, windLean(WIND_TRUNK, give * trunkGive(uHeight), uFrequency, gustAt(root.xz, uTime), uTime, aMore.z * 6.28318530718, 1.0, 0.0, along), uHeight);
   vec3 world = root + R * (p * s);
+  world.y += dot(aSlope, world.xz - root.xz);
   vWorld = world;
   vToEye = V;
   vYaw = aSpot.w;
@@ -799,8 +801,8 @@ export interface FarCopies {
   /** The solid and the fading set's meshes: to add where the copies' full forms stand, so hiding them hides their cards. */
   readonly object: THREE.Group;
   /**
-   * Stands the copies, seven numbers each in `places`: where (x, y, z), yaw,
-   * scale, vitality and seed (`placesOf`), and four in `crowns` (`crownsOf`).
+   * Stands the copies, `PLACE_STRIDE` numbers each in `places`: where (x, y, z), yaw,
+   * scale, vitality, seed and the ground's slope (`placesOf`), and four in `crowns` (`crownsOf`).
    */
   place(places: Float32Array, crowns: Float32Array): void;
   /** Sets copy `index`'s vitality, which its card shows. */
@@ -810,10 +812,13 @@ export interface FarCopies {
   dispose(): void;
 }
 
-/** Each copy as its card draws it, seven numbers per copy: where it stands (x, y, z), its yaw, scale, vitality and seed. */
+/** How many numbers each copy takes in `placesOf`; its shown vitality is the sixth. */
+export const PLACE_STRIDE = 9;
+
+/** Each copy as its card draws it: where it stands (x, y, z), its yaw, scale, vitality and seed, and the ground's slope under it. */
 export function placesOf(spots: readonly InstanceSpot[]): Float32Array {
-  const places = new Float32Array(spots.length * 7);
-  spots.forEach((s, k) => places.set([s.x, s.y, s.z, s.yaw, s.scale, shownVitality(s.vitality ?? 1), copySeed(s)], k * 7));
+  const places = new Float32Array(spots.length * PLACE_STRIDE);
+  spots.forEach((s, k) => places.set([s.x, s.y, s.z, s.yaw, s.scale, shownVitality(s.vitality ?? 1), copySeed(s), s.slope?.[0] ?? 0, s.slope?.[1] ?? 0], k * PLACE_STRIDE));
   return places;
 }
 
@@ -877,6 +882,7 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
         g.setAttribute("position", card.getAttribute("position"));
         g.setAttribute("aSpot", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
         g.setAttribute("aMore", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
+        g.setAttribute("aSlope", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 2), 2));
         g.setAttribute("aCrown", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
         g.instanceCount = 0;
         return g;
@@ -908,7 +914,7 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
       const set: FarCopies = {
         object,
         place(places, crowns) {
-          const count = places.length / 7;
+          const count = places.length / PLACE_STRIDE;
           if (count > room) {
             room = Math.ceil(count * 1.25);
             geometry.dispose();
@@ -918,12 +924,15 @@ export function createFarCards(forms: readonly FarForm[], light: SceneLight, swa
           }
           const spot = attribute("aSpot");
           const more = attribute("aMore");
+          const slope = attribute("aSlope");
           for (let k = 0; k < count; k++) {
-            spot.array.set(places.subarray(k * 7, k * 7 + 4), k * 4);
-            more.array.set(places.subarray(k * 7 + 4, k * 7 + 7), k * 4);
+            const at = k * PLACE_STRIDE;
+            spot.array.set(places.subarray(at, at + 4), k * 4);
+            more.array.set(places.subarray(at + 4, at + 7), k * 4);
+            slope.array.set(places.subarray(at + 7, at + 9), k * 2);
           }
           attribute("aCrown").array.set(crowns.subarray(0, count * 4));
-          for (const name of ["aSpot", "aMore", "aCrown"]) attribute(name).needsUpdate = true;
+          for (const name of ["aSpot", "aMore", "aSlope", "aCrown"]) attribute(name).needsUpdate = true;
           geometry.instanceCount = count;
           // Copies stood anew show their vitality at rest.
           easing.clear();

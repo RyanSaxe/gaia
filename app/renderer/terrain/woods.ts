@@ -20,7 +20,7 @@
 
 import * as THREE from "three";
 import { AIR, type Realized, shownVitality } from "@gaia/realize";
-import { type FarCards, type FarCopies, type FarTurn, type InstanceSpot, type LevelCopies, type PlantView, type SceneLight, createPlantInstances, crownsOf, farChoice, farness as farnessOf, placesOf } from "@gaia/render";
+import { type FarCards, type FarCopies, type FarTurn, type InstanceSpot, type LevelCopies, type PlantView, type SceneLight, createPlantInstances, crownsOf, farChoice, farness as farnessOf, PLACE_STRIDE, placesOf } from "@gaia/render";
 
 /** The side of a cell, in meters. */
 export const COPY_CELL = 32;
@@ -270,13 +270,13 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     setVitality(v) {
       view.setVitality(v);
       for (let k = 0; k < view.count; k++) {
-        places[k * 7 + 5] = shownVitality(view.vitality);
+        places[k * PLACE_STRIDE + 5] = shownVitality(view.vitality);
         cards?.setVitalityAt(k, view.vitality);
       }
     },
     setVitalityAt(index, v) {
       view.setVitalityAt(index, v);
-      places[index * 7 + 5] = shownVitality(v);
+      places[index * PLACE_STRIDE + 5] = shownVitality(v);
       cards?.setVitalityAt(index, v);
     },
     cull(camera, size = VIEW_SIZE) {
