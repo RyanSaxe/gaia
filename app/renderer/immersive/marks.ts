@@ -2524,8 +2524,9 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
 }
 
 /**
- * A rock arch from its form and thickness: the ring's face toward the viewer over its far face in shade. As it fails
- * the crack opens at its crown, then the span is gone and two stacks stand over its rubble.
+ * A rock arch from its form and thickness: the ring's face toward the viewer over its far face in shade. As it fails,
+ * at the shown vitalities `buildRockArch` gives way at: the crack opens at its crown; one half of the span falls; its
+ * stack crumbles to a stump over the rubble while the other half breaks part way out, leaving its stack with a stub.
  */
 function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, seed: number): void {
   const w = look.w;
@@ -2535,17 +2536,29 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
   const ring = f.ring * p.thickness * LK;
   const depth = f.depth * p.thickness * LK * 0.5;
   const stone = worn(look.hue("stone", "#c4b498"), w);
-  const crack = ease(w.v, 0.8, 0.66);
-  const fallen = ease(w.v, 0.4, 0.3) > 0.5;
-  // The opening's edge from foot to foot, and the ring's outside, thicker low down.
+  const crack = ease(w.v, 0.56, 0.48);
+  const fallen = w.v < 0.45;
+  /** How high the bare stack stands, as a share of the rise: to its springing, then its middle block, then its stump. */
+  const bare = w.v < 0.15 ? 0.4 : w.v < 0.35 ? 0.6 : 0.76;
+  const stubbed = w.v < 0.25;
+  // The opening's edge from foot to foot, up each straight side a few points at a time so a stack can break off at
+  // any height, each point with its normal out into the stone; and the ring's outside, thicker low down.
   const n = 24;
-  const inner: [number, number][] = [[-half, 0], ...Array.from({ length: n + 1 }, (_, k): [number, number] => [half * Math.cos(Math.PI * (1 - k / n)), straight + head * Math.sin(Math.PI * (1 - k / n))]), [half, 0]];
-  const outer = inner.map(([x, h], i): [number, number] => {
-    const t = ring * (1.25 - 0.4 * Math.min(1, h / rise));
-    const k = i - 1;
-    const [nx, nh] = k < 0 || k > n ? [Math.sign(x), 0] : [Math.cos(Math.PI * (1 - k / n)) / half, Math.sin(Math.PI * (1 - k / n)) / head];
-    const l = Math.hypot(nx, nh) || 1;
-    return [x + (nx / l) * t, h + (nh / l) * t];
+  const legs = 6;
+  const head_ = (k: number): { x: number; h: number; nx: number; nh: number } => {
+    const a = Math.PI * (1 - k / n);
+    const l = Math.hypot(Math.cos(a) / half, Math.sin(a) / head) || 1;
+    return { x: half * Math.cos(a), h: straight + head * Math.sin(a), nx: Math.cos(a) / half / l, nh: Math.sin(a) / head / l };
+  };
+  const edge = [
+    ...Array.from({ length: legs }, (_, k) => ({ x: -half, h: (straight * k) / legs, nx: -1, nh: 0 })),
+    ...Array.from({ length: n + 1 }, (_, k) => head_(k)),
+    ...Array.from({ length: legs }, (_, k) => ({ x: half, h: (straight * (legs - 1 - k)) / legs, nx: 1, nh: 0 })),
+  ];
+  const inner = edge.map((e): [number, number] => [e.x, e.h]);
+  const outer = edge.map((e): [number, number] => {
+    const t = ring * (1.25 - 0.4 * Math.min(1, e.h / rise));
+    return [e.x + e.nx * t, e.h + e.nh * t];
   });
   const piece = (from: number, to: number, shift: number): void => {
     const loop = (Z: number): P3[] => [...outer.slice(from, to + 1).map(([x, h]): P3 => [x + shift, Z, h]), ...inner.slice(from, to + 1).reverse().map(([x, h]): P3 => [x + shift, Z, h])];
@@ -2560,12 +2573,12 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
     piece(0, mid, -crack * 0.5);
     piece(mid, inner.length - 1, crack * 0.5);
   } else {
-    // The stacks stand to the haunches.
-    const stand = 0.76 * rise;
-    const left = Math.max(1, inner.findIndex(([, h], i) => i > 0 && h >= stand));
-    const right = Math.min(inner.length - 2, inner.length - 1 - [...inner].reverse().findIndex(([, h], i) => i > 0 && h >= stand));
-    piece(0, left, -crack * 0.5);
-    piece(right, inner.length - 1, crack * 0.5);
+    // The bare stack on the left, the one that stands on the right: its half of the span whole, then broken halfway
+    // out from its springing.
+    const left = Math.max(1, inner.findIndex(([, h], i) => i > 0 && h >= bare * rise));
+    const spring = Math.min(inner.length - 2, inner.length - 1 - [...inner].reverse().findIndex(([, h], i) => i > 0 && h >= 0.76 * rise));
+    piece(0, left, -0.5);
+    piece(stubbed ? Math.round((mid + spring) / 2) : mid, inner.length - 1, 0.5);
     rubble(pen, 0, -depth * 0.5, 2.2 + half * 0.3, seed + 3, stone);
   }
   tufts(pen, [[-foot - 0.8, -1.2], [foot + 0.6, -1]], w);
