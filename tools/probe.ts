@@ -125,7 +125,8 @@ for (const [world, preset] of Object.entries(SPOTS)) {
 if (measures.has("swap")) {
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const hour of [15.5, 22]) {
-    calls.push({ key: `swap ${hour}`, js: `(await __lab.hour(${hour}), ${go("valley")}, ${settle}, T.swap().flatMap((name) => [1, 0.5, 0.15].map((vitality) => ({ name, vitality, ...T.swap(name, vitality) }))))` });
+    // Each preset's far form is brought into a slot for its test, so each test waits for it.
+    calls.push({ key: `swap ${hour}`, js: `(await __lab.hour(${hour}), ${go("valley")}, ${settle}, await (async () => { const rows = []; for (const name of T.swap()) for (const vitality of [1, 0.5, 0.15]) rows.push({ name, vitality, ...(await T.swap(name, vitality)) }); return rows; })())` });
   }
   jobs.push({ world: "showcase", calls });
 }
@@ -229,6 +230,8 @@ if (values.json !== undefined) writeFileSync(values.json, JSON.stringify({ dpr, 
 // ---------- the report ----------
 
 type Tally = Record<"shadow" | "mirror" | "view", Record<string, { calls: number; triangles: number }>>;
+/** A set of far forms as `__lab.terrain.scale()` reports it. */
+type FarCardsReport = { slots: number; forms: number; held: number; mb: number; farCopies: number; carded: number; read: number; baked: number };
 const m = (n: number): string => (n / 1e6).toFixed(2);
 const f = (n: number, d = 1): string => n.toFixed(d);
 const line = (s: string): void => void process.stdout.write(`${s}\n`);
@@ -240,7 +243,7 @@ for (const [world, calls] of Object.entries(results)) {
   line(`\n${world}`);
   for (const [key, value] of Object.entries(calls)) {
     if (key.startsWith("drawn ") || key.startsWith("stress ")) {
-      const { ms, drawn, trees, woods, understory } = value as { ms: number; drawn: Tally; trees?: number; woods?: { treesDrawn: number; treesInBand: number; treesFar: number; swapPx: number }; understory?: Record<string, { copies: number; triangles: number }> };
+      const { ms, drawn, trees, woods, understory } = value as { ms: number; drawn: Tally; trees?: number; woods?: { treesDrawn: number; treesInBand: number; treesFar: number; swapPx: number; treeCards?: FarCardsReport; bushCards?: FarCardsReport }; understory?: Record<string, { copies: number; triangles: number }> };
       const kinds = [...new Set(Object.values(drawn).flatMap((p) => Object.keys(p)))].sort((a, b) => (drawn.view[b]?.triangles ?? 0) - (drawn.view[a]?.triangles ?? 0));
       const sum = (pass: keyof Tally, k: "calls" | "triangles"): number => Object.values(drawn[pass]).reduce((n, d) => n + d[k], 0);
       line(`  ${key}${trees === undefined ? "" : ` (${trees} trees)`}: ${f(ms, 2)} ms a frame; triangles (millions) and draw calls, view / mirror / shadow:`);
@@ -250,6 +253,9 @@ for (const [world, calls] of Object.entries(results)) {
         line(`    ${k.padEnd(12)} ${m(at("view").triangles)} / ${m(at("mirror").triangles)} / ${m(at("shadow").triangles)}   calls ${at("view").calls} / ${at("mirror").calls} / ${at("shadow").calls}`);
       }
       if (woods !== undefined) line(`    trees in view: ${woods.treesDrawn - woods.treesInBand} full, ${woods.treesInBand} in the band, ${woods.treesFar} far; turning far at ${woods.swapPx} px`);
+      for (const [set, c] of [["trees", woods?.treeCards], ["understory", woods?.bushCards]] as const) {
+        if (c !== undefined) line(`    far ${set}: ${c.held} of ${c.forms} forms in ${c.slots} slots (${c.mb} MB); ${c.carded} of ${c.farCopies} far copies as cards; ${c.read} read, ${c.baked} baked`);
+      }
       if (understory !== undefined) {
         const kinds = Object.entries(understory).sort(([, a], [, b]) => b.triangles - a.triangles);
         line(`    understory in view, by kind: ${kinds.map(([k, d]) => `${k} ${m(d.triangles)}M (${d.copies})`).join(", ")}`);

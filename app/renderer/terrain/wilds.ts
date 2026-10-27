@@ -16,7 +16,7 @@ import { biome } from "@gaia/kinds";
 import { type Realized, realizeRegion } from "@gaia/realize";
 import type { InstanceSpot, SceneLight } from "@gaia/render";
 import { type Terrain, WILD_THICKETS, wildHeightAt, wildThicket } from "@gaia/terrain";
-import { type BuildAsk, made } from "./made.ts";
+import { type BuildAsk, made, makeLater } from "./made.ts";
 import type { RegionCovers } from "./regions.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
@@ -152,7 +152,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
   covers.wild(wildGround(biomeLib));
   const asks = wildBushBuilds();
   const plants: Realized[] = asks.map((ask) => made(ask, floraLib));
-  const fars = plants.map((p) => farForms?.add(p, FAR.bush));
+  const fars = plants.map((p, i) => farForms?.add(p, () => makeLater(asks[i] as BuildAsk, floraLib), FAR.bush));
   const views = plants.map((p, i) => {
     const view = createCopies(p, light, [], fars[i]);
     scene.add(view.object);

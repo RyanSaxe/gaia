@@ -13,14 +13,16 @@
 // @gaia/render). Just past the band, where the far form already draws whole,
 // the full form dissolves before it leaves (`FAR.leave`). The woods choose
 // only the full form; each copy's card is chosen by the card's own shader, by
-// the same rule, from buffers written when the copies are placed. Whatever
+// the same rule, from buffers written when the copies are placed, while the
+// plant's far form holds one of its set's slots (`FAR_SLOTS`); without one,
+// every copy keeps its full form. Whatever
 // its form, a crown too small to see dissolves and goes (`GONE`). How a plant
 // looks at each level is the plant's own (`createPlantInstances` in
 // @gaia/render); this decides only which copies draw it.
 
 import * as THREE from "three";
 import { AIR, type Realized, shownVitality } from "@gaia/realize";
-import { type FarCards, type FarCopies, type FarTurn, type InstanceSpot, type LevelCopies, type PlantView, type SceneLight, createPlantInstances, crownsOf, farChoice, farness as farnessOf, PLACE_STRIDE, placesOf } from "@gaia/render";
+import { type FarCards, type FarCopies, type FarTurn, type InstanceSpot, type LevelCopies, type PlantView, type SceneLight, createFarCards, createPlantInstances, crownsOf, farChoice, farness as farnessOf, PLACE_STRIDE, placesOf } from "@gaia/render";
 
 /** The side of a cell, in meters. */
 export const COPY_CELL = 32;
@@ -42,6 +44,17 @@ export type DetailMode = "auto" | "full" | "far";
  * valley, 36 of 601 stay full).
  */
 export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25, bush: 0.25, leave: 1.15 } as const;
+
+/**
+ * How many far forms each set's cards hold at once, whatever the world's
+ * size: the trees' (32 MiB each where trees turn far at 128 pixels, 8 MiB on
+ * a phone) and the bushes', stones' and flowers' (a sixteenth of that). The
+ * forms of the builds with the most copies a view draws far hold them
+ * (far-stream.ts); every copy of any other keeps its full form. In Gaia's
+ * own world, whose 115 tree builds all stand within reach of every spot, the
+ * 24 heaviest hold four in five of its trees.
+ */
+export const FAR_SLOTS = { trees: 24, bushes: 96 } as const;
 
 /**
  * Too small to see: a copy whose crown spans fewer device pixels than `start`
@@ -75,7 +88,7 @@ export interface PassSize {
 
 const VIEW_SIZE: PassSize = { smaller: 1, focal: 0, ortho: false };
 
-/** A blueprint's far form: its index among its set's forms, and the set, whose cards draw it once baked. */
+/** A blueprint's far form: its index among its set's forms, and the set, whose cards draw it while it holds a slot. */
 export interface FarOf {
   readonly form: number;
   readonly forms: FarForms;
@@ -83,38 +96,103 @@ export interface FarOf {
   readonly share?: number;
 }
 
-/** Plants that take far forms, in their far cards' form order, and the cards once their forms have baked. */
-export interface FarForms {
-  readonly count: number;
-  /** The cards of every form, once baked: until then every copy draws its full form. */
-  cards: FarCards | null;
-  /** Gives `plant` a far form baked at `share` of `FAR.swapPx`: what its copies take as their `far`. */
-  add(plant: Realized, share?: number): FarOf;
-  /**
-   * Every plant added, in form order, and the crown span in device pixels its form bakes and turns far at. Nothing
-   * may be added after, and the forms keep the plants no longer: the caller holds them only while their forms bake.
-   */
-  close(): readonly { readonly plant: Realized; readonly px: number }[];
+/** A plant that takes a far form: the crown span its form bakes and turns far at, and its build. */
+export interface FarPlant {
+  /** The crown span its form bakes at and its copies turn far at, device pixels. */
+  readonly px: number;
+  /** The build while the world holds it; let go of once its form is made or no longer wanted soon. */
+  plant: Realized | null;
+  /** The same build made again, off the page's thread where it can be, to bake its form later. */
+  readonly again: () => Promise<Realized>;
 }
 
-export function createFarForms(): FarForms {
-  const plants: { plant: Realized; px: number }[] = [];
-  let count = 0;
-  let closed = false;
+/**
+ * Plants that take far forms, in form order, and the cards that draw them.
+ * The cards hold a fixed number of forms at once (`FAR_SLOTS`); a form that
+ * holds none draws no card, and every copy of it keeps its full form.
+ */
+export interface FarForms {
+  readonly count: number;
+  /** Every form's plant, in form order. */
+  readonly plants: readonly FarPlant[];
+  /** The cards every form's copies draw from, while the form holds a slot of theirs. */
+  readonly cards: FarCards;
+  /** Gives `plant` a far form baked at `share` of `FAR.swapPx`: what its copies take as their `far`. `again` makes the build anew. */
+  add(plant: Realized, again: () => Promise<Realized>, share?: number): FarOf;
+  /** The slot form `form` holds, -1 for none. */
+  slotOf(form: number): number;
+  /** The crown span, device pixels, at which copies of `form` turn far now: 0 while it holds no slot. */
+  swapPx(form: number): number;
+  /** Puts form `form` in `slot` (-1 for none), its copies turning far at `swapPx`: its cards and full forms both follow from the next pass. */
+  set(form: number, slot: number, swapPx: number): void;
+  /** The cards of one plant's copies of `form`, shown while `anchor` is; `far` counts how many of them a view would draw far. */
+  join(form: number, anchor: THREE.Object3D, far: (eye: THREE.Vector3, focal: number) => number): FarCopies;
+  /** How many copies of each form, by form, a view from `eye` with `focal` device pixels' focal length would draw far, in any direction. */
+  weigh(eye: THREE.Vector3, focal: number): Float64Array;
+}
+
+/** Whether `o` draws: it and every object above it visible. */
+const shows = (o: THREE.Object3D): boolean => {
+  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) if (!a.visible) return false;
+  return true;
+};
+
+/** Far forms whose cards draw from `slots` slots at once, lit by `light`. */
+export function createFarForms(light: SceneLight, slots: number): FarForms {
+  const plants: FarPlant[] = [];
+  const state: { slot: number; swapPx: number }[] = [];
+  const members: { copies: FarCopies; anchor: THREE.Object3D; far: (eye: THREE.Vector3, focal: number) => number }[][] = [];
+  const cards = createFarCards(light, TURN, slots);
   const forms: FarForms = {
-    cards: null,
     get count() {
-      return count;
+      return plants.length;
     },
-    add(plant, share = 1) {
-      if (closed) throw new Error("The far forms are already baking; add every plant before they bake.");
-      plants.push({ plant, px: FAR.swapPx * share });
-      count = plants.length;
-      return { form: count - 1, forms, share };
+    plants,
+    cards,
+    add(plant, again, share = 1) {
+      plants.push({ px: FAR.swapPx * share, plant, again });
+      state.push({ slot: -1, swapPx: 0 });
+      members.push([]);
+      return { form: plants.length - 1, forms, share };
     },
-    close() {
-      closed = true;
-      return plants.splice(0);
+    slotOf: (form) => state[form]?.slot ?? -1,
+    swapPx: (form) => state[form]?.swapPx ?? 0,
+    set(form, slot, swapPx) {
+      const s = state[form];
+      if (s === undefined) throw new Error(`No far form ${form}; there are ${plants.length}.`);
+      s.slot = slot;
+      s.swapPx = slot < 0 ? 0 : swapPx;
+      if (slot >= 0) cards.turnAt(slot, s.swapPx);
+      for (const m of members[form] ?? []) m.copies.slot = slot;
+    },
+    join(form, anchor, far) {
+      const list = members[form];
+      if (list === undefined) throw new Error(`No far form ${form}; there are ${plants.length}.`);
+      const own = cards.copies(anchor);
+      own.slot = forms.slotOf(form);
+      const copies: FarCopies = {
+        place: (places, crowns) => own.place(places, crowns),
+        setVitalityAt: (index, v) => own.setVitalityAt(index, v),
+        useDepth: (on) => own.useDepth(on),
+        get slot() {
+          return own.slot;
+        },
+        set slot(slot: number) {
+          own.slot = slot;
+        },
+        dispose() {
+          const k = list.indexOf(member);
+          if (k >= 0) list.splice(k, 1);
+          own.dispose();
+        },
+      };
+      const member = { copies, anchor, far };
+      list.push(member);
+      return copies;
+    },
+    // A plant hidden from the world, as the swap test's copies are between its runs, draws nothing far.
+    weigh(eye, focal) {
+      return Float64Array.from(members, (list) => list.reduce((n, m) => n + (shows(m.anchor) ? m.far(eye, focal) : 0), 0));
     },
   };
   return forms;
@@ -129,8 +207,6 @@ export interface Copies extends PlantView {
   readonly crown: THREE.Sphere;
   /** Its far form, when a copy small on screen turns far. */
   readonly far: FarOf | undefined;
-  /** Its copies' far cards, once its far form has baked: they stand inside `object`. */
-  readonly cards: THREE.Object3D | null;
   /** Sets one copy's vitality; the shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
   /**
@@ -149,9 +225,15 @@ export interface Copies extends PlantView {
   /**
    * Copies and triangles the last pass drew, and how many of those copies
    * were in the band or would be far forms by their crowns' size on its
-   * screen. Until the plant has a far form, those draw the full form.
+   * screen. While its far form holds no slot, those draw the full form.
    */
   drawn(): { copies: number; triangles: number; band: number; far: number };
+  /**
+   * How many of its copies a view from `eye`, `focal` device pixels a radian,
+   * would draw as far forms in any direction, once its form holds a slot:
+   * what its far form is weighed by.
+   */
+  farCount(eye: THREE.Vector3, focal: number): number;
 }
 
 interface Cell {
@@ -195,8 +277,8 @@ function cellsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere, reach: nu
 
 /**
  * Stands `spots` copies of a realized plant, each pass drawing the ones it can
- * see at the detail they need. Given its far form, once that has baked each
- * copy also has a card, which draws itself where the copy is small on a
+ * see at the detail they need. Given its far form, while that holds a slot
+ * each copy also has a card, which draws itself where the copy is small on a
  * pass's screen; the full form leaves there.
  */
 export function createCopies(plant: Realized, light: SceneLight, spots: readonly InstanceSpot[], far?: FarOf): Copies {
@@ -208,29 +290,31 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
   let inBand = 0;
   let farAway = 0;
   let detail: DetailMode = "auto";
-  /** The copies' cards, made once the far form has baked. */
-  let cards: FarCopies | null = null;
-  /** Whether the copies draw their depth, for the sun's shadow: cards made meanwhile must too. */
-  let depth = false;
   const frustum = new THREE.Frustum();
   const viewProjection = new THREE.Matrix4();
   /** Each level's copies as last packed, kept while the same cells draw it. */
   let packed: LevelCopies[] = levels.map(() => ({ copies: [], key: "" }));
   /** What each level draws in this pass: a whole cell by its index, or the copies kept from a cell straddling the band. */
   const parts: (number | readonly number[])[][] = levels.map(() => []);
+  /** The crown span its form bakes at, device pixels: its copies turn far there while the form holds a slot. */
+  const formPx = FAR.swapPx * (far?.share ?? 1);
 
-  /** The copies' cards, made from their places and crowns the first time they are wanted once the far form has baked. */
-  const cardsNow = (): FarCopies | null => {
-    const baked = far?.forms.cards ?? null;
-    if (cards === null && baked !== null && far !== undefined) {
-      cards = baked.copies(far.form);
-      cards.place(places, crowns);
-      // Made in the middle of the sun's shadow pass, they draw its depth, never their color into the map they read.
-      cards.useDepth(depth);
-      view.object.add(cards.object);
+  /** How many copies a view from `eye` would draw far: crowns spanning no more than the band's top and not yet gone. */
+  const farCount = (eye: THREE.Vector3, focal: number): number => {
+    let n = 0;
+    const top = formPx * FAR.band;
+    for (let k = 0; k < crowns.length; k += 4) {
+      const r = crowns[k + 3] as number;
+      const d = Math.hypot((crowns[k] as number) - eye.x, (crowns[k + 1] as number) - eye.y, (crowns[k + 2] as number) - eye.z);
+      if (d - r >= AIR.dissolveEnd) continue;
+      const px = (2 * r * focal) / Math.max(d, 1);
+      if (px > GONE.end && px <= top) n++;
     }
-    return cards;
+    return n;
   };
+  /** The copies' cards, drawn from their form's slot while it holds one. */
+  const cards: FarCopies | null = far === undefined ? null : far.forms.join(far.form, view.object, farCount);
+  cards?.place(places, crowns);
 
   const levelFor = (cell: Cell, smaller: number): number => {
     if (detail === "full") return 0;
@@ -248,9 +332,6 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     levels,
     crown: view.built.clone(),
     far,
-    get cards() {
-      return cards?.object ?? null;
-    },
     get count() {
       return view.count;
     },
@@ -266,7 +347,7 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     set detail(mode: DetailMode) {
       detail = mode;
     },
-    // `places` is what cards made later stand from, so it holds how each copy's vitality shows (as `placesOf` writes it), never the vitality.
+    // `places` is what the cards stand from whenever they pack their copies anew, so it holds how each copy's vitality shows (as `placesOf` writes it), never the vitality.
     setVitality(v) {
       view.setVitality(v);
       for (let k = 0; k < view.count; k++) {
@@ -286,11 +367,11 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       // A crown's span on this pass's screen, in device pixels, at distance d.
       const span = (radius: number, d: number): number => (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
       const sized = size.focal > 0;
-      const card = cardsNow();
-      // Each card chooses itself on the GPU, by the same rule as the full form below; forced detail draws none.
-      if (card !== null) card.object.visible = detail === "auto";
-      const swapping = card !== null && detail === "auto" && sized;
-      const swapPx = FAR.swapPx * (far?.share ?? 1);
+      // Each card chooses itself on the GPU, by the same rule as the full form below, at the size its form turns far
+      // at now: none while the form holds no slot, and none under forced detail.
+      const swapPx = far === undefined ? 0 : far.forms.swapPx(far.form);
+      if (cards !== null && far !== undefined) cards.slot = detail === "auto" ? far.forms.slotOf(far.form) : -1;
+      const swapping = swapPx > 0 && detail === "auto" && sized;
       // Past the band's end a perspective pass's full form dissolves under its whole card until its crown spans
       // `leavePx`; the sun's shadow, a flat pass, keeps the full form to the band's end, as the card casts from there.
       const leaves = swapping && !size.ortho;
@@ -333,8 +414,6 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     },
     warm() {
       view.warm();
-      // The cards stand in the scene from here, so their shaders compile with everything else.
-      cardsNow();
     },
     respot(next) {
       view.respot(next);
@@ -345,8 +424,8 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       packed = levels.map(() => ({ copies: [], key: "" }));
     },
     drawn: () => ({ ...view.drawn(), band: inBand, far: farAway }),
+    farCount,
     useDepth(on) {
-      depth = on;
       view.useDepth(on);
       cards?.useDepth(on);
     },

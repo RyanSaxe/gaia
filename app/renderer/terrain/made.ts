@@ -79,3 +79,9 @@ export function made(ask: BuildAsk, lib: Library): Realized {
   making.delete(key);
   return built ?? realize(ask.blueprint, KINDS[ask.kind], lib, { seed: ask.seed, facts: ask.facts });
 }
+
+/** The build `ask` names, made on a worker thread now, so a build let go of earlier comes back without holding the page. */
+export async function makeLater(ask: BuildAsk, lib: Library): Promise<Realized> {
+  await makeAhead([ask], 1);
+  return made(ask, lib);
+}

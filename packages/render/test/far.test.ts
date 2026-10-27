@@ -1,22 +1,10 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { shownVitality } from "@gaia/realize";
-import { type FarForm, type FarTurn, type InstanceSpot, createFarCards, createSceneLight, crownsOf, farChoice, goneness, placesOf, settleVitality } from "@gaia/render";
+import { type FarCards, type FarTurn, type InstanceSpot, createFarCards, createSceneLight, crownsOf, farChoice, goneness, placesOf, settleVitality } from "@gaia/render";
 
 const TURN: FarTurn = { band: 1.25, leave: 1.15, gone: { start: 8, end: 4 } };
 const SWAP = 128;
-
-/** A form with one-texel atlases: enough for its cards to stand and choose, with nothing to bake. */
-function formOf(radius: number): FarForm {
-  const layers = [0, 1, 2, 3].map(() => new THREE.DataTexture(new Uint8Array(4), 1, 1));
-  return {
-    bounds: { center: new THREE.Vector3(0, radius, 0), radius, height: radius * 2 },
-    bytes: 16,
-    ms: 0,
-    atlas: { layers, frame: 1, sway: 0, frequency: 1 },
-    dispose: () => undefined,
-  };
-}
 
 describe("a copy's form by its crown's size on a pass's screen", () => {
   it("draws its full form alone above the band, its card coming in across it, and its card alone once the full form has dissolved", () => {
@@ -51,20 +39,20 @@ describe("a copy's form by its crown's size on a pass's screen", () => {
   });
 });
 
-describe("a plant's far cards", () => {
+describe("a set's far cards", () => {
   const spots: InstanceSpot[] = [
     { x: 10, y: 1, z: -40, yaw: 0.3, scale: 1.2, vitality: 0.7 },
     { x: -30, y: 2, z: 80, yaw: 2, scale: 0.8 },
   ];
   const crown = new THREE.Sphere(new THREE.Vector3(0.2, 3, -0.1), 4);
+  const meshesOf = (cards: FarCards): [THREE.Mesh<THREE.InstancedBufferGeometry>, THREE.Mesh<THREE.InstancedBufferGeometry>] => cards.object.children as [THREE.Mesh<THREE.InstancedBufferGeometry>, THREE.Mesh<THREE.InstancedBufferGeometry>];
 
-  it("stand in buffers written when the copies are placed, which no pass writes again", () => {
-    const cards = createFarCards([formOf(4)], createSceneLight(), [SWAP], TURN);
-    const copies = cards.copies(0);
+  it("stand each plant's copies in buffers written when they are placed, which no pass writes again", () => {
+    const cards = createFarCards(createSceneLight(), TURN, 2);
+    const copies = cards.copies(new THREE.Group());
     copies.place(placesOf(spots), crownsOf(spots, crown));
-    const mesh = copies.object.children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
-    const geometry = mesh.geometry;
-    expect(geometry.instanceCount).toBe(2);
+    const geometry = meshesOf(cards)[0].geometry;
+    expect(geometry.instanceCount).toBeGreaterThanOrEqual(2);
     // Each copy's place, and its crown measured as the woods measure it.
     expect(Array.from(geometry.getAttribute("aSpot").array.slice(0, 4))).toEqual(Array.from(new Float32Array([10, 1, -40, 0.3])));
     expect(Array.from(geometry.getAttribute("aMore").array.slice(0, 2))).toEqual(Array.from(new Float32Array([1.2, shownVitality(0.7)])));
@@ -80,37 +68,59 @@ describe("a plant's far cards", () => {
     settleVitality();
     expect(geometry.getAttribute("aMore").array[5]).toBeCloseTo(shownVitality(0.25), 6);
     copies.place(placesOf(spots.slice(0, 1)), crownsOf(spots.slice(0, 1), crown));
-    expect(geometry.instanceCount).toBe(1);
     expect(versions().every((v, i) => v > (placed[i] as number))).toBe(true);
   });
 
-  it("grow their buffers when more copies stand than they hold, every copy kept", () => {
-    const cards = createFarCards([formOf(4)], createSceneLight(), [SWAP], TURN);
-    const copies = cards.copies(0);
-    copies.place(placesOf(spots.slice(0, 1)), crownsOf(spots.slice(0, 1), crown));
+  it("draw every plant's copies in one batch, two draws whatever forms they show, every copy kept as they grow", () => {
+    const cards = createFarCards(createSceneLight(), TURN, 2);
+    const one = cards.copies(new THREE.Group());
+    const other = cards.copies(new THREE.Group());
+    one.place(placesOf(spots.slice(0, 1)), crownsOf(spots.slice(0, 1), crown));
+    other.place(placesOf(spots), crownsOf(spots, crown));
     const many = Array.from({ length: 40 }, (_, k): InstanceSpot => ({ x: k, y: 0, z: -k, yaw: 0, scale: 1 }));
-    copies.place(placesOf(many), crownsOf(many, crown));
-    const geometry = (copies.object.children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>).geometry;
-    expect(geometry.instanceCount).toBe(40);
-    expect(geometry.getAttribute("aSpot").array[39 * 4]).toBe(39);
+    one.place(placesOf(many), crownsOf(many, crown));
+    expect(cards.object.children).toHaveLength(2);
+    const [solid, fading] = meshesOf(cards);
     // The solid and the fading set read the same copies.
-    expect((copies.object.children[1] as THREE.Mesh).geometry).toBe(geometry);
+    expect(fading.geometry).toBe(solid.geometry);
+    const spot = solid.geometry.getAttribute("aSpot").array;
+    const more = solid.geometry.getAttribute("aMore").array;
+    // Each plant's copies stand in a stretch of their own, marked with whose they are; spare room is nobody's.
+    const xs = (member: number): number[] => Array.from({ length: solid.geometry.instanceCount }, (_, i) => i).filter((i) => more[i * 4 + 3] === member).map((i) => spot[i * 4] as number);
+    const members = [...new Set(Array.from({ length: solid.geometry.instanceCount }, (_, i) => more[i * 4 + 3] as number))].filter((m) => m > 0);
+    expect(members).toHaveLength(2);
+    expect(members.map((m) => xs(m).length).sort((a, b) => a - b)).toEqual([2, 40]);
+    expect(members.map(xs).find((x) => x.length === 40)).toEqual(many.map((s) => s.x));
   });
 
-  it("cast into the sun's shadow only where a card stands alone", () => {
-    const cards = createFarCards([formOf(4)], createSceneLight(), [SWAP], TURN);
-    const copies = cards.copies(0);
-    const [solid, fading] = copies.object.children as [THREE.Mesh, THREE.Mesh];
+  it("draw only while some plant whose form holds a slot shows, and cast into the sun's shadow only where a card stands alone", () => {
+    const cards = createFarCards(createSceneLight(), TURN, 2);
+    const anchor = new THREE.Group();
+    const copies = cards.copies(anchor);
+    copies.place(placesOf(spots), crownsOf(spots, crown));
+    const [solid, fading] = meshesOf(cards);
+    cards.pass(900, false);
+    expect(solid.visible).toBe(false);
+    copies.slot = 1;
+    cards.pass(900, false);
+    expect(solid.visible && fading.visible).toBe(true);
+    // Hiding the plant hides its cards.
+    anchor.visible = false;
+    cards.pass(900, false);
+    expect(solid.visible).toBe(false);
+    anchor.visible = true;
     const color = solid.material;
     copies.useDepth(true);
+    cards.pass(40, true);
     expect(solid.material).not.toBe(color);
     expect(fading.visible).toBe(false);
     copies.useDepth(false);
+    cards.pass(900, false);
     expect(solid.material).toBe(color);
     expect(fading.visible).toBe(true);
   });
 
-  it("refuse a size for each form other than one apiece", () => {
-    expect(() => createFarCards([formOf(4)], createSceneLight(), [], TURN)).toThrow();
+  it("hold at least one form", () => {
+    expect(() => createFarCards(createSceneLight(), TURN, 0)).toThrow();
   });
 });

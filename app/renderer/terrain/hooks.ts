@@ -19,7 +19,7 @@ import { type TourStop, tourStops } from "./tour.ts";
 import { groundVitalityAt } from "./vitality.ts";
 import { type Copies, type DetailMode, FAR, type FarOf, GONE, createCopies } from "./woods.ts";
 import { composedName } from "./settlement.ts";
-import { PAINTING, type Subject, type TreeVariant, type ViewPin, type WorldInside } from "./world.ts";
+import { type FarSet, PAINTING, type Subject, type TreeVariant, type ViewPin, type WorldInside } from "./world.ts";
 
 /** A step of walking: half a second at walking pace, as the walk test steps. */
 const WALK_STEP = 0.7;
@@ -353,9 +353,13 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
    * too large to dissolve where the air has already hidden it stands there
    * all the same, and changes nothing. Null when there is no such preset.
    */
-  function swapTest(name: string, vitality: number): { middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep; dissolving: SwapStep; gone: SwapStep } | null {
+  async function swapTest(name: string, vitality: number): Promise<{ middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep; dissolving: SwapStep; gone: SwapStep } | null> {
     const preset = farPresets().find((f) => f.name === name);
     if (preset === undefined) return null;
+    // Its far form holds a slot, turned all the way in, while it runs.
+    const set = [world.treeSet, world.bushSet].find((s) => s.forms === preset.far.forms);
+    if (set === undefined) throw new Error(`The swap test's ${name} belongs to no set of far forms.`);
+    const release = await set.stream.hold(preset.far.form);
     const gl = world.renderer.getContext();
     const focal = gl.drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(world.camera.fov) / 2);
     let copy = swapCopies.get(preset.far);
@@ -423,6 +427,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         gone: walk(copy, (2 * crown.radius * focal) / (at(GONE.end) - WALK_STEP / 2), WALK_STEP, 64),
       };
     } finally {
+      release();
       world.swapping = null;
       copy.object.visible = false;
       others.forEach((o, i) => (o.object.visible = hidden[i] ?? true));
@@ -464,6 +469,12 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       requestAnimationFrame(tick);
     });
   }
+
+  /** A set of far forms as reports show it: its slots and what holds them, in plain numbers. */
+  const farCards = (set: FarSet): Record<string, number> => {
+    const st = set.stream.stats();
+    return { slots: st.slots, forms: set.forms.count, held: st.held, turnedIn: st.turnedIn, mb: Math.round(st.bytes / 2 ** 20), wanted: st.wanted, farCopies: st.farCopies, carded: st.carded, read: st.read, baked: st.baked };
+  };
 
   return {
     /**
@@ -687,11 +698,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       name("trees", world.treeViews.map((v) => v.object));
       name("understory", [...world.understory.all().map((v) => v.object), ...world.understory.quiet()]);
       name("wild bushes", world.wildGrowth.all().map((v) => v.object));
-      // Each plant's cards stand inside its full form's object: named after, so they count apart.
-      name("far trees", world.treeViews.map((v) => v.cards ?? undefined));
-      name("far bushes", [...world.understory.grouped().filter((g) => g.group === "shrubs").map((g) => g.view), ...world.wildGrowth.all()].map((v) => v.cards ?? undefined));
-      name("far rocks", world.understory.grouped().filter((g) => g.group === "rocks").map((g) => g.view.cards ?? undefined));
-      name("far flowers", world.understory.grouped().filter((g) => g.group === "flowers").map((g) => g.view.cards ?? undefined));
+      // Each set's cards draw in one batch: the trees', and the bushes', stones' and flowers'.
+      name("far trees", [world.treeSet.forms.cards.object]);
+      name("far understory", [world.bushSet.forms.cards.object]);
       name("grass", [world.grass.mesh]);
       name("ground", [world.ground.fine, world.ground.coarse, world.ground.mirror, world.ground.wilds]);
       name("water", [world.water.group]);
@@ -806,12 +815,14 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     },
     /** The swap test (`swapTest`) for preset `name` at `vitality`, and every tree and bush preset's name with none. */
     swap: (name?: string, vitality = 1) => (name === undefined ? farPresets().map((p) => p.name) : swapTest(name, vitality)),
-    /** Resolves once the bushes' far forms, which bake after the wait lifts, are ready too. */
+    /** Resolves once the bushes' far forms, which come in after the wait lifts, are in too, and both sets have settled. */
     farReady: () => world.bushesBaked,
+    /** Resolves once both sets' far forms have settled where the person stands now: none being brought or turning. */
+    farSettled: () => Promise.all([world.treeSet.stream.settled(), world.bushSet.stream.settled()]).then(() => undefined),
     /** Walks as a person would for `seconds` of real time (`wander`). */
     wander,
     /** Shows or hides the far trees' cards alone, for seeing what they draw. */
-    showFarTrees: (on: boolean) => world.treeSet.forms.cards?.show(on),
+    showFarTrees: (on: boolean) => world.treeSet.forms.cards.show(on),
     /** Shows or hides every tree, for comparing frame costs. */
     showTrees: (on: boolean) => {
       for (const v of world.treeViews) v.object.visible = on;
@@ -917,12 +928,15 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       drawnTriangles: world.instanced().reduce((n, v) => n + v.drawn().triangles, 0),
       /** The crown span trees turn far at, in device pixels (`FAR.swapPx`). */
       swapPx: FAR.swapPx,
-      /** Milliseconds every tree build took to bake into its far form, and then every bush build. */
-      farBakeMs: Math.round(world.treeSet.ms),
-      bushBakeMs: Math.round(world.bushSet.ms),
-      /** Each set's far forms and the GPU memory their atlases take, MB: one form for each distinct build. */
-      treeCards: { forms: world.treeSet.count, mb: Math.round(world.treeSet.bytes / 2 ** 20) },
-      bushCards: { forms: world.bushSet.count, mb: Math.round(world.bushSet.bytes / 2 ** 20) },
+      /** Milliseconds bringing the trees' far forms took, baking or reading them, and then the bushes'. */
+      farBakeMs: world.treeSet.stream.stats().ms,
+      bushBakeMs: world.bushSet.stream.stats().ms,
+      /**
+       * Each set's far forms: its slots and the forms holding them, the GPU memory the slots take (MB), the forms a
+       * view would draw far and their far copies, those drawn as cards now, and the forms read and baked so far.
+       */
+      treeCards: farCards(world.treeSet),
+      bushCards: farCards(world.bushSet),
       /** The understory's distinct builds by group: one for each distinct blueprint its things take. */
       understoryBuilds: Object.fromEntries(Object.entries(world.code?.plants ?? {}).map(([group, builds]) => [group, builds.length])),
       /** Trees in the last pass in the band, or small enough on screen to draw as far forms. */

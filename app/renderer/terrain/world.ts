@@ -14,17 +14,10 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITI
 import { biome, landmark as landmarkKind, world as worldKind } from "@gaia/kinds";
 import { CLEAR_AIR, type Realized, type RegionLook, type SkyLook, airFromHeight, gustAt, mergeParts, mixAir, murkyAir, realizeRegion, realizeSky, regionAir, spinAt, throughAir } from "@gaia/realize";
 import {
-  type FarCards,
   LANTERN,
   type PlantView,
   applyLight,
   FAR_BAKE_VERSION,
-  createFarCards,
-  type FarForm,
-  type FarFormData,
-  farFormData,
-  farFormFrom,
-  startFarBake,
   createLantern,
   createPlant,
   createRenderer,
@@ -46,7 +39,7 @@ import { type Water, createWater } from "./water.ts";
 import { type WildGrowth, createWildGrowth, wildBushBuilds } from "./wilds.ts";
 import { type Crown, type Drifts, createDrifts } from "./drifts.ts";
 import { type Understory, createUnderstory, understoryBuilds } from "./understory.ts";
-import { type BuildAsk, made, makeAhead, plantAsk } from "./made.ts";
+import { type BuildAsk, made, makeAhead, makeLater, plantAsk } from "./made.ts";
 import { createClearings } from "./clearings.ts";
 import { type WayPiece, type Ways, createWays, crossingVitality, setTrailEnds } from "./trails.ts";
 import { reportStage } from "../telemetry.ts";
@@ -65,8 +58,9 @@ import { type Standing, createStanding } from "./standing.ts";
 import { AS_THING, type Stand, type StandRequest, type StandingLandmark, landmarkBase, landmarkFeet, ownerVitality, understoryVitality } from "./stand.ts";
 import { declineAround, groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import type { Drawn, Pass } from "./measure.ts";
-import { type Copies, type FarForms, type FarOf, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
-import { contentHash, openFarStore } from "./far-store.ts";
+import { type Copies, FAR_SLOTS, type FarForms, type FarOf, type PassSize, createCopies, createFarForms } from "./woods.ts";
+import { openFarStore } from "./far-store.ts";
+import { type FarStream, createFarStream } from "./far-stream.ts";
 
 const TEMPLATE = /* html */ `
 <main class="stage">
@@ -345,13 +339,10 @@ export interface Settled {
   readonly edging?: Stand["edging"];
 }
 
-/** A set of plants that turn far, and how long baking or reading their far forms took, milliseconds. */
+/** A set of plants that turn far, and the stream that holds their far forms in its cards' slots. */
 export interface FarSet {
   readonly forms: FarForms;
-  ms: number;
-  /** How many forms it baked or read, and the GPU memory their atlases take, bytes. */
-  count: number;
-  bytes: number;
+  readonly stream: FarStream;
 }
 
 /**
@@ -481,7 +472,7 @@ export interface WorldInside {
   readonly treeBlueprints: readonly Blueprint[];
   readonly groves: ReadonlyMap<number, Copies>;
   readonly treeFar: readonly FarOf[];
-  /** The trees' far forms, and the bushes', which bake once the wait has lifted and are ready when `bushesBaked` settles. */
+  /** The trees' far forms, and the bushes', which come in once the wait has lifted: both sets have settled when `bushesBaked` does. */
   readonly treeSet: FarSet;
   readonly bushSet: FarSet;
   readonly bushesBaked: Promise<void>;
@@ -585,6 +576,12 @@ const LIFT_FRAMES = 4;
  * the bushes' forms bake.
  */
 const FAR_BAKE = { views: 24, ms: 6, walkingMs: 2 } as const;
+/** How many far forms each set holds at once: `FAR_SLOTS`, or as the page's `?farSlots=trees,bushes` asks, to see a smaller budget's world. */
+const farSlots = ((): { readonly trees: number; readonly bushes: number } => {
+  const asked = new URLSearchParams(location.search).get("farSlots")?.split(",").map(Number);
+  const [trees, bushes] = asked ?? [];
+  return trees !== undefined && bushes !== undefined && trees >= 1 && bushes >= 1 ? { trees, bushes } : FAR_SLOTS;
+})();
 /** The air seen through from above (the `overview` hook): clear, and thinning with the world's size so the whole of it stays legible. */
 const overviewAir = (size: number): AtmosphereSpec => ({ ...CLEAR_AIR, density: 0.0008 * Math.min(1, 320 / size) });
 /** The least reach a stone, a bush or flowers keeps from the rest, meters, however small its build at the ground. */
@@ -979,8 +976,8 @@ export function createWorld(root: HTMLElement): World {
 
   // Every plant that turns far when small on screen: each tree build, by its
   // index among the variants, and the understory's and the wild's bushes.
-  const treeForms = createFarForms();
-  const bushForms = createFarForms();
+  const treeForms = createFarForms(light, farSlots.trees);
+  const bushForms = createFarForms(light, farSlots.bushes);
   let treeFar: readonly FarOf[] = [];
 
   // Rocks, bushes and wildflowers, scattered around the trees.
@@ -991,58 +988,20 @@ export function createWorld(root: HTMLElement): World {
   // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
   const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, bushForms);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
-  // Far forms: each tree and bush build baked once into its far form, drawn as
-  // cards where a copy is small on a pass's screen (woods.ts). A build's form
-  // is read from the store when it was baked before; otherwise it bakes a few
-  // views a frame, and is stored for next time. The trees' forms bake from the
-  // moment the world opens, and the wait lifts only once they are ready, so no
-  // frame shows a far tree before its card. The bushes' bake once the world is
-  // open: until then every bush draws its full form, and the far ones then
-  // change by less than a level of 255 as their cards come in.
-  const farSets = [treeForms, bushForms].map((forms): FarSet => ({ forms, ms: 0, count: 0, bytes: 0 }));
-  const [treeSet, bushSet] = farSets as [(typeof farSets)[number], (typeof farSets)[number]];
+  // Far forms: each tree and bush build bakes its own far form, drawn as cards
+  // where a copy is small on a pass's screen (woods.ts). Each set's cards hold
+  // a fixed number of forms at once: those whose builds have the most copies a
+  // view would draw far (far-stream.ts). A form is read from the store when it
+  // was baked before, else baked a few views a frame and stored. The trees'
+  // forms come in before the wait lifts, so no frame shows a far tree before
+  // its card; the bushes' once the world is open, until then every bush drawing
+  // its full form, and the far ones changing by less than a level of 255 as
+  // their cards come in.
   const farStore = openFarStore(FAR_BAKE_VERSION);
-  /** Bakes or reads every form of `set`, `ms` milliseconds a frame, and draws its cards from then on. */
-  async function bakeFar(set: (typeof farSets)[number], ms: number): Promise<void> {
-    const t0 = performance.now();
-    const store = await farStore;
-    const forms: FarForm[] = [];
-    const turns: number[] = [];
-    for (const { plant, px } of set.forms.close()) {
-      turns.push(px);
-      const key = contentHash(plant.parts, plant.motion, plant.palette, px);
-      const kept = (await store?.get(key).catch(() => undefined)) as FarFormData | undefined;
-      const stored = kept === undefined ? null : farFormFrom(kept);
-      if (stored !== null) {
-        // Its layers go to the GPU now, a form a frame: drawn first all at once, a set's uploads held one frame, in
-        // the shadow pass, for a tenth of a second or more just after the world appeared.
-        for (const layer of stored.atlas.layers) renderer.initTexture(layer);
-        forms.push(stored);
-        await new Promise((r) => requestAnimationFrame(r));
-        continue;
-      }
-      const bake = startFarBake(renderer, plant, px);
-      await bake.ready;
-      for (;;) {
-        const form = bake.step(ms, FAR_BAKE.views);
-        if (form !== null) {
-          forms.push(form);
-          // A failed write only means the build bakes again next time.
-          if (store !== null) void farFormData(renderer, form).then((data) => store.put(key, data)).catch(() => undefined);
-          break;
-        }
-        await new Promise((r) => requestAnimationFrame(r));
-      }
-    }
-    // Each plant's copies take their cards from here, standing in buffers of their own (`createCopies`).
-    set.forms.cards = createFarCards(forms, light, turns, TURN);
-    set.ms = performance.now() - t0;
-    set.count = forms.length;
-    set.bytes = forms.reduce((n, f) => n + f.bytes, 0);
-  }
-  /** Settles once the world's tree builds' far forms are baked: the wait lifts only then, so no frame shows a far tree before its card. */
-  let farBaked: Promise<void> = Promise.resolve();
-  const farCardSets = (): FarCards[] => farSets.flatMap((set) => (set.forms.cards === null ? [] : [set.forms.cards]));
+  const farPace = { opening: { views: FAR_BAKE.views, ms: FAR_BAKE.ms }, walking: { views: FAR_BAKE.views, ms: FAR_BAKE.walkingMs } } as const;
+  const farSets = [treeForms, bushForms].map((forms): FarSet => ({ forms, stream: createFarStream(renderer, forms, farStore, farPace) }));
+  const [treeSet, bushSet] = farSets as [FarSet, FarSet];
+  for (const set of farSets) scene.add(set.forms.cards.object);
   /**
    * Makes one build of each distinct tree blueprint of the world, its far form and its instances, once, as the world
    * opens: each build's instances are made a build a frame while the wait holds, so a world's planting only moves
@@ -1053,11 +1012,7 @@ export function createWorld(root: HTMLElement): World {
     treeAsks = blueprints.map(plantAsk);
     treeBuilds = treeAsks.map((ask) => made(ask, floraLib));
     variants = treeBuilds.map((built) => variantOf(built as Realized));
-    treeFar = variants.map((_, k) => treeForms.add(treeBuild(k)));
-    farBaked = bakeFar(treeSet, FAR_BAKE.ms).then(() => {
-      reportStage("tree cards", { ms: Math.round(treeSet.ms), builds: variants.length });
-      warmSoon();
-    });
+    treeFar = variants.map((_, k) => treeForms.add(treeBuild(k), () => makeLater(treeAsks[k] as BuildAsk, floraLib)));
     void (async (): Promise<void> => {
       for (const k of variants.keys()) {
         if (!groves.has(k)) {
@@ -1065,7 +1020,7 @@ export function createWorld(root: HTMLElement): World {
           scene.add(view.object);
           groves.set(k, view);
         }
-        // Its instances made, the build is the far form's alone until that bakes (`bakeFar`).
+        // Its instances made, the build is the far form's alone until that is brought in or let go (`createFarStream`).
         treeBuilds[k] = null;
         await new Promise((r) => requestAnimationFrame(r));
       }
@@ -1087,9 +1042,10 @@ export function createWorld(root: HTMLElement): World {
         : passCamera instanceof THREE.OrthographicCamera
           ? { smaller: 1, focal: height / (passCamera.top - passCamera.bottom), ortho: true }
           : { smaller: 1, focal: 0, ortho: false };
-    // Each card measures its copy's crown on this pass's screen itself, from buffers written when the copies stood.
-    for (const cards of farCardSets()) cards.pass(size.focal, size.ortho);
     for (const v of swapping === null ? instanced() : [swapping]) v.cull(passCamera, size);
+    // Each card measures its copy's crown on this pass's screen itself, from buffers written when the copies stood;
+    // each plant's copies show their cards in this pass as the plant shows.
+    for (const set of farSets) set.forms.cards.pass(size.focal, size.ortho);
   };
   /** The copy the swap test stands alone while it runs (`swapTest`), when it does. */
   let swapping: Copies | null = null;
@@ -1140,9 +1096,10 @@ export function createWorld(root: HTMLElement): World {
       }
     });
   }
-  /** Every level of every instanced plant readied to draw one copy, and its far cards, once baked, standing. */
+  /** Every level of every instanced plant readied to draw one copy, and the far cards' every material. */
   function readyToWarm(): void {
     for (const v of instanced()) v.warm();
+    for (const set of farSets) set.forms.cards.warm();
   }
   function warm(): void {
     warming = true;
@@ -2194,6 +2151,8 @@ export function createWorld(root: HTMLElement): World {
     // Every pass thins distant detail from where the person's eyes are.
     light.uEye.value.copy(aerial === null ? detailEye : camera.position);
     if (aerial === null) drifts.follow(crownsNear, viewFocal());
+    // The far forms the slots hold follow the person, turning in and out over the frames' own time.
+    if (!streamHeld && aerial === null) for (const set of farSets) set.stream.follow(light.uEye.value, viewFocal(), dt);
     castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
@@ -2276,7 +2235,15 @@ export function createWorld(root: HTMLElement): World {
   showAerial(false);
   // The first world bakes behind a quiet veil, which lifts once it stands.
   const ready = openCodebase().then(async () => {
-    await farBaked;
+    // The trees' far forms come in from where the person stands, before the world shows. The world draws no frames
+    // under the wait meanwhile, so the bakes have the GPU to themselves.
+    holding++;
+    try {
+      await treeSet.stream.open(new THREE.Vector3(walker.x, walker.eye, walker.z), viewFocal());
+    } finally {
+      letGo();
+    }
+    reportStage("tree cards", { ...treeSet.stream.stats(), builds: variants.length });
     await warmed;
     // The world's first frames draw under the paper, so the world shows only once it moves smoothly.
     for (let k = 0; k < LIFT_FRAMES; k++) await new Promise((r) => requestAnimationFrame(r));
@@ -2284,7 +2251,10 @@ export function createWorld(root: HTMLElement): World {
     reportStage("lifted");
     for (const listener of liftedListeners) listener();
   });
-  const bushesBaked = ready.then(() => bakeFar(bushSet, FAR_BAKE.walkingMs)).then(() => reportStage("bush cards", { ms: Math.round(bushSet.ms) }));
+  const bushesBaked = ready
+    .then(() => bushSet.stream.open(light.uEye.value, viewFocal()))
+    .then(() => Promise.all(farSets.map((set) => set.stream.settled())))
+    .then(() => reportStage("bush cards", { ...bushSet.stream.stats() }));
 
   /** Whether a person can stand at (x, z): on the land, on dry ground clear of every solid. */
   function standable(x: number, z: number): boolean {
@@ -2733,7 +2703,7 @@ export function createWorld(root: HTMLElement): World {
       trails: ways.network.trails.length,
       ways: ways.network.ways.length,
       bakeMs: Math.round(bakeMs),
-      farBakeMs: Math.round(treeSet.ms),
+      farBakeMs: treeSet.stream.stats().ms,
     }),
     setActive(on: boolean) {
       active = on;

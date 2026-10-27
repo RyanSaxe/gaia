@@ -12,7 +12,7 @@ import type { SceneLight } from "@gaia/render";
 import type { Placement } from "@gaia/terrain";
 import type { Clearings } from "./clearings.ts";
 import type { PlantBuilds, PlantGroup } from "./code-world.ts";
-import { type BuildAsk, made, plantAsk } from "./made.ts";
+import { type BuildAsk, made, makeLater, plantAsk } from "./made.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
 interface Group {
@@ -127,7 +127,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     const fresh = asks.map((ask) => made(ask, lib));
     const reach = fresh.map(outlineOf);
     const tops = fresh.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
-    const far = fresh.map((p) => farForms?.add(p, g.far));
+    const far = fresh.map((p, i) => farForms?.add(p, () => makeLater(asks[i] as BuildAsk, lib), g.far));
     // Each build is held only until its instances are made (`instancesOf`) and its far form baked; asked for after
     // that, it is realized again, the same build.
     const plants: (Realized | null)[] = [...fresh];
