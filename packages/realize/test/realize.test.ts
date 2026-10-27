@@ -17,8 +17,8 @@ const named = (bp: Blueprint): string =>
 /**
  * The plants past their triangle budgets today, by kind. None stands in a world yet, since every world's trees, bushes
  * and flowers are still hand-filled: a fir's frame under leaf clumps or a feathery leaf mound, each of its whorls
- * carrying a crown's worth; a sapling's clumps bowed with fruit; a bramble or a scrub at its largest and densest under
- * clumps or a mound; and the widest, thickest, tallest drifts of bells and spikes.
+ * carrying a crown's worth; a sapling's clumps bowed with fruit; and a bramble or a scrub at its largest and densest
+ * under clumps or a mound.
  */
 const OVER_BUDGET: Readonly<Record<string, readonly string[]>> = {
   tree: [
@@ -33,7 +33,7 @@ const OVER_BUDGET: Readonly<Record<string, readonly string[]>> = {
     "thicket@1 (scrub, a dense tangle, head-high) with leaf-mound@1 (feathery, dense and clipped)",
   ],
   rock: [],
-  wildflowers: ["bells@1 (a wide drift, a thick carpet, tall)", "spikes@1 (a wide drift, a thick carpet, tall)"],
+  wildflowers: [],
 };
 const facts = { scale: 1, age: 120 };
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
