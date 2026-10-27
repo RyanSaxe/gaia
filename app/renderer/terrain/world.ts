@@ -512,6 +512,8 @@ export interface WorldInside {
   body: Stride | null;
   /** Whether the person walked up to the thing they stand at, which keeps its card until they move on. */
   arrived: boolean;
+  /** The light, sky and wind the world shows; another lights the world from the next frame. */
+  skyWorld: Blueprint;
   // The last frame and the last bake.
   readonly hour: number;
   readonly bakeMs: number;
@@ -2760,6 +2762,11 @@ export function createWorld(root: HTMLElement): World {
       get solids() { return solids; },
       get goal() { return goal; },
       get tripEnd() { return tripEnd; },
+      get skyWorld() { return skyWorld; },
+      set skyWorld(b) {
+        skyWorld = b;
+        hour = Number.NaN;
+      },
       get hour() { return hour; },
       get bakeMs() { return bakeMs; },
       get openingSteps() { return openingSteps; },
