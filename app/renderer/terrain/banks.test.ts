@@ -8,7 +8,7 @@ import { sweep } from "@gaia/world";
 import { type OpenedWorld, openedWorld, provingWorld } from "./code-world.ts";
 import { laySnapshot } from "./snapshot.ts";
 import { snapshotFacts } from "./snapshot-facts.ts";
-import { AS_THING, type Stand, type StandBuilding, type StandLandmark, blockedBy, landmarkBase, needsBank, standWorld } from "./stand.ts";
+import { AS_THING, type Stand, type StandBuilding, type StandLandmark, houseGround, landmarkBase, landmarkGround, needsBank, standWorld } from "./stand.ts";
 
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 // A watermill, the first of a sweep of a building's parts, the size of the median building that has a wheel in these two worlds, about 54 m².
@@ -138,10 +138,11 @@ describe("the showcase, as it is and fixed, and the proving ground, stood as the
       const pads = stood.edits.pads;
       const yards = pads.flatMap((a, i) => pads.flatMap((b, k) => (k > i && yardsMeet(a, b) ? [`${buildings[i]!.name} and ${buildings[k]!.name}`] : [])));
       expect(yards, root).toEqual([]);
-      const base = (s: Stand["landmarks"][number]): number => landmarks[s.landmark]!.base;
+      // Measured as a landmark's site is found: its ground against each house's and each other landmark's.
+      const ground = (s: Stand["landmarks"][number]): number => landmarkGround(landmarks[s.landmark]!.base);
       const crowded = stood.landmarks.flatMap((s, i) => [
-        ...buildings.flatMap((b, k) => (blockedBy(b, stood.sites[k]!, s.site.x, s.site.z, base(s)) ? [`${s.id} on ${b.name}`] : [])),
-        ...stood.landmarks.flatMap((o, k) => (k > i && Math.hypot(o.site.x - s.site.x, o.site.z - s.site.z) < base(s) + base(o) ? [`${s.id} on ${o.id}`] : [])),
+        ...buildings.flatMap((b, k) => (Math.hypot(stood.sites[k]!.x - s.site.x, stood.sites[k]!.z - s.site.z) < houseGround(b) + ground(s) ? [`${s.id} on ${b.name}`] : [])),
+        ...stood.landmarks.flatMap((o, k) => (k > i && Math.hypot(o.site.x - s.site.x, o.site.z - s.site.z) < ground(s) + ground(o) ? [`${s.id} on ${o.id}`] : [])),
       ]);
       expect(crowded, root).toEqual([]);
     }

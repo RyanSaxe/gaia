@@ -136,8 +136,9 @@ export interface Stand {
 }
 
 /**
- * How far a landmark reaches at the ground: its standing pieces within a meter of it, at most 25 m, as far as a great
- * span's feet. Fallen stone that grows in at its foot is walked over, so it does not count.
+ * How far a landmark reaches at the ground: its standing pieces within a meter of it, as far as its farthest foot,
+ * a massive great span's 30 m away at its largest. Fallen stone that grows in at its foot is walked over, so it does
+ * not count.
  */
 export function landmarkBase(built: Pick<Built, "parts">): number {
   let base = 1;
@@ -147,8 +148,17 @@ export function landmarkBase(built: Pick<Built, "parts">): number {
       if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
     }
   }
-  return Math.min(base, 25);
+  return base;
 }
+
+/**
+ * The ground a landmark keeps on its lot: a disc round its middle a little wider than its reach at the ground
+ * (`landmarkBase`). Its site is found where that disc meets neither another landmark's nor a house's ground.
+ */
+export const landmarkGround = (base: number): number => base + 1.5;
+
+/** The ground round a house that no landmark's ground may reach into: a circle round its middle, past its walls and what stands beside it. */
+export const houseGround = (b: { readonly plan: BuildingPlan; readonly beside: Extent | null }): number => reachOf(b) + 2;
 
 /**
  * Where a landmark meets the ground, in its own frame: a disc round where each piece it stands on meets the ground
@@ -318,17 +328,17 @@ function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
  */
 function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
   const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite, id: code.lots[i]?.id ?? b.name }));
-  const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: reachOf(b) + 2 }));
+  const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: houseGround(b) }));
   const landmarks: StandingLandmark[] = [];
   const ids: string[] = [];
   for (const { landmark, lot } of code.landmarks) {
     const lm = req.landmarks[landmark];
     if (lm === undefined) continue;
-    const site = findLandmarkSite(t, 0, lm.base + 1.5, avoid, lot);
+    const site = findLandmarkSite(t, 0, landmarkGround(lm.base), avoid, lot);
     if (site === null) continue;
     landmarks.push({ landmark, id: lot.id, site });
     ids.push(lot.id);
-    avoid.push({ x: site.x, z: site.z, radius: lm.base + 2 });
+    avoid.push({ x: site.x, z: site.z, radius: landmarkGround(lm.base) });
   }
   // A trail ends at a building's door, at a landmark's foot facing the mean way to its trails' other ends, one spot per
   // place so they share it, or for an entity that stands as neither, at its lot's middle. A foot or a lot in water
