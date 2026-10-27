@@ -517,20 +517,29 @@ export function routeRivers(
   const owner = new Int32Array(n * n).fill(-1);
   const ownerAt = new Int32Array(n * n);
   const rivers: { source: number; cells: number[]; into: { river: number; at: number } | null; seep: boolean; lake: { x: number; z: number; radius: number } | null }[] = [];
-  // Water meets a river laid before it on the ground that river's valley spans, unless it runs there below the river's
-  // own course, which its water could never rise to: then it runs on beneath, past it.
-  const joins = (k: number): boolean => {
+  // The cells rivers laid so far run through, not only the ground their valleys claim either side.
+  const course = new Uint8Array(n * n);
+  const banked = Math.round(RIVERS.banked / RIVERS.cell);
+  // Water meets a river laid before it on the ground that river's valley spans, once it has run `RIVERS.banked` of its
+  // own, so it has banks of its own; before that only where it runs into that river's course. Never where it runs
+  // below the river's own course, which its water could never rise to: then it runs on beneath, past it.
+  const joins = (k: number, along: number): boolean => {
     const o = owner[k] as number;
-    return o >= 0 && (h[k] as number) >= (h[(rivers[o] as (typeof rivers)[number]).cells[ownerAt[k] as number] as number] as number) - RIVERS.roll;
+    if (o < 0 || (along < banked && course[k] !== 1)) return false;
+    return (h[k] as number) >= (h[(rivers[o] as (typeof rivers)[number]).cells[ownerAt[k] as number] as number] as number) - RIVERS.roll;
   };
-  // How many cells water runs from each cell before it meets a river laid before it, a pond or the land's edge.
+  // How many cells water runs from each cell before it runs into a river laid before it, a pond or the land's edge.
   const free = new Int32Array(n * n);
-  for (const ri of valleys.keys()) {
+  // The smallest regions' rivers are laid first, while their ground is free: a river through a small area would claim
+  // all of it before the area's own river rose.
+  const extent = new Int32Array(spec.regions.length);
+  for (let k = 0; k < n * n; k++) if (inside[k] === 1) extent[region[k] as number] = (extent[region[k] as number] as number) + 1;
+  for (const ri of [...valleys.keys()].sort((a, b) => (extent[a] as number) - (extent[b] as number) || a - b)) {
     const v = valleys[ri];
     if (v === null || v === undefined) continue;
     for (const k of popped) {
       const next = down[k] as number;
-      free[k] = joins(k) || pondAt[k] !== undefined ? 0 : next < 0 ? 1 : (free[next] as number) + 1;
+      free[k] = joins(k, 0) || pondAt[k] !== undefined ? 0 : next < 0 ? 1 : (free[next] as number) + 1;
     }
     // Its spring: where water runs longest across its own region before it leaves, so the river Jev chose for an area
     // runs through that area, the higher ground of two; away from the land's rim, which would drain it at once, or,
@@ -538,7 +547,6 @@ export function routeRivers(
     // runs at least `RIVERS.banked` before it meets a river laid before it, so it has banks of its own, or as far as
     // any spot in its region lets it.
     let spring = -1;
-    const banked = Math.round(RIVERS.banked / RIVERS.cell);
     let longest = 0;
     for (let k = 0; k < n * n; k++) if (inside[k] === 1 && region[k] === ri) longest = Math.max(longest, free[k] as number);
     for (const fromEdge of [RIVERS.springFromEdge, BUILDING_MARGIN + RIVERS.cell, 0]) {
@@ -554,7 +562,7 @@ export function routeRivers(
     let lake: { x: number; z: number; radius: number } | null = null;
     let seep = false;
     for (let k = spring; ; ) {
-      if (joins(k)) {
+      if (joins(k, cells.length)) {
         into = { river: owner[k] as number, at: ownerAt[k] as number };
         break;
       }
@@ -606,6 +614,7 @@ export function routeRivers(
         }
       }
     });
+    for (const k of cells) course[k] = 1;
     rivers.push({ source: ri, cells, into, seep, lake });
   }
 
