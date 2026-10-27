@@ -6,13 +6,17 @@
 // vitality falls the tower crumbles from the top down to a jagged stump and
 // no block is ever left above a gap; rubble gathers at its foot, everything
 // a course carries (galleries, the crown, its roof) goes before it, and its
-// lamps go out one by one.
+// lamps go out one by one. Each tower's seed picks its proportions within its
+// words (`TOWER_SHAPE`): its girth, how much it narrows, where its stages
+// meet, how high its head stands, how far its walkways reach, how tall its
+// merlons stand, and the side its weather comes from, where its top breaks
+// lowest.
 
 import type { Anchor, BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { lookoutTowerParams } from "../../landmark.ts";
 import { type Channels, LOSS_BAND, PartBuilder, type V3, clamp, cross, lossThreshold, normalize, sub } from "../kit.ts";
 import { UP, box, quad, tri } from "../blocks.ts";
-import { lump, nonEmpty, still } from "./shared.ts";
+import { type Bands, type Shape as Seeded, about, facing, landmarkShape, lump, nonEmpty, still } from "./shared.ts";
 
 /** Height of one course of stone, meters. */
 export const COURSE = 0.56;
@@ -25,8 +29,36 @@ const SIDES = { round: 0, square: 4, octagonal: 8 } as const;
 const GALLERY = { out: 0.95, slab: 0.24, parapet: 0.9 } as const;
 /** A parapet kept low, so a lantern room's glass shows above it. */
 const LOW_PARAPET = 0.5;
+/**
+ * How far behind the wall's face a going piece sinks, meters: never so deep in a thick wall that partway gone it hangs
+ * inside the wall with no face near enough to hold it (`SUPPORT.within` in @gaia/realize).
+ */
+const SINK_DEPTH = 0.18;
 
 type TowerParams = Resolved<typeof lookoutTowerParams>;
+
+/**
+ * What a tower's seed picks within its words: its girth against its words' own, how much straight or tapering walls
+ * narrow from foot to head and how far each stage sets back, how stage heights grow or shrink upward (a power of the
+ * even split), its head's height against its crown's own, a walkway's reach and a merlon's height in meters and in
+ * courses, the bearing its weather comes from and how much lower its top breaks on that side. Straight walls stay
+ * all but plumb beside tapering ones, whatever the seed.
+ */
+export const TOWER_SHAPE = {
+  girth: about(1, 0.08),
+  taper: { by: "profile", bands: { straight: [0.02, 0.06], tapering: [0.2, 0.32], stepped: null } },
+  setback: { by: "profile", bands: { straight: null, tapering: null, stepped: [0.13, 0.21] } },
+  stages: about(1, 0.15),
+  head: about(1, 0.03),
+  reach: about(GALLERY.out, 0.15),
+  merlon: about(1.6, 0.2),
+  weather: [0, Math.PI * 2],
+  exposure: [0.03, 0.09],
+} as const satisfies Bands;
+
+type TowerShape = Seeded<typeof TOWER_SHAPE>;
+/** A stepped tower's walls lean in a little within each stage. */
+const STAGE_BATTER = 0.04;
 
 /**
  * The tower's shape: where its shaft ends, its wall's outer radius at each
@@ -41,26 +73,26 @@ interface Shape {
   readonly wallAt: (y: number) => number;
 }
 
-function shapeOf(p: TowerParams, height: number): Shape {
+function shapeOf(p: TowerParams, height: number, seeded: TowerShape): Shape {
   const sides = SIDES[p.plan];
-  const radius = height * (p.profile === "stepped" ? 0.165 : 0.15);
+  const radius = height * (p.profile === "stepped" ? 0.165 : 0.15) * seeded.girth;
   const gallery = p.galleries !== "none";
   // The shaft stops where the crown starts: a cone's eaves sit about three quarters up.
   const drum = Math.max(1.6, height * 0.1);
   const shaft =
-    p.crown === "a conical roof" ? height * 0.74 - (gallery ? GALLERY.slab + drum : COURSE * 0.55)
-    : p.crown === "an open lantern room" ? height * (gallery ? 0.72 : 0.78)
-    : p.crown === "battlements" ? height * 0.9
+    p.crown === "a conical roof" ? height * 0.74 * seeded.head - (gallery ? GALLERY.slab + drum : COURSE * 0.55)
+    : p.crown === "an open lantern room" ? height * (gallery ? 0.72 : 0.78) * seeded.head
+    : p.crown === "battlements" ? height * 0.9 * seeded.head
     : height * 0.96;
   const courses = Math.max(8, Math.round(shaft / COURSE));
   const courseH = shaft / courses;
   const count = height >= 15 ? 3 : 2;
   // Stages meet on course joints, so a set-back never splits a block.
-  const stages = Array.from({ length: count - 1 }, (_, k) => Math.round((courses * (k + 1)) / count) * courseH);
+  const stages = Array.from({ length: count - 1 }, (_, k) => Math.round(courses * Math.pow((k + 1) / count, seeded.stages)) * courseH);
   const stageOf = (y: number): number => stages.filter((s) => y >= s).length;
   const wallAt = (y: number): number => {
     const t = clamp(y / shaft, 0, 1);
-    const lean = p.profile === "tapering" ? 1 - 0.26 * t : p.profile === "stepped" ? (1 - 0.17 * stageOf(y)) * (1 - 0.04 * t) : 1 - 0.04 * t;
+    const lean = p.profile === "stepped" ? (1 - seeded.setback * stageOf(y)) * (1 - STAGE_BATTER * t) : 1 - seeded.taper * t;
     return radius * lean * (y < courseH * 2 ? 1.08 : 1);
   };
   return { sides, shaft, courseH, courses, stages, wallAt };
@@ -217,13 +249,12 @@ class Courses {
  * stand there instead). Its pieces
  * fall a little before the wall they hang from.
  */
-function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thick: number, courses: Courses, parapet: number, r: Rand): number {
-  const out = GALLERY.out;
+function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thick: number, courses: Courses, parapet: number, out: number, r: Rand): number {
   const rim = wall + out;
   // A gallery never outlasts the wall it is let into: it goes once the
   // blocks it hangs from stand whole, shrinking back into them.
   const held = Math.max(0, courses.ring(y - 1.6, y + 0.05)) + LET_IN;
-  const root = (a: number, h: number): V3 => ringPoint(sides, a, wall - thick * 0.5, h);
+  const root = (a: number, h: number): V3 => ringPoint(sides, a, wall - Math.min(thick * 0.5, SINK_DEPTH), h);
   let most = 0;
   for (const [a0, a1] of courseSpans(sides, wall, 1.25, false)) {
     const mid = (a0 + a1) / 2;
@@ -256,15 +287,16 @@ function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thi
 export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   const r = ctx.rand.fork("tower");
   const height = p.height * (ctx.facts.scale ?? 1);
-  const shape = shapeOf(p, height);
+  const seeded = landmarkShape(TOWER_SHAPE, p, ctx);
+  const shape = shapeOf(p, height, seeded);
   const { sides, shaft, courseH: ch, courses, wallAt } = shape;
   const stone = new PartBuilder("masonry", "solid");
   const timber = new PartBuilder("timber", "solid");
   const roof = new PartBuilder("roof", "solid");
   const glass = new PartBuilder("glass");
   const thick = wallAt(0) * 0.32;
-  /** The ground under the middle of the wall at angle `a`: what a piece sinks toward as it goes, so it slides down into the wall below. */
-  const foot = (a: number): V3 => ringPoint(sides, a, wallAt(ch * 2.5) - thick * 0.5, 0);
+  /** The ground just behind the wall's face at angle `a`: what a piece sinks toward as it goes, so it slides down into the wall below. */
+  const foot = (a: number): V3 => ringPoint(sides, a, wallAt(ch * 2.5) - Math.min(thick * 0.5, SINK_DEPTH), 0);
   const blockLen = p.masonry * 1.1;
   const topGallery = p.galleries !== "none";
   // Galleries at every stage stand where the stages meet; the top one rings the shaft's head.
@@ -309,8 +341,10 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       const under = c === 0 ? 0 : laid.under(a0, a1, y0 - ch * 0.6, y0);
       if (under < 0) continue;
       const rise = (y0 + ch / 2) / height;
-      // Higher blocks fall first; a seeded jitter makes the falling top jagged.
-      const loss = c < 2 ? 0 : clamp(Math.max(fallsAt(rise, u), under), 0.02, MOST);
+      // Higher blocks fall first; a seeded jitter makes the falling top jagged, and it breaks lower on the side the
+      // weather comes from.
+      const weathered = fallsAt(rise, u) + seeded.exposure * (2 * facing(mid, seeded.weather) - 1);
+      const loss = c < 2 ? 0 : clamp(Math.max(weathered, under), 0.02, MOST);
       for (const [b0, b1] of pieces) laid.laid.push({ a0: b0, a1: b1, y0, y1, loss });
       // A falling block sinks down into the wall below it as it goes, never hanging in the air; a block an opening
       // cuts in two, each piece into the wall below itself, not into the opening.
@@ -333,7 +367,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       ringBlock(stone, sides, a0, a1, s - 0.26, s, rad, thick * 0.7, 0.6 + 0.08 * u, still(root, 0.5, { loss: clamp(under + LET_IN + 0.015 * u, 0.02, 0.86) }), true);
     }
   }
-  for (const g of midGalleries) gallery(stone, sides, g, wallAt(g - ch / 2), thick, laid, GALLERY.parapet, r.fork(`gallery${g.toFixed(1)}`));
+  for (const g of midGalleries) gallery(stone, sides, g, wallAt(g - ch / 2), thick, laid, GALLERY.parapet, seeded.reach, r.fork(`gallery${g.toFixed(1)}`));
 
   // The openings: dark, then lamplit panes in each slit; a plank door at the foot.
   for (const sl of slits) {
@@ -382,9 +416,9 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   let rim: number;
   if (topGallery) {
     const parapet = p.crown === "battlements" ? 0 : p.crown === "an open lantern room" ? LOW_PARAPET : GALLERY.parapet;
-    perch = Math.max(perch, gallery(stone, sides, shaft, headWall, thick, laid, parapet, r.fork("top-gallery")));
+    perch = Math.max(perch, gallery(stone, sides, shaft, headWall, thick, laid, parapet, seeded.reach, r.fork("top-gallery")));
     deck = shaft + GALLERY.slab;
-    rim = headWall + GALLERY.out;
+    rim = headWall + seeded.reach;
   } else {
     rim = headWall * 1.1;
     deck = shaft + ch * 0.55;
@@ -404,7 +438,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       if (k % 2 === 1) return;
       const u = r.next();
       // Each shrinks down onto the walkway or cornice it stands on.
-      ringBlock(stone, sides, a0, a1, deck, deck + ch * 1.6, rim, thick * 0.8, 0.56 + 0.1 * u, still(ringPoint(sides, (a0 + a1) / 2, rim - thick * 0.4, deck), 0.6, { loss: tier(0, u), tint: (u - 0.5) * 0.04 }));
+      ringBlock(stone, sides, a0, a1, deck, deck + ch * seeded.merlon, rim, thick * 0.8, 0.56 + 0.1 * u, still(ringPoint(sides, (a0 + a1) / 2, rim - thick * 0.4, deck), 0.6, { loss: tier(0, u), tint: (u - 0.5) * 0.04 }));
     });
   } else {
     crownRoof(p, shape, height, shaft, deck, topGallery ? headWall : rim, topGallery, { stone, timber, roof, glass }, tier, r);

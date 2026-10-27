@@ -10,7 +10,7 @@ import { ROCK_ARCH_SHAPE, buildRockArch } from "./geometry/landmark/arch.ts";
 import { ROTUNDA_SHAPE, ROTUNDA_STEPS, buildRotunda } from "./geometry/landmark/rotunda.ts";
 import type { Bands } from "./geometry/landmark/shared.ts";
 import { STANDING_STONES_SHAPE, buildStandingStones } from "./geometry/landmark/stones.ts";
-import { buildLookoutTower } from "./geometry/landmark/tower.ts";
+import { TOWER_SHAPE, buildLookoutTower } from "./geometry/landmark/tower.ts";
 import { buildGreatTree } from "./geometry/landmark/tree.ts";
 import { WINDMILL_SHAPE, buildWindmill } from "./geometry/landmark/windmill.ts";
 
@@ -169,6 +169,7 @@ export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, win
  * great tree has none: its seed already grows its whole frame, every limb's length and turn.
  */
 export const LANDMARK_SHAPES: Readonly<Record<string, Bands>> = {
+  [lookoutTower.id]: TOWER_SHAPE,
   [standingStones.id]: STANDING_STONES_SHAPE,
   [windmill.id]: WINDMILL_SHAPE,
   [rockArch.id]: ROCK_ARCH_SHAPE,
