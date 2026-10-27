@@ -14,27 +14,6 @@ const firstTree = (where: (bp: Blueprint) => boolean = () => true): Blueprint =>
 /** A plant by the parts that shape it and their settings, as a failure names it. */
 const named = (bp: Blueprint): string =>
   ["form", "crown", "bloom", "drift"].flatMap((slot) => (bp.slots[slot] === undefined ? [] : [`${bp.slots[slot].use} (${Object.values(bp.slots[slot].params).flat().join(", ")})`])).join(" with ");
-/**
- * The plants past their triangle budgets today, by kind. None stands in a world yet, since every world's trees, bushes
- * and flowers are still hand-filled: a fir's frame under leaf clumps or a feathery leaf mound, each of its whorls
- * carrying a crown's worth; a sapling's clumps bowed with fruit; and a bramble or a scrub at its largest and densest
- * under clumps or a mound.
- */
-const OVER_BUDGET: Readonly<Record<string, readonly string[]>> = {
-  tree: [
-    "spire@1 (many close rings, drooping at the tips, narrow spire) with leaf-clumps@1 (plates, oval, medium, full) with fruit@1 (apples, bowed with fruit)",
-    "spire@1 (several rings, level, classic cone) with leaf-mound@1 (feathery, full)",
-  ],
-  bush: [
-    "sapling@1 (tiered, a few, waist-high) with leaf-clumps@1 (tufts, lobed, large, dense and lush) with fruit@1 (apples, bowed with fruit)",
-    "bramble@1 (an impenetrable tangle, rambling far over the ground, head-high) with leaf-clumps@1 (tufts, blossom, very large, dense and lush)",
-    "bramble@1 (an impenetrable tangle, rambling far over the ground, head-high) with leaf-mound@1 (feathery, dense and clipped)",
-    "thicket@1 (scrub, a dense tangle, head-high) with leaf-clumps@1 (tufts, blossom, very large, dense and lush)",
-    "thicket@1 (scrub, a dense tangle, head-high) with leaf-mound@1 (feathery, dense and clipped)",
-  ],
-  rock: [],
-  wildflowers: [],
-};
 const facts = { scale: 1, age: 120 };
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
 
@@ -103,9 +82,9 @@ describe("realize", () => {
     expect(bare.parts.map((p) => p.swatch)).toEqual(["bark"]);
   });
 
-  it("keeps every tree under 40k triangles, but those known to be past it", () => {
+  it("keeps every tree under 40k triangles", () => {
     const over = trees.filter((bp) => triangleCount(realize(bp, tree, lib, { seed: 11, facts: { scale: 1.4, age: 0 } }).parts) >= 40_000);
-    expect(over.map(named)).toEqual(OVER_BUDGET.tree);
+    expect(over.map(named)).toEqual([]);
   });
 });
 
@@ -382,7 +361,7 @@ describe("the understory", () => {
     { blueprints: sweep(wildflowers, all).blueprints, kind: wildflowers },
   ];
   for (const { blueprints, kind } of groups) {
-    it(`stands every ${kind.id} part valid and, but those known to be past it, light enough to place by the hundred`, () => {
+    it(`stands every ${kind.id} part valid and light enough to place by the hundred`, () => {
       const over: string[] = [];
       for (const blueprint of blueprints) {
         expect(validate(blueprint, kind, all), named(blueprint)).toEqual([]);
@@ -390,7 +369,7 @@ describe("the understory", () => {
         expect(parts.length, named(blueprint)).toBeGreaterThan(0);
         if (triangleCount(parts) >= 12_000) over.push(named(blueprint));
       }
-      expect(over).toEqual(OVER_BUDGET[kind.id]);
+      expect(over).toEqual([]);
     });
   }
 
