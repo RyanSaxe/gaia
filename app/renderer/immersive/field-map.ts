@@ -786,6 +786,13 @@ const UNDERSTORY_SHOWS = [3, 6] as const;
  * understory comes in as the map comes close.
  */
 export function drawPlants(ctx: CanvasRenderingContext2D, stood: Pick<StoodWorld, "trees" | "understory">, sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, visible: (x: number, y: number, pad: number) => boolean): void {
+  for (const _ of drawingPlants(ctx, stood, sx, sy, zoom, grow, visible)) {
+    // Drawn whole.
+  }
+}
+
+/** As `drawPlants`, pausing whenever `stepMs` of drawing has passed, so a pen that draws a step a frame never stalls. */
+export function* drawingPlants(ctx: CanvasRenderingContext2D, stood: Pick<StoodWorld, "trees" | "understory">, sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, visible: (x: number, y: number, pad: number) => boolean, stepMs = Number.POSITIVE_INFINITY): Generator<void> {
   const marks: { x: number; y: number; s: number; plant: StoodPlant; alpha: number }[] = [];
   for (const t of stood.trees) {
     const x = sx(t.x);
@@ -802,9 +809,15 @@ export function drawPlants(ctx: CanvasRenderingContext2D, stood: Pick<StoodWorld
     if (visible(x, y, span)) marks.push({ x, y, s, plant: u, alpha: Math.min(1, (span - UNDERSTORY_SHOWS[0]) / (UNDERSTORY_SHOWS[1] - UNDERSTORY_SHOWS[0])) });
   }
   marks.sort((a, b) => a.y - b.y);
+  let t0 = performance.now();
   for (const m of marks) {
     ctx.globalAlpha = m.alpha;
     stampPlant(ctx, m.x, m.y, m.s, m.plant.build, shownVitality(m.plant.vitality));
+    if (performance.now() - t0 > stepMs) {
+      ctx.globalAlpha = 1;
+      yield;
+      t0 = performance.now();
+    }
   }
   ctx.globalAlpha = 1;
 }
