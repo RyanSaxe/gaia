@@ -26,11 +26,12 @@ import { shownVitality } from "@gaia/realize";
 import { outlinesOf, pastTheEdge, type Place, type PlaceArea, type Terrain, waterDepthAt, type WorldPlaces } from "@gaia/terrain";
 import { areaVitality, groundVitality } from "@gaia/world";
 import { onTap } from "../tap.ts";
-import type { StoodWorld } from "../terrain/world.ts";
+import type { StoodPlant, StoodWorld } from "../terrain/world.ts";
 import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthColor, healthField, landWash } from "./map-styles.ts";
 import { contour, contourLines, simplified, slopes } from "./isolines.ts";
 import { type AreaLabel, type Box, CELL, type NameLand, type NamePlace, type NamePlaces, PARENT_FONT, ROSE, SERIF, canvasMeasure, nameFont, nameLand, nameSpacing, placeNames } from "./map-names.ts";
 import { markScale, stampBuilding, stampLandmark } from "./marks.ts";
+import { stampPlant } from "./plant-marks.ts";
 import { PAPER, type WashArea, type WashSheet, borderPath, easeRing, fadeMask, floatWash, layWash, paintAt, rimPath, ringsPath } from "./wash.ts";
 import { INK, type LandView, RIM, type WildInk, createWildInk, layGround, reliefAt } from "./wild-ink.ts";
 
@@ -107,10 +108,6 @@ const SOON_MS = 8;
 /** How long the relief's painting runs before it lets the page draw, ms: a few, so the wait's lines never stall. */
 const RELIEF_STEP_MS = 4;
 
-const hash = (x: number, z: number): number => {
-  const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
-  return s - Math.floor(s);
-};
 /** Red, green and blue between two hex colors. */
 const mixRgb = (a: string, b: string, t: number): [number, number, number] => {
   const pa = parseInt(a.slice(1), 16);
@@ -590,9 +587,6 @@ function whenIdle(step: (budget: number) => boolean, least = 0): () => void {
   };
 }
 
-/** Trees' crowns are laid in this many tones of health, so all of a tone fills at once; a healthy crown's green. */
-const TREE_TONES = 8;
-const TREE_GREEN: readonly [number, number, number] = [95, 148, 71];
 /** The linework's widths in pixels at every zoom: a contour, an index contour, an area's border and its hedgerow. */
 const LINE = { contour: 0.85, index: 1.4, border: 1, hedge: 3.2 };
 
@@ -637,7 +631,7 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
 
   drawRivers(ctx, stood.terrain.streams, sx, sy, view.zoom);
   drawTrails(ctx, stood.ways, sx, sy, view.zoom, grow, style);
-  drawTrees(ctx, stood.trees, sx, sy, view.zoom, grow, style, visible);
+  drawPlants(ctx, stood, sx, sy, view.zoom, grow, visible);
 
   // Buildings and landmarks: each drawn from its own blueprint and worn as its entity is. Names keep off the box it takes.
   const s = markScale(view.zoom, grow);
@@ -780,37 +774,39 @@ export function drawTrails(ctx: CanvasRenderingContext2D, ways: StoodWorld["ways
   ctx.restore();
 }
 
+/** The least a tree's crown spans on the sheet, pixels across at `grow` 1, however far out the map looks: legible, as the marks are. */
+const TREE_LEAST = 4.6;
+/** Pixels a stone's, bush's or drift's mark must span before it shows, and by which it has fully come in: the understory shows at its size on the land alone. */
+const UNDERSTORY_SHOWS = [3, 6] as const;
+
 /**
- * Trees: round crowns with a soft shadow to the southeast and the sun on their northwest shoulders, colored by
- * their files' health as the land is; each layer is one path, so a thousand trees cost a few fills.
+ * Trees, bushes, stones and flower drifts, each its own build's mark (`plant-marks.ts`), drawn from the back of the
+ * sheet to the front so the nearer overlap the farther. A tree stands at its size on the land, its crown never
+ * spanning less than `TREE_LEAST` times `grow`; a stone, a bush or a drift stands at its size on the land only, so the
+ * understory comes in as the map comes close.
  */
-export function drawTrees(ctx: CanvasRenderingContext2D, trees: StoodWorld["trees"], sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, style: MapStyle, visible: (x: number, y: number, pad: number) => boolean): void {
-  const shadows = new Path2D();
-  const lights = new Path2D();
-  const crowns = Array.from({ length: TREE_TONES }, () => new Path2D());
-  for (const tree of trees) {
-    const x = sx(tree.x);
-    const y = sy(tree.z);
-    if (!visible(x, y, 8)) continue;
-    const seed = hash(tree.x, tree.z);
-    const r = Math.max((1.9 + seed * 0.8) * grow, (2 + seed * 1.2) * zoom);
-    // Each mark its own closed shape: without the move, one path would join them all into a web.
-    shadows.moveTo(x + r * 1.55, y + r * 0.6);
-    shadows.ellipse(x + r * 0.5, y + r * 0.6, r * 1.05, r * 0.78, 0, 0, Math.PI * 2);
-    const tone = crowns[Math.round(shownVitality(tree.vitality) * (TREE_TONES - 1))] as Path2D;
-    tone.moveTo(x + r, y);
-    tone.arc(x, y, r, 0, Math.PI * 2);
-    lights.moveTo(x - r * 0.3 + r * 0.52, y - r * 0.32);
-    lights.arc(x - r * 0.3, y - r * 0.32, r * 0.52, 0, Math.PI * 2);
+export function drawPlants(ctx: CanvasRenderingContext2D, stood: Pick<StoodWorld, "trees" | "understory">, sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, visible: (x: number, y: number, pad: number) => boolean): void {
+  const marks: { x: number; y: number; s: number; plant: StoodPlant; alpha: number }[] = [];
+  for (const t of stood.trees) {
+    const x = sx(t.x);
+    const y = sy(t.z);
+    const s = Math.max(zoom * t.scale, (TREE_LEAST * grow) / (2 * t.build.radius));
+    if (visible(x, y - t.build.height * s * 0.5, Math.max(t.build.height, t.build.radius * 2) * s)) marks.push({ x, y, s, plant: t, alpha: 1 });
   }
-  ctx.fillStyle = "rgba(34,44,48,0.22)";
-  ctx.fill(shadows);
-  crowns.forEach((path, k) => {
-    ctx.fillStyle = `rgb(${healthColor(style, TREE_GREEN, k / (TREE_TONES - 1)).join(",")})`;
-    ctx.fill(path);
-  });
-  ctx.fillStyle = "rgba(226,240,170,0.45)";
-  ctx.fill(lights);
+  for (const u of stood.understory) {
+    const s = zoom * u.scale;
+    const span = Math.max(u.build.height, u.build.radius * 2) * s;
+    if (span < UNDERSTORY_SHOWS[0]) continue;
+    const x = sx(u.x);
+    const y = sy(u.z);
+    if (visible(x, y, span)) marks.push({ x, y, s, plant: u, alpha: Math.min(1, (span - UNDERSTORY_SHOWS[0]) / (UNDERSTORY_SHOWS[1] - UNDERSTORY_SHOWS[0])) });
+  }
+  marks.sort((a, b) => a.y - b.y);
+  for (const m of marks) {
+    ctx.globalAlpha = m.alpha;
+    stampPlant(ctx, m.x, m.y, m.s, m.plant.build, shownVitality(m.plant.vitality));
+  }
+  ctx.globalAlpha = 1;
 }
 
 /**

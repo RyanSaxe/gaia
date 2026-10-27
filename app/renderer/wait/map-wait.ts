@@ -47,7 +47,7 @@ import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
 import type { FilePatch, Settled } from "../../world-service/protocol.ts";
 import type { StoodWorld } from "../terrain/world.ts";
-import { MARGIN, drawRivers, drawTrails, drawTrees, letterName, nearestAreas, paintRelief, riverCourse, riverStretches, riverStrokes, strokeContours } from "../immersive/field-map.ts";
+import { MARGIN, drawPlants, drawRivers, drawTrails, letterName, nearestAreas, paintRelief, riverCourse, riverStretches, riverStrokes, strokeContours } from "../immersive/field-map.ts";
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
 import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, healthWeight, landWash } from "../immersive/map-styles.ts";
 import { markScale, stampBuilding, stampLandmark } from "../immersive/marks.ts";
@@ -1020,7 +1020,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
               yield;
             }
             drawTrails(whole, stood.ways, sx, sx, zoom, 1, STYLE);
-            for (const c of [lands, whole]) drawTrees(c, stood.trees, sx, sx, zoom, 1, STYLE, () => true);
+            for (const c of [lands, whole]) drawPlants(c, stood, sx, sx, zoom, 1, () => true);
             yield;
             yield* reliefWashes(l, lands.canvas, lay);
             resolve(whole.canvas);
