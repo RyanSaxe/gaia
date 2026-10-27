@@ -163,7 +163,6 @@ const SKY_COLORS = {
   "teal lagoon": { zenith: 0x3d93b6, horizon: 0xbfe4dc },
   lavender: { zenith: 0x7c8ed2, horizon: 0xe2d8ec },
   apricot: { zenith: 0x7aa1cf, horizon: 0xf3dcc0 },
-  "pearl grey": { zenith: 0x8d9bab, horizon: 0xdfe1dc },
 } as const;
 
 type CloudShape = Omit<CloudSpec, "threshold">;
@@ -197,7 +196,6 @@ export const sky = primitive({
       "teal lagoon": "Blue-green, like a shallow lagoon, for code that feels fresh and playful",
       lavender: "Lilac-blue, soft violet at the horizon, for code that feels dreamy and whimsical",
       apricot: "Blue above, warm apricot at the horizon, for code that feels nostalgic, like a long afternoon",
-      "pearl grey": "A pale pearl-grey sky, bright behind thin cloud, for code that feels muted, thoughtful or weary",
     }),
     clouds: t.choice("The form of the clouds", {
       "fair-weather puffs": "Small bright cumulus puffs, for code that feels sunny and carefree",
