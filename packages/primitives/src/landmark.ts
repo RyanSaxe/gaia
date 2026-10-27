@@ -155,7 +155,7 @@ export const rotundaParams = {
 export const rotunda = primitive({
   id: "rotunda@1",
   role: "Landmark",
-  doc: "A small round temple of stone, a garden folly: a ring of columns on a stepped base carrying a dome or an open ring, for code that feels romantic and wistful, a little sentimental, made for lingering. In decline the dome falls in from its crown, then the columns topple outward one by one onto the steps.",
+  doc: "A small round temple of stone, a garden folly: a ring of columns on a stepped base carrying a dome or an open ring, for code that feels graceful and contemplative, a quiet place set a little apart, made for pausing. In decline the dome falls in from its crown, then the columns topple outward one by one onto the steps.",
   params: rotundaParams,
   build: (p, ctx) => buildRotunda(p, ctx),
 });
