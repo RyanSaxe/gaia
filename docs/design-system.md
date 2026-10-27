@@ -83,6 +83,19 @@ water, sits at its own stream's bank, and reaches the water while its house
 stays dry. Landmarks use prominent, walkable ground and silhouettes that remain
 recognizable through haze.
 
+Two landmarks Jev answers alike never stand as twins. Each landmark's seed
+picks the proportions a person notices within what its words allow: a rotunda's
+span, its columns' height, girth and spacing, its dome's rise and its steps'
+depth; a tower's girth, taper, stages and walkways; a mill's body, stage and
+sails; an arch's opening; how far apart standing stones stand; every limb of a
+great tree. A word's look never crosses into its neighbour's: a seeded shallow
+dome stays lower than any high one, and six columns stay wider apart than any
+eight. The seed also chooses the side a landmark's weather comes from, where
+its columns topple first, its tower breaks lowest, its stones lean away and its
+mill's cap lists. Each primitive's bands are in its shape table, such as
+`ROTUNDA_SHAPE` in
+[`rotunda.ts`](../packages/primitives/src/geometry/landmark/rotunda.ts).
+
 Ruin follows structural support. Coverings fail with or before their frames;
 upper masonry cannot outlast the blocks supporting it. Detached pieces collapse
 onto a support or the ground. Ivy grows on remaining walls rather than across

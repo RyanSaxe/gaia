@@ -108,9 +108,11 @@ what a thing stands as among the forms its importance is offered (`FORMS` and
 `SIZES` in [`looks.ts`](../app/renderer/terrain/looks.ts)). A small form names
 the part a person sees first, such as a weeping tree's frame, which is filled in
 and never asked; Jev composes the rest from that size's parts alone, so a bush
-is never offered a tree's frame. Two things Jev answers alike share one build,
-seeded by the blueprint's content, which every copy turns, scales and leans on
-its ground's slope; each distinct build bakes its own far form.
+is never offered a tree's frame. Two trees, bushes, stones or drifts Jev
+answers alike share one build, seeded by the blueprint's content, which every
+copy turns, scales and leans on its ground's slope; each distinct build bakes
+its own far form. A landmark builds from a seed of its own, its path, so two
+landmarks Jev answers alike still stand differently, each within its words.
 
 The GPU holds a fixed number of far forms at once, whatever the world's size
 (`FAR_SLOTS` in [`woods.ts`](../app/renderer/terrain/woods.ts)). The forms
