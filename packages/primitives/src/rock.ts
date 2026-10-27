@@ -1,8 +1,11 @@
-// Rock primitives: the rock kind's bodies and the moss that grows on them.
-// Geometry lives in ./geometry/rock.ts.
+// Rock primitives: the rock kind's bodies, stone and old wood lying still in
+// the grass, and the moss that grows on them. Geometry lives in
+// ./geometry/rock.ts and ./geometry/wood.ts.
 
 import { primitive, t } from "@gaia/schema";
+import { barkParams } from "./flora.ts";
 import { buildBoulder, buildFlatStone, buildMoss, buildOutcrop, buildStoneCluster } from "./geometry/rock.ts";
+import { buildFallenLog, buildStump } from "./geometry/wood.ts";
 
 const facets = t.scale("How the stone's faces are cut", {
   "worn smooth": 0.15,
@@ -88,13 +91,71 @@ export const outcrop = primitive({
   build: (p, ctx) => buildOutcrop(p, ctx),
 });
 
+export const fallenLogParams = {
+  length: t.scale("How long the log lies", {
+    "a short length": 1.4,
+    "a person's length": 2.4,
+    "a whole fallen trunk": 4.5,
+  }),
+  girth: t.scale("How thick the log is", {
+    slender: 0.13,
+    stout: 0.22,
+    "broad as an old oak": 0.34,
+  }),
+  ends: t.choice("How its ends were left", {
+    sawn: "Sawn clean across, its rings showing, as if cut and left to lie",
+    broken: "Snapped and splintered, as if it came down in a storm",
+    "one of each": "Sawn at its foot and torn away at its top",
+  }),
+  boughs: t.scale("What is left of its boughs", {
+    "bare and smooth": 0,
+    "a few broken stubs": 2,
+    "bristling with stubs": 5,
+  }),
+  bark: barkParams.roughness,
+};
+
+export const fallenLog = primitive({
+  id: "fallen-log@1",
+  role: "Rock",
+  doc: "A fallen log lying in the grass, spent and peaceful, full of small life. As it fails its bark falls away to grey wood, its stubs break off, and it splits and sinks into the turf.",
+  params: fallenLogParams,
+  build: (p, ctx) => buildFallenLog(p, ctx),
+});
+
+export const stumpParams = {
+  height: t.scale("How tall the stump stands", {
+    "cut low to the ground": 0.3,
+    "knee-high": 0.55,
+    "waist-high": 1,
+  }),
+  top: t.choice("Its top", {
+    sawn: "Sawn flat, its rings open to the sky",
+    broken: "Snapped off ragged, splinters standing up on one side",
+  }),
+  roots: t.scale("How far its roots spread", {
+    "tucked in close": 0.5,
+    "gripping the ground": 1.1,
+    "sprawling over the ground": 2.2,
+  }),
+  bark: barkParams.roughness,
+};
+
+export const stump = primitive({
+  id: "stump@1",
+  role: "Rock",
+  doc: "An old stump with its roots still in the ground, stubborn, cut back and still holding on. As it fails it splits and leans apart, and its top crumbles from the heart into a soft, dark hollow.",
+  params: stumpParams,
+  build: (p, ctx) => buildStump(p, ctx),
+});
+
 export const mossParams = {
-  cover: t.scale("How much of the stone the moss covers", {
+  cover: t.scale("How much of the stone or bark the moss covers", {
     "a few patches": 0.35,
     "a cap on top": 0.6,
     "thickly overgrown": 0.85,
   }),
-  growth: t.choice("What grows on the stone", {
+  growth: t.choice("What grows on the stone or bark", {
     velvet: "Smooth velvet moss",
     cushions: "Plump cushions of moss",
     lichen: "A thin crust of lichen",
@@ -104,9 +165,9 @@ export const mossParams = {
 export const moss = primitive({
   id: "moss@1",
   role: "Overgrowth",
-  doc: "Moss on the stone's upward faces; it recedes and dries to lichen grey as vitality falls.",
+  doc: "Moss on the upward faces of stone or bark; it recedes and dries to lichen grey as vitality falls.",
   params: mossParams,
   build: (p, ctx, base) => buildMoss(p, ctx, base),
 });
 
-export const ROCK_PRIMITIVES = [boulder, flatStone, stoneCluster, outcrop, moss];
+export const ROCK_PRIMITIVES = [boulder, flatStone, stoneCluster, outcrop, fallenLog, stump, moss];

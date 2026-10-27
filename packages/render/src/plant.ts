@@ -971,7 +971,7 @@ export function letGoOnUpload(geometry: THREE.BufferGeometry, keep: readonly str
 
 /** Bark, stone and a building's fabric are solid; leaves, moss and blooms are thin and scatter light; fruit and berries are solid under a waxy skin. */
 export const FOLIAGE: Readonly<Record<string, number>> = {
-  bark: 0, leaf: 1, bloom: 0.6, fruit: 0.2, berry: 0.2, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6,
+  bark: 0, leaf: 1, bloom: 0.6, fruit: 0.2, berry: 0.2, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6, wood: 0,
   wall: 0, render: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0,
 };
 /** The colors a spray borrows: its stalks the bark's, a blossom spray's petals the family's bloom and its few fresh leaves the stem green. */
@@ -983,7 +983,7 @@ export const sprayColors = (plant: Pick<Realized, "palette">): { uBark: { value:
 /** Swatches lit from inside at night, like window glass. */
 export const LAMP: ReadonlySet<string> = new Set(["glass"]);
 /** Closed shapes, drawn front-faced; a building's boards and panes show from both sides. */
-export const CLOSED: ReadonlySet<string> = new Set(["bark", "stone"]);
+export const CLOSED: ReadonlySet<string> = new Set(["bark", "stone", "wood"]);
 
 export function createPlant(plant: Realized, light: SceneLight): PlantView {
   // Only the palette is read once the plant stands, so the parts' arrays go once the meshes are made.
