@@ -68,12 +68,12 @@ export const FORMS: Readonly<Record<string, Look>> = {
   Ledge: first("stones", "stone", "A ledge of bedrock breaking through the turf: foundational and sure, the old ground everything else rests on.", "form", "outcrop@1"),
   "Fallen log": first("stones", "stone", "A fallen log lying in the grass: peaceful and spent, its long work done.", "form", "fallen-log@1"),
   "Old stump": first("stones", "stone", "An old stump with its roots still in the ground: worn and stubborn, still holding on to its roots.", "form", "stump@1"),
-  Daisies: first("flowers", "flowers", "A drift of daisies in the open: plain and friendly, simple to take in at a glance.", "drift", "daisies@1"),
+  Daisies: first("flowers", "flowers", "A drift of daisies in the open: plain and friendly, easy to take in at a glance.", "drift", "daisies@1"),
   Poppies: first("flowers", "flowers", "Poppies cupped open in the grass: quick and fleeting, here for a moment and gone.", "drift", "cups@1"),
   Bluebells: first("flowers", "flowers", "A carpet of bluebells in the shade: quiet and shy, keeping to itself.", "drift", "bells@1"),
-  Lupines: first("flowers", "flowers", "Lupines standing in tidy rows: neat and exact, one of many just alike.", "drift", "spikes@1"),
+  Lupines: first("flowers", "flowers", "Upright spires of lupines: neat and exact, one of many just alike.", "drift", "spikes@1"),
   Ferns: first("flowers", "flowers", "Ferns unrolling from their crowns: old and settled, unchanged for ages.", "drift", "ferns@1"),
-  Mushrooms: first("flowers", "flowers", "Mushrooms springing up out of the ground: earthy and hidden, quietly busy in the damp.", "drift", "mushrooms@1"),
+  Mushrooms: first("flowers", "flowers", "Mushrooms springing up out of the ground: odd and unexpected, popping up in damp corners few ever visit.", "drift", "mushrooms@1"),
 };
 
 /** The forms Jev composes part by part once it chooses one, as it composes an entity's: a building, or a landmark. */
