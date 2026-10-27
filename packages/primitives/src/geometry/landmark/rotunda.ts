@@ -5,9 +5,10 @@
 // columns. Decline follows what carries what: the dome falls in first, course
 // by course from its crown, each block sinking into the one below it and its
 // stone heaped on the floor inside; then the ring over each pair of columns
-// goes, and the columns topple outward one by one, each breaking into drums
-// that lie in the grass past the steps, leaving the stepped base and the
-// columns' feet.
+// goes, and the columns topple one by one, each to its own side of straight
+// out, breaking into drums that roll on and come to rest in the grass or
+// against the lowest step, leaving the stepped base, the columns' feet and
+// here and there a drum or two still standing.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { rotundaParams } from "../../landmark.ts";
@@ -33,8 +34,8 @@ const EAVE = 0.5;
 const FLUTES = 16;
 /** How much vitality apart each course of the dome goes, so each is gone before the one it rests on starts. */
 const COURSE_STEP = 0.06;
-/** How much sooner a piece goes than what it rests on, so it is all but gone before that starts to sink. */
-const SETTLES = 0.035;
+/** How much sooner a piece goes than what it sinks onto the face of, which must stand whole until it is all but gone. */
+const ONTO = 0.06;
 /** The gap between dressed blocks, meters: a joint the light falls into. */
 const JOINT = 0.022;
 /** How long a column's drums are, meters. */
@@ -111,57 +112,92 @@ function columnFoot(b: PartBuilder, a: number, ring: number, floor: number, radi
   drum(b, x, z, floor + 0.22, floor + 0.42, radius * 1.3, radius * 1.22, 0.58, ch, true);
 }
 
-/**
- * A column's shaft over its foot, in drums with a joint between each, swelling a little toward its middle, and its
- * flared capital and square abacus: one piece that topples outward about the shaft's outer edge.
- */
-function columnShaft(b: PartBuilder, a: number, ring: number, floor: number, height: number, radius: number, ch: Channels, r: Rand): void {
-  const [x, , z] = around(a, ring, 0);
-  const axes = [[Math.cos(a), 0, Math.sin(a)], UP, [-Math.sin(a), 0, Math.cos(a)]] as const;
+/** A column's shaft from its foot to its neck, in `DRUM`-long drums: where each starts and ends, and its girth there. */
+function shaftOf(floor: number, height: number, radius: number): { foot: number; neck: number; drums: number; at: (y: number) => number } {
   const foot = floor + 0.42;
   const neck = floor + height - 0.62;
   const at = (y: number): number => {
     const t = (y - foot) / (neck - foot);
     return radius * (1 - 0.14 * t + 0.04 * Math.sin(Math.PI * t));
   };
-  const drums = Math.max(3, Math.round((neck - foot) / DRUM));
+  return { foot, neck, drums: Math.max(3, Math.round((neck - foot) / DRUM)), at };
+}
+
+/**
+ * A column's shaft over its foot, in drums with a joint between each, swelling a little toward its middle, and its
+ * flared capital and square abacus. The lowest `stay` drums stand on the foot whatever comes; the rest, with the
+ * capital, is one piece that topples about its outer edge.
+ */
+function columnShaft(b: PartBuilder, a: number, ring: number, floor: number, height: number, radius: number, stay: number, stub: Channels, ch: Channels, r: Rand): void {
+  const [x, , z] = around(a, ring, 0);
+  const axes = [[Math.cos(a), 0, Math.sin(a)], UP, [-Math.sin(a), 0, Math.cos(a)]] as const;
+  const { foot, neck, drums, at } = shaftOf(floor, height, radius);
   for (let k = 0; k < drums; k++) {
     const y0 = foot + ((neck - foot) * k) / drums;
     const y1 = foot + ((neck - foot) * (k + 1)) / drums;
     const shade = 0.56 + 0.1 * r.next();
-    drum(b, x, z, y0, y1 - JOINT * 1.5, at(y0), at(y1), shade, ch);
-    drum(b, x, z, y1 - JOINT * 1.5, y1, at(y1) * 0.94, at(y1) * 0.94, shade - 0.2, ch);
+    const own = k < stay ? stub : ch;
+    drum(b, x, z, y0, y1 - JOINT * 1.5, at(y0), at(y1), shade, own);
+    drum(b, x, z, y1 - JOINT * 1.5, y1, at(y1) * 0.94, at(y1) * 0.94, shade - 0.2, own, k === stay - 1);
   }
   drum(b, x, z, neck, neck + 0.12, radius * 0.95, radius * 0.95, 0.56, ch);
   drum(b, x, z, neck + 0.12, neck + 0.38, radius * 0.92, radius * 1.42, 0.6, ch);
   box(b, [x, neck + 0.5, z], axes, [radius * 1.55, 0.12, radius * 1.55], 0.62, ch);
 }
 
+/** A fallen drum's or capital's ground: where it lies and how far round it reaches, so no two lie in each other. */
+interface Lying {
+  readonly x: number;
+  readonly z: number;
+  readonly reach: number;
+}
+
 /**
- * Where a column broke as it fell: its drums lying in the grass past the steps along the way it fell, rolled a
- * little apart, and its capital at the end, growing in as the shaft goes.
+ * Where a column broke as it fell: each drum that went, and its capital, lying in the grass about where it struck,
+ * rolled on a little and turned, growing in as the shaft goes. One that struck the steps rolled down them and lies
+ * against the lowest, along it. None lies in another or in the steps; one with nowhere to lie is left out.
  */
-function fallenDrums(b: PartBuilder, from: V3, away: number, start: number, height: number, radius: number, grow: number, r: Rand): void {
-  const drums = Math.max(3, Math.round((height - 1.04) / DRUM));
-  let d = start;
+function fallenDrums(b: PartBuilder, centre: V3, away: number, edge: number, pieces: readonly number[], radius: number, grow: number, lying: Lying[], r: Rand): void {
   const dir: V3 = [Math.cos(away), 0, Math.sin(away)];
   const side: V3 = [-dir[2], 0, dir[0]];
-  for (let k = 0; k <= drums; k++) {
-    const len = k === drums ? radius * 1.1 : DRUM * r.range(0.9, 1);
-    const off = r.range(-0.45, 0.45);
-    const c: V3 = [from[0] + dir[0] * (d + len / 2) + side[0] * off, 0, from[2] + dir[2] * (d + len / 2) + side[2] * off];
-    const yaw = away + r.range(-0.6, 0.6);
-    const ch = still([c[0], 0, c[2]], 0.6, { grow, tint: (r.next() - 0.5) * 0.04 });
-    if (k === drums) {
-      // The capital, upside down where it came to rest.
-      box(b, [c[0], radius * 0.55, c[2]], [[Math.cos(yaw), 0, Math.sin(yaw)], UP, [-Math.sin(yaw), 0, Math.cos(yaw)]], [radius * 1.5, radius * 0.55, radius * 1.5], 0.56, ch);
-    } else {
-      const u: V3 = [Math.cos(yaw) * len * 0.5, 0, Math.sin(yaw) * len * 0.5];
-      const y = radius * 0.92;
-      log(b, [c[0] - u[0], y, c[2] - u[2]], [c[0] + u[0], y, c[2] + u[2]], radius, 0.55 + 0.1 * r.next(), ch, 12);
+  let along = 0;
+  pieces.forEach((len, k) => {
+    const capital = k === pieces.length - 1;
+    along += len / 2;
+    const d = along + r.range(0.2, 2.4);
+    along += len / 2;
+    // The farther a drum flew, the farther it may have rolled aside.
+    const off = r.range(-1, 1) * (0.5 + 0.16 * d);
+    let x = centre[0] + dir[0] * d + side[0] * off;
+    let z = centre[2] + dir[2] * d + side[2] * off;
+    let yaw = away + r.range(-1.3, 1.3);
+    const reach = capital ? radius * 1.55 * Math.SQRT2 : Math.hypot(len / 2, radius);
+    // It struck the steps and rolled down them, coming to rest against the lowest, along it.
+    const out = Math.hypot(x, z);
+    if (out < edge + reach) {
+      const round = Math.atan2(z, x) + r.range(-0.12, 0.12);
+      const rest = edge + (capital ? reach : radius) + 0.03;
+      x = Math.cos(round) * rest;
+      z = Math.sin(round) * rest;
+      yaw = round + Math.PI / 2 + r.range(-0.08, 0.08);
     }
-    d += len + r.range(0.15, 0.6);
-  }
+    // Clear of every drum already lying, pushed on outward if need be.
+    for (let tries = 0; tries < 10 && lying.some((o) => Math.hypot(o.x - x, o.z - z) < o.reach + reach + 0.04); tries++) {
+      const round = Math.atan2(z, x);
+      x += Math.cos(round) * 0.6;
+      z += Math.sin(round) * 0.6;
+    }
+    if (lying.some((o) => Math.hypot(o.x - x, o.z - z) < o.reach + reach + 0.04)) return;
+    lying.push({ x, z, reach });
+    const ch = still([x, 0, z], 0.6, { grow, tint: (r.next() - 0.5) * 0.04 });
+    if (capital) {
+      // The capital, upside down where it came to rest.
+      box(b, [x, radius * 0.55, z], [[Math.cos(yaw), 0, Math.sin(yaw)], UP, [-Math.sin(yaw), 0, Math.cos(yaw)]], [radius * 1.5, radius * 0.55, radius * 1.5], 0.56, ch);
+      return;
+    }
+    const u: V3 = [Math.cos(yaw) * len * 0.5, 0, Math.sin(yaw) * len * 0.5];
+    log(b, [x - u[0], radius * 0.96, z - u[2]], [x + u[0], radius * 0.96, z + u[2]], radius, 0.55 + 0.1 * r.next(), ch, 12);
+  });
 }
 
 /**
@@ -207,12 +243,19 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
   // A column starts to topple at its own vitality; halfway down it breaks, the shaft going as its drums come to lie
   // in the grass, so every column lies broken before vitality reaches nothing.
   order.forEach((k, m) => (falls[k] = 0.29 - (0.12 * m) / Math.max(1, n - 1) + r.range(-0.006, 0.006)));
+  // Each falls to its own side of straight out, within a spread its neighbours leave room for; a few keep a drum or
+  // two standing on their foot, broken off above them.
+  const spread = Math.min(0.9, 5.4 / n);
+  const lying: Lying[] = [];
+  const shaft = shaftOf(floor, height, radius);
   angles.forEach((a, k) => {
-    // Outward, a little to one side, so the fallen columns never lie like spokes.
-    const away = a + r.range(-2.1, 2.1) / n;
+    const away = a + r.range(-1, 1) * spread;
     const radial: V3 = [Math.cos(away), 0, Math.sin(away)];
     const centre = around(a, ring, 0);
-    const toe: V3 = [centre[0] + radial[0] * radius, floor + 0.42, centre[2] + radial[2] * radius];
+    const stay = r.next() < 0.35 ? (r.next() < 0.5 ? 1 : 2) : 0;
+    const drumLen = (shaft.neck - shaft.foot) / shaft.drums;
+    const stub = shaft.foot + stay * drumLen;
+    const toe: V3 = [centre[0] + radial[0] * shaft.at(stub), stub, centre[2] + radial[2] * shaft.at(stub)];
     const axis = normalize(cross(UP, radial));
     // It would come to rest once its top met the ground past the steps.
     const head = around(a, ring, floor + height);
@@ -222,9 +265,11 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     const fall = falls[k] as number;
     const wither = 0.45 + 0.3 * r.next();
     const tint = (r.next() - 0.5) * 0.05;
-    columnFoot(stone, a, ring, floor, radius, still([centre[0], floor, centre[2]], wither, { tint }));
-    columnShaft(stone, a, ring, floor, height, radius, { loss: fall - 0.15, droop: 0, wither, glow: 0, pivot: toe, tint, fall: [axis[0] * most, axis[1] * most, axis[2] * most, fall] }, r.fork(`shaft${k}`));
-    fallenDrums(stone, centre, away, edge - ring + 0.7, height, radius, fall - 0.15, r.fork(`drums${k}`));
+    const standing = still([centre[0], floor, centre[2]], wither, { tint });
+    columnFoot(stone, a, ring, floor, radius, standing);
+    columnShaft(stone, a, ring, floor, height, radius, stay, standing, { loss: fall - 0.15, droop: 0, wither, glow: 0, pivot: toe, tint, fall: [axis[0] * most, axis[1] * most, axis[2] * most, fall] }, r.fork(`shaft${k}`));
+    const pieces = [...Array.from({ length: shaft.drums - stay }, () => drumLen - JOINT), radius * 1.1];
+    fallenDrums(stone, centre, away, edge, pieces, radius, fall - 0.15, lying, r.fork(`drums${k}`));
   });
 
   // The ring over the columns, in a span from each column to the next; each goes before either column under it
@@ -243,7 +288,8 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     sector(stone, a, a1, ring - radius * 1.2, ring + radius * 1.2, beam + e * 0.45, beam + e * 0.8, shade + 0.05, ch);
     sector(stone, a, a1, ring - radius * 1.2, ring + radius * 2, beam + e * 0.8, beam + e, shade + 0.02, ch, true);
     if (p.roof === "an open ring") sector(stone, a, a1, ring - radius * 0.75, ring + radius * 0.75, beam + e, beam + e + 0.7 * s, shade, ch);
-    return { a0: a, a1, loss, centre: around((a + a1) / 2, ring, beam + 0.6 * s) };
+    // What rests on a span sinks onto the middle of its top.
+    return { a0: a, a1, loss, centre: around((a + a1) / 2, ring, beam + e) };
   });
   const lastSpan = Math.max(...spans.map((sp) => sp.loss));
 
@@ -252,7 +298,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     const high = p.roof === "a high dome";
     let spring = beam + ENTABLATURE * s;
     // A high dome stands on a drum, which goes after the dome and before the ring it stands on.
-    const drumGoes = lastSpan + SETTLES;
+    const drumGoes = lastSpan + ONTO;
     const seats = spans.map((sp) => sp.centre);
     if (high) {
       const drumH = 1.8 * s;
@@ -260,7 +306,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
         const ch = still(sp.centre, 0.55, { loss: drumGoes + r.range(0, 0.01), tint: (r.next() - 0.5) * 0.03 });
         sector(stone, sp.a0, sp.a1, ring - radius * 1.05, ring + radius * 1.05, spring, spring + drumH, 0.55 + 0.06 * r.next(), ch);
         sector(stone, sp.a0, sp.a1, ring - radius * 1.05, ring + radius * 1.45, spring + drumH, spring + drumH + 0.3 * s, 0.6, ch, true);
-        seats[k] = around((sp.a0 + sp.a1) / 2, ring, spring + drumH * 0.5);
+        seats[k] = around((sp.a0 + sp.a1) / 2, ring, spring + drumH + 0.3 * s);
       });
       spring += drumH + 0.3 * s;
     }
@@ -268,7 +314,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     const courses = high ? 5 : 4;
     const gores = n * 2;
     const open = high ? 0.86 : 1;
-    const base = (high ? drumGoes : lastSpan) + SETTLES;
+    const base = (high ? drumGoes : lastSpan) + ONTO;
     let topmost = 0;
     let crownSeat: V3 = [0, spring, 0];
     for (let g = 0; g < gores; g++) {

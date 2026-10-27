@@ -2,11 +2,13 @@
 // ring of faceted stone rises from a foot either side of the way through and
 // leaps over it; the way runs along z, which the world turns toward the
 // trail. The ring is swept around the opening's edge and stands in pieces
-// that meet without a seam: on each side a stack of two blocks, and over the
-// opening the span in two halves. As vitality falls the stacks lean apart
-// and a crack opens across the span; then each half of the span falls and
-// lies broken in the grass, leaving two stacks either side of the way. The
-// stacks are separate pieces, so a walker passes between them.
+// that meet without a seam: on each side a stump and two blocks above it,
+// and over the opening the span in two halves. As vitality falls one half
+// sags and a crack steps open across the span; then each half falls and
+// lies broken in the grass, and the stacks crumble a block at a time to
+// stumps a third to a half of the arch's height, broken on top, their blocks
+// in chunks round them. The stacks are separate pieces, so a walker passes
+// between them.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { rockArchParams } from "../../landmark.ts";
@@ -153,8 +155,7 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
 
   // Where it breaks: the crack near the crown, the stacks' tops at the haunches, and a joint halfway up each stack.
   const crown = centers.reduce((best, c, i) => (c[1] > (centers[best] as V3)[1] ? i : best), 0);
-  const crack = clamp(crown + Math.round(r.range(-0.07, 0.07) * count), 4, count - 5);
-  // High on the haunches: what a stack carries of the span must rest across most of its reach from the toe it leans over.
+  const crack = clamp(crown + Math.round(r.range(-0.07, 0.07) * count), 8, count - 9);
   const springH = rise * r.range(0.72, 0.8);
   const leftTop = centers.findIndex((c, i) => i < crack - 3 && c[1] >= springH);
   const rightTop = count - 1 - [...centers].reverse().findIndex((c, i) => count - 1 - i > crack + 3 && c[1] >= springH);
@@ -163,10 +164,14 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
     for (let i = from; i !== to; i += step) if ((centers[i] as V3)[1] >= h) return i;
     return to;
   };
-  const leftJoint = firstUp(0, leftTop, (centers[leftTop] as V3)[1] * r.range(0.42, 0.56));
-  const rightJoint = firstUp(count - 1, rightTop, (centers[rightTop] as V3)[1] * r.range(0.42, 0.56));
+  // Each stack breaks into a stump a third to a half of the arch's height and two blocks above it.
+  const tall = rise + ringT;
+  const leftStump = firstUp(0, leftTop - 4, tall * r.range(0.33, 0.48));
+  const rightStump = firstUp(count - 1, rightTop + 4, tall * r.range(0.33, 0.48));
+  const leftMid = Math.round((leftStump + leftTop) / 2);
+  const rightMid = Math.round((rightStump + rightTop) / 2);
   // Each break is ragged: its ring's points move along the sweep, by as much as the rings are apart.
-  for (const i of [leftJoint, leftTop, crack, rightTop, rightJoint]) {
+  for (const i of [leftStump, leftMid, leftTop, crack, rightTop, rightMid, rightStump]) {
     (grid[i] as V3[]).forEach((q, j) => {
       const next = (grid[Math.min(count - 1, i + 1)] as V3[])[j] as V3;
       const gap = Math.hypot(next[0] - q[0], next[1] - q[1], next[2] - q[2]);
@@ -188,41 +193,61 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
     }),
   );
 
-  // How it gives way, side by side: each side leans out about its outer toe, opening the crack across the span; then
-  // its half of the span falls, sinking into its stack, one side first. The stacks stand: a block sinking toward the
-  // toe from high on a stack this tall would pass outside the stone below it.
+  // How it gives way. One half of the span sags about the outer edge of its springing, so a crack steps open across
+  // the span; then that half falls, and the other after it, each sinking into the top of its stack; then each stack
+  // crumbles from the top, a block at a time, each sinking onto the joint below it, down to a stump with a broken top.
+  // A piece goes only once everything resting on it has all but gone.
   const out = new PartBuilder("stone", "solid");
-  /** The outer edge of a foot where it meets the ground, which its side leans over and its half of the span sinks toward. */
-  const footOf = (from: number, to: number, side: number): { toe: V3; outer: number } => {
-    let ground = from;
-    for (let i = from; i <= to; i++) if (Math.abs((centers[i] as V3)[1]) < Math.abs((centers[ground] as V3)[1])) ground = i;
-    const outer = side * Math.max(...(grid[ground] as V3[]).map((q) => side * q[0]));
-    return { toe: [outer, 0, 0], outer };
+  const edgeOf = (i: number, side: number): V3 => {
+    const ring = grid[i] as V3[];
+    let best = ring[0] as V3;
+    for (const q of ring) if (side * q[0] > side * best[0]) best = q;
+    return [best[0], best[1], (centers[i] as V3)[2]];
   };
+  const SETTLES = 0.07;
+  const first = r.range(0.4, 0.42);
+  const sags = r.next() < 0.5 ? 0 : 1;
+  const spanGoes = sags === 0 ? [first, first - r.range(0.03, 0.05)] : [first - r.range(0.03, 0.05), first];
   const sides = [
-    { ...footOf(0, leftJoint, -1), turn: r.range(0.032, 0.042), from: r.range(0.78, 0.84) },
-    { ...footOf(rightJoint, count - 1, 1), turn: -r.range(0.032, 0.042), from: r.range(0.72, 0.77) },
-  ];
-  const spanGoes = [r.range(0.34, 0.4), 0];
-  spanGoes[1] = (spanGoes[0] as number) - r.range(0.04, 0.07);
-  const pieces: { from: number; to: number; side: number; loss: number }[] = [
-    { from: 0, to: leftJoint, side: 0, loss: 0 },
-    { from: leftJoint, to: leftTop, side: 0, loss: 0 },
-    { from: leftTop, to: crack, side: 0, loss: spanGoes[0] as number },
-    { from: crack, to: rightTop, side: 1, loss: spanGoes[1] as number },
-    { from: rightTop, to: rightJoint, side: 1, loss: 0 },
-    { from: rightJoint, to: count - 1, side: 1, loss: 0 },
+    { side: -1, stump: leftStump, mid: leftMid, top: leftTop, span: [leftTop, crack] as const },
+    { side: 1, stump: rightStump, mid: rightMid, top: rightTop, span: [crack, rightTop] as const },
   ];
   const tint = r.range(-0.03, 0.03);
-  for (const piece of pieces) {
-    const side = sides[piece.side] as (typeof sides)[number];
-    const ch: Channels = { loss: piece.loss, droop: 0, wither: 0, glow: 0, pivot: side.toe, tint, fall: [0, 0, side.turn, side.from] };
-    emitSweep(out, grid, normals, centers, piece.from, piece.to, rise + ringT, ch, seed);
-  }
+  const crumbled: { side: number; stump: number; goes: number; size: number }[] = [];
+  sides.forEach((sd, k) => {
+    const span = spanGoes[k] as number;
+    const upper = span - SETTLES;
+    const lower = upper - SETTLES;
+    const hinge = edgeOf(sd.top, sd.side);
+    // The half that sags would drop its crown end a meter, turning about the hinge; it falls before the sag is
+    // done, so it never lies sagged over nothing but its hinge.
+    const reach = Math.hypot((centers[crack] as V3)[0] - hinge[0], (centers[crack] as V3)[1] - hinge[1]);
+    const turn = clamp(1 / Math.max(1, reach), 0.04, 0.1) * sd.side;
+    const spanCh: Channels = { loss: span, droop: 0, wither: 0, glow: 0, pivot: hinge, tint, ...(k === sags ? { fall: [0, 0, turn, span + 0.15] as const } : {}) };
+    const [s0, s1] = sd.span;
+    emitSweep(out, grid, normals, centers, s0, s1, tall, spanCh, seed);
+    const along = (from: number, to: number): [number, number] => (from < to ? [from, to] : [to, from]);
+    const [b0, b1] = along(sd.mid, sd.top);
+    emitSweep(out, grid, normals, centers, b0, b1, tall, { loss: upper, droop: 0, wither: 0, glow: 0, pivot: centers[sd.mid] as V3, tint }, seed);
+    const [a0, a1] = along(sd.stump, sd.mid);
+    emitSweep(out, grid, normals, centers, a0, a1, tall, { loss: lower, droop: 0, wither: 0, glow: 0, pivot: centers[sd.stump] as V3, tint }, seed);
+    const [g0, g1] = along(sd.side < 0 ? 0 : count - 1, sd.stump);
+    emitSweep(out, grid, normals, centers, g0, g1, tall, { loss: 0, droop: 0, wither: 0, glow: 0, pivot: centers[sd.stump] as V3, tint }, seed);
+    crumbled.push({ side: sd.side, stump: sd.stump, goes: upper, size: 1 }, { side: sd.side, stump: sd.stump, goes: lower, size: 0.85 });
+  });
 
-  // What has fallen lies in the grass and grows in as it falls, stopping no walker: the broken span under each half.
-  // Old scree lies at both feet at any vitality.
+  // What has fallen lies in the grass and grows in as it falls, stopping no walker: the broken span under each half,
+  // and each stack's blocks as chunks round its stump. Old scree lies at both feet at any vitality.
   const fallen = r.fork("fallen");
+  /** The ground ring under a stump: its reach along x and its depth along z. */
+  const footing = (stump: number, side: number): { inner: number; outer: number; deep: number } => {
+    let ground = side < 0 ? 0 : count - 1;
+    const step = side < 0 ? 1 : -1;
+    for (let i = ground; i !== stump; i += step) if (Math.abs((centers[i] as V3)[1]) < Math.abs((centers[ground] as V3)[1])) ground = i;
+    const ring = grid[ground] as V3[];
+    const xs = ring.map((q) => q[0]);
+    return { inner: side < 0 ? Math.max(...xs) : Math.min(...xs), outer: side < 0 ? Math.min(...xs) : Math.max(...xs), deep: Math.max(...ring.map((q) => Math.abs(q[2]))) };
+  };
   for (const [k, side] of [-1, 1].entries()) {
     const grow = spanGoes[k] as number;
     for (let m = 0; m < 4; m++) {
@@ -230,8 +255,19 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
       chunk(out, side * half * fallen.range(0.12, 0.85), fallen.range(-0.45, 0.45) * depth, size, fallen.next() * Math.PI, grow, seed + k * 7 + m, fallen);
     }
     for (let m = 0; m < 6; m++) rubble(out, side * half * fallen.range(0, 1.1), fallen.range(-0.8, 0.8) * depth, ringT * fallen.range(0.12, 0.22), grow, fallen);
-    const outer = (sides[k] as (typeof sides)[number]).outer;
-    for (let m = 0; m < 4; m++) rubble(out, outer + side * fallen.range(0.2, 1.6), fallen.range(-0.9, 0.9) * depth, ringT * fallen.range(0.08, 0.16), 1, fallen);
+    const foot = footing(k === 0 ? leftStump : rightStump, side);
+    for (let m = 0; m < 4; m++) rubble(out, foot.outer + side * fallen.range(0.2, 1.6), fallen.range(-0.9, 0.9) * depth, ringT * fallen.range(0.08, 0.16), 1, fallen);
+    // The stack's blocks, broken, lie off its stump: out beyond it and in front of it and behind it, clear of it.
+    for (const c of crumbled.filter((x) => x.side === side)) {
+      for (let m = 0; m < 3; m++) {
+        const size: V3 = [ringT * fallen.range(0.3, 0.48) * c.size, ringT * fallen.range(0.22, 0.34) * c.size, ringT * fallen.range(0.28, 0.42) * c.size];
+        const reach = Math.max(size[0], size[2]);
+        const out_ = m === 0;
+        const x = out_ ? foot.outer + side * (reach + fallen.range(0.3, 2)) : (foot.inner + foot.outer) / 2 + fallen.range(-1, 1) * Math.abs(foot.outer - foot.inner) * 0.5;
+        const z = out_ ? fallen.range(-0.5, 0.5) * depth : (m === 1 ? 1 : -1) * (foot.deep + reach + fallen.range(0.2, 1.4));
+        chunk(out, x, z, size, fallen.next() * Math.PI, c.goes, seed + 31 + k * 13 + m, fallen);
+      }
+    }
   }
   return { parts: [out.part()], anchors: [{ position: [0, rise + ringT, 0], normal: [0, 1, 0], size: 1 }] };
 }
