@@ -15,10 +15,9 @@ const firstTree = (where: (bp: Blueprint) => boolean = () => true): Blueprint =>
 const named = (bp: Blueprint): string =>
   ["form", "crown", "bloom", "drift"].flatMap((slot) => (bp.slots[slot] === undefined ? [] : [`${bp.slots[slot].use} (${Object.values(bp.slots[slot].params).flat().join(", ")})`])).join(" with ");
 /**
- * The plants past their triangle budgets today, by kind. None stands in a world yet, since every world's trees, bushes
- * and flowers are still hand-filled: a fir's frame under leaf clumps or a feathery leaf mound, each of its whorls
- * carrying a crown's worth; a sapling's clumps bowed with fruit; a bramble or a scrub at its largest and densest under
- * clumps or a mound; and the widest, thickest, tallest drifts of bells and spikes.
+ * The plants past their triangle budgets today, by kind: a fir's frame under leaf clumps or a feathery leaf mound,
+ * each of its whorls carrying a crown's worth; a sapling's clumps bowed with fruit; a bramble or a scrub at its
+ * largest and densest under clumps or a mound; and the widest, thickest, tallest drifts of bells and spikes.
  */
 const OVER_BUDGET: Readonly<Record<string, readonly string[]>> = {
   tree: [

@@ -6,12 +6,12 @@
 // the same either way.
 
 import { type Blueprint, type Library, seedOf } from "@gaia/schema";
-import { bush, flora, landmark, rock, structure, tree, wildflowers } from "@gaia/kinds";
+import { bush, landmark, rock, structure, tree, wildflowers } from "@gaia/kinds";
 import { type Realized, realize } from "@gaia/realize";
 import type { MakeReply } from "./make-worker.ts";
 import MakeWorker from "./make-worker.ts?worker";
 
-const KINDS = { flora, tree, bush, landmark, rock, structure, wildflowers } as const;
+const KINDS = { tree, bush, landmark, rock, structure, wildflowers } as const;
 /** The kinds a build can be made ahead for. */
 export type BuildKind = keyof typeof KINDS;
 

@@ -47,7 +47,7 @@ export const AS_THING = "thing";
 export interface StandSymbol {
   readonly x: number;
   readonly z: number;
-  /** The understory rule and variant it stands as, or "trees" and the flora preset of the tree it stands as. */
+  /** The group it stands in and its build among the group's (`OpenedWorld.plants`), or `AS_THING` for a building or a landmark. */
   readonly rule: string;
   readonly variant: number;
   /** Its footprint's radius at scale 1, meters (a tree's comes from its crown), and its scale. */

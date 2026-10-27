@@ -5,7 +5,7 @@
 
 import { type AnyKind, Library } from "@gaia/schema";
 import { FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES } from "@gaia/primitives";
-import { bush, flora, landmark, rock, structure, tree, wildflowers } from "@gaia/kinds";
+import { bush, landmark, rock, structure, tree, wildflowers } from "@gaia/kinds";
 import { type Realized, realize } from "@gaia/realize";
 import type { BuildAsk } from "./made.ts";
 
@@ -18,7 +18,7 @@ interface WorkerScope {
 }
 
 const scope = globalThis as unknown as WorkerScope;
-const KINDS: Readonly<Record<BuildAsk["kind"], AnyKind>> = { flora, tree, bush, landmark, rock, structure, wildflowers };
+const KINDS: Readonly<Record<BuildAsk["kind"], AnyKind>> = { tree, bush, landmark, rock, structure, wildflowers };
 // Realize looks primitives up by id alone, so one library of every kind's primitives builds what each kind's own would.
 const lib = new Library([...FLORA_PRIMITIVES, ...LANDMARK_PRIMITIVES, ...ROCK_PRIMITIVES, ...STRUCTURE_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]);
 
