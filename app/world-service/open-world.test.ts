@@ -3,7 +3,7 @@ import type { CodeGraph, CodeFacts, EngineClient, GraphNode, JevRequest } from "
 import { composeWorld, factsOf, judgeWorld, keptJev, landOf, requestKey } from "@gaia/world";
 import { fakeJevClient } from "@gaia/world/testing";
 import { LOOKS } from "../renderer/terrain/looks.ts";
-import proving from "../renderer/terrain/fixtures/proving.json";
+import { facts as provingFacts } from "virtual:proving-ground";
 import { LIMIT_KEY, healWorld, judgedGraph, openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
@@ -25,7 +25,7 @@ function graphOf(m: CodeFacts): CodeGraph {
   const edges = m.files.flatMap((f) => f.imports.map((to) => ({ from: `file:${f.path}`, to: `file:${to}`, kind: "imports" as const, by: { by: "rule" as const } })));
   return { projectId: "proving", name: "proving", commit: "c0ffee", nodes, edges, pending: [] };
 }
-const graph = graphOf(proving as unknown as CodeFacts);
+const graph = graphOf(provingFacts);
 const facts = factsOf(graph);
 
 /** An engine with Jev live and nothing kept, whose every batch of answers waits until `release` lets it go. */
@@ -162,7 +162,9 @@ describe("opening a world", () => {
     const asked: number[] = [];
     const { engine, batches } = engineWith({ limitUsd: 0.001, estimateUsd: 0.05 });
     await expect(openWorld({ engine, root: "proving", consent: async (plan) => (asked.push(plan.estimatedUsd), false), progress: () => {} })).rejects.toThrow(/you chose not to go ahead/);
-    expect(asked).toEqual([0.05]);
+    // The figure counts judging's requests and composing's too: about two a thing, each priced as one that composes a tree.
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toBeGreaterThan(0.05 * 2);
     expect(batches).toEqual([]);
   });
 });

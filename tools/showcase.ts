@@ -10,7 +10,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 import type { CodeGraph, JevResponse } from "@gaia/schema";
-import { composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
+import { composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 import { showcaseFiles } from "../app/renderer/terrain/showcase-code.ts";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
@@ -18,6 +18,7 @@ import { judgedGraph, judgedThings, openWorld } from "../app/world-service/open-
 import { startOpenRouterStandIn } from "./openrouter-stand-in.ts";
 import { engineBinary } from "./engine-binary.ts";
 import { cargoEnv } from "./cargo-env.ts";
+import { fixtureJson } from "./fixture-json.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
@@ -60,7 +61,7 @@ if (data === undefined) throw new Error("Set GAIA_DATA_DIR to the store that kee
 const root = resolve(data, "gaia");
 writeCode(root);
 
-/** The answers the page lays the showcase out from, by request key, as `pnpm jev-world` keeps Gaia's. */
+/** The answers the page lays the showcase out from, by request key, as the app keeps a project's. */
 interface Kept {
   readonly answers: Record<string, JevResponse>;
 }
@@ -102,14 +103,17 @@ try {
   const before = await billed(project);
 
   // What the run would send: the understanding pass, then the looks and what every thing stands as on the graph as it
-  // stands. Composing follows from those answers, so it is not planned ahead.
+  // stands, and composing, which follows from those answers and is priced at about two requests a thing.
   const understanding = await client.call("understanding.plan", { root });
   const graph0 = judgedGraph(first);
   const facts0 = factsOf(graph0);
   const looks = [...planWorldRequests(facts0, LOOKS), ...planStanding(facts0, LOOKS, { graph: graph0 }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
   const judging = await client.call("jev.estimate", { requests: looks.map((p) => p.request) });
-  const estimate = understanding.estimate.estimatedUsd + judging.estimatedUsd;
-  console.error(`showcase: about ${understanding.estimate.requests + judging.requests} requests before composing, about $${estimate.toFixed(4)}`);
+  // Composing follows from those answers: about two requests a thing, priced at one that composes a tree.
+  const composing = looks.length > 0 ? composingEstimate(facts0, LOOKS, graph0) : null;
+  const each = composing === null ? 0 : (await client.call("jev.estimate", { requests: [composing.sample] })).estimatedUsd;
+  const estimate = understanding.estimate.estimatedUsd + judging.estimatedUsd + each * (composing?.requests ?? 0);
+  console.error(`showcase: about ${understanding.estimate.requests + judging.requests} requests before composing and ${composing?.requests ?? 0} composing, about $${estimate.toFixed(4)}`);
   const allowed = Number(args["spend-up-to"] ?? "0");
   if (judge === "jev" && !(allowed >= estimate * 2)) throw new Error(`Refusing to spend: pass --spend-up-to ${(estimate * 2).toFixed(4)} or more to ask Jev.`);
 
@@ -141,7 +145,7 @@ try {
     console.error(`showcase: the land ${same ? "is identical to" : "DIFFERS from"} the other v1's`);
     if (!same) process.exitCode = 1;
   }
-  writeFileSync(keptFile, `${JSON.stringify({ answers: Object.fromEntries(Object.entries(used).sort(([a], [b]) => (a < b ? -1 : 1))) }, null, 1)}\n`);
+  writeFileSync(keptFile, fixtureJson({ answers: Object.fromEntries(Object.entries(used).sort(([a], [b]) => (a < b ? -1 : 1))) }));
   const after = await billed(project);
   console.log(
     JSON.stringify({

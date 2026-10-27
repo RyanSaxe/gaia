@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, type Built, type FilledSlot, Library, blueprintOf, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type Built, type FilledSlot, Library, type Skeleton, blueprintOf, rand, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, BUSH_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, TREE_PRIMITIVES, fieldAt } from "@gaia/primitives";
 import { biome, bush, structure, tree } from "@gaia/kinds";
 import { sweep, validate } from "@gaia/world";
@@ -29,6 +29,7 @@ import {
   levelPad,
   siteToWorld,
   groundedBase,
+  groundSlope,
   heightAt,
   landHalf,
   landformsOf,
@@ -501,42 +502,97 @@ describe("terrain", { timeout: 20_000 }, () => {
     expect(offs[Math.floor(offs.length * 0.99)]).toBeLessThan(0.1);
   });
 
-  it("grounds plants: every point of a trunk's bottom ring is at or under the ground", () => {
+  describe("grounds plants, each copy leaned on its ground's slope", () => {
     const floraLib = new Library(FLORA_PRIMITIVES);
-    // Every tree's and every bush's frame, each with every crown, but a bramble's: its canes bow back to the soil
-    // metres from its root, so it meets the ground across its whole spread, never on a trunk.
-    const plants = [tree, bush].flatMap((k) =>
-      sweep(k, new Library(k === tree ? TREE_PRIMITIVES : BUSH_PRIMITIVES), { pairs: [["form", "crown"]] }).blueprints.flatMap((blueprint) => (blueprint.slots.form?.use === "bramble@1" ? [] : [{ k, blueprint }])),
-    );
-    // The trunk's base is every bark vertex at the ground, however many sides or lobes the trunk has.
-    const bases = plants.map(({ k, blueprint }) => {
-      const bark = realize(blueprint, k, floraLib, { seed: seedOf("p"), facts: { scale: 1, age: 1 } }).parts.find((p) => p.swatch === "bark")!;
-      const ring: (readonly [number, number, number])[] = [];
-      for (let k = 0; k < bark.positions.length; k += 3) if (bark.positions[k + 1]! < 0.05) ring.push([bark.positions[k]!, bark.positions[k + 1]!, bark.positions[k + 2]!]);
-      return ring;
-    });
-    for (const ring of bases) expect(ring.length, "the origin is the trunk base").toBeGreaterThanOrEqual(3);
-    baked.slice(0, 8).forEach((t, w) => {
-      // Spots a tree could stand on: dry, gentle ground across the land, every 23 m.
+    // Every tree's and every bush's frame, each with every crown.
+    const plants = [tree, bush].flatMap((k) => sweep(k, new Library(k === tree ? TREE_PRIMITIVES : BUSH_PRIMITIVES), { pairs: [["form", "crown"]] }).blueprints.map((blueprint) => ({ k, blueprint })));
+    type Point = readonly [number, number, number];
+    /** Spots a plant could stand on in world `t`: dry, gentle ground across the land, every 23 m. */
+    const spotsOf = (t: Terrain): { x: number; z: number }[] => {
       const spots: { x: number; z: number }[] = [];
       const half = t.spec.size / 2 - 20;
       for (let z = -half; z <= half && spots.length < 16; z += 23) {
         for (let x = -half; x <= half && spots.length < 16; x += 23) if (slopeAt(t.lattice, x, z) <= PLANT_SLOPE / 2 && !isWet(t, x, z)) spots.push({ x, z });
       }
-      expect(spots.length).toBe(16);
-      spots.forEach((s, i) => {
-        const ring = bases[(w * spots.length + i) % bases.length]!;
-        const radius = Math.max(...ring.map((v) => Math.hypot(v[0], v[2])));
-        const y = groundedBase(t.lattice, s.x, s.z, radius);
-        const turn = i * 1.7;
-        for (const [vx, vy, vz] of ring) {
-          // Three's Y rotation: x' = x cos + z sin, z' = -x sin + z cos.
-          const x = s.x + vx * Math.cos(turn) + vz * Math.sin(turn);
-          const z = s.z - vx * Math.sin(turn) + vz * Math.cos(turn);
-          const g = heightAt(t.lattice, x, z);
-          expect(y + vy, "no gap under the trunk").toBeLessThanOrEqual(g);
-          expect(g - (y + vy), "not sunk deep").toBeLessThan(0.8);
-        }
+      return spots;
+    };
+    /**
+     * A plant's point, stood at `s` on origin height `y`, turned by `turn` (Three's Y rotation, x' = x cos + z sin,
+     * z' = -x sin + z cos) and leaned on the ground's slope there as its copy is, its base following the ground while
+     * its stems stay upright; and the ground's height under it.
+     */
+    const stood = (t: Terrain, s: { x: number; z: number }, y: number, turn: number, [vx, vy, vz]: Point): { at: number; ground: number } => {
+      const dx = vx * Math.cos(turn) + vz * Math.sin(turn);
+      const dz = -vx * Math.sin(turn) + vz * Math.cos(turn);
+      const [gx, gz] = groundSlope(t.lattice, s.x, s.z);
+      return { at: y + vy + gx * dx + gz * dz, ground: heightAt(t.lattice, s.x + dx, s.z + dz) };
+    };
+    const barkOf = (k: typeof tree | typeof bush, blueprint: Blueprint): { points: Point[]; skel: Skeleton } => {
+      const built = realize(blueprint, k, floraLib, { seed: seedOf("p"), facts: { scale: 1, age: 1 } });
+      const bark = built.parts.find((p) => p.swatch === "bark")!;
+      const points: Point[] = [];
+      for (let k = 0; k < bark.positions.length; k += 3) points.push([bark.positions[k]!, bark.positions[k + 1]!, bark.positions[k + 2]!]);
+      return { points, skel: built.slots.get("form")?.output as Skeleton };
+    };
+    /**
+     * Where a plant meets the soil at its root: every bark vertex at the ground near where a trunk, a stem or a cane
+     * leaves it, however many sides or lobes it has (a trunk's root flare reaches under three of its radii).
+     */
+    const rootRing = (points: readonly Point[], skel: Skeleton): Point[] =>
+      points.filter((v) => v[1] < 0.05 && skel.limbs.some((l) => l.parent === -1 && Math.hypot(v[0] - l.start[0], v[2] - l.start[2]) < 3.5 * l.startRadius));
+
+    it("stands every trunk's and every stem's bottom ring at or under the ground", () => {
+      const bases = plants.map(({ k, blueprint }) => {
+        const { points, skel } = barkOf(k, blueprint);
+        return rootRing(points, skel);
+      });
+      for (const ring of bases) expect(ring.length, "the origin is the trunk base").toBeGreaterThanOrEqual(3);
+      baked.slice(0, 8).forEach((t, w) => {
+        const spots = spotsOf(t);
+        expect(spots.length).toBe(16);
+        spots.forEach((s, i) => {
+          const ring = bases[(w * spots.length + i) % bases.length]!;
+          const y = groundedBase(t.lattice, s.x, s.z, Math.max(...ring.map((v) => Math.hypot(v[0], v[2]))));
+          for (const v of ring) {
+            const { at, ground } = stood(t, s, y, i * 1.7, v);
+            expect(at, "no gap under the trunk").toBeLessThanOrEqual(ground);
+            expect(ground - at, "not sunk deep").toBeLessThan(0.8);
+          }
+        });
+      });
+    });
+
+    it("bows every bramble's canes into the soil, downhill as well as up, metres from its root", () => {
+      const brambles = plants.filter(({ blueprint }) => blueprint.slots.form?.use === "bramble@1").map(({ k, blueprint }) => {
+        const { points, skel } = barkOf(k, blueprint);
+        // Each cane runs from the soil at the root, one segment after another, to where it roots again.
+        const ends = skel.limbs.flatMap((l, i) => {
+          if (l.parent !== -1) return [];
+          let at = i;
+          for (let next = skel.limbs.findIndex((m) => m.parent === at && m.depth === l.depth); next !== -1; next = skel.limbs.findIndex((m) => m.parent === at && m.depth === l.depth)) at = next;
+          return [skel.limbs[at]!.end];
+        });
+        // The bark at a cane's far end, within a hand of where its frame ends.
+        const tips = ends.map((e) => points.filter((v) => Math.hypot(v[0] - e[0], v[1] - e[1], v[2] - e[2]) < 0.1));
+        return { root: rootRing(points, skel), tips, reach: Math.max(...ends.map((e) => Math.hypot(e[0], e[2]))) };
+      });
+      expect(brambles.length).toBeGreaterThanOrEqual(3);
+      expect(Math.max(...brambles.map((b) => b.reach)), "the sweep stands a bramble rambling far").toBeGreaterThan(3);
+      baked.slice(0, 8).forEach((t, w) => {
+        spotsOf(t).forEach((s, i) => {
+          const b = brambles[(w * 16 + i) % brambles.length]!;
+          const turn = i * 1.7;
+          const y = groundedBase(t.lattice, s.x, s.z, Math.max(...b.root.map((v) => Math.hypot(v[0], v[2]))));
+          for (const v of b.root) {
+            const { at, ground } = stood(t, s, y, turn, v);
+            expect(at, "no gap under the root").toBeLessThanOrEqual(ground);
+            expect(ground - at, "the root not sunk deep").toBeLessThan(0.8);
+          }
+          for (const tip of b.tips) {
+            expect(tip.length, "bark at every cane's end").toBeGreaterThan(0);
+            expect(Math.min(...tip.map((v) => { const { at, ground } = stood(t, s, y, turn, v); return at - ground; })), "the cane reaches the soil").toBeLessThanOrEqual(0);
+          }
+        });
       });
     });
   });

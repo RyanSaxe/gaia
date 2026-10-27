@@ -5,15 +5,24 @@
 // never made ahead, is realized in place: realize is pure, so the build is
 // the same either way.
 
-import type { Blueprint, Library } from "@gaia/schema";
-import { flora, landmark, rock, structure, wildflowers } from "@gaia/kinds";
+import { type Blueprint, type Library, seedOf } from "@gaia/schema";
+import { bush, landmark, rock, structure, tree, wildflowers } from "@gaia/kinds";
 import { type Realized, realize } from "@gaia/realize";
 import type { MakeReply } from "./make-worker.ts";
 import MakeWorker from "./make-worker.ts?worker";
 
-const KINDS = { flora, landmark, rock, structure, wildflowers } as const;
+const KINDS = { tree, bush, landmark, rock, structure, wildflowers } as const;
 /** The kinds a build can be made ahead for. */
 export type BuildKind = keyof typeof KINDS;
+
+/**
+ * The one build of a tree's, a bush's, a stone's or flowers' blueprint, which every thing answered alike copies:
+ * seeded by the blueprint's content alone, so the same blueprint builds the same in every world.
+ */
+export function plantAsk(blueprint: Blueprint): BuildAsk {
+  if (!(blueprint.kind in KINDS)) throw new Error(`No build is made for a ${blueprint.kind} blueprint.`);
+  return { kind: blueprint.kind as BuildKind, blueprint, seed: seedOf(`build/${blueprint.id}`), facts: { scale: 1, age: 120 } };
+}
 
 /** One build as plain data a worker can take: what realize is given. */
 export interface BuildAsk {
@@ -69,4 +78,10 @@ export function made(ask: BuildAsk, lib: Library): Realized {
   ready.delete(key);
   making.delete(key);
   return built ?? realize(ask.blueprint, KINDS[ask.kind], lib, { seed: ask.seed, facts: ask.facts });
+}
+
+/** The build `ask` names, made on a worker thread now, so a build let go of earlier comes back without holding the page. */
+export async function makeLater(ask: BuildAsk, lib: Library): Promise<Realized> {
+  await makeAhead([ask], 1);
+  return made(ask, lib);
 }

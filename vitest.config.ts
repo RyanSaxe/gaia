@@ -1,6 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { provingGroundVite } from "./tools/proving-ground.ts";
 
 export default defineConfig({
+  // The proving ground, made from its plan once a run (`virtual:proving-ground`).
+  plugins: [provingGroundVite()],
   test: {
     include: ["packages/*/test/**/*.test.ts", "app/**/*.test.ts", "tools/**/*.test.ts"],
     // V8's Maglev compiler in Node 26.7 (V8 14.6) sometimes gives freshly made objects another's numbers when the

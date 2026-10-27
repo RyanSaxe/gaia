@@ -183,8 +183,8 @@ describe("judging a codebase with Jev", () => {
     // Jev judged everything.
     expect(first.document.summary).toContain("judged by Jev");
     const asking = first.shown.filter((o) => o.stage === "asking");
-    // Composing follows from the answers, so it is never planned ahead; every building and landmark was composed, and
-    // each answer, what a thing stands as and composing included, is counted as it comes.
+    // Every building, landmark, tree, bush, stone and drift of flowers was composed, and each answer, what a thing
+    // stands as and composing included, is counted as it comes.
     const composed = first.about.filter((a) => a.startsWith("compose:")).length;
     expect(composed).toBeGreaterThan(0);
     expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, asking: [] });
@@ -253,13 +253,13 @@ describe("judging a codebase with Jev", () => {
     expect(asked[0]?.estimatedUsd).toBeGreaterThan(0);
     expect(asked[0]?.estimatedTokens).toBeGreaterThan(0);
     expect(standIn.received.length).toBe(before);
-    // Declining isn't remembered: the next opening asks again, and going ahead sends every request it planned, and at
-    // most one more round of the understanding pass's where Jev asked for more. Composing follows from the answers, so
-    // it is never planned ahead.
+    // Declining isn't remembered: the next opening asks again, and going ahead sends about as many requests as it
+    // showed: every one it planned, at most one more round of the understanding pass's where Jev asked for more, and
+    // composing every thing, which it counts at about two requests a thing.
     const third = await open(root, data, true);
     expect(third.asked).toHaveLength(1);
-    const planned = third.sent.length - third.about.filter((a) => a.startsWith("compose:")).length;
-    expect(planned).toBeGreaterThanOrEqual(third.asked[0]?.requests ?? Number.POSITIVE_INFINITY);
-    expect(planned).toBeLessThanOrEqual(2 * (third.asked[0]?.requests ?? 0));
+    const shown = third.asked[0]?.requests ?? 0;
+    expect(third.sent.length).toBeGreaterThanOrEqual(shown / 2);
+    expect(third.sent.length).toBeLessThanOrEqual(2 * shown);
   }, 60_000);
 });

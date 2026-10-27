@@ -23,6 +23,22 @@ interface Flower {
 /** Flowers per square meter at the heart of a drift of density 1. */
 const PER_SQUARE_METER = 24;
 const MAX_FLOWERS = 300;
+/** The most triangles a drift takes on average: it is placed by the hundred, beside the 12,000 a bush may. */
+const DRIFT_TRIANGLES = 11_000;
+/** A stem in two segments of three sides, and its two strap leaves. */
+const STEM_TRIANGLES = 16;
+/**
+ * A head's triangles on average, in full and in the lighter form a crowded
+ * drift takes: a daisy's rays and eye, a cup's petals and eye, four bells
+ * of 25 or 15 (without the shoulder ring), and eleven or so florets of 8 or
+ * 4 (a tetrahedron rather than an octahedron).
+ */
+const HEAD_TRIANGLES: Readonly<Record<Species, { readonly full: number; readonly light: number }>> = {
+  daisies: { full: 31, light: 31 },
+  cups: { full: 21, light: 21 },
+  bells: { full: 100, light: 60 },
+  spikes: { full: 92, light: 46 },
+};
 
 /** Night closing per species: open faces fold tight, bells and spikes barely change. */
 const CLOSE: Record<Species, number> = { daisies: 1, cups: 0.9, bells: 0.3, spikes: 0.25 };
@@ -33,7 +49,9 @@ export function buildDrift(species: Species, p: Resolved<typeof driftParams>, ct
   const eyes = new PartBuilder("eye");
   const stems = new PartBuilder("stem");
   const s = 0.85 + 0.15 * (ctx.facts.scale ?? 1);
-  const flowers = layout(p, r.fork("layout"), s);
+  const heads = HEAD_TRIANGLES[species];
+  // A drift too crowded to draw in full keeps its flowers and lightens every head, then thins to fit if it must.
+  const { flowers, light } = layout(p, r.fork("layout"), s, (want) => want * (STEM_TRIANGLES + heads.full) > DRIFT_TRIANGLES, Math.floor(DRIFT_TRIANGLES / (STEM_TRIANGLES + heads.light)));
   for (const f of flowers) {
     const headLoss = clamp(lossThreshold(f.r.next(), 0.78) + 0.12 * f.edge, 0.02, 0.85);
     const tint = f.r.range(-0.06, 0.06);
@@ -42,20 +60,25 @@ export function buildDrift(species: Species, p: Resolved<typeof driftParams>, ct
     const ch = { loss: headLoss, droop: 0.35, wither: 1, glow: 0, close: CLOSE[species], tint, bough: f.base };
     if (species === "daisies") emitDaisy(petals, eyes, f, ch);
     else if (species === "cups") emitCup(petals, eyes, f, ch);
-    else if (species === "bells") emitBells(petals, f, ch);
-    else emitSpike(petals, f, ch);
+    else if (species === "bells") emitBells(petals, f, ch, light);
+    else emitSpike(petals, f, ch, light);
   }
   const parts = [stems.part(), petals.part()];
   if (eyes.vertexCount > 0) parts.push(eyes.part());
   return { parts, anchors: [] };
 }
 
-/** Stems scattered over a rotated ellipse, thickest at its heart, never closer than a hand's width. */
-function layout(p: Resolved<typeof driftParams>, r: Rand, s: number): Flower[] {
+/**
+ * Stems scattered over a rotated ellipse, thickest at its heart, never closer than a hand's width. A drift of more
+ * flowers than `crowded` allows draws them light, and no more than `lightMost` of them.
+ */
+function layout(p: Resolved<typeof driftParams>, r: Rand, s: number, crowded: (want: number) => boolean, lightMost: number): { flowers: Flower[]; light: boolean } {
   const rx = p.spread;
   const rz = p.spread * r.range(0.5, 0.7);
   const turn = r.next() * Math.PI;
-  const want = Math.min(MAX_FLOWERS, Math.round(Math.PI * rx * rz * p.density * PER_SQUARE_METER * 0.55));
+  const asked = Math.min(MAX_FLOWERS, Math.round(Math.PI * rx * rz * p.density * PER_SQUARE_METER * 0.55));
+  const light = crowded(asked);
+  const want = light ? Math.min(asked, lightMost) : asked;
   const out: Flower[] = [];
   const gap = 0.11;
   for (let tries = 0; out.length < want && tries < want * 30; tries++) {
@@ -79,7 +102,7 @@ function layout(p: Resolved<typeof driftParams>, r: Rand, s: number): Flower[] {
     const base: V3 = [x, -0.08, z];
     out.push({ base, top: addScaled(base, lean, height + 0.08), lean, height, edge, r: fr });
   }
-  return out;
+  return { flowers: out, light };
 }
 
 interface HeadLook {
@@ -214,8 +237,11 @@ function emitCup(petals: PartBuilder, eyes: PartBuilder, f: Flower, look: HeadLo
 /** A bell's sides: five reads as round at a flower's size. */
 const SIDES = 5;
 
+/** A bell's rings: its shoulder, its mouth and its flared lip, each as far down its axis, as wide, and as flared. A light bell has no shoulder. */
+const BELL_RINGS = [[0.25, 0.6, 0], [1, 1, 0], [1.25, 1.35, 0.4]] as const;
+
 /** An arching stem hung with nodding bells on one side, like a bluebell. */
-function emitBells(petals: PartBuilder, f: Flower, look: HeadLook): void {
+function emitBells(petals: PartBuilder, f: Flower, look: HeadLook, light: boolean): void {
   const count = 3 + Math.floor(f.r.next() * 3);
   const away = normalize([f.lean[0] + 1e-3, 0, f.lean[2]]);
   const size = (0.034 + 0.022 * f.height) * f.r.range(0.85, 1.15);
@@ -227,7 +253,7 @@ function emitBells(petals: PartBuilder, f: Flower, look: HeadLook): void {
     const ch = { ...look, pivot: hang, loss: clamp(look.loss + 0.05 * k, 0.02, 0.9) };
     const top = petals.vertex(addScaled(hang, axis, -size * 0.4), scale(axis, -1), 0.6, ch);
     const rings: number[] = [];
-    for (const [along, rad, flare] of [[0.25, 0.6, 0], [1, 1, 0], [1.25, 1.35, 0.4]] as const) {
+    for (const [along, rad, flare] of light ? BELL_RINGS.slice(1) : BELL_RINGS) {
       rings.push(petals.vertexCount);
       for (let j = 0; j < SIDES; j++) {
         const a = (j / SIDES) * Math.PI * 2;
@@ -237,7 +263,7 @@ function emitBells(petals: PartBuilder, f: Flower, look: HeadLook): void {
       }
     }
     for (let j = 0; j < SIDES; j++) petals.triangle(top, (rings[0] as number) + ((j + 1) % SIDES), (rings[0] as number) + j);
-    for (let ring = 0; ring < 2; ring++) {
+    for (let ring = 0; ring < rings.length - 1; ring++) {
       for (let j = 0; j < SIDES; j++) {
         const a = (rings[ring] as number) + j;
         const b = (rings[ring] as number) + ((j + 1) % SIDES);
@@ -248,8 +274,21 @@ function emitBells(petals: PartBuilder, f: Flower, look: HeadLook): void {
   }
 }
 
+/** A floret's points and faces: an octahedron, or in a crowded drift a tetrahedron with its point up. */
+const FLORET: Record<"full" | "light", { readonly dirs: readonly V3[]; readonly faces: readonly (readonly [number, number, number])[] }> = {
+  full: {
+    dirs: [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]],
+    faces: [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]],
+  },
+  light: {
+    dirs: [[0, 1, 0], [0.943, -0.333, 0], [-0.471, -0.333, 0.816], [-0.471, -0.333, -0.816]],
+    faces: [[0, 2, 1], [0, 3, 2], [0, 1, 3], [1, 2, 3]],
+  },
+};
+
 /** A spire of small florets up the top of the stem, like lupine or lavender. */
-function emitSpike(petals: PartBuilder, f: Flower, look: HeadLook): void {
+function emitSpike(petals: PartBuilder, f: Flower, look: HeadLook, light: boolean): void {
+  const floret = FLORET[light ? "light" : "full"];
   const count = 9 + Math.floor(f.r.next() * 6);
   const span = f.height * 0.38;
   const size = (0.022 + 0.016 * f.height) * f.r.range(0.85, 1.15);
@@ -264,9 +303,7 @@ function emitSpike(petals: PartBuilder, f: Flower, look: HeadLook): void {
     const ch = { ...look, pivot: at, loss: clamp(look.loss + 0.08 * t, 0.02, 0.9) };
     const shade = 0.6 + 0.3 * t;
     const first = petals.vertexCount;
-    const dirs: V3[] = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-    for (const d of dirs) petals.vertex(addScaled(c, d, rad * (d[1] === 0 ? 1 : 0.8)), normalize(add(d, normalize(out))), shade + 0.1 * d[1], ch);
-    const faces = [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]];
-    for (const [x, y, z] of faces) petals.triangle(first + (x as number), first + (y as number), first + (z as number));
+    for (const d of floret.dirs) petals.vertex(addScaled(c, d, rad * (light || d[1] === 0 ? 1 : 0.8)), normalize(add(d, normalize(out))), shade + 0.1 * d[1], ch);
+    for (const [x, y, z] of floret.faces) petals.triangle(first + x, first + y, first + z);
   }
 }

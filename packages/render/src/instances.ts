@@ -186,11 +186,12 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   const { palette } = plant;
   const object = new THREE.Group();
 
+  // Bounded by what stands above the soil: a bramble's canes root a metre or more under it, where no one sees them.
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
   for (const part of plant.parts) {
     const p = part.positions;
-    for (let i = 0; i < p.length; i += 3) box.expandByPoint(point.set(p[i] as number, p[i + 1] as number, p[i + 2] as number));
+    for (let i = 0; i < p.length; i += 3) box.expandByPoint(point.set(p[i] as number, Math.max(0, p[i + 1] as number), p[i + 2] as number));
   }
   if (box.isEmpty()) box.set(new THREE.Vector3(-0.3, 0, -0.3), new THREE.Vector3(0.3, 0.3, 0.3));
   const height = Math.max(0.3, box.max.y);

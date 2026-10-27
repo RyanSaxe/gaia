@@ -31,6 +31,8 @@ export interface Target {
   readonly has?: readonly string[];
   /** The thing's rank by importance among the world's own things, 0 to 1, for a primitive that needs a range of it. */
   readonly rank?: number;
+  /** The part already chosen for a slot, by slot, such as the frame a thing's form is: offered alone, so never asked. */
+  readonly uses?: Readonly<Record<string, string>>;
 }
 
 type Ref =
@@ -89,8 +91,9 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   const refs: Record<string, Ref> = {};
   const offered: Record<string, readonly string[]> = {};
   for (const [name, s] of Object.entries(k.slots)) {
-    // Only the primitives whose needs the place meets; a part none of them can fill is not asked about.
-    const fitting = lib.forRole(s.role, { has: target.has ?? [], ...(target.rank === undefined ? {} : { rank: target.rank }) });
+    // Only the primitives whose needs the place meets, or the one part already chosen; a part none can fill is not asked about.
+    const settled = target.uses?.[name];
+    const fitting = settled !== undefined ? [lib.get(settled)] : lib.forRole(s.role, { has: target.has ?? [], ...(target.rank === undefined ? {} : { rank: target.rank }) });
     if (fitting.length === 0) {
       if (s.optional) continue;
       throw new Error(`No ${s.role} primitive fits ${target.id || "the repository's root"}'s place.`);

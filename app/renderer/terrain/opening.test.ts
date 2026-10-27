@@ -85,15 +85,13 @@ function expectGoodView({ terrain, at, world }: ReturnType<typeof landing>, what
 }
 
 describe("where a person first stands in a world from code", () => {
-  // Gaia's world bakes whole here, as the page bakes it: about 15 seconds alone, longer while other work shares the machine.
-  it("is among Gaia's own code, on dry ground beside a stream, looking downstream over open ground at code", { timeout: 180_000 }, async () => {
-    const { world, summary } = await laySnapshot("a test");
-    const laid = landing({ root: world.name, facts: snapshotFacts(), world, summary, judged: {} });
-    expectAmongCode(laid, "Gaia's world");
-    // Its stretch nearest the repository's heart is the end of a stream that dries away: the first rule stood the
-    // person there, facing past the water onto a slope of grass that rose 6.4 degrees above the eye.
-    expectLooksDownstream(laid, "Gaia's world");
-    expectGoodView(laid, "Gaia's world");
+  // The showcase bakes whole here, as the page bakes it: about ten seconds while other work shares the machine.
+  it("is among the showcase's code, on dry ground beside a stream, looking downstream over open ground at code", { timeout: 120_000 }, async () => {
+    const { world, summary } = await laySnapshot("a test", "showcase");
+    const laid = landing({ root: world.name, facts: snapshotFacts("showcase"), world, summary, judged: {} });
+    expectAmongCode(laid, "the showcase");
+    expectLooksDownstream(laid, "the showcase");
+    expectGoodView(laid, "the showcase");
   });
 
   it("is among the proving ground's code, on dry ground, looking downstream over open ground at code", { timeout: 120_000 }, () => {

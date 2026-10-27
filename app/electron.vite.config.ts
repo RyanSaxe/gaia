@@ -3,6 +3,7 @@
 
 import { resolve } from "node:path";
 import { defineConfig } from "electron-vite";
+import { provingGroundVite } from "../tools/proving-ground.ts";
 
 const here = import.meta.dirname;
 
@@ -30,6 +31,8 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(here, "renderer"),
+    // The proving ground, made from its plan as the renderer builds (`virtual:proving-ground`).
+    plugins: [provingGroundVite()],
     build: {
       rollupOptions: { input: { index: resolve(here, "renderer/index.html") } },
     },

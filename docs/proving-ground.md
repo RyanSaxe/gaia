@@ -2,10 +2,12 @@
 
 The proving ground is a synthetic world for visual coverage. Its plan includes
 water, crossings, buildings, landmarks, trees and understory at healthy, tired
-and ruined states. Its sky, lands, buildings, landmarks and trails sweep every
-part Jev composes them from: each part of each slot stands thriving, tired and
-in ruin, and each option of each part stands somewhere. Use it alongside Gaia's
-own world when changing rendering, placement or interaction.
+and ruined states. Its sky, lands, buildings, landmarks, trails, trees, bushes,
+stones and flowers sweep every part Jev composes them from: each part of each
+slot, and every frame with every crown, stands thriving, tired and in ruin, and
+each option of each part stands somewhere. Use it alongside the
+[showcase](showcase.md) and Gaia's own world in the app when changing
+rendering, placement or interaction.
 
 ## Explore it
 
@@ -30,7 +32,7 @@ cairns, groves, large and tiny areas, deep nesting, and each building and
 landmark at multiple healths. Use the returned stops rather than fixed
 coordinates, which can change with layout.
 
-`pnpm shots` captures the stops and component forms at vitality 1, 0.5 and 0.1
+`pnpm shots` captures the stops and component forms at vitality 1, 0.65 and 0.3
 by day, plus healthy forms at night, and the first stop under each of the
 sweep's skies. Supply words such as `pnpm shots willow` or `pnpm shots sky` to
 limit the captures. See [visual verification](development.md#visual-verification)
@@ -44,9 +46,12 @@ for performance and walking probes.
 | [`sweep.ts`](../packages/world/src/sweep.ts) | The sweep of a kind's parts, and what a set of blueprints leaves missing |
 | [`terrain/proving.test.ts`](../app/renderer/terrain/proving.test.ts) | Every part at every health, crossings, junctions and other world guarantees |
 
-`pnpm proving` regenerates `proving.json` and `proving-judged.json` in
-`app/renderer/terrain/fixtures/`. These are generated from the plan and use fixed
-judgments so coverage does not depend on a model response.
+The lab, the app and the tests make `proving.json` and `proving-judged.json`
+in `app/renderer/terrain/fixtures/` from the plan as they build, and nothing
+commits them ([`proving-ground.ts`](../tools/proving-ground.ts)). They are made
+again, in about two seconds, only when the plan or anything it reads has
+changed. `pnpm proving` writes the same files and prints what the plan holds.
+Its judgments are fixed, so coverage does not depend on a model response.
 
 Each region's land is a place of the land sweep, labelled by its own ground's
 health, its water settled as Jev's choice of water settles it: a brook's or a
@@ -57,7 +62,7 @@ may take a waterwheel only where its land holds running water. The trails that
 cross a stream come first, so their crossings take turns between footbridges
 and stepping stones.
 
-The generator fails, naming each part, option or health missing, until every
+The build fails, naming each part, option or health missing, until every
 sweep is covered; a new part or option may need another directory in the plan.
 When changing rivers, trails or placement, inspect the resulting crossings:
 paths or banks can move away from the feature the plan is intended to exercise.

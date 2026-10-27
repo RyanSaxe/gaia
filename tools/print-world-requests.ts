@@ -1,26 +1,33 @@
-// Prints, and never sends, every Jev request that judging Gaia's own world
-// would make, the looks' and what every entity, file and definition stands
-// as: the exact bodies the engine's connector would post to OpenRouter, then
-// how many there are and what they would cost. Composing follows from the
-// answers, so it is not printed. The cost
-// comes from the engine's own `jev.estimate`, the same code that would send
-// them, which reads neither the key nor the network.
-// Usage: pnpm print-world-requests [requests.json]
+// Prints, and never sends, every Jev request that judging a project's world
+// would make, from the graph snapshot `pnpm graph-snapshot` writes (`SNAPSHOT`
+// unless --graph names another): the looks' and what every entity, file and
+// definition stands as, the exact bodies the engine's connector would post to
+// OpenRouter, then how many there are and what they would cost. Composing
+// follows from the answers, so it is not printed; the app prices it at about
+// two requests a thing (`composingEstimate`). The cost comes from the engine's
+// own `jev.estimate`, the same code that would send them, which reads neither
+// the key nor the network.
+// Usage: pnpm print-world-requests [--graph graph.json] [requests.json]
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { engineBinary } from "./engine-binary.ts";
 import { cargoEnv } from "./cargo-env.ts";
 import type { CodeGraph, JevEstimate } from "@gaia/schema";
 import { factsOf, planStanding, planWorldRequests } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
+import { SNAPSHOT } from "./snapshot-paths.ts";
 
 const repo = resolve(import.meta.dirname, "..");
-const graph = JSON.parse(readFileSync(resolve(repo, "app/renderer/terrain/fixtures/gaia-graph.json"), "utf8")) as CodeGraph;
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { graph: { type: "string" } } });
+const graphFile = resolve(values.graph ?? SNAPSHOT.graph);
+if (!existsSync(graphFile)) throw new Error(`No graph snapshot at ${graphFile}: write one with \`GAIA_DATA_DIR=dir pnpm graph-snapshot\`, or pass --graph.`);
+const graph = JSON.parse(readFileSync(graphFile, "utf8")) as CodeGraph;
 const facts = factsOf(graph);
 const planned = [...planWorldRequests(facts, LOOKS), ...planStanding(facts, LOOKS, { graph }).requests];
-const out = process.argv[2];
+const out = positionals[0];
 if (out !== undefined) writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
 else console.log(JSON.stringify(planned.map((p) => p.request), null, 2));
 

@@ -2,10 +2,9 @@
 // source with, the showcase's, reads it there; inside the app the world
 // service reads it from the folder the world was opened from (`world.source`),
 // at the commit the world was built from, and once the world heals onto a new
-// commit (`world.vitality`) every file read so far is read again from that;
-// the phone lab's server reads Gaia's own from the commit its snapshot was
-// made at (`/source`). A page with none of these, such as the offline lab on
-// Gaia's own world, shows a definition's name and place without its code.
+// commit (`world.vitality`) every file read so far is read again from that.
+// A page with neither, such as the lab on the proving ground, shows a
+// definition's name and place without its code.
 
 import type { WorldService } from "../service.ts";
 
@@ -35,25 +34,16 @@ export function createSourceText(service: WorldService | null, carried: Readonly
     // Its old lines stay until the new ones come, so no page shows a file empty.
     else if (m.type === "world.vitality" && m.commit !== undefined) for (const [path, had] of files) if (had !== "asked") service.send({ type: "world.source", path });
   });
-  const served = location.protocol === "http:" || location.protocol === "https:";
-  function ask(path: string): void {
-    files.set(path, "asked");
-    if (service !== null) service.send({ type: "world.source", path });
-    else if (served)
-      fetch(`/source?path=${encodeURIComponent(path)}`)
-        .then((r) => (r.ok ? r.text() : null))
-        .then((text) => arrive(path, text === null ? null : text.split(/\r?\n/)))
-        .catch(() => arrive(path, null));
-  }
   return {
     lines(path) {
       const had = files.get(path);
       if (had !== undefined) return had === "asked" ? undefined : had;
-      if (carried !== null || (service === null && !served)) {
+      if (carried !== null || service === null) {
         files.set(path, null);
         return null;
       }
-      ask(path);
+      files.set(path, "asked");
+      service.send({ type: "world.source", path });
       return undefined;
     },
     onArrive: (listener) => listeners.push(listener),

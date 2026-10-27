@@ -24,8 +24,10 @@ pnpm dev
 Choose a folder on your computer or a public repository on GitHub, and walk in!
 It takes a minute or two to generate your world.
 
-Judging a 100k LOC codebase costs roughly twenty to fifty cents. Updating a
-10–20k LOC personal project should cost under ten cents.
+Judging a 100k LOC codebase and composing every thing in its world costs
+roughly seventy cents to a dollar; composing Gaia's own 2,700 things, from
+68k lines, cost about thirty-five cents of that. Updating a 10–20k LOC personal
+project should cost under ten cents.
 
 Gaia estimates the cost before sending live requests and reuses saved answers
 on later runs.

@@ -2,7 +2,9 @@
 // feature a world can show, so each can be walked up to and tested. It
 // writes the facts its world is laid out from
 // (`app/renderer/terrain/fixtures/proving.json`, `CodeFacts`) and the choices Jev would make about it
-// (`fixtures/proving-judged.json`, a `Judgments`), both from the plan below.
+// (`fixtures/proving-judged.json`, a `Judgments`), both from the plan below,
+// or into `--out DIR`. They are never committed: the lab, the app and the
+// tests make them from this plan as they build (tools/proving-ground.ts).
 // The lab lays it out with the real `layoutWorld`, `standWorld` and bake
 // (`?world=proving`), so what it shows is what any codebase would get.
 //
@@ -13,10 +15,11 @@
 //   cross on footbridges and stepping stones;
 // - large and tiny areas, deep nesting, and a hub many trails branch to;
 // - every water, tree, bush and flower option Jev is offered.
-// Its sky, lands, buildings, landmarks and trails are what Jev composes them
-// from, swept (`sweep` in @gaia/world): every part of every slot, at each of
-// three healths, and every option of every part, each standing where its
-// place lets it, a waterwheel only by running water. The generator fails
+// Its sky, lands, buildings, landmarks, trails, trees, bushes, stones and
+// flowers are what Jev composes them from, swept (`sweep` in @gaia/world):
+// every part of every slot and every frame with every crown, at each of three
+// healths, and every option of every part, each standing where its place lets
+// it, a waterwheel only by running water. The generator fails
 // while any sweep leaves something missing, and then the plan needs another
 // place for it; the lab's test checks the baked world shows each feature.
 //
@@ -28,14 +31,15 @@
 // repository or under a node_modules folder, which Gaia's own world never
 // reads.
 //
-// Usage: pnpm proving [--code DIR [--manifest PATH]]
+// Usage: pnpm proving [--out DIR] [--code DIR [--manifest PATH]]
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
-import type { AnyKind, Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
-import { type Judgments, type Look, type SweepPlace, layoutWorld, sweep } from "@gaia/world";
+import type { AnyKind, Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, Library, SymbolFact } from "@gaia/schema";
+import { type Judgments, type Look, type StandsAs, type SweepPlace, layoutWorld, raisedAs, sweep } from "@gaia/world";
 import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "../app/renderer/terrain/looks.ts";
+import { fixtureJson } from "./fixture-json.ts";
 import { provingCode } from "./proving-code.ts";
 
 /** How a file or an entity fares, from thriving to ruin; `decayed` is ruin with no tests at all, so it drags its entity down less. */
@@ -417,13 +421,15 @@ const facts: CodeFacts = {
 // Every other definition of a source file stands as a tree, so each file grows trees at its health, and the rest go
 // round the stones, bushes and flowers.
 const stands: Record<string, string> = {};
-const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.rule === "trees");
-const others = Object.keys(FORMS).filter((k) => FORMS[k]?.rule !== "trees");
+const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.composes === "tree");
+const others = Object.keys(FORMS).filter((k) => FORMS[k]?.composes !== "tree");
 let tree = 0;
 let other = 0;
 for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
   if (f.kind === "source") f.symbols.forEach((s, k) => (stands[`${f.path}#${s.name}`] = k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)));
 }
+/** What a tree, a bush, a stone or flowers is: whatever stands that is not a building or a landmark. */
+type SmallAs = Exclude<StandsAs, "building" | "landmark">;
 /** What the definitions stand as. */
 const definitionForms = (): string[] => Object.entries(stands).flatMap(([id, form]) => (id.includes("#") ? [form] : []));
 // Every file stands as one thing too, at its patch's heart, round every form; and a few files and definitions stand as
@@ -466,8 +472,8 @@ const bandOf = (v: number): { label?: string } => (v >= 0.85 ? { label: "thrivin
 // What Jev would compose from: the sweep of every part, standing each where its place lets it and at every health.
 const { lib } = COMPOSING;
 const gaps: string[] = [];
-const swept = (what: string, k: AnyKind, places?: readonly SweepPlace[]): readonly Blueprint[] => {
-  const { blueprints, missing } = sweep(k, lib, places === undefined ? {} : { places });
+const swept = (what: string, k: AnyKind, places?: readonly SweepPlace[], parts: Library = lib, pairs?: readonly (readonly [string, string])[]): readonly Blueprint[] => {
+  const { blueprints, missing } = sweep(k, parts, { ...(places === undefined ? {} : { places }), ...(pairs === undefined ? {} : { pairs }) });
   gaps.push(...missing.map((m) => `${what} ${m}`));
   return blueprints;
 };
@@ -525,7 +531,25 @@ const composed = (as: "building" | "landmark", k: AnyKind): [string, { as: "buil
   const blueprints = swept(`a ${as}'s`, k, ids.map(placeOf));
   return ids.map((id, i) => [id, { as, blueprint: blueprints[i] as Blueprint }]);
 };
-const things = Object.fromEntries([...composed("building", COMPOSING.building), ...composed("landmark", COMPOSING.landmark)]);
+// Every tree, bush, stone and drift of flowers takes a blueprint of its size's sweep, every frame with every crown,
+// each health's things going round the whole sweep, so every row stands thriving, tired and in ruin.
+const smallSweeps: Readonly<Record<SmallAs, readonly Blueprint[]>> = {
+  tree: swept("a tree's", COMPOSING.tree, undefined, COMPOSING.offered?.tree, [["form", "crown"]]),
+  bush: swept("a bush's", COMPOSING.bush, undefined, COMPOSING.offered?.bush, [["form", "crown"]]),
+  stone: swept("a stone's", COMPOSING.stone),
+  flowers: swept("a drift's", COMPOSING.flowers),
+};
+const turns = new Map<string, number>();
+const smallThings = Object.entries(stands).flatMap(([id, form]): [string, { as: SmallAs; blueprint: Blueprint }][] => {
+  const as = FORMS[form]?.composes;
+  if (as === undefined || raisedAs(as)) return [];
+  const rows = smallSweeps[as];
+  const turn = `${as} ${bandOf(quality[id.split("#")[0] as string] ?? 1).label ?? ""}`;
+  const k = turns.get(turn) ?? 0;
+  turns.set(turn, k + 1);
+  return [[id, { as, blueprint: rows[k % rows.length] as Blueprint }]];
+});
+const things = Object.fromEntries([...composed("building", COMPOSING.building), ...composed("landmark", COMPOSING.landmark), ...smallThings]);
 const routes = swept("a trail's", COMPOSING.link, TRAIL_PLAN.map(([from, to]) => bandOf(((quality[from] ?? 1) + (quality[to] ?? 1)) / 2)));
 // The sky stands the first of the sweep's skies; `__lab.terrain.sky(k)` shows the others.
 const skies = swept("the sky's", COMPOSING.world);
@@ -556,7 +580,7 @@ const astray = [...planned.filter((p) => !laidOut.includes(p)).map((p) => `${p |
 if (astray.length > 0) throw new Error(`The proving ground lays out differently from its plan: ${astray.join("; ")}.`);
 
 const repo = resolve(import.meta.dirname, "..");
-const args = parseArgs({ options: { code: { type: "string" }, manifest: { type: "string" } } }).values;
+const args = parseArgs({ options: { code: { type: "string" }, manifest: { type: "string" }, out: { type: "string" } } }).values;
 if (args.code !== undefined) {
   const dir = resolve(args.code);
   const manifestPath = resolve(args.manifest ?? `${dir}-manifest.json`);
@@ -579,9 +603,10 @@ if (args.code !== undefined) {
   console.log(`proving: wrote ${code.size} files, ${lines.toLocaleString("en-US")} lines, to ${dir}, and the manifest of ${manifest.length} source files to ${manifestPath}`);
   process.exit(0);
 }
-const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
+const fixtures = resolve(args.out ?? resolve(repo, "app/renderer/terrain/fixtures"));
+mkdirSync(fixtures, { recursive: true });
 writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(facts)}\n`);
-writeFileSync(resolve(fixtures, "proving-judged.json"), `${JSON.stringify(judged, null, 1)}\n`);
+writeFileSync(resolve(fixtures, "proving-judged.json"), fixtureJson(judged));
 const band = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" : v >= 0.35 ? "tired" : v >= 0.12 ? "failing" : "ruin");
 const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} ${k}`).join(", ");
 console.log(`proving: ${facts.files.length} files, ${facts.repository.lines.toLocaleString("en-US")} lines, ${entities.length} entities; a ${world.size} m world of ${world.regions.length} lands and ${world.areas.length} areas`);

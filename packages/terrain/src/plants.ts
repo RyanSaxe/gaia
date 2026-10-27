@@ -16,6 +16,18 @@ const WATER_CLEARANCE = 4;
  */
 export const PLANT_SINK = 0.12;
 
+/** How far either side the ground's slope under a plant is read, meters: about a bush's reach, so a hummock under it doesn't tip it. */
+const SLOPE_REACH = 1;
+
+/**
+ * The ground's slope at (x, z), dy/dx and dy/dz, read `SLOPE_REACH` either side: what a copy standing there takes,
+ * its base following the ground while its stems stay upright (`InstanceSpot.slope` in @gaia/render).
+ */
+export function groundSlope(l: Lattice, x: number, z: number): [number, number] {
+  const h = (px: number, pz: number): number => heightAt(l, px, pz);
+  return [(h(x + SLOPE_REACH, z) - h(x - SLOPE_REACH, z)) / (2 * SLOPE_REACH), (h(x, z + SLOPE_REACH) - h(x, z - SLOPE_REACH)) / (2 * SLOPE_REACH)];
+}
+
 /** The height a plant's origin takes at (x, z), for a trunk base of `radius` meters. */
 export function groundedBase(l: Lattice, x: number, z: number, radius: number): number {
   return lowestUnder(l, x, z, radius) - PLANT_SINK;

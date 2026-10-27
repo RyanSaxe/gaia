@@ -19,7 +19,7 @@
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey, vitalityOf, withLines, withVitality } from "@gaia/world";
+import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey, vitalityOf, withLines, withVitality } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, Heal, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
@@ -218,11 +218,16 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   if (unasked === undefined && (total > 0 || toUnderstand === null)) {
     const judging = missing.length > 0 ? await engine.call("jev.estimate", { requests: missing.map((p) => p.request) }) : undefined;
     concurrency = judging?.concurrency ?? understanding?.estimate.concurrency ?? (await engine.call("jev.estimate", { requests: [] })).concurrency;
+    // Composing every thing follows from what Jev chooses, so it is priced at about two requests a thing, each the
+    // size of one that composes a tree.
+    const composing = missing.length > 0 ? composingEstimate(facts, LOOKS, graph) : null;
+    const each = composing === null ? undefined : await engine.call("jev.estimate", { requests: [composing.sample] });
+    const composed = { requests: composing?.requests ?? 0, estimatedTokens: (each?.estimatedTokens ?? 0) * (composing?.requests ?? 0), estimatedUsd: (each?.estimatedUsd ?? 0) * (composing?.requests ?? 0) };
     const estimate = {
       endpoint: judging?.endpoint ?? understanding?.estimate.endpoint ?? "",
-      requests: (judging?.requests ?? 0) + (understanding?.estimate.requests ?? 0),
-      estimatedTokens: (judging?.estimatedTokens ?? 0) + (understanding?.estimate.estimatedTokens ?? 0),
-      estimatedUsd: (judging?.estimatedUsd ?? 0) + (understanding?.estimate.estimatedUsd ?? 0),
+      requests: (judging?.requests ?? 0) + (understanding?.estimate.requests ?? 0) + composed.requests,
+      estimatedTokens: (judging?.estimatedTokens ?? 0) + (understanding?.estimate.estimatedTokens ?? 0) + composed.estimatedTokens,
+      estimatedUsd: (judging?.estimatedUsd ?? 0) + (understanding?.estimate.estimatedUsd ?? 0) + composed.estimatedUsd,
     };
     console.log(
       understanding === null

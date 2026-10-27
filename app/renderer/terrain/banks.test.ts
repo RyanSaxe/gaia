@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, structure } from "@gaia/kinds";
-import { FLORA_PRESETS, realize } from "@gaia/realize";
+import { realize } from "@gaia/realize";
 import { type BuildingSite, type Terrain, bakeTerrain, extentOf, findBankSite, pastTheEdge, regionAt, siteToWorld, turningExtent, waterDepthAt, yardsMeet } from "@gaia/terrain";
 import { sweep } from "@gaia/world";
 import { type OpenedWorld, openedWorld, provingWorld } from "./code-world.ts";
@@ -35,17 +35,17 @@ function standAsThePage(t: Terrain, code: OpenedWorld, buildings: StandBuilding[
   const stood = standWorld(land, {
     buildings,
     landmarks,
-    trees: { builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
+    trees: { bases: code.plants.trees.map(() => 0.5), crowns: code.plants.trees.map(() => 4) },
     code: code.stand,
   });
   return { land, stood, landmarks };
 }
 
-describe("Gaia's world, the showcase and the proving ground, stood as the page stands them", () => {
+describe("the showcase, as it is and fixed, and the proving ground, stood as the page stands them", () => {
   let worlds: { root: string; code: OpenedWorld; t: Terrain; buildings: StandBuilding[]; land: Terrain; stood: Stand; landmarks: StandLandmark[] }[] = [];
-  // Bakes and stands all four worlds whole: about fifty seconds alone, more when other work shares the machine.
+  // Bakes and stands all three worlds whole: about two minutes while other work shares the machine, most of it the proving ground's.
   beforeAll(async () => {
-    const snapshots = await Promise.all((["gaia", "showcase", "showcase-fixed"] as const).map(async (of) => ({ root: of, facts: snapshotFacts(of), ...(await laySnapshot("a test", of)), judged: {} })));
+    const snapshots = await Promise.all((["showcase", "showcase-fixed"] as const).map(async (of) => ({ root: of, facts: snapshotFacts(of), ...(await laySnapshot("a test", of)), judged: {} })));
     worlds = [...snapshots, provingWorld()].map((doc) => {
       const code = openedWorld(doc as never);
       const t = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));

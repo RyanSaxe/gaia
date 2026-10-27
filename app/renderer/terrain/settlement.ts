@@ -88,10 +88,16 @@ const wordsOf = (id: string): string => id.replace(/@\d+$/, "").replace(/-/g, " 
 
 /**
  * What a composed thing is called, from the parts Jev chose: a building by its walls and its feature ("Fieldstone
- * house with a tower"), a landmark by its form ("Lookout tower").
+ * house with a tower"), a tree or a bush by its frame and its crown ("Branching with leaf strands"), flowers by
+ * their drift ("Daisies"), and a landmark or a stone by its form ("Lookout tower", "Boulder").
  */
 export function composedName(bp: Blueprint): string {
   const named = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+  const frame = bp.slots.form?.use;
+  const crown = bp.slots.crown?.use;
+  if (frame !== undefined && crown !== undefined) return named(`${wordsOf(frame)} with ${wordsOf(crown)}`);
+  const drift = bp.slots.drift?.use;
+  if (drift !== undefined) return named(wordsOf(drift));
   const form = bp.slots.form?.use;
   if (form !== undefined) return named(wordsOf(form));
   const walls = bp.slots.body?.use;

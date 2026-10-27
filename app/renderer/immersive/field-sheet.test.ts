@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type CodeFacts, Library } from "@gaia/schema";
+import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { WILDS, bakeTerrain, groundHeightAt, heightAt, landHalf, outlinesOf, pastTheEdge } from "@gaia/terrain";
 import { sampleWorld } from "@gaia/terrain/testing";
-import { type Judgments, LAYOUT, type LotPlace, layoutWorld } from "@gaia/world";
-import proving from "../terrain/fixtures/proving.json";
-import provingJudged from "../terrain/fixtures/proving-judged.json";
+import { LAYOUT, type LotPlace, layoutWorld } from "@gaia/world";
+import { facts as provingFacts, judged as provingJudged } from "virtual:proving-ground";
 import { type Box, type Measure, type NameLand, type NamePlaces, nameLand, nameTails, placeNames } from "./map-names.ts";
 import { chained, contourLines, isoline, simplified, slopes } from "./isolines.ts";
 import { MAP_STYLE, healthColor, healthField, landWash } from "./map-styles.ts";
@@ -41,7 +40,7 @@ describe("where the sheets letter areas' names", () => {
   const measure: Measure = (text, font, spacing) => text.length * (0.72 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
   // The proving ground's land as the world service sends it before anything is judged: every area's outline and
   // every lot where a building or landmark will stand. Laid out once and only read.
-  const world = layoutWorld(proving as unknown as CodeFacts, provingJudged as unknown as Judgments, undefined, 1);
+  const world = layoutWorld(provingFacts, provingJudged, undefined, 1);
   const landWith = (lots: readonly LotPlace[]): NameLand => run(nameLand(outlinesOf(world).areas, world.size, world.size / 2, lots));
   const land = landWith(world.things.map(({ x, z }) => ({ x, z })));
   // A wide screen's sheet and a phone's.

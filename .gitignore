@@ -6,3 +6,5 @@ target/
 *.local
 .DS_Store
 .lab/
+# The proving ground, made from tools/proving.ts's plan whenever the lab, the app or the tests build (tools/proving-ground.ts).
+app/renderer/terrain/fixtures/proving*

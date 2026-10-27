@@ -3,16 +3,15 @@
 // Exposes judged code and blueprints to rendering and applies live vitality
 // updates while preserving the existing world's layout.
 
-import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
 import { link } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judgments, layoutWorld } from "@gaia/world";
+import { type CodeWorld, type StandsAs, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, Heal, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
-import GAIA_PAINTING from "../start/gaia-painting.webp";
+import SHOWCASE_PAINTING from "../start/showcase-painting.webp";
 import { CHOSEN_MS } from "../start/start.ts";
-import gaiaJudged from "./fixtures/gaia-judged.json";
 import showcaseJudged from "./fixtures/showcase-judged.json";
 import showcaseFixedJudged from "./fixtures/showcase-fixed-judged.json";
 import showcaseCode from "./fixtures/showcase-code.txt?raw";
@@ -21,9 +20,8 @@ import { type Snapshot, snapshotFacts } from "./snapshot-facts.ts";
 import { showcaseFiles } from "./showcase-code.ts";
 import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
-import proving from "./fixtures/proving.json";
-import provingJudged from "./fixtures/proving-judged.json";
-import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "./looks.ts";
+import { facts as provingFacts, judged as provingJudged } from "virtual:proving-ground";
+import { COMPOSED_FORMS, COMPOSING, WATERS } from "./looks.ts";
 import { type BuildingOf, type Represented, representEntity, representFile } from "./represent.ts";
 import { composedName } from "./settlement.ts";
 import { AS_THING, type StandCode, type StandLot } from "./stand.ts";
@@ -58,6 +56,8 @@ export interface OpenedWorld {
   readonly standing: (i: number) => StandingOf | undefined;
   /** The light, sky and wind Jev composed for the world. */
   readonly sky: Blueprint;
+  /** Every distinct blueprint the world's trees, stones, bushes and flowers take, by the group that draws them: each stands one build, copied. */
+  readonly plants: PlantBuilds;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
   readonly stand: StandCode;
   /** What the understanding pass judged about a folder, a file or a definition, by its path or path#name. */
@@ -97,8 +97,21 @@ export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts
   };
 }
 
+/** The groups that draw the small things: trees with the woods, the rest in the understory, mushrooms apart for their turf. */
+export type PlantGroup = "trees" | "rocks" | "shrubs" | "flowers" | "mushrooms";
+export const PLANT_GROUPS: readonly PlantGroup[] = ["trees", "rocks", "shrubs", "flowers", "mushrooms"];
+
+/** Every distinct blueprint of a group, in the order the world first meets each: a copy's variant indexes them. */
+export type PlantBuilds = Readonly<Record<PlantGroup, readonly Blueprint[]>>;
+
+/** The group a small thing is drawn with: by what it stands as, and a drift of mushrooms apart from other flowers. */
+export function plantGroup(as: Exclude<StandsAs, "building" | "landmark">, blueprint: Blueprint): PlantGroup {
+  if (as === "flowers") return blueprint.slots.drift?.use === "mushrooms@1" ? "mushrooms" : "flowers";
+  return as === "tree" ? "trees" : as === "bush" ? "shrubs" : "rocks";
+}
+
 /** The sizes each kind of standing thing looks right between, by how much it matters: a stone can grow to a landmark, a flower barely grows. */
-const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { trees: [0.55, 1.35], rocks: [0.4, 2.2], shrubs: [0.5, 1.6], flowers: [0.7, 1.3] };
+const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { trees: [0.55, 1.35], rocks: [0.4, 2.2], shrubs: [0.5, 1.6], flowers: [0.7, 1.3], mushrooms: [0.7, 1.3] };
 
 /**
  * How large a definition stands, within what its blueprint looks right at:
@@ -142,17 +155,13 @@ export function onHeal(heal: (h: Heal) => void): void {
 }
 
 /** What the understanding pass judged about each snapshot's things, for the journal. */
-const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = { gaia: gaiaJudged, showcase: showcaseJudged, "showcase-fixed": showcaseFixedJudged };
+const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = { showcase: showcaseJudged, "showcase-fixed": showcaseFixedJudged };
 
-/**
- * A world from a bundled snapshot (`snapshot.ts`), laid out on a thread of its
- * own while the wait draws: Gaia's own, the world of a page with no engine,
- * or the showcase's.
- */
-function snapshotWorld(why: string, of: Snapshot = "gaia"): Promise<WorldDocument> {
+/** A world from a bundled snapshot (`snapshot.ts`), the showcase's, laid out on a thread of its own while the wait draws. */
+function snapshotWorld(why: string, of: Snapshot): Promise<WorldDocument> {
   const facts = snapshotFacts(of);
   const worker = new LayoutWorker();
-  const failed = (why: string): Error => new Error(`${of === "gaia" ? "Gaia's snapshot" : "The showcase"} could not be laid out: ${why}`);
+  const failed = (why: string): Error => new Error(`The showcase could not be laid out: ${why}`);
   return new Promise<WorldDocument>((resolve, reject) => {
     worker.onmessage = (e: MessageEvent<LayoutReply>) => {
       const reply = e.data;
@@ -167,13 +176,13 @@ function snapshotWorld(why: string, of: Snapshot = "gaia"): Promise<WorldDocumen
 /**
  * The proving ground (`?world=proving`): a made-up codebase with every
  * feature a world can show, from thriving to ruin, laid out from the choices
- * fixed for it (`fixtures/proving.json` and `proving-judged.json`, written by
- * `pnpm proving`). It is laid out, stood and baked like any codebase's world.
+ * fixed for it, which the build makes from the plan in `tools/proving.ts`
+ * (`virtual:proving-ground`). It is laid out, stood and baked like any codebase's world.
  */
 export function provingWorld(): WorldDocument {
-  const facts = proving as unknown as CodeFacts;
+  const facts = provingFacts;
   // The proving ground keeps a square, so everything its tests look for stands where they look.
-  const world = layoutWorld(facts, provingJudged as unknown as Judgments, undefined, 1);
+  const world = layoutWorld(facts, provingJudged, undefined, 1);
   return { root: facts.repository.name, facts, world, summary: "The proving ground: every choice fixed so each feature shows", judged: {} };
 }
 
@@ -191,22 +200,28 @@ const ASKS_SHOWCASE: Snapshot | null = ((world) => (world === "showcase" || worl
   typeof location === "undefined" ? null : new URLSearchParams(location.search).get("world"),
 );
 
+/** The showcase the page shows, if any: the one it asks for, or the showcase as it is on a page with no engine that asks for no world. */
+function shownShowcase(): Snapshot | null {
+  return ASKS_SHOWCASE ?? (ASKS_PROVING || worldService() !== null ? null : "showcase");
+}
+
 /** The source of a world the page carries with it, by path, for the journal: the showcase's, with its fixed `v1/` laid over it for the fixed one, none otherwise. */
 export function carriedSource(): ReadonlyMap<string, string> | null {
-  if (ASKS_SHOWCASE === null) return null;
-  return new Map([...showcaseFiles(showcaseCode), ...(ASKS_SHOWCASE === "showcase-fixed" ? showcaseFiles(showcaseFixedCode) : [])]);
+  const shown = shownShowcase();
+  if (shown === null) return null;
+  return new Map([...showcaseFiles(showcaseCode), ...(shown === "showcase-fixed" ? showcaseFiles(showcaseFixedCode) : [])]);
 }
 
 /**
  * The start on a page with no engine, to see it (`?start`):
- * Gaia's own world is the one world walked before, with a painting of where
- * it opens, as the app paints where a person stands (`start/gaia-painting.webp`,
+ * the showcase is the one world walked before, with a painting of where
+ * it opens, as the app paints where a person stands (`start/showcase-painting.webp`,
  * from `__lab.immersive.look()`), and any choice opens it, except an
  * address, which a page with no engine cannot follow.
  */
 async function previewStart(veil: Veil): Promise<void> {
-  const facts = snapshotFacts();
-  const recent = [{ root: facts.repository.name, name: facts.repository.name, at: Date.now(), painting: GAIA_PAINTING }];
+  const facts = snapshotFacts("showcase");
+  const recent = [{ root: facts.repository.name, name: facts.repository.name, at: Date.now(), painting: SHOWCASE_PAINTING }];
   let place = await veil.choose({ recent });
   while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
   veil.opening({ stage: "reading", root: facts.repository.name });
@@ -228,7 +243,7 @@ export async function codeWorld(veil: Veil): Promise<OpenedWorld> {
     else if (ASKS_SHOWCASE !== null) document = await snapshotWorld("the showcase", ASKS_SHOWCASE);
     else if (service === null) {
       if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
-      document = await snapshotWorld("no engine on a standalone page");
+      document = await snapshotWorld("no engine on a standalone page", "showcase");
     } else ({ document, stood } = await serviceWorld(service, watched));
   } catch (error) {
     const message = (error as Error).message;
@@ -325,9 +340,29 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     if (own === undefined) return undefined;
     return { represented: representStanding(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form };
   };
+  // Every distinct blueprint of each group, in the order the stand's symbols first meet it; two things answered alike share one.
+  const plants: Record<PlantGroup, Blueprint[]> = { trees: [], rocks: [], shrubs: [], flowers: [], mushrooms: [] };
+  const variantOf = (group: PlantGroup, blueprint: Blueprint): number => {
+    const builds = plants[group];
+    const k = builds.findIndex((b) => b.id === blueprint.id);
+    return k >= 0 ? k : builds.push(blueprint) - 1;
+  };
+  const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
+  type Small = { readonly x: number; readonly z: number; readonly form: string; readonly as?: StandsAs; readonly blueprint?: Blueprint; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string };
+  const symbol = (s: Small, who: string): StandCode["symbols"][number] => {
+    // A definition standing as a building or a landmark is one of the world's things, stood with them.
+    if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };
+    // Every thing stands as the blueprint Jev composed for it; one with none is a fault, never a default form.
+    if (s.as === undefined || s.blueprint === undefined || s.as === "building" || s.as === "landmark") throw new Error(`${who} stands as "${s.form}" with no blueprint of a tree, a bush, a stone or flowers.`);
+    const group = plantGroup(s.as, s.blueprint);
+    const patch = s.file === undefined ? undefined : patchOf.get(s.file);
+    return { x: s.x, z: s.z, rule: group, variant: variantOf(group, s.blueprint), radius: group === "flowers" || group === "mushrooms" ? 0.8 : 1, scale: symbolScale(s.lines, group, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
+  };
+  const symbols = [...world.symbols.map((s) => symbol(s, s.id)), ...world.standing.map((s) => symbol(s, s.path || "The repository's root"))];
   return {
     world,
     spec,
+    plants,
     thing: (of) => judged[of],
     files,
     buildings: houses.map((t) => ({ ...thingOf(t, world, files, entities), blueprint: t.blueprint, kindName: composedName(t.blueprint), vitality: t.vitality })),
@@ -345,19 +380,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
         const areaOf = new Map(world.areas.map((a, i) => [a.path, i]));
         return world.cells.map((c) => ({ x: c.x, z: c.z, patch: c.file === null || c.file === undefined ? -1 : (patchOf.get(c.file) ?? -1), area: areaOf.get(c.area) ?? 0 }));
       })(),
-      symbols: (() => {
-        const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
-        const symbol = (s: { readonly x: number; readonly z: number; readonly form: string; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string }, who: string): StandCode["symbols"][number] => {
-          // A definition standing as a building or a landmark is one of the world's things, stood with them.
-          if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };
-          const form = FORMS[s.form];
-          // Every thing stands as the form Jev chose for it; one with none is a fault, never a default form.
-          if (form === undefined) throw new Error(`${who} stands as "${s.form}", which is no form Jev was offered.`);
-          const patch = s.file === undefined ? undefined : patchOf.get(s.file);
-          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
-        };
-        return [...world.symbols.map((s) => symbol(s, s.id)), ...world.standing.map((s) => symbol(s, s.path || "The repository's root"))];
-      })(),
+      symbols,
       // Trails joining parts of the code no other trail joins route first, then the most wanted.
       // Each trail keeps the width, wear, edging, winding and crossing Jev composed for it.
       trails: world.trails.map((t) => ({ from: t.from, to: t.to, want: (t.spans === true ? 1 : 0) + t.want, style: routeOf(t) })),

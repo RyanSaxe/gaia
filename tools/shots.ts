@@ -3,14 +3,15 @@
 // in. The proving ground holds every feature a world can show
 // (`docs/proving-ground.md`). Each stop of its tour, one stop for each kind of
 // building and landmark, and one thing standing as each tree, bush, stone and
-// flower form are seen at vitality 1, 0.5 and 0.1 at 15:30, and at 1 at 22:00.
+// flower build are seen at vitality 1, 0.65 and 0.3 at 15:30, and at 1 at 22:00.
 // The first stop is seen again under each sky the sweep holds (`__lab.terrain.sky`),
 // whole at 15:30, as `sky-K.jpg`.
 // The one-file lab opens in a hidden Electron window (the app's own Chromium,
 // drawing on the GPU) from a browser profile of its own, so the far forms bake
 // as on a first visit, and the run fails on any WebGL error the page reports.
 // Each shot goes to shots/ as a JPEG named for its stop.
-// Usage: pnpm shots [WORD...]  (only the stops whose names hold one of the words, such as `pnpm shots watermill` or `pnpm shots sky`)
+// Usage: pnpm shots [--world showcase|showcase-fixed] [WORD...]  (only the stops whose names hold one of the
+// words, such as `pnpm shots watermill` or `pnpm shots sky`; the proving ground's unless --world names another)
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -28,8 +29,8 @@ const QUALITY = 88;
 /** Each stop's shots: the hour and the vitality every file and entity in the world is set to. */
 const LOOKS = [
   { hour: 15.5, vitality: 1 },
-  { hour: 15.5, vitality: 0.5 },
-  { hour: 15.5, vitality: 0.1 },
+  { hour: 15.5, vitality: 0.65 },
+  { hour: 15.5, vitality: 0.3 },
   { hour: 22, vitality: 1 },
 ];
 
@@ -65,7 +66,7 @@ window.__shots = (() => {
       }
       const forms = new Set(stops.map((s) => s.name));
       for (const s of T.subjects()) {
-        const form = bare(s.standsAs);
+        const form = s.built === undefined ? bare(s.standsAs) : s.built.toLowerCase();
         if (forms.has(form)) continue;
         forms.add(form);
         stops.push({ name: form, at: { x: s.x, z: s.z, height: s.height } });
@@ -120,7 +121,7 @@ writeFileSync(
   main,
   `import { app, BrowserWindow } from "electron";
 import { writeFileSync } from "node:fs";
-const { page, out, result, profile, words, looks, width, height, quality, script } = JSON.parse(process.env.GAIA_SHOTS);
+const { page, out, result, profile, world, words, looks, width, height, quality, script } = JSON.parse(process.env.GAIA_SHOTS);
 app.setPath("userData", profile);
 app.commandLine.appendSwitch("force-device-scale-factor", "2");
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
@@ -135,10 +136,10 @@ async function take() {
     if (e.level === "error") say("page: " + e.message);
     if (e.level === "warning" || e.level === "error") messages.push(e.message);
   });
-  await win.loadFile(page, { query: { world: "proving" } });
+  await win.loadFile(page, { query: { world } });
   const run = (js) => win.webContents.executeJavaScript(js);
   await run("new Promise((r) => { const t = () => (window.__lab ? r() : setTimeout(t, 50)); t(); })");
-  say("opening the proving ground");
+  say("opening " + world);
   await run('window.__lab.open("immersive").then(() => window.__lab.terrain.farReady())');
   await run(script + "; true");
   const stops = await run("window.__shots.stops(" + JSON.stringify(words) + ")");
@@ -153,7 +154,7 @@ async function take() {
     for (const look of looks) {
       await run("window.__lab.hour(" + look.hour + ")");
       await run("window.__shots.vitality(" + look.vitality + ")");
-      const file = slug + (look.hour >= 20 ? "-night" : "") + "-vitality-" + look.vitality.toFixed(1) + ".jpg";
+      const file = slug + (look.hour >= 20 ? "-night" : "") + "-vitality-" + look.vitality.toFixed(2) + ".jpg";
       const image = await win.webContents.capturePage();
       writeFileSync(out + "/" + file, image.resize({ width, quality: "best" }).toJPEG(quality));
       saved.push(file);
@@ -192,7 +193,15 @@ app.whenReady().then(take).then(
 );
 
 const electron = createRequire(resolve(repo, "app/package.json"))("electron") as string;
-const settings = { page, out, result, profile: join(scratch, "profile"), words: process.argv.slice(2), looks: LOOKS, width: WIDTH, height: HEIGHT, quality: QUALITY, script: PAGE };
+const argv = process.argv.slice(2);
+const at = argv.indexOf("--world");
+const world = at < 0 ? "proving" : (argv[at + 1] ?? "proving");
+if (!["proving", "showcase", "showcase-fixed"].includes(world)) {
+  rmSync(scratch, { recursive: true, force: true });
+  throw new Error(`No world named ${world}; choose from proving, showcase or showcase-fixed.`);
+}
+const words = at < 0 ? argv : [...argv.slice(0, at), ...argv.slice(at + 2)];
+const settings = { page, out, result, profile: join(scratch, "profile"), world, words, looks: LOOKS, width: WIDTH, height: HEIGHT, quality: QUALITY, script: PAGE };
 const env: NodeJS.ProcessEnv = { ...process.env, GAIA_SHOTS: JSON.stringify(settings) };
 delete env.ELECTRON_RUN_AS_NODE;
 const run = spawnSync(electron, [main], { env, stdio: ["ignore", "inherit", "inherit"] });

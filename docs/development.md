@@ -25,13 +25,14 @@ pnpm lab:html
 ```
 
 Open `dist/lab.html` in a browser. It bundles the renderer, fonts and world
-fixtures into one offline page. It has no engine connection and uses saved
-Jev answers; a missing answer fails with the request's name.
+fixtures into one offline page. It has no engine connection and opens the
+[showcase](showcase.md) unless a query names another world. The showcase opens
+from its saved Jev answers; a missing answer fails with the request's name.
 
 | Query | Use |
 | --- | --- |
 | `?world=proving` | Every supported visual feature, including ruin |
-| `?world=showcase` | A small codebase with a mixture of healthy and poor code |
+| `?world=showcase` | A small codebase with a mixture of healthy and poor code, the page's world with no query |
 | `?world=showcase-fixed` | The same showcase with its broken module repaired |
 | `?hour=22` | Pin the lighting to an hour |
 | `?start` | Show the start page |
@@ -62,20 +63,20 @@ The hooks are defined in [terrain/hooks.ts](../app/renderer/terrain/hooks.ts),
 [sound/index.ts](../app/renderer/sound/index.ts). Scripted Electron windows
 call `webContents.setAudioMuted(true)`, so a run never plays through the
 machine's speakers.
-[readme-shots.ts](../tools/readme-shots.ts) is an example of driving the page.
+[shots.ts](../tools/shots.ts) is an example of driving the page.
 
 ## Visual verification
 
 Use the [proving ground](proving-ground.md) to inspect every affected form at
-vitality 1, 0.5 and 0.1, by day and at night. Also inspect Gaia's own world to
-catch changes that only appear in a large composition.
+vitality 1, 0.65 and 0.3, by day and at night. Also open Gaia's own checkout in
+the app to catch changes that only appear in a large composition. The app keeps
+Jev's answers for it in its own store after the first live open.
 
 | Command | Result |
 | --- | --- |
 | `pnpm shots` | Captures all proving-ground stops into `shots/` |
 | `pnpm shots willow` | Captures stops matching the supplied word |
 | `pnpm shots sky` | Captures the first stop under each of the sweep's skies |
-| `pnpm readme-shots` | Updates the journal and map images in `docs/images/` |
 | `pnpm brand` | Regenerates the app's brand images and macOS icon |
 
 For changes to frame cost or walking detail, compare before and after on a
@@ -90,9 +91,9 @@ quiet machine with `pnpm probe`. Its Electron window must remain uncovered.
 | `pnpm probe stress` | The proving ground with five times as many code trees |
 | `pnpm probe paint` | Journal painting capture and rendering |
 
-`--world gaia` or `--world proving` selects a world. `--spot` limits the stops;
-`--dpr` sets the pixel ratio. The probes fail on WebGL errors. A timing on a
-busy machine is not a reliable baseline.
+`--world showcase` or `--world proving` selects a world. `--spot` limits the
+stops; `--dpr` sets the pixel ratio. The probes fail on WebGL errors. A timing
+on a busy machine is not a reliable baseline.
 
 ## Components and fixtures
 
@@ -102,15 +103,17 @@ To add a primitive:
    Fill every vitality channel and describe its closed parameters for Jev.
 2. Register it in `library.ts`. Shared contract tests cover determinism,
    parameter ranges, channel ranges, triangle budgets and vitality response.
-3. Regenerate the proving ground with `pnpm proving`. Its sky, lands,
-   buildings, landmarks and trails are sweeps of the parts Jev composes them
-   from (`sweep` in [`@gaia/world`](../packages/world/src/sweep.ts)), so a new
-   part of one stands there with each of its options, thriving, tired and in
-   ruin. The generator fails and names what is missing while the plan in
-   `tools/proving.ts` has no place for it, such as an area with running water;
-   add a directory to the plan then. Trees, bushes, stones and flowers stand as
-   the forms in `app/renderer/terrain/looks.ts`. Inspect the result in the app
-   and screenshots.
+3. The [proving ground](proving-ground.md) follows on its own: the lab, the
+   app and the tests make it from the plan in `tools/proving.ts` as they
+   build. Its sky, lands, buildings, landmarks, trails, trees, bushes, stones
+   and flowers are sweeps of the parts Jev composes them from (`sweep` in
+   [`@gaia/world`](../packages/world/src/sweep.ts)), so a new part of one
+   stands there with each of its options, thriving, tired and in ruin. The
+   build fails and names what is missing while the plan has no place for it,
+   such as an area with running water; add a directory to the plan then. A
+   new part a tree, bush, stone or drift may grow from also needs words with a
+   feel for every option, which `looks.test.ts` checks. Inspect the result in
+   the app and screenshots.
 4. Add an ink renderer in `app/renderer/immersive/marks.ts` if the primitive
    contributes to a building or landmark's map symbol.
 
@@ -118,18 +121,22 @@ The lab's fixture bundles live in `app/renderer/terrain/fixtures/`:
 
 | Bundle | Source and regeneration |
 | --- | --- |
-| `gaia-*` | A frozen graph, judgments and design answers for Gaia's own code. `tools/graph-snapshot.ts` and `tools/jev-world.ts` generate them. |
-| `proving*` | The made-up codebase planned in `tools/proving.ts` and the sweeps it stands; `pnpm proving` regenerates its facts and judgments. |
-| `showcase*` | Source bundles and saved judgments for the [showcase](showcase.md). |
+| `proving*` | The made-up codebase planned in `tools/proving.ts` and the sweeps it stands. Not committed: the lab, the app and the tests make its facts and judgments as they build ([`proving-ground.ts`](../tools/proving-ground.ts)), and `pnpm proving` writes the same files. |
+| `showcase*` | Source bundles, judged graphs and saved Jev answers for the [showcase](showcase.md). |
 
-Frozen graphs contain code metadata from the commit they picture. Their
-embedded comments and document headings describe that snapshot. Use the guides
-and current source for development guidance.
+The repository keeps Jev's answers for the showcase only. To count what
+composing another project's world asks and costs, such as Gaia's own,
+`GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` writes its judged graph from the
+answers an app store holds, `pnpm jev-world` judges and composes its world from
+that graph, and `pnpm print-world-requests` prints the requests without sending
+them. They keep those files in `~/.cache/gaia-snapshot/` unless their arguments
+name others ([`snapshot-paths.ts`](../tools/snapshot-paths.ts)).
 
-If a new primitive or schema change invalidates Gaia's bundled answers, use the
-proving ground for visual coverage and open a checkout in the app against the
-local stand-in for integration. Use a temporary store for that run. Refresh the
-live fixture bundle with approval before submitting changes that invalidate it.
+If a new primitive or schema change invalidates the showcase's bundled answers,
+use the proving ground for visual coverage and open a checkout in the app
+against the local stand-in for integration. Use a temporary store for that run.
+Re-ask Jev for the showcase ([showcase.md](showcase.md#update-the-bundled-worlds))
+before submitting changes that invalidate its answers.
 
 Saved Jev answers are keyed by request hash. Changing request state, wording or
 options can invalidate them. Never relabel a saved answer as the answer to a

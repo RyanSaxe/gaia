@@ -16,7 +16,7 @@ import { biome } from "@gaia/kinds";
 import { type Realized, realizeRegion } from "@gaia/realize";
 import type { InstanceSpot, SceneLight } from "@gaia/render";
 import { type Terrain, WILD_THICKETS, wildHeightAt, wildThicket } from "@gaia/terrain";
-import { type BuildAsk, made } from "./made.ts";
+import { type BuildAsk, made, makeLater } from "./made.ts";
 import type { RegionCovers } from "./regions.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
@@ -45,16 +45,16 @@ const WILD_COVERS = [
   { cover: "golden steppe", length: "tall and unkempt", wildflowers: "none" },
 ] as const;
 
-/** Wild bushes in the flora kind's words: grey-green scrub in tufts and a rounded bush. */
+/** Wild bushes in the bush kind's words: grey-green scrub in tufts and a rounded bush, standing for no code. */
 const WILD_BUSHES = [
-  ["Wild scrub", blueprintOf("flora", {
+  ["Wild scrub", blueprintOf("bush", {
     form: { use: "thicket@1", params: { habit: "scrub", stems: "a few stems", stature: "waist-high" } },
     bark: { use: "bark@1", params: { roughness: "smooth" } },
     crown: { use: "leaf-mound@1", params: { leaves: "rounded", fullness: "in tufts at its tips" } },
     motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "gentle" } },
     palette: { use: "palette@1", params: { family: "desert-sage", contrast: "balanced" } },
   })],
-  ["Wild bush", blueprintOf("flora", {
+  ["Wild bush", blueprintOf("bush", {
     form: { use: "thicket@1", params: { habit: "mound", stems: "a few stems", stature: "head-high" } },
     bark: { use: "bark@1", params: { roughness: "smooth" } },
     crown: { use: "leaf-mound@1", params: { leaves: "rounded", fullness: "full" } },
@@ -64,7 +64,7 @@ const WILD_BUSHES = [
 ] as const;
 
 /** Each wild bush's build, for making ahead. */
-export const wildBushBuilds = (): BuildAsk[] => WILD_BUSHES.map(([, blueprint], i) => ({ kind: "flora", blueprint, seed: seedOf(`wilds/bush-${i}`), facts: { scale: 1, age: 120 } }));
+export const wildBushBuilds = (): BuildAsk[] => WILD_BUSHES.map(([, blueprint], i) => ({ kind: "bush", blueprint, seed: seedOf(`wilds/bush-${i}`), facts: { scale: 1, age: 120 } }));
 
 export interface WildGrowth {
   /** Every instanced blueprint, for culling each pass, warming and the sun's shadow. */
@@ -152,7 +152,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
   covers.wild(wildGround(biomeLib));
   const asks = wildBushBuilds();
   const plants: Realized[] = asks.map((ask) => made(ask, floraLib));
-  const fars = plants.map((p) => farForms?.add(p, FAR.bush));
+  const fars = plants.map((p, i) => farForms?.add(p, () => makeLater(asks[i] as BuildAsk, floraLib), FAR.bush));
   const views = plants.map((p, i) => {
     const view = createCopies(p, light, [], fars[i]);
     scene.add(view.object);

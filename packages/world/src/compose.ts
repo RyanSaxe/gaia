@@ -18,11 +18,18 @@ export interface Composing {
   readonly biome: AnyKind;
   /** A trail between two entities. */
   readonly link: AnyKind;
+  /** A tree, a bush, a stone and a drift of flowers that stand for a thing. */
+  readonly tree: AnyKind;
+  readonly bush: AnyKind;
+  readonly stone: AnyKind;
+  readonly flowers: AnyKind;
   readonly lib: Library;
+  /** The parts a thing of some sizes is offered instead of all of `lib`'s: a bush is never offered a tree's frame. */
+  readonly offered?: Partial<Readonly<Record<ComposedAs, Library>>>;
 }
 
 /** What a composed thing is: which of `Composing`'s kinds fills it. */
-export type ComposedAs = "building" | "landmark" | "world" | "biome" | "link";
+export type ComposedAs = "building" | "landmark" | "world" | "biome" | "link" | "tree" | "bush" | "stone" | "flowers";
 
 /**
  * One thing to compose: its id (an entity's path, a file's, a definition's `<file>#<name>`, or `world:`, `land:` or
@@ -38,27 +45,30 @@ export interface Composed {
   readonly narrow?: Readonly<Record<string, readonly string[]>>;
   /** Values its place already settles, per field path, such as its area's water for "relief.stream": filled in, not asked. */
   readonly fixed?: Readonly<Record<string, string | boolean>>;
+  /** The part already chosen for a slot, by slot, such as the frame its form is: filled in, not asked. */
+  readonly uses?: Readonly<Record<string, string>>;
 }
 
 /** Composes one thing: its structure, then each stage's details, and the blueprint they make. */
 export async function composeThing(c: Composing, jev: JevClient, thing: Composed): Promise<Blueprint> {
   const k = c[thing.as];
-  const target: Target = { id: thing.path, state: thing.state, ...(thing.has === undefined ? {} : { has: thing.has }) };
-  const structureWave = planStructure(k, c.lib, target);
-  const structure = readStructure(k, c.lib, structureWave, await answersOf(jev, structureWave));
+  const lib = c.offered?.[thing.as] ?? c.lib;
+  const target: Target = { id: thing.path, state: thing.state, ...(thing.has === undefined ? {} : { has: thing.has }), ...(thing.uses === undefined ? {} : { uses: thing.uses }) };
+  const structureWave = planStructure(k, lib, target);
+  const structure = readStructure(k, lib, structureWave, await answersOf(jev, structureWave));
   const waves: Wave[] = [];
   const answers: Record<string, JevAnswer> = {};
   for (let stage = 0; stage < stagesOf(k).length; stage++) {
     // Each stage sees the parts settled in the stages before it, so the openings suit the walls they are set in.
-    const earlier = waves.length === 0 ? undefined : settledParams(assemble(k, c.lib, structure, waves, answers));
-    const wave = planDetails(k, c.lib, structure, target, { stage, ...(thing.narrow === undefined ? {} : { narrow: thing.narrow }), ...(thing.fixed === undefined ? {} : { fixed: thing.fixed }), ...(earlier === undefined ? {} : { earlier }) });
+    const earlier = waves.length === 0 ? undefined : settledParams(assemble(k, lib, structure, waves, answers));
+    const wave = planDetails(k, lib, structure, target, { stage, ...(thing.narrow === undefined ? {} : { narrow: thing.narrow }), ...(thing.fixed === undefined ? {} : { fixed: thing.fixed }), ...(earlier === undefined ? {} : { earlier }) });
     // A stage with nothing to ask or fill in leaves no wave; one whose values its place settles keeps them.
     if (Object.keys(wave.refs).length === 0) continue;
     Object.assign(answers, await answersOf(jev, wave));
     waves.push(wave);
   }
-  const blueprint = assemble(k, c.lib, structure, waves, answers);
-  const problems = validate(blueprint, k, c.lib);
+  const blueprint = assemble(k, lib, structure, waves, answers);
+  const problems = validate(blueprint, k, lib);
   if (problems.length > 0) throw new Error(`The ${thing.as} composed for ${thing.path || "the repository's root"} does not hold together: ${problems.join(" ")}`);
   return blueprint;
 }
