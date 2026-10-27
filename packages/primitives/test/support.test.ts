@@ -137,12 +137,13 @@ function misshapen(parts: readonly Part[], moments: readonly WindState[]): strin
 describe("plants", () => {
   const skeletons = lib.forRole("Skeleton").flatMap((p) => samples(p).map((s, i) => build(p, s, null, 21 + i)));
   const bark = lib.forRole("Surface")[0] as AnyPrimitive;
-  const bloom = lib.forRole("Ornament")[0] as AnyPrimitive;
-  // Each crown on frames of every kind, with bark under it and blossoms on it, cycling their words.
+  const blooms = lib.forRole("Ornament");
+  // Each crown on frames of every kind, with bark under it and each bloom in turn on it, cycling their words.
   const cases = lib.forRole("Foliage").flatMap((crown) => samples(crown).map((s, i) => [crown.id, i, crown, s] as const));
   const plantOf = (crown: AnyPrimitive, s: Stored, i: number): Part[] => {
     const frame = skeletons[(i * 5 + crown.id.length) % skeletons.length];
     const built = build(crown, s, frame, 9 + i) as Built;
+    const bloom = blooms[i % blooms.length] as AnyPrimitive;
     const flowers = build(bloom, samples(bloom)[i % 3] as Stored, built.anchors, 4 + i) as Built;
     return [...((build(bark, samples(bark)[i % 3] as Stored, frame, 3) as Built).parts as Part[]), ...(built.parts as Part[]), ...(flowers.parts as Part[])];
   };

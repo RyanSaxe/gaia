@@ -2,9 +2,9 @@
 // Geometry lives in ./geometry, one pure function per primitive.
 
 import { primitive, t } from "@gaia/schema";
-import { buildBark, buildBlossoms, buildLeafClumps, buildLeafStrands, buildNeedles } from "./geometry/foliage.ts";
-import { growBranching, growSpire } from "./geometry/skeleton.ts";
-import { buildLeafMound, growThicket } from "./geometry/shrub.ts";
+import { buildBark, buildBlossoms, buildFruit, buildJuniper, buildLeafClumps, buildLeafStrands, buildNeedles, oneTrunk } from "./geometry/foliage.ts";
+import { growBranching, growSapling, growSpire } from "./geometry/skeleton.ts";
+import { buildLeafMound, growBramble, growThicket } from "./geometry/shrub.ts";
 import { PALETTE_FAMILIES, paletteOf } from "./palettes.ts";
 
 export const branchingParams = {
@@ -65,6 +65,24 @@ export const spire = primitive({
   doc: "A conifer's single straight trunk with rings of short limbs.",
   params: spireParams,
   build: (p, ctx) => growSpire(p, ctx),
+});
+
+export const saplingParams = {
+  habit: t.choice("How the young tree is growing", {
+    reaching: "A slender stem whose few shoots reach eagerly upward, in a hurry to be tall",
+    tiered: "Neat, level tiers of branches up a straight stem, patient and orderly",
+    leaning: "A slim stem leaning toward the light, its branches uneven and searching",
+  }),
+  tiers: t.scale("How many tiers of branches it has grown", { "its first two": 2, "a few": 3, several: 5 }),
+  stature: t.scale("How tall it has grown", { "knee-high": 0.6, "waist-high": 1.1, "as tall as a person": 1.7 }),
+};
+
+export const sapling = primitive({
+  id: "sapling@1",
+  role: "Skeleton",
+  doc: "A young tree no taller than a person: one thin stem and a few tiers of slender branches.",
+  params: saplingParams,
+  build: (p, ctx) => growSapling(p, ctx),
 });
 
 export const barkParams = {
@@ -136,9 +154,9 @@ export const needlesParams = {
 export const needles = primitive({
   id: "needles@1",
   role: "Foliage",
-  doc: "Dense sprays of needles along each limb, like a fir.",
+  doc: "Dense sprays of needles along each limb, like a fir; on a bush's many stems, close tufts, like a juniper.",
   params: needlesParams,
-  build: (p, ctx, skeleton) => buildNeedles(p, ctx, skeleton),
+  build: (p, ctx, skeleton) => (oneTrunk(skeleton) ? buildNeedles(p, ctx, skeleton) : buildJuniper(p, ctx, skeleton)),
 });
 
 export const blossomsParams = {
@@ -156,6 +174,22 @@ export const blossoms = primitive({
   doc: "Flowers, pods or berries among the foliage.",
   params: blossomsParams,
   build: (p, ctx, anchors) => buildBlossoms(p, ctx, anchors),
+});
+
+export const fruitParams = {
+  fruit: t.choice("What fruit hangs from its twigs", {
+    apples: "Round apples, plump and generous",
+    pears: "Pears that swell below a narrow neck, heavy and mellow",
+  }),
+  crop: t.scale("How much fruit it bears", { "a scattered few": 0.2, "a good crop": 0.45, "bowed with fruit": 0.8 }),
+};
+
+export const fruit = primitive({
+  id: "fruit@1",
+  role: "Ornament",
+  doc: "Apples or pears hanging on stalks from the twigs, under the outer leaves.",
+  params: fruitParams,
+  build: (p, ctx, anchors) => buildFruit(p, ctx, anchors),
 });
 
 export const sway = primitive({
@@ -199,6 +233,20 @@ export const thicket = primitive({
   build: (p, ctx) => growThicket(p, ctx),
 });
 
+export const brambleParams = {
+  canes: t.scale("How many canes arch from its root", { "a few wild canes": 4, "a thorny thicket": 7, "an impenetrable tangle": 11 }),
+  reach: t.scale("How far its canes arch out before they bow to the soil", { "humped and close": 1.2, sprawling: 1.8, "rambling far over the ground": 2.5 }),
+  stature: t.scale("How high its arches stand", { "knee-high": 0.6, "waist-high": 1, "head-high": 1.5 }),
+};
+
+export const bramble = primitive({
+  id: "bramble@1",
+  role: "Skeleton",
+  doc: "A bramble's frame: long canes from one root that arch over and bow back to the soil, crossing into a tangle.",
+  params: brambleParams,
+  build: (p, ctx) => growBramble(p, ctx),
+});
+
 export const leafMoundParams = {
   leaves: t.choice("What the shrub's leaves are like", {
     rounded: "Soft, rounded clumps of small leaves",
@@ -216,4 +264,4 @@ export const leafMound = primitive({
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });
 
-export const FLORA_PRIMITIVES = [branching, spire, bark, leafClumps, leafStrands, needles, blossoms, sway, palette, thicket, leafMound];
+export const FLORA_PRIMITIVES = [branching, spire, sapling, bark, leafClumps, leafStrands, needles, blossoms, fruit, sway, palette, thicket, bramble, leafMound];

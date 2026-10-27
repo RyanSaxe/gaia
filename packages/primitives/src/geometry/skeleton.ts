@@ -2,8 +2,8 @@
 // more in one branch never shifts another.
 
 import type { Anchor, BuildContext, Limb, Rand, Resolved, Skeleton } from "@gaia/schema";
-import type { branchingParams, spireParams } from "../flora.ts";
-import { type V3, addScaled, basis, normalize, rotate } from "./kit.ts";
+import type { branchingParams, saplingParams, spireParams } from "../flora.ts";
+import { type V3, addScaled, basis, lerp, normalize, rotate } from "./kit.ts";
 
 type Habit = Resolved<typeof branchingParams>["habit"];
 
@@ -182,6 +182,81 @@ export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildCon
     const out = normalize([l.end[0] - l.start[0], l.end[1] - l.start[1], l.end[2] - l.start[2]]);
     tips.push({ position: l.end, normal: out, size: 1 });
   });
+  return { limbs, tips };
+}
+
+type SaplingHabit = Resolved<typeof saplingParams>["habit"];
+
+/**
+ * How a young tree carries its tiers: its width for its height, where its
+ * lowest tier leaves the stem, branches per tier, how far each branch rises
+ * above level (radians), how its outer half bends (up toward the light, or
+ * down under its own weight), how far its side twigs tilt, and how far the
+ * stem leans toward the light. A tiered sapling's branches droop at their
+ * tips and carry a second twig hung below the first, so each tier has depth.
+ */
+const SAPLING: Readonly<Record<SaplingHabit, { width: number; low: number; perTier: number; rise: number; bend: number; twigs: readonly number[]; lean: number }>> = {
+  reaching: { width: 0.42, low: 0.38, perTier: 2, rise: 0.85, bend: 0.25, twigs: [0.2], lean: 0.03 },
+  tiered: { width: 0.62, low: 0.22, perTier: 4, rise: 0.12, bend: -0.6, twigs: [-0.15, -0.75], lean: 0.01 },
+  leaning: { width: 0.55, low: 0.32, perTier: 2, rise: 0.5, bend: 0.25, twigs: [0.2], lean: 0.16 },
+};
+
+/**
+ * A young tree: one thin stem to its top and a few tiers of slender
+ * branches, shortest at the top, each with a side twig, so it reads as a
+ * tree that will grow rather than a small grown one. It stands at its own
+ * height, never the file's: a sapling is no taller than a person.
+ */
+export function growSapling(p: Resolved<typeof saplingParams>, ctx: BuildContext): Skeleton {
+  const habit = SAPLING[p.habit];
+  const r = ctx.rand.fork("sapling");
+  const height = Math.min(1.8, p.stature);
+  const width = height * habit.width;
+  const stem = 0.006 + 0.012 * height;
+  const limbs: Limb[] = [];
+  const tips: Anchor[] = [];
+  const lean = r.next() * Math.PI * 2;
+  // The stem: six gently wandering segments, tapering to a whip at the top.
+  const along: V3[] = [[0, 0, 0]];
+  for (let i = 1; i <= 6; i++) {
+    const f = i / 6;
+    along.push([Math.cos(lean) * habit.lean * height * f * f + r.range(-0.012, 0.012), height * f, Math.sin(lean) * habit.lean * height * f * f + r.range(-0.012, 0.012)]);
+  }
+  for (let i = 0; i < 6; i++) {
+    limbs.push({ start: along[i] as V3, end: along[i + 1] as V3, startRadius: stem * (1 - 0.8 * (i / 6)), endRadius: stem * (1 - 0.8 * ((i + 1) / 6)), depth: 0, parent: i - 1 });
+  }
+  tips.push({ position: along[6] as V3, normal: [0, 1, 0], size: 0.5 });
+  const tiers = Math.max(1, Math.round(p.tiers));
+  for (let k = 0; k < tiers; k++) {
+    const tr = r.fork(`tier${k}`);
+    const f = habit.low + (0.9 - habit.low) * (tiers === 1 ? 0.5 : k / (tiers - 1));
+    const seg = Math.min(5, Math.floor(f * 6));
+    const at = lerp(along[seg] as V3, along[seg + 1] as V3, f * 6 - seg);
+    const count = habit.perTier + (tr.next() < 0.35 ? 1 : 0);
+    for (let j = 0; j < count; j++) {
+      const br = tr.fork(`branch${j}`);
+      const az = k * 2.4 + (j / count) * Math.PI * 2 + br.range(-0.4, 0.4);
+      const len = Math.max(0.1, (width / 2) * Math.pow(1 - (f - habit.low) / (1.05 - habit.low), 0.7) * br.range(0.8, 1.15) + 0.06);
+      const up = habit.rise + br.range(-0.12, 0.12);
+      const d1 = normalize([Math.cos(az) * Math.cos(up), Math.sin(up), Math.sin(az) * Math.cos(up)]);
+      const d2 = normalize(addScaled(d1, UP, habit.bend));
+      const mid = addScaled(at, d1, len * 0.55);
+      const end = addScaled(mid, d2, len * 0.45);
+      const r0 = Math.max(0.003, stem * 0.42 * Math.pow(len / (width / 2 + 0.06), 0.5));
+      limbs.push({ start: at, end: mid, startRadius: r0, endRadius: r0 * 0.65, depth: 1, parent: seg });
+      const first = limbs.length - 1;
+      limbs.push({ start: mid, end, startRadius: r0 * 0.65, endRadius: r0 * 0.3, depth: 1, parent: first });
+      tips.push({ position: end, normal: d2, size: 0.6 + 0.4 * Math.min(1, len / (width / 2 + 0.06)) });
+      // Side twigs from the middle, so a branch carries leaves along its length; a second one, on the other side, hangs lower.
+      const hand = br.next() < 0.5 ? -1 : 1;
+      habit.twigs.forEach((tilt, n) => {
+        const side = normalize(rotate(d1, UP, br.range(0.55, 0.9) * hand * (n === 0 ? 1 : -1)));
+        const twigEnd = addScaled(mid, normalize(addScaled(side, UP, tilt)), len * (n === 0 ? 0.4 : 0.32));
+        limbs.push({ start: mid, end: twigEnd, startRadius: r0 * 0.4, endRadius: r0 * 0.18, depth: 2, parent: first });
+        tips.push({ position: twigEnd, normal: side, size: 0.45 });
+      });
+    }
+  }
   return { limbs, tips };
 }
 
