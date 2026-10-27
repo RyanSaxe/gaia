@@ -1,6 +1,6 @@
 {
  "sky": {
-  "id": "bp-0ccd77a2",
+  "id": "bp-1a1a98f7",
   "kind": "world",
   "slots": {
    "light": {
@@ -18,7 +18,8 @@
     "params": {
      "character": "powder blue",
      "clouds": "fair-weather puffs",
-     "cover": "scattered"
+     "cover": "scattered",
+     "overcast": "fair"
     }
    },
    "wind": {

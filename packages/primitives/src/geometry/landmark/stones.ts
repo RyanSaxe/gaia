@@ -57,7 +57,7 @@ const tipAxis = (s: Stone): V3 => normalize(cross([0, 1, 0], [Math.cos(s.toward)
  * How far `points` must turn about `axis` through `hinge` until the lowest
  * of them comes down to `ground`: where a falling stone comes to rest.
  */
-function restAngle(points: readonly V3[], hinge: V3, axis: V3, ground: number): number {
+export function restAngle(points: readonly V3[], hinge: V3, axis: V3, ground: number): number {
   const lowest = (angle: number): number =>
     Math.min(...points.map((p) => hinge[1] + rotate([p[0] - hinge[0], p[1] - hinge[1], p[2] - hinge[2]], axis, angle)[1]));
   let lo = 0;
@@ -172,7 +172,7 @@ function emitStone(b: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: nu
 }
 
 /** A piece of stone lying in the grass, half sunk, that grows in below `grow`: a snapped top or a fallen lintel. */
-function emitFallen(b: PartBuilder, f: { x: number; z: number; yaw: number; width: number; depth: number; length: number }, facets: number, grow: number, r: Rand): void {
+export function emitFallen(b: PartBuilder, f: { x: number; z: number; yaw: number; width: number; depth: number; length: number }, facets: number, grow: number, r: Rand): void {
   const shape = slabShape({ width: f.width, depth: f.depth, height: f.length }, facets, 0, r, 2);
   const c = Math.cos(f.yaw);
   const sn = Math.sin(f.yaw);

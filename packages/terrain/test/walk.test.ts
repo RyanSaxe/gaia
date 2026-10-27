@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type BuildingPlan, Library, blueprintOf, rand } from "@gaia/schema";
-import { BIOME_PRIMITIVES, PRIMITIVES, RELIEF_PRIMITIVES, standingStones } from "@gaia/primitives";
+import { BIOME_PRIMITIVES, PRIMITIVES, RELIEF_PRIMITIVES, ROCK_ARCH_FORMS, ROTUNDA_MEASURES, rockArch, rotunda, standingStones } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import {
@@ -20,6 +20,7 @@ import {
   type Walker,
   bakeTerrain,
   carry,
+  floorOf,
   groundHeightAt,
   landHalf,
   clearanceAt,
@@ -267,6 +268,50 @@ describe("solid pieces of a built thing", () => {
     expect(walk.state).toBe("arrived");
     // A king stone at the middle blocks it.
     expect(clearanceAt(solidsOf(piecesShapes(ring(true, "a tall king stone").parts, at)), at.x, at.z)).toBeLessThan(0);
+  });
+
+  it("lets a walker pass under a rock arch along the way through it, between the feet that stop it", () => {
+    for (const form of ["a doorway", "a gate", "a great span"] as const) {
+      const arch = rockArch.build({ form, thickness: 1.35, stone: 1 }, { rand: rand(5), facts: {} }, null);
+      const solids = solidsOf(piecesShapes(arch.parts, at));
+      // The way runs along the arch's own z, which the world turns toward its trail: (sin yaw, cos yaw) in the world.
+      const [wx, wz] = [Math.sin(at.yaw), Math.cos(at.yaw)];
+      const walk = tapWalk(solids, { x: at.x - wx * 16, z: at.z - wz * 16 }, { x: at.x + wx * 16, z: at.z + wz * 16 });
+      expect(walk.state, form).toBe("arrived");
+      // Straight through under the span, never round a foot.
+      for (const q of walk.path) expect(Math.abs((q.x - at.x) * wz - (q.z - at.z) * wx), form).toBeLessThan(1);
+      // Each foot, across the way at the opening's sides, stops a walker.
+      const foot = ROCK_ARCH_FORMS[form].half + ROCK_ARCH_FORMS[form].ring * 1.35 * 0.6;
+      for (const side of [-1, 1]) expect(clearanceAt(solids, at.x + side * wz * foot, at.z - side * wx * foot), form).toBeLessThan(0);
+    }
+  });
+
+  it("carries a walker up a rotunda's steps to stand among its columns, which stop it", () => {
+    const temple = rotunda.build({ columns: "eight", roof: "a high dome", steps: 5 }, { rand: rand(5), facts: {} }, null);
+    const floor = floorOf(temple.parts, at);
+    if (floor === null) throw new Error("A rotunda has a floor.");
+    const solids = solidsOf(piecesShapes(temple.parts, at));
+    // In from 16 m in front, along the rotunda's own z, through the gap between two columns that faces the way in.
+    const [wx, wz] = [Math.sin(at.yaw), Math.cos(at.yaw)];
+    const walk = tapWalk(solids, { x: at.x + wx * 16, z: at.z + wz * 16 }, { x: at.x, z: at.z });
+    expect(walk.state).toBe("arrived");
+    for (const q of walk.path) expect(clearanceAt(solids, q.x, q.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
+    // It stands on the floor inside, five steps up, and climbs no more than a step at a time on the way.
+    const middle = footingAt(t, [floor], at.x, at.z);
+    expect(middle.deck).toBe(true);
+    expect(middle.ground).toBeCloseTo(at.y + 5 * 0.34, 2);
+    let last = -Infinity;
+    for (let d = 14; d >= 0; d -= 0.1) {
+      const here = footingAt(t, [floor], at.x + wx * d, at.z + wz * d);
+      if (here.deck && last > -Infinity) expect(here.ground - last).toBeLessThan(0.36);
+      if (here.deck) last = here.ground;
+    }
+    // Inside the top step, the paving's joints never drop a walk to the ground below it.
+    for (let d = ROTUNDA_MEASURES.ring + ROTUNDA_MEASURES.step.margin - 0.3; d >= 0; d -= 0.05) expect(footingAt(t, [floor], at.x + wx * d, at.z + wz * d).deck, `${d.toFixed(2)} m in`).toBe(true);
+    // A column stands in the ring, and stops a walker.
+    const a = Math.PI / 2 + Math.PI / 8;
+    const [lx, lz] = [Math.cos(a) * ROTUNDA_MEASURES.ring, Math.sin(a) * ROTUNDA_MEASURES.ring];
+    expect(clearanceAt(solids, at.x + lx * Math.cos(at.yaw) + lz * wx, at.z - lx * Math.sin(at.yaw) + lz * wz)).toBeLessThan(0);
   });
 });
 

@@ -17,23 +17,30 @@ const AIRS = {
   "pollen-filled": { tint: 0xf1e2a8, tintAmount: 0.32, density: 0.0065, mist: 0.06, specks: 1 },
 } as const;
 
+/** How much each distance thickens the air. */
+const DISTANCE = { "for miles": 0.55, "softened distance": 1, "close and dreamy": 1.7 } as const;
+
 export const air = primitive({
   id: "air@1",
   role: "Atmosphere",
   doc: "What hangs in the air between you and the distance.",
   params: {
     air: t.choice("The character of the air", {
-      clear: "Crisp, clean air",
-      "hazy gold": "Warm golden haze",
-      "blue haze": "Distance fades into soft blue",
-      "morning mist": "White mist lying low on the ground",
-      "pollen-filled": "Air thick with drifting golden pollen",
+      clear: "Crisp, clean air, for code that feels plain, brisk and honest",
+      "hazy gold": "Warm golden haze, for code that feels drowsy, warm and nostalgic",
+      "blue haze": "Distance fades into soft blue, for code that feels remote and melancholy, its far end lost",
+      "morning mist": "White mist lying low on the ground, for code that feels hushed and a little mysterious",
+      "pollen-filled": "Air thick with drifting golden pollen, for code that feels fertile, lively and in bloom",
     }),
-    distance: t.scale("How far you can see", { "for miles": 0.55, "softened distance": 1, "close and dreamy": 1.7 }),
+    distance: t.choice("How far you can see", {
+      "for miles": "The far hills sharp against the sky, for code that feels bare and exposed, nothing hidden",
+      "softened distance": "The far land softened but still there, for code that feels mellow and calm",
+      "close and dreamy": "Only the near land clear, the rest a dream, for code that feels cosy, secret or hard to see into",
+    }),
   },
   build: (p) => {
     const a = AIRS[p.air];
-    return { tint: hex(a.tint), tintAmount: a.tintAmount, density: a.density * p.distance, mist: a.mist, specks: a.specks };
+    return { tint: hex(a.tint), tintAmount: a.tintAmount, density: a.density * DISTANCE[p.distance], mist: a.mist, specks: a.specks };
   },
 });
 
@@ -65,22 +72,34 @@ const COVERS = {
   "clover meadow": { soil: 0x5e8944, low: 0x4f8b42, high: 0x8ec45e, tip: 0xa4d07a, height: 0.1, width: 0.036, density: 1, clump: 0, lean: 0.72, round: 0.95, bend: 0.1, flowers: [0xf3f0f2, 0xe7a5c8, 0xc9b6ec] },
 } as const satisfies Record<string, Cover>;
 
+/** How tall each length grows the cover, and how thick each amount of wildflowers is. */
+const LENGTH = { cropped: 0.65, natural: 1, "tall and unkempt": 1.45 } as const;
+const WILDFLOWERS = { none: 0, "a scattering": 0.03, "drifts of them": 0.11 } as const;
+
 export const groundCover = primitive({
   id: "ground-cover@1",
   role: "Ground",
   doc: "What grows over the open ground between the components.",
   params: {
     cover: t.choice("What covers the ground", {
-      "lush grass": "Soft green grass",
-      "golden steppe": "Dry golden grassland",
-      "silver grass": "Tall pale plumed grass that ripples in the wind",
-      moss: "A deep cushion of moss",
-      heather: "Low purple heather",
-      "sand and scrub": "Pale sand with clumps of scrub",
-      "clover meadow": "A low carpet of clover",
+      "lush grass": "Soft green grass, for code that feels fresh, eager and cared for",
+      "golden steppe": "Dry golden grassland, for code that feels sun-baked, spare and wide open",
+      "silver grass": "Tall pale plumed grass that ripples in the wind, for code that feels restless, airy and always on the move",
+      moss: "A deep cushion of moss, for code that feels old, quiet and settled",
+      heather: "Low purple heather, for code that feels wild, tough and a little lonely",
+      "sand and scrub": "Pale sand with clumps of scrub, for code that feels sparse, dry and hard-won",
+      "clover meadow": "A low carpet of clover, for code that feels friendly and humble, modest pieces side by side",
     }),
-    length: t.scale("How tall the cover grows", { cropped: 0.65, natural: 1, "tall and unkempt": 1.45 }),
-    wildflowers: t.scale("How many wildflowers", { none: 0, "a scattering": 0.03, "drifts of them": 0.11 }),
+    length: t.choice("How tall the cover grows", {
+      cropped: "Kept short, for code that feels fussy and strict, kept in line",
+      natural: "Left to its own height, for code that feels relaxed and natural",
+      "tall and unkempt": "Grown long and tangled, for code that feels overgrown, wild or left alone",
+    }),
+    wildflowers: t.choice("How many wildflowers grow in it", {
+      none: "No flowers at all, for code that feels serious and businesslike",
+      "a scattering": "A few here and there, for code that feels mostly plain, with a little cheer",
+      "drifts of them": "Drifts of flowers, for code that feels generous, joyful and in full bloom",
+    }),
   },
   build: (p): GroundSpec => {
     const c: Cover = COVERS[p.cover];
@@ -89,14 +108,14 @@ export const groundCover = primitive({
       low: hex(c.low),
       high: hex(c.high),
       tip: hex(c.tip),
-      height: c.height * p.length,
+      height: c.height * LENGTH[p.length],
       width: c.width,
       density: c.density,
       clump: c.clump,
       lean: c.lean,
       round: c.round,
       bend: c.bend,
-      flowers: p.wildflowers,
+      flowers: WILDFLOWERS[p.wildflowers],
       flowerColors: c.flowers.map(hex),
     };
   },

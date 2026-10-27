@@ -312,6 +312,11 @@ export interface CloudSpec {
   readonly low: number;
   readonly high: number;
   readonly opacity: number;
+  /**
+   * How overcast the sky is, 0 to 1: absent on a fair sky. An overcast sky greys its clouds and darkens their
+   * undersides, brightens the sky seen through its breaks, and dims and cools the sun's light so shadows soften.
+   */
+  readonly overcast?: number;
   /** How strongly the sun side brightens and the far side shades, 0 to 1. */
   readonly billow: number;
   /** Breaks the cover into small cells, like a mackerel sky, 0 to 1. */

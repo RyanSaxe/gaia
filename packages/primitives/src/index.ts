@@ -11,4 +11,6 @@ export * from "./rock.ts";
 export * from "./wildflowers.ts";
 export * from "./route.ts";
 export * from "./landmark.ts";
+export { ROCK_ARCH_FORMS } from "./geometry/landmark/arch.ts";
+export { ROTUNDA_MEASURES } from "./geometry/landmark/rotunda.ts";
 export { type FootbridgeDeck, buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones, footbridgeDeck, footbridgeHolds } from "./geometry/crossing.ts";

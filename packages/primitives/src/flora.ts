@@ -209,7 +209,7 @@ export const palette = primitive({
   doc: "The component's colors when healthy and in decline.",
   params: {
     family: t.choice("Color family", PALETTE_FAMILIES),
-    contrast: t.scale("How strongly the colors differ", { soft: 0.6, balanced: 1, vivid: 1.35 }),
+    contrast: t.scale("How strongly the colors differ: soft for code that feels shy, faded or retiring, balanced for code that feels even-tempered, vivid for code that feels bold, loud or full of life", { soft: 0.6, balanced: 1, vivid: 1.35 }),
   },
   build: (p) => paletteOf(p.family, p.contrast),
 });

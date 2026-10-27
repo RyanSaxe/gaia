@@ -2,7 +2,7 @@
 // solids and water, limit turns to the keyboard steering rate, and slow for
 // bends. Manual looking keeps control of the view until it faces the route.
 
-import { type Deck, deckAt } from "./gait.ts";
+import { type Deck, type Footbed, deckAt } from "./gait.ts";
 import { heightAt } from "./lattice.ts";
 import type { Crossing, TrailNetwork, Way } from "./paths.ts";
 import type { Solids } from "./solids.ts";
@@ -175,7 +175,7 @@ function waterAt(t: Terrain, x: number, z: number): number {
 const DAMP = 0.05;
 
 /** Whether a person at (x, z) wades: in water, and not on a footbridge's deck. */
-export function wadingAt(t: Terrain, decks: readonly Deck[], x: number, z: number): boolean {
+export function wadingAt(t: Terrain, decks: readonly Footbed[], x: number, z: number): boolean {
   return waterAt(t, x, z) > DAMP && deckAt(decks, x, z) === -Infinity;
 }
 

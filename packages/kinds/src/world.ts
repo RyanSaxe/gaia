@@ -10,7 +10,7 @@ export const world = kind({
   doc: "The art direction of a whole world: its light, sky and wind.",
   slots: {
     light: slot("Light", {
-      ask: "its light says how the whole codebase feels to work in: low, warm light for an old and settled one, clear and bright for a young one still taking shape, soft and painterly for one kept with care.",
+      ask: "its light is how the whole codebase feels to work in: choose the light whose feel suits it.",
     }),
     sky: slot("Sky", {
       ask: "its sky says the codebase's weather: open and fair for code that is easy to read and in good health, heavier cloud for code that is tangled or hard to follow.",

@@ -9,10 +9,10 @@ import { applyVitality, resolveParams } from "@gaia/realize";
 type Erased = (params: unknown, ctx: { rand: ReturnType<typeof rand>; facts: Record<string, number> }, input: unknown) => unknown;
 
 const PLANS = ["round", "square", "octagonal"] as const;
-const CROWNS = ["a conical roof", "battlements", "an open lantern room", "a broken top"] as const;
+const CROWNS = ["a conical roof", "battlements", "an open lantern room"] as const;
 
 describe("a lookout tower", () => {
-  // Builds twelve towers and reads each at four vitalities: a few seconds alone, more when other work shares the machine.
+  // Builds nine towers and reads each at four vitalities: a few seconds alone, more when other work shares the machine.
   it("never leaves its door or lintel standing higher than the wall beside the doorway", { timeout: 30_000 }, () => {
     for (const plan of PLANS) {
       for (const crown of CROWNS) {

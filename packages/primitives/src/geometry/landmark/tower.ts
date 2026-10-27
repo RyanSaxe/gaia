@@ -10,15 +10,15 @@
 
 import type { Anchor, BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { lookoutTowerParams } from "../../landmark.ts";
-import { type Channels, LOSS_BAND, PartBuilder, type V3, clamp, cross, fbm3, lossThreshold, normalize, sub } from "../kit.ts";
+import { type Channels, LOSS_BAND, PartBuilder, type V3, clamp, cross, lossThreshold, normalize, sub } from "../kit.ts";
 import { UP, box, quad, tri } from "../blocks.ts";
 import { lump, nonEmpty, still } from "./shared.ts";
 
 /** Height of one course of stone, meters. */
-const COURSE = 0.56;
+export const COURSE = 0.56;
 /** Mortar gap between blocks, meters, and how far the mortar is set back behind a course's least proud block. */
-const JOINT = 0.035;
-const MORTAR = 0.012;
+export const JOINT = 0.035;
+export const MORTAR = 0.012;
 /** Faces of each plan; 0 is round. */
 const SIDES = { round: 0, square: 4, octagonal: 8 } as const;
 /** How far a gallery's walkway reaches past the wall, how thick it is, and its parapet's height. */
@@ -73,13 +73,13 @@ const facetOf = (sides: number, a: number): number => {
 };
 
 /** A point on a round wall, or on a polygonal wall whose apothem is `rad`, at angle `a`. */
-function ringPoint(sides: number, a: number, rad: number, y: number): V3 {
+export function ringPoint(sides: number, a: number, rad: number, y: number): V3 {
   if (sides === 0) return [Math.cos(a) * rad, y, Math.sin(a) * rad];
   const k = rad / Math.cos(a - facetOf(sides, a));
   return [Math.cos(a) * k, y, Math.sin(a) * k];
 }
 
-function ringNormal(sides: number, a: number): V3 {
+export function ringNormal(sides: number, a: number): V3 {
   const f = sides === 0 ? a : facetOf(sides, a);
   return [Math.cos(f), 0, Math.sin(f)];
 }
@@ -89,7 +89,7 @@ function ringNormal(sides: number, a: number): V3 {
  * block on odd courses. On a polygon every corner is a joint, so no block
  * bends around one.
  */
-function courseSpans(sides: number, rad: number, len: number, odd: boolean): [number, number][] {
+export function courseSpans(sides: number, rad: number, len: number, odd: boolean): [number, number][] {
   const gap = JOINT / (2 * rad);
   if (sides === 0) {
     const n = Math.max(10, Math.round((Math.PI * 2 * rad) / len));
@@ -120,7 +120,7 @@ function courseSpans(sides: number, rad: number, len: number, odd: boolean): [nu
  * joint past each end, so the joints round it read as dark recesses from outside and never let the sky through;
  * every block of a course sets its mortar at the same radius, so the mortar is one unbroken ring.
  */
-function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number, y0: number, y1: number, rad: number, thick: number, shade: number, ch: Channels, under = false, joint = 0, mortar = rad): void {
+export function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number, y0: number, y1: number, rad: number, thick: number, shade: number, ch: Channels, under = false, joint = 0, mortar = rad): void {
   const am = (a0 + a1) / 2;
   const outer = (a: number, y: number, bulge = 0): V3 => ringPoint(sides, a, rad + bulge, y);
   const inner = (a: number, y: number): V3 => ringPoint(sides, a, rad - thick, y);
@@ -163,14 +163,6 @@ function disc(b: PartBuilder, sides: number, y: number, rad: number, shade: numb
     const a1 = ((i + 1) / n) * Math.PI * 2 + off;
     tri(b, [[0, y, 0], [Math.cos(a0) * rad * k, y, Math.sin(a0) * rad * k], [Math.cos(a1) * rad * k, y, Math.sin(a1) * rad * k]], UP, shade, { ...ch, pivot: foot((a0 + a1) / 2) });
   }
-}
-
-/** The wedge of a disc of `sides` that angle `a` falls in, by its middle angle. */
-function wedgeOf(sides: number, a: number): number {
-  const n = sides === 0 ? 16 : sides;
-  const off = sides === 0 ? 0 : Math.PI / sides;
-  const step = (Math.PI * 2) / n;
-  return off + (Math.floor((((a - off) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / step) + 0.5) * step;
 }
 
 /** How readily a piece at share `rise` of the tower's height falls: higher first, jagged by `u`. */
@@ -223,10 +215,9 @@ class Courses {
  * A walkway on stepped corbels ringing the wall at height `y`, with a
  * parapet `parapet` meters high along its edge (none where battlements
  * stand there instead). Its pieces
- * fall a little before the wall they hang from. `broken` leaves out some of
- * the walkway and parapet, as on a ruin.
+ * fall a little before the wall they hang from.
  */
-function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thick: number, courses: Courses, parapet: number, broken: boolean, r: Rand): number {
+function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thick: number, courses: Courses, parapet: number, r: Rand): number {
   const out = GALLERY.out;
   const rim = wall + out;
   // A gallery never outlasts the wall it is let into: it goes once the
@@ -248,13 +239,12 @@ function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thi
     }
   }
   for (const [a0, a1] of courseSpans(sides, rim, 1.6, false)) {
-    if (broken && r.next() < 0.4) continue;
     const u = r.next();
     const loss = clamp(held + 0.015 * u, 0.02, 0.86);
     most = Math.max(most, loss);
     const ch = still(root((a0 + a1) / 2, y), 0.55, { loss, tint: (u - 0.5) * 0.04 });
     ringBlock(stone, sides, a0, a1, y, y + GALLERY.slab, rim, out + 0.15, 0.55 + 0.08 * u, ch, true);
-    if (parapet > 0 && !(broken && r.next() < 0.5)) ringBlock(stone, sides, a0, a1, y + GALLERY.slab, y + GALLERY.slab + parapet, rim, 0.22, 0.56 + 0.1 * u, ch);
+    if (parapet > 0) ringBlock(stone, sides, a0, a1, y + GALLERY.slab, y + GALLERY.slab + parapet, rim, 0.22, 0.56 + 0.1 * u, ch);
   }
   return most;
 }
@@ -265,7 +255,6 @@ function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thi
  */
 export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   const r = ctx.rand.fork("tower");
-  const seed = Math.floor(r.next() * 1e6);
   const height = p.height * (ctx.facts.scale ?? 1);
   const shape = shapeOf(p, height);
   const { sides, shaft, courseH: ch, courses, wallAt } = shape;
@@ -277,26 +266,15 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   /** The ground under the middle of the wall at angle `a`: what a piece sinks toward as it goes, so it slides down into the wall below. */
   const foot = (a: number): V3 => ringPoint(sides, a, wallAt(ch * 2.5) - thick * 0.5, 0);
   const blockLen = p.masonry * 1.1;
-  const broken = p.crown === "a broken top";
   const topGallery = p.galleries !== "none";
   // Galleries at every stage stand where the stages meet; the top one rings the shaft's head.
   const midGalleries = p.galleries === "a gallery at every stage" ? shape.stages : [];
 
-  // A ruin's broken top: a jagged line, low in two notches, above which no block stands.
-  const notches = [r.next() * Math.PI * 2, r.next() * Math.PI * 2];
-  const jagged = (a: number): number => {
-    if (!broken) return Infinity;
-    const n = 0.5 + 0.5 * fbm3(Math.cos(a) * 2.6, Math.sin(a) * 2.6, 0.3, seed, 3);
-    const dips = notches.map((o, k) => Math.max(0, 1 - Math.abs(Math.atan2(Math.sin(a - o), Math.cos(a - o))) / (k === 0 ? 0.9 : 0.5)) ** 2);
-    return shaft * Math.max(0.52, 0.66 + 0.34 * n - 0.24 * (dips[0] ?? 0) - 0.14 * (dips[1] ?? 0));
-  };
-  const lowestTop = broken ? shaft * 0.52 : shaft;
-
   // Openings: a door at the foot and slit windows climbing the shaft, clear
-  // of the galleries and below a ruin's broken top. Blocks stop at an
-  // opening's edges, so each one is a clean, dressed gap.
+  // of the galleries and the head. Blocks stop at an opening's edges, so each
+  // one is a clean, dressed gap.
   const busy = (c: number, rows: number): boolean =>
-    midGalleries.some((g) => c * ch < g + ch && (c + rows) * ch > g - 3 * ch) || (c + rows) * ch > lowestTop - ch;
+    midGalleries.some((g) => c * ch < g + ch && (c + rows) * ch > g - 3 * ch) || (c + rows) * ch > shaft - ch;
   const slits: { course: number; rows: number; along: number; half: number }[] = [{ course: 0, rows: 4, along: Math.PI / 2, half: 0.55 / wallAt(0) }];
   for (let c = 5; c < courses - 3; c += 4 + Math.floor(r.next() * 3)) {
     const along = sides === 0 ? r.next() * Math.PI * 2 : facetOf(sides, r.next() * Math.PI * 2);
@@ -317,8 +295,6 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
     for (const [a0, a1] of courseSpans(sides, rad, blockLen, c % 2 === 1)) {
       const mid = (a0 + a1) / 2;
       const u = cr.next();
-      const top = jagged(mid);
-      if (y0 + ch / 2 > top) continue;
       let pieces: [number, number][] = [[a0, a1]];
       for (const sl of open) {
         const o = mid + angleDiff(sl.along, mid);
@@ -333,10 +309,8 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       const under = c === 0 ? 0 : laid.under(a0, a1, y0 - ch * 0.6, y0);
       if (under < 0) continue;
       const rise = (y0 + ch / 2) / height;
-      // Higher blocks fall first; a seeded jitter makes the broken top jagged.
-      // On a ruin, the blocks along the break are loose and go sooner.
-      const loose = top - y0 < ch * 2.5 ? 0.12 : 0;
-      const loss = c < 2 ? 0 : clamp(Math.max(fallsAt(rise, u) + loose, under), 0.02, MOST);
+      // Higher blocks fall first; a seeded jitter makes the falling top jagged.
+      const loss = c < 2 ? 0 : clamp(Math.max(fallsAt(rise, u), under), 0.02, MOST);
       for (const [b0, b1] of pieces) laid.laid.push({ a0: b0, a1: b1, y0, y1, loss });
       // A falling block sinks down into the wall below it as it goes, never hanging in the air; a block an opening
       // cuts in two, each piece into the wall below itself, not into the opening.
@@ -352,7 +326,6 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   for (const s of shape.stages) {
     const rad = wallAt(s - ch / 2) + 0.08;
     for (const [a0, a1] of courseSpans(sides, rad, blockLen * 1.4, false)) {
-      if (s > jagged((a0 + a1) / 2)) continue;
       const under = laid.under(a0, a1, s - 0.4, s + 0.05);
       if (under < 0) continue;
       const u = r.next();
@@ -360,7 +333,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       ringBlock(stone, sides, a0, a1, s - 0.26, s, rad, thick * 0.7, 0.6 + 0.08 * u, still(root, 0.5, { loss: clamp(under + LET_IN + 0.015 * u, 0.02, 0.86) }), true);
     }
   }
-  for (const g of midGalleries) gallery(stone, sides, g, wallAt(g - ch / 2), thick, laid, GALLERY.parapet, broken, r.fork(`gallery${g.toFixed(1)}`));
+  for (const g of midGalleries) gallery(stone, sides, g, wallAt(g - ch / 2), thick, laid, GALLERY.parapet, r.fork(`gallery${g.toFixed(1)}`));
 
   // The openings: dark, then lamplit panes in each slit; a plank door at the foot.
   for (const sl of slits) {
@@ -409,36 +382,22 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   let rim: number;
   if (topGallery) {
     const parapet = p.crown === "battlements" ? 0 : p.crown === "an open lantern room" ? LOW_PARAPET : GALLERY.parapet;
-    perch = Math.max(perch, gallery(stone, sides, shaft, headWall, thick, laid, parapet, broken, r.fork("top-gallery")));
+    perch = Math.max(perch, gallery(stone, sides, shaft, headWall, thick, laid, parapet, r.fork("top-gallery")));
     deck = shaft + GALLERY.slab;
     rim = headWall + GALLERY.out;
   } else {
     rim = headWall * 1.1;
     deck = shaft + ch * 0.55;
-    if (!broken) {
-      for (const [a0, a1] of courseSpans(sides, rim, blockLen, false)) {
-        // The cornice is the head course of the wall, and comes down with it.
-        const u = r.next();
-        const loss = c0(laid.under(a0, a1, shaft - ch * 1.6, shaft + 0.05));
-        perch = Math.max(perch, loss);
-        ringBlock(stone, sides, a0, a1, shaft - ch * 0.15, deck, rim, thick * 1.3, 0.55 + 0.1 * u, still(foot((a0 + a1) / 2), 0.6, { loss, tint: (u - 0.5) * 0.04 }), true);
-      }
+    for (const [a0, a1] of courseSpans(sides, rim, blockLen, false)) {
+      // The cornice is the head course of the wall, and comes down with it.
+      const u = r.next();
+      const loss = c0(laid.under(a0, a1, shaft - ch * 1.6, shaft + 0.05));
+      perch = Math.max(perch, loss);
+      ringBlock(stone, sides, a0, a1, shaft - ch * 0.15, deck, rim, thick * 1.3, 0.55 + 0.1 * u, still(foot((a0 + a1) / 2), 0.6, { loss, tint: (u - 0.5) * 0.04 }), true);
     }
   }
-  // A floor across the top, so a look down never sees into the hollow shaft;
-  // a ruin's lies lower, heaped with fallen stone.
-  if (broken) {
-    const floor = lowestTop - ch * 2;
-    const goes = clamp(laid.ring(floor - ch, floor + ch) + 0.01, 0.02, MOST + 0.03);
-    disc(stone, sides, floor, headWall - thick * 0.5, 0.42, still([0, 0, 0], 0.6, { loss: goes }), foot);
-    for (let i = 0; i < 9; i++) {
-      const a = r.next() * Math.PI * 2;
-      const d = r.next() * (headWall - thick) * 0.7;
-      const s = 0.3 + 0.3 * r.next();
-      // Each lies on a wedge of the floor and goes down with it.
-      lump(stone, [Math.cos(a) * d, floor, Math.sin(a) * d], [s, s * 0.55, s * 0.8], r.next() * Math.PI, 0.45, still(foot(wedgeOf(sides, a)), 0.6, { loss: goes }), r);
-    }
-  } else disc(stone, sides, deck - 0.02, rim * 0.98, 0.5, still([0, 0, 0], 0.6, { loss: tier(0, 1) }), (a) => ringPoint(sides, a, rim * 0.9, deck - 0.02));
+  // A floor across the top, so a look down never sees into the hollow shaft.
+  disc(stone, sides, deck - 0.02, rim * 0.98, 0.5, still([0, 0, 0], 0.6, { loss: tier(0, 1) }), (a) => ringPoint(sides, a, rim * 0.9, deck - 0.02));
 
   if (p.crown === "battlements") {
     courseSpans(sides, rim, blockLen, false).forEach(([a0, a1], k) => {
@@ -447,19 +406,18 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       // Each shrinks down onto the walkway or cornice it stands on.
       ringBlock(stone, sides, a0, a1, deck, deck + ch * 1.6, rim, thick * 0.8, 0.56 + 0.1 * u, still(ringPoint(sides, (a0 + a1) / 2, rim - thick * 0.4, deck), 0.6, { loss: tier(0, u), tint: (u - 0.5) * 0.04 }));
     });
-  } else if (!broken) {
+  } else {
     crownRoof(p, shape, height, shaft, deck, topGallery ? headWall : rim, topGallery, { stone, timber, roof, glass }, tier, r);
   }
 
-  // Fallen stone at the foot: it gathers as the tower crumbles, and a ruin has always had some.
-  // It grows in, and never stops a walker.
+  // Fallen stone at the foot: it gathers as the tower crumbles. It grows in,
+  // and never stops a walker.
   for (let i = 0; i < 26; i++) {
     const a = r.next() * Math.PI * 2;
     const d = wallAt(0) * (sides === 0 ? 1 : 1.1) + 0.3 + Math.pow(r.next(), 1.6) * Math.max(2.5, height * 0.2);
     const s = (0.22 + 0.3 * r.next()) * p.masonry;
     const at: V3 = [Math.cos(a) * d, 0, Math.sin(a) * d];
-    // A ruin's oldest rubble fell before any decline, so it lies there even at full health.
-    const grow = broken && i % 3 === 0 ? 1 : clamp(0.08 + 0.5 * r.next(), 0.06, 0.55);
+    const grow = clamp(0.08 + 0.5 * r.next(), 0.06, 0.55);
     lump(stone, [at[0], s * 0.1, at[2]], [s, s * 0.6, s * 0.8], r.next() * Math.PI, 0.42 + 0.15 * r.next(), still(at, 0.6, { grow, tint: (r.next() - 0.5) * 0.04 }), r);
   }
 
@@ -576,7 +534,7 @@ function crownRoof(
   if (first !== null) box(timber, [0, height + 0.35, 0], [[1, 0, 0], UP, [0, 0, 1]], [0.06, 0.45, 0.06], 0.4, { ...first, wither: 0.8 });
 }
 
-function angleDiff(a: number, b: number): number {
+export function angleDiff(a: number, b: number): number {
   const d = (((a - b) % (Math.PI * 2)) + Math.PI * 3) % (Math.PI * 2);
   return d - Math.PI;
 }

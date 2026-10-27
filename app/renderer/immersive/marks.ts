@@ -23,6 +23,10 @@ import {
   granaryParams,
   greatTreeParams,
   lookoutTowerParams,
+  ROCK_ARCH_FORMS,
+  ROTUNDA_MEASURES,
+  rockArchParams,
+  rotundaParams,
   standingStonesParams,
   thatchParams,
   tilesParams,
@@ -30,6 +34,7 @@ import {
   towerParams,
   waterwheelParams,
   wellParams,
+  windmillParams,
 } from "@gaia/primitives";
 
 type Pt = readonly [number, number];
@@ -1402,6 +1407,9 @@ export const INKS: Readonly<Record<string, Ink>> = {
   "lookout-tower@1": landmark(lookoutTowerParams, { draw: (pen, look, p, seed) => drawLookoutTower(pen, look, p, seed) }),
   "standing-stones@1": landmark(standingStonesParams, { draw: (pen, look, p, seed) => drawStones(pen, look, p, seed) }),
   "great-tree@1": landmark(greatTreeParams, { draw: (pen, look, p, seed) => drawGreatTree(pen, look, p, seed) }),
+  "windmill@1": landmark(windmillParams, { draw: (pen, look, p) => drawWindmill(pen, look, p) }),
+  "rock-arch@1": landmark(rockArchParams, { draw: (pen, look, p, seed) => drawRockArch(pen, look, p, seed) }),
+  "rotunda@1": landmark(rotundaParams, { draw: (pen, look, p, seed) => drawRotunda(pen, look, p, seed) }),
 };
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -2110,16 +2118,15 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
     const lean = p.profile === "tapering" ? 1 - 0.26 * t : p.profile === "stepped" ? (1 - 0.17 * stage) * (1 - 0.04 * t) : 1 - 0.04 * t;
     return radius * lean * LK;
   };
-  const broken = p.crown === "a broken top";
   const fall = ease(w.v, 0.36, 0.03);
-  const jag = broken ? Math.max(0.45, fall) : fall;
+  const jag = fall;
   const shaft = shaftM * LK;
   const top = shaft * (1 - 0.45 * fall);
   const stone = worn(look.hue("masonry", "#d2c39f"), w);
   const course = 0.56 * p.masonry * 2 * LK;
   const r0 = wallAt(0);
   castShadow(pen, ellipseFeet(0, 0, r0, r0, top * 0.8));
-  // The hollow inside a broken top, its far wall in shade.
+  // The hollow inside a crumbling top, its far wall in shade.
   if (jag > 0.05) disc(pen, sides, top - jag * 1.2, wallAt((top / LK) * 0.99) * 0.9, shaded(stone, 0.55), 0.6);
   // The shaft, stage by stage, a string course where each sets back.
   const breaks = [0, ...stagesM.map((y) => y * LK).filter((y) => y < top - 0.5), top];
@@ -2144,7 +2151,7 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
   if (p.galleries === "a gallery at every stage" && tiers.gallery < 0.9) for (const y of stagesM) if (y * LK < top - 1) gallery(pen, sides, y * LK, wallAt(y), 0.9 * LK, stone);
   if (jag > 0.05) {
     ivy(pen, -r0 * 0.5, -r0 * 0.9, top, w.ivy, seed, -1);
-    rubble(pen, r0 * 0.8, -r0 - 1.2, (broken ? 1.6 : 0) + fall * 3, seed + 4, stone);
+    rubble(pen, r0 * 0.8, -r0 - 1.2, fall * 3, seed + 4, stone);
     return;
   }
   // The crown, on a gallery at the top if it has one.
@@ -2174,6 +2181,93 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
       eavesR = head * 0.82 + 0.6 * LK;
     }
     spire(pen, sides, eaves, eavesR, m * LK, look, tiers.cap, seed);
+  }
+}
+
+/**
+ * A windmill from its own words: its body and cap, and its sails turned to the viewer, in front. As it fails its
+ * sails go bare to their frames, then its cap (a post mill's whole body) tips to one side.
+ */
+function drawWindmill(pen: Pen, look: Look, p: Resolved<typeof windmillParams>): void {
+  const w = look.w;
+  const m = p.height * LK;
+  const bare = ease(w.v, 0.75, 0.25);
+  const tip = ease(w.v, 0.2, 0.06) * 0.3;
+  const timber = worn(look.hue("timber", "#6b4f3a"), w);
+  const roof = worn(look.hue("roof", "#8f7f62"), w, 0.5);
+  const boards = worn(look.hue("render", "#e2d4b6"), w);
+  /** A point tipped east about height `from` as the mill fails. */
+  const tipped = (from: number) => ([X, Z, H]: P3): P3 => [X + tip * Math.max(0, H - from), Z, H];
+  let hub: P3;
+  let clear: number;
+  if (p.body === "a post mill") {
+    const W = m * 0.25;
+    const D = m * 0.34;
+    const yb = m * 0.3;
+    const ye = m * 0.78;
+    const reach = m * 0.2;
+    castShadow(pen, ellipseFeet(0, 0, reach, reach, ye));
+    hatch(pen, [[[-reach, 0, 0.9], [0, 0, yb * 0.7]], [[reach, 0, 0.9], [0, 0, yb * 0.7]], [[0, -reach * 0.7, 0.9], [0, 0, yb * 0.7]], [[-reach, 0, 0.9], [reach, 0, 0.9]]], INK, 1.4);
+    box(pen, -0.3, 0.3, -0.3, 0.3, 0, yb + 0.6, timber);
+    const t = tipped(yb);
+    face(pen, ([[-W / 2, -D / 2, yb], [-W / 2, D / 2, yb], [-W / 2, D / 2, ye], [-W / 2, -D / 2, ye]] as P3[]).map(t), lit(boards, 0.14));
+    face(pen, ([[-W / 2, -D / 2, yb], [W / 2, -D / 2, yb], [W / 2, -D / 2, ye], [-W / 2, -D / 2, ye]] as P3[]).map(t), shaded(boards, 0.18));
+    face(pen, ([[-W / 2 - 0.3, -D / 2 - 0.3, ye - 0.1], [-W / 2 - 0.3, D / 2 + 0.3, ye - 0.1], [0, D / 2 + 0.3, m], [0, -D / 2 - 0.3, m]] as P3[]).map(t), lit(roof, 0.12));
+    face(pen, ([[-W / 2, -D / 2 - 0.3, ye], [W / 2, -D / 2 - 0.3, ye], [0, -D / 2 - 0.3, m]] as P3[]).map(t), shaded(boards, 0.1));
+    hub = t([0, -D / 2 - 0.8, ye + (m - ye) * 0.3]);
+    clear = 2.4 * LK;
+  } else {
+    const smock = p.body === "a timber smock mill";
+    const sides = smock ? 8 : 0;
+    const curb = m * (smock ? 0.77 : 0.76);
+    const r0 = m * 0.2;
+    const r1 = m * (smock ? 0.112 : 0.118);
+    const stone = worn(look.hue("masonry", "#b8ad98"), w);
+    const stageAt = smock ? m * 0.2 : curb * 0.24;
+    const wallAt = (h: number): number => (smock ? (h <= stageAt ? r0 : m * 0.185 + (r1 - m * 0.185) * clamp01((h - stageAt) / (curb - stageAt))) : r0 + (r1 - r0) * clamp01(h / curb));
+    castShadow(pen, ellipseFeet(0, 0, r0, r0, curb));
+    const courses = smock ? {} : { course: 0.56 * 2 * LK };
+    drum(pen, sides, 0, r0, stageAt, wallAt(stageAt - 0.01), stone, courses);
+    disc(pen, sides, stageAt, wallAt(stageAt) + 1.1 * LK, lit(timber, 0.25), 0.8);
+    drum(pen, sides, stageAt, wallAt(stageAt + 0.01), curb, r1, smock ? boards : stone, courses);
+    const [dX, dZ] = ringPoint(sides, Math.atan2(-0.91, -0.415), r0);
+    towerDoor(pen, dX, dZ, 0.6, 2.2, worn("#5a4030", w));
+    // The cap: a dome, or a pointed bonnet on a smock, seen in outline.
+    const rise = m - curb - 1.2;
+    const capR = r1 + 0.42 * LK;
+    const profile: readonly (readonly [number, number])[] = smock ? [[0, 1], [0.38, 0.8], [0.62, 0.55], [0.84, 0.27], [1, 0]] : [[0, 1], [0.14, 1.05], [0.32, 0.97], [0.5, 0.8], [0.68, 0.55], [0.84, 0.3], [1, 0]];
+    const t = tipped(curb);
+    face(pen, [...profile.map(([h, f]): P3 => [-capR * f, 0, curb + rise * h]), ...[...profile].reverse().map(([h, f]): P3 => [capR * f, 0, curb + rise * h])].map(t), roof);
+    hatch(pen, [[t([0, 0, m - 1.2]), t([0, 0, m])]], INK, 0.9);
+    hub = t([0, -capR - 1.0 * LK, curb + rise * 0.28]);
+    clear = stageAt + 1.4 * LK;
+  }
+  // The sails, flat to the eye about the hub.
+  const [hx, hy] = pen.at(...hub);
+  const count = p.sails === "six sails" ? 6 : 4;
+  const R = Math.min(m * 0.56, hub[2] - clear);
+  const width = R * (count === 6 ? 0.17 : 0.22);
+  const cloth = worn(look.hue("wall", "#f1e4c8"), w);
+  const start = count === 6 ? 0.3 : Math.PI / 4;
+  for (let k = 0; k < count; k++) {
+    const a = start + (k / count) * Math.PI * 2;
+    const at = (u: number, v: number): Pt => {
+      const q: Pt = [hx + (Math.cos(a) * u + Math.sin(a) * v) * pen.s, hy + (-Math.sin(a) * u + Math.cos(a) * v) * pen.s];
+      pen.reach(q[0], q[1]);
+      return q;
+    };
+    const inner = R * 0.2;
+    const sail = [at(inner, 0), at(R, 0), at(R, width * 0.8), at(inner, width * 0.8)];
+    if (bare < 0.9) {
+      pen.ctx.globalAlpha = 1 - bare;
+      wash(pen, sail, p.sails === "four lattice sails" ? lit(cloth, 0.1) : cloth);
+      pen.ctx.globalAlpha = 1;
+    }
+    const bars = 7;
+    const lines: [Pt, Pt][] = Array.from({ length: bars + 1 }, (_, j) => [at(inner + ((R - inner) * j) / bars, 0), at(inner + ((R - inner) * j) / bars, width * 0.8)]);
+    strokeLines(pen, lines, 0.5, 0.75);
+    ink(pen, sail, true, 0.6);
+    ink(pen, [at(0, 0), at(R, 0)], false, 1.1);
   }
 }
 
@@ -2427,6 +2521,116 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
   things.sort((a, b) => b.depth - a.depth).forEach((t) => t.draw());
   const spread = Math.max(h, ...feet.map(([X, Z]) => Math.hypot(X, Z)));
   tufts(pen, [[-spread - 1, -1.6], [spread * 0.6, -spread * 0.7], [0.4, -spread - 1.2]], w);
+}
+
+/**
+ * A rock arch from its form and thickness: the ring's face toward the viewer over its far face in shade. As it fails
+ * the crack opens at its crown, then the span is gone and two stacks stand over its rubble.
+ */
+function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, seed: number): void {
+  const w = look.w;
+  const f = ROCK_ARCH_FORMS[p.form];
+  const [half, rise, head] = [f.half * LK, f.rise * LK, f.head * LK];
+  const straight = Math.max(0, rise - head);
+  const ring = f.ring * p.thickness * LK;
+  const depth = f.depth * p.thickness * LK * 0.5;
+  const stone = worn(look.hue("stone", "#c4b498"), w);
+  const crack = ease(w.v, 0.8, 0.66);
+  const fallen = ease(w.v, 0.4, 0.3) > 0.5;
+  // The opening's edge from foot to foot, and the ring's outside, thicker low down.
+  const n = 24;
+  const inner: [number, number][] = [[-half, 0], ...Array.from({ length: n + 1 }, (_, k): [number, number] => [half * Math.cos(Math.PI * (1 - k / n)), straight + head * Math.sin(Math.PI * (1 - k / n))]), [half, 0]];
+  const outer = inner.map(([x, h], i): [number, number] => {
+    const t = ring * (1.25 - 0.4 * Math.min(1, h / rise));
+    const k = i - 1;
+    const [nx, nh] = k < 0 || k > n ? [Math.sign(x), 0] : [Math.cos(Math.PI * (1 - k / n)) / half, Math.sin(Math.PI * (1 - k / n)) / head];
+    const l = Math.hypot(nx, nh) || 1;
+    return [x + (nx / l) * t, h + (nh / l) * t];
+  });
+  const piece = (from: number, to: number, shift: number): void => {
+    const loop = (Z: number): P3[] => [...outer.slice(from, to + 1).map(([x, h]): P3 => [x + shift, Z, h]), ...inner.slice(from, to + 1).reverse().map(([x, h]): P3 => [x + shift, Z, h])];
+    face(pen, loop(depth), shaded(stone, 0.35), 0.8);
+    face(pen, loop(-depth), stone);
+  };
+  const foot = half + ring * 1.25;
+  castShadow(pen, [[-foot, 0, rise], [foot, 0, rise], [-foot * 0.6, 0, rise], [foot * 0.6, 0, rise]], 0.8);
+  const mid = Math.floor(inner.length / 2);
+  if (crack < 0.05) piece(0, inner.length - 1, 0);
+  else if (!fallen) {
+    piece(0, mid, -crack * 0.5);
+    piece(mid, inner.length - 1, crack * 0.5);
+  } else {
+    // The stacks stand to the haunches.
+    const stand = 0.76 * rise;
+    const left = Math.max(1, inner.findIndex(([, h], i) => i > 0 && h >= stand));
+    const right = Math.min(inner.length - 2, inner.length - 1 - [...inner].reverse().findIndex(([, h], i) => i > 0 && h >= stand));
+    piece(0, left, -crack * 0.5);
+    piece(right, inner.length - 1, crack * 0.5);
+    rubble(pen, 0, -depth * 0.5, 2.2 + half * 0.3, seed + 3, stone);
+  }
+  tufts(pen, [[-foot - 0.8, -1.2], [foot + 0.6, -1]], w);
+}
+
+/**
+ * A rotunda from its columns, roof and steps: the stepped base, the columns, the ring over them and its dome. As it
+ * fails the dome sinks to its foot and is gone, then the columns lie fallen outward round the steps.
+ */
+function drawRotunda(pen: Pen, look: Look, p: Resolved<typeof rotundaParams>, seed: number): void {
+  const w = look.w;
+  const M = ROTUNDA_MEASURES;
+  const n = { six: 6, eight: 8, twelve: 12 }[p.columns];
+  const steps = Math.max(1, Math.round(p.steps));
+  const ring = M.ring * LK;
+  const colH = M.column.height * LK;
+  const colR = M.column.radius * LK;
+  const floor = steps * M.step.rise * LK;
+  const top = (M.ring + M.step.margin) * LK;
+  const stone = worn(look.hue("masonry", "#d6c9ab"), w);
+  const covering = worn(look.hue("roof", "#7f8f7c"), w, 0.6);
+  const dome = 1 - ease(w.v, 0.7, 0.34);
+  const down = ease(w.v, 0.2, 0.04);
+  castShadow(pen, ellipseFeet(0, 0, top + steps * M.step.tread * LK, top, colH * 0.8));
+  const angles = Array.from({ length: n }, (_, k) => Math.PI / 2 + ((k + 0.5) / n) * Math.PI * 2);
+  // Columns lie fallen outward once they go, one by one as vitality falls.
+  const fallenAt = angles.map((_, k) => noise(seed, k + 40));
+  const isDown = (k: number): boolean => (fallenAt[k] as number) < down;
+  angles.forEach((a, k) => {
+    if (!isDown(k)) return;
+    const [X, Z] = [Math.cos(a) * ring, Math.sin(a) * ring];
+    const [dx, dz] = [Math.cos(a), Math.sin(a)];
+    face(pen, [[X - dz * colR, Z + dx * colR, floor], [X + dz * colR, Z - dx * colR, floor], [X + dx * colH + dz * colR, Z + dz * colH - dx * colR, 0.4], [X + dx * colH - dz * colR, Z + dz * colH + dx * colR, 0.4]], lit(stone, 0.15), 0.45);
+  });
+  // The steps, too low to ink one by one: the base's lower half at the foot of the steps, its upper half at the top.
+  const bottom = top + (steps - 1) * M.step.tread * LK;
+  drum(pen, 0, 0, bottom, floor * 0.5, bottom, shaded(stone, 0.1), { weight: 0.6 });
+  drum(pen, 0, floor * 0.5, top, floor, top, stone, { weight: 0.6 });
+  const column = (a: number): void => {
+    const [X, Z] = [Math.cos(a) * ring, Math.sin(a) * ring];
+    face(pen, [[X - colR, Z, floor], [X + colR, Z, floor], [X + colR * 0.86, Z, floor + colH], [X - colR * 0.86, Z, floor + colH]], lit(stone, 0.1), 0.6);
+  };
+  // The far columns, then the near ones, under the ring they carry.
+  angles.forEach((a, k) => !isDown(k) && Math.sin(a) > 0 && column(a));
+  angles.forEach((a, k) => !isDown(k) && Math.sin(a) <= 0 && column(a));
+  if (down > 0.02) return;
+  const beam = floor + colH;
+  drum(pen, 0, beam, ring + 0.55 * LK, beam + M.entablature * LK, ring + 0.85 * LK, stone);
+  if (p.roof === "an open ring" || dome < 0.05) return;
+  const high = p.roof === "a high dome";
+  let spring = beam + M.entablature * LK;
+  if (high) {
+    drum(pen, 0, spring, ring + 0.45 * LK, spring + 2 * LK, ring + 0.45 * LK, shaded(stone, 0.08));
+    spring += 2 * LK;
+  }
+  const foot = ring + M.eave * LK;
+  // A shallow dome drawn a little higher than it stands, as a mapmaker draws a roof, so it reads as a dome.
+  const riseH = (high ? 0.65 : 0.38 * ROOF_LIFT * 1.2) * foot;
+  // Fallen in from its crown: what stands ends in a ragged edge.
+  const cap = spring + riseH * dome;
+  face(pen, Array.from({ length: 17 }, (_, k): P3 => {
+    const H = spring + riseH * Math.sin((k / 16) * Math.PI);
+    return [-foot * Math.cos((k / 16) * Math.PI), 0, H > cap ? cap - noise(seed, k + 60) * 0.9 : H];
+  }), covering);
+  if (high && dome > 0.95) drum(pen, 0, spring + riseH, foot * 0.16, spring + riseH + 2 * LK, foot * 0.12, stone);
 }
 
 /** How each great tree grows, at "vast": its trunk, its crown as lobes (east, up, radius in units), its great limbs, and its green. */

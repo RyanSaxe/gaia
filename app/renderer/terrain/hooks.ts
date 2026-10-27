@@ -829,7 +829,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** The body now: its speed, its eyes' ride and what the stride adds, and the footing under it. */
     gait: () => (world.body === null ? null : { speed: Math.hypot(world.body.vx, world.body.vz), eye: world.body.eye, camera: world.camera.position.y, footing: footingAt(world.terrain, world.decks, world.walker.x, world.walker.z) }),
     /** Every footbridge deck a walk stands on: its middle, the way it runs along, its span and its top at the middle. */
-    decks: () => world.decks.map((d) => ({ x: d.x, z: d.z, along: [d.cos, -d.sin], span: d.half * 2, width: d.halfWidth * 2, top: d.base + d.topAt(0) })),
+    decks: () => world.decks.flatMap((d) => ("tops" in d ? [] : [{ x: d.x, z: d.z, along: [d.cos, -d.sin], span: d.half * 2, width: d.halfWidth * 2, top: d.base + d.topAt(0) }])),
     /** The ground (bridges left out), how a person stood there before decks, and the footing now, at each (x, z). */
     profile: (points: readonly (readonly [number, number])[]) =>
       points.map(([x, z]) => {

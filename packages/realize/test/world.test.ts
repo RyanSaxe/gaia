@@ -68,7 +68,7 @@ describe("world and biome kinds", () => {
     expect(Object.keys(first.request.questions).sort()).toEqual(["light.brush", "light.moon", "light.path", "light.stars", "light.warmth"]);
     const firstAnswers = fakeJev(first.request);
     const second = planDetails(world, lib, structure, target, { stage: 1, earlier: { light: "warm" } });
-    expect(Object.keys(second.request.questions).sort()).toEqual(["sky.character", "sky.clouds", "sky.cover", "wind.strength"]);
+    expect(Object.keys(second.request.questions).sort()).toEqual(["sky.character", "sky.clouds", "sky.cover", "sky.overcast", "wind.strength"]);
     expect((second.request.state as { earlier?: unknown }).earlier).toEqual({ light: "warm" });
     const bp = assemble(world, lib, structure, [first, second], { ...firstAnswers, ...fakeJev(second.request) });
     expect(validate(bp, world, lib)).toEqual([]);
@@ -77,7 +77,7 @@ describe("world and biome kinds", () => {
 
 describe("the air where regions meet", () => {
   type Erased = (p: unknown) => ReturnType<typeof airPrimitive.build>;
-  const MIST = (airPrimitive.build as unknown as Erased)({ air: "morning mist", distance: 1 });
+  const MIST = (airPrimitive.build as unknown as Erased)({ air: "morning mist", distance: "softened distance" });
   const close = (a: readonly number[], b: readonly number[]): void => a.forEach((v, i) => expect(v).toBeCloseTo(b[i] as number, 4));
 
   it("is each region's own air inside it, and between two regions moves with their weights, a clear region's unused tint coloring nothing", () => {
@@ -94,7 +94,7 @@ describe("the air where regions meet", () => {
 
 describe("the air over failing ground and from above", () => {
   type Erased = (p: unknown) => ReturnType<typeof airPrimitive.build>;
-  const airs = Object.keys((airPrimitive.params.air as ChoiceField).options).map((name) => (airPrimitive.build as unknown as Erased)({ air: name, distance: 1 }));
+  const airs = Object.keys((airPrimitive.params.air as ChoiceField).options).map((name) => (airPrimitive.build as unknown as Erased)({ air: name, distance: "softened distance" }));
 
   it("leaves thriving and tired ground's air as it was, and thickens and greys it as the ground fails, gradually", () => {
     for (const air of airs) {

@@ -35,7 +35,7 @@ import {
   followVitality,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type Station, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, hurryFor, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, type Floor, floorOf, type Footbed, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type Station, type StoodSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, hurryFor, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { type Sky, createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
 import { onTap, tapSlop } from "../tap.ts";
@@ -62,7 +62,7 @@ import { type Signs, createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
 import { type PageLand, createPageLand } from "./land.ts";
 import { type Standing, createStanding } from "./standing.ts";
-import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, ownerVitality, understoryVitality } from "./stand.ts";
+import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, landmarkFeet, ownerVitality, understoryVitality } from "./stand.ts";
 import { declineAround, groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import type { Drawn, Pass } from "./measure.ts";
 import { type Copies, type FarForms, type FarOf, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
@@ -323,13 +323,14 @@ export interface Landing {
   readonly yaw: number;
 }
 
-/** A landmark built and measured: its key in the view pool, what it is called, its blueprint, its build and how far its foot reaches. */
+/** A landmark built and measured: its key in the view pool, what it is called, its blueprint, its build, how far its foot reaches and where it meets the ground. */
 export interface Landmark {
   readonly key: string;
   readonly name: string;
   readonly blueprint: Blueprint;
   readonly built: Realized;
   readonly base: number;
+  readonly feet: ReturnType<typeof landmarkFeet>;
 }
 
 /** The landmarks standing and the network of paths between every place, from the last bake. */
@@ -499,7 +500,7 @@ export interface WorldInside {
   /** What the person walked up to while its card is open. */
   readonly shown: Represented | null;
   readonly symbolPlacements: readonly number[];
-  readonly decks: readonly Deck[];
+  readonly decks: readonly Footbed[];
   readonly broken: readonly Deck[];
   readonly solids: Solids;
   // The person.
@@ -606,8 +607,10 @@ export function createWorld(root: HTMLElement): World {
   let bodies: SolidShape[] = [];
   /** Every footbridge's deck; those a walk stands on above the water, while each holds at its way's vitality; and those that no longer hold, which a walk goes round and a trip fords beside. */
   let allDecks: readonly Deck[] = [];
-  let decks: readonly Deck[] = [];
+  let decks: readonly Footbed[] = [];
   let broken: readonly Deck[] = [];
+  /** The floors of the landmarks standing, which a walk stands on as it does on a deck that holds. */
+  let floors: readonly Floor[] = [];
   let places: WorldPlaces = { name: "", size: world.size, areas: [], patches: [], cells: [] };
   let furnisher: ((stood: StoodWorld) => Furnishing) | null = null;
   let furnished: Furnishing = UNFURNISHED;
@@ -622,7 +625,7 @@ export function createWorld(root: HTMLElement): World {
   /** Builds and measures a landmark. */
   const landmarkOf = (name: string, ask: BuildAsk): Landmark => {
     const built = made(ask, landmarkLib);
-    return { key: `${ask.blueprint.id}:${ask.seed}`, name, blueprint: ask.blueprint, built, base: landmarkBase(built) };
+    return { key: `${ask.blueprint.id}:${ask.seed}`, name, blueprint: ask.blueprint, built, base: landmarkBase(built), feet: landmarkFeet(built) };
   };
   /** The landmarks of the world shown, each as Jev composed it. */
   let landmarks: Landmark[] = [];
@@ -857,10 +860,18 @@ export function createWorld(root: HTMLElement): World {
   placeWays();
   for (const v of settlement.views()) scene.add(v.object);
   function placeBuildings(): void {
-    // No grass inside a landmark's footprint either: a hollow tower or a great trunk.
-    const feet = ways.sites.map((s) => {
-      const r = Math.min(landmarks[s.landmark]?.base ?? 2, 4);
-      return { ax: s.site.x, az: s.site.z, bx: s.site.x + 0.01, bz: s.site.z, radius: r };
+    // No grass inside a landmark's footprint either: a hollow tower or a great trunk, and under every piece it stands
+    // on, however far it reaches: a rotunda's steps, a great span's feet. Each turns with its landmark, as Three turns it.
+    const feet = ways.sites.flatMap((s, i) => {
+      const lm = landmarks[s.landmark];
+      const turn = landmarkViews[i]?.object.rotation.y ?? 0;
+      const [c, sn] = [Math.cos(turn), Math.sin(turn)];
+      const under = (lm?.feet ?? []).map((f) => {
+        const x = s.site.x + f.x * c + f.z * sn;
+        const z = s.site.z - f.x * sn + f.z * c;
+        return { ax: x, az: z, bx: x + 0.01, bz: z, radius: f.radius };
+      });
+      return [{ ax: s.site.x, az: s.site.z, bx: s.site.x + 0.01, bz: s.site.z, radius: Math.min(lm?.base ?? 2, 4) }, ...under];
     });
     // Nor round a junction's cairn, so it stands in the open where its ways meet.
     const cairns = ways.network.junctions.flatMap(({ cairn: c }) => (c === null ? [] : [{ ax: c.x, az: c.z, bx: c.x + 0.01, bz: c.z, radius: TRAILS.cairnGround }]));
@@ -1233,6 +1244,16 @@ export function createWorld(root: HTMLElement): World {
     });
     bodies = [...trunks, ...components, ...standing, ...buildings];
     gatherSolids();
+    // A landmark's walkable parts carry a walk instead of stopping it: a rotunda's steps and the floor inside.
+    floors = ways.sites.flatMap((s, i) => {
+      const view = landmarkViews[i];
+      const lm = landmarks[s.landmark];
+      if (view === undefined || lm === undefined) return [];
+      const p = view.object.position;
+      const floor = floorOf(lm.built.parts, { x: p.x, y: p.y, z: p.z, yaw: view.object.rotation.y });
+      return floor === null ? [] : [floor];
+    });
+    holdDecks();
   }
   /** What stops a walker now: the bodies, what furnishes the world when it is solid, and each footbridge that no longer holds. */
   function gatherSolids(): void {
@@ -1800,10 +1821,10 @@ export function createWorld(root: HTMLElement): World {
 
   const forward = new THREE.Vector3();
   let walked = 0;
-  /** Sorts the decks by whether each holds at its way's vitality now, and has a walk go round those that no longer do. */
+  /** Sorts the decks by whether each holds at its way's vitality now, and has a walk go round those that no longer do; the landmarks' floors always hold. */
   function holdDecks(): void {
     const was = broken;
-    decks = allDecks.filter((d) => crossingVitality(ways.network, d.way, d.crossing, vitalityOfPlace) >= d.holds);
+    decks = [...allDecks.filter((d) => crossingVitality(ways.network, d.way, d.crossing, vitalityOfPlace) >= d.holds), ...floors];
     broken = allDecks.filter((d) => !decks.includes(d));
     if (broken.length !== was.length || broken.some((d, i) => d !== was[i])) gatherSolids();
   }
