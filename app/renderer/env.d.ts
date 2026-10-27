@@ -31,3 +31,13 @@ declare module "*.ogg" {
   const url: string;
   export default url;
 }
+
+// `import { facts, judged } from "virtual:proving-ground"` gives the proving ground: the facts its world is laid out
+// from and the choices fixed for it, made from the plan in tools/proving.ts as the page is built, by Vite's plugin for
+// the app and the tests and esbuild's for the one-file lab (tools/proving-ground.ts).
+declare module "virtual:proving-ground" {
+  import type { CodeFacts } from "@gaia/schema";
+  import type { Judgments } from "@gaia/world";
+  export const facts: CodeFacts;
+  export const judged: Judgments;
+}

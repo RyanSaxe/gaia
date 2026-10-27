@@ -6,6 +6,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { type BuildOptions, type BuildResult, type Plugin, build } from "esbuild";
+import { provingGroundEsbuild } from "./proving-ground.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const renderer = resolve(root, "app/renderer");
@@ -46,7 +47,7 @@ export const LAB_BUILD = {
   ...SCRIPT,
   entryPoints: [resolve(renderer, "main.ts")],
   outdir: "lab",
-  plugins: [inlineWorkers, rawText],
+  plugins: [inlineWorkers, rawText, provingGroundEsbuild],
   // Pictures (Gaia's logo, the start's preview), the journal's title face and the world's recordings go inline, so the page stays one file.
   loader: { ".webp": "dataurl", ".woff2": "dataurl", ".ogg": "dataurl" },
 } as const satisfies BuildOptions;

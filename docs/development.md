@@ -103,16 +103,17 @@ To add a primitive:
    Fill every vitality channel and describe its closed parameters for Jev.
 2. Register it in `library.ts`. Shared contract tests cover determinism,
    parameter ranges, channel ranges, triangle budgets and vitality response.
-3. Regenerate the proving ground with `pnpm proving`. Its sky, lands,
-   buildings, landmarks, trails, trees, bushes, stones and flowers are sweeps
-   of the parts Jev composes them from (`sweep` in
+3. The [proving ground](proving-ground.md) follows on its own: the lab, the
+   app and the tests make it from the plan in `tools/proving.ts` as they
+   build. Its sky, lands, buildings, landmarks, trails, trees, bushes, stones
+   and flowers are sweeps of the parts Jev composes them from (`sweep` in
    [`@gaia/world`](../packages/world/src/sweep.ts)), so a new part of one
    stands there with each of its options, thriving, tired and in ruin. The
-   generator fails and names what is missing while the plan in
-   `tools/proving.ts` has no place for it, such as an area with running water;
-   add a directory to the plan then. A new part a tree, bush, stone or drift
-   may grow from also needs words with a feel for every option, which
-   `looks.test.ts` checks. Inspect the result in the app and screenshots.
+   build fails and names what is missing while the plan has no place for it,
+   such as an area with running water; add a directory to the plan then. A
+   new part a tree, bush, stone or drift may grow from also needs words with a
+   feel for every option, which `looks.test.ts` checks. Inspect the result in
+   the app and screenshots.
 4. Add an ink renderer in `app/renderer/immersive/marks.ts` if the primitive
    contributes to a building or landmark's map symbol.
 
@@ -120,7 +121,7 @@ The lab's fixture bundles live in `app/renderer/terrain/fixtures/`:
 
 | Bundle | Source and regeneration |
 | --- | --- |
-| `proving*` | The made-up codebase planned in `tools/proving.ts` and the sweeps it stands; `pnpm proving` regenerates its facts and judgments. |
+| `proving*` | The made-up codebase planned in `tools/proving.ts` and the sweeps it stands. Not committed: the lab, the app and the tests make its facts and judgments as they build ([`proving-ground.ts`](../tools/proving-ground.ts)), and `pnpm proving` writes the same files. |
 | `showcase*` | Source bundles, judged graphs and saved Jev answers for the [showcase](showcase.md). |
 
 The repository keeps Jev's answers for the showcase only. To count what

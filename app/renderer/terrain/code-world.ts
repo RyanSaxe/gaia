@@ -3,11 +3,11 @@
 // Exposes judged code and blueprints to rendering and applies live vitality
 // updates while preserving the existing world's layout.
 
-import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
 import { link } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judgments, type StandsAs, layoutWorld } from "@gaia/world";
+import { type CodeWorld, type StandsAs, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, Heal, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import SHOWCASE_PAINTING from "../start/showcase-painting.webp";
@@ -20,8 +20,7 @@ import { type Snapshot, snapshotFacts } from "./snapshot-facts.ts";
 import { showcaseFiles } from "./showcase-code.ts";
 import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
-import proving from "./fixtures/proving.json";
-import provingJudged from "./fixtures/proving-judged.json";
+import { facts as provingFacts, judged as provingJudged } from "virtual:proving-ground";
 import { COMPOSED_FORMS, COMPOSING, WATERS } from "./looks.ts";
 import { type BuildingOf, type Represented, representEntity, representFile } from "./represent.ts";
 import { composedName } from "./settlement.ts";
@@ -177,13 +176,13 @@ function snapshotWorld(why: string, of: Snapshot): Promise<WorldDocument> {
 /**
  * The proving ground (`?world=proving`): a made-up codebase with every
  * feature a world can show, from thriving to ruin, laid out from the choices
- * fixed for it (`fixtures/proving.json` and `proving-judged.json`, written by
- * `pnpm proving`). It is laid out, stood and baked like any codebase's world.
+ * fixed for it, which the build makes from the plan in `tools/proving.ts`
+ * (`virtual:proving-ground`). It is laid out, stood and baked like any codebase's world.
  */
 export function provingWorld(): WorldDocument {
-  const facts = proving as unknown as CodeFacts;
+  const facts = provingFacts;
   // The proving ground keeps a square, so everything its tests look for stands where they look.
-  const world = layoutWorld(facts, provingJudged as unknown as Judgments, undefined, 1);
+  const world = layoutWorld(facts, provingJudged, undefined, 1);
   return { root: facts.repository.name, facts, world, summary: "The proving ground: every choice fixed so each feature shows", judged: {} };
 }
 

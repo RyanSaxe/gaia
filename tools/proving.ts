@@ -2,7 +2,9 @@
 // feature a world can show, so each can be walked up to and tested. It
 // writes the facts its world is laid out from
 // (`app/renderer/terrain/fixtures/proving.json`, `CodeFacts`) and the choices Jev would make about it
-// (`fixtures/proving-judged.json`, a `Judgments`), both from the plan below.
+// (`fixtures/proving-judged.json`, a `Judgments`), both from the plan below,
+// or into `--out DIR`. They are never committed: the lab, the app and the
+// tests make them from this plan as they build (tools/proving-ground.ts).
 // The lab lays it out with the real `layoutWorld`, `standWorld` and bake
 // (`?world=proving`), so what it shows is what any codebase would get.
 //
@@ -29,7 +31,7 @@
 // repository or under a node_modules folder, which Gaia's own world never
 // reads.
 //
-// Usage: pnpm proving [--code DIR [--manifest PATH]]
+// Usage: pnpm proving [--out DIR] [--code DIR [--manifest PATH]]
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
@@ -578,7 +580,7 @@ const astray = [...planned.filter((p) => !laidOut.includes(p)).map((p) => `${p |
 if (astray.length > 0) throw new Error(`The proving ground lays out differently from its plan: ${astray.join("; ")}.`);
 
 const repo = resolve(import.meta.dirname, "..");
-const args = parseArgs({ options: { code: { type: "string" }, manifest: { type: "string" } } }).values;
+const args = parseArgs({ options: { code: { type: "string" }, manifest: { type: "string" }, out: { type: "string" } } }).values;
 if (args.code !== undefined) {
   const dir = resolve(args.code);
   const manifestPath = resolve(args.manifest ?? `${dir}-manifest.json`);
@@ -601,7 +603,8 @@ if (args.code !== undefined) {
   console.log(`proving: wrote ${code.size} files, ${lines.toLocaleString("en-US")} lines, to ${dir}, and the manifest of ${manifest.length} source files to ${manifestPath}`);
   process.exit(0);
 }
-const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
+const fixtures = resolve(args.out ?? resolve(repo, "app/renderer/terrain/fixtures"));
+mkdirSync(fixtures, { recursive: true });
 writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(facts)}\n`);
 writeFileSync(resolve(fixtures, "proving-judged.json"), fixtureJson(judged));
 const band = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" : v >= 0.35 ? "tired" : v >= 0.12 ? "failing" : "ruin");

@@ -4,13 +4,12 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITI
 import { landmark, structure } from "@gaia/kinds";
 import { realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
-import { type Judgments, type Stood, areaVitality, groundVitality, missingFrom, sweep } from "@gaia/world";
+import { type Stood, areaVitality, groundVitality, missingFrom, sweep } from "@gaia/world";
 import { openedWorld, provingWorld } from "./code-world.ts";
 import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "./looks.ts";
 import { type Stand, type StandBuilding, groundSites, landmarkBase, needsBank, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
-import judgedFixture from "./fixtures/proving-judged.json";
+import { judged } from "virtual:proving-ground";
 
-const judged = judgedFixture as unknown as Judgments;
 const doc = provingWorld();
 const code = openedWorld(doc);
 const vitalityOf = new Map(doc.world.things.map((t) => [t.path, t.vitality]));
