@@ -176,14 +176,17 @@ const FEATHERY = { cut: CUT.needles, half: 0.12, twigs: 26, sprays: 5, fullSpray
 const CROWDED_HALF = { rounded: 0.108, glossy: 0.095 } as const;
 
 /**
- * How a bush lays its clusters: how many a full bush shows and how many ride
- * each twig; the depths twigs reach into a clump (a share of its radius) and
- * each depth's share; cluster size at the rim and deep inside; and its ragged
+ * How a bush lays its clusters: how many a full bush shows over clumps of
+ * this much surface (the sum of their radii squared, square meters, about a
+ * waist-high spreading bush's), and how many ride each twig; the depths
+ * twigs reach into a clump (a share of its radius) and each depth's share;
+ * cluster size at the rim and deep inside; and its ragged
  * outline: how lumpy each clump is, how much clump sizes vary, the share of
  * twigs that stray past a clump, and how much of the rim is notched away.
  */
 const MOUND = {
   clusters: 1250,
+  surface: 5,
   perTwig: 5,
   layers: [[1, 0.5], [0.8, 0.3], [0.6, 0.2]] as readonly (readonly [number, number])[],
   rim: 0.85,
@@ -200,6 +203,8 @@ const TUFTED = 0.25;
 /** How far a cluster card reaches from its base, as a multiple of its size: along its direction (twice its reach, up to 1.15 times 1.15), and across it. */
 const CARD_ALONG = 2.65;
 const CARD_ACROSS = 1.15;
+/** The most a mound's clusters grow past a bush's to cover a frame larger than its room allows (`buildLeafMound`). */
+const LARGEST_CLUSTERS = 2.4;
 /** Clusters drop evenly between these vitalities, the outer ones this much sooner and the inner this much later. */
 const DROP = { from: 0.75, to: 0.25, rim: 0.05 } as const;
 
@@ -239,9 +244,12 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
   const kept = crownTips(skel.tips, Math.floor(budget / (FEWEST_CLUSTER_TWIGS * perTwig)), (n) => fillOf(n, p.fullness, tufts));
   const clumps = clumpsOf(skel, boughs, p, r.fork("clumps"), base, tufts, kept);
   const surface = clumps.reduce((n, c) => n + c.radius * c.radius, 0);
-  const wanted = look.clusters * (0.8 + 0.25 * Math.max(p.fullness, 0.45));
-  // A crowded frame thins every clump's twigs evenly to stay in budget.
+  // A mound larger than a bush's, on a tree's frame, grows as many clusters for each square meter of its clumps.
+  const wanted = look.clusters * (0.8 + 0.25 * Math.max(p.fullness, 0.45)) * Math.max(1, surface / MOUND.surface);
+  // A crowded frame thins every clump's twigs evenly to stay in budget, and grows its clusters larger to cover what
+  // the thinned ones would have, so a tree's mound is as full as a bush's, its leaves gathered in larger clusters.
   const density = Math.min(1, budget / Math.max(1, (wanted / look.perTwig) * perTwig));
+  const larger = Math.min(LARGEST_CLUSTERS, 1 / Math.sqrt(density));
   const leaf = new PartBuilder("leaf");
   const twigs = new PartBuilder("bark");
   const anchors: Anchor[] = [];
@@ -284,7 +292,7 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
       // have gone by 0.6, half by 0.5, and a failing bush stands bare.
       const loss = clamp(DROP.from - (DROP.from - DROP.to) * tr.next() + (depth >= 0.95 ? DROP.rim : -DROP.rim), 0.02, 0.9);
       const n = stray ? 2 : look.perTwig;
-      const size = half * clump.leaves * (look.inside + (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
+      const size = half * larger * clump.leaves * (look.inside + (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
       const ts = Array.from({ length: n }, (_, j) => 0.2 + 0.8 * ((j + tr.range(0.15, 0.85)) / n));
       const twigCh: Channels = { loss: 0, droop: b.droop, wither: 0.5, glow: 0, pivot: root, bough: b.bough, twig: root };
       const tip = Math.max(...ts);
