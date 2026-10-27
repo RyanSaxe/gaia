@@ -109,7 +109,7 @@ export const windmillParams = {
     "four lattice sails": "Four sails of white shutters, slatted like blinds, the light flickering through them as they turn, for code that feels fussy and precise, every slat set just so",
     "six sails": "Six slender canvas sails crowding round one hub, a quick, restless whirl, for code that feels restless and hurried, always spinning a little too fast",
   }),
-  height: t.scale("How tall it stands to the top of its cap; its sails reach higher still: a stout mill for code that feels humble and close to the ground, a tall mill for code that feels proud of its work, a towering mill for code that feels ambitious, reaching up for every breath of wind", { "a stout mill": 12, "a tall mill": 15, "a towering mill": 19 }),
+  height: t.scale("How tall it stands to the top of its cap; its sails reach higher still: a stout mill for code that feels humble and close to the ground, a tall mill for code that feels proud of its work, a towering mill for code that feels ambitious, reaching up for every breath of wind", { "a stout mill": 16, "a tall mill": 20, "a towering mill": 25 }),
 };
 
 export const windmill = primitive({
