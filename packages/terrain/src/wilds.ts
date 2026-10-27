@@ -188,11 +188,12 @@ export interface WildBush {
 
 /**
  * The thicket in one cell of the wild's grid (`WILD_THICKETS.cell` meters), if
- * it holds one: its bushes, and a number in [0, 1) that picks which kind of
- * bush it is. Seeded by the cell, so a cell always holds the same thicket.
- * Thickets gather where the wild runs to scrub and thin out over open grass.
+ * it holds one: its bushes. Seeded by the cell, so a cell always holds the
+ * same thicket. Thickets gather where the wild runs to scrub and thin out over
+ * open grass; which bush they are is the one of the cover they grow in
+ * (`wildPatch`).
  */
-export function wildThicket(t: Terrain, ci: number, cj: number): { readonly pick: number; readonly bushes: readonly WildBush[] } | null {
+export function wildThicket(t: Terrain, ci: number, cj: number): { readonly bushes: readonly WildBush[] } | null {
   const g = WILD_THICKETS;
   const cx = (ci + 0.5) * g.cell;
   const cz = (cj + 0.5) * g.cell;
@@ -219,7 +220,7 @@ export function wildThicket(t: Terrain, ci: number, cj: number): { readonly pick
       seed: wildHash(ci, cj, 160 + m),
     });
   }
-  return { pick: wildHash(ci, cj, 105), bushes };
+  return { bushes };
 }
 
 export interface WildsRing {

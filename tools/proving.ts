@@ -38,7 +38,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import type { AnyKind, Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, Library, SymbolFact } from "@gaia/schema";
 import { type Judgments, type Look, type StandsAs, type SweepPlace, layoutWorld, raisedAs, sweep } from "@gaia/world";
-import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "../app/renderer/terrain/looks.ts";
+import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS, WILD_GROUNDS } from "../app/renderer/terrain/looks.ts";
 import { fixtureJson } from "./fixture-json.ts";
 import { provingCode } from "./proving-code.ts";
 
@@ -553,11 +553,15 @@ const things = Object.fromEntries([...composed("building", COMPOSING.building), 
 const routes = swept("a trail's", COMPOSING.link, TRAIL_PLAN.map(([from, to]) => bandOf(((quality[from] ?? 1) + (quality[to] ?? 1)) / 2)));
 // The sky stands the first of the sweep's skies; `__lab.terrain.sky(k)` shows the others.
 const skies = swept("the sky's", COMPOSING.world);
+// Each of the wild's grounds grows the next row of the wild bush's sweep, the bush's own: the land's bushes stand every
+// row, so the wild's two leave nothing missing.
+const wild = sweep(COMPOSING.wildBush, COMPOSING.offered?.wildBush ?? lib, { places: WILD_GROUNDS.map(() => ({})) }).blueprints;
 
 // The proving ground is written by hand, not judged: what Jev would choose is fixed, and every part is swept.
 const judged: Judgments = {
   sky: skies[0] as Blueprint,
   lands: Object.fromEntries(regions.map((d, i) => [d.path, lands[i] as Blueprint])),
+  wild,
   waters: Object.fromEntries(regions.map((d) => [d.path, d.water as string])),
   things,
   stands,
