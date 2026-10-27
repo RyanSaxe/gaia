@@ -1,20 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { type Blueprint, type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "@gaia/schema";
+import { type BuildingPlan, type Built, Library, type RouteSpec, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { link, structure } from "@gaia/kinds";
 import { buildSlots, realize } from "@gaia/realize";
+import { sweep } from "@gaia/world";
 import { SHORE_CAP, bakeTerrain, extentOf, heightAt, planTerrain, siteToWorld, standTile, trailField, trailPlaces, yardsMeet } from "@gaia/terrain";
 import { sampleWorld } from "@gaia/terrain/testing";
 import { type StandCode, type StandRequest, blockedBy, standWorld } from "./stand.ts";
-import { BUILDINGS, TRAILS } from "../../../tools/proving-looks.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 const routeLib = new Library(ROUTE_PRIMITIVES);
-/** The proving ground's worn footpath and stone-edged path. */
-const styles = [TRAILS["Worn footpath"], TRAILS["Stone-edged path"]].map((b) => buildSlots(b as Blueprint, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
-/** The proving ground's thatched cottage, stone croft and storybook house. */
-const houses = ["Thatched cottage", "Stone croft", "Storybook house"].map((name) => BUILDINGS[name] as Blueprint);
+/** The first two trails of a sweep of a trail's parts: one crossing streams on a footbridge, the other on stepping stones. */
+const styles = sweep(link, routeLib).blueprints.slice(0, 2).map((b) => buildSlots(b, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
+/** The first three houses of a sweep of a building's parts that stand as a single block and need no stream, small enough for this world's lots. */
+const houses = sweep(structure, buildingLib).blueprints.filter((b) => b.slots.footprint?.params.massing === "a single block" && b.slots.feature?.use !== "waterwheel@1").slice(0, 3);
 /** A world laid out from code, as small as the tests need: two buildings' lots, a landmark's, three files' patches and what stands on them. */
 const code: StandCode = {
   lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],

@@ -4,15 +4,16 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITI
 import { landmark, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Terrain, bakeTerrain, extentOf, findBankSite, pastTheEdge, regionAt, siteToWorld, turningExtent, waterDepthAt, yardsMeet } from "@gaia/terrain";
+import { sweep } from "@gaia/world";
 import { type OpenedWorld, openedWorld, provingWorld } from "./code-world.ts";
 import { laySnapshot } from "./snapshot.ts";
 import { snapshotFacts } from "./snapshot-facts.ts";
-import { BUILDINGS } from "../../../tools/proving-looks.ts";
 import { AS_THING, type Stand, type StandBuilding, type StandLandmark, blockedBy, landmarkBase, needsBank, standWorld } from "./stand.ts";
 
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
-// A watermill the size of the median building that has a wheel in these two worlds, about 54 m².
-const mill = realize(BUILDINGS.Watermill!, structure, buildingLib, { seed: 7, facts: { size: 0.7, floors: 1 } });
+// A watermill, the first of a sweep of a building's parts, the size of the median building that has a wheel in these two worlds, about 54 m².
+const millBlueprint = sweep(structure, buildingLib).blueprints.find((b) => b.slots.feature?.use === "waterwheel@1")!;
+const mill = realize(millBlueprint, structure, buildingLib, { seed: 7, facts: { size: 0.7, floors: 1 } });
 const millPlan = mill.slots.get("footprint")?.output as BuildingPlan;
 const millBeside = extentOf(mill.slots.get("feature")?.output as Built | undefined)!;
 const millWheel = turningExtent(mill.slots.get("feature")?.output as Built | undefined)!;

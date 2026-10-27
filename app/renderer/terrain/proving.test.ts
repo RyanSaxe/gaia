@@ -1,13 +1,12 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { type BuildingPlan, type Built, Library, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES, drift } from "@gaia/primitives";
+import { type AnyKind, type Blueprint, type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
-import { type Judgments, areaVitality, groundVitality } from "@gaia/world";
+import { type Judgments, type Stood, areaVitality, groundVitality, missingFrom, sweep } from "@gaia/world";
 import { openedWorld, provingWorld } from "./code-world.ts";
-import { COMPOSED_FORMS, FORMS, WATERS } from "./looks.ts";
-import { BUILDINGS, LANDMARKS, LANDS, TRAILS } from "../../../tools/proving-looks.ts";
+import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "./looks.ts";
 import { type Stand, type StandBuilding, groundSites, landmarkBase, needsBank, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
 import judgedFixture from "./fixtures/proving-judged.json";
 
@@ -41,15 +40,30 @@ const groundField = vitalityOver(own, tables.ground);
 const waterField = vitalityOver(own, tables.area);
 
 describe("the proving ground", () => {
-  it("chooses every option Jev is offered, uses every look of its own, and stands each of its buildings and landmarks thriving, tired and in ruin", () => {
+  it("stands every part of every land, building, landmark and trail Jev composes, thriving, tired and in ruin, and chooses every option Jev is offered", () => {
     const used = (options: object, chosen: Iterable<string>): string[] => Object.keys(options).filter((k) => ![...chosen].includes(k));
-    // Its lands, trails, buildings and landmarks are its own hand-filled blueprints, each found by its id.
-    const blueprints = (of: Iterable<{ readonly id: string } | undefined>): Set<string> => new Set([...of].flatMap((b) => (b === undefined ? [] : [b.id])));
-    // A land is the same land whatever drifts through its air.
-    const landsUsed = blueprints(Object.values(judged.lands).map(({ kind, slots: { accents: _drift, ...slots } }) => blueprintOf(kind, slots)));
-    expect(Object.entries(LANDS).filter(([, b]) => !landsUsed.has(b.id)).map(([k]) => k)).toEqual([]);
-    const drifts = Object.values(judged.lands).flatMap((b) => (b.slots.accents === undefined ? [] : [String(b.slots.accents.params.form)]));
-    expect(used(drift.params.form.options, drifts)).toEqual([]);
+    // Whole, tired and in ruin, as the world shows each: a thing between tired and ruin counts toward none.
+    const healths = ["thriving", "tired", "ruin"];
+    const stood = (blueprint: Blueprint | undefined, v: number): Stood[] => {
+      if (blueprint === undefined) return [];
+      const label = v >= 0.85 ? "thriving" : v >= 0.35 ? "tired" : v < 0.12 ? "ruin" : undefined;
+      return [{ blueprint, ...(label === undefined ? {} : { label }) }];
+    };
+    const lacking = (k: AnyKind, of: readonly Stood[]): string[] => missingFrom(k, COMPOSING.lib, of, { labels: healths });
+    // A land's health is its own ground's: every file standing on it, pooled by size.
+    const regionOf = new Map(doc.world.areas.map((a) => [a.path, a.region]));
+    const lands = doc.world.regions.map((r, i) => {
+      const own = doc.world.patches.filter((p) => regionOf.get(p.area) === i);
+      const size = own.reduce((n, p) => n + p.radius * p.radius, 0);
+      return stood(r.biome, own.reduce((n, p) => n + p.vitality * p.radius * p.radius, 0) / size);
+    });
+    expect(lacking(COMPOSING.biome, lands.flat())).toEqual([]);
+    for (const [as, k] of [["building", COMPOSING.building], ["landmark", COMPOSING.landmark]] as const) {
+      expect(lacking(k, doc.world.things.filter((t) => t.as === as).flatMap((t) => stood(t.blueprint, t.vitality))), as).toEqual([]);
+    }
+    expect(lacking(COMPOSING.link, doc.world.trails.flatMap((t) => stood(t.route, ((endVitality.get(t.from) ?? 1) + (endVitality.get(t.to) ?? 1)) / 2)))).toEqual([]);
+    // Its sky is the first of the sweep's skies.
+    expect(judged.sky?.id).toBe(sweep(COMPOSING.world, COMPOSING.lib).blueprints[0]?.id);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
     expect(used(FORMS, Object.entries(judged.stands ?? {}).flatMap(([id, form]) => (id.includes("#") ? [form] : [])))).toEqual([]);
     // Anything stands as anything: an entity, a file and a definition each stand as a building and as a landmark, and
@@ -59,16 +73,6 @@ describe("the proving ground", () => {
     }
     expect(doc.world.standing.filter((s) => s.of === "file").length + doc.world.things.filter((t) => t.of === "file").length).toBe(doc.world.patches.length);
     expect(used(FORMS, doc.world.standing.map((s) => s.form))).toEqual([]);
-    const trailsUsed = blueprints(judged.trails.map((t) => t.route));
-    expect(Object.entries(TRAILS).filter(([, b]) => !trailsUsed.has(b.id)).map(([k]) => k)).toEqual([]);
-    for (const [as, looks] of [["building", BUILDINGS], ["landmark", LANDMARKS]] as const) {
-      for (const [look, blueprint] of Object.entries(looks)) {
-        const healths = doc.world.things.filter((t) => t.as === as && t.blueprint.id === blueprint.id).map((t) => vitalityOf.get(t.path) ?? 1);
-        expect(healths.some((v) => v >= 0.85), `a thriving ${look}`).toBe(true);
-        expect(healths.some((v) => v >= 0.35 && v < 0.85), `a tired ${look}`).toBe(true);
-        expect(healths.some((v) => v < 0.12), `a ${look} in ruin`).toBe(true);
-      }
-    }
   });
 
   it("lays out every planned land, a whole area in ruin beside thriving ones, a tiny area and deep nesting", () => {
@@ -113,12 +117,14 @@ describe("the proving ground", () => {
     expect(ruins.dry).toBeGreaterThan(0.7);
     expect(ruins.bare).toBeGreaterThan(0.3);
     expect(ruins.water).toBeLessThan(0.1);
-    for (const thriving of [mean("moor"), mean("crossings")]) {
-      expect(thriving.blades).toBeGreaterThan(0.97);
-      expect(thriving.dry).toBeLessThan(0.05);
-      // Bare earth shows only where a failing neighbor's ground eases across the border.
-      expect(thriving.bare).toBeLessThan(0.002);
-      expect(thriving.water).toBeGreaterThan(0.9);
+    for (const area of ["moor", "crossings"]) {
+      const thriving = mean(area);
+      expect(thriving.blades, area).toBeGreaterThan(0.97);
+      expect(thriving.dry, area).toBeLessThan(0.05);
+      // Bare earth shows only where a failing neighbor's ground eases across the border, as the attic's in ruin does
+      // into the moor.
+      expect(thriving.bare, area).toBeLessThan(0.005);
+      expect(thriving.water, area).toBeGreaterThan(0.9);
     }
     // A failing grove in a living area is one sick patch: its ground dries, while its neighbor's stays green.
     expect(mean("mixed/failing-grove.ts").dry).toBeGreaterThan(0.6);
