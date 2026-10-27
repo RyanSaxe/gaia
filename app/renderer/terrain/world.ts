@@ -115,7 +115,7 @@ const STILL = 0.25;
 /** Furnishings (fingerposts, boundary stones) a tap can reach stand about this tall, meters. */
 const FURNISHING_TOP = 2.4;
 
-/** One seeded build of a flora preset: every tree is a copy of one. */
+/** One tree build, of one distinct tree blueprint: every tree answered alike is a copy of it. */
 export interface TreeVariant {
   /** Radius of the trunk's bottom ring, for grounding. */
   readonly base: number;
@@ -349,6 +349,9 @@ export interface Settled {
 export interface FarSet {
   readonly forms: FarForms;
   ms: number;
+  /** How many forms it baked or read, and the GPU memory their atlases take, bytes. */
+  count: number;
+  bytes: number;
 }
 
 /**
@@ -996,7 +999,7 @@ export function createWorld(root: HTMLElement): World {
   // frame shows a far tree before its card. The bushes' bake once the world is
   // open: until then every bush draws its full form, and the far ones then
   // change by less than a level of 255 as their cards come in.
-  const farSets = [treeForms, bushForms].map((forms): FarSet => ({ forms, ms: 0 }));
+  const farSets = [treeForms, bushForms].map((forms): FarSet => ({ forms, ms: 0, count: 0, bytes: 0 }));
   const [treeSet, bushSet] = farSets as [(typeof farSets)[number], (typeof farSets)[number]];
   const farStore = openFarStore(FAR_BAKE_VERSION);
   /** Bakes or reads every form of `set`, `ms` milliseconds a frame, and draws its cards from then on. */
@@ -1034,6 +1037,8 @@ export function createWorld(root: HTMLElement): World {
     // Each plant's copies take their cards from here, standing in buffers of their own (`createCopies`).
     set.forms.cards = createFarCards(forms, light, turns, TURN);
     set.ms = performance.now() - t0;
+    set.count = forms.length;
+    set.bytes = forms.reduce((n, f) => n + f.bytes, 0);
   }
   /** Settles once the world's tree builds' far forms are baked: the wait lifts only then, so no frame shows a far tree before its card. */
   let farBaked: Promise<void> = Promise.resolve();

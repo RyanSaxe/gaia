@@ -921,6 +921,11 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       /** Milliseconds every tree build took to bake into its far form, and then every bush build. */
       farBakeMs: Math.round(world.treeSet.ms),
       bushBakeMs: Math.round(world.bushSet.ms),
+      /** Each set's far forms and the GPU memory their atlases take, MB: one form for each distinct build. */
+      treeCards: { forms: world.treeSet.count, mb: Math.round(world.treeSet.bytes / 2 ** 20) },
+      bushCards: { forms: world.bushSet.count, mb: Math.round(world.bushSet.bytes / 2 ** 20) },
+      /** The understory's distinct builds by group: one for each distinct blueprint its things take. */
+      understoryBuilds: Object.fromEntries(Object.entries(world.code?.plants ?? {}).map(([group, builds]) => [group, builds.length])),
       /** Trees in the last pass in the band, or small enough on screen to draw as far forms. */
       treesInBand: world.treeViews.reduce((n, v) => n + v.drawn().band, 0),
       treesFar: world.treeViews.reduce((n, v) => n + v.drawn().far, 0),
