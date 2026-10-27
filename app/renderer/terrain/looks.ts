@@ -1,14 +1,13 @@
 // What a codebase's world is made from. Jev composes its sky, its lands,
-// its buildings, landmarks and trails part by part (`COMPOSING`), and
-// chooses among the looks here for what is still a choice: what each entity,
-// file and definition stands as (`FORMS`, offered by importance through
-// `SIZES`) and whether a land holds water. Each option's words are what Jev
-// reads.
+// its buildings, landmarks, trails, trees, bushes, stones and flowers part by
+// part (`COMPOSING`), and chooses among the looks here for what is still a
+// choice: what each entity, file and definition stands as (`FORMS` and
+// `COMPOSED_FORMS`, offered by importance through `SIZES`) and whether a land
+// holds water. Each option's words are what Jev reads.
 
 import { biome, bush, landmark, link, rock, structure, tree, wildflowers, world } from "@gaia/kinds";
 import { BUSH_PRIMITIVES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
-import { FLORA_PRESETS, FLOWER_PRESETS, type Preset, ROCK_PRESETS, SHRUB_PRESETS } from "@gaia/realize";
-import { type Blueprint, Library } from "@gaia/schema";
+import { Library } from "@gaia/schema";
 import type { Composing, Look, Looks, StandsAs } from "@gaia/world";
 
 const look = (doc: string): Look => ({ doc });
@@ -32,36 +31,46 @@ export type Size = keyof typeof SIZES;
 /** A form's look: its character in its own words, then its size's, offered only within its size's range. */
 const sized = (size: Size, vibe: string): Look => ({ doc: `${vibe} ${SIZES[size].words}`, needs: [{ rank: SIZES[size].rank }] });
 
-/** The blueprint of a hand-filled form, by its name: what every thing standing as the form takes. */
-const preset = (presets: readonly Preset[], name: string): Blueprint => {
-  const found = presets.find((p) => p.name === name);
-  if (found === undefined) throw new Error(`No preset is called ${name}.`);
-  return found.blueprint;
-};
-/** A form of a size that every thing standing as it takes the same blueprint of: one build, copied. */
-const filled = (size: Size, as: StandsAs, vibe: string, blueprint: Blueprint): Look => ({ ...sized(size, vibe), composes: as, blueprint });
+/**
+ * A form of a size that Jev composes part by part once it is chosen, as a building is: the part a person sees first,
+ * which choosing the form settles (its frame, and its frame's habit), and Jev chooses the rest.
+ */
+const first = (size: Size, as: StandsAs, vibe: string, slot: string, use: string, fixed?: Readonly<Record<string, string>>): Look => ({
+  ...sized(size, vibe),
+  composes: as,
+  first: { slot, use, ...(fixed === undefined ? {} : { fixed }) },
+});
 
 /**
- * What a thing stands as when it is flowers, a stone, a bush or a tree, each
- * form one blueprint every thing standing as it takes. Each look says only
- * what its form is like, never what kind of code suits it: importance decides
- * what is offered, and character decides Jev's pick.
+ * What a thing stands as when it is flowers, a stone, a bush or a tree: the
+ * one part a person sees first, which Jev then composes the rest of. Each
+ * look says only what its form is like, never what kind of code suits it:
+ * importance decides what is offered, and character decides Jev's pick.
  */
 export const FORMS: Readonly<Record<string, Look>> = {
-  "Lantern willow": filled("trees", "tree", "A weeping willow hung with lanterns: gentle and guiding, lighting the way for others.", preset(FLORA_PRESETS, "Lantern willow")),
-  Fir: filled("trees", "tree", "A dark fir: watchful and unbending.", preset(FLORA_PRESETS, "Fir")),
-  Cherry: filled("trees", "tree", "A cherry in full blossom: eager and lively, quick to lend a hand.", preset(FLORA_PRESETS, "Cherry")),
-  "Autumn maple": filled("trees", "tree", "A broad maple turning gold: sheltering, rich and full of years, with much leaning on it.", preset(FLORA_PRESETS, "Autumn maple")),
-  "Standing stone": filled("stones", "stone", "A lone upright stone: stern, still and solitary.", preset(ROCK_PRESETS, "Standing stone")),
-  "Mossy boulder": filled("stones", "stone", "A broad boulder gone green with moss: heavy, old and unhurried.", preset(ROCK_PRESETS, "Mossy boulder")),
-  "Stone family": filled("stones", "stone", "A big stone among its small ones: close-knit and huddled.", preset(ROCK_PRESETS, "Stone family")),
-  "Bench stone": filled("stones", "stone", "A low flat stone worn smooth by sitting: drowsy, idle and content.", preset(ROCK_PRESETS, "Bench stone")),
-  "Box mound": filled("bushes", "bush", "A box bush clipped into a hard square: strict and severe.", preset(SHRUB_PRESETS, "Box mound")),
-  Blueberry: filled("bushes", "bush", "A blueberry bush, low and thick with berries: cosy and a little untidy.", preset(SHRUB_PRESETS, "Blueberry")),
-  Rhododendron: filled("bushes", "bush", "A rhododendron in flower: showy and a little proud.", preset(SHRUB_PRESETS, "Rhododendron")),
-  "Feather shrub": filled("bushes", "bush", "A tall, feathery shrub: airy and restless.", preset(SHRUB_PRESETS, "Feather shrub")),
-  Bluebells: filled("flowers", "flowers", "A carpet of bluebells in the shade: quiet and shy, keeping to itself.", preset(FLOWER_PRESETS, "Bluebells")),
-  Daisies: filled("flowers", "flowers", "A drift of daisies in the open: simple and sunny, plain to see.", preset(FLOWER_PRESETS, "Daisies")),
+  "Upright tree": first("trees", "tree", "An upright tree, one leader driving up through its limbs: bold and striving, climbing past its neighbors to lead.", "form", "branching@1", { "form.habit": "upright" }),
+  "Spreading tree": first("trees", "tree", "A spreading tree, broader than it is tall, its low limbs reaching wide: easy and welcoming, letting much rest in its shade.", "form", "branching@1", { "form.habit": "spreading" }),
+  "Weeping tree": first("trees", "tree", "A weeping tree whose limbs arch over and hang toward the ground: soft and easygoing, swaying low in the breeze.", "form", "branching@1", { "form.habit": "weeping" }),
+  "Columnar tree": first("trees", "tree", "A columnar tree, narrow and tall with its limbs held close: exacting and formal, standing to attention.", "form", "branching@1", { "form.habit": "columnar" }),
+  Fir: first("trees", "tree", "A dark fir, one straight trunk ringed with limbs: quiet and steady, keeping watch through every season.", "form", "spire@1"),
+  Mound: first("bushes", "bush", "A plump, rounded mound of a bush: cosy and rounded, comfortable where it is.", "form", "thicket@1", { "form.habit": "mound" }),
+  "Spreading bush": first("bushes", "bush", "A low bush spilling outward over the ground: friendly and easygoing, at home anywhere.", "form", "thicket@1", { "form.habit": "spreading" }),
+  "Vase bush": first("bushes", "bush", "A bush of upright stems flaring like a vase: lively and cheerful, reaching up and out.", "form", "thicket@1", { "form.habit": "vase" }),
+  Scrub: first("bushes", "bush", "Low wiry scrub, its stems forking and arching over: tough and wiry, making do with little.", "form", "thicket@1", { "form.habit": "scrub" }),
+  Bramble: first("bushes", "bush", "A bramble whose long canes arch over and root back into the soil: knotted and prickly, catching on everything.", "form", "bramble@1"),
+  Sapling: first("bushes", "bush", "A young sapling no taller than a person: new and hopeful, still finding its shape.", "form", "sapling@1"),
+  Boulder: first("stones", "stone", "A boulder half sunk in the ground: solid and steady, holding firm.", "form", "boulder@1"),
+  "Flat stone": first("stones", "stone", "A low flat stone worn smooth by sitting: idle and drowsy, content to doze.", "form", "flat-stone@1"),
+  "Stone family": first("stones", "stone", "A big stone among its small ones: warm and companionable, a big one keeping its little ones close.", "form", "stone-cluster@1"),
+  Ledge: first("stones", "stone", "A ledge of bedrock breaking through the turf: foundational, the old ground everything else rests on.", "form", "outcrop@1"),
+  "Fallen log": first("stones", "stone", "A fallen log lying in the grass: peaceful and spent, its long work done.", "form", "fallen-log@1"),
+  "Old stump": first("stones", "stone", "An old stump with its roots still in the ground: worn and stubborn, still holding on to its roots.", "form", "stump@1"),
+  Daisies: first("flowers", "flowers", "A drift of daisies in the open: plain and friendly, simple to take in at a glance.", "drift", "daisies@1"),
+  Poppies: first("flowers", "flowers", "Poppies cupped open in the grass: bright and warm, quick to catch the eye.", "drift", "cups@1"),
+  Bluebells: first("flowers", "flowers", "A carpet of bluebells in the shade: quiet and shy, keeping to itself.", "drift", "bells@1"),
+  Lupines: first("flowers", "flowers", "Upright spires of lupines: neat and upright, each in its proper place.", "drift", "spikes@1"),
+  Ferns: first("flowers", "flowers", "Ferns unrolling from their crowns: old and settled, unchanged for ages.", "drift", "ferns@1"),
+  Mushrooms: first("flowers", "flowers", "Mushrooms springing up out of the ground: earthy and hidden, busy out of sight in the damp.", "drift", "mushrooms@1"),
 };
 
 /** The forms Jev composes part by part once it chooses one, as it composes an entity's: a building, or a landmark. */

@@ -162,7 +162,9 @@ describe("opening a world", () => {
     const asked: number[] = [];
     const { engine, batches } = engineWith({ limitUsd: 0.001, estimateUsd: 0.05 });
     await expect(openWorld({ engine, root: "proving", consent: async (plan) => (asked.push(plan.estimatedUsd), false), progress: () => {} })).rejects.toThrow(/you chose not to go ahead/);
-    expect(asked).toEqual([0.05]);
+    // The figure counts judging's requests and composing's too: about two a thing, each priced as one that composes a tree.
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toBeGreaterThan(0.05 * 2);
     expect(batches).toEqual([]);
   });
 });

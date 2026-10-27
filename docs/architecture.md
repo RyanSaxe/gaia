@@ -102,6 +102,16 @@ contains identifiers and typed values; it contains no model-generated code,
 shaders or coordinates. This keeps composition flexible while geometry and
 placement remain deterministic.
 
+Everything that stands for code is composed this way: every building and
+landmark, and every tree, bush, stone and drift of flowers. Jev first chooses
+what a thing stands as among the forms its importance is offered (`FORMS` and
+`SIZES` in [`looks.ts`](../app/renderer/terrain/looks.ts)). A small form names
+the part a person sees first, such as a weeping tree's frame, which is filled in
+and never asked; Jev composes the rest from that size's parts alone, so a bush
+is never offered a tree's frame. Two things Jev answers alike share one build,
+seeded by the blueprint's content, which every copy turns, scales and leans on
+its ground's slope; each distinct build bakes its own far form.
+
 A primitive writes channels for health and motion as it builds. Shared shaders
 apply vitality and time to those channels, so a change in health can alter
 foliage or ruin without rebuilding geometry. The

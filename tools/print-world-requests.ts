@@ -2,7 +2,8 @@
 // would make, the looks' and what every entity, file and definition stands
 // as: the exact bodies the engine's connector would post to OpenRouter, then
 // how many there are and what they would cost. Composing follows from the
-// answers, so it is not printed. The cost
+// answers, so it is not printed; the app prices it at about two requests a
+// thing (`composingEstimate`). The cost
 // comes from the engine's own `jev.estimate`, the same code that would send
 // them, which reads neither the key nor the network.
 // Usage: pnpm print-world-requests [requests.json]

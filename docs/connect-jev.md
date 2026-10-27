@@ -34,8 +34,10 @@ arguments. Clearing the variable removes it from that shell's environment.
 
 The [README](../README.md#get-started) gives rough costs for first openings and
 updates. Gaia estimates request cost before sending, prints usage in the
-terminal and reuses saved answers when requests are unchanged. Estimates are
-approximate; the connector's rate and token estimate are defined in
+terminal and reuses saved answers when requests are unchanged. Composing the
+world's things follows from Jev's first answers, so the estimate counts it at
+about two requests for every thing that stands. Estimates are approximate; the
+connector's rate and token estimate are defined in
 [`engine/src/jev/client.rs`](../engine/src/jev/client.rs).
 
 There is no default spend limit. To set one, close Gaia and set the
