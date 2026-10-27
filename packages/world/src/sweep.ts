@@ -46,7 +46,70 @@ function valuesOf(field: Exclude<Field, { type: "set" }>): (string | boolean)[] 
 }
 
 /** What one value of a field covers: the value itself, or each member a set includes. */
-const keysOf = (value: Value): string[] => (Array.isArray(value) ? value : [String(value)]);
+const keysOf = (value: Value | readonly string[]): readonly string[] => (Array.isArray(value) ? value : [String(value)]);
+
+/** Every key a field's values cover: each option, level, flag or member. */
+const allKeys = (field: Field): string[] => (field.type === "set" ? Object.keys(field.members) : valuesOf(field).map(String));
+
+/** A blueprint that stands somewhere, with the label of the place it stands in, if it has one. */
+export interface Stood {
+  readonly blueprint: Blueprint;
+  readonly label?: string;
+}
+
+export interface Coverage {
+  /** Slot pairs whose every pairing of parts must stand, as `SweepOptions.pairs`. */
+  readonly pairs?: readonly (readonly [string, string])[];
+  /** The labels every part must stand under; without any, every part must stand once. */
+  readonly labels?: readonly string[];
+}
+
+/**
+ * What a kind's blueprints leave unstood, in words: each part of each slot (under each label, given labels), each
+ * option of each part's settings, each optional slot left out, and each listed pairing. A sweep's `missing` is this
+ * of its blueprints; a world's blueprints, labelled by where they stand, can be checked the same way.
+ */
+export function missingFrom(k: AnyKind, lib: Library, stood: readonly Stood[], coverage: Coverage = {}): string[] {
+  const labels = coverage.labels ?? [];
+  const under = new Map<string, Set<string>>();
+  const seen = new Set<string>();
+  const absent = new Set<string>();
+  const paired = new Set<string>();
+  for (const { blueprint, label } of stood) {
+    for (const name of Object.keys(k.slots)) {
+      const filled = blueprint.slots[name];
+      if (filled === undefined) {
+        absent.add(name);
+        continue;
+      }
+      const key = `${name}=${filled.use}`;
+      under.set(key, (under.get(key) ?? new Set()).add(label ?? ""));
+      for (const [param, value] of Object.entries(filled.params)) for (const v of keysOf(value)) seen.add(`${key}.${param}=${v}`);
+    }
+    for (const [a, b] of coverage.pairs ?? []) {
+      const pa = blueprint.slots[a]?.use;
+      const pb = blueprint.slots[b]?.use;
+      if (pa !== undefined && pb !== undefined) paired.add(`${a}=${pa}+${b}=${pb}`);
+    }
+  }
+  const out: string[] = [];
+  for (const name of slotOrder(k)) {
+    const s = k.slots[name] as AnyKind["slots"][string];
+    for (const p of lib.forRole(s.role)) {
+      const at = under.get(`${name}=${p.id}`);
+      if (labels.length === 0) {
+        if (at === undefined) out.push(`${name}: ${p.id}`);
+      } else for (const l of labels) if (!(at?.has(l) ?? false)) out.push(`${name}: ${p.id} (${l})`);
+      for (const [param, f] of Object.entries(p.params)) for (const key of allKeys(f)) if (!seen.has(`${name}=${p.id}.${param}=${key}`)) out.push(`${name}: ${p.id} ${param} "${key}"`);
+    }
+    if (s.optional && !absent.has(name)) out.push(`${name} left out`);
+  }
+  for (const [a, b] of coverage.pairs ?? []) {
+    const parts = (name: string): AnyPrimitive[] => lib.forRole((k.slots[name] as AnyKind["slots"][string]).role);
+    for (const pa of parts(a)) for (const pb of parts(b)) if (!paired.has(`${a}=${pa.id}+${b}=${pb.id}`)) out.push(`${a} ${pa.id} with ${b} ${pb.id}`);
+  }
+  return out;
+}
 
 /**
  * Sweeps a kind's parts from a library. Each blueprint takes, slot by slot, the part with the most left to cover:
@@ -68,7 +131,6 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
   const stood = new Map<string, Set<string>>();
   const seen = new Set<string>();
   const used = new Map<string, number>();
-  const absent = new Set<string>();
   const paired = new Set<string>();
   const part = (name: string, p: AnyPrimitive): string => `${name}=${p.id}`;
   const option = (name: string, p: AnyPrimitive, param: string, key: string): string => `${part(name, p)}.${param}=${key}`;
@@ -79,8 +141,7 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
     if (labels.length === 0) return under === undefined;
     return label !== undefined && !(under?.has(label) ?? false);
   };
-  const optionsLeft = (name: string, p: AnyPrimitive): number =>
-    Object.entries(p.params).reduce((n, [param, f]) => n + (f.type === "set" ? Object.keys(f.members) : valuesOf(f).map(String)).filter((key) => !seen.has(option(name, p, param, key))).length, 0);
+  const optionsLeft = (name: string, p: AnyPrimitive): number => Object.entries(p.params).reduce((n, [param, f]) => n + allKeys(f).filter((key) => !seen.has(option(name, p, param, key))).length, 0);
   /** The listed pairings with `p` in `name` left to stand: with a partner already chosen in this blueprint, or with any partner still to come. */
   const pairsLeft = (name: string, p: AnyPrimitive, slots: Readonly<Record<string, FilledSlot>>): { now: number; later: number } => {
     let now = 0;
@@ -123,10 +184,7 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
         const wanted = fresh || left > 0 || pending.now > 0 || pending.later > 0;
         return { p, wanted, rank: [(p.needs?.length ?? 0) > 0 && wanted ? 1 : 0, pending.now, fresh ? 1 : 0, pending.later, left, -(used.get(part(name, p)) ?? 0)] };
       });
-      if (s.optional && settled === undefined && !ranked.some((r) => r.wanted)) {
-        absent.add(name);
-        continue;
-      }
+      if (s.optional && settled === undefined && !ranked.some((r) => r.wanted)) continue;
       const ahead = (a: readonly number[], b: readonly number[]): boolean => {
         const i = a.findIndex((x, j) => x !== b[j]);
         return i >= 0 && (a[i] as number) > (b[i] as number);
@@ -156,32 +214,12 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
     return bp;
   };
 
-  const missingNow = (): string[] => {
-    const out: string[] = [];
-    for (const name of order) {
-      const s = k.slots[name] as AnyKind["slots"][string];
-      for (const p of partsOf(name)) {
-        const under = stood.get(part(name, p));
-        if (labels.length === 0) {
-          if (under === undefined) out.push(`${name}: ${p.id}`);
-        } else for (const l of labels) if (!(under?.has(l) ?? false)) out.push(`${name}: ${p.id} (${l})`);
-        for (const [param, f] of Object.entries(p.params)) {
-          for (const key of f.type === "set" ? Object.keys(f.members) : valuesOf(f).map(String)) if (!seen.has(option(name, p, param, key))) out.push(`${name}: ${p.id} ${param} "${key}"`);
-        }
-      }
-      if (s.optional && !absent.has(name)) out.push(`${name} left out`);
-    }
-    for (const [a, b] of pairs) {
-      for (const pa of partsOf(a)) for (const pb of partsOf(b)) if (!paired.has(pairing(a, pa.id, b, pb.id))) out.push(`${a} ${pa.id} with ${b} ${pb.id}`);
-    }
-    return out;
-  };
-
+  const blueprints: Blueprint[] = [];
+  const missingNow = (): string[] => missingFrom(k, lib, blueprints.map((blueprint, i) => ({ blueprint, ...(places?.[i]?.label === undefined ? {} : { label: places[i].label }) })), { pairs, labels });
   if (places !== undefined) {
-    const blueprints = places.map(blueprintAt);
+    for (const place of places) blueprints.push(blueprintAt(place));
     return { blueprints, missing: missingNow() };
   }
-  const blueprints: Blueprint[] = [];
   for (let missing = missingNow(); missing.length > 0; missing = missingNow()) {
     if (blueprints.length === MOST_ROWS) throw new Error(`The sweep of ${k.id} still lacks ${missing.join(", ")} after ${MOST_ROWS} blueprints.`);
     blueprints.push(blueprintAt(undefined));
