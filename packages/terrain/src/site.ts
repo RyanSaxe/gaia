@@ -10,7 +10,7 @@ import type { BuildingPlan, Built } from "@gaia/schema";
 import { type Lattice, heightAt, worldOf, worldOfZ } from "./lattice.ts";
 import { surfaceHalfWidth } from "./water.ts";
 import { DRY, type Terrain, regionAt } from "./world.ts";
-import { withinLand } from "./edge.ts";
+import { BUILDING_MARGIN, withinLand } from "./edge.ts";
 import { waterDepthAt } from "./walk.ts";
 
 export interface BuildingSite {
@@ -166,10 +166,10 @@ function ringSpots(lot: Circle, r0: number, r1: number): Spot[] {
  * `beside` too.
  */
 export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly BuildingSite[] = [], apart = 30, beside: Extent | null = null, within: Circle | null = null, laid: readonly PadEdit[] = []): BuildingSite {
-  const half = t.spec.size / 2 - 34;
+  const half = t.spec.size / 2 - BUILDING_MARGIN;
   const everywhere = (): Spot[] => {
     const spots: Spot[] = [];
-    for (let z = -half; z <= half; z += 12) for (let x = -half; x <= half; x += 12) if (withinLand(t.spec, x, z, 34)) spots.push({ x, z, yaw: Math.atan2(-x, -z) });
+    for (let z = -half; z <= half; z += 12) for (let x = -half; x <= half; x += 12) if (withinLand(t.spec, x, z, BUILDING_MARGIN)) spots.push({ x, z, yaw: Math.atan2(-x, -z) });
     return spots;
   };
   if (within !== null) {
@@ -249,7 +249,7 @@ function gentlest(t: Terrain, plan: BuildingPlan, candidates: readonly Spot[], t
   let best: BuildingSite | null = null;
   let bestScore = Infinity;
   for (const c of candidates) {
-    if (Math.abs(c.x) > half || !withinLand(t.spec, c.x, c.z, 34)) continue;
+    if (Math.abs(c.x) > half || !withinLand(t.spec, c.x, c.z, BUILDING_MARGIN)) continue;
     if (taken.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < apart)) continue;
     const site: BuildingSite = { ...c, level: 0 };
     if (laid.some((p) => yardsMeet(p, { site, yard }))) continue;
@@ -319,14 +319,14 @@ export interface BankSpot {
 
 /**
  * Every spot on the banks of the streams through `region` (or, `along` its river, the river that rises there, its
- * whole reach) where a building whose feature (`beside`, its `wheel` turning) needs running water could stand: the house dry, its yard's
+ * whole reach; or any stream's) where a building whose feature (`beside`, its `wheel` turning) needs running water could stand: the house dry, its yard's
  * other sides as far from water as every yard keeps (`BANK_SITE.margin`), its pad within `limit` meters of the
  * ground under it and low enough over the water for the wheel to dip in, the wheel's foot in water deeper than
  * `foot` and the stream running on past it, `taken` sites 12 m away, and its yard off every yard already `laid`.
  */
-export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel: Extent, region: number, options: { readonly along?: "region" | "river"; readonly limit?: number; readonly foot?: number; readonly taken?: readonly BuildingSite[]; readonly within?: Circle | null; readonly laid?: readonly PadEdit[] } = {}): BankSpot[] {
+export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel: Extent, region: number, options: { readonly along?: "region" | "river" | "any"; readonly limit?: number; readonly foot?: number; readonly taken?: readonly BuildingSite[]; readonly within?: Circle | null; readonly laid?: readonly PadEdit[] } = {}): BankSpot[] {
   const { along = "region", limit = BANK_SITE.even, foot = BANK_SITE.foot, taken = [], within = null, laid = [] } = options;
-  const half = t.spec.size / 2 - 34;
+  const half = t.spec.size / 2 - BUILDING_MARGIN;
   const yard = yardOf(plan, beside);
   // The wheel's side, its wall, where the wheel turns, and how far out what stands beside the house reaches.
   const side = wheel.x0 + wheel.x1 >= 0 ? 1 : -1;
@@ -335,10 +335,13 @@ export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel:
   const wheelX = (wheel.x0 + wheel.x1) / 2;
   const wheelZ = (wheel.z0 + wheel.z1) / 2;
   const streams =
-    along === "region"
+    along === "any"
+      ? t.streams
+      : along === "region"
       ? t.streams.filter((s) => s.stations.some((q) => regionAt(t.spec, q.x, q.z) === region))
       : t.streams.filter((s) => {
-          const head = s.stations[Math.min(s.stations.length - 1, 8)];
+          // Where it rises: a small region's river may leave it within its first few meters.
+          const head = s.stations[0];
           return head !== undefined && regionAt(t.spec, head.x, head.z) === region;
         });
   const spots: BankSpot[] = [];
@@ -361,7 +364,7 @@ export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel:
           const off = edge + gap + plan.width / 2;
           const x = s.x + nx * off;
           const z = s.z + nz * off;
-          if (Math.abs(x) > half || Math.abs(z) > half || !withinLand(t.spec, x, z, 34)) continue;
+          if (Math.abs(x) > half || Math.abs(z) > half || !withinLand(t.spec, x, z, BUILDING_MARGIN)) continue;
           if (taken.some((o) => Math.hypot(o.x - x, o.z - z) < 12)) continue;
           // The wheel's side faces the water: the house's +x runs (cos yaw, -sin yaw), toward the stream on that side.
           const yaw = Math.atan2(nz / side, -nx / side);
@@ -417,14 +420,24 @@ export function bankSpots(t: Terrain, plan: BuildingPlan, beside: Extent, wheel:
 /**
  * Where a building whose feature (`beside`, its `wheel` turning) needs running water stands: the bank spot nearest its lot (`within`) on
  * a stream through `region` (`bankSpots`); failing that, anywhere along the river that rises in `region`; failing
- * both, the same on ground as uneven as its pad's blend can carry (`BANK_SITE.blended`); failing all of these, the
- * same with its wheel's foot in thinner water (`BANK_SITE.foot`). It never stands a wheel on dry ground nor a house
- * in the water: null when no stream offers such a spot.
+ * both, the same on ground as uneven as its pad's blend can carry (`BANK_SITE.blended`); failing these, the same with
+ * its wheel's foot in thinner water (`BANK_SITE.foot`); and when the banks there are all taken, as a small area's
+ * crowded mills can take them, on the free bank nearest its lot of any stream. It never stands a wheel on dry ground
+ * nor a house in the water: null when no stream offers such a spot.
  */
 export function findBankSite(t: Terrain, plan: BuildingPlan, beside: Extent, wheel: Extent, region: number, taken: readonly BuildingSite[] = [], within: Circle | null = null, laid: readonly PadEdit[] = []): BankSite | null {
   for (const foot of [BANK_SITE.foot, 0]) {
     for (const limit of [BANK_SITE.even, BANK_SITE.blended]) {
       for (const along of ["region", "river"] as const) {
+        let best: BankSpot | null = null;
+        for (const spot of bankSpots(t, plan, beside, wheel, region, { along, limit, foot, taken, within, laid })) if (best === null || spot.score < best.score) best = spot;
+        if (best !== null) return best.site;
+      }
+    }
+  }
+  for (const foot of [BANK_SITE.foot, 0]) {
+    for (const limit of [BANK_SITE.even, BANK_SITE.blended]) {
+      for (const along of ["any"] as const) {
         let best: BankSpot | null = null;
         for (const spot of bankSpots(t, plan, beside, wheel, region, { along, limit, foot, taken, within, laid })) if (best === null || spot.score < best.score) best = spot;
         if (best !== null) return best.site;

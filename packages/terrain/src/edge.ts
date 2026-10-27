@@ -11,6 +11,9 @@ export interface LandOutline {
   readonly aspect?: number;
 }
 
+/** How far in from the land's edge a building stands, meters: clear of the rim where the land gives way to the wild. */
+export const BUILDING_MARGIN = 34;
+
 /** The journal's spread, two 520 by 660 pages: the proportions every world laid out from code takes. */
 export const LAND_ASPECT = 1040 / 660;
 /** A squircle's share of the square round it: |x|⁴ + |z|⁴ ≤ r⁴ holds 4Γ(5/4)² / Γ(3/2) r². */

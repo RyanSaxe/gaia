@@ -587,10 +587,10 @@ function solveWater(
     for (const s of streams) carveStream(window, heights, level, s);
     for (const p of ponds) carvePond(window, heights, level, p.pond, p.depth);
     if (bed.kind === "stream") {
-      const solved = solveStream(window, bed.path, bed.width, bed.depth, bed.widths === undefined ? {} : { widths: bed.widths, seep: bed.seep ?? true, ...(bed.floors === undefined ? {} : { floors: bed.floors }) });
+      const solved = solveStream(window, bed.path, bed.width, bed.depth, bed.widths === undefined ? {} : { widths: bed.widths, seep: bed.seep ?? true, water: level, ...(bed.floors === undefined ? {} : { floors: bed.floors }) });
       if (solved !== null) streams.push(solved);
     } else {
-      const solved = solvePond(window, heights, bed.x, bed.z, bed.radius);
+      const solved = solvePond(window, heights, bed.x, bed.z, bed.radius, level);
       if (solved !== null) ponds.push({ pond: solved, depth: bed.depth });
     }
   }

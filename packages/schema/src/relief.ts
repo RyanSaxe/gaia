@@ -62,6 +62,11 @@ export interface ValleyCourse {
    * shoulder, meters out from the course, and how much of a terrace the wall keeps, 0 to 1; then the same on its right.
    */
   readonly walls: Float32Array;
+  /**
+   * At each point, how far out from the course the valley cuts the land at all, meters: past its shoulders, as far as
+   * its sides go on rising before they meet the land, so a valley cut deep through a rim ends in a slope.
+   */
+  readonly reaches: Float32Array;
 }
 
 /** Every river valley of a world, in world meters, with its segments by square cells `cell` meters a side from (`x0`, `z0`), so a point finds the few near it. */

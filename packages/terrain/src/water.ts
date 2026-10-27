@@ -135,6 +135,11 @@ export interface StreamCourse {
   readonly floors?: Float32Array;
   /** False where it ends in another stream, a pond or past the land, so it keeps its width to its end. */
   readonly seep?: boolean;
+  /**
+   * The water already laid on the lattice, per sample: where it runs into a stream laid before it, it meets that
+   * water at its surface, never under it in that stream's channel.
+   */
+  readonly water?: Float32Array;
 }
 
 /**
@@ -157,6 +162,16 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
   const total = along[count - 1] as number;
   const stations: Station[] = [];
   let level = Infinity;
+  // The ground a stream reads: the land, or another stream's surface where that one's water stands.
+  const oz = l.originZ ?? l.origin;
+  const groundAt = (x: number, z: number): number => {
+    const g = heightAt(l, x, z);
+    const water = course.water;
+    if (water === undefined) return g;
+    const i = Math.min(l.n - 1, Math.max(0, Math.round((z - oz) / l.spacing))) * l.n + Math.min(l.n - 1, Math.max(0, Math.round((x - l.origin) / l.spacing)));
+    const surface = water[i] as number;
+    return surface > g ? surface + INSET : g;
+  };
   order.forEach((idx, k) => {
     const x = path[idx * 2] as number;
     const z = path[idx * 2 + 1] as number;
@@ -167,7 +182,7 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
     const share = Math.min(1, HEAD.outlet / full);
     const opens = (from: number): number => share + (1 - share) * smooth(from / HEAD.run);
     const halfWidth = full * opens(s) * (course.seep === false ? 1 : opens(total - s));
-    level = Math.min(level, heightAt(l, x, z) - INSET);
+    level = Math.min(level, groundAt(x, z) - INSET);
     // A routed river may swing across ground that falls away to one side: its water lies below the ground either
     // side of it too, so it is cut into the higher bank rather than standing above the lower one.
     if (course.widths !== undefined) {
@@ -177,7 +192,7 @@ export function solveStream(l: Lattice, path: Float32Array, width: number, depth
       const tz = (path[b * 2 + 1] as number) - (path[a * 2 + 1] as number);
       const len = Math.hypot(tx, tz) || 1;
       const out = halfWidth + BANK * 0.5;
-      level = Math.min(level, heightAt(l, x - (tz / len) * out, z + (tx / len) * out) - INSET, heightAt(l, x + (tz / len) * out, z - (tx / len) * out) - INSET);
+      level = Math.min(level, groundAt(x - (tz / len) * out, z + (tx / len) * out) - INSET, groundAt(x + (tz / len) * out, z - (tx / len) * out) - INSET);
     }
     // A dip the stream passes never drags its water below its own valley's floor, so it never cuts a gorge after.
     const floor = course.floors?.[idx];
@@ -328,18 +343,38 @@ function carveHead(l: Lattice, heights: Float32Array, level: Float32Array, head:
   }
 }
 
-/** Fills a pond to just under its rim, then cuts a gentle bed below the level. Null when the hollow cannot hold water. */
-export function solvePond(l: Lattice, heights: Float32Array, x: number, z: number, radius: number): SolvedPond | null {
+/**
+ * Fills a pond to just under its rim, then cuts a gentle bed below the level. Null when the hollow cannot hold water.
+ * A stream running in across the rim (where `level`, the water already laid, stands above the ground) is the pond's
+ * inflow, not a gap in its rim: its water meets the pond's.
+ */
+export function solvePond(l: Lattice, heights: Float32Array, x: number, z: number, radius: number, level?: Float32Array): SolvedPond | null {
   const reach = radius * POND_REACH;
   let rim = Infinity;
   const steps = Math.ceil((Math.PI * 2 * reach) / (l.spacing * 0.5));
+  const oz = l.originZ ?? l.origin;
   for (let k = 0; k < steps; k++) {
     const a = (k / steps) * Math.PI * 2;
-    rim = Math.min(rim, heightAt(l, x + Math.cos(a) * reach, z + Math.sin(a) * reach, heights));
+    const px = x + Math.cos(a) * reach;
+    const pz = z + Math.sin(a) * reach;
+    // A sample read from any wet lattice point lies in the inflow's channel.
+    if (level !== undefined) {
+      const ix = Math.floor((px - l.origin) / l.spacing);
+      const iz = Math.floor((pz - oz) / l.spacing);
+      let wet = false;
+      for (let dz = 0; dz <= 1 && !wet; dz++) {
+        for (let dx = 0; dx <= 1 && !wet; dx++) {
+          const i = Math.min(l.n - 1, Math.max(0, iz + dz)) * l.n + Math.min(l.n - 1, Math.max(0, ix + dx));
+          wet = (level[i] as number) > (heights[i] as number);
+        }
+      }
+      if (wet) continue;
+    }
+    rim = Math.min(rim, heightAt(l, px, pz, heights));
   }
-  const level = rim - POND_FREEBOARD;
-  if (heightAt(l, x, z, heights) > level - 0.2) return null;
-  return { x, z, radius, reach, level };
+  const surface = rim - POND_FREEBOARD;
+  if (!Number.isFinite(surface) || heightAt(l, x, z, heights) > surface - 0.2) return null;
+  return { x, z, radius, reach, level: surface };
 }
 
 export function carvePond(l: Lattice, heights: Float32Array, level: Float32Array, pond: SolvedPond, depth: number): void {

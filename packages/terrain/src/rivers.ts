@@ -1,27 +1,28 @@
 // Rivers that follow the land. A region whose valley carries a stream gives
 // its water a spring where water runs longest across that region; the water
 // then runs downhill across the whole land, as the land falls, through other
-// regions too, until it reaches the land's edge, a pond, a basin too deep to
-// cross, where it sinks away at the bottom, or a river laid before it, which
-// it joins, widening it below. Its valley is carved along that course, with
-// the cross-section and winding Jev chose for the valley it rose in, and the
-// stream loops across the valley's floor as that valley's winding allows.
-// A river that passes a pond bends round it, so its valley never cuts the
-// pond's rim and drains it. Where it runs is the land's, never a compass
-// direction: a valley's own trough, which runs straight along its region's
-// axis, gives way to the river's.
+// regions too, until it reaches the land's edge, a pond, or a river laid
+// before it, which it joins, widening it below. No river ends in a hollow: one
+// runs down into it and out over the lowest point of its rim, its valley cut
+// through. Its valley is carved along that course, with the cross-section and
+// winding Jev chose for the valley it rose in, and the stream loops across the
+// valley's floor as that valley's winding allows. A river that passes a pond
+// bends round it, and one that ends in a pond keeps its floor up at the pond's
+// rim, so no valley drains a pond. Where it runs is the land's, never a
+// compass direction: a valley's own trough, which runs straight along its
+// region's axis, gives way to the river's.
 //
 // Courses are routed over the land composed without those troughs, on a
-// coarse grid whose shallow hollows are filled so water finds a way across
-// them (priority flood), then smoothed so the grid's eight directions never
-// show. Everything is pure and seeded only by the land, so every composer of
-// a world (a whole bake, a plan of tiles, a bake's workers) routes the same
+// coarse grid whose hollows are filled so water finds its way across them
+// (priority flood), then smoothed so the grid's eight directions never show.
+// Everything is pure and seeded only by the land, so every composer of a
+// world (a whole bake, a plan of tiles, a bake's workers) routes the same
 // rivers to the bit.
 
 import type { HeightField, Landform, PondBed, StreamBed, ValleyCourse, ValleyNet } from "@gaia/schema";
 import { bedBend, fbm, troughOffset } from "@gaia/primitives";
 import { RELIEF_BUDGET } from "./budget.ts";
-import { withinLand } from "./edge.ts";
+import { BUILDING_MARGIN, withinLand } from "./edge.ts";
 import { BANK, HEAD, POND_REACH } from "./water.ts";
 import type { WorldSpec } from "./world.ts";
 
@@ -40,8 +41,8 @@ export const RIVERS = {
   alongside: 1,
   /** The steepest a river's valley floor falls to meet the floor of the river it joins. */
   joinGrade: 0.05,
-  /** A hollow deeper than this, meters, is a basin rivers run down into and end in, rather than filling it to cross. */
-  sink: 1.5,
+  /** A river runs at least this far, meters, before it joins a river laid before it, so it has banks of its own. */
+  banked: 64,
   /** How fast a river widens below a confluence, meters per meter. */
   widening: 0.1,
   /** How far from its spring a river's winding eases in, and before a pond's rim or another river eases out, meters. */
@@ -60,9 +61,11 @@ export const RIVERS = {
   /** The routing ground's faint roll: meters, over this many meters. */
   roll: 0.6,
   rollWavelength: 140,
-  /** Past its shoulders, a valley's sides go on rising at this grade (about 19 degrees) until they meet the land, as far out as this many half widths past them. */
+  /** Past its shoulders, a valley's sides go on rising at this grade (about 19 degrees) until they meet the land, at least this many half widths past them. */
   grade: 0.35,
   reachOut: 2,
+  /** The farthest past its shoulders a valley's sides rise to meet the land, meters. */
+  farthest: 120,
   /**
    * How a wall's run from its floor to its shoulder changes along its river, each side on its own: by a seeded wander
    * that `wallWander` scales into a power of e, so it narrows and widens alike, by up to about 1.5 times, over about
@@ -447,6 +450,9 @@ export function routeRivers(
       region[k] = regionAt(at(i), at(j));
     }
   }
+  // Every cell's way down to the land's edge: a flood from the edge inward, lowest ground first, each cell draining to
+  // the one it was reached from. A hollow fills to a hair over the lowest point of its rim, so water crossing it runs
+  // on toward that point and out: no river ends in a hollow, and its valley cuts through the rim beyond.
   const down = new Int32Array(n * n).fill(-1);
   const filled = new Float64Array(n * n);
   const done = new Uint8Array(n * n);
@@ -474,7 +480,6 @@ export function routeRivers(
         const m = (j + dj) * n + (i + di);
         if ((di === 0 && dj === 0) || inside[m] !== 1 || done[m] === 1) continue;
         done[m] = 1;
-        // A hollow fills to a hair over the way out, so the water crossing it always falls toward the edge.
         filled[m] = Math.max(h[m] as number, (filled[k] as number) + 1e-4 * Math.hypot(di, dj));
         down[m] = k;
         heap.push(filled[m] as number, m);
@@ -482,77 +487,85 @@ export function routeRivers(
     }
   }
 
-  // How many cells water runs from each cell before it leaves that cell's region or a hollow too deep to cross holds it.
+  // How many cells water runs from each cell before it leaves that cell's region.
   const run = new Int32Array(n * n);
   for (const k of popped) {
     const next = down[k] as number;
-    run[k] = next >= 0 && region[next] === region[k] && (filled[k] as number) - (h[k] as number) <= RIVERS.sink ? (run[next] as number) + 1 : 1;
+    run[k] = next >= 0 && region[next] === region[k] ? (run[next] as number) + 1 : 1;
   }
-  // The neighbour a cell falls to most steeply on the land as it lies, unfilled, or -1 at the bottom of a hollow.
-  const lowerOf = (k: number): number => {
-    const i = k % n;
-    const j = Math.floor(k / n);
-    let best = -1;
-    let drop = 0;
-    for (const dj of near) {
-      for (const di of near) {
-        const m = (j + dj) * n + (i + di);
-        if ((di === 0 && dj === 0) || inside[m] !== 1) continue;
-        const fall = ((h[k] as number) - (h[m] as number)) / Math.hypot(di, dj);
-        if (fall > drop) {
-          drop = fall;
-          best = m;
-        }
-      }
-    }
-    return best;
-  };
-  // Each river from its spring, the highest ground its own region holds, down to the edge, a pond or a river before it.
+  // Each river from its spring down to the edge, a pond or a river before it.
   const ponds: { x: number; z: number; radius: number }[] = [];
   spec.regions.forEach((r, ri) => {
     for (const b of flat[ri]?.water ?? []) if (b.kind === "pond") ponds.push({ x: r.x + (b as PondBed).x, z: r.z + (b as PondBed).z, radius: (b as PondBed).radius });
   });
+  // A pond's rim as the land holds it before any river: a river that ends in the pond keeps its valley's floor up at
+  // it, so its water meets the pond's at the pond's surface and never drains it.
+  const rims = new Map(
+    ponds.map((p) => {
+      let rim = Infinity;
+      const reach = p.radius * POND_REACH;
+      const steps = Math.ceil((Math.PI * 2 * reach) / 2);
+      for (let s = 0; s < steps; s++) rim = Math.min(rim, height(p.x + Math.cos((s / steps) * Math.PI * 2) * reach, p.z + Math.sin((s / steps) * Math.PI * 2) * reach));
+      return [p, rim] as const;
+    }),
+  );
+  // The pond each cell's water runs into: one whose rim it reaches at the rim's height or above. Water that comes to
+  // a pond's raised rim from lower ground runs on past it, and its valley bends round the pond.
+  const pondAt = Array.from({ length: n * n }, (_, k) =>
+    inside[k] === 1 ? ponds.find((p) => Math.hypot(p.x - at(k % n), p.z - at(Math.floor(k / n))) < p.radius * RIVERS.pondRim && (h[k] as number) >= (rims.get(p) as number) - RIVERS.roll) : undefined,
+  );
   const owner = new Int32Array(n * n).fill(-1);
   const ownerAt = new Int32Array(n * n);
   const rivers: { source: number; cells: number[]; into: { river: number; at: number } | null; seep: boolean; lake: { x: number; z: number; radius: number } | null }[] = [];
-  valleys.forEach((v, ri) => {
-    if (v === null) return;
+  // Water meets a river laid before it on the ground that river's valley spans, unless it runs there below the river's
+  // own course, which its water could never rise to: then it runs on beneath, past it.
+  const joins = (k: number): boolean => {
+    const o = owner[k] as number;
+    return o >= 0 && (h[k] as number) >= (h[(rivers[o] as (typeof rivers)[number]).cells[ownerAt[k] as number] as number] as number) - RIVERS.roll;
+  };
+  // How many cells water runs from each cell before it meets a river laid before it, a pond or the land's edge.
+  const free = new Int32Array(n * n);
+  for (const ri of valleys.keys()) {
+    const v = valleys[ri];
+    if (v === null || v === undefined) continue;
+    for (const k of popped) {
+      const next = down[k] as number;
+      free[k] = joins(k) || pondAt[k] !== undefined ? 0 : next < 0 ? 1 : (free[next] as number) + 1;
+    }
     // Its spring: where water runs longest across its own region before it leaves, so the river Jev chose for an area
     // runs through that area, the higher ground of two; away from the land's rim, which would drain it at once, or,
-    // for a region that lies wholly near the rim, anywhere it holds, so every area given water has its river. Never on
-    // ground a river laid before it claims, whose valley may run past the area without entering it.
+    // for a region that lies near the rim, where buildings may still stand on its banks, or else anywhere it holds. It
+    // runs at least `RIVERS.banked` before it meets a river laid before it, so it has banks of its own, or as far as
+    // any spot in its region lets it.
     let spring = -1;
-    for (const fromEdge of [RIVERS.springFromEdge, 0]) {
+    const banked = Math.round(RIVERS.banked / RIVERS.cell);
+    let longest = 0;
+    for (let k = 0; k < n * n; k++) if (inside[k] === 1 && region[k] === ri) longest = Math.max(longest, free[k] as number);
+    for (const fromEdge of [RIVERS.springFromEdge, BUILDING_MARGIN + RIVERS.cell, 0]) {
       for (let k = 0; k < n * n; k++) {
-        if (inside[k] !== 1 || region[k] !== ri || (owner[k] as number) >= 0 || !withinLand(spec, at(k % n), at(Math.floor(k / n)), fromEdge)) continue;
+        if (inside[k] !== 1 || region[k] !== ri || (free[k] as number) < Math.min(banked, longest) || !withinLand(spec, at(k % n), at(Math.floor(k / n)), fromEdge)) continue;
         if (spring < 0 || (run[k] as number) > (run[spring] as number) || ((run[k] as number) === (run[spring] as number) && (h[k] as number) > (h[spring] as number))) spring = k;
       }
       if (spring >= 0) break;
     }
-    if (spring < 0) return;
+    if (spring < 0) continue;
     const cells: number[] = [];
     let into: { river: number; at: number } | null = null;
     let lake: { x: number; z: number; radius: number } | null = null;
     let seep = false;
-    let sinking = false;
     for (let k = spring; ; ) {
-      if ((owner[k] as number) >= 0) {
+      if (joins(k)) {
         into = { river: owner[k] as number, at: ownerAt[k] as number };
         break;
       }
-      const x = at(k % n);
-      const z = at(Math.floor(k / n));
       // Its valley ends at a pond's rim; its stream runs on into the pond's water.
-      const pond = ponds.find((p) => Math.hypot(p.x - x, p.z - z) < p.radius * RIVERS.pondRim);
+      const pond = pondAt[k];
       if (pond !== undefined) {
-        into = null;
         lake = pond;
         break;
       }
       cells.push(k);
-      // A hollow too deep to fill holds what runs into it: the river runs on down to its lowest and sinks away there.
-      if ((filled[k] as number) - (h[k] as number) > RIVERS.sink) sinking = true;
-      const next = sinking ? lowerOf(k) : (down[k] as number);
+      const next = down[k] as number;
       // At the land's edge the rim rises: the river sinks away into the ground there.
       if (next < 0) {
         seep = true;
@@ -560,7 +573,7 @@ export function routeRivers(
       }
       k = next;
     }
-    if (cells.length < 3) return;
+    if (cells.length < 3) continue;
     // Its headwater: where the land parts around its spring, its water comes from across the rest of its region,
     // straight back the way it sets off, so its valley spans its region as the area's river should; never alongside
     // its own course further down.
@@ -594,7 +607,7 @@ export function routeRivers(
       }
     });
     rivers.push({ source: ri, cells, into, seep, lake });
-  });
+  }
 
   // Where along a river's course, as a point index, the water reaching its `at`th cell joins it.
   const lines: number[][] = [];
@@ -649,12 +662,27 @@ export function routeRivers(
     for (let k = from; k < theirs.length; k++) theirs[k] = (theirs[k] as number) + (mine[mine.length - 1] as number);
   }
 
+  // The land as the routing grid holds it, between its points; off the grid, as composed.
+  const landAt = (x: number, z: number): number => {
+    const fi = (x + half) / RIVERS.cell;
+    const fj = (z + half) / RIVERS.cell;
+    const i = Math.floor(fi);
+    const j = Math.floor(fj);
+    if (i < 0 || j < 0 || i + 1 >= n || j + 1 >= n) return height(x, z);
+    const k = j * n + i;
+    if (inside[k] !== 1 || inside[k + 1] !== 1 || inside[k + n] !== 1 || inside[k + n + 1] !== 1) return height(x, z);
+    const u = fi - i;
+    const w = fj - j;
+    return ((h[k] as number) * (1 - u) + (h[k + 1] as number) * u) * (1 - w) + ((h[k + n] as number) * (1 - u) + (h[k + n + 1] as number) * u) * w;
+  };
   // No valley floor lies lower than the relief budget allows below the land's highest ground.
   let highest = -Infinity;
   for (let k = 0; k < n * n; k++) if (inside[k] === 1) highest = Math.max(highest, h[k] as number);
   const lowest = highest - RIVERS.budgetShare * RELIEF_BUDGET.range;
   const valleyCourses: ValleyCourse[] = [];
   const floorsOf: (Float32Array | undefined)[] = [];
+  /** The lowest each river's floor lies: the rim of the pond its water ends in, if it ends in one. */
+  const aboveOf: (number | undefined)[] = [];
   const bends: (Float32Array | undefined)[] = [];
   const beds = new Map<number, StreamBed[]>();
   rivers.forEach((rv, c) => {
@@ -663,24 +691,49 @@ export function routeRivers(
     const count = course.length / 2;
     if (count < RIVERS.shortest) return;
     // Its floor only ever descends from source to mouth, `depth` below the land or lower where the land rises along
-    // its way, so its stream never has to cut a gorge; never below the relief's budget.
+    // its way, so its stream never has to cut a gorge; never below the relief's budget, unless the land it crosses lies
+    // lower still: there it runs on the land, and its valley cuts through the rim beyond at that height.
     const floors = new Float32Array(count);
     const depths = new Float32Array(count).fill(v.depth);
     const halfWidths = new Float32Array(count).fill(v.trough.halfWidth);
     let floorAt = Infinity;
+    let landLow = Infinity;
     for (let k = 0; k < count; k++) {
       const g = height(course[k * 2] as number, course[k * 2 + 1] as number);
-      floorAt = Math.max(lowest, Math.min(floorAt - 1e-3, g - v.depth));
+      landLow = Math.min(landLow, g);
+      floorAt = Math.max(Math.min(lowest, landLow), Math.min(floorAt - 1e-3, g - v.depth));
       floors[k] = floorAt;
     }
-    // Where it joins a river, its floor comes down to that river's, never hanging above it.
+    // Into a pond, its floor never lies below the pond's rim, nor any river's that joins it, so no valley drains the pond.
+    const above = rv.lake !== null ? (rims.get(rv.lake) as number) : rv.into !== null ? (aboveOf[rv.into.river] ?? -Infinity) : -Infinity;
+    aboveOf[c] = above;
+    for (let k = 0; k < count; k++) floors[k] = Math.max(floors[k] as number, above);
+    // Where it joins a river, its floor comes down to that river's, never hanging above it nor running in below it.
     const into = rv.into === null ? undefined : floorsOf[rv.into.river];
     if (rv.into !== null && into !== undefined) {
       const meet = into[Math.min(into.length - 1, joinIndex(rv.into.river, rv.into.at))] as number;
-      for (let k = 0; k < count; k++) floors[k] = Math.max(lowest, Math.min(floors[k] as number, meet + RIVERS.joinGrade * (count - 1 - k) * RIVERS.step));
+      for (let k = 0; k < count; k++) floors[k] = Math.max(meet, Math.min(floors[k] as number, meet + RIVERS.joinGrade * (count - 1 - k) * RIVERS.step));
     }
     floorsOf[c] = floors;
-    valleyCourses.push({ points: new Float32Array(course), halfWidths, floors, depths, walls: wallsAlong(course, v.trough, v.depth) });
+    const walls = wallsAlong(course, v.trough, v.depth);
+    // How far out each point's valley cuts the land: past its shoulders until its sides, rising at `RIVERS.grade`, meet
+    // the land as it lies, so a valley cut deep through a rim it crosses ends in a slope, never a cliff.
+    const reaches = new Float32Array(count);
+    for (let k = 0; k < count; k++) {
+      const [nx, nz] = leftOf(course, k);
+      const x = course[k * 2] as number;
+      const z = course[k * 2 + 1] as number;
+      const top = (floors[k] as number) + (depths[k] as number);
+      let reach = 0;
+      for (const [side, o] of [[1, 1], [-1, 4]] as const) {
+        const shoulder = walls[k * 6 + o] as number;
+        let d = shoulder + (halfWidths[k] as number) * RIVERS.reachOut;
+        while (d < shoulder + RIVERS.farthest && top + RIVERS.grade * (d - shoulder) < landAt(x + nx * side * d, z + nz * side * d)) d += RIVERS.cell / 2;
+        reach = Math.max(reach, d);
+      }
+      reaches[k] = reach;
+    }
+    valleyCourses.push({ points: new Float32Array(course), halfWidths, floors, depths, walls, reaches });
     const stream = landforms[rv.source]?.water.find((b) => b.kind === "stream") as StreamBed;
     // It widens over a short reach below each river that joins it, as a river does below a confluence.
     const widths = Float32Array.from(carried[c] as Float64Array, (q) => Math.sqrt(q));
@@ -693,8 +746,9 @@ export function routeRivers(
     const meetZ = rv.into === null ? 0 : (bends[rv.into.river]?.[joinIndex(rv.into.river, rv.into.at) * 2 + 1] ?? 0);
     const path = new Float32Array(count * 2);
     const bend = new Float32Array(count * 2);
+    // Its loops ease out toward its end too, wherever it ends, so its stream ends on its valley's floor.
     const tails = Array.from({ length: count }, (_, k) => {
-      const t = rv.into === null ? 1 : Math.min(1, (count - 1 - k) / (RIVERS.meet / RIVERS.step));
+      const t = Math.min(1, (count - 1 - k) / (RIVERS.meet / RIVERS.step));
       return t * t * (3 - 2 * t);
     });
     // Its loops ease in from its spring, as its valley's winding does.
@@ -804,24 +858,24 @@ export function valleySurface(net: ValleyNet, x: number, z: number): number {
     const wall = (at: number): number => lerp(course.walls, 6, at + 3) + (lerp(course.walls, 6, at) - lerp(course.walls, 6, at + 3)) * left;
     const edge = wall(0);
     const shoulder = wall(1);
-    if (d > shoulder + halfWidth * RIVERS.reachOut) continue;
+    if (d > lerp(course.reaches)) continue;
     const surface = lerp(course.floors) + lerp(course.depths) * wallRise((d - edge) / (shoulder - edge), wall(2)) + RIVERS.grade * Math.max(0, d - shoulder);
     lowest = Math.min(lowest, surface);
   }
   return lowest;
 }
 
-/** The valley net: every course's segments, by the cells within a valley's reach of them. */
+/** The valley net: every course's segments, by the cells within a valley's reach of them, however far past the land's edge that is. */
 function valleyNet(spec: WorldSpec, courses: readonly ValleyCourse[]): ValleyNet {
-  const half = spec.size / 2 + RIVERS.net;
+  let out = spec.size / 2;
+  for (const c of courses) for (let k = 0; k < c.points.length / 2; k++) out = Math.max(out, Math.abs(c.points[k * 2] as number) + (c.reaches[k] as number), Math.abs(c.points[k * 2 + 1] as number) + (c.reaches[k] as number));
+  const half = out + RIVERS.net;
   const cols = Math.ceil((half * 2) / RIVERS.net);
   const cells: number[][] = Array.from({ length: cols * cols }, () => []);
   courses.forEach((c, ci) => {
     const p = c.points;
-    const w = c.walls;
     for (let k = 0; k + 1 < p.length / 2; k++) {
-      const shoulder = Math.max(w[k * 6 + 1] as number, w[k * 6 + 4] as number, w[k * 6 + 7] as number, w[k * 6 + 10] as number);
-      const reach = shoulder + Math.max(c.halfWidths[k] as number, c.halfWidths[k + 1] as number) * RIVERS.reachOut;
+      const reach = Math.max(c.reaches[k] as number, c.reaches[k + 1] as number);
       const minX = Math.min(p[k * 2] as number, p[k * 2 + 2] as number) - reach;
       const maxX = Math.max(p[k * 2] as number, p[k * 2 + 2] as number) + reach;
       const minZ = Math.min(p[k * 2 + 1] as number, p[k * 2 + 3] as number) - reach;
