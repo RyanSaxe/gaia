@@ -39,6 +39,12 @@ import { type LandNode, divideLand, dividePlots, nearestRung, rung } from "./lan
 import { MODEL } from "./planner.ts";
 import { type Composed, type Composing, areaState, composeThing, composeThings, composingState, definitionState, fileState, repositoryState, share, trailState, trim } from "./compose.ts";
 
+/** What a thing stands as: a building or a landmark, which stand on their own lots, or a tree, a bush, a stone or flowers. */
+export type StandsAs = "building" | "landmark" | "tree" | "bush" | "stone" | "flowers";
+
+/** Whether a thing standing as `as` is one of the world's buildings and landmarks, which stand on lots of their own. */
+export const raisedAs = (as: StandsAs): as is "building" | "landmark" => as === "building" || as === "landmark";
+
 /** One option Jev may choose: what it is like, in the words Jev reads. */
 export interface Look {
   readonly doc: string;
@@ -50,8 +56,10 @@ export interface Look {
    * world's own things that it suits.
    */
   readonly needs?: readonly Need[];
-  /** For a form: the kind Jev composes it from part by part once chosen. A form without one stands as its own blueprint. */
-  readonly composes?: "building" | "landmark";
+  /** For a form: what a thing it is chosen for stands as, which Jev composes part by part, or which `blueprint` fills. */
+  readonly composes?: StandsAs;
+  /** For a form Jev does not yet compose: the blueprint every thing standing as it takes. */
+  readonly blueprint?: Blueprint;
   /**
    * For a water: what choosing it settles in the land composed for its area, per field path (a valley's
    * `relief.stream`, a basin's `relief.pond`), filled in there and never asked again.
@@ -99,10 +107,11 @@ export interface Judgments {
    */
   readonly stands?: Readonly<Record<string, string>>;
   /**
-   * Each thing that stands as a building or a landmark, by its id as in `stands`, and the blueprint Jev composed for
-   * it (`composeWorld`); a thing not yet composed has none and stands nowhere.
+   * What each thing stands as, by its id as in `stands`, and its blueprint (`composeWorld`): a building's or a
+   * landmark's, a tree's, a bush's, a stone's or flowers'. A building or a landmark not yet composed has none and
+   * stands nowhere.
    */
-  readonly things: Readonly<Record<string, { readonly as: "building" | "landmark"; readonly blueprint?: Blueprint }>>;
+  readonly things: Readonly<Record<string, { readonly as: StandsAs; readonly blueprint?: Blueprint }>>;
   /** Dependencies Jev would walk, with how much it wants each and, once composed, how each trail looks. */
   readonly trails: readonly CodeTrail[];
   /**
@@ -164,6 +173,9 @@ export interface CodeStanding {
   readonly name: string;
   /** The form Jev chose for it. */
   readonly form: string;
+  /** What it stands as and its blueprint, once composed. */
+  readonly as?: StandsAs;
+  readonly blueprint?: Blueprint;
   readonly lines: number;
   /** How much it matters, 0 to 1: Jev's importance; its size follows it. */
   readonly importance?: number;
@@ -192,6 +204,9 @@ export interface CodeSymbol {
   readonly importance?: number;
   /** What it stands as: the form key Jev chose for it; "" before anything is judged. */
   readonly form: string;
+  /** What it stands as and its blueprint, once composed. */
+  readonly as?: StandsAs;
+  readonly blueprint?: Blueprint;
   readonly x: number;
   readonly z: number;
   /** Its file's vitality. */
@@ -811,7 +826,7 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
    * A building or a landmark to compose for a thing, with what the graph holds about it, once its land is composed:
    * its place has what its region's water holds, and its colors are among its land's native families.
    */
-  const raised = async (id: string, as: "building" | "landmark"): Promise<Composed> => {
+  const raised = async (id: string, as: StandsAs): Promise<Composed> => {
     const of = thingKind(facts, id);
     const region = regionFor(regionSet, of === "entity" ? id : parentOf(fileOfThing(of, id) as string));
     const place = { has: looks.water[judged.waters[region] ?? ""]?.holds ?? [], narrow: { [NATIVE_COLORS.thing]: nativesOf((await lands)[`land:${region}`]) } };
@@ -827,15 +842,21 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     concurrency,
   );
   // What every entity, file and definition stands as, unless the judgments already say; each thing Jev raises to a building or a landmark is composed as soon as its answer is in and its land is composed.
-  const things: Record<string, { as: "building" | "landmark"; blueprint?: Blueprint }> = { ...judged.things };
+  const things: Record<string, { as: StandsAs; blueprint?: Blueprint }> = { ...judged.things };
   const rising: Promise<unknown>[] = [];
-  const compose = (id: string, as: "building" | "landmark"): void => {
+  const compose = (id: string, as: StandsAs): void => {
     rising.push(raised(id, as).then((thing) => composeThing(looks.compose, jev, thing)).then((blueprint) => (things[id] = { as, blueprint })));
   };
-  for (const [id, t] of Object.entries(judged.things)) compose(id, t.as);
+  for (const [id, t] of Object.entries(judged.things)) if (t.blueprint === undefined) compose(id, t.as);
+  // A form Jev does not yet compose stands as its own blueprint, asked nothing.
   const raise = (id: string, form: string): void => {
-    const as = looks.form[form]?.composes;
+    const look = looks.form[form];
+    const as = look?.composes;
     if (as === undefined || judged.things[id] !== undefined) return;
+    if (look?.blueprint !== undefined) {
+      things[id] = { as, blueprint: look.blueprint };
+      return;
+    }
     things[id] = { as };
     compose(id, as);
   };
@@ -862,7 +883,7 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     ...(stands === undefined ? {} : { stands }),
     sky: of("world:"),
     lands: Object.fromEntries(regions.map((path) => [path, of(`land:${path}`)])),
-    things: Object.fromEntries(Object.keys(things).sort().map((id) => [id, { as: (things[id] as { as: "building" | "landmark" }).as, blueprint: of(id) }])),
+    things: Object.fromEntries(Object.keys(things).sort().map((id) => [id, { as: (things[id] as { as: StandsAs }).as, blueprint: of(id) }])),
     trails: judged.trails.map((t) => ({ ...t, route: of(trailId(t)) })),
   };
 }
@@ -1072,7 +1093,12 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
   /** A building or landmark Jev composed for a thing, if one stands for it. */
   const composed = (id: string): { as: "building" | "landmark"; blueprint: Blueprint } | undefined => {
     const t = judged.things[id];
-    return t?.blueprint === undefined ? undefined : { as: t.as, blueprint: t.blueprint };
+    return t?.blueprint === undefined || !raisedAs(t.as) ? undefined : { as: t.as, blueprint: t.blueprint };
+  };
+  /** A tree, a bush, a stone or flowers composed for a thing, if one stands for it. */
+  const small = (id: string): { as: StandsAs; blueprint: Blueprint } | Record<string, never> => {
+    const t = judged.things[id];
+    return t?.blueprint === undefined || raisedAs(t.as) ? {} : { as: t.as, blueprint: t.blueprint };
   };
   const folderQuality = (path: string): number | undefined => {
     for (let p: string | null = path; p !== null; p = p === "" ? null : parentOf(p)) {
@@ -1102,7 +1128,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
   const stand = (of: CodeStanding["of"], path: string, name: string, lines: number, at: { x: number; z: number }, vitality: number, value: number | undefined, file?: string): void => {
     const form = stands[path];
     if (form === undefined || composed(path) !== undefined) return;
-    standing.push({ of, path, name, form, lines, ...(value === undefined ? {} : { importance: value }), x: at.x, z: at.z, ...(file === undefined ? {} : { file }), vitality });
+    standing.push({ of, path, name, form, ...small(path), lines, ...(value === undefined ? {} : { importance: value }), x: at.x, z: at.z, ...(file === undefined ? {} : { file }), vitality });
   };
   /** Per directory: ground held and the ground-weighted sum of its leaves' hearts. */
   const held = new Map<string, { ground: number; x: number; z: number; hearts: { x: number; z: number }[] }>();
@@ -1164,6 +1190,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
         ...(def.doc === undefined ? {} : { doc: def.doc }),
         ...(def.importance === undefined ? {} : { importance: def.importance }),
         form: stands[def.id] ?? "",
+        ...small(def.id),
         x,
         z,
         vitality: mine,

@@ -7,7 +7,8 @@
 // sees calls them.
 
 import * as THREE from "three";
-import { FLORA_PRESETS, type Realized } from "@gaia/realize";
+import type { Realized } from "@gaia/realize";
+import type { Blueprint } from "@gaia/schema";
 import { settleVitality } from "@gaia/render";
 import { clearanceAt, fordBeside, footingAt, frameOf, groundHeightAt, heightAt, junctionVitality, placeAt, planTrip, stanceAt, standAt, stoodBy, type StoodSpot, type Stride, TRAVEL, trailWay, travelFrom, travelStep, wadingAt, WALK_TO, walkStep, type Walker, waterDepthAt, wayVitalityAt, wayWear } from "@gaia/terrain";
 import { groundVitality, sweep } from "@gaia/world";
@@ -18,7 +19,8 @@ import { type Change, pictureChange, tallyFrame } from "./measure.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { groundVitalityAt } from "./vitality.ts";
 import { type Copies, type DetailMode, FAR, type FarOf, GONE, createCopies } from "./woods.ts";
-import { PAINTING, type Subject, TREE_BUILDS, type TreeVariant, type ViewPin, type WorldInside } from "./world.ts";
+import { composedName } from "./settlement.ts";
+import { PAINTING, type Subject, type TreeVariant, type ViewPin, type WorldInside } from "./world.ts";
 
 /** A step of walking: half a second at walking pace, as the walk test steps. */
 const WALK_STEP = 0.7;
@@ -312,12 +314,20 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     };
   }
 
-  /** Every preset that turns far, by name: each tree preset's first build, then the bushes. */
-  const farPresets = (): readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[] => [
-    ...FLORA_PRESETS.map((preset, p) => ({ name: preset.name, plant: () => world.treeBuild(p * TREE_BUILDS), far: world.treeFar[p * TREE_BUILDS] as FarOf })),
-    ...world.understory.farPresets,
-    ...world.wildGrowth.farPresets,
-  ];
+  /** Every build that turns far, by a name from its parts: each of the world's tree builds, its understory's and the wild's bushes. */
+  const farPresets = (): readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[] => {
+    const named = new Map<string, number>();
+    const unique = (name: string): string => {
+      const n = (named.get(name) ?? 0) + 1;
+      named.set(name, n);
+      return n === 1 ? name : `${name} ${n}`;
+    };
+    return [
+      ...world.treeBlueprints.map((bp, k) => ({ name: unique(composedName(bp)), plant: () => world.treeBuild(k), far: world.treeFar[k] as FarOf })),
+      ...world.understory.farBuilds().map((b) => ({ name: unique(composedName(b.blueprint)), plant: b.plant, far: b.far })),
+      ...world.wildGrowth.farPresets,
+    ];
+  };
 
   /**
    * The swap test: whether a tree's or a bush's change of form ever shows.
@@ -517,7 +527,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       const s = world.subjects[i];
       if (s !== undefined) world.approach(s);
     },
-    subjects: () => world.subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
+    subjects: () => world.subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, ...(s.built === undefined ? {} : { built: s.built }), x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
     card: () => (world.shown === null ? null : { name: world.shown.name, what: world.shown.what }),
     closeCard: () => world.hideCard(),
     walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => world.walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
@@ -885,7 +895,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
     },
     ponds: () => world.terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-    plants: () => world.trees.map((t) => ({ x: t.x, z: t.z, height: (world.variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z), preset: FLORA_PRESETS[Math.floor(t.variant / TREE_BUILDS)]?.name ?? "", vitality: t.represented.vitality })),
+    plants: () => world.trees.map((t) => ({ x: t.x, z: t.z, height: (world.variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z), preset: composedName(world.treeBlueprints[t.variant] as Blueprint), vitality: t.represented.vitality })),
     /**
      * Stands every tree that stands for code `copies` times, each copy on its own patch, for measuring at scale;
      * 1 stands the world as it is. The bake thread stands them again. Never in a world a person walks.

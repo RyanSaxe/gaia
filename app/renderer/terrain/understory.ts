@@ -1,22 +1,22 @@
 // The world's understory: the stones, bushes and flowers that code
-// stands as (`FORMS` in looks.ts), drawn as one InstancedMesh per part and
-// level of detail of each blueprint, so a hundred bushes cost a handful of
-// draw calls, and each pass draws only the cells it can see. Nothing here
-// stands for nothing: the land between them is grass, ground and water.
+// stands as, one build of each distinct blueprint the world's things take
+// (`OpenedWorld.plants`), drawn as one InstancedMesh per part and level of
+// detail of each build, so a hundred bushes cost a handful of draw calls,
+// and each pass draws only the cells it can see. Nothing here stands for
+// nothing: the land between them is grass, ground and water.
 
 import * as THREE from "three";
-import { type Library, seedOf } from "@gaia/schema";
-import { FLOWER_PRESETS, MUSHROOM_PRESETS, type Preset, ROCK_PRESETS, type Realized, SHRUB_PRESETS } from "@gaia/realize";
+import type { Blueprint, Library } from "@gaia/schema";
+import type { Realized } from "@gaia/realize";
 import type { SceneLight } from "@gaia/render";
 import type { Placement } from "@gaia/terrain";
 import type { Clearings } from "./clearings.ts";
-import { type BuildAsk, type BuildKind, made } from "./made.ts";
+import type { PlantBuilds, PlantGroup } from "./code-world.ts";
+import { type BuildAsk, made, plantAsk } from "./made.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
 interface Group {
-  readonly id: string;
-  readonly kind: BuildKind;
-  readonly presets: readonly Preset[];
+  readonly id: Exclude<PlantGroup, "trees">;
   /** Whether the group's instances draw into the sun's shadow map. */
   readonly casts: boolean;
   /** How much of its outline at the ground is kept clear of grass, 0 for none. */
@@ -35,12 +35,12 @@ interface Group {
   readonly far: number;
 }
 
-/** Each group's presets in order: a placement's variant indexes them (`FORMS` in looks.ts names its rule and preset). */
+/** Each group the understory draws: a placement's rule names it, and its variant indexes the group's builds. */
 const GROUPS: readonly Group[] = [
-  { id: "rocks", kind: "rock", presets: ROCK_PRESETS, casts: true, clears: 0.92, far: FAR.bush },
-  { id: "shrubs", kind: "flora", presets: SHRUB_PRESETS, casts: true, clears: 0.55, far: FAR.bush },
-  { id: "flowers", kind: "wildflowers", presets: FLOWER_PRESETS, casts: false, clears: 0, far: FAR.bush },
-  { id: "mushrooms", kind: "wildflowers", presets: MUSHROOM_PRESETS, casts: false, clears: 0, turf: { share: 1.25, beyond: 0.35 }, far: FAR.bush },
+  { id: "rocks", casts: true, clears: 0.92, far: FAR.bush },
+  { id: "shrubs", casts: true, clears: 0.55, far: FAR.bush },
+  { id: "flowers", casts: false, clears: 0, far: FAR.bush },
+  { id: "mushrooms", casts: false, clears: 0, turf: { share: 1.25, beyond: 0.35 }, far: FAR.bush },
 ];
 
 /** The least a patch of turf reaches from a copy's middle, meters: a mask texel is half a meter, so a smaller patch could miss every texel. */
@@ -59,11 +59,8 @@ function turfOf(outline: Float32Array, turf: NonNullable<Group["turf"]>): Float3
   });
 }
 
-/** Each build of a group, one per preset as listed, seeded by the preset's name, so a preset keeps its build whichever others come or go. */
-const asksOf = (g: Group): BuildAsk[] => g.presets.map((p) => ({ kind: g.kind, blueprint: p.blueprint, seed: seedOf(`terrain-lab/${g.id}/${p.name}`), facts: { scale: 1, age: 120 } }));
-
-/** Every build the understory makes, for making ahead. */
-export const understoryBuilds = (): BuildAsk[] => GROUPS.flatMap(asksOf);
+/** Every build the understory makes for a world's things, for making ahead: one per distinct blueprint. */
+export const understoryBuilds = (plants: PlantBuilds): BuildAsk[] => GROUPS.flatMap((g) => plants[g.id].map(plantAsk));
 
 /** A component's reach where it meets the ground, in 48 directions around its origin. */
 function outlineOf(plant: Realized): Float32Array {
@@ -114,14 +111,19 @@ export interface Understory {
   readonly stats: () => { placed: Record<string, number>; triangles: number; meshes: number; drawn: number };
   /** Copies and triangles each kind of the understory drew in the last pass. */
   readonly drawnByKind: () => Record<string, { copies: number; triangles: number }>;
-  /** Each preset that turns far, by its first build: what the swap test stands alone. */
-  readonly farPresets: readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[];
+  /**
+   * Makes one build of every distinct blueprint the world's things take and its far form, once, when the world opens
+   * and before anything stands: `place` then only moves copies.
+   */
+  build(plants: PlantBuilds): void;
+  /** Each build that turns far, with its blueprint: what the swap test stands alone. */
+  readonly farBuilds: () => readonly { readonly blueprint: Blueprint; readonly plant: () => Realized; readonly far: FarOf }[];
 }
 
 /** `farForms` takes the far form of every build whose group turns far; without it, nothing does. */
 export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings, farForms?: FarForms): Understory {
-  const built = GROUPS.map((g) => {
-    const asks = asksOf(g);
+  const buildGroup = (g: Group, blueprints: readonly Blueprint[]) => {
+    const asks = blueprints.map(plantAsk);
     const fresh = asks.map((ask) => made(ask, lib));
     const reach = fresh.map(outlineOf);
     const tops = fresh.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
@@ -131,14 +133,9 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     const plants: (Realized | null)[] = [...fresh];
     const plant = (variant: number): Realized => plants[variant] ?? made(asks[variant] as BuildAsk, lib);
     const turf = g.turf;
-    return { group: g, plants, plant, far, reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)), turfs: turf === undefined ? undefined : reach.map((o) => turfOf(o, turf)) };
-  });
-  const farPresets = built.flatMap(({ group, plant, far }) =>
-    group.presets.flatMap((preset, i) => {
-      const f = far[i];
-      return f === undefined ? [] : [{ name: preset.name, plant: () => plant(i), far: f }];
-    }),
-  );
+    return { group: g, blueprints, plants, plant, far, reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)), turfs: turf === undefined ? undefined : reach.map((o) => turfOf(o, turf)) };
+  };
+  let built: ReturnType<typeof buildGroup>[] = [];
   const views: { group: Group; view: Copies }[] = [];
   /** Each blueprint's instances by rule and variant, kept for the life of the world. */
   const kept = new Map<string, { group: Group; view: Copies }>();
@@ -146,7 +143,17 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
   /** Each placement's blueprint and its copy among that blueprint's instances. */
   let copies: readonly { readonly key: string; readonly copy: number }[] = [];
   return {
-    farPresets,
+    build(plants) {
+      if (built.length > 0) throw new Error("The understory builds a world's blueprints once, when it opens.");
+      built = GROUPS.map((g) => buildGroup(g, plants[g.id]));
+    },
+    farBuilds: () =>
+      built.flatMap(({ blueprints, plant, far }) =>
+        blueprints.flatMap((blueprint, i) => {
+          const f = far[i];
+          return f === undefined ? [] : [{ blueprint, plant: () => plant(i), far: f }];
+        }),
+      ),
     place(given) {
       placed = given;
       clearings.update(
@@ -167,7 +174,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
         plants.forEach((_, variant) => {
           const spots = placed
             .filter((p) => p.rule === group.id && p.variant === variant)
-            .map((p) => ({ x: p.x, y: p.y, z: p.z, yaw: p.yaw, scale: p.scale, hue: ((((p.x * 12.9898 + p.z * 78.233) % 1) + 1) % 1) * 0.04 - 0.02, ...(p.vitality === undefined ? {} : { vitality: p.vitality }) }));
+            .map((p) => ({ x: p.x, y: p.y, z: p.z, yaw: p.yaw, scale: p.scale, hue: ((((p.x * 12.9898 + p.z * 78.233) % 1) + 1) % 1) * 0.04 - 0.02, ...(p.vitality === undefined ? {} : { vitality: p.vitality }), ...(p.slope === undefined ? {} : { slope: p.slope }) }));
           const key = `${group.id}/${variant}`;
           const had = kept.get(key);
           if (had !== undefined) {

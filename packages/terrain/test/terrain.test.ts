@@ -29,6 +29,7 @@ import {
   levelPad,
   siteToWorld,
   groundedBase,
+  groundSlope,
   heightAt,
   landHalf,
   landformsOf,
@@ -501,7 +502,7 @@ describe("terrain", { timeout: 20_000 }, () => {
     expect(offs[Math.floor(offs.length * 0.99)]).toBeLessThan(0.1);
   });
 
-  it("grounds plants: every point of a trunk's bottom ring is at or under the ground", () => {
+  it("grounds plants: every point of a trunk's bottom ring, leaned on its ground's slope, is at or under the ground", () => {
     const floraLib = new Library(FLORA_PRIMITIVES);
     // Every tree's and every bush's frame, each with every crown, but a bramble's: its canes bow back to the soil
     // metres from its root, so it meets the ground across its whole spread, never on a trunk.
@@ -529,13 +530,16 @@ describe("terrain", { timeout: 20_000 }, () => {
         const radius = Math.max(...ring.map((v) => Math.hypot(v[0], v[2])));
         const y = groundedBase(t.lattice, s.x, s.z, radius);
         const turn = i * 1.7;
+        // The copy takes the ground's slope: its base follows the ground while its trunk stays upright.
+        const [gx, gz] = groundSlope(t.lattice, s.x, s.z);
         for (const [vx, vy, vz] of ring) {
           // Three's Y rotation: x' = x cos + z sin, z' = -x sin + z cos.
-          const x = s.x + vx * Math.cos(turn) + vz * Math.sin(turn);
-          const z = s.z - vx * Math.sin(turn) + vz * Math.cos(turn);
-          const g = heightAt(t.lattice, x, z);
-          expect(y + vy, "no gap under the trunk").toBeLessThanOrEqual(g);
-          expect(g - (y + vy), "not sunk deep").toBeLessThan(0.8);
+          const dx = vx * Math.cos(turn) + vz * Math.sin(turn);
+          const dz = -vx * Math.sin(turn) + vz * Math.cos(turn);
+          const g = heightAt(t.lattice, s.x + dx, s.z + dz);
+          const at = y + vy + gx * dx + gz * dz;
+          expect(at, "no gap under the trunk").toBeLessThanOrEqual(g);
+          expect(g - at, "not sunk deep").toBeLessThan(0.8);
         }
       });
     });

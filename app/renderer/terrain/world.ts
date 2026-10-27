@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { type AtmosphereSpec, type Blueprint, type BuildingPlan, type GroundSpec, Library, type Palette, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, ROCK_PRIMITIVES, WILDFLOWER_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
 import { biome, landmark as landmarkKind, world as worldKind } from "@gaia/kinds";
-import { CLEAR_AIR, FLORA_PRESETS, type Realized, type RegionLook, type SkyLook, airFromHeight, gustAt, mergeParts, mixAir, murkyAir, realizeRegion, realizeSky, regionAir, spinAt, throughAir } from "@gaia/realize";
+import { CLEAR_AIR, type Realized, type RegionLook, type SkyLook, airFromHeight, gustAt, mergeParts, mixAir, murkyAir, realizeRegion, realizeSky, regionAir, spinAt, throughAir } from "@gaia/realize";
 import {
   type FarCards,
   LANTERN,
@@ -46,7 +46,7 @@ import { type Water, createWater } from "./water.ts";
 import { type WildGrowth, createWildGrowth, wildBushBuilds } from "./wilds.ts";
 import { type Crown, type Drifts, createDrifts } from "./drifts.ts";
 import { type Understory, createUnderstory, understoryBuilds } from "./understory.ts";
-import { type BuildAsk, made, makeAhead } from "./made.ts";
+import { type BuildAsk, made, makeAhead, plantAsk } from "./made.ts";
 import { createClearings } from "./clearings.ts";
 import { type WayPiece, type Ways, createWays, crossingVitality, setTrailEnds } from "./trails.ts";
 import { reportStage } from "../telemetry.ts";
@@ -55,14 +55,14 @@ import { withStart } from "../start/start.ts";
 import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
 import { type CodeWorld, vitalityOf, withLines, withVitality } from "@gaia/world";
-import { type OpenedWorld, codeWorld, onHeal } from "./code-world.ts";
+import { type OpenedWorld, type PlantGroup, codeWorld, onHeal } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, type Settlement, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
 import { type Signs, createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
 import { type PageLand, createPageLand } from "./land.ts";
 import { type Standing, createStanding } from "./standing.ts";
-import { type Stand, type StandRequest, type StandingLandmark, landmarkBase, landmarkFeet, ownerVitality, understoryVitality } from "./stand.ts";
+import { AS_THING, type Stand, type StandRequest, type StandingLandmark, landmarkBase, landmarkFeet, ownerVitality, understoryVitality } from "./stand.ts";
 import { declineAround, groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import type { Drawn, Pass } from "./measure.ts";
 import { type Copies, type FarForms, type FarOf, type PassSize, TURN, createCopies, createFarForms } from "./woods.ts";
@@ -131,6 +131,8 @@ export interface Subject {
   readonly represented: Represented;
   /** Its form in the world, such as "a watermill". */
   readonly standsAs: string;
+  /** For a tree, a bush, a stone or flowers: its build, named for its parts (`composedName`), which other things may share. */
+  readonly built?: string;
   /** Where it stands, and where a person stops to read its sign; a tree's spot depends on where they come from. */
   readonly x: number;
   readonly z: number;
@@ -151,6 +153,8 @@ export interface Tree {
   readonly variant: number;
   readonly scale: number;
   readonly yaw: number;
+  /** The ground's slope under it, which its copy takes. */
+  readonly slope: readonly [number, number];
   /** What it stands for, by index into the world's symbols: a definition, a file or an entity. */
   readonly symbol: number;
   readonly represented: Represented;
@@ -469,8 +473,9 @@ export interface WorldInside {
   readonly signs: Signs;
   readonly understory: Understory;
   readonly wildGrowth: WildGrowth;
-  /** Each tree build, its instances and its far form, by its index among the builds. */
+  /** Each tree build, its blueprint, its instances and its far form, by its index among the builds. */
   readonly variants: readonly TreeVariant[];
+  readonly treeBlueprints: readonly Blueprint[];
   readonly groves: ReadonlyMap<number, Copies>;
   readonly treeFar: readonly FarOf[];
   /** The trees' far forms, and the bushes', which bake once the wait has lifted and are ready when `bushesBaked` settles. */
@@ -579,16 +584,12 @@ const LIFT_FRAMES = 4;
 const FAR_BAKE = { views: 24, ms: 6, walkingMs: 2 } as const;
 /** The air seen through from above (the `overview` hook): clear, and thinning with the world's size so the whole of it stays legible. */
 const overviewAir = (size: number): AtmosphereSpec => ({ ...CLEAR_AIR, density: 0.0008 * Math.min(1, 320 / size) });
+/** The least reach a stone, a bush or flowers keeps from the rest, meters, however small its build at the ground. */
+const UNDERSTORY_LEAST = 0.3;
 /** How far round the eye failing ground murks the air, meters: the band regions' airs blend over, so murk gathers as gradually as a region's air. */
 const MURK_REACH = TERRAIN.blend;
-/** Seeded builds per flora preset: a tree copies one of its form's. */
-export const TREE_BUILDS = 3;
-/** Each flora preset's seeded builds, preset by preset, as the woods copy them. */
-const TREE_ASKS: readonly BuildAsk[] = FLORA_PRESETS.flatMap((preset, p) =>
-  Array.from({ length: TREE_BUILDS }, (_, k): BuildAsk => ({ kind: "flora", blueprint: preset.blueprint, seed: seedOf(`terrain-lab/tree-${p}-${k}`), facts: { scale: 1, age: 120 } })),
-);
-/** Every build the world makes as it opens, whatever codebase it shows: what the page makes ahead (made.ts). */
-export const openingBuilds = (): BuildAsk[] => [...TREE_ASKS, ...understoryBuilds(), ...wildBushBuilds()];
+/** Every build the page makes before any codebase's world opens, whatever it shows: the wild's bushes (made.ts). */
+export const openingBuilds = (): BuildAsk[] => wildBushBuilds();
 
 export function createWorld(root: HTMLElement): World {
   root.innerHTML = TEMPLATE;
@@ -922,17 +923,19 @@ export function createWorld(root: HTMLElement): World {
 
   // ---------- plants ----------
 
-  // Trees are copies of a few seeded builds of each preset, drawn as
-  // instances: hundreds of trees cost a few draw calls per build.
+  // Trees are copies of one build of each distinct tree blueprint the world's
+  // things take (`OpenedWorld.plants`), drawn as instances: hundreds of trees
+  // cost a few draw calls per build. None stands until a world opens.
+  /** Each tree build's ask, by its variant: one per distinct blueprint. */
+  let treeAsks: readonly BuildAsk[] = [];
   /**
    * Each tree build, held only until its instances are made and its far form
-   * is baked; asked for after that (the swap test, a build no world has
-   * planted yet), it is realized again, the same build.
+   * is baked; asked for after that (the swap test), it is realized again, the
+   * same build.
    */
-  const treeBuilds: (Realized | null)[] = TREE_ASKS.map((ask) => made(ask, floraLib));
-  const treeBuild = (k: number): Realized => treeBuilds[k] ?? made(TREE_ASKS[k] as BuildAsk, floraLib);
-  const variants: TreeVariant[] = treeBuilds.map((built) => {
-    const plant = built as Realized;
+  let treeBuilds: (Realized | null)[] = [];
+  const treeBuild = (k: number): Realized => treeBuilds[k] ?? made(treeAsks[k] as BuildAsk, floraLib);
+  const variantOf = (plant: Realized): TreeVariant => {
     const bark = plant.parts.find((part) => part.swatch === "bark");
     // The trunk's base is every bark vertex at the ground, however many sides or lobes the trunk has.
     let trunk = 0;
@@ -951,7 +954,8 @@ export function createWorld(root: HTMLElement): World {
       }
     }
     return { base, trunk, height, radius };
-  });
+  };
+  let variants: TreeVariant[] = [];
   /** How many times each tree that stands for code stands, for measuring at scale (`forest`): once in a world a person walks. */
   let forestCopies = 1;
   let trees: readonly Tree[] = [];
@@ -974,7 +978,7 @@ export function createWorld(root: HTMLElement): World {
   // index among the variants, and the understory's and the wild's bushes.
   const treeForms = createFarForms();
   const bushForms = createFarForms();
-  const treeFar: readonly FarOf[] = variants.map((_, k) => treeForms.add(treeBuild(k)));
+  let treeFar: readonly FarOf[] = [];
 
   // Rocks, bushes and wildflowers, scattered around the trees.
   const understory = createUnderstory(scene, light, new Library([...FLORA_PRIMITIVES, ...ROCK_PRIMITIVES, ...WILDFLOWER_PRIMITIVES]), clearings, bushForms);
@@ -1031,25 +1035,37 @@ export function createWorld(root: HTMLElement): World {
     set.forms.cards = createFarCards(forms, light, turns, TURN);
     set.ms = performance.now() - t0;
   }
-  const farBaked = bakeFar(treeSet, FAR_BAKE.ms).then(() => {
-    reportStage("tree cards", { ms: Math.round(treeSet.ms) });
-    warmSoon();
-  });
+  /** Settles once the world's tree builds' far forms are baked: the wait lifts only then, so no frame shows a far tree before its card. */
+  let farBaked: Promise<void> = Promise.resolve();
   const farCardSets = (): FarCards[] => farSets.flatMap((set) => (set.forms.cards === null ? [] : [set.forms.cards]));
-  // Each tree build's instances are made a build a frame while the wait holds,
-  // so a world's planting only moves copies.
-  void (async (): Promise<void> => {
-    for (const k of variants.keys()) {
-      if (!groves.has(k)) {
-        const view = createCopies(treeBuild(k), light, [], treeFar[k]);
-        scene.add(view.object);
-        groves.set(k, view);
+  /**
+   * Makes one build of each distinct tree blueprint of the world, its far form and its instances, once, as the world
+   * opens: each build's instances are made a build a frame while the wait holds, so a world's planting only moves
+   * copies, while the far forms bake.
+   */
+  function buildTrees(blueprints: readonly Blueprint[]): void {
+    if (treeAsks.length > 0) throw new Error("The woods build a world's trees once, when it opens.");
+    treeAsks = blueprints.map(plantAsk);
+    treeBuilds = treeAsks.map((ask) => made(ask, floraLib));
+    variants = treeBuilds.map((built) => variantOf(built as Realized));
+    treeFar = variants.map((_, k) => treeForms.add(treeBuild(k)));
+    farBaked = bakeFar(treeSet, FAR_BAKE.ms).then(() => {
+      reportStage("tree cards", { ms: Math.round(treeSet.ms), builds: variants.length });
+      warmSoon();
+    });
+    void (async (): Promise<void> => {
+      for (const k of variants.keys()) {
+        if (!groves.has(k)) {
+          const view = createCopies(treeBuild(k), light, [], treeFar[k]);
+          scene.add(view.object);
+          groves.set(k, view);
+        }
+        // Its instances made, the build is the far form's alone until that bakes (`bakeFar`).
+        treeBuilds[k] = null;
+        await new Promise((r) => requestAnimationFrame(r));
       }
-      // Its instances made, the build is the far form's alone until that bakes (`bakeFar`).
-      treeBuilds[k] = null;
-      await new Promise((r) => requestAnimationFrame(r));
-    }
-  })();
+    })();
+  }
   let warming = false;
   const viewSize = new THREE.Vector2();
   const bufferSize = new THREE.Vector2();
@@ -1135,14 +1151,18 @@ export function createWorld(root: HTMLElement): World {
   /** What the bake thread stands on the codebase's world: plain data from its buildings, landmarks, trails and what stands for code. */
   const standRequest = (): StandRequest => {
     if (code === null) throw new Error("No world to stand: a codebase's world opens first.");
-    const symbols = code.stand.symbols;
+    // A stone, a bush or flowers keeps its build's own reach at the ground from the rest, as wide as a fallen log is long.
+    const symbols = code.stand.symbols.map((s) => {
+      const outline = s.rule === "trees" || s.rule === AS_THING ? undefined : understory.footprint(s.rule, s.variant)?.outline;
+      return outline === undefined ? s : { ...s, radius: Math.max(UNDERSTORY_LEAST, ...outline) };
+    });
     const copied = symbols.flatMap((s, i) => (s.rule === "trees" ? [i] : []));
     forestOf = Array.from({ length: forestCopies - 1 }, () => copied).flat();
     return {
       buildings: settlement.requests(),
       landmarks: landmarks.map((lm) => ({ base: lm.base, tree: lm.blueprint.slots.form?.use === "great-tree@1" })),
-      trees: { builds: TREE_BUILDS, bases: variants.map((v) => v.base), crowns: variants.map((v) => v.radius) },
-      code: forestOf.length === 0 ? code.stand : { ...code.stand, symbols: [...symbols, ...forestOf.map((i) => symbols[i] as (typeof symbols)[number])] },
+      trees: { bases: variants.map((v) => v.base), crowns: variants.map((v) => v.radius) },
+      code: { ...code.stand, symbols: [...symbols, ...forestOf.map((i) => symbols[i] as (typeof symbols)[number])] },
     };
   };
   /** Each tile's trees, by "ti,tj": what the trees' stander stands. */
@@ -1160,7 +1180,7 @@ export function createWorld(root: HTMLElement): World {
     treeViews = variants.flatMap((_, k) => {
       const mine = held.filter((t) => t.variant === k);
       mine.forEach((t, c) => copyOf.set(t, c));
-      const spots = mine.map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, vitality: treeVitality(t) }));
+      const spots = mine.map((t) => ({ x: t.x, y: t.y, z: t.z, yaw: t.yaw, scale: t.scale, slope: t.slope, vitality: treeVitality(t) }));
       const had = groves.get(k);
       if (had !== undefined) {
         had.respot(spots);
@@ -1360,6 +1380,7 @@ export function createWorld(root: HTMLElement): World {
       return {
         represented: tree.represented,
         standsAs: sym === undefined ? "A tree" : withArticle(sym.form),
+        built: composedName(treeAsks[tree.variant]?.blueprint as Blueprint),
         x,
         z,
         height: (variants[tree.variant] as TreeVariant).height * tree.scale,
@@ -1385,6 +1406,7 @@ export function createWorld(root: HTMLElement): World {
           return [[at, {
             represented: sym.represented,
             standsAs: withArticle(sym.form),
+            ...(code?.plants[p.rule as PlantGroup]?.[p.variant] === undefined ? {} : { built: composedName(code.plants[p.rule as PlantGroup][p.variant] as Blueprint) }),
             x,
             z,
             height: (understory.footprint(p.rule, p.variant)?.top ?? 0.8) * p.scale,
@@ -2189,9 +2211,12 @@ export function createWorld(root: HTMLElement): World {
     const opened = await codeWorld(veil);
     code = opened;
     reportStage("laid out", { things: opened.world.things.length, symbols: opened.world.symbols.length });
-    // The buildings and landmarks are made on other threads while the wait draws the land.
+    // The buildings, landmarks and one build of each distinct tree, stone, bush and flowers are made on other threads
+    // while the wait draws the land.
     const composedLandmarks = landmarkAsks(opened);
-    await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks]);
+    await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks, ...opened.plants.trees.map(plantAsk), ...understoryBuilds(opened.plants)]);
+    buildTrees(opened.plants.trees);
+    understory.build(opened.plants);
     landmarks = composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, opened.buildings);
@@ -2245,7 +2270,8 @@ export function createWorld(root: HTMLElement): World {
 
   showAerial(false);
   // The first world bakes behind a quiet veil, which lifts once it stands.
-  const ready = Promise.all([openCodebase(), farBaked]).then(async () => {
+  const ready = openCodebase().then(async () => {
+    await farBaked;
     await warmed;
     // The world's first frames draw under the paper, so the world shows only once it moves smoothly.
     for (let k = 0; k < LIFT_FRAMES; k++) await new Promise((r) => requestAnimationFrame(r));
@@ -2730,9 +2756,10 @@ export function createWorld(root: HTMLElement): World {
       signs,
       understory,
       wildGrowth,
-      variants,
+      get variants() { return variants; },
+      get treeBlueprints() { return treeAsks.map((ask) => ask.blueprint); },
       groves,
-      treeFar,
+      get treeFar() { return treeFar; },
       treeSet,
       bushSet,
       bushesBaked,

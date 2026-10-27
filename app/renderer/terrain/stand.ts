@@ -7,9 +7,9 @@
 // No Three.js and no DOM: the bake worker runs it, and the same terrain and
 // request give the same stand on any thread.
 
-import { type Blueprint, type BuildingPlan, type Built, type Library, type RouteSpec, rand, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type Built, type Library, type RouteSpec, seedOf } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, waterDepthAt } from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, groundSlope, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, waterDepthAt } from "@gaia/terrain";
 
 /** A building to site: its plan, what stands beside it, the name its trails go by, and whether it stands on a stream's bank. */
 export interface StandBuilding {
@@ -87,8 +87,8 @@ export interface StandRequest {
   readonly buildings: readonly StandBuilding[];
   /** Each landmark Jev composed, in the order `StandCode.landmarks` names them. */
   readonly landmarks: readonly StandLandmark[];
-  /** How many builds each tree form has, and each build's trunk and crown radius: a tree copies one of its form's builds. */
-  readonly trees: { readonly builds: number; readonly bases: readonly number[]; readonly crowns: readonly number[] };
+  /** Each tree build's trunk and crown radius, by the variant a tree's symbol names: a tree copies its blueprint's one build. */
+  readonly trees: { readonly bases: readonly number[]; readonly crowns: readonly number[] };
   readonly code: StandCode;
 }
 
@@ -101,6 +101,8 @@ export interface StandTree {
   readonly variant: number;
   readonly scale: number;
   readonly yaw: number;
+  /** The ground's slope under it, dy/dx and dy/dz, which its copy takes (`Placement.slope`). */
+  readonly slope: readonly [number, number];
   /** What it stands for, by index into `StandCode.symbols`. */
   readonly symbol: number;
 }
@@ -419,7 +421,7 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   // Trees keep off the trails and their cairns, out of the buildings and out from under a landmark.
   const clear: Occupied[] = [...trailDiscs(network, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as StandLandmark) }))];
   const blocked = (x: number, z: number): boolean => req.buildings.some((b, k) => blockedBy(b, sites[k] as BuildingSite, x, z, 6)) || clear.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius);
-  const { builds, bases, crowns } = req.trees;
+  const { bases, crowns } = req.trees;
   // Every tree is a definition, a file or an entity, stood with the rest of them below.
   const trees: StandTree[] = [];
   // No stone, bush or flowers stands in a building, on its walk, on a trail or under a landmark.
@@ -445,8 +447,7 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const standing: Placement[] = [];
   /** The crowns of the trees stood so far, which nothing else that stands for code stands under. */
   const crowned: Occupied[] = [];
-  const treeBuild = (sym: StandSymbol): number => sym.variant * builds + Math.floor(rand(seedOf(`tree:${sym.x.toFixed(2)},${sym.z.toFixed(2)}`)).next() * builds);
-  const crownOf = (sym: StandSymbol): number => Math.max(TRUNK_GAP / 2, (crowns[treeBuild(sym)] ?? 4) * 0.55);
+  const crownOf = (sym: StandSymbol): number => Math.max(TRUNK_GAP / 2, (crowns[sym.variant] ?? 4) * 0.55);
   const footprint = (sym: StandSymbol): number => (sym.rule === "trees" ? crownOf(sym) : sym.radius) * sym.scale;
   const syms = code.symbols;
   const cells = code.cells;
@@ -486,16 +487,17 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     const [x, z, shrink] = at ?? [sym.x, sym.z, SHRINKS[SHRINKS.length - 1] as number];
     const scale = sym.scale * shrink;
     const reach = footprint(sym) * shrink;
+    const slope = groundSlope(t.lattice, x, z);
     if (tree) {
       // Nothing else that stands for code stands under a tree's crown.
-      const variant = treeBuild(sym);
-      trees.push({ index: trees.length, x, y: groundedBase(t.lattice, x, z, (bases[variant] ?? 0.5) * scale), z, variant, scale, yaw: (i * 2.399) % (Math.PI * 2), symbol: i });
+      const variant = sym.variant;
+      trees.push({ index: trees.length, x, y: groundedBase(t.lattice, x, z, (bases[variant] ?? 0.5) * scale), z, variant, scale, yaw: (i * 2.399) % (Math.PI * 2), slope, symbol: i });
       occupied.push({ x, z, radius: 1.6 });
       crowned.push({ x, z, radius: reach });
       continue;
     }
     occupied.push({ x, z, radius: reach + 0.4 });
-    standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: (i * 2.399) % (Math.PI * 2), scale, radius: reach, vitality: sym.vitality });
+    standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: (i * 2.399) % (Math.PI * 2), scale, radius: reach, vitality: sym.vitality, slope });
     symbols[i] = standing.length - 1;
   }
   mark("symbols");

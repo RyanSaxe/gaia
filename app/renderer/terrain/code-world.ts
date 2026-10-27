@@ -7,7 +7,7 @@ import { type Blueprint, type CodeFacts, type EntityFacts, type FileFacts, type 
 import { link } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type Judgments, layoutWorld } from "@gaia/world";
+import { type CodeWorld, type Judgments, type StandsAs, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, Heal, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import GAIA_PAINTING from "../start/gaia-painting.webp";
@@ -23,7 +23,7 @@ import type { LayoutReply, LayoutRequest } from "./layout-worker.ts";
 import LayoutWorker from "./layout-worker.ts?worker";
 import proving from "./fixtures/proving.json";
 import provingJudged from "./fixtures/proving-judged.json";
-import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "./looks.ts";
+import { COMPOSED_FORMS, COMPOSING, WATERS } from "./looks.ts";
 import { type BuildingOf, type Represented, representEntity, representFile } from "./represent.ts";
 import { composedName } from "./settlement.ts";
 import { AS_THING, type StandCode, type StandLot } from "./stand.ts";
@@ -58,6 +58,8 @@ export interface OpenedWorld {
   readonly standing: (i: number) => StandingOf | undefined;
   /** The light, sky and wind Jev composed for the world. */
   readonly sky: Blueprint;
+  /** Every distinct blueprint the world's trees, stones, bushes and flowers take, by the group that draws them: each stands one build, copied. */
+  readonly plants: PlantBuilds;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
   readonly stand: StandCode;
   /** What the understanding pass judged about a folder, a file or a definition, by its path or path#name. */
@@ -97,8 +99,21 @@ export function representSymbol(s: CodeWorld["symbols"][number], file: FileFacts
   };
 }
 
+/** The groups that draw the small things: trees with the woods, the rest in the understory, mushrooms apart for their turf. */
+export type PlantGroup = "trees" | "rocks" | "shrubs" | "flowers" | "mushrooms";
+export const PLANT_GROUPS: readonly PlantGroup[] = ["trees", "rocks", "shrubs", "flowers", "mushrooms"];
+
+/** Every distinct blueprint of a group, in the order the world first meets each: a copy's variant indexes them. */
+export type PlantBuilds = Readonly<Record<PlantGroup, readonly Blueprint[]>>;
+
+/** The group a small thing is drawn with: by what it stands as, and a drift of mushrooms apart from other flowers. */
+export function plantGroup(as: Exclude<StandsAs, "building" | "landmark">, blueprint: Blueprint): PlantGroup {
+  if (as === "flowers") return blueprint.slots.drift?.use === "mushrooms@1" ? "mushrooms" : "flowers";
+  return as === "tree" ? "trees" : as === "bush" ? "shrubs" : "rocks";
+}
+
 /** The sizes each kind of standing thing looks right between, by how much it matters: a stone can grow to a landmark, a flower barely grows. */
-const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { trees: [0.55, 1.35], rocks: [0.4, 2.2], shrubs: [0.5, 1.6], flowers: [0.7, 1.3] };
+const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = { trees: [0.55, 1.35], rocks: [0.4, 2.2], shrubs: [0.5, 1.6], flowers: [0.7, 1.3], mushrooms: [0.7, 1.3] };
 
 /**
  * How large a definition stands, within what its blueprint looks right at:
@@ -325,9 +340,29 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     if (own === undefined) return undefined;
     return { represented: representStanding(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form };
   };
+  // Every distinct blueprint of each group, in the order the stand's symbols first meet it; two things answered alike share one.
+  const plants: Record<PlantGroup, Blueprint[]> = { trees: [], rocks: [], shrubs: [], flowers: [], mushrooms: [] };
+  const variantOf = (group: PlantGroup, blueprint: Blueprint): number => {
+    const builds = plants[group];
+    const k = builds.findIndex((b) => b.id === blueprint.id);
+    return k >= 0 ? k : builds.push(blueprint) - 1;
+  };
+  const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
+  type Small = { readonly x: number; readonly z: number; readonly form: string; readonly as?: StandsAs; readonly blueprint?: Blueprint; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string };
+  const symbol = (s: Small, who: string): StandCode["symbols"][number] => {
+    // A definition standing as a building or a landmark is one of the world's things, stood with them.
+    if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };
+    // Every thing stands as the blueprint Jev composed for it; one with none is a fault, never a default form.
+    if (s.as === undefined || s.blueprint === undefined || s.as === "building" || s.as === "landmark") throw new Error(`${who} stands as "${s.form}" with no blueprint of a tree, a bush, a stone or flowers.`);
+    const group = plantGroup(s.as, s.blueprint);
+    const patch = s.file === undefined ? undefined : patchOf.get(s.file);
+    return { x: s.x, z: s.z, rule: group, variant: variantOf(group, s.blueprint), radius: group === "flowers" || group === "mushrooms" ? 0.8 : 1, scale: symbolScale(s.lines, group, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
+  };
+  const symbols = [...world.symbols.map((s) => symbol(s, s.id)), ...world.standing.map((s) => symbol(s, s.path || "The repository's root"))];
   return {
     world,
     spec,
+    plants,
     thing: (of) => judged[of],
     files,
     buildings: houses.map((t) => ({ ...thingOf(t, world, files, entities), blueprint: t.blueprint, kindName: composedName(t.blueprint), vitality: t.vitality })),
@@ -345,19 +380,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
         const areaOf = new Map(world.areas.map((a, i) => [a.path, i]));
         return world.cells.map((c) => ({ x: c.x, z: c.z, patch: c.file === null || c.file === undefined ? -1 : (patchOf.get(c.file) ?? -1), area: areaOf.get(c.area) ?? 0 }));
       })(),
-      symbols: (() => {
-        const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
-        const symbol = (s: { readonly x: number; readonly z: number; readonly form: string; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string }, who: string): StandCode["symbols"][number] => {
-          // A definition standing as a building or a landmark is one of the world's things, stood with them.
-          if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };
-          const form = FORMS[s.form];
-          // Every thing stands as the form Jev chose for it; one with none is a fault, never a default form.
-          if (form === undefined) throw new Error(`${who} stands as "${s.form}", which is no form Jev was offered.`);
-          const patch = s.file === undefined ? undefined : patchOf.get(s.file);
-          return { x: s.x, z: s.z, rule: form.rule, variant: form.preset, radius: form.rule === "flowers" ? 0.8 : 1, scale: symbolScale(s.lines, form.rule, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
-        };
-        return [...world.symbols.map((s) => symbol(s, s.id)), ...world.standing.map((s) => symbol(s, s.path || "The repository's root"))];
-      })(),
+      symbols,
       // Trails joining parts of the code no other trail joins route first, then the most wanted.
       // Each trail keeps the width, wear, edging, winding and crossing Jev composed for it.
       trails: world.trails.map((t) => ({ from: t.from, to: t.to, want: (t.spans === true ? 1 : 0) + t.want, style: routeOf(t) })),

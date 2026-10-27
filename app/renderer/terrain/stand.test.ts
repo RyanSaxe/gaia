@@ -39,7 +39,7 @@ const request: StandRequest = {
     beside: null,
   })),
   landmarks: [{ base: 3, tree: false }],
-  trees: { builds: 2, bases: [0.5, 0.6, 0.7, 0.8], crowns: [3, 3, 4, 4] },
+  trees: { bases: [0.5, 0.6], crowns: [3, 4] },
   code,
 };
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
@@ -94,7 +94,7 @@ describe("standing a world's things on a bake", () => {
     for (const tree of stood.trees) {
       const sym = code.symbols[tree.symbol!]!;
       expect(Math.hypot(tree.x - sym.x, tree.z - sym.z)).toBeLessThan(8);
-      expect(Math.floor(tree.variant / request.trees.builds)).toBe(sym.variant);
+      expect(tree.variant).toBe(sym.variant);
     }
     expect(stood.symbols.slice(1)).toEqual([-1, -1]);
     // A file's function stands near where the layout put it, as the blueprint it was given, with its own vitality.

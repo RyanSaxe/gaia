@@ -33,8 +33,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
-import type { AnyKind, Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, SymbolFact } from "@gaia/schema";
-import { type Judgments, type Look, type SweepPlace, layoutWorld, sweep } from "@gaia/world";
+import type { AnyKind, Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, Library, SymbolFact } from "@gaia/schema";
+import { type Judgments, type Look, type StandsAs, type SweepPlace, layoutWorld, raisedAs, sweep } from "@gaia/world";
 import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "../app/renderer/terrain/looks.ts";
 import { provingCode } from "./proving-code.ts";
 
@@ -417,13 +417,15 @@ const facts: CodeFacts = {
 // Every other definition of a source file stands as a tree, so each file grows trees at its health, and the rest go
 // round the stones, bushes and flowers.
 const stands: Record<string, string> = {};
-const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.rule === "trees");
-const others = Object.keys(FORMS).filter((k) => FORMS[k]?.rule !== "trees");
+const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.composes === "tree");
+const others = Object.keys(FORMS).filter((k) => FORMS[k]?.composes !== "tree");
 let tree = 0;
 let other = 0;
 for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
   if (f.kind === "source") f.symbols.forEach((s, k) => (stands[`${f.path}#${s.name}`] = k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)));
 }
+/** What a tree, a bush, a stone or flowers is: whatever stands that is not a building or a landmark. */
+type SmallAs = Exclude<StandsAs, "building" | "landmark">;
 /** What the definitions stand as. */
 const definitionForms = (): string[] => Object.entries(stands).flatMap(([id, form]) => (id.includes("#") ? [form] : []));
 // Every file stands as one thing too, at its patch's heart, round every form; and a few files and definitions stand as
@@ -466,8 +468,8 @@ const bandOf = (v: number): { label?: string } => (v >= 0.85 ? { label: "thrivin
 // What Jev would compose from: the sweep of every part, standing each where its place lets it and at every health.
 const { lib } = COMPOSING;
 const gaps: string[] = [];
-const swept = (what: string, k: AnyKind, places?: readonly SweepPlace[]): readonly Blueprint[] => {
-  const { blueprints, missing } = sweep(k, lib, places === undefined ? {} : { places });
+const swept = (what: string, k: AnyKind, places?: readonly SweepPlace[], parts: Library = lib, pairs?: readonly (readonly [string, string])[]): readonly Blueprint[] => {
+  const { blueprints, missing } = sweep(k, parts, { ...(places === undefined ? {} : { places }), ...(pairs === undefined ? {} : { pairs }) });
   gaps.push(...missing.map((m) => `${what} ${m}`));
   return blueprints;
 };
@@ -525,7 +527,25 @@ const composed = (as: "building" | "landmark", k: AnyKind): [string, { as: "buil
   const blueprints = swept(`a ${as}'s`, k, ids.map(placeOf));
   return ids.map((id, i) => [id, { as, blueprint: blueprints[i] as Blueprint }]);
 };
-const things = Object.fromEntries([...composed("building", COMPOSING.building), ...composed("landmark", COMPOSING.landmark)]);
+// Every tree, bush, stone and drift of flowers takes a blueprint of its size's sweep, every frame with every crown,
+// each health's things going round the whole sweep, so every row stands thriving, tired and in ruin.
+const smallSweeps: Readonly<Record<SmallAs, readonly Blueprint[]>> = {
+  tree: swept("a tree's", COMPOSING.tree, undefined, COMPOSING.offered?.tree, [["form", "crown"]]),
+  bush: swept("a bush's", COMPOSING.bush, undefined, COMPOSING.offered?.bush, [["form", "crown"]]),
+  stone: swept("a stone's", COMPOSING.stone),
+  flowers: swept("a drift's", COMPOSING.flowers),
+};
+const turns = new Map<string, number>();
+const smallThings = Object.entries(stands).flatMap(([id, form]): [string, { as: SmallAs; blueprint: Blueprint }][] => {
+  const as = FORMS[form]?.composes;
+  if (as === undefined || raisedAs(as)) return [];
+  const rows = smallSweeps[as];
+  const turn = `${as} ${bandOf(quality[id.split("#")[0] as string] ?? 1).label ?? ""}`;
+  const k = turns.get(turn) ?? 0;
+  turns.set(turn, k + 1);
+  return [[id, { as, blueprint: rows[k % rows.length] as Blueprint }]];
+});
+const things = Object.fromEntries([...composed("building", COMPOSING.building), ...composed("landmark", COMPOSING.landmark), ...smallThings]);
 const routes = swept("a trail's", COMPOSING.link, TRAIL_PLAN.map(([from, to]) => bandOf(((quality[from] ?? 1) + (quality[to] ?? 1)) / 2)));
 // The sky stands the first of the sweep's skies; `__lab.terrain.sky(k)` shows the others.
 const skies = swept("the sky's", COMPOSING.world);

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, structure } from "@gaia/kinds";
-import { FLORA_PRESETS, realize } from "@gaia/realize";
+import { realize } from "@gaia/realize";
 import { type BuildingSite, type Terrain, bakeTerrain, extentOf, findBankSite, pastTheEdge, regionAt, siteToWorld, turningExtent, waterDepthAt, yardsMeet } from "@gaia/terrain";
 import { sweep } from "@gaia/world";
 import { type OpenedWorld, openedWorld, provingWorld } from "./code-world.ts";
@@ -35,7 +35,7 @@ function standAsThePage(t: Terrain, code: OpenedWorld, buildings: StandBuilding[
   const stood = standWorld(land, {
     buildings,
     landmarks,
-    trees: { builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
+    trees: { bases: code.plants.trees.map(() => 0.5), crowns: code.plants.trees.map(() => 4) },
     code: code.stand,
   });
   return { land, stood, landmarks };

@@ -21,4 +21,6 @@ export interface Placement {
   readonly radius: number;
   /** The vitality the copy shows: that of what it stands for. Absent, full health. */
   readonly vitality?: number;
+  /** The ground's slope under it, dy/dx and dy/dz, which its copy takes: its base follows the ground, its stems stay upright. */
+  readonly slope?: readonly [number, number];
 }

@@ -67,7 +67,7 @@ machine's speakers.
 ## Visual verification
 
 Use the [proving ground](proving-ground.md) to inspect every affected form at
-vitality 1, 0.5 and 0.1, by day and at night. Also inspect Gaia's own world to
+vitality 1, 0.65 and 0.3, by day and at night. Also inspect Gaia's own world to
 catch changes that only appear in a large composition.
 
 | Command | Result |

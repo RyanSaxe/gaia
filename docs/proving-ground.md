@@ -30,7 +30,7 @@ cairns, groves, large and tiny areas, deep nesting, and each building and
 landmark at multiple healths. Use the returned stops rather than fixed
 coordinates, which can change with layout.
 
-`pnpm shots` captures the stops and component forms at vitality 1, 0.5 and 0.1
+`pnpm shots` captures the stops and component forms at vitality 1, 0.65 and 0.3
 by day, plus healthy forms at night, and the first stop under each of the
 sweep's skies. Supply words such as `pnpm shots willow` or `pnpm shots sky` to
 limit the captures. See [visual verification](development.md#visual-verification)

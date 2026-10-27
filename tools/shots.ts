@@ -3,7 +3,7 @@
 // in. The proving ground holds every feature a world can show
 // (`docs/proving-ground.md`). Each stop of its tour, one stop for each kind of
 // building and landmark, and one thing standing as each tree, bush, stone and
-// flower form are seen at vitality 1, 0.5 and 0.1 at 15:30, and at 1 at 22:00.
+// flower build are seen at vitality 1, 0.65 and 0.3 at 15:30, and at 1 at 22:00.
 // The first stop is seen again under each sky the sweep holds (`__lab.terrain.sky`),
 // whole at 15:30, as `sky-K.jpg`.
 // The one-file lab opens in a hidden Electron window (the app's own Chromium,
@@ -28,8 +28,8 @@ const QUALITY = 88;
 /** Each stop's shots: the hour and the vitality every file and entity in the world is set to. */
 const LOOKS = [
   { hour: 15.5, vitality: 1 },
-  { hour: 15.5, vitality: 0.5 },
-  { hour: 15.5, vitality: 0.1 },
+  { hour: 15.5, vitality: 0.65 },
+  { hour: 15.5, vitality: 0.3 },
   { hour: 22, vitality: 1 },
 ];
 
@@ -65,7 +65,7 @@ window.__shots = (() => {
       }
       const forms = new Set(stops.map((s) => s.name));
       for (const s of T.subjects()) {
-        const form = bare(s.standsAs);
+        const form = s.built === undefined ? bare(s.standsAs) : s.built.toLowerCase();
         if (forms.has(form)) continue;
         forms.add(form);
         stops.push({ name: form, at: { x: s.x, z: s.z, height: s.height } });

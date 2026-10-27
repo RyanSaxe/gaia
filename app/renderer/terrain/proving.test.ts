@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { type AnyKind, type Blueprint, type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, structure } from "@gaia/kinds";
-import { FLORA_PRESETS, realize } from "@gaia/realize";
+import { realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
 import { type Judgments, type Stood, areaVitality, groundVitality, missingFrom, sweep } from "@gaia/world";
 import { openedWorld, provingWorld } from "./code-world.ts";
@@ -62,6 +62,12 @@ describe("the proving ground", () => {
       expect(lacking(k, doc.world.things.filter((t) => t.as === as).flatMap((t) => stood(t.blueprint, t.vitality))), as).toEqual([]);
     }
     expect(lacking(COMPOSING.link, doc.world.trails.flatMap((t) => stood(t.route, ((endVitality.get(t.from) ?? 1) + (endVitality.get(t.to) ?? 1)) / 2)))).toEqual([]);
+    // Every tree's and bush's frame with every crown, every stone and every drift, each thriving, tired and in ruin.
+    const small = [...doc.world.symbols, ...doc.world.standing];
+    for (const [as, k, pairs] of [["tree", COMPOSING.tree, [["form", "crown"]]], ["bush", COMPOSING.bush, [["form", "crown"]]], ["stone", COMPOSING.stone, []], ["flowers", COMPOSING.flowers, []]] as const) {
+      const of = small.filter((s) => s.as === as).flatMap((s) => stood(s.blueprint, s.vitality));
+      expect(missingFrom(k, COMPOSING.offered?.[as] ?? COMPOSING.lib, of, { labels: healths, pairs }), as).toEqual([]);
+    }
     // Its sky is the first of the sweep's skies.
     expect(judged.sky?.id).toBe(sweep(COMPOSING.world, COMPOSING.lib).blueprints[0]?.id);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
@@ -153,7 +159,7 @@ describe("the proving ground", () => {
           tree: l.blueprint.slots.form?.use === "great-tree@1",
           base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })),
         })),
-        trees: { builds: 1, bases: FLORA_PRESETS.map(() => 0.5), crowns: FLORA_PRESETS.map(() => 4) },
+        trees: { bases: code.plants.trees.map(() => 0.5), crowns: code.plants.trees.map(() => 4) },
         code: code.stand,
       });
     }, 120_000);
@@ -206,7 +212,7 @@ describe("the proving ground", () => {
         const s = doc.world.symbols[k] ?? doc.world.standing[k - doc.world.symbols.length]!;
         const id = "id" in s ? s.id : s.path;
         const raised = COMPOSED_FORMS[s.form] !== undefined;
-        const tree = FORMS[s.form]?.rule === "trees";
+        const tree = s.as === "tree";
         // Each stands once: as its tree, as its placement, or as one of the world's buildings and landmarks.
         expect(trees.has(k), id).toBe(tree);
         expect(i >= 0, id).toBe(!tree && !raised);

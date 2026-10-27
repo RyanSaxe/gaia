@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { biome, landmark, link, structure, world as worldKind } from "@gaia/kinds";
+import { biome, bush, landmark, link, rock, structure, tree, wildflowers, world as worldKind } from "@gaia/kinds";
 import { PALETTE_FAMILIES, PRIMITIVES } from "@gaia/primitives";
 import { type CodeGraph, type CodeFacts, type DefNode, type EntityFacts, type FileFacts, type JevClient, type JevQuestion, type JevRequest, type JevResponse, Library } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
@@ -65,7 +65,7 @@ const FORMS: LookSet = {
   Spire: { doc: "Option Spire.", needs: [{ rank: [0.8, 1] }], composes: "landmark" },
 };
 const LOOKS: Looks = {
-  compose: { building: structure, landmark, world: worldKind, biome, link, lib: new Library(PRIMITIVES) },
+  compose: { building: structure, landmark, world: worldKind, biome, link, tree, bush, stone: rock, flowers: wildflowers, lib: new Library(PRIMITIVES) },
   form: FORMS,
   water: set("Dry", "Brook"),
 };
