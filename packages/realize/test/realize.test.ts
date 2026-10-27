@@ -373,9 +373,12 @@ describe("the understory", () => {
     });
   }
 
-  it("keeps a shrub and a bramble under a leaf mound on the ground: their lowest leaves reach the soil", () => {
-    // A mound fills its frame down to the ground; a sapling stands on its one stem, its leaves on the branches above.
-    for (const blueprint of bushes.filter((b) => b.slots.form?.use !== "sapling@1" && b.slots.crown?.use === "leaf-mound@1")) {
+  it("keeps a shrub and a bramble under every crown on the ground: their lowest leaves reach the soil and none sinks into it", () => {
+    // Clumps and a mound fill a shrub's frame down to the ground, and strands rest on the soil; a sapling stands on
+    // its one stem, its leaves on the branches above. Each frame stands at its smallest and largest under each crown.
+    const shrubs = [...bushes, ...extremes].filter((b) => b.slots.form?.use !== "sapling@1");
+    for (const crown of bushLib.forRole("Foliage")) expect(shrubs.filter((b) => b.slots.crown?.use === crown.id).length, crown.id).toBeGreaterThanOrEqual(4);
+    for (const blueprint of shrubs) {
       const leaf = realize(blueprint, bush, all, { seed: 3, facts: { scale: 1, age: 0 } }).parts.find((p) => p.swatch === "leaf")!;
       let low = Infinity;
       for (let i = 1; i < leaf.positions.length; i += 3) low = Math.min(low, leaf.positions[i]!);

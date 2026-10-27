@@ -7,7 +7,7 @@
 import { type Anchor, type BuildContext, type Built, CUT, type Limb, type Resolved, type Skeleton } from "@gaia/schema";
 import type { brambleParams, leafMoundParams, thicketParams } from "../flora.ts";
 import { type Channels, PartBuilder, type V3, add, addScaled, clamp, cross, dot, fbm3, length, lerp, normalize, scale, sub } from "./kit.ts";
-import { Boughs, type Clump, type ClumpLook, type Crown, FEWEST_TWIGS, NEEDLE_TRIANGLE_BUDGET, crownRoom, crownTips, emitClumps, emitSpray, emitTwig, filled, hungFrom, twigTriangles } from "./foliage.ts";
+import { Boughs, type Clump, type ClumpLook, type Crown, FEWEST_TWIGS, NEEDLE_TRIANGLE_BUDGET, SOIL, aboveSoil, crownRoom, crownTips, emitClumps, emitSpray, emitTwig, filled, hungFrom, twigTriangles } from "./foliage.ts";
 
 const HABITS = {
   mound: { width: 1.25, rise: 0.55, lift: 0.12 },
@@ -103,6 +103,13 @@ function growScrub(p: Resolved<typeof thicketParams>, ctx: BuildContext): Skelet
 
 /** A cane's tips are small (`SMALL_TIP`), so a leaf mound sleeves its canes in leaves rather than burying them in clumps sized for the whole frame. */
 const CANE_TIP = 0.12;
+/**
+ * How deep a cane roots past where it touches down, as a share of how far
+ * out it touches: on a slope the soil falls away from the root, and a cane
+ * rooted this deep still meets ground falling 24 degrees, as steep as any
+ * plant stands on (`PLANT_SLOPE` in @gaia/terrain).
+ */
+const ROOTING = 0.45;
 
 /**
  * A bramble: canes from one root that rise steeply, arch over and run
@@ -117,7 +124,8 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
   const cane = 0.008 + 0.005 * height;
   const limbs: Limb[] = [];
   const tips: Anchor[] = [];
-  const SEGMENTS = 7;
+  // Six straight segments arch smoothly enough at a cane's width, and leave a bush's budget room for its leaves.
+  const SEGMENTS = 6;
   for (let i = 0; i < canes; i++) {
     const cr = r.fork(`cane${i}`);
     const az = (i / canes) * Math.PI * 2 + cr.range(-0.5, 0.5);
@@ -148,8 +156,12 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
       limbs.push({ start: end, end: shootEnd, startRadius: cane * 0.28, endRadius: cane * 0.12, depth: 2, parent });
       tips.push({ position: shootEnd, normal: shoot, size: CANE_TIP });
     }
-    // The tip where the cane touches down and roots.
+    // The tip where the cane touches down, and the cane diving on into the soil past it as a rooting tip does, so it
+    // meets the ground wherever the soil falls away; on level ground the root is hidden.
     const touch = at(1);
+    const dive = normalize(add(normalize(sub(touch, at(0.98))), [0, -1, 0]));
+    const deep = ROOTING * Math.hypot(touch[0], touch[2]);
+    limbs.push({ start: touch, end: addScaled(touch, dive, deep / Math.max(0.2, -dive[1])), startRadius: cane * 0.4, endRadius: cane * 0.3, depth: 1, parent });
     tips.push({ position: touch, normal: normalize([touch[0], 0.4, touch[2]]), size: CANE_TIP });
   }
   return { limbs, tips };
@@ -188,8 +200,6 @@ const TUFTED = 0.25;
 /** How far a cluster card reaches from its base, as a multiple of its size: along its direction (twice its reach, up to 1.15 times 1.15), and across it. */
 const CARD_ALONG = 2.65;
 const CARD_ACROSS = 1.15;
-/** The lowest a leaf may reach above the soil, meters. */
-const SOIL = 0.005;
 /** Clusters drop evenly between these vitalities, the outer ones this much sooner and the inner this much later. */
 const DROP = { from: 0.75, to: 0.25, rim: 0.05 } as const;
 
@@ -367,9 +377,10 @@ function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundPa
   }
   if (tufts) return out;
   const fill = fillOf(kept.length, p.fullness, false);
-  for (let i = 0; i < fill && skel.limbs.length > 0; i++) {
+  const bearing = skel.limbs.flatMap((l, k) => (aboveSoil(l) ? [k] : []));
+  for (let i = 0; i < fill && bearing.length > 0; i++) {
     const fr = r.fork(`fill${i}`);
-    const k = Math.floor(fr.next() * skel.limbs.length);
+    const k = bearing[Math.floor(fr.next() * bearing.length)] as number;
     const limb = skel.limbs[k] as Limb;
     const center = lerp(limb.start, limb.end, fr.range(0.5, 1));
     // A clump along a stem is as small as the small tips near it.
@@ -415,9 +426,10 @@ function buildNeedleMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext
   });
   // Fill along the stems, so the mound is full from inside.
   const fill = fillFor(kept.length);
-  for (let i = 0; i < fill && skel.limbs.length > 0; i++) {
+  const bearing = skel.limbs.flatMap((l, k) => (aboveSoil(l) ? [k] : []));
+  for (let i = 0; i < fill && bearing.length > 0; i++) {
     const fr = r.fork(`fill${i}`);
-    const k = Math.floor(fr.next() * skel.limbs.length);
+    const k = bearing[Math.floor(fr.next() * bearing.length)] as number;
     const limb = skel.limbs[k] as Limb;
     const at = lerp(limb.start, limb.end, fr.range(0.45, 1));
     const rad = base * fr.range(0.8, 1.1) * grow;

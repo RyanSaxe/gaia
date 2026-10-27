@@ -140,11 +140,12 @@ export class Boughs {
     const bough = this.skel.limbs[root]?.start ?? [0, 0, 0];
     return { bough, droop: 0.2 * clamp(length(sub(q, bough)) / (this.#reach.get(root) ?? 1), 0, 1) };
   }
-  /** The limb nearest `q`, by distance to its axis. */
+  /** The limb nearest `q`, by distance to its axis, of those that stand above the soil. */
   limbNear(q: Vec3): number {
     let best = 0;
     let bestD = Infinity;
     this.skel.limbs.forEach((l, i) => {
+      if (!aboveSoil(l)) return;
       const ab = sub(l.end, l.start);
       const t = clamp(dot(sub(q, l.start), ab) / Math.max(dot(ab, ab), 1e-9), 0, 1);
       const d = length(sub(q, addScaled(l.start, ab, t)));
@@ -185,6 +186,12 @@ const HUNG = {
   tree: { most: TREE_HUNG, least: TREE_HUNG },
   bush: { most: Math.max(BUSH_HUNG, BLOSSOM_CAP.berries) * HUNG_TRIANGLES, least: 1_500 },
 } as const;
+
+/** The lowest a leaf may reach above the soil, meters. */
+export const SOIL = 0.005;
+
+/** Whether any of a limb stands above the soil: a limb wholly in it, where a cane roots, carries no leaves. */
+export const aboveSoil = (l: Limb): boolean => Math.max(l.start[1], l.end[1]) > SOIL;
 
 /** Whether a frame, or a crown whose highest point is `top`, stands as a bush's. */
 const standsAsBush = (top: number): boolean => top <= BUSH_TOP;
@@ -541,7 +548,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const spray = SPRAY_CUTS[p.leaf];
   // Leaves keep near their own size on a great tree: its sprays grow only with the root of its scale,
   // so each covers s times the area and its clumps need 1/s as many twigs per square meter.
-  const lookOf = (share: number): ClumpLook => ({ twigs: 15 / Math.max(1, s), sprays: 8 * share, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0 });
+  const lookOf = (share: number): ClumpLook => ({ twigs: 15 / Math.max(1, s), sprays: 8 * share, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0, low: !oneTrunk(skel) });
   const fillOf = (n: number): number => Math.round(Math.max(1, n) * Math.max(0, p.fullness - 0.35) * 0.9);
   const roomFor = (most: number): number => guard ?? crownRoom(skel, most);
   const mostClumps = (look: ClumpLook, budget: number): number => Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
@@ -567,7 +574,8 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   // (a great tree's buttresses) are not boughs.
   const trunkTop = skel.limbs.reduce((m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m), 0);
   const fork = skel.limbs.reduce((m, l) => (l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m), trunkTop);
-  const floor = Math.max(fork * 0.85, 1.2 * s);
+  // A shrub has no trunk: its clumps reach the soil, as a leaf mound's do.
+  const floor = oneTrunk(skel) ? Math.max(fork * 0.85, 1.2 * s) : 0;
   for (const i of kept) {
     const tip = skel.tips[i] as Anchor;
     const cr = r.fork(`tip${i}`);
@@ -579,7 +587,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   }
   // Fill the crown's interior so a full canopy reads as one mass.
   const fill = fillOf(tipCount);
-  const inner = skel.limbs.map((l, i) => ({ l, i })).filter(({ l }) => l.depth >= Math.max(1, maxDepthOf(skel) - 1));
+  const inner = skel.limbs.map((l, i) => ({ l, i })).filter(({ l }) => l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l));
   for (let i = 0; i < fill && inner.length > 0; i++) {
     const fr = r.fork(`fill${i}`);
     const pick = inner[Math.floor(fr.next() * inner.length)] as { l: Limb; i: number };
@@ -635,7 +643,11 @@ function liftedFrom(boughs: Boughs, center: V3, placed: Vec3, radius: number, li
   return center[1] - placed[1] > radius ? boughs.limbNear(center) : limb;
 }
 
-/** How a crown's or a mound's clumps are built: twigs per square meter of clump, sprays per twig, a spray's half width, its cut, the clump's shape, and the lowest a spray may reach. */
+/**
+ * How a crown's or a mound's clumps are built: twigs per square meter of clump, sprays per twig, a spray's half
+ * width, its cut, the clump's shape, the lowest a spray may reach, and whether a spray near the soil grows smaller
+ * to fit above it, as a shrub's lowest leaves do, rather than being left off.
+ */
 export interface ClumpLook {
   readonly twigs: number;
   readonly sprays: number;
@@ -643,7 +655,11 @@ export interface ClumpLook {
   readonly cut: number;
   readonly shape: ClumpShape;
   readonly ground: number;
+  readonly low?: boolean;
 }
+
+/** The smallest a shrub's spray grows near the soil, against its others; one that would be smaller is left off. */
+const LOWEST_SPRAY = 0.35;
 
 /**
  * The most triangles one twig of a clump takes: a three-sided tube in two
@@ -714,9 +730,12 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
         const sgn = j % 2 === 0 ? 1 : -1;
         const ang = last ? tr.range(-0.25, 0.25) : tr.range(0.55, 1.1);
         const sdir = normalize(add(add(scale(tdir, Math.cos(ang)), scale(sideDir, sgn * Math.sin(ang))), scale(out, 0.15)));
-        // Near the soil a spray turns up rather than into it.
-        if (at0[1] + sdir[1] * 2.3 * look.half - look.half < look.ground) sdir[1] = Math.abs(sdir[1]);
-        if (at0[1] - 1.2 * look.half < look.ground) continue;
+        // Near the soil a spray turns up rather than into it, and on a shrub grows smaller to fit above it.
+        const half = look.low === true ? Math.min(look.half, (at0[1] - look.ground) / 1.2) : look.half;
+        // A shrub's spray as near the soil as a card reaches along itself, 2.65 of its half widths and more for
+        // its spread, always turns up.
+        if (at0[1] + sdir[1] * 2.3 * half - half < look.ground || (look.low === true && at0[1] - look.ground < 3.1 * half)) sdir[1] = Math.abs(sdir[1]);
+        if (look.low === true ? half < LOWEST_SPRAY * look.half : at0[1] - 1.2 * look.half < look.ground) continue;
         const b = carry(at0);
         const depth = clamp(length(sub(at0, clump.center)) / clump.radius, 0, 1);
         const ch: Channels = {
@@ -729,7 +748,7 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
           twig: root,
           tint: clamp(tint * 0.4 + tr.range(-0.025, 0.025), -0.1, 0.1),
         };
-        emitSpray(leaf, crown, at0, sdir, faceUp, look.half * tr.range(0.85, 1.15), look.cut, tr, ch, -0.16 * (1 - depth));
+        emitSpray(leaf, crown, at0, sdir, faceUp, half * tr.range(0.85, 1.15), look.cut, tr, ch, -0.16 * (1 - depth));
       }
     };
     sprays(line, Math.max(2, Math.round(look.sprays * along)), 0.12);
@@ -854,16 +873,22 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   const leafLen = 0.3 * g;
   const leafWide = 0.085 * g;
   const anchors: Anchor[] = [];
+  // A strand never reaches below the soil, and none hangs from lower than the sprays at its top reach. A tree's
+  // strands stop short of the ground; a shrub's rest on the soil, the corners of their narrowed foot clear of it
+  // however the foot turns.
+  const foot = oneTrunk(skel) ? 0 : leafWide * 1.3 * 0.7;
+  const room = (h: { at: V3 }): number => h.at[1] - SOIL - foot;
+  const hangsFree = (h: { at: V3 }): boolean => h.at[1] - SOIL >= leafLen * 0.8;
   // A dense frame thins every strand's chance evenly to stay in budget: each
   // strand is two ribbons of rows 0.3 m apart, and two sprays at its top.
   const kept = 0.45 + 0.55 * p.fullness;
-  const perStrand = (h: { at: V3 }): number => 4 * Math.max(3, Math.ceil(Math.min(p.length * 2.2 * s, Math.max(0.3, h.at[1] - 0.2 * s)) / (0.3 * g))) + 4;
-  const wanted = hangs.reduce((n, h) => n + perStrand(h), 0) * kept;
+  const perStrand = (h: { at: V3 }): number => 4 * Math.max(3, Math.ceil(Math.min(p.length * 2.2 * s, Math.max(0.3, h.at[1] - 0.2 * s), room(h)) / (0.3 * g))) + 4;
+  const wanted = hangs.reduce((n, h) => n + (hangsFree(h) ? perStrand(h) : 0), 0) * kept;
   const thin = Math.min(1, budget / Math.max(1, wanted));
   hangs.forEach((h, i) => {
     const sr = r.fork(`strand${i}`);
-    if (sr.next() > kept * thin) return;
-    const fall = Math.min(p.length * 2.2 * s * sr.range(0.7, 1.15), Math.max(0.3, h.at[1] - 0.2 * s));
+    if (!hangsFree(h) || sr.next() > kept * thin) return;
+    const fall = Math.min(p.length * 2.2 * s * sr.range(0.7, 1.15), Math.max(0.3, h.at[1] - 0.2 * s), room(h));
     const outward = normalize([h.out[0] + sr.range(-0.3, 0.3), 0, h.out[2] + sr.range(-0.3, 0.3)]);
     const drift = fall * 0.12 * sr.range(0.5, 1);
     const loss = lossThreshold(sr.next(), 0.55);
