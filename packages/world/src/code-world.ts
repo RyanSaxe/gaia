@@ -56,10 +56,8 @@ export interface Look {
    * world's own things that it suits.
    */
   readonly needs?: readonly Need[];
-  /** For a form: what a thing it is chosen for stands as, which Jev composes part by part, or which `blueprint` fills. */
+  /** For a form: what a thing it is chosen for stands as, which Jev composes part by part. */
   readonly composes?: StandsAs;
-  /** For a form Jev does not yet compose: the blueprint every thing standing as it takes. */
-  readonly blueprint?: Blueprint;
   /**
    * For a small form Jev composes: the part a person sees first, which choosing the form settles (a fir's frame, a
    * weeping tree's frame and its habit), filled in and never asked; Jev composes the rest.
@@ -882,15 +880,9 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     rising.push(raised(id, as, form).then((thing) => composeThing(looks.compose, jev, thing)).then((blueprint) => (things[id] = { as, blueprint })));
   };
   for (const [id, t] of Object.entries(judged.things)) if (t.blueprint === undefined) compose(id, t.as);
-  // A form Jev does not yet compose stands as its own blueprint, asked nothing.
   const raise = (id: string, form: string): void => {
-    const look = looks.form[form];
-    const as = look?.composes;
+    const as = looks.form[form]?.composes;
     if (as === undefined || judged.things[id] !== undefined) return;
-    if (look?.blueprint !== undefined) {
-      things[id] = { as, blueprint: look.blueprint };
-      return;
-    }
     things[id] = { as };
     compose(id, as, form);
   };
