@@ -100,62 +100,62 @@ export const greatTree = primitive({
 
 export const windmillParams = {
   body: t.choice("What kind of mill it is", {
-    "a stone tower mill": "A tall round tower of stone, broad at its foot and tapering as it rises, a stage ringing it where the sails sweep low, under a domed cap",
-    "a timber smock mill": "Eight sides of pale weatherboards leaning in as they rise, like a countryman's smock, on a stone base with a stage around it, under a pointed cap",
-    "a post mill": "A boarded wooden body perched on one great post over crossed trestles, a ladder and a tail pole trailing behind it",
+    "a stone tower mill": "A tall round tower of stone, broad at its foot and tapering as it rises, a stage ringing it where the sails sweep low, under a domed cap, for code that feels sturdy and long-serving, built to outlast the people who made it",
+    "a timber smock mill": "Eight sides of pale weatherboards leaning in as they rise, like a countryman's smock, on a stone base with a stage around it, under a pointed cap, for code that feels homely and modest, patched and kept turning by hand",
+    "a post mill": "A boarded wooden body perched on one great post over crossed trestles, a ladder and a tail pole trailing behind it, for code that feels light and makeshift, balanced on a single prop",
   }),
   sails: t.choice("Its sails", {
-    "four canvas sails": "Four broad sails of pale canvas spread on lattice frames, full of the wind",
-    "four lattice sails": "Four sails of white shutters, slatted like blinds, the light flickering through them as they turn",
-    "six sails": "Six slender canvas sails crowding round one hub, a quick, restless whirl",
+    "four canvas sails": "Four broad sails of pale canvas spread on lattice frames, full of the wind, for code that feels plain and steady, keeping an even pace",
+    "four lattice sails": "Four sails of white shutters, slatted like blinds, the light flickering through them as they turn, for code that feels fussy and precise, every slat set just so",
+    "six sails": "Six slender canvas sails crowding round one hub, a quick, restless whirl, for code that feels restless and hurried, always spinning a little too fast",
   }),
-  height: t.scale("How tall it stands to the top of its cap; its sails reach higher still", { "a stout mill": 12, "a tall mill": 15, "a towering mill": 19 }),
+  height: t.scale("How tall it stands to the top of its cap; its sails reach higher still: a stout mill for code that feels humble and close to the ground, a tall mill for code that feels proud of its work, a towering mill for code that feels ambitious, reaching up for every breath of wind", { "a stout mill": 12, "a tall mill": 15, "a towering mill": 19 }),
 };
 
 export const windmill = primitive({
   id: "windmill@1",
   role: "Landmark",
-  doc: "A windmill whose sails turn all day and all night: a stone tower, a timber smock or a post mill, with canvas sails, shutters or six sails, for code that feels tireless and busy, turning with every change in the weather. Its windows are lit at night. In decline its sails tear to bare frames and slow to a stop; then its cap lists on its curb.",
+  doc: "A windmill whose sails turn all day and all night: a stone tower, a timber smock or a post mill, with canvas sails, shutters or six sails, for code that feels homespun and hard-working, grinding patiently round and round at one plain task. Its windows are lit at night. In decline its sails tear to bare frames and slow to a stop; then its cap lists on its curb.",
   params: windmillParams,
   build: (p, ctx) => buildWindmill(p, ctx),
 });
 
 export const rockArchParams = {
   form: t.choice("The opening the stone leaps over", {
-    "a doorway": "A tall, narrow doorway through a fin of rock, a way through for one or two at a time",
-    "a gate": "A broad gate of stone, its opening nearly as wide as it is high, a road could pass under it",
-    "a great span": "A long, high span flung across open ground, thin against the sky, the land itself bridging the way",
+    "a doorway": "A tall, narrow doorway through a fin of rock, a way through for one or two at a time, for code that feels shy and private, keeping to itself",
+    "a gate": "A broad gate of stone, its opening nearly as wide as it is high, a road could pass under it, for code that feels open-handed and generous, welcoming whoever comes",
+    "a great span": "A long, high span flung across open ground, thin against the sky, for code that feels daring and overreaching, stretched thin across a gap too wide for it",
   }),
-  thickness: t.scale("How heavy its stone is", { "a slender ribbon of stone": 0.7, "stout and sure": 1, "massive and heavy": 1.35 }),
-  stone: t.scale("How the weather has shaped it", { "worn smooth by wind and rain": 0.15, "sharply cut along its joints": 1 }),
+  thickness: t.scale("How heavy its stone is: a slender ribbon of stone for code that feels delicate and finely balanced, stout and sure for code that feels sound and unfussy, massive and heavy for code that feels ponderous and overbuilt, far heavier than it needs to be", { "a slender ribbon of stone": 0.7, "stout and sure": 1, "massive and heavy": 1.35 }),
+  stone: t.scale("How the weather has shaped it: worn smooth by wind and rain for code that feels softened and rounded by years of patient change, sharply cut along its joints for code that feels angular and abrupt, all hard edges", { "worn smooth by wind and rain": 0.15, "sharply cut along its joints": 1 }),
 };
 
 export const rockArch = primitive({
   id: "rock-arch@1",
   role: "Landmark",
-  doc: "An arch of living rock the land made: a doorway, a gate or a great span over a way that everything passes under, for code that feels like a threshold, the way into everything beyond it. In decline its stacks lean apart and a crack opens across the span; the span falls and lies broken in the grass, leaving two stacks standing either side of the way.",
+  doc: "An arch of living rock the land made: a doorway, a gate or a great span standing over the way, for code that feels strange and wondrous, a shape no one would have planned, worn into being by slow forces. In decline its stacks lean apart and a crack opens across the span; the span falls and lies broken in the grass, leaving two stacks standing either side of the way.",
   params: rockArchParams,
   build: (p, ctx) => buildRockArch(p, ctx),
 });
 
 export const rotundaParams = {
   columns: t.choice("How many columns ring it", {
-    six: "Six columns set wide apart, so the land and the light show between them",
-    eight: "Eight columns evenly spaced, balanced from every side",
-    twelve: "Twelve columns close-set, a solemn colonnade all the way round",
+    six: "Six columns set wide apart, so the land and the light show between them, for code that feels airy and spare, more open space than stone",
+    eight: "Eight columns evenly spaced, balanced from every side, for code that feels prim and correct, every part matched by its twin",
+    twelve: "Twelve columns close-set, a solemn colonnade all the way round, for code that feels solemn and crowded, many alike standing shoulder to shoulder",
   }),
   roof: t.choice("What it carries over its columns", {
-    "a shallow dome": "A low, broad dome resting on the ring, quiet against the sky",
-    "a high dome": "A tall dome raised on a drum and crowned by a small lantern, seen from far away",
-    "an open ring": "No roof at all: a ring of stone held high on the columns, open to the sky",
+    "a shallow dome": "A low, broad dome resting on the ring, quiet against the sky, for code that feels modest and quiet, keeping a low profile",
+    "a high dome": "A tall dome raised on a drum and crowned by a small lantern, seen from far away, for code that feels proud and ceremonial, wanting to be seen from afar",
+    "an open ring": "No roof at all: a ring of stone held high on the columns, open to the sky, for code that feels unfinished and open-ended, its top left open to whatever comes",
   }),
-  steps: t.scale("How high its stepped base lifts it", { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 }),
+  steps: t.scale("How high its stepped base lifts it: a low plinth of two steps for code that feels approachable and down to earth, three broad steps for code that feels gracious and welcoming, a high podium of five steps for code that feels stately and remote, raised above everything around it", { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 }),
 };
 
 export const rotunda = primitive({
   id: "rotunda@1",
   role: "Landmark",
-  doc: "A round temple of stone: a ring of columns on a stepped base carrying a dome or an open ring, for code that feels calm, ordered and a little grand, the still centre the rest is arranged around. In decline the dome falls in from its crown, then the columns topple outward one by one onto the steps.",
+  doc: "A round temple of stone: a ring of columns on a stepped base carrying a dome or an open ring, for code that feels serene and formal, a little vain of its own perfect symmetry, built to be admired more than used. In decline the dome falls in from its crown, then the columns topple outward one by one onto the steps.",
   params: rotundaParams,
   build: (p, ctx) => buildRotunda(p, ctx),
 });
