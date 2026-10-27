@@ -3,7 +3,7 @@ import { type BuildingPlan, type Built, Library, seedOf } from "@gaia/schema";
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { landmark, structure } from "@gaia/kinds";
 import { FLORA_PRESETS, realize } from "@gaia/realize";
-import { type BuildingSite, type Terrain, bakeTerrain, extentOf, findBankSite, regionAt, siteToWorld, turningExtent, waterDepthAt, yardsMeet } from "@gaia/terrain";
+import { type BuildingSite, type Terrain, bakeTerrain, extentOf, findBankSite, pastTheEdge, regionAt, siteToWorld, turningExtent, waterDepthAt, yardsMeet } from "@gaia/terrain";
 import { type OpenedWorld, openedWorld, provingWorld } from "./code-world.ts";
 import { laySnapshot } from "./snapshot.ts";
 import { snapshotFacts } from "./snapshot-facts.ts";
@@ -93,6 +93,15 @@ describe("Gaia's world, the showcase and the proving ground, stood as the page s
         return waterDepthAt(land, x, z) > 0.05 ? [] : [b.name];
       });
       expect(offWater, root).toEqual([]);
+    }
+  });
+
+  it("run every river and stand every mill on the land its areas are laid out on, never past its outline", () => {
+    for (const { root, code, t, buildings, stood } of worlds) {
+      const land = { size: code.world.size, ...(code.world.aspect === undefined ? {} : { aspect: code.world.aspect }) };
+      const past = t.streams.flatMap((s, i) => (s.stations.some((p) => pastTheEdge(land, p.x, p.z) > 0) ? [`stream ${i}`] : []));
+      const mills = buildings.flatMap((b, i) => (b.wheel !== undefined && pastTheEdge(land, stood.sites[i]!.x, stood.sites[i]!.z) > 0 ? [b.name] : []));
+      expect([...past, ...mills], root).toEqual([]);
     }
   });
 
