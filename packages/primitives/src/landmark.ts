@@ -6,7 +6,7 @@
 
 import { primitive, t } from "@gaia/schema";
 import { buildRockArch } from "./geometry/landmark/arch.ts";
-import { buildRotunda } from "./geometry/landmark/rotunda.ts";
+import { ROTUNDA_STEPS, buildRotunda } from "./geometry/landmark/rotunda.ts";
 import { buildStandingStones } from "./geometry/landmark/stones.ts";
 import { buildLookoutTower } from "./geometry/landmark/tower.ts";
 import { buildGreatTree } from "./geometry/landmark/tree.ts";
@@ -149,7 +149,7 @@ export const rotundaParams = {
     "a high dome": "A tall dome raised on a drum and crowned by a small lantern, seen from far away, for code that feels proud and showy, dressed up for an occasion",
     "an open ring": "No roof at all: a ring of stone held high on the columns, open to the sky, for code that feels unfinished and open-ended, its top left open to whatever comes",
   }),
-  steps: t.scale("How high its stepped base lifts it: a low plinth of two steps for code that feels approachable and down to earth, three broad steps for code that feels gracious and welcoming, a high podium of five steps for code that feels aloof and hard to approach", { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 }),
+  steps: t.scale("How high its stepped base lifts it: a low plinth of two steps for code that feels approachable and down to earth, three broad steps for code that feels gracious and welcoming, a high podium of five steps for code that feels aloof and hard to approach", ROTUNDA_STEPS),
 };
 
 export const rotunda = primitive({

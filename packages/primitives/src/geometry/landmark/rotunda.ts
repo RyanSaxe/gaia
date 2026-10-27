@@ -20,6 +20,8 @@ import { restAngle } from "./stones.ts";
 type RotundaParams = Resolved<typeof rotundaParams>;
 
 const COLUMNS = { six: 6, eight: 8, twelve: 12 } as const;
+/** How many steps lift it, by the words Jev reads: each its own count, never a neighbour's. */
+export const ROTUNDA_STEPS = { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 } as const;
 /** Meters at scale 1: the circle the columns stand on, and a column's height and radius at its foot. */
 const RING = 7.5;
 const COLUMN = { height: 12.5, radius: 0.6 } as const;
@@ -215,7 +217,8 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
   const ring = RING * s;
   const height = COLUMN.height * s;
   const radius = COLUMN.radius * s;
-  const count = Math.max(1, Math.round(p.steps));
+  // The seeded value lies in its level's band; the steps are that level's own count, the level nearest it.
+  const count = Object.values(ROTUNDA_STEPS).reduce((best, n) => (Math.abs(n - p.steps) < Math.abs(best - p.steps) ? n : best));
   const floor = count * STEP.rise;
   const top = ring + STEP.margin;
   const edge = top + (count - 1) * STEP.tread;
