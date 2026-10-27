@@ -61,7 +61,7 @@ if (data === undefined) throw new Error("Set GAIA_DATA_DIR to the store that kee
 const root = resolve(data, "gaia");
 writeCode(root);
 
-/** The answers the page lays the showcase out from, by request key, as `pnpm jev-world` keeps Gaia's. */
+/** The answers the page lays the showcase out from, by request key, as the app keeps a project's. */
 interface Kept {
   readonly answers: Record<string, JevResponse>;
 }

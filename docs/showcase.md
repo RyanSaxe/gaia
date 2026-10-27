@@ -4,8 +4,9 @@ The showcase is a synthetic static-site generator used to demonstrate Gaia.
 It contains a central kernel, an engine, extensions and an older `v1` module
 with deliberately poor code. A second variant repairs `v1` while keeping its
 file paths and definition spans, so code health changes without changing the
-layout. Both worlds open from bundled Jev answers. The standalone lab,
-`pnpm probe` and CI's rendering probe open the showcase.
+layout. Both worlds open from bundled Jev answers, the only ones the repository
+keeps. The standalone lab, `pnpm probe` and CI's rendering probe open the
+showcase.
 
 ## Open it
 

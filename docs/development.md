@@ -120,18 +120,22 @@ The lab's fixture bundles live in `app/renderer/terrain/fixtures/`:
 
 | Bundle | Source and regeneration |
 | --- | --- |
-| `gaia-*` | A frozen graph, judgments and design answers for Gaia's own code. `tools/graph-snapshot.ts` and `tools/jev-world.ts` generate them. |
 | `proving*` | The made-up codebase planned in `tools/proving.ts` and the sweeps it stands; `pnpm proving` regenerates its facts and judgments. |
-| `showcase*` | Source bundles and saved judgments for the [showcase](showcase.md). |
+| `showcase*` | Source bundles, judged graphs and saved Jev answers for the [showcase](showcase.md). |
 
-Frozen graphs contain code metadata from the commit they picture. Their
-embedded comments and document headings describe that snapshot. Use the guides
-and current source for development guidance.
+The repository keeps Jev's answers for the showcase only. To count what
+composing another project's world asks and costs, such as Gaia's own,
+`GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` writes its judged graph from the
+answers an app store holds, `pnpm jev-world` judges and composes its world from
+that graph, and `pnpm print-world-requests` prints the requests without sending
+them. They keep those files in `~/.cache/gaia-snapshot/` unless their arguments
+name others ([`snapshot-paths.ts`](../tools/snapshot-paths.ts)).
 
-If a new primitive or schema change invalidates Gaia's bundled answers, use the
-proving ground for visual coverage and open a checkout in the app against the
-local stand-in for integration. Use a temporary store for that run. Refresh the
-live fixture bundle with approval before submitting changes that invalidate it.
+If a new primitive or schema change invalidates the showcase's bundled answers,
+use the proving ground for visual coverage and open a checkout in the app
+against the local stand-in for integration. Use a temporary store for that run.
+Re-ask Jev for the showcase ([showcase.md](showcase.md#update-the-bundled-worlds))
+before submitting changes that invalidate its answers.
 
 Saved Jev answers are keyed by request hash. Changing request state, wording or
 options can invalidate them. Never relabel a saved answer as the answer to a
