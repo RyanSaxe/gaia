@@ -105,7 +105,7 @@ export const windmillParams = {
     "a post mill": "A boarded wooden body perched on one great post over crossed trestles, a ladder and a tail pole trailing behind it, for code that feels light and makeshift, balanced on a single prop",
   }),
   sails: t.choice("Its sails", {
-    "four canvas sails": "Four broad sails of pale canvas spread on lattice frames, full of the wind, for code that feels plain and steady, keeping an even pace",
+    "four canvas sails": "Four broad sails of pale canvas spread on lattice frames, full of the wind, for code that feels old-fashioned and honest, made the way it always has been",
     "four lattice sails": "Four sails of white shutters, slatted like blinds, the light flickering through them as they turn, for code that feels fussy and precise, every slat set just so",
     "six sails": "Six slender canvas sails crowding round one hub, a quick, restless whirl, for code that feels restless and hurried, always spinning a little too fast",
   }),
@@ -115,7 +115,7 @@ export const windmillParams = {
 export const windmill = primitive({
   id: "windmill@1",
   role: "Landmark",
-  doc: "A windmill whose sails turn all day and all night: a stone tower, a timber smock or a post mill, with canvas sails, shutters or six sails, for code that feels homespun and hard-working, grinding patiently round and round at one plain task. Its windows are lit at night. In decline its sails tear to bare frames and slow to a stop; then its cap lists on its curb.",
+  doc: "A windmill whose sails turn all day and all night: a stone tower, a timber smock or a post mill, with canvas sails, shutters or six sails, for code that feels homely and good-humoured, cheerfully at work whatever the weather. Its windows are lit at night. In decline its sails tear to bare frames and slow to a stop; then its cap lists on its curb.",
   params: windmillParams,
   build: (p, ctx) => buildWindmill(p, ctx),
 });
@@ -141,21 +141,21 @@ export const rockArch = primitive({
 export const rotundaParams = {
   columns: t.choice("How many columns ring it", {
     six: "Six columns set wide apart, so the land and the light show between them, for code that feels airy and spare, more open space than stone",
-    eight: "Eight columns evenly spaced, balanced from every side, for code that feels prim and correct, every part matched by its twin",
+    eight: "Eight columns evenly spaced, for code that feels prim and correct, every part matched by its twin",
     twelve: "Twelve columns close-set, a solemn colonnade all the way round, for code that feels solemn and crowded, many alike standing shoulder to shoulder",
   }),
   roof: t.choice("What it carries over its columns", {
     "a shallow dome": "A low, broad dome resting on the ring, quiet against the sky, for code that feels modest and quiet, keeping a low profile",
-    "a high dome": "A tall dome raised on a drum and crowned by a small lantern, seen from far away, for code that feels proud and ceremonial, wanting to be seen from afar",
+    "a high dome": "A tall dome raised on a drum and crowned by a small lantern, seen from far away, for code that feels proud and showy, dressed up for an occasion",
     "an open ring": "No roof at all: a ring of stone held high on the columns, open to the sky, for code that feels unfinished and open-ended, its top left open to whatever comes",
   }),
-  steps: t.scale("How high its stepped base lifts it: a low plinth of two steps for code that feels approachable and down to earth, three broad steps for code that feels gracious and welcoming, a high podium of five steps for code that feels stately and remote, raised above everything around it", { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 }),
+  steps: t.scale("How high its stepped base lifts it: a low plinth of two steps for code that feels approachable and down to earth, three broad steps for code that feels gracious and welcoming, a high podium of five steps for code that feels aloof and hard to approach", { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 }),
 };
 
 export const rotunda = primitive({
   id: "rotunda@1",
   role: "Landmark",
-  doc: "A round temple of stone: a ring of columns on a stepped base carrying a dome or an open ring, for code that feels serene and formal, a little vain of its own perfect symmetry, built to be admired more than used. In decline the dome falls in from its crown, then the columns topple outward one by one onto the steps.",
+  doc: "A small round temple of stone, a garden folly: a ring of columns on a stepped base carrying a dome or an open ring, for code that feels romantic and wistful, a little sentimental, made for lingering. In decline the dome falls in from its crown, then the columns topple outward one by one onto the steps.",
   params: rotundaParams,
   build: (p, ctx) => buildRotunda(p, ctx),
 });
