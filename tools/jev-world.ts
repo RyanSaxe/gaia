@@ -31,6 +31,7 @@ import { LOOKS } from "../app/renderer/terrain/looks.ts";
 import { startOpenRouterStandIn } from "./openrouter-stand-in.ts";
 import { engineBinary } from "./engine-binary.ts";
 import { cargoEnv } from "./cargo-env.ts";
+import { fixtureJson } from "./fixture-json.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const flag = (name: string, fallback: string): string => {
@@ -130,7 +131,7 @@ try {
 // Once a whole run has asked every request, answers to requests the world no longer makes (its questions or options
 // changed) are dropped.
 if (stopped === undefined) for (const key of Object.keys(kept.answers)) if (!asked.has(key)) delete kept.answers[key];
-writeFileSync(out, `${JSON.stringify({ answers: kept.answers }, null, 1)}\n`);
+writeFileSync(out, fixtureJson({ answers: kept.answers }));
 
 ms.sort((a, b) => a - b);
 const at = (q: number): number => ms[Math.min(ms.length - 1, Math.floor(q * ms.length))] ?? 0;

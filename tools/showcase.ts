@@ -18,6 +18,7 @@ import { judgedGraph, judgedThings, openWorld } from "../app/world-service/open-
 import { startOpenRouterStandIn } from "./openrouter-stand-in.ts";
 import { engineBinary } from "./engine-binary.ts";
 import { cargoEnv } from "./cargo-env.ts";
+import { fixtureJson } from "./fixture-json.ts";
 
 const repo = resolve(import.meta.dirname, "..");
 const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
@@ -144,7 +145,7 @@ try {
     console.error(`showcase: the land ${same ? "is identical to" : "DIFFERS from"} the other v1's`);
     if (!same) process.exitCode = 1;
   }
-  writeFileSync(keptFile, `${JSON.stringify({ answers: Object.fromEntries(Object.entries(used).sort(([a], [b]) => (a < b ? -1 : 1))) }, null, 1)}\n`);
+  writeFileSync(keptFile, fixtureJson({ answers: Object.fromEntries(Object.entries(used).sort(([a], [b]) => (a < b ? -1 : 1))) }));
   const after = await billed(project);
   console.log(
     JSON.stringify({

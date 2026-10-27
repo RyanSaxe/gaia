@@ -37,6 +37,7 @@ import { parseArgs } from "node:util";
 import type { AnyKind, Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, Library, SymbolFact } from "@gaia/schema";
 import { type Judgments, type Look, type StandsAs, type SweepPlace, layoutWorld, raisedAs, sweep } from "@gaia/world";
 import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "../app/renderer/terrain/looks.ts";
+import { fixtureJson } from "./fixture-json.ts";
 import { provingCode } from "./proving-code.ts";
 
 /** How a file or an entity fares, from thriving to ruin; `decayed` is ruin with no tests at all, so it drags its entity down less. */
@@ -602,7 +603,7 @@ if (args.code !== undefined) {
 }
 const fixtures = resolve(repo, "app/renderer/terrain/fixtures");
 writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(facts)}\n`);
-writeFileSync(resolve(fixtures, "proving-judged.json"), `${JSON.stringify(judged, null, 1)}\n`);
+writeFileSync(resolve(fixtures, "proving-judged.json"), fixtureJson(judged));
 const band = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" : v >= 0.35 ? "tired" : v >= 0.12 ? "failing" : "ruin");
 const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} ${k}`).join(", ");
 console.log(`proving: ${facts.files.length} files, ${facts.repository.lines.toLocaleString("en-US")} lines, ${entities.length} entities; a ${world.size} m world of ${world.regions.length} lands and ${world.areas.length} areas`);
