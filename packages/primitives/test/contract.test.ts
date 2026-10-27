@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, GRAIN, Library, type Part, type Skeleton, rand } from "@gaia/schema";
 import * as primitivesModule from "@gaia/primitives";
-import { PRIMITIVES } from "@gaia/primitives";
+import { LANDMARK_SHAPES, PRIMITIVES, bandOf, landmarkShape } from "@gaia/primitives";
 import { applyVitality, detailAt, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
@@ -319,6 +319,79 @@ describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))("%s", { timeo
           });
         for (const [sx, sz] of [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]] as const) {
           expect(covered(m.x + sx * (m.width / 2 - 0.2), m.z + sz * (m.depth / 2 - 0.2))).toBe(true);
+        }
+      }
+    }
+  });
+});
+
+/**
+ * A landmark's proportions as it stands at full health: its width across x and across z, and how far it reaches at
+ * the ground, each over its height. Fallen stone that grows in is left out.
+ */
+function proportions(built: Built): number[] {
+  let [x0, x1, z0, z1, top, ground] = [Infinity, -Infinity, Infinity, -Infinity, 0, 0];
+  for (const part of built.parts) {
+    for (let v = 0; v < part.shade.length; v++) {
+      if ((part.channels.grow?.[v] ?? 0) > 0) continue;
+      const [x, y, z] = [part.positions[v * 3] as number, part.positions[v * 3 + 1] as number, part.positions[v * 3 + 2] as number];
+      [x0, x1, z0, z1, top] = [Math.min(x0, x), Math.max(x1, x), Math.min(z0, z), Math.max(z1, z), Math.max(top, y)];
+      if (y < 1) ground = Math.max(ground, Math.hypot(x, z));
+    }
+  }
+  return [(x1 - x0) / top, (z1 - z0) / top, ground / top];
+}
+
+describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))("%s", (_id, p) => {
+  // Builds every sample from four seeds: a few seconds alone, more when other work shares the machine.
+  it("stands in proportions of its own from each seed, given the same answers", { timeout: 60_000 }, () => {
+    for (const s of samples(p)) {
+      // The same answers, their scales resolved alike: only the build's own seed differs.
+      const params = resolveParams(p, s, rand(1), p.id);
+      const seen = [1, 2, 3, 4].map((seed) => proportions((p.build as Erased)(params, { rand: rand(seed).fork(p.id), facts }, null) as Built));
+      const spread = (k: number): number => {
+        const xs = seen.map((one) => one[k] as number);
+        return (Math.max(...xs) - Math.min(...xs)) / (xs.reduce((a, x) => a + x, 0) / xs.length);
+      };
+      expect(Math.max(spread(0), spread(1), spread(2)), JSON.stringify(s)).toBeGreaterThan(0.03);
+    }
+  });
+
+  it("resolves each scale's words within their own band, short of a neighbour's", () => {
+    for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
+      if (f.type !== "scale") continue;
+      f.levels.forEach((level, k) => {
+        const low = (level.value + (f.levels[k - 1]?.value ?? level.value)) / 2;
+        const high = (level.value + (f.levels[k + 1]?.value ?? level.value)) / 2;
+        for (let seed = 1; seed <= 32; seed++) {
+          const value = resolveParams(p, { ...(samples(p)[0] as Stored), [name]: level.words }, rand(seed), p.id)[name] as number;
+          expect(value >= low && value <= high, `${name}: ${level.words}`).toBe(true);
+        }
+      });
+    }
+  });
+
+  const bands = LANDMARK_SHAPES[p.id];
+  if (bands === undefined) return;
+
+  it("picks each measure of its shape within the band its words allow, and no two words' bands meet", () => {
+    for (const [name, measure] of Object.entries(bands)) {
+      if (!("by" in measure)) continue;
+      // A measure set by a field's words names a band, or none, for every word of it.
+      const field = p.params[measure.by] as Field | undefined;
+      expect(field?.type, name).toBe("choice");
+      if (field?.type === "choice") expect(Object.keys(measure.bands).sort(), name).toEqual(Object.keys(field.options).sort());
+      const set = Object.values(measure.bands).filter((b) => b !== null).sort((a, b) => a[0] - b[0]);
+      for (let k = 1; k < set.length; k++) expect((set[k - 1] as readonly [number, number])[1], name).toBeLessThan((set[k] as readonly [number, number])[0]);
+    }
+    for (const stored of combinations(p)) {
+      for (let seed = 1; seed <= 16; seed++) {
+        const params = resolveParams(p, stored, rand(seed), p.id);
+        const shape = landmarkShape(bands, params, { rand: rand(seed).fork(p.id), facts });
+        for (const [name, measure] of Object.entries(bands)) {
+          const band = bandOf(measure, params);
+          const value = shape[name] as number;
+          expect(band === null ? value === 0 : value >= band[0] && value <= band[1], `${name} ${JSON.stringify(stored)}`).toBe(true);
         }
       }
     }
