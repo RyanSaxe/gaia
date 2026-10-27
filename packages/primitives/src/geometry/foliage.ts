@@ -549,7 +549,14 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   // Leaves keep near their own size on a great tree: its sprays grow only with the root of its scale,
   // so each covers s times the area and its clumps need 1/s as many twigs per square meter.
   const lookOf = (share: number): ClumpLook => ({ twigs: 15 / Math.max(1, s), sprays: 8 * share, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0, low: !oneTrunk(skel) });
-  const fillOf = (n: number): number => Math.round(Math.max(1, n) * Math.max(0, p.fullness - 0.35) * 0.9);
+  const shapeScale = p.shape === "plates" ? 1.2 : p.shape === "tufts" ? 0.62 : 1;
+  // Tufts are smaller than round clumps, so a tufted crown grows more of them along its limbs, as many as cover what
+  // round clumps would: at a fullness it hides as much of its frame, in more and smaller tufts.
+  const fillOf = (n: number): number => {
+    const tips = Math.max(1, n);
+    const fill = tips * Math.max(0, p.fullness - 0.35) * 0.9;
+    return Math.round(shapeScale < 1 ? (tips + fill) / (shapeScale * shapeScale) - tips : fill);
+  };
   const roomFor = (most: number): number => guard ?? crownRoom(skel, most);
   const mostClumps = (look: ClumpLook, budget: number): number => Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
   // A frame of more tips than the crown can give clumps (a fir's whorls) grows fewer, larger clumps spread over
@@ -562,7 +569,6 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const kept = crownTips(skel.tips, mostClumps(look, budget), fillOf);
   const grow = Math.sqrt(skel.tips.length / Math.max(1, kept.length));
   const tipCount = Math.max(1, kept.length);
-  const shapeScale = p.shape === "plates" ? 1.2 : p.shape === "tufts" ? 0.62 : 1;
   // Clumps scale with how far apart the tips are, so neighbors just overlap at "medium".
   const spacing = meanNearest(skel.tips.map((t) => t.position));
   const base = Math.min(0.3 * s + 0.6 * spacing, 0.24 * crown.radius[0]) * p.size * shapeScale * (0.72 + 0.38 * p.fullness);
@@ -855,11 +861,14 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   // with the root of its scale, so it hangs more of them, each as narrow as a
   // willow's, rather than a few wide ones that read as slabs from afar.
   const g = s <= 1 ? s : Math.sqrt(s);
-  // Strands hang from the tips and from the undersides of the outer limbs.
+  // Strands hang from the tips and from the undersides of the outer limbs. A
+  // shrub's stems are short, so strands hang from them too, twice as close,
+  // and its curtain is as full as a tree's.
+  const shrub = !oneTrunk(skel);
   const hangs: { at: V3; out: V3; limb: number }[] = skel.tips.map((t) => ({ at: [...t.position] as V3, out: [...t.normal] as V3, limb: boughs.limbNear(t.position) }));
-  const spacing = (0.3 * g) / (0.5 + p.fullness);
+  const spacing = (0.3 * g) / (0.5 + p.fullness) / (shrub ? 2 : 1);
   skel.limbs.forEach((limb, i) => {
-    if (limb.depth < 1) return;
+    if (limb.depth < 1 && !shrub) return;
     const span = length(sub(limb.end, limb.start));
     const steps = Math.floor(span / spacing);
     const d = normalize(sub(limb.end, limb.start));
