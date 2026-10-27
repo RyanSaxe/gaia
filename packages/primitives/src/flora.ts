@@ -265,3 +265,13 @@ export const leafMound = primitive({
 });
 
 export const FLORA_PRIMITIVES = [branching, spire, sapling, bark, leafClumps, leafStrands, needles, blossoms, fruit, sway, palette, thicket, bramble, leafMound];
+
+/** The parts a tree is composed from: a broadleaf's or a conifer's frame, its bark, any of the four crowns, and what hangs in them. */
+export const TREE_PRIMITIVES = [branching, spire, bark, leafClumps, leafStrands, needles, leafMound, blossoms, fruit, sway, palette];
+
+/**
+ * The parts a bush is composed from: a shrub's, a bramble's or a sapling's frame and the crowns that suit one.
+ * Needles are left out: on a bush's many stems they grow as a juniper's tufts (`buildJuniper`), up to 20,000
+ * triangles, too heavy for a bush the understory stands by the hundred.
+ */
+export const BUSH_PRIMITIVES = [thicket, bramble, sapling, bark, leafClumps, leafStrands, leafMound, blossoms, fruit, sway, palette];
