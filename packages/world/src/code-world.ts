@@ -36,7 +36,7 @@ import {
 import { LAND_ASPECT, type LandSite, landArea } from "@gaia/terrain";
 import { type StandingDef, definitionsOf } from "./definitions.ts";
 import { type LandNode, divideLand, dividePlots, nearestRung, rung } from "./land.ts";
-import { MODEL } from "./planner.ts";
+import { MODEL, planStructure } from "./planner.ts";
 import { type Composed, type Composing, areaState, composeThing, composeThings, composingState, definitionState, fileState, repositoryState, share, trailState, trim } from "./compose.ts";
 
 /** What a thing stands as: a building or a landmark, which stand on their own lots, or a tree, a bush, a stone or flowers. */
@@ -60,6 +60,11 @@ export interface Look {
   readonly composes?: StandsAs;
   /** For a form Jev does not yet compose: the blueprint every thing standing as it takes. */
   readonly blueprint?: Blueprint;
+  /**
+   * For a small form Jev composes: the part a person sees first, which choosing the form settles (a fir's frame, a
+   * weeping tree's frame and its habit), filled in and never asked; Jev composes the rest.
+   */
+  readonly first?: { readonly slot: string; readonly use: string; readonly fixed?: Readonly<Record<string, string | boolean>> };
   /**
    * For a water: what choosing it settles in the land composed for its area, per field path (a valley's
    * `relief.stream`, a basin's `relief.pond`), filled in there and never asked again.
@@ -288,7 +293,7 @@ export const LAYOUT = {
   /** Square meters each definition standing on a file's patch adds to it, on top of the file's lines. */
   defGround: 50,
   /** How many of a file's definitions one request asks a form for: a larger file's are asked over several, so each fits Jev's window. */
-  formsPerRequest: 24,
+  formsPerRequest: 12,
 } as const;
 
 // ---------- the tree of directories ----------
@@ -792,6 +797,30 @@ function thingKind(facts: CodeFacts, id: string): StandingThing["of"] {
 /** The file a thing stands on: a file's own path, or a definition's file; none for an entity. */
 const fileOfThing = (of: StandingThing["of"], id: string): string | undefined => (of === "entity" ? undefined : of === "file" ? id : id.slice(0, id.indexOf("#")));
 
+/** About how many requests composing a world's things takes once their forms are chosen, and one of them to price them by. */
+export interface ComposingEstimate {
+  readonly requests: number;
+  readonly sample: JevRequest;
+}
+
+/**
+ * What composing a world's things asks of Jev once it has chosen their forms, for pricing before anything is asked:
+ * about two requests a thing (its parts, then their settings), each about the size of the one that composes the first
+ * of them as a tree. Its lands, sky, buildings, landmarks and trails are few beside them. None for a world with no
+ * thing to stand, or no tree form to price by.
+ */
+export function composingEstimate(facts: CodeFacts, looks: Looks, graph?: CodeGraph): ComposingEstimate | null {
+  const things = standingThings(facts, graph);
+  const first = things[0];
+  const form = Object.entries(looks.form).find(([, look]) => look.composes === "tree" && look.first !== undefined);
+  if (first === undefined || form === undefined) return null;
+  const [name, look] = form;
+  const state = first.of === "entity" ? composingState(graph, { path: first.id, name: baseName(first.id) || facts.repository.name }) : first.of === "file" ? fileState(graph, first.id) : definitionState(graph, first.id);
+  const uses = look.first === undefined ? {} : { [look.first.slot]: look.first.use };
+  const wave = planStructure(looks.compose.tree, looks.compose.offered?.tree ?? looks.compose.lib, { id: first.id, state: { ...state, standsAs: { form: name, words: look.doc } }, uses });
+  return { requests: things.length * 2, sample: wave.request };
+}
+
 export interface ComposeOptions {
   readonly graph?: CodeGraph;
   readonly concurrency?: number;
@@ -826,12 +855,17 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
    * A building or a landmark to compose for a thing, with what the graph holds about it, once its land is composed:
    * its place has what its region's water holds, and its colors are among its land's native families.
    */
-  const raised = async (id: string, as: StandsAs): Promise<Composed> => {
+  const raised = async (id: string, as: StandsAs, form?: string): Promise<Composed> => {
     const of = thingKind(facts, id);
     const region = regionFor(regionSet, of === "entity" ? id : parentOf(fileOfThing(of, id) as string));
     const place = { has: looks.water[judged.waters[region] ?? ""]?.holds ?? [], narrow: { [NATIVE_COLORS.thing]: nativesOf((await lands)[`land:${region}`]) } };
-    if (of === "entity") return { path: id, as, state: composingState(graph, entity(id)), ...place };
-    return { path: id, as, state: of === "file" ? fileState(graph, id) : definitionState(graph, id), ...place };
+    const state = of === "entity" ? composingState(graph, entity(id)) : of === "file" ? fileState(graph, id) : definitionState(graph, id);
+    // A tree, a bush, a stone or flowers is composed as the form Jev chose for it: the request says which, and the
+    // part a person sees first is the form's own.
+    const look = form === undefined ? undefined : looks.form[form];
+    const first = look?.first;
+    if (raisedAs(as) || look === undefined || first === undefined) return { path: id, as, state, ...place };
+    return { path: id, as, state: { ...state, standsAs: { form, words: look.doc } }, ...place, uses: { [first.slot]: first.use }, ...(first.fixed === undefined ? {} : { fixed: first.fixed }) };
   };
   const trailId = (t: CodeTrail): string => `trail:${t.from}->${t.to}`;
   // The sky and the trails do not wait on the lands, nor on what things stand as: they are composed meanwhile.
@@ -844,8 +878,8 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
   // What every entity, file and definition stands as, unless the judgments already say; each thing Jev raises to a building or a landmark is composed as soon as its answer is in and its land is composed.
   const things: Record<string, { as: StandsAs; blueprint?: Blueprint }> = { ...judged.things };
   const rising: Promise<unknown>[] = [];
-  const compose = (id: string, as: StandsAs): void => {
-    rising.push(raised(id, as).then((thing) => composeThing(looks.compose, jev, thing)).then((blueprint) => (things[id] = { as, blueprint })));
+  const compose = (id: string, as: StandsAs, form?: string): void => {
+    rising.push(raised(id, as, form).then((thing) => composeThing(looks.compose, jev, thing)).then((blueprint) => (things[id] = { as, blueprint })));
   };
   for (const [id, t] of Object.entries(judged.things)) if (t.blueprint === undefined) compose(id, t.as);
   // A form Jev does not yet compose stands as its own blueprint, asked nothing.
@@ -858,7 +892,7 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
       return;
     }
     things[id] = { as };
-    compose(id, as);
+    compose(id, as, form);
   };
   let stands = judged.stands;
   if (stands === undefined) {

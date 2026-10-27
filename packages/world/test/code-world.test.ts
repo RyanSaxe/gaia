@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { biome, bush, landmark, link, rock, structure, tree, wildflowers, world as worldKind } from "@gaia/kinds";
-import { PALETTE_FAMILIES, PRIMITIVES } from "@gaia/primitives";
+import { BUSH_PRIMITIVES, PALETTE_FAMILIES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
 import { type CodeGraph, type CodeFacts, type DefNode, type EntityFacts, type FileFacts, type JevClient, type JevQuestion, type JevRequest, type JevResponse, Library } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
-import { type LookSet, type Looks, composeWorld, formsFor, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, rankThings, requestKey, validate } from "@gaia/world";
+import { LAYOUT, type LookSet, type Looks, composeWorld, formsFor, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, raisedAs, rankThings, requestKey, validate } from "@gaia/world";
 import { fakeJevClient } from "./fixtures.ts";
 
 const file = (path: string, lines: number): FileFacts => ({
@@ -59,13 +59,13 @@ function facts(grow = 1): CodeFacts {
 const set = (...keys: string[]) => Object.fromEntries(keys.map((k) => [k, { doc: `Option ${k}.` }]));
 /** Forms by size, each offered within its range of rank by importance, wide and overlapping as the world's own are. */
 const FORMS: LookSet = {
-  Stone: { doc: "Option Stone.", needs: [{ rank: [0, 0.7] }] },
-  Bush: { doc: "Option Bush.", needs: [{ rank: [0.2, 1] }] },
+  Stone: { doc: "Option Stone.", needs: [{ rank: [0, 0.7] }], composes: "stone", first: { slot: "form", use: "boulder@1" } },
+  Bush: { doc: "Option Bush.", needs: [{ rank: [0.2, 1] }], composes: "bush", first: { slot: "form", use: "thicket@1", fixed: { "form.habit": "mound" } } },
   Hall: { doc: "Option Hall.", needs: [{ rank: [0.5, 1] }], composes: "building" },
   Spire: { doc: "Option Spire.", needs: [{ rank: [0.8, 1] }], composes: "landmark" },
 };
 const LOOKS: Looks = {
-  compose: { building: structure, landmark, world: worldKind, biome, link, tree, bush, stone: rock, flowers: wildflowers, lib: new Library(PRIMITIVES) },
+  compose: { building: structure, landmark, world: worldKind, biome, link, tree, bush, stone: rock, flowers: wildflowers, lib: new Library(PRIMITIVES), offered: { tree: new Library(TREE_PRIMITIVES), bush: new Library(BUSH_PRIMITIVES) } },
   form: FORMS,
   water: set("Dry", "Brook"),
 };
@@ -77,7 +77,7 @@ const holding = (rank: number): string[] => Object.keys(FORMS).filter((k) => FOR
  * The fake Jev, except that what each thing stands as is `pick`'s choice among the forms it was offered: by default
  * every entity raises the largest form it is offered and everything else stands as the smallest.
  */
-const standing = (pick: (about: "file" | "entity", id: string, offered: readonly string[]) => string = (about, _id, offered) => (about === "entity" ? (offered.find((k) => FORMS[k]?.composes === "landmark") ?? offered.find((k) => FORMS[k]?.composes === "building") ?? offered[0]) : offered.find((k) => FORMS[k]?.composes === undefined)) as string): JevClient => {
+const standing = (pick: (about: "file" | "entity", id: string, offered: readonly string[]) => string = (about, _id, offered) => (about === "entity" ? (offered.find((k) => FORMS[k]?.composes === "landmark") ?? offered.find((k) => FORMS[k]?.composes === "building") ?? offered[0]) : offered.find((k) => !raisedAs(FORMS[k]?.composes ?? "building"))) as string): JevClient => {
   const base = fakeJevClient();
   return {
     async ask(request) {
@@ -98,6 +98,36 @@ const standing = (pick: (about: "file" | "entity", id: string, offered: readonly
 const composed = async (m: CodeFacts, jev: JevClient = standing()) => composeWorld(m, LOOKS, jev, await judgeWorld(m, LOOKS, jev));
 
 describe("a world laid out from code", () => {
+  it("composes every tree, bush, stone and flowers as the form Jev chose: its first part settled, the rest Jev's, each from its own size's parts", async () => {
+    const asked: JevRequest[] = [];
+    const bushes = standing((about, _id, offered) => (about === "file" && offered.includes("Bush") ? "Bush" : (offered.find((k) => !raisedAs(FORMS[k]?.composes ?? "building")) ?? (offered[0] as string))));
+    const recording: JevClient = { ask: (request) => (asked.push(request), bushes.ask(request)) };
+    const m = facts();
+    const world = layoutWorld(m, await composeWorld(m, LOOKS, recording, await judgeWorld(m, LOOKS, recording)));
+    const small = [...world.symbols, ...world.standing];
+    // Every thing that stands small has a blueprint of what it stands as.
+    expect(small.length).toBeGreaterThan(0);
+    for (const s of small) expect(s.as === "stone" || s.as === "bush", s.form).toBe(true);
+    for (const s of small) {
+      const bp = s.blueprint;
+      if (bp === undefined) throw new Error(`${s.form} stands with no blueprint.`);
+      if (s.as === "bush") {
+        expect([bp.kind, bp.slots.form?.use, bp.slots.form?.params.habit]).toEqual(["bush", "thicket@1", "mound"]);
+        expect(validate(bp, bush, new Library(BUSH_PRIMITIVES))).toEqual([]);
+      } else expect([bp.kind, bp.slots.form?.use]).toEqual(["rock", "boulder@1"]);
+    }
+    expect(small.some((s) => s.as === "bush")).toBe(true);
+    // Each composing request says what the thing stands as, never asks its first part, and offers a bush no tree's frame and no needles.
+    const composing = asked.filter((r) => (r.state as { standsAs?: unknown }).standsAs !== undefined);
+    expect(composing.length).toBeGreaterThan(0);
+    for (const r of composing) {
+      const form = (r.state as { standsAs: { form: string } }).standsAs.form;
+      expect(Object.keys(r.questions).some((q) => q === "form.use" || q === "form.habit")).toBe(false);
+      const offered = JSON.stringify(r.questions);
+      if (form === "Bush") for (const id of ["branching@1", "spire@1", "needles@1"]) expect(offered.includes(id), id).toBe(false);
+    }
+  });
+
   it("composes the whole world part by part, its sky and every land, building, landmark and trail, each part in its own words, never offering Jev a preset or the old model's signals", async () => {
     const asked: JevRequest[] = [];
     const fake = standing();
@@ -111,9 +141,10 @@ describe("a world laid out from code", () => {
       for (const q of Object.values(r.questions)) expect(q.instructions).not.toContain("Which form fits it best?");
       expect(JSON.stringify(r.state)).not.toMatch(/"(tests|coveredByTests|failing|diagnostics|unusedExports|debtMarkers)"/);
     }
-    expect(Object.keys(judged.things).sort()).toEqual(facts().entities.map((e) => e.path).sort());
+    // Every entity stands as a building or a landmark; every other thing stands small, also composed.
+    expect(Object.keys(judged.things).filter((id) => raisedAs(judged.things[id]!.as)).sort()).toEqual(facts().entities.map((e) => e.path).sort());
     for (const [path, t] of Object.entries(judged.things)) {
-      const k = t.as === "building" ? structure : landmark;
+      const k = t.as === "building" ? structure : t.as === "landmark" ? landmark : t.as === "bush" ? bush : rock;
       if (t.blueprint === undefined) throw new Error(`Nothing was composed for ${path}.`);
       expect(t.blueprint.kind, path).toBe(k.id);
       expect(validate(t.blueprint, k, LOOKS.compose.lib), path).toEqual([]);
@@ -401,7 +432,7 @@ describe("a world laid out from code", () => {
     const judged = await composed(facts());
     const blueprint = Object.values(judged.things)[0]?.blueprint;
     if (blueprint === undefined) throw new Error("Nothing stands.");
-    const landmarks = { ...judged, things: Object.fromEntries(Object.keys(judged.things).map((path) => [path, { as: "landmark" as const, blueprint }])) };
+    const landmarks = { ...judged, things: Object.fromEntries(Object.entries(judged.things).map(([path, t]) => [path, raisedAs(t.as) ? { as: "landmark" as const, blueprint } : t])) };
     const land = landOf(facts());
     for (const world of [layoutWorld(facts(), judged), layoutWorld(facts(), landmarks)]) {
       expect(world.size).toBe(land.size);
@@ -461,7 +492,7 @@ describe("a world laid out from code", () => {
     // A file with more definitions than one request asks about is asked over several, each definition once and the file once.
     const crowded = { ...facts(), files: facts().files.map((f) => (f.path === "packages/core/src/math.ts" ? { ...f, symbols: Array.from({ length: 30 }, (_, k) => ({ name: `f${k}`, kind: "function" as const, exported: false, line: 1 + k * 9, lines: 8 })) } : f)) };
     const asked = planStanding(crowded, LOOKS).requests.filter((p) => p.target === "packages/core/src/math.ts");
-    expect(asked.length).toBe(2);
+    expect(asked.length).toBe(Math.ceil(30 / LAYOUT.formsPerRequest));
     expect(asked.flatMap((p) => Object.keys(p.request.questions)).sort()).toEqual(["form", ...Array.from({ length: 30 }, (_, k) => `form#f${k}`)].sort());
     // A Jev that gives each thing its own form.
     const jev = standing((about, id) => (about === "entity" ? "Hall" : id === "form#x" ? "Stone" : "Bush"));
