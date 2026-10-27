@@ -220,8 +220,10 @@ export function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: numbe
     const h = Math.max(0, y);
     return 1 + 0.35 * Math.exp(-h / reach) + 0.25 * Math.exp(-h / fillet) + lift * l * Math.exp(-h / (reach * 1.6));
   };
-  return { at, rings: [...FLARE_RINGS, 5.5].map((k) => k * trunkRadius) };
+  return { at, rings: flareRingsOf(trunkRadius) };
 }
+
+const flareRingsOf = (trunkRadius: number): number[] => [...FLARE_RINGS, 5.5].map((k) => k * trunkRadius);
 
 /**
  * The bark's ridges and shade at angle `theta` around a ring centered at
@@ -254,31 +256,33 @@ const FORK_REACH = 1.4;
  */
 const WHIP = 0.05;
 
-export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, skel: Skeleton): Built {
-  const out = new PartBuilder("bark", "solid");
-  const r = ctx.rand.fork("bark");
-  const seed = Math.floor(r.next() * 1e6);
+/** One chain of a frame's bark as a tube: its limbs, its sides, its rings, and whether it flares into the ground. */
+interface Tube {
+  readonly chain: readonly number[];
+  readonly radial: number;
+  readonly rings: readonly Ring[];
+  readonly flared: boolean;
+}
+
+/**
+ * The tubes a frame's bark is built from, one per chain of segments, so its
+ * bark runs unbroken past the joins. The bark builds its surface on them, and
+ * a crown counts their triangles to know what room the frame leaves it.
+ */
+function tubesOf(skel: Skeleton): Tube[] {
   const trunkRadius = skel.limbs[0]?.startRadius ?? 0.2;
-  const boughs = new Boughs(skel);
-  const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
+  const flareRings = flareRingsOf(trunkRadius);
   // A tree stands on one trunk, which flares into root lobes; a shrub's many stems rise straight from the soil.
   const trunk = oneTrunk(skel);
   const whip = trunk && trunkRadius < WHIP;
-  const children = skel.limbs.map(() => 0);
-  for (const l of skel.limbs) if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
-
-  // Each chain of segments is one tube, so its bark runs unbroken past the joins.
+  const tubes: Tube[] = [];
   for (const whole of chainsOf(skel)) {
     const chain = whole.filter((i) => length(sub((skel.limbs[i] as Limb).end, (skel.limbs[i] as Limb).start)) >= 1e-4);
     if (chain.length === 0) continue;
     const head = chain[0] as number;
     const first = skel.limbs[head] as Limb;
-    const lr = r.fork(`limb${head}`);
     const flared = trunk && head === 0 && !whip;
     const radial = whip ? (first.depth === 0 ? 6 : 4) : flared ? 24 : first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
-    // Limbs never go: twigs and leaves always have a limb under them, and a failing tree stands bare.
-    const wither = 0.45 + 0.25 * lr.next();
-    const furrows = first.depth === 0 ? 7 : 4;
 
     // The rings along the chain, in one frame carried from ring to ring, so
     // the bark's ridges never jump where one segment meets the next.
@@ -314,7 +318,7 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
       }
       if (k === 0 && flared) {
         // Rings close together near the ground, so the flare curves.
-        const extra = flare.rings.map((y) => y / Math.max(dir[1], 0.5)).filter((a) => a < span * 0.8);
+        const extra = flareRings.map((y) => y / Math.max(dir[1], 0.5)).filter((a) => a < span * 0.8);
         alongs = [...alongs, ...extra].sort((a, b) => a - b).filter((a, n, all) => n === 0 || a - (all[n - 1] as number) > trunkRadius * 0.03);
       }
       alongs.forEach((along, n) => {
@@ -323,6 +327,31 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
         push(addScaled(start, dir, along), end ? normalize(add(dir, nextDir)) : dir, radiusAt(along), i);
       });
     });
+    tubes.push({ chain, radial, rings, flared });
+  }
+  return tubes;
+}
+
+/** How many triangles a frame's bark takes: each tube's sides between its rings, and its rounded tip. */
+export const barkTriangles = (skel: Skeleton): number => tubesOf(skel).reduce((n, t) => n + t.radial * (2 * (t.rings.length - 1) + 1), 0);
+
+export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, skel: Skeleton): Built {
+  const out = new PartBuilder("bark", "solid");
+  const r = ctx.rand.fork("bark");
+  const seed = Math.floor(r.next() * 1e6);
+  const trunkRadius = skel.limbs[0]?.startRadius ?? 0.2;
+  const boughs = new Boughs(skel);
+  const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
+  const children = skel.limbs.map(() => 0);
+  for (const l of skel.limbs) if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
+
+  for (const { chain, radial, rings, flared } of tubesOf(skel)) {
+    const head = chain[0] as number;
+    const first = skel.limbs[head] as Limb;
+    const lr = r.fork(`limb${head}`);
+    // Limbs never go: twigs and leaves always have a limb under them, and a failing tree stands bare.
+    const wither = 0.45 + 0.25 * lr.next();
+    const furrows = first.depth === 0 ? 7 : 4;
 
     // The surface without its bark's ridges gives the normals, so the flare
     // shades as one smooth form; the ridges go on top.
