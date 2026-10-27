@@ -94,14 +94,18 @@ describe("manifest", () => {
 });
 
 // Each test builds every sample of a primitive: up to a second alone, several when other work shares the machine.
+// Needles on a bush grow as a juniper of 280 tufts per sample, about 12 s alone and over 20 s on a busy CI runner.
+const SLOW: Readonly<Record<string, number>> = { "needles@1": 60_000 };
+
 describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
-  it("declares a versioned ID, a doc and an instruction for every field", () => {
+  const timeout = SLOW[p.id] ?? 20_000;
+  it("declares a versioned ID, a doc and an instruction for every field", { timeout }, () => {
     expect(p.id).toMatch(/^[a-z][a-z0-9-]*@\d+$/);
     expect(p.doc.trim().length).toBeGreaterThan(10);
     for (const f of Object.values(p.params) as Field[]) expect(f.ask.trim().length).toBeGreaterThan(5);
   });
 
-  it("builds the same output from the same seed", () => {
+  it("builds the same output from the same seed", { timeout }, () => {
     for (const s of samples(p)) {
       for (const input of inputFor(p).slice(0, 2)) {
         expect(JSON.stringify(build(p, s, input, 3), replacer)).toBe(JSON.stringify(build(p, s, input, 3), replacer));
@@ -111,7 +115,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
 
   if (!GEOMETRY_ROLES.has(p.role)) return;
 
-  it("writes finite geometry with channels in range, within the triangle budget", () => {
+  it("writes finite geometry with channels in range, within the triangle budget", { timeout }, () => {
     for (const s of samples(p)) {
       for (const input of inputFor(p)) {
         for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
@@ -134,7 +138,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
     }
   });
 
-  it("winds bark, stone and wood with their front faces outward", () => {
+  it("winds bark, stone and wood with their front faces outward", { timeout }, () => {
     for (const s of samples(p)) {
       for (const input of inputFor(p).slice(0, 2)) {
         for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
@@ -146,7 +150,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
     }
   });
 
-  it("builds whole pieces, and far detail leaves out whole pieces and keeps the rest bit-identical", () => {
+  it("builds whole pieces, and far detail leaves out whole pieces and keeps the rest bit-identical", { timeout }, () => {
     for (const s of samples(p)) {
       for (const input of inputFor(p).slice(0, 2)) {
         for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
@@ -201,7 +205,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
     }
   });
 
-  it("responds to vitality", () => {
+  it("responds to vitality", { timeout }, () => {
     const built = build(p, (samples(p)[1] as Stored), inputFor(p)[0], 5) as Built;
     const changed = built.parts.some((part) => {
       const healthy = applyVitality(part, 1);
