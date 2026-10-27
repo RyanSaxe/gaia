@@ -390,7 +390,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
  * The bake's version: a far form stored by an earlier version must be baked
  * again. Bump it whenever what a bake writes, or how a card reads it, changes.
  */
-export const FAR_BAKE_VERSION = 4;
+export const FAR_BAKE_VERSION = 5;
 
 /** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
 export interface FarFormData {
@@ -702,8 +702,16 @@ flat varying float vSlot;
 flat varying float vRadius;
 float formRadius;
 // Half a level finer than the mipmaps pick: blending four views already softens the card.
+const float LOD_BIAS = -0.5;
 vec4 atlas(highp sampler2DArray t, vec2 uv) {
-  return texture(t, vec3(uv, vSlot), -0.5);
+  return texture(t, vec3(uv, vSlot), LOD_BIAS);
+}
+// The mip level the atlas is read at here (\`atlas\`), from how many of its texels the pixel spans. A form bakes a
+// texel to a pixel at the size it turns far at; this is 0 down to about 0.7 of that size and 1 at about a third.
+float minified() {
+  float frame = float(textureSize(uLayer0, 0).y) / GRID.y;
+  float texels = max(length(dFdx(vQ)), length(dFdy(vQ))) * frame / (2.0 * formRadius);
+  return max(0.0, log2(max(texels, 1e-6)) + LOD_BIAS);
 }
 vec3 viewDir(vec2 cell) {
   float az = 6.28318530718 * cell.x / GRID.x;
@@ -744,14 +752,21 @@ vec4 tap(highp sampler2DArray t) {
   return atlas(t, gUv0) * vW.x + atlas(t, gUv1) * vW.y + atlas(t, gUv2) * vW.z + atlas(t, gUv3) * vW.w;
 }
 // The share of the texel covered at vitality v, between the baked slices at
-// 1, 0.6, 0.3 and 0.1, its edge sharpened: blending four views and their
-// mipmaps softens it, and a soft edge would dither into a halo.
+// 1, 0.6, 0.3 and 0.1. Near the size the form turns far at, its edge is
+// sharpened: blending four views softens it, and a soft edge would dither
+// into a halo. Smaller on screen, each texel read is a mipmap's average of
+// the plant's pieces: a twig, strand or needle finer than a texel is only a
+// share of it, which a sharpened edge would cut away, so the card's outer
+// twigs would vanish and its crown shrink while the full form's pieces keep
+// covering their share. Over the first mip level the edge gives way to the
+// share as it is.
 float coverAt(vec4 l0, vec4 l3, float v) {
   float c;
   if (v >= 0.6) c = mix(l3.r, l0.a, (v - 0.6) / 0.4);
   else if (v >= 0.3) c = mix(l3.g, l3.r, (v - 0.3) / 0.3);
   else c = mix(l3.b, l3.g, clamp((v - 0.1) / 0.2, 0.0, 1.0));
-  return clamp((c - uCoverEdge.x) / (uCoverEdge.y - uCoverEdge.x), 0.0, 1.0);
+  vec2 edge = mix(uCoverEdge, vec2(0.0, 1.0), clamp(minified(), 0.0, 1.0));
+  return clamp((c - edge.x) / (edge.y - edge.x), 0.0, 1.0);
 }
 `;
 
@@ -829,7 +844,11 @@ void main() {
 }
 `;
 
-/** How a card reads its bake: the coverage remapped from this range to 0 to 1, and how far toward the sun, in radii, it reads its shadow. */
+/**
+ * How a card reads its bake: near the size its form turns far at, the coverage remapped from this range to 0 to 1
+ * (smaller, the range widens to 0 to 1 over the first mip level), and how far toward the sun, in radii, it reads its
+ * shadow.
+ */
 export const CARD = { coverEdge: [0.25, 0.75], shadowLift: 0.2 } as const;
 
 /** One plant's copies among a set's cards: in buffers written when the copies are placed, read by every pass. */
