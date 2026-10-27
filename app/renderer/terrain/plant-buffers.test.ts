@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { Library, seedOf } from "@gaia/schema";
-import { FLORA_PRIMITIVES } from "@gaia/primitives";
-import { flora } from "@gaia/kinds";
-import { FLORA_PRESETS, mergeParts, realize } from "@gaia/realize";
+import { TREE_PRIMITIVES } from "@gaia/primitives";
+import { tree } from "@gaia/kinds";
+import { sweep } from "@gaia/world";
+import { mergeParts, realize } from "@gaia/realize";
 import { createPlant, createPlantInstances, createSceneLight, geometryOf } from "@gaia/render";
 
-const plant = realize((FLORA_PRESETS[0] as (typeof FLORA_PRESETS)[number]).blueprint, flora, new Library(FLORA_PRIMITIVES), { seed: seedOf("plant-buffers"), facts: { scale: 1, age: 120 } });
+const treeLib = new Library(TREE_PRIMITIVES);
+/** The first tree of a sweep of a tree's parts. */
+const firstTree = sweep(tree, treeLib).blueprints[0]!;
+const plant = realize(firstTree, tree, treeLib, { seed: seedOf("plant-buffers"), facts: { scale: 1, age: 120 } });
 
 /** Every buffer under `object` as the renderer leaves it once uploaded: its upload callback run. */
 function uploaded(object: THREE.Object3D): THREE.BufferAttribute[] {
