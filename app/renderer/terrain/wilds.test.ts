@@ -72,7 +72,8 @@ describe("the wild's bushes", () => {
     // The window holds a few dozen bushes.
     expect(bare).toBeGreaterThan(20);
     expect(edge).toBeGreaterThan(bare);
-  });
+    // Builds the bush and reads every texel of a 512-texel window against 625 thickets: about 2.5 s alone, past 5 s when other work shares the machine.
+  }, 30_000);
 
   it("clear nothing before a world gives them, and their own ground once it does", () => {
     const clearings = createClearings(terrain);
