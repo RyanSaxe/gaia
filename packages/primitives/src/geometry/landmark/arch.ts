@@ -37,7 +37,7 @@ const SPACING = 0.36;
 /** How deep the feet are set into the ground, meters. */
 const SINK = 0.8;
 /** How far out from its springing toward the crown the standing half's stub reaches, as a share of its rings. */
-const STUB = 0.5;
+export const ROCK_ARCH_STUB = 0.7;
 
 /** The opening's edge from the left foot over the head to the right foot, densely, as x, y pairs. */
 function openingEdge(half: number, rise: number, head: number): [number, number][] {
@@ -180,7 +180,7 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
   const first = r.range(0.4, 0.42);
   const sags = r.next() < 0.5 ? 0 : 1;
   const stage = r.range(0.09, 0.11);
-  const stub = sags === 0 ? rightTop - Math.round((rightTop - crack) * STUB) : leftTop + Math.round((crack - leftTop) * STUB);
+  const stub = sags === 0 ? rightTop - Math.round((rightTop - crack) * ROCK_ARCH_STUB) : leftTop + Math.round((crack - leftTop) * ROCK_ARCH_STUB);
   // Each break is ragged: its ring's points move along the sweep, by as much as the rings are apart.
   for (const i of [leftStump, leftMid, leftTop, crack, stub, rightTop, rightMid, rightStump]) {
     (grid[i] as V3[]).forEach((q, j) => {

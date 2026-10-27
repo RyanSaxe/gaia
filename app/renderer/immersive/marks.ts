@@ -24,6 +24,7 @@ import {
   greatTreeParams,
   lookoutTowerParams,
   ROCK_ARCH_FORMS,
+  ROCK_ARCH_STUB,
   ROTUNDA_MEASURES,
   rockArchParams,
   rotundaParams,
@@ -2573,12 +2574,12 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
     piece(0, mid, -crack * 0.5);
     piece(mid, inner.length - 1, crack * 0.5);
   } else {
-    // The bare stack on the left, the one that stands on the right: its half of the span whole, then broken halfway
-    // out from its springing.
+    // The bare stack on the left, the one that stands on the right: its half of the span whole, then broken part way
+    // out from its springing, as far as the world's.
     const left = Math.max(1, inner.findIndex(([, h], i) => i > 0 && h >= bare * rise));
     const spring = Math.min(inner.length - 2, inner.length - 1 - [...inner].reverse().findIndex(([, h], i) => i > 0 && h >= 0.76 * rise));
     piece(0, left, -0.5);
-    piece(stubbed ? Math.round((mid + spring) / 2) : mid, inner.length - 1, 0.5);
+    piece(stubbed ? Math.round(spring - (spring - mid) * ROCK_ARCH_STUB) : mid, inner.length - 1, 0.5);
     rubble(pen, 0, -depth * 0.5, 2.2 + half * 0.3, seed + 3, stone);
   }
   tufts(pen, [[-foot - 0.8, -1.2], [foot + 0.6, -1]], w);
