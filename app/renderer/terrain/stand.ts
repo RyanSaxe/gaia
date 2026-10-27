@@ -133,7 +133,10 @@ export interface Stand {
   readonly dry: readonly string[];
 }
 
-/** How far a landmark reaches at the ground: its standing pieces within a meter of it, at most 10 m. Fallen stone that grows in at its foot is walked over, so it does not count. */
+/**
+ * How far a landmark reaches at the ground: its standing pieces within a meter of it, at most 25 m, as far as a great
+ * span's feet. Fallen stone that grows in at its foot is walked over, so it does not count.
+ */
 export function landmarkBase(built: Pick<Built, "parts">): number {
   let base = 1;
   for (const part of built.parts) {
@@ -142,7 +145,44 @@ export function landmarkBase(built: Pick<Built, "parts">): number {
       if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
     }
   }
-  return Math.min(base, 10);
+  return Math.min(base, 25);
+}
+
+/**
+ * Where a landmark meets the ground, in its own frame: a disc round where each piece it stands on meets the ground
+ * (a step, a stone, a foot, a tower's lowest blocks, a great tree's roots), from the middle of that footing, leaving
+ * out any disc another holds. The grass is cleared under each, however far the landmark reaches. Fallen stone that
+ * grows in does not count.
+ */
+export function landmarkFeet(built: Pick<Built, "parts">): { readonly x: number; readonly z: number; readonly radius: number }[] {
+  const feet: { x: number; z: number; radius: number }[] = [];
+  for (const part of built.parts) {
+    if (part.collision === "none") continue;
+    const pieces = new Map<number, number[]>();
+    for (let v = 0; v * 3 < part.positions.length; v++) {
+      if ((part.channels.grow?.[v] ?? 0) > 0 || (part.positions[v * 3 + 1] as number) >= 0.3) continue;
+      const id = part.piece[v * 2] as number;
+      let points = pieces.get(id);
+      if (points === undefined) pieces.set(id, (points = []));
+      points.push(part.positions[v * 3] as number, part.positions[v * 3 + 2] as number);
+    }
+    for (const points of pieces.values()) {
+      let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
+      for (let k = 0; k < points.length; k += 2) {
+        x0 = Math.min(x0, points[k] as number);
+        x1 = Math.max(x1, points[k] as number);
+        z0 = Math.min(z0, points[k + 1] as number);
+        z1 = Math.max(z1, points[k + 1] as number);
+      }
+      const x = (x0 + x1) / 2;
+      const z = (z0 + z1) / 2;
+      let reach = 0;
+      for (let k = 0; k < points.length; k += 2) reach = Math.max(reach, Math.hypot((points[k] as number) - x, (points[k + 1] as number) - z));
+      feet.push({ x, z, radius: reach + 0.2 });
+    }
+  }
+  feet.sort((a, b) => b.radius - a.radius);
+  return feet.filter((f, i) => !feet.some((g, k) => k < i && Math.hypot(f.x - g.x, f.z - g.z) + f.radius <= g.radius));
 }
 
 /**

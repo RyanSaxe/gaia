@@ -6,6 +6,7 @@
 // smooths away its facets. Nothing else moves the eyes: no bob, no sway, no
 // roll, so the view moves only as the person moves it.
 
+import type { Part } from "@gaia/schema";
 import { footbridgeDeck, footbridgeHolds } from "@gaia/primitives";
 import { type Crossing, type Way, crossingSeed } from "./paths.ts";
 import { EYE_HEIGHT } from "./sight.ts";
@@ -92,10 +93,106 @@ export function deckShape(d: Deck): SolidShape {
   return { points: [[-d.half, -w], [d.half, -w], [d.half, w], [-d.half, w]].flatMap(([u, v]) => [d.x + (u as number) * d.cos + (v as number) * d.sin, d.z - (u as number) * d.sin + (v as number) * d.cos]) };
 }
 
-/** The highest deck's top over a point, or -Infinity off every deck. */
-export function deckAt(decks: readonly Deck[], x: number, z: number): number {
+/** Meters a side of a floor's cells. */
+export const FLOOR_CELL = 0.25;
+
+/**
+ * A built floor a walk stands on, such as a landmark's steps and the floor inside: the top of its upward faces on a
+ * grid of `FLOOR_CELL` cells over the land from (x0, z0), -Infinity where it has none.
+ */
+export interface Floor {
+  readonly x0: number;
+  readonly z0: number;
+  readonly cols: number;
+  readonly rows: number;
+  readonly tops: Float32Array;
+}
+
+/** What a walk stands on above the ground: a footbridge's deck or a built floor. */
+export type Footbed = Deck | Floor;
+
+/**
+ * The floor a built thing's walkable parts make, standing at (x, y, z) turned by `yaw` as Three turns it: the tops of
+ * their upward faces, which a walk climbs as it climbs the ground, and which stop no walk (`piecesShapes` reads only
+ * solid parts). Null when it has none.
+ */
+export function floorOf(parts: readonly Part[], at: { readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }): Floor | null {
+  const c = Math.cos(at.yaw);
+  const s = Math.sin(at.yaw);
+  const tris: number[] = [];
+  for (const part of parts) {
+    if (part.collision !== "walkable") continue;
+    const p = part.positions;
+    const n = part.normals;
+    for (let t = 0; t < part.indices.length; t += 3) {
+      const vs = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
+      if (vs.reduce((up, v) => up + (n[v * 3 + 1] as number), 0) < 1.5) continue;
+      for (const v of vs) {
+        const lx = p[v * 3] as number;
+        const lz = p[v * 3 + 2] as number;
+        tris.push(at.x + lx * c + lz * s, at.y + (p[v * 3 + 1] as number), at.z - lx * s + lz * c);
+      }
+    }
+  }
+  if (tris.length === 0) return null;
+  let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
+  for (let k = 0; k < tris.length; k += 3) {
+    x0 = Math.min(x0, tris[k] as number);
+    x1 = Math.max(x1, tris[k] as number);
+    z0 = Math.min(z0, tris[k + 2] as number);
+    z1 = Math.max(z1, tris[k + 2] as number);
+  }
+  const cols = Math.ceil((x1 - x0) / FLOOR_CELL) + 1;
+  const rows = Math.ceil((z1 - z0) / FLOOR_CELL) + 1;
+  const tops = new Float32Array(cols * rows).fill(-Infinity);
+  // Each upward face's height at the middle of every cell it covers; the highest face over a cell is its top.
+  for (let k = 0; k < tris.length; k += 9) {
+    const [ax, ay, az, bx, by, bz, qx, qy, qz] = tris.slice(k, k + 9) as [number, number, number, number, number, number, number, number, number];
+    const area = (bx - ax) * (qz - az) - (qx - ax) * (bz - az);
+    if (Math.abs(area) < 1e-9) continue;
+    const i0 = Math.max(0, Math.floor((Math.min(ax, bx, qx) - x0) / FLOOR_CELL));
+    const i1 = Math.min(cols - 1, Math.ceil((Math.max(ax, bx, qx) - x0) / FLOOR_CELL));
+    const j0 = Math.max(0, Math.floor((Math.min(az, bz, qz) - z0) / FLOOR_CELL));
+    const j1 = Math.min(rows - 1, Math.ceil((Math.max(az, bz, qz) - z0) / FLOOR_CELL));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        const px = x0 + (i + 0.5) * FLOOR_CELL;
+        const pz = z0 + (j + 0.5) * FLOOR_CELL;
+        const u = ((qx - bx) * (pz - bz) - (px - bx) * (qz - bz)) / area;
+        const v = ((ax - qx) * (pz - qz) - (px - qx) * (az - qz)) / area;
+        const w = 1 - u - v;
+        if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
+        const y = u * ay + v * by + w * qy;
+        if (y > (tops[j * cols + i] as number)) tops[j * cols + i] = y;
+      }
+    }
+  }
+  // A joint between paving stones is narrower than a cell: a cell that misses every face but has floor either side
+  // of it takes the lower side, so a walk never drops into a joint.
+  const filled = tops.slice();
+  for (let j = 1; j < rows - 1; j++) {
+    for (let i = 1; i < cols - 1; i++) {
+      const k = j * cols + i;
+      if ((tops[k] as number) > -Infinity) continue;
+      const across = Math.min(tops[k - 1] as number, tops[k + 1] as number);
+      const along = Math.min(tops[k - cols] as number, tops[k + cols] as number);
+      const side = Math.max(across, along);
+      if (side > -Infinity) filled[k] = side;
+    }
+  }
+  return { x0, z0, cols, rows, tops: filled };
+}
+
+/** The highest deck's or floor's top over a point, or -Infinity off every one. */
+export function deckAt(decks: readonly Footbed[], x: number, z: number): number {
   let top = -Infinity;
   for (const d of decks) {
+    if ("tops" in d) {
+      const i = Math.floor((x - d.x0) / FLOOR_CELL);
+      const j = Math.floor((z - d.z0) / FLOOR_CELL);
+      if (i >= 0 && j >= 0 && i < d.cols && j < d.rows) top = Math.max(top, d.tops[j * d.cols + i] as number);
+      continue;
+    }
     const dx = x - d.x;
     const dz = z - d.z;
     // Local +x runs along the span as Three's rotation about y turns it.
@@ -106,8 +203,8 @@ export function deckAt(decks: readonly Deck[], x: number, z: number): number {
   return top;
 }
 
-/** How a person stands at a point: on a deck where one stands above the ground or the water there, dry; otherwise on the ground, wading or swimming. */
-export function footingAt(t: Terrain, decks: readonly Deck[], x: number, z: number): Footing {
+/** How a person stands at a point: on a deck or floor where one stands above the ground or the water there, dry; otherwise on the ground, wading or swimming. */
+export function footingAt(t: Terrain, decks: readonly Footbed[], x: number, z: number): Footing {
   const stance = stanceAt(t, x, z);
   const ground = groundHeightAt(t, x, z);
   const top = decks.length === 0 ? -Infinity : deckAt(decks, x, z);
@@ -163,7 +260,7 @@ const FOOTPRINT_WEIGHT = FOOTPRINT.reduce((sum, [, , w]) => sum + w, 0);
 const RIDE_LAG = 2 / GAIT.ride + 1 / GAIT.level;
 
 /** The eyes' height above the mean footing round a point, weighted toward its middle: the ground's shape without its facets. */
-function rideTarget(t: Terrain, decks: readonly Deck[], x: number, z: number): number {
+function rideTarget(t: Terrain, decks: readonly Footbed[], x: number, z: number): number {
   const r = GAIT.footprint;
   let sum = 0;
   for (const [ox, oz, w] of FOOTPRINT) sum += footingAt(t, decks, x + ox * r, z + oz * r).eye * w;
@@ -171,7 +268,7 @@ function rideTarget(t: Terrain, decks: readonly Deck[], x: number, z: number): n
 }
 
 /** A body standing still at a point, eyes at rest. */
-export function standAt(t: Terrain, decks: readonly Deck[], x: number, z: number): Stride {
+export function standAt(t: Terrain, decks: readonly Footbed[], x: number, z: number): Stride {
   const eye = rideTarget(t, decks, x, z);
   return { x, z, vx: 0, vz: 0, ax: 0, az: 0, eye, climb: 0, level: eye, blocked: false };
 }
@@ -182,7 +279,7 @@ export function standAt(t: Terrain, decks: readonly Deck[], x: number, z: number
  * the grade along the way it would go; solids turn it aside as they turn any
  * step. The eyes ride the footing.
  */
-export function stride(t: Terrain, solids: Solids, decks: readonly Deck[], from: Stride, want: Intent, dt: number): Stride {
+export function stride(t: Terrain, solids: Solids, decks: readonly Footbed[], from: Stride, want: Intent, dt: number): Stride {
   if (dt <= 0) return from;
   const here = footingAt(t, decks, from.x, from.z);
   const len = Math.hypot(want.dx, want.dz);
@@ -216,7 +313,7 @@ export function stride(t: Terrain, solids: Solids, decks: readonly Deck[], from:
 }
 
 /** The eyes riding the footing as the body comes to (x, z) going (vx, vz). */
-function ride(t: Terrain, decks: readonly Deck[], from: Stride, x: number, z: number, vx: number, vz: number, dt: number): Stride {
+function ride(t: Terrain, decks: readonly Footbed[], from: Stride, x: number, z: number, vx: number, vz: number, dt: number): Stride {
   const ahead = rideTarget(t, decks, x + vx * RIDE_LAG, z + vz * RIDE_LAG);
   const level = ahead + (from.level - ahead) * Math.exp(-GAIT.level * dt);
   const [eye, climb] = settle(from.eye, from.climb, level, GAIT.ride, dt);
@@ -224,7 +321,7 @@ function ride(t: Terrain, decks: readonly Deck[], from: Stride, x: number, z: nu
 }
 
 /** One frame of being carried to (x, z), as travel along the trails carries the body: the eyes ride the footing as a walk's do. */
-export function carry(t: Terrain, decks: readonly Deck[], from: Stride, x: number, z: number, dt: number): Stride {
+export function carry(t: Terrain, decks: readonly Footbed[], from: Stride, x: number, z: number, dt: number): Stride {
   if (dt <= 0) return from;
   return ride(t, decks, from, x, z, (x - from.x) / dt, (z - from.z) / dt, dt);
 }
