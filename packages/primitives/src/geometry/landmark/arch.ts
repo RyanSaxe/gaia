@@ -5,15 +5,13 @@
 // that meet without a seam: on each side a stack of two blocks, and over the
 // opening the span in two halves. As vitality falls the stacks lean apart
 // and a crack opens across the span; then each half of the span falls and
-// lies broken in the grass; last the stacks' tops crumble, leaving two
-// stacks either side of the way. The stacks are separate pieces, so a walker
-// passes between them.
+// lies broken in the grass, leaving two stacks either side of the way. The
+// stacks are separate pieces, so a walker passes between them.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { rockArchParams } from "../../landmark.ts";
-import { type Channels, PartBuilder, type V3, clamp, cross, fbm3, normalize, sub } from "../kit.ts";
+import { type Channels, PartBuilder, type V3, clamp, cross, fbm3, icosphere, normalize, sub } from "../kit.ts";
 import { lump, still } from "./shared.ts";
-import { emitFallen } from "./stones.ts";
 
 type ArchParams = Resolved<typeof rockArchParams>;
 
@@ -24,9 +22,9 @@ type ArchParams = Resolved<typeof rockArchParams>;
  * through it, along the way.
  */
 export const ROCK_ARCH_FORMS = {
-  "a doorway": { half: 2.2, rise: 9.5, head: 2.9, ring: 3.6, depth: 3.8 },
-  "a gate": { half: 4.8, rise: 10.5, head: 6.8, ring: 3.2, depth: 3.5 },
-  "a great span": { half: 9.5, rise: 12.5, head: 12.5, ring: 2.8, depth: 3 },
+  "a doorway": { half: 3, rise: 14, head: 4, ring: 4.8, depth: 5 },
+  "a gate": { half: 6.5, rise: 16, head: 9.5, ring: 4.4, depth: 4.8 },
+  "a great span": { half: 15, rise: 18.5, head: 18.5, ring: 3.9, depth: 4.2 },
 } as const;
 /** Points round each ring of the sweep, and the spacing of its rings along the opening's edge, meters. */
 const AROUND = 24;
@@ -191,27 +189,28 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
   );
 
   // How it gives way, side by side: each side leans out about its outer toe, opening the crack across the span; then
-  // its half of the span falls, sinking into its stack, one side first; at last the stacks' tops crumble.
+  // its half of the span falls, sinking into its stack, one side first. The stacks stand: a block sinking toward the
+  // toe from high on a stack this tall would pass outside the stone below it.
   const out = new PartBuilder("stone", "solid");
-  /** The outer edge of a foot where it meets the ground, which its side leans over. */
-  const toeOf = (from: number, to: number, side: number): V3 => {
+  /** The outer edge of a foot where it meets the ground, which its side leans over and its half of the span sinks toward. */
+  const footOf = (from: number, to: number, side: number): { toe: V3; outer: number } => {
     let ground = from;
     for (let i = from; i <= to; i++) if (Math.abs((centers[i] as V3)[1]) < Math.abs((centers[ground] as V3)[1])) ground = i;
-    return [side * Math.max(...(grid[ground] as V3[]).map((q) => side * q[0])), 0, 0];
+    const outer = side * Math.max(...(grid[ground] as V3[]).map((q) => side * q[0]));
+    return { toe: [outer, 0, 0], outer };
   };
   const sides = [
-    { toe: toeOf(0, leftJoint, -1), turn: r.range(0.032, 0.042), from: r.range(0.78, 0.84) },
-    { toe: toeOf(rightJoint, count - 1, 1), turn: -r.range(0.032, 0.042), from: r.range(0.72, 0.77) },
+    { ...footOf(0, leftJoint, -1), turn: r.range(0.032, 0.042), from: r.range(0.78, 0.84) },
+    { ...footOf(rightJoint, count - 1, 1), turn: -r.range(0.032, 0.042), from: r.range(0.72, 0.77) },
   ];
   const spanGoes = [r.range(0.34, 0.4), 0];
   spanGoes[1] = (spanGoes[0] as number) - r.range(0.04, 0.07);
-  const topGoes = [r.range(0.1, 0.2), r.range(0.1, 0.2)];
   const pieces: { from: number; to: number; side: number; loss: number }[] = [
     { from: 0, to: leftJoint, side: 0, loss: 0 },
-    { from: leftJoint, to: leftTop, side: 0, loss: topGoes[0] as number },
+    { from: leftJoint, to: leftTop, side: 0, loss: 0 },
     { from: leftTop, to: crack, side: 0, loss: spanGoes[0] as number },
     { from: crack, to: rightTop, side: 1, loss: spanGoes[1] as number },
-    { from: rightTop, to: rightJoint, side: 1, loss: topGoes[1] as number },
+    { from: rightTop, to: rightJoint, side: 1, loss: 0 },
     { from: rightJoint, to: count - 1, side: 1, loss: 0 },
   ];
   const tint = r.range(-0.03, 0.03);
@@ -221,21 +220,62 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
     emitSweep(out, grid, normals, centers, piece.from, piece.to, rise + ringT, ch, seed);
   }
 
-  // What has fallen lies in the grass and grows in as it falls, stopping no walker: the broken span under each half,
-  // and the crumbled top at its stack's foot. Old scree lies at both feet at any vitality.
+  // What has fallen lies in the grass and grows in as it falls, stopping no walker: the broken span under each half.
+  // Old scree lies at both feet at any vitality.
   const fallen = r.fork("fallen");
   for (const [k, side] of [-1, 1].entries()) {
     const grow = spanGoes[k] as number;
-    for (let m = 0; m < 2; m++) {
-      const x = side * half * fallen.range(0.25, 0.75);
-      emitFallen(out, { x, z: fallen.range(-0.4, 0.4) * depth, yaw: fallen.range(-0.5, 0.5), width: depth * 0.75, depth: ringT * 0.8, length: Math.min(5.5, half * 0.7 + 1.5) }, facets, grow, fallen);
+    for (let m = 0; m < 4; m++) {
+      const size: V3 = [ringT * fallen.range(0.35, 0.6), ringT * fallen.range(0.22, 0.36), depth * fallen.range(0.25, 0.4)];
+      chunk(out, side * half * fallen.range(0.12, 0.85), fallen.range(-0.45, 0.45) * depth, size, fallen.next() * Math.PI, grow, seed + k * 7 + m, fallen);
     }
     for (let m = 0; m < 6; m++) rubble(out, side * half * fallen.range(0, 1.1), fallen.range(-0.8, 0.8) * depth, ringT * fallen.range(0.12, 0.22), grow, fallen);
-    const toe = (sides[k] as (typeof sides)[number]).toe;
-    for (let m = 0; m < 4; m++) rubble(out, toe[0] + side * fallen.range(0.2, 1.6), fallen.range(-0.9, 0.9) * depth, ringT * fallen.range(0.08, 0.16), 1, fallen);
-    for (let m = 0; m < 5; m++) rubble(out, toe[0] + side * fallen.range(0.4, 2.4), fallen.range(-1, 1) * depth, ringT * fallen.range(0.12, 0.2), topGoes[k] as number, fallen);
+    const outer = (sides[k] as (typeof sides)[number]).outer;
+    for (let m = 0; m < 4; m++) rubble(out, outer + side * fallen.range(0.2, 1.6), fallen.range(-0.9, 0.9) * depth, ringT * fallen.range(0.08, 0.16), 1, fallen);
   }
   return { parts: [out.part()], anchors: [{ position: [0, rise + ringT, 0], normal: [0, 1, 0], size: 1 }] };
+}
+
+/**
+ * A broken chunk of the span lying in the grass, a quarter sunk, its faces flat and sharp where it split and its
+ * shading the stone's own; it grows in below `grow`.
+ */
+function chunk(b: PartBuilder, x: number, z: number, size: V3, yaw: number, grow: number, seed: number, r: Rand): void {
+  const sphere = icosphere(1);
+  const planes = Array.from({ length: 7 }, () => {
+    const a = r.next() * Math.PI * 2;
+    const y = r.range(-0.3, 0.9);
+    const h = Math.sqrt(1 - y * y);
+    return { n: [Math.cos(a) * h, y, Math.sin(a) * h] as V3, d: r.range(0.4, 0.78) };
+  });
+  const c = Math.cos(yaw);
+  const sn = Math.sin(yaw);
+  const points = sphere.points.map((q): V3 => {
+    let p: V3 = [q[0], q[1], q[2]];
+    for (const pl of planes) {
+      const over = p[0] * pl.n[0] + p[1] * pl.n[1] + p[2] * pl.n[2] - pl.d;
+      if (over > 0) p = [p[0] - pl.n[0] * over, p[1] - pl.n[1] * over, p[2] - pl.n[2] * over];
+    }
+    const lx = p[0] * size[0];
+    const lz = p[2] * size[2];
+    return [x + lx * c - lz * sn, Math.max(p[1], -0.6) * size[1] + size[1] * 0.35, z + lx * sn + lz * c];
+  });
+  const ch = still([x, 0, z], 0.6, { grow: clamp(grow, 0.05, 1), tint: (r.next() - 0.5) * 0.04 });
+  const middle: V3 = [x, size[1] * 0.35, z];
+  // Each face its own, so the breaks read as sharp planes.
+  for (const [i, j, k] of sphere.triangles) {
+    const [pa, pb, pc] = [points[i] as V3, points[j] as V3, points[k] as V3];
+    const f = cross(sub(pb, pa), sub(pc, pa));
+    if (Math.hypot(f[0], f[1], f[2]) < 1e-8) continue;
+    const mid: V3 = [(pa[0] + pb[0] + pc[0]) / 3, (pa[1] + pb[1] + pc[1]) / 3, (pa[2] + pb[2] + pc[2]) / 3];
+    const outward = f[0] * (mid[0] - middle[0]) + f[1] * (mid[1] - middle[1]) + f[2] * (mid[2] - middle[2]) >= 0;
+    const n = normalize(outward ? f : [-f[0], -f[1], -f[2]]);
+    const mottle = fbm3(mid[0] * 0.9, mid[1] * 0.9, mid[2] * 0.9, seed + 11, 3);
+    const shade = 0.47 + 0.14 * mottle + 0.08 * n[1] - 0.12 * Math.max(0, -n[1]);
+    const ids = [pa, pb, pc].map((q) => b.vertex(q, n, shade, ch));
+    if (outward) b.triangle(ids[0] as number, ids[1] as number, ids[2] as number);
+    else b.triangle(ids[0] as number, ids[2] as number, ids[1] as number);
+  }
 }
 
 /** A rough stone lying in the grass that grows in below `grow`. */

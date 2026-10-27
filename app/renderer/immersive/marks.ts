@@ -2525,7 +2525,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
 
 /**
  * A rock arch from its form and thickness: the ring's face toward the viewer over its far face in shade. As it fails
- * the crack opens at its crown, then the span is gone and two stacks stand over its rubble, crumbling lower at the last.
+ * the crack opens at its crown, then the span is gone and two stacks stand over its rubble.
  */
 function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, seed: number): void {
   const w = look.w;
@@ -2537,7 +2537,6 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
   const stone = worn(look.hue("stone", "#c4b498"), w);
   const crack = ease(w.v, 0.8, 0.66);
   const fallen = ease(w.v, 0.4, 0.3) > 0.5;
-  const crumbled = ease(w.v, 0.2, 0.1) > 0.5;
   // The opening's edge from foot to foot, and the ring's outside, thicker low down.
   const n = 24;
   const inner: [number, number][] = [[-half, 0], ...Array.from({ length: n + 1 }, (_, k): [number, number] => [half * Math.cos(Math.PI * (1 - k / n)), straight + head * Math.sin(Math.PI * (1 - k / n))]), [half, 0]];
@@ -2561,8 +2560,8 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
     piece(0, mid, -crack * 0.5);
     piece(mid, inner.length - 1, crack * 0.5);
   } else {
-    // The stacks stand to the haunches, then to halfway.
-    const stand = (crumbled ? 0.38 : 0.76) * rise;
+    // The stacks stand to the haunches.
+    const stand = 0.76 * rise;
     const left = Math.max(1, inner.findIndex(([, h], i) => i > 0 && h >= stand));
     const right = Math.min(inner.length - 2, inner.length - 1 - [...inner].reverse().findIndex(([, h], i) => i > 0 && h >= stand));
     piece(0, left, -crack * 0.5);
@@ -2624,7 +2623,7 @@ function drawRotunda(pen: Pen, look: Look, p: Resolved<typeof rotundaParams>, se
   }
   const foot = ring + M.eave * LK;
   // A shallow dome drawn a little higher than it stands, as a mapmaker draws a roof, so it reads as a dome.
-  const riseH = (high ? 1.05 : 0.38 * ROOF_LIFT * 1.2) * foot;
+  const riseH = (high ? 0.65 : 0.38 * ROOF_LIFT * 1.2) * foot;
   // Fallen in from its crown: what stands ends in a ragged edge.
   const cap = spring + riseH * dome;
   face(pen, Array.from({ length: 17 }, (_, k): P3 => {
