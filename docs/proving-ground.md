@@ -2,9 +2,10 @@
 
 The proving ground is a synthetic world for visual coverage. Its plan includes
 water, crossings, buildings, landmarks, trees and understory at healthy, tired
-and ruined states. Its sky, lands, buildings, landmarks and trails sweep every
-part Jev composes them from: each part of each slot stands thriving, tired and
-in ruin, and each option of each part stands somewhere. Use it alongside Gaia's
+and ruined states. Its sky, lands, buildings, landmarks, trails, trees, bushes,
+stones and flowers sweep every part Jev composes them from: each part of each
+slot, and every frame with every crown, stands thriving, tired and in ruin, and
+each option of each part stands somewhere. Use it alongside Gaia's
 own world when changing rendering, placement or interaction.
 
 ## Explore it

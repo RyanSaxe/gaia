@@ -103,14 +103,15 @@ To add a primitive:
 2. Register it in `library.ts`. Shared contract tests cover determinism,
    parameter ranges, channel ranges, triangle budgets and vitality response.
 3. Regenerate the proving ground with `pnpm proving`. Its sky, lands,
-   buildings, landmarks and trails are sweeps of the parts Jev composes them
-   from (`sweep` in [`@gaia/world`](../packages/world/src/sweep.ts)), so a new
-   part of one stands there with each of its options, thriving, tired and in
-   ruin. The generator fails and names what is missing while the plan in
+   buildings, landmarks, trails, trees, bushes, stones and flowers are sweeps
+   of the parts Jev composes them from (`sweep` in
+   [`@gaia/world`](../packages/world/src/sweep.ts)), so a new part of one
+   stands there with each of its options, thriving, tired and in ruin. The
+   generator fails and names what is missing while the plan in
    `tools/proving.ts` has no place for it, such as an area with running water;
-   add a directory to the plan then. Trees, bushes, stones and flowers stand as
-   the forms in `app/renderer/terrain/looks.ts`. Inspect the result in the app
-   and screenshots.
+   add a directory to the plan then. A new part a tree, bush, stone or drift
+   may grow from also needs words with a feel for every option, which
+   `looks.test.ts` checks. Inspect the result in the app and screenshots.
 4. Add an ink renderer in `app/renderer/immersive/marks.ts` if the primitive
    contributes to a building or landmark's map symbol.
 

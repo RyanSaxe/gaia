@@ -13,10 +13,11 @@
 //   cross on footbridges and stepping stones;
 // - large and tiny areas, deep nesting, and a hub many trails branch to;
 // - every water, tree, bush and flower option Jev is offered.
-// Its sky, lands, buildings, landmarks and trails are what Jev composes them
-// from, swept (`sweep` in @gaia/world): every part of every slot, at each of
-// three healths, and every option of every part, each standing where its
-// place lets it, a waterwheel only by running water. The generator fails
+// Its sky, lands, buildings, landmarks, trails, trees, bushes, stones and
+// flowers are what Jev composes them from, swept (`sweep` in @gaia/world):
+// every part of every slot and every frame with every crown, at each of three
+// healths, and every option of every part, each standing where its place lets
+// it, a waterwheel only by running water. The generator fails
 // while any sweep leaves something missing, and then the plan needs another
 // place for it; the lab's test checks the baked world shows each feature.
 //
