@@ -41,11 +41,11 @@ function standAsThePage(t: Terrain, code: OpenedWorld, buildings: StandBuilding[
   return { land, stood, landmarks };
 }
 
-describe("Gaia's world, the showcase and the proving ground, stood as the page stands them", () => {
+describe("the showcase, as it is and fixed, and the proving ground, stood as the page stands them", () => {
   let worlds: { root: string; code: OpenedWorld; t: Terrain; buildings: StandBuilding[]; land: Terrain; stood: Stand; landmarks: StandLandmark[] }[] = [];
-  // Bakes and stands all four worlds whole: about fifty seconds alone, more when other work shares the machine.
+  // Bakes and stands all three worlds whole: about two minutes while other work shares the machine, most of it the proving ground's.
   beforeAll(async () => {
-    const snapshots = await Promise.all((["gaia", "showcase", "showcase-fixed"] as const).map(async (of) => ({ root: of, facts: snapshotFacts(of), ...(await laySnapshot("a test", of)), judged: {} })));
+    const snapshots = await Promise.all((["showcase", "showcase-fixed"] as const).map(async (of) => ({ root: of, facts: snapshotFacts(of), ...(await laySnapshot("a test", of)), judged: {} })));
     worlds = [...snapshots, provingWorld()].map((doc) => {
       const code = openedWorld(doc as never);
       const t = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));

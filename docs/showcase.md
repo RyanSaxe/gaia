@@ -4,13 +4,15 @@ The showcase is a synthetic static-site generator used to demonstrate Gaia.
 It contains a central kernel, an engine, extensions and an older `v1` module
 with deliberately poor code. A second variant repairs `v1` while keeping its
 file paths and definition spans, so code health changes without changing the
-layout. Both worlds open from bundled Jev answers.
+layout. Both worlds open from bundled Jev answers. The standalone lab,
+`pnpm probe` and CI's rendering probe open the showcase.
 
 ## Open it
 
 Choose the showcase on Gaia's start page, or set `GAIA_PROJECT` to `showcase`
-or `showcase-fixed` before `pnpm dev`. In the standalone lab, use
-`?world=showcase` or `?world=showcase-fixed`.
+or `showcase-fixed` before `pnpm dev`. The standalone lab opens the showcase
+with no query, or with `?world=showcase`; use `?world=showcase-fixed` for the
+repaired one.
 
 | Bundle in `app/renderer/terrain/fixtures/` | Purpose |
 | --- | --- |

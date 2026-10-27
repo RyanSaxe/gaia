@@ -16,7 +16,7 @@
 //   see, dissolving and gone. Each is held against the wind's half-second change.
 // - stress: the proving ground as it is, then with every tree that stands for
 //   code standing five times on its own patch.
-// - paint: the painter check. Standing still in Gaia's world with the wind's
+// - paint: the painter check. Standing still in the showcase with the wind's
 //   clock frozen while the journal's painter paints the things farthest
 //   away, the person's view must not change at all; and the page's frames
 //   while it paints, late ones counted. Then 30 s standing still while the
@@ -32,7 +32,7 @@
 // pace, so it shows then, without taking focus; leave it uncovered. Timings
 // are only worth comparing from a quiet machine: other work on the GPU or CPU
 // makes them noisy, so the probe prints the load average it ran at.
-// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [paint] [--world gaia|proving]
+// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [paint] [--world showcase|proving]
 //          [--spot NAME] [--dpr 1|2] [--json FILE]
 // A spot is "valley", "turned" or a tour stop (`__lab.terrain.tour()` lists
 // them, such as "ruined bridge"); --world and --spot may repeat.
@@ -52,7 +52,7 @@ type Measure = (typeof MEASURES)[number];
 
 /** Where each world is measured: by the stream at the valley, turned 120° from it, and the proving ground's woods. */
 const SPOTS = {
-  gaia: ["valley", "turned"],
+  showcase: ["valley", "turned"],
   proving: ["valley", "thriving grove", "large area"],
 } as const;
 /** How far the walk test walks from each spot, its step (half a second at walking pace), and the wind's moment, so every run sees the same wind. */
@@ -82,6 +82,7 @@ const { values, positionals } = parseArgs({
 const asked = positionals.length === 0 ? [...MEASURES] : positionals;
 for (const m of asked) if (!(MEASURES as readonly string[]).includes(m)) throw new Error(`No measure named ${m}; choose from ${MEASURES.join(", ")}.`);
 const measures = new Set(asked as Measure[]);
+for (const w of values.world ?? []) if (!(w in SPOTS)) throw new Error(`No world named ${w}; choose from ${Object.keys(SPOTS).join(", ")}.`);
 const dpr = Number(values.dpr);
 
 /** One page load: the world to open, then each call's JavaScript, run in order with `T` as `__lab.terrain`. */
@@ -126,11 +127,11 @@ if (measures.has("swap")) {
   for (const hour of [15.5, 22]) {
     calls.push({ key: `swap ${hour}`, js: `(await __lab.hour(${hour}), ${go("valley")}, ${settle}, T.swap().flatMap((name) => [1, 0.5, 0.15].map((vitality) => ({ name, vitality, ...T.swap(name, vitality) }))))` });
   }
-  jobs.push({ world: "gaia", calls });
+  jobs.push({ world: "showcase", calls });
 }
 if (measures.has("paint")) {
   // Looking at the view draws frames of its own, so the page's frames are counted again over paintings made unwatched.
-  jobs.push({ world: "gaia", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, await T.paintCheck(6))` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }, { key: "stand", js: `(${go("valley")}, ${settle}, await T.standCheck(30))` }] });
+  jobs.push({ world: "showcase", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, await T.paintCheck(6))` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }, { key: "stand", js: `(${go("valley")}, ${settle}, await T.standCheck(30))` }] });
 }
 if (measures.has("stress") && (values.world === undefined || values.world.includes("proving"))) {
   // The proving ground as it stands, then with every tree that stands for code standing five times.
@@ -190,7 +191,7 @@ async function probe() {
     const view = await win.webContents.executeJavaScript("[innerWidth, innerHeight]");
     if (view[0] !== width || view[1] !== height) throw new Error("The window is " + view.join("x") + ", not " + width + "x" + height + ": something resized it.");
     // The screen's own ratio wins over the one asked for, so the report says which the world drew at.
-    // A world measured by several jobs, as Gaia's is by the walks and the swap test, keeps every job's results.
+    // A world measured by several jobs, as the showcase is by the walks and the swap test, keeps every job's results.
     results[job.world] = { ...(results[job.world] ?? {}), ratio: await win.webContents.executeJavaScript("devicePixelRatio") };
     for (const call of job.calls) {
       say(job.world + ": " + call.key);

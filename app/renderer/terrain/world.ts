@@ -2207,9 +2207,9 @@ export function createWorld(root: HTMLElement): World {
 
   /**
    * Opens the codebase's world: judged and laid out by the world service, or
-   * on a page with no engine from the engine's snapshot of this repository or
-   * the proving ground's fixtures. The buildings and landmarks are its own, so
-   * the settlement is rebuilt; the rest follows the bake.
+   * on a page with no engine from the showcase's snapshot or the proving
+   * ground's fixtures. The buildings and landmarks are its own, so the
+   * settlement is rebuilt; the rest follows the bake.
    */
   async function openCodebase(): Promise<void> {
     reportStage("judging");

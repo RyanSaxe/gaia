@@ -10,7 +10,7 @@
 // drawing on the GPU) from a browser profile of its own, so the far forms bake
 // as on a first visit, and the run fails on any WebGL error the page reports.
 // Each shot goes to shots/ as a JPEG named for its stop.
-// Usage: pnpm shots [--world gaia|showcase|showcase-fixed] [WORD...]  (only the stops whose names hold one of the
+// Usage: pnpm shots [--world showcase|showcase-fixed] [WORD...]  (only the stops whose names hold one of the
 // words, such as `pnpm shots watermill` or `pnpm shots sky`; the proving ground's unless --world names another)
 
 import { spawnSync } from "node:child_process";
@@ -136,8 +136,7 @@ async function take() {
     if (e.level === "error") say("page: " + e.message);
     if (e.level === "warning" || e.level === "error") messages.push(e.message);
   });
-  // Gaia's own world is the page's own: it opens with no query.
-  await win.loadFile(page, world === "gaia" ? {} : { query: { world } });
+  await win.loadFile(page, { query: { world } });
   const run = (js) => win.webContents.executeJavaScript(js);
   await run("new Promise((r) => { const t = () => (window.__lab ? r() : setTimeout(t, 50)); t(); })");
   say("opening " + world);
@@ -197,6 +196,10 @@ const electron = createRequire(resolve(repo, "app/package.json"))("electron") as
 const argv = process.argv.slice(2);
 const at = argv.indexOf("--world");
 const world = at < 0 ? "proving" : (argv[at + 1] ?? "proving");
+if (!["proving", "showcase", "showcase-fixed"].includes(world)) {
+  rmSync(scratch, { recursive: true, force: true });
+  throw new Error(`No world named ${world}; choose from proving, showcase or showcase-fixed.`);
+}
 const words = at < 0 ? argv : [...argv.slice(0, at), ...argv.slice(at + 2)];
 const settings = { page, out, result, profile: join(scratch, "profile"), world, words, looks: LOOKS, width: WIDTH, height: HEIGHT, quality: QUALITY, script: PAGE };
 const env: NodeJS.ProcessEnv = { ...process.env, GAIA_SHOTS: JSON.stringify(settings) };

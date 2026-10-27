@@ -40,7 +40,7 @@ jobs:
       - run: cargo test --quiet
       - run: cargo clippy --all-targets --quiet -- -D warnings
 
-  # The probe at one spot of Gaia's world, from the fixtures, in Electron on
+  # The probe at one spot of the showcase, from its fixtures, in Electron on
   # a fresh profile: it fails on any WebGL error, such as a far bake whose
   # every draw WebGL rejects.
   probe:
@@ -54,7 +54,7 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm probe drawn --world gaia --spot valley --dpr 1
+      - run: pnpm probe drawn --world showcase --spot valley --dpr 1
 
   # Branch protection requires this stable name as the platform matrix changes.
   required-check:

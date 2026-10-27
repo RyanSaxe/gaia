@@ -1,7 +1,6 @@
-// The thread a page lays a bundled snapshot out on (`laySnapshot`): Gaia's
-// own with no engine, or the showcase's, so the page keeps drawing the wait
-// meanwhile. It runs the same pure layout the page would, so the world is the
-// same.
+// The thread a page lays a bundled snapshot out on (`laySnapshot`), the
+// showcase's, so the page keeps drawing the wait meanwhile. It runs the same
+// pure layout the page would, so the world is the same.
 
 import type { CodeWorld } from "@gaia/world";
 import { laySnapshot } from "./snapshot.ts";

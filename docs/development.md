@@ -25,13 +25,14 @@ pnpm lab:html
 ```
 
 Open `dist/lab.html` in a browser. It bundles the renderer, fonts and world
-fixtures into one offline page. It has no engine connection and uses saved
-Jev answers; a missing answer fails with the request's name.
+fixtures into one offline page. It has no engine connection and opens the
+[showcase](showcase.md) unless a query names another world. The showcase opens
+from its saved Jev answers; a missing answer fails with the request's name.
 
 | Query | Use |
 | --- | --- |
 | `?world=proving` | Every supported visual feature, including ruin |
-| `?world=showcase` | A small codebase with a mixture of healthy and poor code |
+| `?world=showcase` | A small codebase with a mixture of healthy and poor code, the page's world with no query |
 | `?world=showcase-fixed` | The same showcase with its broken module repaired |
 | `?hour=22` | Pin the lighting to an hour |
 | `?start` | Show the start page |
@@ -62,20 +63,20 @@ The hooks are defined in [terrain/hooks.ts](../app/renderer/terrain/hooks.ts),
 [sound/index.ts](../app/renderer/sound/index.ts). Scripted Electron windows
 call `webContents.setAudioMuted(true)`, so a run never plays through the
 machine's speakers.
-[readme-shots.ts](../tools/readme-shots.ts) is an example of driving the page.
+[shots.ts](../tools/shots.ts) is an example of driving the page.
 
 ## Visual verification
 
 Use the [proving ground](proving-ground.md) to inspect every affected form at
-vitality 1, 0.65 and 0.3, by day and at night. Also inspect Gaia's own world to
-catch changes that only appear in a large composition.
+vitality 1, 0.65 and 0.3, by day and at night. Also open Gaia's own checkout in
+the app to catch changes that only appear in a large composition. The app keeps
+Jev's answers for it in its own store after the first live open.
 
 | Command | Result |
 | --- | --- |
 | `pnpm shots` | Captures all proving-ground stops into `shots/` |
 | `pnpm shots willow` | Captures stops matching the supplied word |
 | `pnpm shots sky` | Captures the first stop under each of the sweep's skies |
-| `pnpm readme-shots` | Updates the journal and map images in `docs/images/` |
 | `pnpm brand` | Regenerates the app's brand images and macOS icon |
 
 For changes to frame cost or walking detail, compare before and after on a
@@ -90,9 +91,9 @@ quiet machine with `pnpm probe`. Its Electron window must remain uncovered.
 | `pnpm probe stress` | The proving ground with five times as many code trees |
 | `pnpm probe paint` | Journal painting capture and rendering |
 
-`--world gaia` or `--world proving` selects a world. `--spot` limits the stops;
-`--dpr` sets the pixel ratio. The probes fail on WebGL errors. A timing on a
-busy machine is not a reliable baseline.
+`--world showcase` or `--world proving` selects a world. `--spot` limits the
+stops; `--dpr` sets the pixel ratio. The probes fail on WebGL errors. A timing
+on a busy machine is not a reliable baseline.
 
 ## Components and fixtures
 

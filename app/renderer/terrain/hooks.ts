@@ -1,10 +1,9 @@
 // The hooks scripted checks drive the world through, `window.__lab.terrain`:
 // what stands in the world and where the person is, walking and travelling
 // as a person would, setting vitality live, and measuring what a frame draws
-// and what a step of walking changes in it. `pnpm probe`, `pnpm shots`,
-// `tools/readme-shots.ts`, the proving ground's tour and capture scripts use
-// them. They reach inside the world (`WorldInside`), and nothing a person
-// sees calls them.
+// and what a step of walking changes in it. `pnpm probe`, `pnpm shots`, the
+// proving ground's tour and capture scripts use them. They reach inside the
+// world (`WorldInside`), and nothing a person sees calls them.
 
 import * as THREE from "three";
 import type { Realized } from "@gaia/realize";

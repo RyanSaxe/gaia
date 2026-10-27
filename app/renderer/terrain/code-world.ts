@@ -10,9 +10,8 @@ import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type Judgments, type StandsAs, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, Heal, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
-import GAIA_PAINTING from "../start/gaia-painting.webp";
+import SHOWCASE_PAINTING from "../start/showcase-painting.webp";
 import { CHOSEN_MS } from "../start/start.ts";
-import gaiaJudged from "./fixtures/gaia-judged.json";
 import showcaseJudged from "./fixtures/showcase-judged.json";
 import showcaseFixedJudged from "./fixtures/showcase-fixed-judged.json";
 import showcaseCode from "./fixtures/showcase-code.txt?raw";
@@ -157,17 +156,13 @@ export function onHeal(heal: (h: Heal) => void): void {
 }
 
 /** What the understanding pass judged about each snapshot's things, for the journal. */
-const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = { gaia: gaiaJudged, showcase: showcaseJudged, "showcase-fixed": showcaseFixedJudged };
+const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = { showcase: showcaseJudged, "showcase-fixed": showcaseFixedJudged };
 
-/**
- * A world from a bundled snapshot (`snapshot.ts`), laid out on a thread of its
- * own while the wait draws: Gaia's own, the world of a page with no engine,
- * or the showcase's.
- */
-function snapshotWorld(why: string, of: Snapshot = "gaia"): Promise<WorldDocument> {
+/** A world from a bundled snapshot (`snapshot.ts`), the showcase's, laid out on a thread of its own while the wait draws. */
+function snapshotWorld(why: string, of: Snapshot): Promise<WorldDocument> {
   const facts = snapshotFacts(of);
   const worker = new LayoutWorker();
-  const failed = (why: string): Error => new Error(`${of === "gaia" ? "Gaia's snapshot" : "The showcase"} could not be laid out: ${why}`);
+  const failed = (why: string): Error => new Error(`The showcase could not be laid out: ${why}`);
   return new Promise<WorldDocument>((resolve, reject) => {
     worker.onmessage = (e: MessageEvent<LayoutReply>) => {
       const reply = e.data;
@@ -206,22 +201,28 @@ const ASKS_SHOWCASE: Snapshot | null = ((world) => (world === "showcase" || worl
   typeof location === "undefined" ? null : new URLSearchParams(location.search).get("world"),
 );
 
+/** The showcase the page shows, if any: the one it asks for, or the showcase as it is on a page with no engine that asks for no world. */
+function shownShowcase(): Snapshot | null {
+  return ASKS_SHOWCASE ?? (ASKS_PROVING || worldService() !== null ? null : "showcase");
+}
+
 /** The source of a world the page carries with it, by path, for the journal: the showcase's, with its fixed `v1/` laid over it for the fixed one, none otherwise. */
 export function carriedSource(): ReadonlyMap<string, string> | null {
-  if (ASKS_SHOWCASE === null) return null;
-  return new Map([...showcaseFiles(showcaseCode), ...(ASKS_SHOWCASE === "showcase-fixed" ? showcaseFiles(showcaseFixedCode) : [])]);
+  const shown = shownShowcase();
+  if (shown === null) return null;
+  return new Map([...showcaseFiles(showcaseCode), ...(shown === "showcase-fixed" ? showcaseFiles(showcaseFixedCode) : [])]);
 }
 
 /**
  * The start on a page with no engine, to see it (`?start`):
- * Gaia's own world is the one world walked before, with a painting of where
- * it opens, as the app paints where a person stands (`start/gaia-painting.webp`,
+ * the showcase is the one world walked before, with a painting of where
+ * it opens, as the app paints where a person stands (`start/showcase-painting.webp`,
  * from `__lab.immersive.look()`), and any choice opens it, except an
  * address, which a page with no engine cannot follow.
  */
 async function previewStart(veil: Veil): Promise<void> {
-  const facts = snapshotFacts();
-  const recent = [{ root: facts.repository.name, name: facts.repository.name, at: Date.now(), painting: GAIA_PAINTING }];
+  const facts = snapshotFacts("showcase");
+  const recent = [{ root: facts.repository.name, name: facts.repository.name, at: Date.now(), painting: SHOWCASE_PAINTING }];
   let place = await veil.choose({ recent });
   while ("address" in place) place = await veil.choose({ recent, refused: { address: place.address, why: "offline" } });
   veil.opening({ stage: "reading", root: facts.repository.name });
@@ -243,7 +244,7 @@ export async function codeWorld(veil: Veil): Promise<OpenedWorld> {
     else if (ASKS_SHOWCASE !== null) document = await snapshotWorld("the showcase", ASKS_SHOWCASE);
     else if (service === null) {
       if (typeof location !== "undefined" && new URLSearchParams(location.search).has("start")) await previewStart(veil);
-      document = await snapshotWorld("no engine on a standalone page");
+      document = await snapshotWorld("no engine on a standalone page", "showcase");
     } else ({ document, stood } = await serviceWorld(service, watched));
   } catch (error) {
     const message = (error as Error).message;

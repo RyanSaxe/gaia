@@ -5,8 +5,9 @@ water, crossings, buildings, landmarks, trees and understory at healthy, tired
 and ruined states. Its sky, lands, buildings, landmarks, trails, trees, bushes,
 stones and flowers sweep every part Jev composes them from: each part of each
 slot, and every frame with every crown, stands thriving, tired and in ruin, and
-each option of each part stands somewhere. Use it alongside Gaia's
-own world when changing rendering, placement or interaction.
+each option of each part stands somewhere. Use it alongside the
+[showcase](showcase.md) and Gaia's own world in the app when changing
+rendering, placement or interaction.
 
 ## Explore it
 
