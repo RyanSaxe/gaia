@@ -114,8 +114,10 @@ To add a primitive:
    new part a tree, bush, stone or drift may grow from also needs words with a
    feel for every option, which `looks.test.ts` checks. Inspect the result in
    the app and screenshots.
-4. Add an ink renderer in `app/renderer/immersive/marks.ts` if the primitive
-   contributes to a building or landmark's map symbol.
+4. Add the primitive's map ink: in `app/renderer/immersive/marks.ts` for a
+   part of a building or landmark, in `app/renderer/immersive/plant-marks.ts`
+   for a part of a tree, bush, stone or flower drift. Their contract tests ask
+   every primitive in those roles for its ink.
 
 The lab's fixture bundles live in `app/renderer/terrain/fixtures/`:
 
