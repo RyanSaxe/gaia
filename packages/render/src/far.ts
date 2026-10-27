@@ -161,11 +161,13 @@ export interface FarBake {
 export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarBake {
   let spent = 0;
   const parts = mergeParts(plant.parts).filter((p: Part) => p.indices.length > 0);
+  // Framed by what stands above the soil, as its copies are bounded (`createPlantInstances`): a bramble's canes root
+  // under it, where no one sees them.
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
   for (const part of parts) {
     const p = part.positions;
-    for (let i = 0; i < p.length; i += 3) box.expandByPoint(point.set(p[i] as number, p[i + 1] as number, p[i + 2] as number));
+    for (let i = 0; i < p.length; i += 3) box.expandByPoint(point.set(p[i] as number, Math.max(0, p[i + 1] as number), p[i + 2] as number));
   }
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const height = Math.max(0.3, box.max.y);
@@ -385,7 +387,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
  * The bake's version: a far form stored by an earlier version must be baked
  * again. Bump it whenever what a bake writes, or how a card reads it, changes.
  */
-export const FAR_BAKE_VERSION = 3;
+export const FAR_BAKE_VERSION = 4;
 
 /** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
 export interface FarFormData {
