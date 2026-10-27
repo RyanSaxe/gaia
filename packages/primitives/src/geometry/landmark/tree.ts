@@ -8,7 +8,7 @@ import type { Anchor, BuildContext, Built, Limb, Resolved, Skeleton } from "@gai
 import type { greatTreeParams } from "../../landmark.ts";
 import { PartBuilder, type V3, clamp, cross, dot, fbm3, normalize, sub } from "../kit.ts";
 import { growBranching } from "../skeleton.ts";
-import { buildBark, buildLeafClumps, buildLeafStrands } from "../foliage.ts";
+import { CLUMP_TRIANGLE_BUDGET, STRAND_TRIANGLE_BUDGET, buildBark, buildLeafClumps, buildLeafStrands } from "../foliage.ts";
 
 type TreeParams = Resolved<typeof greatTreeParams>;
 
@@ -200,7 +200,7 @@ function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, r
  * 160,000 triangles for an oak) it drew 2.5 times as many card layers as a
  * tree's ceiling allows, and the frame paid for it.
  */
-const CROWN_GUARD = 48_000;
+const CROWN_GUARD = 2 * CLUMP_TRIANGLE_BUDGET;
 
 export function buildGreatTree(p: TreeParams, ctx: BuildContext): Built {
   const form = FORMS[p.form];
@@ -217,7 +217,7 @@ export function buildGreatTree(p: TreeParams, ctx: BuildContext): Built {
   const fullness = p.fullness * (1 - 0.18 * p.age);
   const crown =
     form.crown === "strands"
-      ? buildLeafStrands({ length: 2.2, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton)
+      ? buildLeafStrands({ length: 2.2, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton, STRAND_TRIANGLE_BUDGET)
       : buildLeafClumps({ shape: form.shape, leaf: form.leaf, size: 1, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton, CROWN_GUARD);
   return { parts: [...bark.parts, ...roots.parts, ...crown.parts], anchors: crown.anchors };
 }
