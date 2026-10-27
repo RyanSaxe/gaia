@@ -10,6 +10,13 @@
 (import_specifier name: (_) @imported alias: (identifier) @name) @alias.renamed
 (namespace_import (identifier) @name) @alias.module
 (import_clause (identifier) @name) @alias.default
+
+; What an `export … from` passes on to the files that import this one: a name,
+; a name renamed, the module under a name, and everything the module exports.
+(export_statement (export_clause (export_specifier name: (_) @name !alias) @reexport.named) source: (_))
+(export_statement (export_clause (export_specifier name: (_) @imported alias: (_) @name) @reexport.renamed) source: (_))
+(export_statement (namespace_export (_) @name) @reexport.module source: (_))
+(export_statement "*" source: (_)) @reexport.all
 (export_statement "default" declaration: (_ name: (_) @name)) @export.default
 (export_statement "default" value: (identifier) @name) @export.default
 

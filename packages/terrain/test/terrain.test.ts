@@ -373,6 +373,12 @@ describe("terrain", { timeout: 20_000 }, () => {
           for (const side of [-1, 1]) {
             const x = a.x + nx * edge * side;
             const z = a.z + nz * edge * side;
+            // Where another stream runs in, its mouth is the bank, its water meeting this one's at the surface.
+            const mouth = t.streams.find((o) => o !== s && o.stations.some((q) => Math.hypot(q.x - x, q.z - z) < q.halfWidth));
+            if (mouth !== undefined) {
+              expect(Math.max(...mouth.stations.filter((q) => Math.hypot(q.x - x, q.z - z) < q.halfWidth).map((q) => q.level)), `mouth at station ${i}`).toBeGreaterThanOrEqual(a.level - 0.05);
+              continue;
+            }
             // The bank climbs straight from the waterline, so on the inside of the tightest bend, where the surface's
             // edge comes within 9 cm of the channel's, the ground stands 3 cm above the water.
             expect(heightAt(t.lattice, x, z), `bank at station ${i}`).toBeGreaterThanOrEqual(a.level + 0.02);

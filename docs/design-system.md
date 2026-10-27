@@ -125,9 +125,13 @@ at an abrupt seam.
 
 Areas form a continuous landscape. Landforms, covers and air blend across
 region boundaries. Rivers follow the terrain, cross area boundaries and join
-one another. Ponds remain enclosed. Trail networks share treads and junctions
-rather than duplicating paths, and cross water with bridges or stepping stones.
-Their coverage budgets preserve open ground.
+one another at the surface of the river they meet. Each runs on until it meets
+another river, a pond or the land's edge; one that crosses a hollow cuts
+through its rim rather than ending in it. Ponds remain enclosed: a river that
+ends in a pond meets it at the pond's surface and never cuts below its rim.
+Trail networks share treads and junctions rather than duplicating paths, and
+cross water with bridges or stepping stones. Their coverage budgets preserve
+open ground.
 
 Walking follows the ground and intact bridge decks. Solids stop or deflect a
 walk; water permits wading and swimming. A broken bridge can stop a walk and

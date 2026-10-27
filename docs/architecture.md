@@ -125,15 +125,38 @@ Jev's answers are stored per project by request hash, so an unchanged request
 can be reused on the next opening. Gaia stores the answers, not the complete
 `WorldDocument`.
 
+## Laying out the land
+
+The land is divided by the code alone, never by Jev's answers
+([`land.ts`](../packages/world/src/land.ts)). A folder's land is divided among
+its own files and its entity's lot and its subfolders, in proportion to the
+ground each asks for: its lines and definitions. Each part is then divided the
+same way, down to every file and, within a file's patch, every definition. Each
+division is a power diagram on a raster of the land. Every part has a site,
+seeded from its path and spaced from its siblings so the parts come out round,
+and a weight, solved so the part holds its share.
+
+The land holds still while the code changes. Every file's and folder's ground
+rounds up to a rung of a ladder whose rungs are 25% apart, and the land's size
+follows the rung of the whole code's ground. An edit that crosses no rung
+leaves the land exactly as it was. One that does re-divides the folder whose
+share changed, and the borders around it shift. A folder's share of the root
+changing moves most of the world a few meters. A directory has a landform of
+its own when its lines reach the rung nearest 3% of all lines
+(`LAYOUT.regionShare` in [`code-world.ts`](../packages/world/src/code-world.ts)).
+
 ## Changes to an open world
 
 ![How an open world responds when a commit changes the code graph](images/architecture-updates.svg)
 
-When a commit leaves the layout unchanged, the open world advances to the new
-commit and updates its code judgments and vitality. If the layout would move,
-Gaia keeps the current layout and forms, updates vitality for matching things,
-and shows the new layout and forms on the next open. This behavior is handled
-by `healWorld` in `app/world-service/open-world.ts`.
+When a commit leaves the land as it was, because its lines shift and its files
+grow without crossing a rung, the open world advances to the new commit and
+updates its code judgments, its vitality and the lines each definition's code
+now spans, which the journal reads. If the land would move, or a file or
+definition is added or removed, Gaia keeps the current layout and
+forms, updates vitality for matching things, and shows the new layout and forms
+on the next open. This behavior is handled by `healWorld` in
+`app/world-service/open-world.ts`.
 
 ## Where to look next
 

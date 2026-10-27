@@ -4,7 +4,7 @@
 
 import type { CodeFacts, PatchPlace, Span, Unreachable } from "@gaia/schema";
 import type { Outline, StoodSpot } from "@gaia/terrain";
-import type { CodeWorld, LotPlace } from "@gaia/world";
+import type { CodeWorld, DefinitionLines, LotPlace } from "@gaia/world";
 
 /** Main process → world service. */
 export type FromMain =
@@ -178,13 +178,21 @@ export type ToRenderer =
    * (`healWorld`): `vitality` is each thing's new vitality where it changed, by what it stands for (a file's path, a
    * definition's `<file>#<name>`, an entity's root path), for the things the page's world holds. Only vitality changes
    * live: nothing moves or changes shape, and the forms Jev picked stay until the next open. When the new code lays
-   * the land out exactly as before, `judged` holds what the understanding pass judged anew where it changed, by the
-   * journal's names (`WorldDocument.judged`), and `commit` is the commit the journal reads files from now
-   * (`world.source`). When it would move anything (a file added, removed, renamed or resized, a definition moved),
-   * both are absent: things that still stand under the same name take their new vitality, and the rest waits for the
-   * next open.
+   * the land out as before, as most commits do (a file's or folder's ground moves the land only when it crosses a
+   * rung), `judged` holds what the understanding pass judged anew where it changed, by the journal's names
+   * (`WorldDocument.judged`), `symbols` each definition whose code now lies on other lines of its file, by its id
+   * (`withLines`), and `commit` is the commit the journal reads files from now (`world.source`). When it would move
+   * anything (a file added, removed or renamed, a definition added or removed, ground across a rung), all three are
+   * absent: things that still stand under the same name take their new vitality, and the rest waits for the next
+   * open.
    */
-  | { readonly type: "world.vitality"; readonly vitality: Readonly<Record<string, number>>; readonly judged?: Readonly<Record<string, JudgedThing>>; readonly commit?: string };
+  | {
+      readonly type: "world.vitality";
+      readonly vitality: Readonly<Record<string, number>>;
+      readonly judged?: Readonly<Record<string, JudgedThing>>;
+      readonly symbols?: Readonly<Record<string, DefinitionLines>>;
+      readonly commit?: string;
+    };
 
 /** A world healed onto a new commit, as the world service sends it to the page. */
 export type Heal = Extract<ToRenderer, { readonly type: "world.vitality" }>;

@@ -37,9 +37,13 @@
 # a function that belongs to no class: an object's own functions, or a
 # Kotlin extension. Elsewhere a call on a value the rule cannot place
 # reaches only methods.
+# `marks_exports = true` marks a language whose files say which definitions
+# they export (`export`, `pub`): a re-export passes on only those. Elsewhere
+# it passes on any definition of the name.
 
 [typescript]
 functions_as_values = true
+marks_exports = true
 family = "js"
 relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 extensions = ["ts", "mts", "cts"]
@@ -52,6 +56,7 @@ conventions = [
 
 [tsx]
 functions_as_values = true
+marks_exports = true
 family = "js"
 relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 extensions = ["tsx"]
@@ -64,6 +69,7 @@ conventions = [
 
 [javascript]
 functions_as_values = true
+marks_exports = true
 family = "js"
 relative = [{ prefix = "./", from = "here" }, { prefix = "../", from = "parent" }]
 builtins = [
@@ -137,6 +143,7 @@ conventions = [
 ]
 
 [rust]
+marks_exports = true
 relative = [{ prefix = "self::", from = "here", in_module = "file" }, { prefix = "super::", from = "ancestors", in_module = "file" }, { prefix = "crate::", from = "ancestors" }]
 builtins = [
   "std", "core", "alloc", "proc_macro",

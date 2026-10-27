@@ -54,7 +54,7 @@ import { takeWait } from "../wait/wait.ts";
 import { withStart } from "../start/start.ts";
 import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
-import { type CodeWorld, vitalityOf, withVitality } from "@gaia/world";
+import { type CodeWorld, vitalityOf, withLines, withVitality } from "@gaia/world";
 import { type OpenedWorld, codeWorld, onHeal } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, type Settlement, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
@@ -2177,13 +2177,18 @@ export function createWorld(root: HTMLElement): World {
     veil.marks(laidOut(opened));
     knowEntities();
     // What the commits made in its folder while it stands change, it shows as vitality alone: what it judged anew
-    // for the journal, then each thing's vitality.
+    // and where each definition's code now lies, for the journal, then each thing's vitality.
     onHeal((heal) => {
       if (code === null) return;
       const judged = heal.judged;
       if (judged !== undefined) {
         const was = code.thing;
         code = { ...code, thing: (of) => judged[of] ?? was(of) };
+      }
+      if (heal.symbols !== undefined) {
+        const was = code.world;
+        code = { ...code, world: withLines(was, heal.symbols) };
+        if (places === was) places = code.world;
       }
       setVitality(new Map(Object.entries(heal.vitality)));
     });

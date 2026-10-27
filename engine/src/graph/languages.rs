@@ -33,6 +33,8 @@ struct Entry {
     #[serde(default)]
     functions_as_values: bool,
     #[serde(default)]
+    marks_exports: bool,
+    #[serde(default)]
     conventions: Vec<ConventionEntry>,
 }
 
@@ -92,6 +94,8 @@ pub struct Spec {
     /// A call on a value can reach a function that belongs to no class, as
     /// a JavaScript object's own functions do.
     pub functions_as_values: bool,
+    /// Its files say which definitions they export, and a re-export passes on only those.
+    pub marks_exports: bool,
     convention_tags: Vec<String>,
     conventions: GlobSet,
 }
@@ -144,6 +148,7 @@ pub fn table() -> &'static BTreeMap<String, Spec> {
                     builtins: e.builtins,
                     implicit_self: e.implicit_self,
                     functions_as_values: e.functions_as_values,
+                    marks_exports: e.marks_exports,
                     convention_tags: e.conventions.into_iter().map(|c| c.tag).collect(),
                     conventions: globs.build().expect("the conventions build"),
                 };

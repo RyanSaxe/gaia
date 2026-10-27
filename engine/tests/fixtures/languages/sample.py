@@ -3,6 +3,7 @@ from .core import Context
 from ..utils import helper
 from .core import Context as Ctx
 import os.path as osp
+from .walk import *
 
 
 class Loader:

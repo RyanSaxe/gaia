@@ -1,6 +1,10 @@
 import { Walker } from "./sample";
 import walker, * as sample from "./sample";
 import { readAll as readEvery } from "./sample";
+export { Walker } from "./sample";
+export { readAll as readEach } from "./sample";
+export * as sampled from "./sample";
+export * from "./sample";
 
 /** Shows a walk. */
 export default function Listing({ root, depth }: { root: string; depth: number }) {

@@ -100,3 +100,18 @@ export function withVitality(world: CodeWorld, changes: ReadonlyMap<string, numb
     standing: world.standing.map((s) => changed(s.path, s)),
   };
 }
+
+/** Where a definition's code lies in its file: its first line and how many it spans. */
+export interface DefinitionLines {
+  readonly line: number;
+  readonly lines: number;
+}
+
+/**
+ * The same world with each definition in `moved` on its new lines of its
+ * file, by its id, so the journal reads its code where it now lies. Nothing
+ * moves on the land.
+ */
+export function withLines(world: CodeWorld, moved: Readonly<Record<string, DefinitionLines>>): CodeWorld {
+  return { ...world, symbols: world.symbols.map((s) => (moved[s.id] === undefined ? s : { ...s, ...moved[s.id] })) };
+}
