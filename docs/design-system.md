@@ -260,5 +260,8 @@ the person approaches.
 
 Do not reduce density abruptly to rescue frame time. Batch and instance shared
 geometry, stream ahead of the person, cache far forms, and keep shadow updates
-stable in world space. Use the [walking and swap probes](development.md#visual-verification)
+stable in world space. Memory for far forms is a fixed budget: a build whose
+far form is not held draws its full form, never a coarser card, and a form
+coming in or leaving moves its swap size over many frames rather than
+changing a tree at once. Use the [walking and swap probes](development.md#visual-verification)
 to check that a performance change preserves the view.

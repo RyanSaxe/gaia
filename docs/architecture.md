@@ -112,6 +112,19 @@ is never offered a tree's frame. Two things Jev answers alike share one build,
 seeded by the blueprint's content, which every copy turns, scales and leans on
 its ground's slope; each distinct build bakes its own far form.
 
+The GPU holds a fixed number of far forms at once, whatever the world's size
+(`FAR_SLOTS` in [`woods.ts`](../app/renderer/terrain/woods.ts)). The forms
+whose builds have the most copies a view from the person would draw far hold
+those slots, and every copy of any other build keeps its full form. A form
+taking a slot is read from the browser's far-form store when an earlier visit
+baked it, or baked and stored. The first world waits only for the forms its
+opening spot fills the slots with. Once the world shows, a form coming in or
+going out turns its copies' swap size up or down over many frames, so each
+copy passes through the same band as when a person walks away from it
+([`far-stream.ts`](../app/renderer/terrain/far-stream.ts)). Every form's
+cards draw in one batch per set, from texture arrays holding the forms
+exactly as they were baked.
+
 A primitive writes channels for health and motion as it builds. Shared shaders
 apply vitality and time to those channels, so a change in health can alter
 foliage or ruin without rebuilding geometry. The
