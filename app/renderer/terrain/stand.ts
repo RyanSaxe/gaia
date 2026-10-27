@@ -137,8 +137,8 @@ export interface Stand {
 
 /**
  * How far a landmark reaches at the ground: its standing pieces within a meter of it, as far as its farthest foot,
- * a massive great span's 30 m away at its largest. Fallen stone that grows in at its foot is walked over, so it does
- * not count.
+ * a massive great span's some 31 m away at its largest. Fallen stone that grows in at its foot is walked over, so it
+ * does not count.
  */
 export function landmarkBase(built: Pick<Built, "parts">): number {
   let base = 1;

@@ -1,16 +1,18 @@
 // Landmark primitives: great things a person steers by from far away, each
 // 12 to 30 m tall, or spread wide, so it reads through the haze from across
 // the world. A few strong axes per primitive change the whole form, so the
-// same few primitives make very different landmarks. Geometry lives in
-// ./geometry/landmark/.
+// same few primitives make very different landmarks, and each build's seed
+// picks its proportions within its words, so two landmarks Jev answered alike
+// still differ. Geometry lives in ./geometry/landmark/.
 
 import { primitive, t } from "@gaia/schema";
-import { buildRockArch } from "./geometry/landmark/arch.ts";
-import { ROTUNDA_STEPS, buildRotunda } from "./geometry/landmark/rotunda.ts";
-import { buildStandingStones } from "./geometry/landmark/stones.ts";
+import { ROCK_ARCH_SHAPE, buildRockArch } from "./geometry/landmark/arch.ts";
+import { ROTUNDA_SHAPE, ROTUNDA_STEPS, buildRotunda } from "./geometry/landmark/rotunda.ts";
+import type { Bands } from "./geometry/landmark/shared.ts";
+import { STANDING_STONES_SHAPE, buildStandingStones } from "./geometry/landmark/stones.ts";
 import { buildLookoutTower } from "./geometry/landmark/tower.ts";
 import { buildGreatTree } from "./geometry/landmark/tree.ts";
-import { buildWindmill } from "./geometry/landmark/windmill.ts";
+import { WINDMILL_SHAPE, buildWindmill } from "./geometry/landmark/windmill.ts";
 
 export const lookoutTowerParams = {
   height: t.scale("How tall the tower stands: a squat watchtower for code that feels humble and stubborn, a lookout tower for code that feels ordinary and steady, a tall tower for code that feels proud, a soaring tower for code that feels grand and ambitious", { "a squat watchtower": 12, "a lookout tower": 16, "a tall tower": 21, "a soaring tower": 25 }),
@@ -161,3 +163,14 @@ export const rotunda = primitive({
 });
 
 export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, windmill, rockArch, rotunda];
+
+/**
+ * What each landmark's seed picks within its words, by primitive: the bands its build's `landmarkShape` keeps to. A
+ * great tree has none: its seed already grows its whole frame, every limb's length and turn.
+ */
+export const LANDMARK_SHAPES: Readonly<Record<string, Bands>> = {
+  [standingStones.id]: STANDING_STONES_SHAPE,
+  [windmill.id]: WINDMILL_SHAPE,
+  [rockArch.id]: ROCK_ARCH_SHAPE,
+  [rotunda.id]: ROTUNDA_SHAPE,
+};

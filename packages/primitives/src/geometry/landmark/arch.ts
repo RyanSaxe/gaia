@@ -11,26 +11,38 @@
 // the arch's height, broken on top, its blocks in chunks round it, while the
 // reaching half breaks part way out, leaving the other stack standing with a
 // stub of the span. The stacks are separate pieces, so a walker passes
-// between them.
+// between them. Each arch's seed picks its proportions within its words
+// (`ROCK_ARCH_SHAPE`): how wide and how high its opening is, how much of it
+// its rounded head takes, and how deep its stone runs along the way.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { rockArchParams } from "../../landmark.ts";
 import { type Channels, PartBuilder, type V3, clamp, cross, fbm3, icosphere, normalize, sub } from "../kit.ts";
-import { lump, still } from "./shared.ts";
+import { type Bands, about, landmarkShape, lump, still } from "./shared.ts";
 
 type ArchParams = Resolved<typeof rockArchParams>;
 
 /**
- * Each form at a stout thickness, meters: the opening's half width, its
- * height under the crown and how much of that its rounded head takes (the
- * rest rises straight), and the stone's thickness across the ring and
- * through it, along the way.
+ * Each form at a stout thickness, in the middle of what its words allow, meters: the opening's half width, its height
+ * under the crown and how much of that its rounded head takes (the rest rises straight), and the stone's thickness
+ * across the ring and through it, along the way. The map's mark draws from these.
  */
 export const ROCK_ARCH_FORMS = {
   "a doorway": { half: 3, rise: 14, head: 4, ring: 4.8, depth: 5 },
   "a gate": { half: 6.5, rise: 16, head: 9.5, ring: 4.4, depth: 4.8 },
   "a great span": { half: 15, rise: 18.5, head: 18.5, ring: 3.9, depth: 4.2 },
 } as const;
+/**
+ * What an arch's seed picks within its words: its opening's half width and its height under the crown, in meters at
+ * scale 1, which its form's words set (a doorway stays narrow and a great span long, whatever the seed); its rounded
+ * head against its form's own, up to the whole height; and its stone's depth along the way against its form's own.
+ */
+export const ROCK_ARCH_SHAPE = {
+  half: { by: "form", bands: { "a doorway": [2.75, 3.25], "a gate": [6, 7], "a great span": [14, 16] } },
+  rise: { by: "form", bands: { "a doorway": [13.2, 14.8], "a gate": [15.2, 16.8], "a great span": [17.6, 19.4] } },
+  head: about(1, 0.1),
+  depth: about(1, 0.08),
+} as const satisfies Bands;
 /** Points round each ring of the sweep, and the spacing of its rings along the opening's edge, meters. */
 const AROUND = 24;
 const SPACING = 0.36;
@@ -89,12 +101,13 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
   const seed = Math.floor(r.next() * 1e6);
   const scale = ctx.facts.scale ?? 1;
   const form = ROCK_ARCH_FORMS[p.form];
-  const half = form.half * scale;
-  const rise = form.rise * scale;
-  const head = form.head * scale;
+  const seeded = landmarkShape(ROCK_ARCH_SHAPE, p, ctx);
+  const half = seeded.half * scale;
+  const rise = seeded.rise * scale;
+  const head = Math.min(rise, (form.head / form.rise) * seeded.head * rise);
   const straight = Math.max(0, rise - head);
   const ringT = form.ring * scale * p.thickness;
-  const depth = form.depth * scale * p.thickness;
+  const depth = form.depth * scale * p.thickness * seeded.depth;
   const facets = p.stone;
   const lean = r.range(-0.025, 0.025);
   const rings = ringsAlong(openingEdge(half, rise, head), straight);
