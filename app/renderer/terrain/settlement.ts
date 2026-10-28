@@ -21,7 +21,7 @@ export interface Building {
   /** The building's own name, such as "Watermill". */
   readonly kindName: string;
   /** Its tile's batch and its index in it while its tile is placed (`Settlement.stand`), or null while it is far off. */
-  standing: { readonly batch: PlantBatch; readonly member: number } | null;
+  batchSlot: { readonly batch: PlantBatch; readonly member: number } | null;
   /** The triangles its build draws. */
   readonly triangles: number;
   /** Its height and the horizontal radius of its bounds in meters, whether or not it is placed. */
@@ -72,7 +72,7 @@ export interface Settlement {
    * of a tile whose buildings changed, from the builds made ahead (`makeAhead`) or else in place, and drops the
    * batches of tiles no longer held.
    */
-  stand(held: readonly Building[], scene: THREE.Object3D, tileOf: (b: Building) => string): void;
+  place(held: readonly Building[], scene: THREE.Object3D, tileOf: (b: Building) => string): void;
   /** The placed building a ray hits first, and the distance along the ray. */
   pick(raycaster: THREE.Raycaster): { readonly building: Building; readonly distance: number } | undefined;
   /** Sets a building's vitality, whether or not it is placed. */
@@ -132,7 +132,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
       entity,
       represented,
       kindName: entity.kindName,
-      standing: null,
+      batchSlot: null,
       triangles: built.parts.reduce((n, p) => n + p.indices.length / 3, 0),
       height,
       radius,
@@ -157,7 +157,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
     seat(sites) {
       buildings.forEach((b, i) => {
         b.site = sites[i] ?? b.site;
-        if (b.standing !== null) b.standing.batch.move(b.standing.member, atSite(b));
+        if (b.batchSlot !== null) b.batchSlot.batch.move(b.batchSlot.member, atSite(b));
       });
     },
     blocked: (x, z, margin) => buildings.some((b) => blockedBy(b, b.site, x, z, margin)),
@@ -165,7 +165,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
     signOf: (b) => signOf(b.plan, b.site),
     readingSpotOf: (b) => readingSpotOf(b.plan, b.site),
     views: () => [...batches.values()].map((t) => t.batch),
-    stand(held, scene, tileOf) {
+    place(held, scene, tileOf) {
       const want = new Map<string, Building[]>();
       for (const b of held) want.set(tileOf(b), [...(want.get(tileOf(b)) ?? []), b]);
       // Drop the batch of a tile no longer held or whose buildings changed.
@@ -173,13 +173,13 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
         const next = want.get(key);
         if (next !== undefined && next.length === tile.members.length && next.every((b) => tile.members.includes(b))) continue;
         tile.batch.dispose();
-        for (const b of tile.members) b.standing = null;
+        for (const b of tile.members) b.batchSlot = null;
         batches.delete(key);
       }
       for (const [key, members] of want) {
         if (batches.has(key)) continue;
         const batch = createPlantBatch(members.map((b) => ({ plant: made(b.ask, lib), ...atSite(b), vitality: b.vitality })), light);
-        members.forEach((b, member) => (b.standing = { batch, member }));
+        members.forEach((b, member) => (b.batchSlot = { batch, member }));
         scene.add(batch.object);
         batches.set(key, { members, batch });
       }
@@ -195,7 +195,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
     },
     setVitality(b, v) {
       b.vitality = v;
-      b.standing?.batch.setVitality(b.standing.member, v);
+      b.batchSlot?.batch.setVitality(b.batchSlot.member, v);
     },
   };
 }

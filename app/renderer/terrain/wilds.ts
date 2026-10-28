@@ -179,7 +179,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
   clearings.setNear((x0, z0, x1, z1) => (terrain === null || clears.length === 0 ? [] : wildClearings(terrain, anchor.x, anchor.z, x0, z0, x1, z1, clears, cache)));
   /** Pending respots, one blueprint a frame, so a jump never costs one frame much. */
   let queue: { view: Copies; spots: InstanceSpot[] }[] = [];
-  const stand = (t: Terrain, now: boolean): void => {
+  const placeThickets = (t: Terrain, now: boolean): void => {
     if (views.length === 0) return;
     const spots = wildSpots(t, anchor.x, anchor.z, views.length, cache);
     queue = views.map((view, i) => ({ view, spots: spots[i] ?? [] }));
@@ -209,7 +209,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
         const far = fars[i];
         return far === undefined ? [] : [{ blueprint: ask.blueprint, plant: () => made(ask, floraLib), far }];
       });
-      if (terrain !== null) stand(terrain, true);
+      if (terrain !== null) placeThickets(terrain, true);
     },
     show(on) {
       shown = on;
@@ -218,7 +218,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
     update(t) {
       terrain = t;
       cache.clear();
-      stand(t, true);
+      placeThickets(t, true);
     },
     follow(x, z) {
       const next = queue.shift();
@@ -226,7 +226,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
       if (terrain === null || Math.hypot(x - anchor.x, z - anchor.z) <= WILD_GROWTH.recenter) return;
       anchor.x = Math.round(x / WILD_THICKETS.cell) * WILD_THICKETS.cell;
       anchor.z = Math.round(z / WILD_THICKETS.cell) * WILD_THICKETS.cell;
-      stand(terrain, false);
+      placeThickets(terrain, false);
     },
   };
 }

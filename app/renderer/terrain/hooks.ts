@@ -250,7 +250,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     x0 = start.x;
     z0 = start.z;
     world.walkTo(x0, z0, 0, pitch);
-    await Promise.all([world.land.around(x0, z0), world.standing.ready(x0, z0)]);
+    await Promise.all([world.land.around(x0, z0), world.thingTiles.ready(x0, z0)]);
     const at = world.landingNear(x1, z1);
     world.travelPace = pace;
     const started = at !== null && world.travelTo(at, false);
@@ -262,7 +262,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const was = world.frozen;
     world.frozen = world.light.uTime.value;
     world.driving = true;
-    world.standing.late();
+    world.thingTiles.late();
     const checks: [number, number, number, number, number, number, number, number, number][] = [];
     /** Each land level's window origin, to find which levels moved since `held`'s view was drawn. */
     const windows = (): string => world.land.origins.map((o) => `${o.x},${o.z}`).join(" ");
@@ -328,7 +328,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       lead: Math.round(lead),
       checks,
       work,
-      late: world.standing.late(),
+      late: world.thingTiles.late(),
       ghosts: +ghosts.toFixed(2),
     };
   }
@@ -744,9 +744,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     landingNear: (x: number, z: number) => world.landingNear(x, z),
     travelTest,
     /** Each tile placed within sight of the person since the last call (`Standing.late`), whose things could be seen appearing. */
-    standingLate: () => world.standing.late(),
-    /** The tiles each stander still waits for (`Standing.asking`), and the land's workers. */
-    standingAsking: () => ({ ...world.standing.asking(), workers: world.land.workers() }),
+    tilesLate: () => world.thingTiles.late(),
+    /** The tiles each layer still waits for (`ThingTiles.asking`), and the land's workers. */
+    tilesAsking: () => ({ ...world.thingTiles.asking(), workers: world.land.workers() }),
     /** The walk's state: the held keys, whether a tap's walk or a trip is under way, and why the last trip ended. */
     walkState: () => ({ keys: [...world.keys], goal: world.goal !== null, trip: world.trip !== null, lastEnd: world.tripEnd }),
     /**
@@ -845,7 +845,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** Shows or hides the wild bushes, for comparing frame costs. */
     showWilds: (on: boolean) => world.wildGrowth.show(on),
     /** Per wild bush blueprint: copies placed, triangles per copy, levels, and what the last pass drew. */
-    wilds: () => world.wildGrowth.all().map((v) => ({ standing: v.count, perCopy: v.triangles / Math.max(1, v.count), levels: v.levels, ...v.drawn() })),
+    wilds: () => world.wildGrowth.all().map((v) => ({ placed: v.count, perCopy: v.triangles / Math.max(1, v.count), levels: v.levels, ...v.drawn() })),
     placements: () => world.understory.placements(),
     showUnderstory: (on: boolean) => world.understory.show(on),
     /** Shows or hides what drifts through the air, for comparing frame costs. */
@@ -1144,7 +1144,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
             regions: world.code.world.regions.map((r) => ({ area: r.area, land: r.biome?.slots.relief?.use ?? "", x: Math.round(r.x), z: Math.round(r.z) })),
             areas: world.code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), ground: Math.round(a.ground), depth: a.depth })),
             symbols: world.code.world.symbols.length,
-            standingSymbols: world.symbolPlacements.filter((k) => k >= 0).length,
+            placedSymbols: world.symbolPlacements.filter((k) => k >= 0).length,
             patches: world.code.world.patches.length,
             things: world.code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, blueprint: t.blueprint.id, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
             trails: world.code.world.trails.map((t) => `${t.from}->${t.to}`),

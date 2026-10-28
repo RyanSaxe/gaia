@@ -52,7 +52,7 @@ import { type Building, type Settlement, composedName, createSettlement, settlem
 import { type Signs, createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
 import { type PageLand, createPageLand } from "./land.ts";
-import { type Standing, createStanding } from "./standing.ts";
+import { type ThingTiles, createThingTiles } from "./thing-tiles.ts";
 import { AS_THING, type Placed, type PlaceRequest, type PlacedLandmark, landmarkBase, landmarkFeet, ownerVitality, understoryVitality } from "./place.ts";
 import { declineAround, groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import type { Drawn, Pass } from "./measure.ts";
@@ -361,7 +361,7 @@ export interface FarSet {
  * A trip in progress (`travelStep`): its plan, the person's position on it,
  * whether they pressed a key, and the marks the world loads ahead along the
  * way. There is a mark every `TRAVEL_MARK` meters, requested from the
- * standers once the trip comes within `TRAVEL_LOOK` of it.
+ * layers once the trip comes within `TRAVEL_LOOK` of it.
  */
 export interface TripUnderWay {
   readonly plan: Trip;
@@ -470,7 +470,7 @@ export interface WorldInside {
   readonly light: SceneLight;
   readonly terrain: Terrain;
   readonly land: PageLand;
-  readonly standing: Standing;
+  readonly thingTiles: ThingTiles;
   readonly sky: Sky;
   readonly ground: GroundMesh;
   readonly grass: Grass;
@@ -1149,9 +1149,9 @@ export function createWorld(root: HTMLElement): World {
       code: { ...code.layout, symbols: [...symbols, ...forestOf.map((i) => symbols[i] as (typeof symbols)[number])] },
     };
   };
-  /** Each tile's trees by "ti,tj", which the trees' stander places. */
+  /** Each tile's trees by "ti,tj", which the trees' layer places. */
   let treesByTile = new Map<string, Tree[]>();
-  /** The largest tree crown radius in meters, which sets how far away `standing` places tree tiles. */
+  /** The largest tree crown radius in meters, which sets how far away `thingTiles` places tree tiles. */
   let largestTree = 0;
   /** The tile of the land holding (x, z), "ti,tj". */
   const tileKeyOf = (x: number, z: number): string => {
@@ -1204,8 +1204,8 @@ export function createWorld(root: HTMLElement): World {
     understory.place(placed.placements);
     showUnderstoryVitality();
     buildSolids();
-    // The trees, trails, buildings and landmarks are placed again tile by tile around the person (`standing`).
-    standing.open(world);
+    // The trees, trails, buildings and landmarks are placed again tile by tile around the person (`thingTiles`).
+    thingTiles.open(world);
     warmSoon();
   }
   /** Each tree's region by tree index, computed the first time `crownsNear` needs it. */
@@ -1235,7 +1235,7 @@ export function createWorld(root: HTMLElement): World {
       return [outlineShape(p.x, p.z, p.yaw, p.scale, foot.outline, share)];
     });
     // A landmark blocks a walker at each of its solid pieces, such as a tower's blocks, each standing stone or a great trunk.
-    const standing = ways.sites.flatMap((s, i) => {
+    const landmarkSolids = ways.sites.flatMap((s, i) => {
       const view = landmarkViews[i];
       const lm = landmarks[s.landmark];
       if (view === undefined || lm === undefined) return [];
@@ -1248,7 +1248,7 @@ export function createWorld(root: HTMLElement): World {
       const beside = e === null ? [] : [{ points: [[e.x0, e.z0], [e.x1, e.z0], [e.x1, e.z1], [e.x0, e.z1]].flatMap(([lx, lz]) => siteToWorld(b.site, lx as number, lz as number)) }];
       return [...wallsShape(b.plan, b.site), ...beside];
     });
-    bodies = [...trunks, ...components, ...standing, ...buildings];
+    bodies = [...trunks, ...components, ...landmarkSolids, ...buildings];
     gatherSolids();
     // A landmark's walkable parts support a walker instead of blocking it, such as a rotunda's steps and the floor inside.
     floors = ways.sites.flatMap((s, i) => {
@@ -1271,39 +1271,39 @@ export function createWorld(root: HTMLElement): World {
 
   /** The view's device pixels per radian, which sets how far away a thing of a given size can be seen. */
   const viewFocal = (): number => renderer.getContext().drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-  const standing = createStanding(viewFocal);
-  standing.add<Tree>({
+  const thingTiles = createThingTiles(viewFocal);
+  thingTiles.add<Tree>({
     name: "trees",
     largest: () => largestTree,
     tile: (ti, tj) => treesByTile.get(`${ti},${tj}`) ?? [],
-    stand(held) {
+    place(held) {
       placeTrees(held);
       buildSolids();
     },
   });
-  standing.add<WayPiece>({
+  thingTiles.add<WayPiece>({
     name: "trails",
     largest: () => built?.largest ?? 0,
     tile: (ti, tj) => built?.pieces.filter((p) => tileKeyOf(p.x, p.z) === `${ti},${tj}`) ?? [],
-    stand: (held) => built?.stand(held),
+    place: (held) => built?.place(held),
   });
-  standing.add<Building>({
+  thingTiles.add<Building>({
     name: "buildings",
     largest: () => settlement.buildings.reduce((r, b) => Math.max(r, b.radius, b.height / 2), 0),
     tile(ti, tj) {
       const here = settlement.buildings.filter((b) => tileKeyOf(b.site.x, b.site.z) === `${ti},${tj}`);
       // A distant building has no meshes, so a worker makes its build before its tile is placed.
-      const missing = here.flatMap((b) => (b.standing === null ? [b.ask] : []));
+      const missing = here.flatMap((b) => (b.batchSlot === null ? [b.ask] : []));
       return missing.length === 0 ? here : makeAhead(missing).then(() => here);
     },
     // Each tile's buildings are placed together as one batch, drawn with one call per material.
-    stand: (held) => settlement.stand(held, scene, (b) => tileKeyOf(b.site.x, b.site.z)),
+    place: (held) => settlement.place(held, scene, (b) => tileKeyOf(b.site.x, b.site.z)),
   });
-  standing.add<number>({
+  thingTiles.add<number>({
     name: "landmarks",
     largest: () => landmarkViews.reduce((r, v) => Math.max(r, v.radius, v.height / 2), 0),
     tile: (ti, tj) => ways.sites.flatMap((s, i) => (tileKeyOf(s.site.x, s.site.z) === `${ti},${tj}` ? [i] : [])),
-    stand(held) {
+    place(held) {
       const keep = new Set(held);
       landmarkViews.forEach((v, i) => (v.object.visible = keep.has(i)));
     },
@@ -1844,7 +1844,7 @@ export function createWorld(root: HTMLElement): World {
   let trip: TripUnderWay | null = null;
   /** Within this many meters, a trip walks straight there around any obstacle rather than by the trails. */
   const TRAVEL_NEAR = 120;
-  /** Meters ahead along a trip that the standers load what can be seen (`TRAVEL_LOOK`), and the spacing of the marks they load at (`TRAVEL_MARK`). */
+  /** Meters ahead along a trip that the layers load what can be seen (`TRAVEL_LOOK`), and the spacing of the marks they load at (`TRAVEL_MARK`). */
   const TRAVEL_LOOK = 300;
   const TRAVEL_MARK = 40;
   /** Requests the marks within `TRAVEL_LOOK` ahead, and returns how far along the trip, in meters, everything visible from it has loaded. */
@@ -1853,7 +1853,7 @@ export function createWorld(root: HTMLElement): World {
       if (m.asked || m.s > t.at.s + TRAVEL_LOOK) continue;
       m.asked = true;
       const x = travelPoint(t.plan, m.s);
-      void standing.fetch(x.x, x.z).then(() => {
+      void thingTiles.fetch(x.x, x.z).then(() => {
         m.ready = true;
       });
     }
@@ -2039,7 +2039,7 @@ export function createWorld(root: HTMLElement): World {
       await nextFrame();
       mark("ground");
       plant(placed);
-      await standing.ready(walker.x, walker.z);
+      await thingTiles.ready(walker.x, walker.z);
       mark("plant");
       await nextFrame();
       placeSigns();
@@ -2113,7 +2113,7 @@ export function createWorld(root: HTMLElement): World {
   let detailPin: { readonly x: number; readonly z: number } | null = null;
   /** The view position when pinned apart from the person, as the travel test pins it. */
   let viewPin: ViewPin | null = null;
-  /** Pauses streaming while a measure draws a pinned view. The land and the standers wait for the frames that move the person. */
+  /** Pauses streaming while a measure draws a pinned view. The land and the layers wait for the frames that move the person. */
   let streamHeld = false;
   /** Set while a measure drives the frames itself, so the app's own loop draws none. */
   let driving = false;
@@ -2161,7 +2161,7 @@ export function createWorld(root: HTMLElement): World {
         wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
         // While a trip goes faster than 1.5 times walking pace, only its marks request tiles. Requesting walking's lead as
         // well would queue tiles ahead of the ones the trip waits on.
-        standing.follow(walker.x, walker.z, trip === null || trip.at.v <= WALK_TO.pace * 1.5);
+        thingTiles.follow(walker.x, walker.z, trip === null || trip.at.v <= WALK_TO.pace * 1.5);
       }
       lantern.follow(camera.position, forward, lanternGround, walked, dt);
       grass.follow(detailEye);
@@ -2693,7 +2693,7 @@ export function createWorld(root: HTMLElement): World {
       walkTo(at.x, at.z, at.yaw);
       return handle.around(at.x, at.z);
     },
-    around: (x, z) => Promise.all([land.around(x, z), standing.ready(x, z)]).then(() => undefined),
+    around: (x, z) => Promise.all([land.around(x, z), thingTiles.ready(x, z)]).then(() => undefined),
     travel: (at, face) => travelTo(at, face),
     trip: () => trip,
     hurry: (on) => {
@@ -2704,7 +2704,7 @@ export function createWorld(root: HTMLElement): World {
       if (on && end !== undefined && !end.asked) {
         end.asked = true;
         const at = travelPoint(trip.plan, end.s);
-        void standing.fetch(at.x, at.z).then(() => {
+        void thingTiles.fetch(at.x, at.z).then(() => {
           end.ready = true;
         });
       }
@@ -2751,7 +2751,7 @@ export function createWorld(root: HTMLElement): World {
       light,
       terrain,
       land,
-      standing,
+      thingTiles: thingTiles,
       sky,
       ground,
       grass,

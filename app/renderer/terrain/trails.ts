@@ -110,7 +110,7 @@ export interface Ways {
   /** The radius of the largest single thing among the pieces, meters. */
   readonly largest: number;
   /** Places exactly these pieces, building any not yet built and dropping the rest. */
-  stand(pieces: readonly WayPiece[]): void;
+  place(pieces: readonly WayPiece[]): void;
   /** Sets each crossing's, edging's and cairn's vitality from the trails on its way (`wayVitalityAt`, `junctionVitality`). */
   setVitality(vitalityOf: (place: string) => number): void;
   dispose(): void;
@@ -146,7 +146,7 @@ const EDGING_SQUARE = 256;
 
 /**
  * Builds each way's crossings and edging stones, and each junction's cairn,
- * as pieces placed only while their tile is (`stand`), with a way's edging
+ * as pieces placed only while their tile is (`place`), with a way's edging
  * stones grouped by square. `edging` is each way's stones when the bake set
  * them on the whole land. Otherwise they are set on `t`.
  */
@@ -203,7 +203,7 @@ export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, 
       for (const p of pieces) p.view?.setVitality(p.vitality(of));
     },
     pieces,
-    stand(wanted) {
+    place(wanted) {
       const keep = new Set(wanted);
       for (const p of pieces) {
         if (!keep.has(p)) {
