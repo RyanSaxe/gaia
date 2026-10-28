@@ -137,12 +137,12 @@ const shows = (o: THREE.Object3D): boolean => {
   return true;
 };
 
-/** Far forms whose cards draw from `slots` slots at once, lit by `light`. */
-export function createFarForms(light: SceneLight, slots: number): FarForms {
+/** Far forms whose cards draw from `slots` slots at once, lit by `light`, sharpening a bare copy by `bareEdge` (`createFarCards`). */
+export function createFarForms(light: SceneLight, slots: number, bareEdge?: readonly [number, number]): FarForms {
   const plants: FarPlant[] = [];
   const state: { slot: number; swapPx: number }[] = [];
   const members: { copies: FarCopies; anchor: THREE.Object3D; far: (eye: THREE.Vector3, focal: number) => number }[][] = [];
-  const cards = createFarCards(light, TURN, slots);
+  const cards = createFarCards(light, TURN, slots, bareEdge);
   const forms: FarForms = {
     get count() {
       return plants.length;

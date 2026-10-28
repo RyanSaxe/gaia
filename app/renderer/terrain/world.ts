@@ -17,6 +17,7 @@ import {
   LANTERN,
   type PlantView,
   applyLight,
+  CARD,
   FAR_BAKE_VERSION,
   createLantern,
   createPlant,
@@ -993,7 +994,8 @@ export function createWorld(root: HTMLElement): World {
 
   // Every plant that turns far when small on screen: each tree build, by its
   // index among the variants, and the understory's and the wild's bushes.
-  const treeForms = createFarForms(light, farSlots.trees);
+  // A bare tree's twigs are finer than its card's texels; bushes, stones and flowers keep a healthy copy's edge.
+  const treeForms = createFarForms(light, farSlots.trees, CARD.bareEdge);
   const bushForms = createFarForms(light, farSlots.bushes);
   let treeFar: readonly FarOf[] = [];
 
