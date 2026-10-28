@@ -46,7 +46,7 @@ import { withStart } from "../start/start.ts";
 import { START_SKY } from "../start/table-scene.ts";
 import type { Represented } from "./represent.ts";
 import { type CodeWorld, vitalityOf, withLines, withVitality } from "@gaia/world";
-import { type OpenedWorld, type PlantGroup, codeWorld, onHeal } from "./code-world.ts";
+import { type OpenedWorld, type PlantGroup, codeWorld, onVitalityUpdate } from "./code-world.ts";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 import { type Building, type Settlement, composedName, createSettlement, settlementBuilds } from "./settlement.ts";
 import { type Signs, createSigns } from "./signs.ts";
@@ -265,7 +265,7 @@ export interface WorldHandle {
   thing(of: string): JudgedThing | undefined;
   /**
    * Calls `listener` with the ids of changed things once vitality changes live (`setVitality`), as when the world
-   * heals onto a new commit. From then on, `code`, `places`, `baked` and `thing` return the new values.
+   * refreshes onto a new commit. From then on, `code`, `places`, `baked` and `thing` return the new values.
    */
   onVitality(listener: (changed: readonly string[]) => void): void;
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
@@ -2217,21 +2217,21 @@ export function createWorld(root: HTMLElement): World {
     // The wait screen draws each building and landmark at its laid-out place while the world bakes.
     veil.marks(laidOut(opened));
     knowEntities();
-    // While the world is open, a heal from new commits changes only what the journal reads and vitality: the new
+    // While the world is open, a refresh from new commits changes only what the journal reads and vitality: the new
     // judgments and each definition's new lines, then each thing's vitality.
-    onHeal((heal) => {
+    onVitalityUpdate((update) => {
       if (code === null) return;
-      const judged = heal.judged;
+      const judged = update.judged;
       if (judged !== undefined) {
         const was = code.thing;
         code = { ...code, thing: (of) => judged[of] ?? was(of) };
       }
-      if (heal.symbols !== undefined) {
+      if (update.symbols !== undefined) {
         const was = code.world;
-        code = { ...code, world: withLines(was, heal.symbols) };
+        code = { ...code, world: withLines(was, update.symbols) };
         if (places === was) places = code.world;
       }
-      setVitality(new Map(Object.entries(heal.vitality)));
+      setVitality(new Map(Object.entries(update.vitality)));
     });
     skyWorld = opened.sky;
     hour = Number.NaN;

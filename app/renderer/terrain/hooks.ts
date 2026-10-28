@@ -821,7 +821,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     passes: () => structuredClone(world.passes),
     /**
      * Sets vitality live for a file and its definitions, or for every file
-     * under a directory, by path. "" sets every file. Like a heal, it goes
+     * under a directory, by path. "" sets every file. Like a refresh, it goes
      * through `setVitality` and changes what represents the files, their
      * patches and what grows there, and the lots and water of the areas that
      * pool them. Nothing rebakes. Returns how many files it set.

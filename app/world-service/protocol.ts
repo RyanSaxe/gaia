@@ -174,7 +174,7 @@ export type ToRenderer =
   /** The answer to `world.source`: the file's lines, or null when it cannot be read or is outside the folder. */
   | { readonly type: "world.source"; readonly path: string; readonly lines: readonly string[] | null }
   /**
-   * The shown world's folder has a new commit, and `healWorld` judged the world again from it. `vitality` gives the
+   * The shown world's folder has a new commit, and `refreshWorld` judged the world again from it. `vitality` gives the
    * new vitality of each thing in the shown world whose vitality changed, by id: a file's path, a definition's
    * `<file>#<name>` or an entity's root path. Only vitality changes live. Nothing moves or changes shape, and Jev's
    * forms stay until the next open.
@@ -194,8 +194,8 @@ export type ToRenderer =
       readonly commit?: string;
     };
 
-/** The `world.vitality` message that `healWorld` returns for a new commit. */
-export type Heal = Extract<ToRenderer, { readonly type: "world.vitality" }>;
+/** The `world.vitality` message that `refreshWorld` returns for a new commit. */
+export type VitalityUpdate = Extract<ToRenderer, { readonly type: "world.vitality" }>;
 
 /** Renderer → world service. */
 export type FromRenderer =
@@ -207,7 +207,7 @@ export type FromRenderer =
   | { readonly type: "world.choose"; readonly place: StartChoice }
   /** A painting of the view where the person stopped in this page's world. The world service stores it as `RecentWorld.painting`. */
   | { readonly type: "world.painting"; readonly painting: string }
-  /** Asks for a file's text by project-relative path, for the journal's code pages. The service reads it at the world's commit, or the commit it healed onto (`world.vitality`). */
+  /** Asks for a file's text by project-relative path, for the journal's code pages. The service reads it at the world's commit, or the commit it refreshed onto (`world.vitality`). */
   | { readonly type: "world.source"; readonly path: string }
   /** Where the person is in this page's world, sent periodically as they walk and when the page unloads. The world service stores it as `RecentWorld.stood`. */
   | { readonly type: "world.stood"; readonly stood: LastSpot };

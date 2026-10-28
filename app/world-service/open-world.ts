@@ -9,7 +9,7 @@ import { outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planForms, planWorldRequests, requestKey, vitalityOf, withLines, withVitality } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
-import type { ConsentPlan, Heal, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
+import type { ConsentPlan, VitalityUpdate, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
 
 /**
  * The spend limit in US dollars until the person sets one. It is infinite
@@ -420,10 +420,10 @@ function linesMoved(a: CodeWorld, b: CodeWorld): Record<string, { line: number; 
  * Only vitality changes live. When `sameLand` holds, the message also moves the journal to the new commit, its
  * judgments and each definition's new lines. Otherwise each thing that keeps its id takes its new vitality, and the
  * new layout, code and judgments wait for the next open. Forms Jev picks for changed code are stored and appear only
- * on that open. A heal never asks for consent mid-walk, so one that costs more than the spend limit fails, and the
+ * on that open. A refresh never asks for consent mid-walk, so one that costs more than the spend limit fails, and the
  * next open asks.
  */
-export async function healWorld(engine: EngineClient, shown: WorldDocument): Promise<{ readonly heal: Heal | null; readonly shown: WorldDocument }> {
+export async function refreshWorld(engine: EngineClient, shown: WorldDocument): Promise<{ readonly update: VitalityUpdate | null; readonly shown: WorldDocument }> {
   const next = await openWorld({ engine, root: shown.root, consent: async () => false, progress: () => {} });
   const now = vitalityOf(next.world);
   const vitality: Record<string, number> = {};
@@ -432,10 +432,10 @@ export async function healWorld(engine: EngineClient, shown: WorldDocument): Pro
     if (v !== undefined && v !== was) vitality[id] = v;
   }
   const world = withVitality(shown.world, new Map(Object.entries(vitality)));
-  if (!sameLand(shown.world, next.world)) return { heal: Object.keys(vitality).length === 0 ? null : { type: "world.vitality", vitality }, shown: { ...shown, world } };
+  if (!sameLand(shown.world, next.world)) return { update: Object.keys(vitality).length === 0 ? null : { type: "world.vitality", vitality }, shown: { ...shown, world } };
   const judged = Object.fromEntries(Object.entries(next.judged).filter(([of, j]) => JSON.stringify(j) !== JSON.stringify(shown.judged[of])));
   const commit = next.commit === undefined ? {} : { commit: next.commit };
   const moved = linesMoved(shown.world, next.world);
   const symbols = Object.keys(moved).length === 0 ? {} : { symbols: moved };
-  return { heal: { type: "world.vitality", vitality, judged, ...symbols, ...commit }, shown: { ...shown, world: withLines(world, moved), judged: next.judged, ...commit } };
+  return { update: { type: "world.vitality", vitality, judged, ...symbols, ...commit }, shown: { ...shown, world: withLines(world, moved), judged: next.judged, ...commit } };
 }

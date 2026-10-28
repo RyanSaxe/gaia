@@ -199,7 +199,7 @@ updates its code judgments, its vitality and each definition's line span,
 which the journal shows. A commit can instead move the land, or add or remove
 a file or definition. Then Gaia keeps the current layout and forms, updates
 vitality for things that still match by ID, and shows the new layout and forms
-on the next open. `healWorld` in `app/world-service/open-world.ts` implements
+on the next open. `refreshWorld` in `app/world-service/open-world.ts` implements
 this.
 
 ## Where to look next

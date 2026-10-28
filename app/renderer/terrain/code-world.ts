@@ -8,7 +8,7 @@ import { link } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import { type LastSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type FormKind, layoutWorld } from "@gaia/world";
-import type { ConsentPlan, Heal, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
+import type { ConsentPlan, VitalityUpdate, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import SHOWCASE_PAINTING from "../start/showcase-painting.webp";
 import { CHOSEN_MS } from "../start/start.ts";
@@ -149,10 +149,10 @@ function serviceWorld(service: WorldService, veil: Veil): Promise<{ readonly doc
   });
 }
 
-/** Calls `heal` with each heal the world service sends this page (`world.vitality`). A page with no service gets none. */
-export function onHeal(heal: (h: Heal) => void): void {
+/** Calls `listener` with each vitality update the world service sends this page (`world.vitality`). A page with no service gets none. */
+export function onVitalityUpdate(listener: (h: VitalityUpdate) => void): void {
   worldService()?.on((m) => {
-    if (m.type === "world.vitality") heal(m);
+    if (m.type === "world.vitality") listener(m);
   });
 }
 

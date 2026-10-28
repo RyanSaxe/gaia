@@ -2,12 +2,12 @@
 // It opens the world for each page's folder, or offers the start page when main
 // names none, and sends progress and the finished `WorldDocument` over the
 // page's MessagePort. While a world is open, it polls the folder for new commits
-// and sends each thing's new vitality from `healWorld`.
+// and sends each thing's new vitality from `refreshWorld`.
 
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
-import { healWorld, openWorld } from "./open-world.ts";
+import { refreshWorld, openWorld } from "./open-world.ts";
 import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer, WorldDocument } from "./protocol.ts";
 import { keepPainting, keepRecent, keepLastSpot, offeredWorlds, lastSpotIn } from "./recent.ts";
 
@@ -32,7 +32,7 @@ function settleable(): { promise: Promise<void>; resolve: () => void; settled: b
   return s;
 }
 
-/** The folder each page opened and the commit its world was built from or healed onto. The page's paintings and positions are stored with that folder, and `sendSource` reads files at that commit. */
+/** The folder each page opened and the commit its world was built from or refreshed onto. The page's paintings and positions are stored with that folder, and `sendSource` reads files at that commit. */
 const openedOn = new WeakMap<MessagePortMain, { readonly folder: string; readonly commit?: string }>();
 /** Runs writes to the recent worlds one at a time, so a painting's write cannot overlap the write of the visit it belongs to. */
 let keeping: Promise<void> = Promise.resolve();
@@ -114,8 +114,8 @@ function stopWatching(): void {
 }
 
 /**
- * Polls the folder of the world `port` shows. On each new commit, `healWorld` judges the world again and the page
- * gets each thing's new vitality. One heal runs at a time, and after a failed heal the next commit tries again. A
+ * Polls the folder of the world `port` shows. On each new commit, `refreshWorld` judges the world again and the page
+ * gets each thing's new vitality. One refresh runs at a time, and after a failed refresh the next commit tries again. A
  * world read from disk has no commit, so it is not polled.
  */
 function watchCommits(port: MessagePortMain, document: WorldDocument): void {
@@ -123,27 +123,27 @@ function watchCommits(port: MessagePortMain, document: WorldDocument): void {
   if (document.commit === undefined) return;
   let shown = document;
   let judgedAt = document.commit;
-  let healing = false;
-  const heal = async (): Promise<void> => {
+  let refreshing = false;
+  const refresh = async (): Promise<void> => {
     // A restarting engine fails the call. The next poll tries again.
     const now = (await engine.call("project.commit", { root: shown.root }).catch(() => ({ commit: null }))).commit;
     if (now === null || now === judgedAt) return;
     judgedAt = now;
     const started = Date.now();
-    const healed = await healWorld(engine, shown);
+    const refreshed = await refreshWorld(engine, shown);
     if (watching?.port !== port) return;
-    shown = healed.shown;
+    shown = refreshed.shown;
     openedOn.set(port, { folder: shown.root, ...(shown.commit === undefined ? {} : { commit: shown.commit }) });
-    if (healed.heal !== null) send(port, healed.heal);
-    const changed = Object.keys(healed.heal?.vitality ?? {}).length;
+    if (refreshed.update !== null) send(port, refreshed.update);
+    const changed = Object.keys(refreshed.update?.vitality ?? {}).length;
     console.log(`gaia: healed ${shown.root} at ${now.slice(0, 8)} in ${Date.now() - started} ms: ${changed} things' vitality changed${shown.commit === now ? "" : "; the land moved, so its new shape waits for the next open"}`);
   };
   const timer = setInterval(() => {
-    if (healing) return;
-    healing = true;
-    heal()
+    if (refreshing) return;
+    refreshing = true;
+    refresh()
       .catch((error: unknown) => console.error(`gaia: could not heal ${shown.root}: ${(error as Error).message}`))
-      .finally(() => (healing = false));
+      .finally(() => (refreshing = false));
   }, COMMIT_EVERY_MS);
   watching = { port, timer };
 }

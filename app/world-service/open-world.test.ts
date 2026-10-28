@@ -4,7 +4,7 @@ import { composeWorld, factsOf, judgeWorld, keptJev, landOf, requestKey } from "
 import { fakeJevClient } from "@gaia/world/testing";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { facts as provingFacts } from "virtual:proving-ground";
-import { LIMIT_KEY, healWorld, judgedGraph, openWorld } from "./open-world.ts";
+import { LIMIT_KEY, refreshWorld, judgedGraph, openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
 /** Builds the engine's graph of the proving ground at commit "c0ffee": its directories, entities, files, definitions and imports. */
@@ -221,9 +221,9 @@ describe("healing an open world", () => {
     // The new commit improves the mill's wheel, so the understanding pass raises its quality to 0.9 and the mill's to 0.8.
     at.graph = judgedAt("beef", { [`file:${wheel}`]: 0.9, "dir:crossings/mill": 0.8 });
     asked.length = 0;
-    const healed = await healWorld(engine, shown);
+    const refreshed = await refreshWorld(engine, shown);
 
-    // The heal asks exactly what a fresh opening of the new commit asks, minus what the first opening asked.
+    // The refresh asks exactly what a fresh opening of the new commit asks, minus what the first opening asked.
     const fresh = keepingEngine({ graph: at.graph });
     await open(fresh.engine);
     const changed = [...new Set(fresh.asked)].filter((key) => !before.has(key));
@@ -231,16 +231,16 @@ describe("healing an open world", () => {
     expect([...new Set(asked)].sort()).toEqual(changed.sort());
 
     // Only the wheel's and the mill's vitality changed, because the wheel's definitions keep their own quality. The
-    // heal sends only those, with the new judgments and the commit the journal now reads.
-    expect(healed.heal).toEqual({
+    // refresh sends only those, with the new judgments and the commit the journal now reads.
+    expect(refreshed.update).toEqual({
       type: "world.vitality",
       vitality: { [wheel]: 0.9, "crossings/mill": 0.8 },
       judged: { [wheel]: expect.objectContaining({ quality: 0.9 }), "crossings/mill": expect.objectContaining({ quality: 0.8 }) },
       commit: "beef",
     });
     // The shown world takes the wheel's new vitality, and no patch moves.
-    expect(healed.shown.world.patches.find((p) => p.path === wheel)?.vitality).toBe(0.9);
-    expect(healed.shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius])).toEqual(shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius]));
+    expect(refreshed.shown.world.patches.find((p) => p.path === wheel)?.vitality).toBe(0.9);
+    expect(refreshed.shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius])).toEqual(shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius]));
   });
 
   it("when the commit only shifts code within its files, heals in place, and the journal reads each definition on its new lines", { timeout: 40_000 }, async () => {
@@ -252,13 +252,13 @@ describe("healing an open world", () => {
     const lower = (n: GraphNode): GraphNode =>
       n.kind === "file" && n.path === wheel ? { ...n, measures: { ...n.measures, lines: n.measures.lines + 1 } } : n.kind === "def" && n.file === `file:${wheel}` ? { ...n, span: { start: n.span.start + 1, end: n.span.end + 1 } } : n;
     at.graph = judgedAt("beef", {}, { ...graph, nodes: graph.nodes.map(lower) });
-    const healed = await healWorld(engine, shown);
+    const refreshed = await refreshWorld(engine, shown);
 
     const was = shown.world.symbols.filter((d) => d.file === wheel);
     expect(was.length).toBeGreaterThan(0);
-    expect(healed.heal).toEqual({ type: "world.vitality", vitality: {}, judged: expect.any(Object), symbols: Object.fromEntries(was.map((d) => [d.id, { line: d.line + 1, lines: d.lines }])), commit: "beef" });
-    expect(healed.shown.commit).toBe("beef");
-    expect(healed.shown.world.symbols.filter((d) => d.file === wheel).map((d) => [d.id, d.line, d.x, d.z])).toEqual(was.map((d) => [d.id, d.line + 1, d.x, d.z]));
+    expect(refreshed.update).toEqual({ type: "world.vitality", vitality: {}, judged: expect.any(Object), symbols: Object.fromEntries(was.map((d) => [d.id, { line: d.line + 1, lines: d.lines }])), commit: "beef" });
+    expect(refreshed.shown.commit).toBe("beef");
+    expect(refreshed.shown.world.symbols.filter((d) => d.file === wheel).map((d) => [d.id, d.line, d.x, d.z])).toEqual(was.map((d) => [d.id, d.line + 1, d.x, d.z]));
   });
 
   it("when the commit would move the land, sends the new vitality of what still stands under the same name, and leaves the rest to the next open", { timeout: 40_000 }, async () => {
@@ -269,11 +269,11 @@ describe("healing an open world", () => {
     const sluice = "crossings/mill/sluice.ts";
     const added: GraphNode = { kind: "file", id: `file:${sluice}`, lineage: sluice, path: sluice, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: 300 } };
     at.graph = judgedAt("beef", { [`file:${wheel}`]: 0.9, [`file:${sluice}`]: 0.2 }, { ...graph, nodes: [...graph.nodes, added] });
-    const healed = await healWorld(engine, shown);
+    const refreshed = await refreshWorld(engine, shown);
 
-    // The heal sends no commit and no judgments, so the journal keeps reading the code that matches the page's land.
-    expect(healed.heal).toEqual({ type: "world.vitality", vitality: { [wheel]: 0.9 } });
-    expect(healed.shown.commit).toBe("c0ffee");
-    expect(healed.shown.world.patches.map((p) => p.path)).toEqual(shown.world.patches.map((p) => p.path));
+    // The refresh sends no commit and no judgments, so the journal keeps reading the code that matches the page's land.
+    expect(refreshed.update).toEqual({ type: "world.vitality", vitality: { [wheel]: 0.9 } });
+    expect(refreshed.shown.commit).toBe("c0ffee");
+    expect(refreshed.shown.world.patches.map((p) => p.path)).toEqual(shown.world.patches.map((p) => p.path));
   });
 });
