@@ -29,7 +29,10 @@ export interface BookPages {
   tabs(): readonly { readonly name: string; readonly at: string; readonly from: string }[];
   /** Resolves once everything a place's spread needs, such as a file's text, has arrived, so its pages are drawn complete. */
   ready?(at: string): Promise<void>;
-  /** Resolves once a place's painting is done, so a page never shows before its painting. */
+  /**
+   * Resolves once a place's painting is done, or found to have nothing to paint, so a page never shows before its
+   * painting. The book waits for it however long it takes.
+   */
   painted?(at: string): Promise<void>;
   /**
    * Returns the faces a riffle from `from` toward `toward` shows. For face `k` of `of`, it returns a page of real code
@@ -59,8 +62,12 @@ export interface JournalBook {
 export const PAGE = { w: 520, h: 660, overhang: 10 } as const;
 /** The width of a page's outer fifth in the book's pixels. A click there turns the page, even over a map or a picture. */
 const EDGE = PAGE.w / 5;
-/** The longest delay in ms before a page shows, complete or not. Only text or a painting that failed to arrive takes this long. */
-const WHOLE_AT_MOST = 20000;
+/**
+ * The longest delay in ms before a page shows without its text, which only text that failed to arrive takes. There is
+ * no limit for its painting, because a painting of a far place waits for that place's land, which waits while the
+ * person travels.
+ */
+const TEXT_AT_MOST = 20000;
 /** How many ms a turn to an adjacent page holds the lifted page while that page's painting finishes, before the book riffles instead. */
 const BESIDE_MS = 1500;
 /**
@@ -318,11 +325,10 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     layEdges();
   }
   const after = (ms: number): Promise<void> => new Promise<void>((r) => window.setTimeout(r, ms));
-  /** Resolves once a place's code and painting have arrived, or after `WHOLE_AT_MOST` if they never do. */
-  const wholeAt = (place: string): Promise<void> =>
-    Promise.race([Promise.all([pages.ready?.(place), pages.painted?.(place)]).then(() => undefined), after(WHOLE_AT_MOST)]);
-  /** Resolves once a place's painting is done, with the same timeout as `wholeAt`. */
-  const painted = (place: string): Promise<void> => Promise.race([pages.painted?.(place) ?? Promise.resolve(), after(WHOLE_AT_MOST)]);
+  /** Resolves once a place's painting is done. */
+  const painted = (place: string): Promise<void> => pages.painted?.(place) ?? Promise.resolve();
+  /** Resolves once a place's code and painting have arrived, or, if the code never does, once the painting is done and `TEXT_AT_MOST` has passed. */
+  const wholeAt = (place: string): Promise<void> => Promise.all([Promise.race([pages.ready?.(place), after(TEXT_AT_MOST)]), painted(place)]).then(() => undefined);
   /** Whether a promise settles within 40 ms. */
   const settledSoon = (p: Promise<void>): Promise<boolean> => Promise.race([p.then(() => true), after(40).then(() => false)]);
   /** Whether `place` lies in the part of the book from the tab at `chapter` to the next tab. */

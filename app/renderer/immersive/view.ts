@@ -96,6 +96,14 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   /** The running trip started from the journal's map. The book stays open on the map until it arrives. */
   let watching: Readonly<TripUnderWay> | null = null;
   /**
+   * How many times the book has opened, and which opening a watched trip
+   * started from. The trip closes only that opening. If the person closes
+   * the book during the trip and opens it again, the book stays open when
+   * the trip arrives.
+   */
+  let openings = 0;
+  let watchedOpening = 0;
+  /**
    * Moves the person to a landing. `world.travel` walks them along the trails
    * or across the land, and the field map closes. If it finds no route, the
    * journal closes and a covered jump places them. With `watch`, used by the
@@ -110,6 +118,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     if (world.travel(at, face)) {
       map.open(false);
       watching = watch ? world.trip() : null;
+      watchedOpening = openings;
       return true;
     }
     journal.close();
@@ -252,7 +261,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     text: (path) => source.when(path),
   });
   const journal = createJournalBook(layer, pages, (open) => {
-    if (open) setSlip(false);
+    if (!open) return;
+    openings++;
+    setSlip(false);
   });
   source.onArrive(() => journal.refresh());
   // A repainted field map paper redraws the open page's map.
@@ -538,10 +549,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       // world never shows coarse ground. If another trip replaced it, the book stays as it is.
       if (watching !== null && world.trip() !== watching) {
         const arrived = watching.at.done;
+        const opening = watchedOpening;
         watching = null;
         if (arrived)
           void world.around(p.x, p.z).then(() => {
-            if (watching === null) journal.close();
+            if (watching === null && openings === opening) journal.close();
           });
       }
       // During any trip, lab.css darkens the wash over the world under the open book.
