@@ -139,16 +139,15 @@ const INSTANCED_VERT = swap(
   NEAR_LEAVES_VERT,
 );
 const INSTANCED_DEPTH = instanced(DEPTH_VERT);
-// A leaving copy's leaves thin through their own coverage, sample by sample;
-// a part drawn without coverage (bark, trunks) is screened away pixel by
-// pixel in an even scatter. Both draw exactly as before until it leaves.
+// A leaving copy thins through its coverage, sample by sample, whatever it
+// is made of. It leaves under its far card, which covers its finest pieces
+// only in part, and bark screened away a whole pixel at a time showed
+// through the card there as a stipple. Bark covers every sample, so each
+// part draws exactly as before until the copy leaves.
 const INSTANCED_FRAG = swap(
   swap(PLANT_FRAG, "void main() {", "varying float vNearGone;\nvoid main() {"),
   "  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);",
-  `  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover * (1.0 - vNearGone));
-#ifndef COVERAGE
-  if (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) < vNearGone) discard;
-#endif`,
+  "  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover * (1.0 - vNearGone));",
 );
 
 const vec3Of = (c: readonly number[]): THREE.Vector3 => new THREE.Vector3(c[0] ?? 0, c[1] ?? 0, c[2] ?? 0);
@@ -266,7 +265,6 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
       color: new THREE.ShaderMaterial({
         vertexShader: INSTANCED_VERT,
         fragmentShader: INSTANCED_FRAG,
-        defines: part.cutout.some((c) => c !== 0) ? { COVERAGE: "" } : {},
         uniforms: {
           ...light,
           ...shared,
@@ -278,7 +276,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
           uLamp: { value: 0 },
         },
         side: foliage === 0 ? THREE.FrontSide : THREE.DoubleSide,
-        alphaToCoverage: part.cutout.some((c) => c !== 0),
+        alphaToCoverage: true,
       }),
       depth: new THREE.ShaderMaterial({
         vertexShader: INSTANCED_DEPTH,

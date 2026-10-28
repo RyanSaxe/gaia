@@ -667,6 +667,13 @@ export function crownsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere): 
 /** How many members' records a row of the members' table holds. */
 const MEMBER_ROW = 256;
 
+/**
+ * How a card reads its bake: near the size its form turns far at, the coverage remapped from this range to 0 to 1
+ * (smaller, the range widens to 0 to 1 over the first mip level); how far toward the sun, in radii, it reads its
+ * shadow; and how far toward the eye, in radii, a card drawn over its full form stands.
+ */
+export const CARD = { coverEdge: [0.25, 0.75], shadowLift: 0.2, overFull: 0.15 } as const;
+
 const CARD_VERT = /* glsl */ `
 attribute vec4 aSpot; // x, y, z, yaw
 attribute vec4 aMore; // scale, vitality, seed, and the member the copy belongs to
@@ -959,8 +966,9 @@ void main() {
   float s = sin(vYaw);
   vec3 n = normalize(vec3(c * nl.x + s * nl.z, nl.y, -s * nl.x + c * nl.z));
   float uFoliage = l3.a / healthy;
-  // The surface lies in front of or behind the card by its baked depth.
-  vec3 world = vWorld - vToEye * ((l2.a / healthy - 0.5) * 2.0 * formRadius * vScale);
+  // The surface lies toward the eye from the card by its baked depth: how far it stood toward the camera that baked
+  // its view, as \`seen\` reads it.
+  vec3 world = vWorld + vToEye * ((l2.a / healthy - 0.5) * 2.0 * formRadius * vScale);
   // The plant shader's lighting, line for line.
   float nDotL = dot(n, uSunDirection);
   float wrapped = mix(max(nDotL, 0.0), nDotL * 0.5 + 0.5, uFoliage * 0.85);
@@ -981,7 +989,15 @@ void main() {
   // Too small to see, a card dissolves through its coverage as the full form leaves.
   gl_FragColor = vec4(aerial(shoulder(color), world) + glow * (1.0 - uNightness * 0.35), cover * vFade * (1.0 - vGone));
   // Its depth is the baked surface's, so what stands in front of the tree hides it as the near form would.
-  vec4 clip = projectionMatrix * viewMatrix * vec4(world, 1.0);
+  vec3 depthAt = world;
+#ifdef FADING
+  // While its full form still draws, the card draws over it: its surface is the views' blend of the full form's, a
+  // little off it, and where the full form's pieces won that test they showed through the card in a scatter. Brought
+  // toward the eye by a little of the crown's radius, the card covers its own full form, and anything standing
+  // farther in front still hides it.
+  depthAt += vToEye * ${CARD.overFull.toFixed(2)} * formRadius * vScale;
+#endif
+  vec4 clip = projectionMatrix * viewMatrix * vec4(depthAt, 1.0);
   gl_FragDepth = clamp(0.5 + 0.5 * clip.z / clip.w, 0.0, 1.0);
 }
 `;
@@ -998,19 +1014,12 @@ void main() {
   vec4 l0 = tap(uLayer0);
   if (coverAt(l0, tap(uLayer3), vVitality) < 0.5) discard;
   vec4 l2 = tap(uLayer2);
-  vec3 world = vWorld - vToEye * ((l2.a / max(l0.a, 1e-4) - 0.5) * 2.0 * formRadius * vScale);
+  vec3 world = vWorld + vToEye * ((l2.a / max(l0.a, 1e-4) - 0.5) * 2.0 * formRadius * vScale);
   vec4 clip = projectionMatrix * viewMatrix * vec4(world, 1.0);
   gl_FragDepth = clamp(0.5 + 0.5 * clip.z / clip.w, 0.0, 1.0);
   gl_FragColor = vec4(1.0);
 }
 `;
-
-/**
- * How a card reads its bake: near the size its form turns far at, the coverage remapped from this range to 0 to 1
- * (smaller, the range widens to 0 to 1 over the first mip level), and how far toward the sun, in radii, it reads its
- * shadow.
- */
-export const CARD = { coverEdge: [0.25, 0.75], shadowLift: 0.2 } as const;
 
 /** One plant's copies among a set's cards: in buffers written when the copies are placed, read by every pass. */
 export interface FarCopies {
