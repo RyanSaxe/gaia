@@ -397,7 +397,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
    * Queues one more mark over each file and area whose forms Jev chose or whose composing it finished after the pass,
    * so the sheet keeps changing until the world is built.
    */
-  function standing(chosen: Settled, composed: Settled): void {
+  function markComposed(chosen: Settled, composed: Settled): void {
     const now = performance.now();
     const of = (by: Settling, s: Settled): Stroke[] => [...s.files.map((path) => ({ of: "file" as const, path, mark: by })), ...s.areas.map((path) => ({ of: "area" as const, path, mark: by }))];
     const strokes = [...of("chosen", chosen), ...of("composed", composed)];
@@ -1143,7 +1143,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         asked(o.asking);
         for (const path of o.settled) letter(path);
       } else if (o.stage === "understood") read(o.files, o.areas);
-      else if (o.stage === "standing") standing(o.chosen, o.composed);
+      else if (o.stage === "composed") markComposed(o.chosen, o.composed);
     },
     baking(health) {
       // The world is about to bake. Everything still queued is drawn quickly now, so pacing never delays the world.

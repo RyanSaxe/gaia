@@ -273,7 +273,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const kept = keptJev(ask ? engineJev(engine) : null, { stored, keep, ...(unasked === undefined ? {} : { unasked }) });
   // A request counts as settled once its answer arrives, stored or new. An area request's answer settles its region.
   const counted = new Set<string>();
-  // Files and areas settled by form choices and composing. Each is sent once, batched into one `standing` message on
+  // Files and areas settled by form choices and composing. Each is sent once, batched into one `composed` message on
   // the next tick.
   const penciled = new Set<string>();
   let due: { chosen: { files: string[]; areas: string[] }; composed: { files: string[]; areas: string[] } } | null = null;
@@ -285,7 +285,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     if (due === null) {
       due = { chosen: { files: [], areas: [] }, composed: { files: [], areas: [] } };
       setTimeout(() => {
-        if (due !== null) progress({ stage: "standing", ...due });
+        if (due !== null) progress({ stage: "composed", ...due });
         due = null;
       }, 0);
     }

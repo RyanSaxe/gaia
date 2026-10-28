@@ -152,7 +152,7 @@ export type Opening =
    * the sky. Each appears once. The wait draws one more pencil stroke over that code, so the sheet keeps changing until
    * the world is laid out.
    */
-  | { readonly stage: "standing"; readonly chosen: Settled; readonly composed: Settled };
+  | { readonly stage: "composed"; readonly chosen: Settled; readonly composed: Settled };
 
 /** Files and areas that a request settled. An area is a directory's path, or "" for the root. */
 export interface Settled {

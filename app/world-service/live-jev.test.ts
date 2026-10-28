@@ -192,16 +192,16 @@ describe("judging a codebase with Jev", () => {
     expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, asking: [] });
     // While a request is in flight, its area appears in `asking`, for the wait to show.
     expect(asking.some((o) => o.asking.length > 0)).toBe(true);
-    // After the understanding pass, `standing` messages list each file whose forms Jev chose, and each file and area
+    // After the understanding pass, `composed` messages list each file whose forms Jev chose, and each file and area
     // whose building, landmark, land or sky it composed, each once, so the wait's pencil keeps moving.
     const after = first.shown.map((o) => o.stage).lastIndexOf("understood");
-    const standing = first.shown.flatMap((o, i) => (o.stage === "standing" ? [{ i, o }] : []));
-    expect(standing.length).toBeGreaterThan(0);
-    expect(standing.every(({ i }) => i > after)).toBe(true);
-    const chosen = standing.flatMap(({ o }) => o.chosen.files);
+    const composedStages = first.shown.flatMap((o, i) => (o.stage === "composed" ? [{ i, o }] : []));
+    expect(composedStages.length).toBeGreaterThan(0);
+    expect(composedStages.every(({ i }) => i > after)).toBe(true);
+    const chosen = composedStages.flatMap(({ o }) => o.chosen.files);
     expect([...chosen].sort()).toEqual(first.document.world.patches.map((p) => p.path).sort());
     expect(new Set(chosen).size).toBe(chosen.length);
-    expect(standing.flatMap(({ o }) => o.composed.areas)).toContain("");
+    expect(composedStages.flatMap(({ o }) => o.composed.areas)).toContain("");
 
     // Reopening on a new engine sends no request already answered and does not ask the person.
     const second = await open(root, data, true);
