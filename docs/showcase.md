@@ -12,7 +12,7 @@ showcase.
 
 Choose the showcase on Gaia's start page, or set `GAIA_PROJECT` to `showcase`
 or `showcase-fixed` before `pnpm dev`. The standalone lab opens the showcase
-with no query, or with `?world=showcase`; use `?world=showcase-fixed` for the
+with no query, or with `?world=showcase`. Use `?world=showcase-fixed` for the
 repaired one.
 
 | Bundle in `app/renderer/terrain/fixtures/` | Purpose |
@@ -28,17 +28,17 @@ faults and misleading comments in the broken variant.
 
 ## Write the source
 
-`pnpm showcase --code DIR` writes the project to a directory outside Gaia's
-checkout, or under `node_modules`. Add `--v1 fixed` for the repaired variant.
-Keep it out of Gaia's analyzed source tree.
+`pnpm showcase --code DIR` writes the project to `DIR`. Add `--v1 fixed` for
+the repaired variant. Choose a `DIR` outside Gaia's checkout or under
+`node_modules`, so Gaia does not analyze it as part of its own source.
 
 ## Update the bundled worlds
 
 Change the source bundle, then regenerate the matching graph, code judgments
 and design answers together. Live regeneration sends code to OpenRouter and
 requires approval. Use a separate `GAIA_DATA_DIR` outside any Git checkout for
-each variant; held judgments in a shared store can preserve part of the other
-variant's verdict.
+each variant. In a shared store, held judgments from one variant can carry
+over into the other.
 
 With `GAIA_JEV=live` set in the environment:
 
@@ -47,10 +47,11 @@ pnpm showcase --judge jev --spend-up-to 0.4
 pnpm showcase --judge jev --v1 fixed --spend-up-to 0.4
 ```
 
-Set the appropriate `GAIA_DATA_DIR` before each command. `--spend-up-to` caps
-that run. `--judge local` exercises the pipeline against the local stand-in;
-it is useful for development, but its answers are not suitable replacements
-for the showcase's live judgments.
+Set the appropriate `GAIA_DATA_DIR` before each command. A run refuses to ask
+Jev unless `--spend-up-to`, in US dollars, is at least twice its estimate.
+`--judge local` runs the same steps against the local stand-in. Use it during
+development, but never use its answers in place of the showcase's live
+judgments.
 
 [`tools/showcase.test.ts`](../tools/showcase.test.ts) checks that each graph
 matches its bundled source, that the fixed variant changes only `v1`, that

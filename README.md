@@ -3,8 +3,8 @@
 ## Wander your codebase.
 
 Gaia turns a codebase into a world you walk through. Folders become lands,
-and files and functions stand on them as generated entities based on their
-determined quality and importance.
+and files and functions stand on them as things whose size follows their
+importance and whose health follows their quality.
 
 https://github.com/user-attachments/assets/55116856-4b34-4a41-861d-c1e5e2b5b237
 
@@ -21,18 +21,18 @@ pnpm install
 pnpm dev
 ```
 
-Choose a folder on your computer or a public repository on GitHub, and walk in!
+Choose a folder on your computer or a public repository on GitHub, and walk in.
 It takes a minute or two to generate your world.
 
-Judging a 100k LOC codebase and composing every thing in its world costs
-roughly seventy cents to a dollar; composing Gaia's own 2,700 things, from
-68k lines, cost about thirty-five cents of that. Updating a 10–20k LOC personal
-project should cost under ten cents.
+Judging a 100k-line codebase and composing every thing in its world costs
+about seventy cents to a dollar. Composing the 2,700 things in Gaia's own
+world, from 68k lines, cost about thirty-five cents. Updating a personal
+project of 10k to 20k lines should cost under ten cents.
 
 Gaia estimates the cost before sending live requests and reuses saved answers
 on later runs.
 
-No key yet? Choose the showcase world from Gaia's start page to get a feel for it.
+Without a key, you can still open the showcase world from Gaia's start page.
 
 ## Walk around
 
@@ -50,9 +50,9 @@ Choose a spot on the map, then tap its mark to travel there.
 ![Gaia's data flow from repository through code analysis and world design to the renderer](docs/images/architecture-data-flow.svg)
 
 Jev handles two separate tasks: analyzing code for scores and links, and
-answering typed design questions that choose the world's parts and
-appearance. The [architecture guide](docs/architecture.md) explains the data
-and package boundaries.
+answering typed design questions about the world's parts and appearance.
+The [architecture guide](docs/architecture.md) explains the data and package
+boundaries.
 
 After a commit, Gaia updates vitality for things that still stand. If the
 layout changes, the current world keeps its shape until you reopen it.
