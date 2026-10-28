@@ -52,21 +52,21 @@ export interface OpeningSpot {
   readonly yaw: number;
 }
 
-/** The positions of everything that represents code on a world's land: buildings and landmarks, definitions on their files' patches, and files and entities shown as plants or stones. */
+/** The positions of everything that represents code on a world's land: buildings and landmarks, definitions on their files' patches, and files and entities shown as flowers, stones, bushes or trees. */
 export interface CodePositions {
   /** Buildings and landmarks, each with its lot's radius. The sample world's have none. */
   readonly things: readonly { readonly x: number; readonly z: number; readonly lot?: number }[];
   /** Definitions. One with no form (`""`) is not shown. */
   readonly symbols: readonly { readonly x: number; readonly z: number; readonly form: string }[];
   /** Files and entities shown as flowers, a stone, a bush or a tree. */
-  readonly plants?: readonly { readonly x: number; readonly z: number }[];
+  readonly naturalThings?: readonly { readonly x: number; readonly z: number }[];
 }
 
 /** Whether (x, z) is clear of everything that represents code (`OPENING.clear`). */
 export function clearOfCode(code: CodePositions, x: number, z: number): boolean {
   for (const t of code.things) if (Math.hypot(t.x - x, t.z - z) < (t.lot ?? 0) + OPENING.pastLot) return false;
   for (const s of code.symbols) if (s.form !== "" && Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
-  for (const s of code.plants ?? []) if (Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
+  for (const s of code.naturalThings ?? []) if (Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
   return true;
 }
 

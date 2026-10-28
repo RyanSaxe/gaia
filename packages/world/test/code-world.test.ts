@@ -108,7 +108,7 @@ describe("a world laid out from code", () => {
     const recording: JevClient = { ask: (request) => (asked.push(request), bushes.ask(request)) };
     const m = facts();
     const world = layoutWorld(m, await composeWorld(m, LOOKS, recording, await judgeWorld(m, LOOKS, recording)));
-    const small = [...world.symbols, ...world.plants];
+    const small = [...world.symbols, ...world.naturalThings];
     // Every small form is a stone or bush with a matching blueprint.
     expect(small.length).toBeGreaterThan(0);
     for (const s of small) expect(s.as === "stone" || s.as === "bush", s.form).toBe(true);
@@ -314,7 +314,7 @@ describe("a world laid out from code", () => {
     // The same code and answers give the same world.
     const a = layoutWorld(facts(), await composed(facts(), fakeJevClient()));
     const b = layoutWorld(facts(), await composed(facts(), fakeJevClient()));
-    expect(a.plants.length + a.things.length).toBeGreaterThan(0);
+    expect(a.naturalThings.length + a.things.length).toBeGreaterThan(0);
     expect(b).toEqual(a);
   });
 
@@ -364,8 +364,8 @@ describe("a world laid out from code", () => {
     expect(world.symbols.length).toBeGreaterThan(0);
     for (const s of world.symbols) expect(placeAt(world, s.x, s.z).file?.path).toBe(s.file);
     // Every file also gets one small form, on its own patch.
-    expect(world.plants.filter((s) => s.of === "file").map((s) => s.path).sort()).toEqual(facts().files.map((f) => f.path).sort());
-    for (const s of world.plants) if (s.file !== undefined) expect(placeAt(world, s.x, s.z).file?.path).toBe(s.file);
+    expect(world.naturalThings.filter((s) => s.of === "file").map((s) => s.path).sort()).toEqual(facts().files.map((f) => f.path).sort());
+    for (const s of world.naturalThings) if (s.file !== undefined) expect(placeAt(world, s.x, s.z).file?.path).toBe(s.file);
     // A region's sites are its cells' sites, so its ground cover changes exactly where its areas end.
     for (const r of world.regions) expect(r.sites.length).toBeGreaterThan(0);
     expect(world.regions.reduce((n, r) => n + r.sites.length, 0)).toBe(world.cells.length);
@@ -539,7 +539,7 @@ describe("a world laid out from code", () => {
     const world = layoutWorld(facts(), await composed(facts(), jev));
     const forms = Object.fromEntries(world.symbols.filter((s) => s.file === "packages/core/src/math.ts").map((s) => [s.name, s.form]));
     expect(forms).toEqual({ x: "Stone", helper: "Bush" });
-    expect(world.plants.find((s) => s.path === "packages/core/src/math.ts")?.form).toBe("Bush");
+    expect(world.naturalThings.find((s) => s.path === "packages/core/src/math.ts")?.form).toBe("Bush");
   });
 
   it("offers every entity, file and definition exactly the forms whose range holds its rank by importance, says its importance, and stands what Jev raises as a building or a landmark on its own ground", async () => {

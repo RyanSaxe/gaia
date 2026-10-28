@@ -690,7 +690,7 @@ export function createWorld(root: HTMLElement): World {
       if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.id);
     });
     // An entity that appears as a plant, stone or flowers.
-    for (const s of code?.world.plants ?? []) if (s.of === "entity") entityOfPlace.set(s.path, s.path);
+    for (const s of code?.world.naturalThings ?? []) if (s.of === "entity") entityOfPlace.set(s.path, s.path);
   }
   knowEntities();
   /** The entity that placed landmark `i` represents, found by its place id. */
@@ -1389,7 +1389,7 @@ export function createWorld(root: HTMLElement): World {
           return [[at, {
             represented: sym.represented,
             formName: withArticle(sym.form),
-            ...(code?.plants[p.rule as PlantGroup]?.[p.variant] === undefined ? {} : { built: composedName(code.plants[p.rule as PlantGroup][p.variant] as Blueprint) }),
+            ...(code?.naturalBuilds[p.rule as PlantGroup]?.[p.variant] === undefined ? {} : { built: composedName(code.naturalBuilds[p.rule as PlantGroup][p.variant] as Blueprint) }),
             x,
             z,
             height: (understory.footprint(p.rule, p.variant)?.top ?? 0.8) * p.scale,
@@ -2206,9 +2206,9 @@ export function createWorld(root: HTMLElement): World {
     // Worker threads make the buildings, the landmarks, one build of each distinct tree, stone, bush and flowers, and
     // the wild's bushes while the wait screen draws the land.
     const composedLandmarks = landmarkAsks(opened);
-    await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks, ...opened.plants.trees.map(plantAsk), ...understoryBuilds(opened.plants), ...opened.wild.map(plantAsk)]);
-    buildTrees(opened.plants.trees);
-    understory.build(opened.plants);
+    await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks, ...opened.naturalBuilds.trees.map(plantAsk), ...understoryBuilds(opened.naturalBuilds), ...opened.wild.map(plantAsk)]);
+    buildTrees(opened.naturalBuilds.trees);
+    understory.build(opened.naturalBuilds);
     wildGrowth.build(opened.wild);
     landmarks = composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
     for (const v of settlement.views()) scene.remove(v.object);

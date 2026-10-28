@@ -51,7 +51,7 @@ export interface OpenedWorld {
   readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: ThingFacts; readonly vitality: number; readonly represented: Represented }[];
   /**
    * What each of `layout.symbols` represents, by index: the definitions in `world.symbols` order, then each file and
-   * entity that appears as flowers, a stone, a bush or a tree (`world.plants`).
+   * entity that appears as flowers, a stone, a bush or a tree (`world.naturalThings`).
    */
   readonly symbolOf: (i: number) => SymbolOf | undefined;
   /** The light, sky and wind Jev composed for the world. */
@@ -59,7 +59,7 @@ export interface OpenedWorld {
   /** The bush Jev composed for each wild ground past the land (`WILD_GROUNDS`). The wild represents no code. */
   readonly wild: readonly Blueprint[];
   /** Every distinct blueprint of the world's trees, stones, bushes and flowers, by the group that draws them. Each blueprint has one build, copied for every instance. */
-  readonly plants: PlantBuilds;
+  readonly naturalBuilds: NaturalBuilds;
   /** What the bake thread needs to place this world's things, including the trail styles. */
   readonly layout: CodeLayout;
   /** What the understanding pass judged about a folder, a file or a definition, by its path or path#name. */
@@ -104,7 +104,7 @@ export type PlantGroup = "trees" | "rocks" | "shrubs" | "flowers" | "mushrooms";
 export const PLANT_GROUPS: readonly PlantGroup[] = ["trees", "rocks", "shrubs", "flowers", "mushrooms"];
 
 /** Every distinct blueprint of each group, in first-seen order. A copy's variant indexes them. */
-export type PlantBuilds = Readonly<Record<PlantGroup, readonly Blueprint[]>>;
+export type NaturalBuilds = Readonly<Record<PlantGroup, readonly Blueprint[]>>;
 
 /** The group that draws a small thing, by the form it appears as. A drift of mushrooms is separate from other flowers. */
 export function plantGroup(as: Exclude<FormKind, "building" | "landmark">, blueprint: Blueprint): PlantGroup {
@@ -276,7 +276,7 @@ export interface SymbolOf {
 }
 
 /** The page of a file or entity that appears as a plant, stone or flowers of its own. */
-const representPlant = (s: CodeWorld["plants"][number], files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): Represented => {
+const representNaturalThing = (s: CodeWorld["naturalThings"][number], files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): Represented => {
   if (s.of === "file") {
     const f = files.get(s.path);
     if (f === undefined) throw new Error(`${s.path} stands in the world but is not among its files.`);
@@ -341,14 +341,14 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
       const file = files.get(sym.file);
       return file === undefined ? undefined : { represented: representSymbol(sym, file), file: sym.file, form: sym.form };
     }
-    const own = world.plants[i - world.symbols.length];
+    const own = world.naturalThings[i - world.symbols.length];
     if (own === undefined) return undefined;
-    return { represented: representPlant(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form };
+    return { represented: representNaturalThing(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form };
   };
   // Every distinct blueprint of each group, in the order the layout's symbols first use it. Two things with the same blueprint share one entry.
-  const plants: Record<PlantGroup, Blueprint[]> = { trees: [], rocks: [], shrubs: [], flowers: [], mushrooms: [] };
+  const naturalBuilds: Record<PlantGroup, Blueprint[]> = { trees: [], rocks: [], shrubs: [], flowers: [], mushrooms: [] };
   const variantOf = (group: PlantGroup, blueprint: Blueprint): number => {
-    const builds = plants[group];
+    const builds = naturalBuilds[group];
     const k = builds.findIndex((b) => b.id === blueprint.id);
     return k >= 0 ? k : builds.push(blueprint) - 1;
   };
@@ -363,11 +363,11 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     const patch = s.file === undefined ? undefined : patchOf.get(s.file);
     return { x: s.x, z: s.z, rule: group, variant: variantOf(group, s.blueprint), radius: group === "flowers" || group === "mushrooms" ? 0.8 : 1, scale: symbolScale(s.lines, group, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
   };
-  const symbols = [...world.symbols.map((s) => symbol(s, s.id)), ...world.plants.map((s) => symbol(s, s.path || "The repository's root"))];
+  const symbols = [...world.symbols.map((s) => symbol(s, s.id)), ...world.naturalThings.map((s) => symbol(s, s.path || "The repository's root"))];
   return {
     world,
     spec,
-    plants,
+    naturalBuilds,
     thing: (of) => judged[of],
     files,
     buildings: houses.map((t) => ({ ...thingOf(t, world, files, entities), blueprint: t.blueprint, kindName: composedName(t.blueprint), vitality: t.vitality })),
@@ -379,7 +379,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
       lots: houses.map(lot),
       landmarks: rises.map((t, i) => ({ landmark: i, lot: lot(t) })),
       // An entity that appears as a plant, stone or flowers. Its trails end at its lot's center.
-      places: world.plants.flatMap((s) => (s.of === "entity" ? [{ id: s.path, x: s.x, z: s.z, radius: 2 }] : [])),
+      places: world.naturalThings.flatMap((s) => (s.of === "entity" ? [{ id: s.path, x: s.x, z: s.z, radius: 2 }] : [])),
       patches: world.patches.map((p) => ({ x: p.x, z: p.z, radius: p.radius })),
       cells: (() => {
         const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));

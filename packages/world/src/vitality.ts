@@ -74,7 +74,7 @@ export function vitalityOf(world: CodeWorld): Map<string, number> {
     ...world.patches.map((p) => [p.path, p.vitality] as const),
     ...world.symbols.map((s) => [s.id, s.vitality] as const),
     ...world.things.map((t) => [t.path, t.vitality] as const),
-    ...world.plants.map((s) => [s.path, s.vitality] as const),
+    ...world.naturalThings.map((s) => [s.path, s.vitality] as const),
   ]);
 }
 
@@ -94,7 +94,7 @@ export function withVitality(world: CodeWorld, changes: ReadonlyMap<string, numb
     patches: world.patches.map((p) => changed(p.path, p)),
     symbols: world.symbols.map((s) => changed(s.id, s)),
     things: world.things.map((t) => changed(t.path, t)),
-    plants: world.plants.map((s) => changed(s.path, s)),
+    naturalThings: world.naturalThings.map((s) => changed(s.path, s)),
   };
 }
 

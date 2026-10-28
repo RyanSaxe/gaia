@@ -140,7 +140,7 @@ describe("judging a codebase with Jev", () => {
     const patches = first.document.world.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius }));
     // Every entity's lot, whatever form Jev chose for the entity. The entity is placed at its lot's center.
     const byPlace = (a: { x: number; z: number }, b: { x: number; z: number }): number => a.x - b.x || a.z - b.z;
-    const lots = [...first.document.world.things.filter((t) => t.of === undefined), ...first.document.world.plants.filter((s) => s.of === "entity")].map(({ x, z }) => ({ x, z })).sort(byPlace);
+    const lots = [...first.document.world.things.filter((t) => t.of === undefined), ...first.document.world.naturalThings.filter((s) => s.of === "entity")].map(({ x, z }) => ({ x, z })).sort(byPlace);
     const shownLand = first.shown[land];
     if (shownLand?.stage !== "land") throw new Error("The land was never shown.");
     expect({ ...shownLand, lots: [...shownLand.lots].sort(byPlace) }).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, aspect: first.document.world.aspect, areas: outlinesOf(first.document.world).areas, patches, lots });

@@ -1124,7 +1124,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       treeCards: farCards(world.treeSet),
       bushCards: farCards(world.bushSet),
       /** The understory's build count by group, one build per distinct blueprint. */
-      understoryBuilds: Object.fromEntries(Object.entries(world.code?.plants ?? {}).map(([group, builds]) => [group, builds.length])),
+      understoryBuilds: Object.fromEntries(Object.entries(world.code?.naturalBuilds ?? {}).map(([group, builds]) => [group, builds.length])),
       /** Trees in the last pass in the band, or small enough on screen to draw as far forms. */
       treesInBand: world.treeViews.reduce((n, v) => n + v.drawn().band, 0),
       treesFar: world.treeViews.reduce((n, v) => n + v.drawn().far, 0),

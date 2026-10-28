@@ -10,7 +10,7 @@ import type { Realized } from "@gaia/realize";
 import type { SceneLight } from "@gaia/render";
 import type { Placement } from "@gaia/terrain";
 import type { Clearings } from "./clearings.ts";
-import type { PlantBuilds, PlantGroup } from "./code-world.ts";
+import type { NaturalBuilds, PlantGroup } from "./code-world.ts";
 import { type PlantMark, markOf } from "./plant-mark.ts";
 import { type BuildAsk, made, makeLater, plantAsk } from "./made.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
@@ -67,7 +67,7 @@ function turfOf(outline: Float32Array, turf: NonNullable<Group["turf"]>): Float3
 }
 
 /** The build requests for a world's understory, one per distinct blueprint, for making ahead. */
-export const understoryBuilds = (plants: PlantBuilds): BuildAsk[] => GROUPS.flatMap((g) => plants[g.id].map(plantAsk));
+export const understoryBuilds = (plants: NaturalBuilds): BuildAsk[] => GROUPS.flatMap((g) => plants[g.id].map(plantAsk));
 
 /** A component's reach where it meets the ground, in 48 directions around its origin. */
 export function outlineOf(plant: Realized): Float32Array {
@@ -124,7 +124,7 @@ export interface Understory {
    * Makes one build and far form for every distinct blueprint, once, when the world opens and before anything is
    * placed, so `place` only moves copies.
    */
-  build(plants: PlantBuilds): void;
+  build(plants: NaturalBuilds): void;
   /** Each build with a far form, and its blueprint, for the swap test. */
   readonly farBuilds: () => readonly { readonly blueprint: Blueprint; readonly plant: () => Realized; readonly far: FarOf }[];
 }

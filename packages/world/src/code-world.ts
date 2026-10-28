@@ -171,7 +171,7 @@ export interface CodeThing {
 }
 
 /** A file or entity that appears as flowers, a stone, a bush or a tree, placed on the file's own plot or on the entity's lot. */
-export interface CodePlant {
+export interface NaturalThing {
   readonly of: "file" | "entity";
   /** A file's path or an entity's root path. */
   readonly path: string;
@@ -263,7 +263,7 @@ export interface CodeWorld extends WorldPlaces {
   /** Every definition placed on its file's patch. One that appears as a building or landmark is also in `things`. */
   readonly symbols: readonly CodeSymbol[];
   /** Each file and entity that appears as flowers, a stone, a bush or a tree. */
-  readonly plants: readonly CodePlant[];
+  readonly naturalThings: readonly NaturalThing[];
   readonly trails: readonly CodeTrail[];
   readonly regions: readonly CodeRegion[];
 }
@@ -1149,12 +1149,12 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
   const things: CodeThing[] = [];
   const lots: LotPlace[] = [];
   const symbols: CodeSymbol[] = [];
-  const plants: CodePlant[] = [];
-  /** Adds a `CodePlant` for a file or entity that has a form and no building or landmark. */
-  const addPlant = (of: CodePlant["of"], path: string, name: string, lines: number, at: { x: number; z: number }, vitality: number, value: number | undefined, file?: string): void => {
+  const naturalThings: NaturalThing[] = [];
+  /** Adds a `NaturalThing` for a file or entity that has a form and no building or landmark. */
+  const addNaturalThing = (of: NaturalThing["of"], path: string, name: string, lines: number, at: { x: number; z: number }, vitality: number, value: number | undefined, file?: string): void => {
     const form = forms[path];
     if (form === undefined || composed(path) !== undefined) return;
-    plants.push({ of, path, name, form, ...small(path), lines, ...(value === undefined ? {} : { importance: value }), x: at.x, z: at.z, ...(file === undefined ? {} : { file }), vitality });
+    naturalThings.push({ of, path, name, form, ...small(path), lines, ...(value === undefined ? {} : { importance: value }), x: at.x, z: at.z, ...(file === undefined ? {} : { file }), vitality });
   };
   /** Per directory: total ground, the ground-weighted sum of its leaves' centers, and the centers themselves. */
   const held = new Map<string, { ground: number; x: number; z: number; leafCenters: { x: number; z: number }[] }>();
@@ -1186,7 +1186,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       const vitality = folderQuality(path) ?? judged.quality?.[path] ?? 1;
       const t = composed(path);
       if (t !== undefined) things.push({ path, name: e.name, as: t.as, blueprint: t.blueprint, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality });
-      addPlant("entity", path, e.name, e.lines, leaf, vitality, importance.get(`dir:${path}`));
+      addNaturalThing("entity", path, e.name, e.lines, leaf, vitality, importance.get(`dir:${path}`));
       continue;
     }
     const f = files.get(path) as FileFacts;
@@ -1197,7 +1197,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
     const own = composed(path);
     const fileFacts: ThingFacts = { path, name: baseName(path), lines: f.lines, exports: f.symbols.filter((x) => x.exported).length, dependents: f.importedBy };
     if (own !== undefined) things.push({ path, of: "file", name: baseName(path), as: own.as, blueprint: own.blueprint, area, x: plotted.own.x, z: plotted.own.z, lot: LAYOUT.lotReach[own.as], file: path, facts: fileFacts, vitality });
-    addPlant("file", path, baseName(path), f.lines, plotted.own, vitality, importance.get(`file:${path}`), path);
+    addNaturalThing("file", path, baseName(path), f.lines, plotted.own, vitality, importance.get(`file:${path}`), path);
     for (const { def, x, z } of plotted.defs) {
       const mine = quality.get(`def:${def.id}`) ?? vitality;
       // A definition with a building or landmark is also added to `things`, on its own plot.
@@ -1278,9 +1278,9 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       cells,
       things,
       symbols,
-      plants,
+      naturalThings,
       // Trails join entities, whatever form each has.
-      trails: chooseTrails(judged.trails, [...things.filter((t) => (t.of ?? "entity") === "entity").map((t) => t.path), ...plants.filter((s) => s.of === "entity").map((s) => s.path)], weights),
+      trails: chooseTrails(judged.trails, [...things.filter((t) => (t.of ?? "entity") === "entity").map((t) => t.path), ...naturalThings.filter((s) => s.of === "entity").map((s) => s.path)], weights),
       regions,
     },
     lots,

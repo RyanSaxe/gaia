@@ -14,7 +14,7 @@ const doc = provingWorld();
 const code = openedWorld(doc);
 const vitalityOf = new Map(doc.world.things.map((t) => [t.path, t.vitality]));
 /** Each trail end's vitality as the world shows it, by the place the trail names: a building's or landmark's lot, or the path of an entity that appears as a plant, stone or flowers. */
-const endVitality = new Map([...vitalityOf, ...doc.world.plants.flatMap((s) => (s.of === "entity" ? [[s.path, s.vitality] as const] : []))]);
+const endVitality = new Map([...vitalityOf, ...doc.world.naturalThings.flatMap((s) => (s.of === "entity" ? [[s.path, s.vitality] as const] : []))]);
 /** Each area's vitality, every file under it pooled by size. */
 const pooled = areaVitality(doc.world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
 /** The owner of a point's ground: its file's patch, its area's lot, or the wild. `groundAt` below gives that ground's vitality. */
@@ -62,7 +62,7 @@ describe("the proving ground", () => {
     }
     expect(lacking(COMPOSING.link, doc.world.trails.flatMap((t) => labeled(t.route, ((endVitality.get(t.from) ?? 1) + (endVitality.get(t.to) ?? 1)) / 2)))).toEqual([]);
     // Every tree's and bush's frame with every crown, every stone and every drift, each under all three labels.
-    const small = [...doc.world.symbols, ...doc.world.plants];
+    const small = [...doc.world.symbols, ...doc.world.naturalThings];
     for (const [as, k, pairs] of [["tree", COMPOSING.tree, [["form", "crown"]]], ["bush", COMPOSING.bush, [["form", "crown"]]], ["stone", COMPOSING.stone, []], ["flowers", COMPOSING.flowers, []]] as const) {
       const of = small.filter((s) => s.as === as).flatMap((s) => labeled(s.blueprint, s.vitality));
       expect(missingFrom(k, COMPOSING.offered?.[as] ?? COMPOSING.lib, of, { labels: healths, pairs }), as).toEqual([]);
@@ -76,8 +76,8 @@ describe("the proving ground", () => {
     for (const of of ["entity", "file", "definition"] as const) {
       for (const as of ["building", "landmark"] as const) expect(doc.world.things.some((t) => (t.of ?? "entity") === of && t.as === as), `a ${of} as a ${as}`).toBe(true);
     }
-    expect(doc.world.plants.filter((s) => s.of === "file").length + doc.world.things.filter((t) => t.of === "file").length).toBe(doc.world.patches.length);
-    expect(used(FORMS, doc.world.plants.map((s) => s.form))).toEqual([]);
+    expect(doc.world.naturalThings.filter((s) => s.of === "file").length + doc.world.things.filter((t) => t.of === "file").length).toBe(doc.world.patches.length);
+    expect(used(FORMS, doc.world.naturalThings.map((s) => s.form))).toEqual([]);
   });
 
   it("lays out every planned land, a whole area in ruin beside thriving ones, a tiny area and deep nesting", () => {
@@ -158,7 +158,7 @@ describe("the proving ground", () => {
           tree: l.blueprint.slots.form?.use === "great-tree@1",
           base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })),
         })),
-        trees: { bases: code.plants.trees.map(() => 0.5), crowns: code.plants.trees.map(() => 4) },
+        trees: { bases: code.naturalBuilds.trees.map(() => 0.5), crowns: code.naturalBuilds.trees.map(() => 4) },
         code: code.layout,
       });
     }, 120_000);
@@ -204,11 +204,11 @@ describe("the proving ground", () => {
     });
 
     it("stands every definition, file and entity the layout lays out, as a tree, a stone, a bush, flowers or one of the world's things, each on its own file's patch, however crowded its ground, and nothing else", () => {
-      expect(placed.symbols.length).toBe(doc.world.symbols.length + doc.world.plants.length);
+      expect(placed.symbols.length).toBe(doc.world.symbols.length + doc.world.naturalThings.length);
       const trees = new Map(placed.trees.map((t) => [t.symbol, t]));
       expect(trees.size).toBeGreaterThan(0);
       placed.symbols.forEach((i, k) => {
-        const s = doc.world.symbols[k] ?? doc.world.plants[k - doc.world.symbols.length]!;
+        const s = doc.world.symbols[k] ?? doc.world.naturalThings[k - doc.world.symbols.length]!;
         const id = "id" in s ? s.id : s.path;
         const raised = COMPOSED_FORMS[s.form] !== undefined;
         const tree = s.as === "tree";

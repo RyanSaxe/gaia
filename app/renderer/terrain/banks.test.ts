@@ -35,7 +35,7 @@ function placeAsThePage(t: Terrain, code: OpenedWorld, buildings: BuildingToPlac
   const placed = placeWorld(land, {
     buildings,
     landmarks,
-    trees: { bases: code.plants.trees.map(() => 0.5), crowns: code.plants.trees.map(() => 4) },
+    trees: { bases: code.naturalBuilds.trees.map(() => 0.5), crowns: code.naturalBuilds.trees.map(() => 4) },
     code: code.layout,
   });
   return { land, placed, landmarks };

@@ -10,7 +10,7 @@
 // first of all. This module records only each entry's subject, list and pages,
 // and the journal UI draws the rest.
 
-import type { CodeArea, CodePatch, CodePlant, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
+import type { CodeArea, CodePatch, NaturalThing, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
 
 export interface JournalEntry {
   /**
@@ -66,7 +66,7 @@ export interface JournalSource {
   /** Buildings and landmarks. Only an entity's gets its own spread, since a file's or definition's is shown on that file's or definition's page. */
   readonly things?: readonly Pick<CodeThing, "path" | "name" | "of">[];
   /** Files and entities that appear as flowers, a stone, a bush or a tree. */
-  readonly plants?: readonly Pick<CodePlant, "path" | "name" | "of">[];
+  readonly naturalThings?: readonly Pick<NaturalThing, "path" | "name" | "of">[];
   readonly trails?: readonly Pick<CodeTrail, "from" | "to">[];
 }
 
@@ -99,7 +99,7 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   for (const p of world.patches) push(files, p.area, { kind: "file", of: p.path, name: p.name });
   for (const s of world.symbols) push(definitions, s.parent ?? s.file, { item: { kind: "definition", of: s.id, name: s.name }, line: s.line });
   // Every entity gets a spread for its thing, whatever form it has.
-  const things = new Map([...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"), ...(world.plants ?? []).filter((t) => t.of === "entity")].map((t) => [t.path, t]));
+  const things = new Map([...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"), ...(world.naturalThings ?? []).filter((t) => t.of === "entity")].map((t) => [t.path, t]));
   // A trail runs from the importing entity to the entity it imports from.
   const usesOf = new Map<string, Set<string>>();
   const usedByOf = new Map<string, Set<string>>();

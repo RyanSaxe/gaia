@@ -620,4 +620,4 @@ console.log(`proving: ${facts.files.length} files, ${facts.repository.lines.toLo
 console.log(`  files: ${count(world.patches.map((p) => p.vitality))}`);
 console.log(`  lands: ${count(world.regions.map((r) => landHealth(r.area)))}; ${lands.length} swept lands, ${skies.length} skies`);
 console.log(`  entities: ${count(world.things.filter((t) => (t.of ?? "entity") === "entity").map((t) => t.vitality))}`);
-console.log(`  raised: ${world.things.filter((t) => t.of === "file").length} files and ${world.things.filter((t) => t.of === "definition").length} definitions as buildings or landmarks; ${world.plants.length} files standing as plants, stones or flowers`);
+console.log(`  raised: ${world.things.filter((t) => t.of === "file").length} files and ${world.things.filter((t) => t.of === "definition").length} definitions as buildings or landmarks; ${world.naturalThings.length} files standing as plants, stones or flowers`);
