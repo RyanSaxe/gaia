@@ -21,8 +21,8 @@ export const boulderParams = {
   }),
   shape: t.choice("The boulder's overall shape", {
     round: "A rounded dome, a little wider than tall, for code that feels comfortable and settled",
-    egg: "Taller than wide, standing on end, for code that feels alert and upright, standing apart",
-    wide: "Broad and squat, much wider than tall, for code that feels heavy and immovable, holding things down",
+    egg: "Taller than wide, standing on end, for code that feels alert, upright and separate",
+    wide: "Broad and squat, much wider than tall, for code that feels heavy and immovable",
     lopsided: "Uneven, leaning to one side, for code that feels awkward and off balance",
   }),
   facets,
@@ -31,7 +31,7 @@ export const boulderParams = {
 export const boulder = primitive({
   id: "boulder@1",
   role: "Rock",
-  doc: "One rounded boulder, half sunk into the ground, for code that feels heavy, patient and not to be moved.",
+  doc: "One rounded boulder, half sunk into the ground, for code that feels heavy, patient and immovable.",
   params: boulderParams,
   build: (p, ctx) => buildBoulder(p, ctx),
 });
@@ -41,7 +41,7 @@ export const flatStoneParams = {
   top: t.choice("The stone's top", {
     level: "A level top you could sit on, for code that feels calm and inviting",
     tilted: "Tilted, as if heaved up by frost, for code that feels unsettled and upheaved",
-    stepped: "Split into two tops, one a step above the other, for code that feels split in two minds",
+    stepped: "Split into two tops, one a step above the other, for code that feels divided between two purposes",
   }),
   facets,
 };
@@ -49,28 +49,28 @@ export const flatStoneParams = {
 export const flatStone = primitive({
   id: "flat-stone@1",
   role: "Rock",
-  doc: "A low, flat-topped stone, like a bench or a table set in the turf, for code that feels dependable, somewhere to sit a while.",
+  doc: "A low, flat-topped stone, like a bench or a table set in the turf, for code that feels dependable and restful.",
   params: flatStoneParams,
   build: (p, ctx) => buildFlatStone(p, ctx),
 });
 
 export const stoneClusterParams = {
   count: t.scale("How many stones lie together: a few for code that feels like a small household, several for code that feels like a close family, many for code that feels like a crowd gathered round", { "a few": 3, several: 5, many: 8 }),
-  size: t.scale("How tall the largest stone stands: knee-high for code that feels small and homely, waist-high for code that feels sturdy, shoulder-high for code that feels led by one big presence", { "knee-high": 0.6, "waist-high": 1.05, "shoulder-high": 1.5 }),
+  size: t.scale("How tall the largest stone stands: knee-high for code that feels small and homely, waist-high for code that feels sturdy, shoulder-high for code that feels dominated by one large part", { "knee-high": 0.6, "waist-high": 1.05, "shoulder-high": 1.5 }),
   facets,
 };
 
 export const stoneCluster = primitive({
   id: "stone-cluster@1",
   role: "Rock",
-  doc: "A family of stones lying together: one large, the rest smaller around it, for code that feels close-knit and huddled.",
+  doc: "A group of stones lying together, one large and the rest smaller around it, for code that feels close-knit and huddled.",
   params: stoneClusterParams,
   build: (p, ctx) => buildStoneCluster(p, ctx),
 });
 
 export const outcropParams = {
-  length: t.scale("How far the ledge runs: short for code that feels like a glimpse of something deeper, long for code that feels far-reaching, a long ridge for code that feels like the backbone of its ground", { short: 4, long: 7, "a long ridge": 11 }),
-  height: t.scale("How high it stands from the ground: barely breaking the turf for code that feels buried and quiet, knee-high for code that feels surfacing, waist-high for code that feels bared and unyielding", {
+  length: t.scale("How far the ledge runs: short for code that feels like a glimpse of something deeper, long for code that feels far-reaching, a long ridge for code that feels foundational to everything around it", { short: 4, long: 7, "a long ridge": 11 }),
+  height: t.scale("How high it stands from the ground: barely breaking the turf for code that feels buried and quiet, knee-high for code that feels half exposed, waist-high for code that feels bare and unyielding", {
     "barely breaking the turf": 0.5,
     "knee-high": 0.9,
     "waist-high": 1.4,
@@ -91,12 +91,12 @@ export const outcrop = primitive({
 });
 
 export const fallenLogParams = {
-  length: t.scale("How long the log lies: a short length for code that feels like a leftover, a person's length for code that feels laid to rest, a whole fallen trunk for code that feels like something great that has come down", {
+  length: t.scale("How long the log lies: a short length for code that feels like a leftover, a person's length for code that feels finished and set aside, a whole fallen trunk for code that feels like a large thing that has collapsed", {
     "a short length": 1.4,
     "a person's length": 2.4,
     "a whole fallen trunk": 4.5,
   }),
-  girth: t.scale("How thick the log is: slender for code that feels slight, stout for code that feels solid, broad as an old oak for code that feels weighty with years", {
+  girth: t.scale("How thick the log is: slender for code that feels slight, stout for code that feels solid, broad as an old oak for code that feels heavy and old", {
     slender: 0.13,
     stout: 0.22,
     "broad as an old oak": 0.34,
@@ -117,22 +117,22 @@ export const fallenLogParams = {
 export const fallenLog = primitive({
   id: "fallen-log@1",
   role: "Rock",
-  doc: "A fallen log lying in the grass, spent and peaceful, full of small life. As it fails its bark falls away to grey wood, its stubs break off, and it splits and sinks into the turf.",
+  doc: "A fallen log in the grass, spent, peaceful and full of small life. As vitality falls its bark falls away to grey wood, its stubs break off, and it splits and sinks into the turf.",
   params: fallenLogParams,
   build: (p, ctx) => buildFallenLog(p, ctx),
 });
 
 export const stumpParams = {
-  height: t.scale("How tall the stump stands: cut low to the ground for code that feels nearly gone, knee-high for code that feels cut back, waist-high for code that feels like a stubborn remnant still standing", {
+  height: t.scale("How tall the stump stands: cut low to the ground for code that feels nearly gone, knee-high for code that feels cut back, waist-high for code that feels like a stubborn remnant", {
     "cut low to the ground": 0.3,
     "knee-high": 0.55,
     "waist-high": 1,
   }),
   top: t.choice("Its top", {
     sawn: "Sawn flat, its rings open to the sky, for code that feels cut short on purpose",
-    broken: "Snapped off ragged, splinters standing up on one side, for code that feels broken off and left as it fell",
+    broken: "Snapped off ragged, splinters standing up on one side, for code that feels broken off and abandoned",
   }),
-  roots: t.scale("How far its roots spread: tucked in close for code that feels self-contained, gripping the ground for code that feels holding on, sprawling over the ground for code that feels still reaching into everything around it", {
+  roots: t.scale("How far its roots spread: tucked in close for code that feels self-contained, gripping the ground for code that feels tenacious, sprawling over the ground for code that feels tangled into everything around it", {
     "tucked in close": 0.5,
     "gripping the ground": 1.1,
     "sprawling over the ground": 2.2,
@@ -143,7 +143,7 @@ export const stumpParams = {
 export const stump = primitive({
   id: "stump@1",
   role: "Rock",
-  doc: "An old stump with its roots still in the ground, stubborn, cut back and still holding on. As it fails it splits and leans apart, and its top crumbles from the heart into a soft, dark hollow.",
+  doc: "An old stump with its roots still in the ground, stubborn, cut back and persistent. As vitality falls it splits and leans apart, and its top crumbles from the center into a soft, dark hollow.",
   params: stumpParams,
   build: (p, ctx) => buildStump(p, ctx),
 });
@@ -164,7 +164,7 @@ export const mossParams = {
 export const moss = primitive({
   id: "moss@1",
   role: "Overgrowth",
-  doc: "Moss on the upward faces of stone or bark, for code that feels old and settled; it recedes and dries to lichen grey as vitality falls.",
+  doc: "Moss on the upward faces of stone or bark, for code that feels old and settled. It recedes and dries to lichen grey as vitality falls.",
   params: mossParams,
   build: (p, ctx, base) => buildMoss(p, ctx, base),
 });

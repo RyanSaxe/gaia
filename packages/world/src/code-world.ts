@@ -593,7 +593,7 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks): WorldRequest[
   for (const path of regionList) {
     const d = dirs.get(path) as Dir;
     ask("area", path, { directory: areaWords(facts, path, d.files, underDir(path), d.children, measures) }, {
-      water: choice("Does this directory's land hold water? Each option gives a reason drawn from how the directory's code imports and is imported; choose the one whose reason fits it best.", docs(looks.water), "water", path),
+      water: choice("Does this directory's land hold water? Each option gives a reason based on how the directory's code imports and is imported. Choose the option whose reason fits best.", docs(looks.water), "water", path),
     });
   }
   const entities = new Map(facts.entities.map((e) => [e.path, e]));
@@ -604,7 +604,7 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks): WorldRequest[
       if (other === undefined) continue;
       questions[`trail:${dep}`] = {
         type: "noul",
-        instructions: `${e.name} depends on ${other.name}. \`dependsOn\` says how many of ${e.name}'s files import it. Would a person walk a worn trail between the two, because ${e.name} leans on it heavily?`,
+        instructions: `${e.name} depends on ${other.name}. \`dependsOn\` says how many of ${e.name}'s files import it. Would a person walk a worn trail between the two, because ${e.name} depends on it heavily?`,
         criteria: { true: "A trail joins them.", false: "No trail joins them." },
       };
     }
@@ -685,7 +685,7 @@ export function planForms(facts: CodeFacts, looks: Looks, options: PlanOptions =
   const importance = new Map(placedThings(facts, graph).flatMap((t) => (t.importance === undefined ? [] : [[t.id, t.importance] as const])));
   const only: Record<string, string> = {};
   const requests: WorldRequest[] = [];
-  const RARE = "Only the forms that suit how much it matters (`importance`) are offered, so a form's size already follows how much it matters, never how long its code is; choose by character.";
+  const RARE = "Only the forms that suit how much it matters (`importance`) are offered, so a form's size already follows its importance and never its line count. Choose by character.";
   /** The question about one thing. When its rank allows only one form, records that form in `only` and returns undefined. */
   const question = (id: string, instructions: string, label: string, target: string): JevQuestion | undefined => {
     const offered = formsFor(looks, ranks.get(id) ?? 0.5);
@@ -709,12 +709,12 @@ export function planForms(facts: CodeFacts, looks: Looks, options: PlanOptions =
   const defs = definitionsOf(facts, graph);
   for (const f of [...facts.files].sort(byPath)) {
     const mine = defs.get(f.path) ?? [];
-    const own = question(f.path, "This file stands in the world as one thing at the heart of its patch, which a person can walk up to and read about. Which one's character suits the file best?", "form", f.path);
+    const own = question(f.path, "This file appears in the world as one thing at the center of its patch, which a person can walk up to and read about. Which one's character suits the file best?", "form", f.path);
     for (let from = 0; from === 0 || from < mine.length; from += LAYOUT.formsPerRequest) {
       const some = mine.slice(from, from + LAYOUT.formsPerRequest);
       const asked = some.map((d) => {
         const name = d.id.slice(d.file.length + 1);
-        const q = question(d.id, `The ${KIND_WORDS[d.kind]} \`${name}\`, listed in \`standing\`, stands in the world as one thing a person can walk up to and read about. Which one's character suits it best?`, `form#${name}`, f.path);
+        const q = question(d.id, `The ${KIND_WORDS[d.kind]} \`${name}\`, listed in \`standing\`, appears in the world as one thing a person can walk up to and read about. Which one's character suits it best?`, `form#${name}`, f.path);
         return [`form#${name}`, d.id, q] as const;
       });
       const file = importance.get(f.path);
@@ -723,7 +723,7 @@ export function planForms(facts: CodeFacts, looks: Looks, options: PlanOptions =
   }
   for (const e of [...facts.entities].sort(byPath)) {
     const value = importance.get(e.path);
-    const q = question(e.path, `This ${e.form} stands in the world as one thing on the ground kept for it at its folder's heart, which a person can walk up to and read about. Which one's character suits it best?`, "form", e.path);
+    const q = question(e.path, `This ${e.form} appears in the world as one thing on the ground set aside for it at the center of its folder, which a person can walk up to and read about. Which one's character suits it best?`, "form", e.path);
     const { size: _lines, ...words } = entityWords(facts, e);
     push("entity", e.path, { entity: { ...words, ...(share(value) === undefined ? {} : { importance: share(value) }) } }, [["form", e.path, q]]);
   }

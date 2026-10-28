@@ -29,7 +29,7 @@ export const COLOR_FEELS: Readonly<Record<PaletteFamily, string>> = {
   "cherry-blossom": "Soft pinks over grey-brown bark, for code that feels tender, delightful and a little fleeting",
   "silver-birch": "Pale silver bark with bright lime leaves, for code that feels light, clean and quick",
   "desert-sage": "Dusty grey-greens with ochre bark, for code that feels dry, spare and hardy",
-  "lantern-dusk": "Deep teal leaves with glowing gold accents, for code that feels guiding and quietly glowing, a light in the evening",
+  "lantern-dusk": "Deep teal leaves with glowing gold accents, for code that feels guiding and warm, like a light in the evening",
   "bluebell-wood": "Cool green leaves with blue-violet flowers, for code that feels shy, cool and shaded",
 };
 

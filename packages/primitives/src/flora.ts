@@ -9,7 +9,7 @@ import { COLOR_FEELS, paletteOf } from "./palettes.ts";
 
 export const branchingParams = {
   habit: t.choice("How the tree grows", {
-    upright: "A central leader with rising limbs, for code that feels steady and sure of its way",
+    upright: "A central leader with rising limbs, for code that feels steady and sure",
     spreading: "Wide, low limbs, broader than tall, for code that feels generous and sheltering",
     weeping: "Limbs that arch over and hang toward the ground, for code that feels gentle, wistful and inward",
     columnar: "Narrow and tall, with tight limbs, for code that feels formal and disciplined",
@@ -19,7 +19,7 @@ export const branchingParams = {
     "moderate branching": 3,
     "dense, fine twigwork": 4,
   }),
-  spread: t.scale("How far its limbs open from each other: tight, nearly parallel for code that feels guarded and held in, narrow for code that feels reserved, open for code that feels at ease, wide for code that feels welcoming, flared, nearly horizontal for code that feels expansive and reaching", {
+  spread: t.scale("How far its limbs open from each other: tight, nearly parallel for code that feels guarded and restrained, narrow for code that feels reserved, open for code that feels at ease, wide for code that feels welcoming, flared, nearly horizontal for code that feels expansive and far-reaching", {
     "tight, nearly parallel": 12,
     narrow: 24,
     open: 36,
@@ -69,18 +69,18 @@ export const spire = primitive({
 
 export const saplingParams = {
   habit: t.choice("How the young tree is growing", {
-    reaching: "A slender stem whose few shoots reach eagerly upward, in a hurry to be tall",
-    tiered: "Neat, level tiers of branches up a straight stem, patient and orderly",
-    leaning: "A slim stem leaning toward the light, its branches uneven and searching",
+    reaching: "A slender stem with a few shoots reaching straight up, for code that feels eager and fast-growing",
+    tiered: "Neat, level tiers of branches up a straight stem, for code that feels patient and orderly",
+    leaning: "A slim stem leaning toward the light, with uneven branches, for code that feels uncertain and searching",
   }),
-  tiers: t.scale("How many tiers of branches it has grown: its first two for code that feels brand new, a few for code that feels young but finding its way, several for code that feels nearly grown", { "its first two": 2, "a few": 3, several: 5 }),
-  stature: t.scale("How tall it has grown: knee-high for code that feels tentative, waist-high for code that feels growing, as tall as a person for code that feels ready to stand on its own", { "knee-high": 0.6, "waist-high": 1.1, "as tall as a person": 1.7 }),
+  tiers: t.scale("How many tiers of branches it has grown: its first two for code that feels brand new, a few for code that feels young but taking shape, several for code that feels nearly grown", { "its first two": 2, "a few": 3, several: 5 }),
+  stature: t.scale("How tall it has grown: knee-high for code that feels tentative, waist-high for code that feels still growing, as tall as a person for code that feels nearly mature", { "knee-high": 0.6, "waist-high": 1.1, "as tall as a person": 1.7 }),
 };
 
 export const sapling = primitive({
   id: "sapling@1",
   role: "Skeleton",
-  doc: "A young tree no taller than a person: one thin stem and a few tiers of slender branches, for code that feels new and still growing.",
+  doc: "A young tree no taller than a person, with one thin stem and a few tiers of slender branches, for code that feels new and still growing.",
   params: saplingParams,
   build: (p, ctx) => growSapling(p, ctx),
 });
@@ -96,7 +96,7 @@ export const barkParams = {
 export const bark = primitive({
   id: "bark@1",
   role: "Surface",
-  doc: "Tapered limbs with bark, its texture worn by the years the code has stood.",
+  doc: "Tapered limbs with bark whose texture shows the code's age.",
   params: barkParams,
   build: (p, ctx, skeleton) => buildBark(p, ctx, skeleton),
 });
@@ -104,7 +104,7 @@ export const bark = primitive({
 export const leafClumpsParams = {
   shape: t.choice("How its leaves gather", {
     round: "Soft, rounded clouds of leaves, for code that feels gentle and comfortable",
-    plates: "Flat-topped layered plates, like a stone pine, for code that feels composed and tiered, each layer resting on the last",
+    plates: "Flat-topped layered plates, like a stone pine, for code that feels composed and tiered",
     tufts: "Small loose tufts at every twig, for code that feels scattered and airy",
   }),
   leaf: t.choice("The shape of each leaf", {
@@ -141,7 +141,7 @@ export const leafStrandsParams = {
 export const leafStrands = primitive({
   id: "leaf-strands@1",
   role: "Foliage",
-  doc: "Long hanging strands of small leaves, like a willow, for code that feels soft, yielding and given to reflection.",
+  doc: "Long hanging strands of small leaves, like a willow, for code that feels soft, yielding and reflective.",
   params: leafStrandsParams,
   build: (p, ctx, skeleton) => buildLeafStrands(p, ctx, skeleton),
 });
@@ -154,7 +154,7 @@ export const needlesParams = {
 export const needles = primitive({
   id: "needles@1",
   role: "Foliage",
-  doc: "Dense sprays of needles along each limb, like a fir, for code that feels evergreen, prickly and enduring; on a bush's many stems, close tufts, like a juniper.",
+  doc: "Dense sprays of needles along each limb, like a fir, for code that feels evergreen, prickly and enduring. On a bush's many stems they grow in close tufts, like a juniper.",
   params: needlesParams,
   build: (p, ctx, skeleton) => (oneTrunk(skeleton) ? buildNeedles(p, ctx, skeleton) : buildJuniper(p, ctx, skeleton)),
 });
@@ -162,8 +162,8 @@ export const needles = primitive({
 export const blossomsParams = {
   form: t.choice("What grows among the leaves", {
     petals: "Small five-petaled flowers, for code that feels sweet and welcoming",
-    pods: "Round seed pods that glow softly, for code that feels mysterious and quietly lit, a little magical",
-    berries: "Clusters of small berries, for code that feels nourishing and homely, giving something back",
+    pods: "Round seed pods that glow softly, for code that feels mysterious and a little magical",
+    berries: "Clusters of small berries, for code that feels nourishing and homely",
   }),
   count: t.scale("How many: a scattered few for code that feels modest, plenty for code that feels generous, covered in them for code that feels exuberant and showy", { "a scattered few": 0.25, plenty: 0.6, "covered in them": 1 }),
 };
@@ -171,17 +171,17 @@ export const blossomsParams = {
 export const blossoms = primitive({
   id: "blossoms@1",
   role: "Ornament",
-  doc: "Flowers, pods or berries among the foliage, for code that feels in its season.",
+  doc: "Flowers, pods or berries among the foliage, for code that feels in its prime.",
   params: blossomsParams,
   build: (p, ctx, anchors) => buildBlossoms(p, ctx, anchors),
 });
 
 export const fruitParams = {
   fruit: t.choice("What fruit hangs from its twigs", {
-    apples: "Round apples, plump and generous, for code that feels wholesome and giving",
-    pears: "Pears that swell below a narrow neck, heavy and mellow, for code that feels ripe, mellow and a little slow",
+    apples: "Round, plump apples, for code that feels wholesome and generous",
+    pears: "Pears that swell below a narrow neck, for code that feels ripe, mellow and a little slow",
   }),
-  crop: t.scale("How much fruit it bears: a scattered few for code that feels sparing, a good crop for code that feels productive, bowed with fruit for code that feels rich and weighed down by all it gives", { "a scattered few": 0.2, "a good crop": 0.45, "bowed with fruit": 0.8 }),
+  crop: t.scale("How much fruit it bears: a scattered few for code that feels sparing, a good crop for code that feels productive, bowed with fruit for code that feels rich and heavily loaded", { "a scattered few": 0.2, "a good crop": 0.45, "bowed with fruit": 0.8 }),
 };
 
 export const fruit = primitive({
@@ -197,7 +197,7 @@ export const sway = primitive({
   role: "Motion",
   doc: "Movement in the wind, as restless or as settled as the code feels.",
   params: {
-    stiffness: t.scale("How the wind moves it: stiff for code that feels rigid and set in its ways, gently swaying for code that feels easy, supple for code that feels flexible and yielding", { supple: 0.9, "gently swaying": 0.55, stiff: 0.2 }),
+    stiffness: t.scale("How the wind moves it: stiff for code that feels rigid and fixed, gently swaying for code that feels easy, supple for code that feels flexible and yielding", { supple: 0.9, "gently swaying": 0.55, stiff: 0.2 }),
     rhythm: t.scale("How quickly it moves: slow for code that feels calm and unhurried, gentle for code that feels relaxed, quick for code that feels nervous and lively", { slow: 0.35, gentle: 0.6, quick: 1.1 }),
   },
   build: (p) => ({ sway: p.stiffness, frequency: p.rhythm }),
@@ -206,7 +206,7 @@ export const sway = primitive({
 export const palette = primitive({
   id: "palette@1",
   role: "Palette",
-  doc: "The component's colors when healthy and in decline, in the mood of the code it stands for.",
+  doc: "The component's colors at high and low vitality, in the mood of the code it represents.",
   params: {
     family: t.choice("Its colors", COLOR_FEELS),
     contrast: t.scale("How strongly the colors differ: soft for code that feels shy, faded or retiring, balanced for code that feels even-tempered, vivid for code that feels bold, loud or full of life", { soft: 0.6, balanced: 1, vivid: 1.35 }),
@@ -219,7 +219,7 @@ export const thicketParams = {
     mound: "A rounded mound, a little wider than tall, for code that feels snug and settled",
     spreading: "Low and wide, spilling outward, for code that feels easygoing and sprawling",
     vase: "Upright stems flaring out like a vase, for code that feels eager and reaching",
-    scrub: "Low, wiry stems that fork and arch over, like scrub, for code that feels tough and making do with little",
+    scrub: "Low, wiry stems that fork and arch over, like scrub, for code that feels tough and spare",
   }),
   stems: t.scale("How many stems rise from the root: a few stems for code that feels simple, several stems for code that feels well rounded, a dense tangle for code that feels knotted and hard to see into", { "a few stems": 3, "several stems": 5, "a dense tangle": 8 }),
   stature: t.scale("How tall the shrub stands: knee-high for code that feels small and modest, waist-high for code that feels ordinary, head-high for code that feels imposing for its size", { "knee-high": 0.6, "waist-high": 1.1, "head-high": 1.8 }),
@@ -228,21 +228,21 @@ export const thicketParams = {
 export const thicket = primitive({
   id: "thicket@1",
   role: "Skeleton",
-  doc: "A shrub's frame: many stems from one root crown, spreading into a low dome, for code that feels close to the ground and busy with small things.",
+  doc: "A shrub's frame of many stems from one root crown, spreading into a low dome, for code that feels close to the ground and busy with small things.",
   params: thicketParams,
   build: (p, ctx) => growThicket(p, ctx),
 });
 
 export const brambleParams = {
   canes: t.scale("How many canes arch from its root: a few wild canes for code that feels unruly but light, a thorny thicket for code that feels prickly and defended, an impenetrable tangle for code that feels hopelessly snarled", { "a few wild canes": 4, "a thorny thicket": 7, "an impenetrable tangle": 11 }),
-  reach: t.scale("How far its canes arch out before they bow to the soil: humped and close for code that feels contained, sprawling for code that feels spreading and creeping, rambling far over the ground for code that feels like it gets everywhere", { "humped and close": 1.2, sprawling: 1.8, "rambling far over the ground": 2.5 }),
+  reach: t.scale("How far its canes arch out before they bow to the soil: humped and close for code that feels contained, sprawling for code that feels spreading and creeping, rambling far over the ground for code that feels spread through everything", { "humped and close": 1.2, sprawling: 1.8, "rambling far over the ground": 2.5 }),
   stature: t.scale("How high its arches stand: knee-high for code that feels low and creeping, waist-high for code that feels in the way, head-high for code that feels overgrown", { "knee-high": 0.6, "waist-high": 1, "head-high": 1.5 }),
 };
 
 export const bramble = primitive({
   id: "bramble@1",
   role: "Skeleton",
-  doc: "A bramble's frame: long canes from one root that arch over and bow back to the soil, crossing into a tangle, for code that feels thorny and hard to get out of.",
+  doc: "A bramble's frame of long canes from one root that arch over and bend back to the soil, crossing into a tangle, for code that feels thorny and hard to get out of.",
   params: brambleParams,
   build: (p, ctx) => growBramble(p, ctx),
 });
@@ -259,7 +259,7 @@ export const leafMoundParams = {
 export const leafMound = primitive({
   id: "leaf-mound@1",
   role: "Foliage",
-  doc: "Crowded leaf clusters on short twigs that fill a shrub's frame down to the ground, with a ragged outline, so it reads as one leafy mass, for code that feels full and close-knit; or tufts at its tips, for scrub.",
+  doc: "Crowded leaf clusters on short twigs that fill a shrub's frame down to the ground, with a ragged outline, so it looks like one leafy mass, for code that feels full and close-knit. On scrub it grows tufts at the tips instead.",
   params: leafMoundParams,
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });

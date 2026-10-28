@@ -8,18 +8,18 @@ import { type AnyKind, type Slot, kind, slot } from "@gaia/schema";
 export const bush = kind({
   id: "bush",
   subject: "thing",
-  doc: "A bush that grows knee to head high, standing for one thing in the code: how it grows, what it wears and how it moves say how that code feels.",
+  doc: "A bush, knee to head high, that represents one thing in the code. Its shape, bark, leaves and movement show how that code feels.",
   slots: {
-    form: slot("Skeleton", { ask: "its frame is how the bush holds itself, low or reaching, tidy or tangled: choose the frame whose feel suits the code it stands for." }),
-    bark: slot("Surface", { on: "form", ask: "its bark is how weathered the code it stands for feels to the touch." }),
-    crown: slot("Foliage", { on: "form", ask: "its leaves are the first thing a person feels about it from the path: choose the leaves whose feel suits the code it stands for." }),
+    form: slot("Skeleton", { ask: "its frame sets the bush's shape, low or tall, tidy or tangled. Choose the frame whose feel suits the code it represents." }),
+    bark: slot("Surface", { on: "form", ask: "its bark shows how weathered the code it represents feels." }),
+    crown: slot("Foliage", { on: "form", ask: "its leaves are the first thing a person notices about it from the path. Choose the leaves whose feel suits the code it represents." }),
     bloom: slot("Ornament", {
       on: "crown",
       optional: true,
-      ask: "flowers, pods, berries or fruit among its leaves say the code it stands for feels generous or in its season; a bush whose code feels plain and workmanlike bears none.",
+      ask: "flowers, pods, berries or fruit among its leaves show that the code it represents feels generous or in its prime. A bush whose code feels plain and workmanlike has none.",
     }),
-    motion: slot("Motion", { ask: "how it moves in the wind says how restless or settled the code it stands for feels." }),
-    palette: slot("Palette", { ask: "its colors say the mood of the code it stands for, and how it sits on its land." }),
+    motion: slot("Motion", { ask: "how it moves in the wind shows how restless or settled the code it represents feels." }),
+    palette: slot("Palette", { ask: "its colors show the mood of the code it represents and how it fits with its land." }),
   },
   facts: {},
 });
@@ -41,13 +41,13 @@ function askedAs(k: AnyKind, asks: Readonly<Record<string, string>>): Record<str
  */
 export const wildBush = kind({
   ...bush,
-  doc: "A bush that grows knee to head high in the wild past the world's edge, which stands for no code: how it grows, what it wears and how it moves say how the wild land around it feels under the world's sky.",
+  doc: "A bush, knee to head high, in the wild land past the world's edge. It represents no code. Its shape, bark, leaves and movement show how the wild land around it feels under the world's sky.",
   slots: askedAs(bush, {
-    form: "its frame is how the bush holds itself, low or reaching, tidy or tangled: choose the frame whose feel suits the wild land it grows on.",
-    bark: "its bark is how weathered the wild land around it feels to the touch.",
-    crown: "its leaves are the first thing a person feels about the wild, looking out from the land's edge: choose the leaves whose feel suits the wild land around it.",
-    bloom: "flowers, pods, berries or fruit among its leaves say the wild land around it feels generous or in its season; a bush of a plain, wind-worn wild bears none.",
-    motion: "how it moves in the wind says how restless or settled the wild land around it feels under the world's wind.",
-    palette: "its colors say the mood of the wild land around it, and how it sits beside the world's lands.",
+    form: "its frame sets the bush's shape, low or tall, tidy or tangled. Choose the frame whose feel suits the wild land it grows on.",
+    bark: "its bark shows how weathered the wild land around it feels.",
+    crown: "its leaves are the first thing a person notices about the wild when looking out from the land's edge. Choose the leaves whose feel suits the wild land around it.",
+    bloom: "flowers, pods, berries or fruit among its leaves show that the wild land around it feels generous or in its prime. A bush in a plain, wind-worn wild has none.",
+    motion: "how it moves in the wind shows how restless or settled the wild land around it feels under the world's wind.",
+    palette: "its colors show the mood of the wild land around it and how it fits beside the world's lands.",
   }),
 });

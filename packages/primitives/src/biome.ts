@@ -27,14 +27,14 @@ export const air = primitive({
     air: t.choice("The character of the air", {
       clear: "Crisp, clean air, for code that feels plain, brisk and honest",
       "hazy gold": "Warm golden haze, for code that feels drowsy, warm and nostalgic",
-      "blue haze": "Distance fades into soft blue, for code that feels remote and melancholy, its far end lost",
+      "blue haze": "Distance fades into soft blue, for code that feels remote and melancholy",
       "morning mist": "White mist lying low on the ground, for code that feels hushed and a little mysterious",
       "pollen-filled": "Air thick with drifting golden pollen, for code that feels fertile, lively and in bloom",
     }),
     distance: t.choice("How far you can see", {
       "for miles": "The far hills sharp against the sky, for code that feels bare and exposed, nothing hidden",
       "softened distance": "The far land softened but still there, for code that feels mellow and calm",
-      "close and dreamy": "Only the near land clear, the rest a dream, for code that feels cosy, secret or hard to see into",
+      "close and dreamy": "Only the near land is clear and the rest fades, for code that feels cosy, secret or hard to see into",
     }),
   },
   build: (p) => {
@@ -83,14 +83,14 @@ export const groundCover = primitive({
     cover: t.choice("What covers the ground", {
       "lush grass": "Soft green grass, for code that feels fresh, eager and cared for",
       "golden steppe": "Dry golden grassland, for code that feels sun-baked, spare and wide open",
-      "silver grass": "Tall pale plumed grass that ripples in the wind, for code that feels restless, airy and always on the move",
+      "silver grass": "Tall pale plumed grass that ripples in the wind, for code that feels restless, airy and always changing",
       moss: "A deep cushion of moss, for code that feels old, quiet and settled",
       heather: "Low purple heather, for code that feels wild, tough and a little lonely",
       "sand and scrub": "Pale sand with clumps of scrub, for code that feels sparse, dry and hard-won",
       "clover meadow": "A low carpet of clover, for code that feels friendly and humble, modest pieces side by side",
     }),
     length: t.choice("How tall the cover grows", {
-      cropped: "Kept short, for code that feels fussy and strict, kept in line",
+      cropped: "Kept short, for code that feels fussy and strict",
       natural: "Left to its own height, for code that feels relaxed and natural",
       "tall and unkempt": "Grown long and tangled, for code that feels overgrown, wild or left alone",
     }),
@@ -132,7 +132,7 @@ const ACCENTS = {
 export const drift = primitive({
   id: "drift@1",
   role: "Accents",
-  doc: "Small living things drifting through the air. Always subtle.",
+  doc: "Small living things drifting through the air, always subtle.",
   params: {
     form: t.choice("What drifts through the air", {
       "drifting petals": "Pink petals carried on the breeze",

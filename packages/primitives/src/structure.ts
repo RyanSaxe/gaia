@@ -15,10 +15,10 @@ import { buildFieldstone, buildTimberFrame } from "./geometry/building/walls.ts"
 export const cottagePlanParams = {
   massing: t.choice("How the building's volumes are put together", {
     "a single block": "One simple block under one roof, for code that feels plain and self-contained",
-    "an L": "A main range with a wing jutting out at one end, its gable looking outward, the door in the corner between them, for code that feels companionable, with a partner at its elbow",
+    "an L": "A main range with a wing jutting out at one end, its gable facing outward, the door in the corner between them, for code that feels companionable and paired",
     "a T": "A main range with a gabled wing jutting from its middle, for code that feels balanced and formal, facing two ways at once",
-    "a long range": "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn, for code that feels patient and hardworking, going on and on",
-    "a cluster": "A main house with wings and outbuildings joined on all round, gathered over the years, for code that feels rambling and gregarious, grown piece by piece",
+    "a long range": "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn, for code that feels patient, hardworking and long",
+    "a cluster": "A main house with wings and outbuildings joined on all sides, added over the years, for code that feels rambling and gregarious, grown piece by piece",
   }),
   shape: t.choice("The main body's shape on the ground", {
     long: "A low range longer than it is deep, its door in the long side under the eaves, for code that feels easygoing and unhurried",
@@ -62,7 +62,7 @@ export const cottagePlanParams = {
 export const cottagePlan = primitive({
   id: "cottage-plan@1",
   role: "Footprint",
-  doc: "A building's plan: the volumes it is put together from (a single block, an L, a T, a long range or a cluster, with a porch, a lean-to or a turret), their storeys and roof forms, and where the door and windows go.",
+  doc: "A building's plan, which sets the volumes it is built from, their storeys and roof forms, and where the door and windows go. The volumes are a single block, an L, a T, a long range or a cluster, with a porch, a lean-to or a turret.",
   params: cottagePlanParams,
   build: (p, ctx) => layOutCottage(p, ctx),
 });
@@ -129,7 +129,7 @@ export const thatchParams = {
 export const thatch = primitive({
   id: "thatch@1",
   role: "Roof",
-  doc: "A thick, soft thatched roof in layered courses with a rolled ridge and rounded eaves, for code that feels old and well-loved, worn soft by many hands.",
+  doc: "A thick, soft thatched roof in layered courses with a rolled ridge and rounded eaves, for code that feels old, well loved and much used.",
   params: thatchParams,
   build: (p, ctx, plan) => buildThatch(p, ctx, plan),
 });
@@ -147,7 +147,7 @@ export const tilesParams = {
 export const tiles = primitive({
   id: "tiles@1",
   role: "Roof",
-  doc: "A gabled roof of tiles, slates or shingles in fine courses, with a gentle kick at the eaves, for code that feels new and sharp-edged, still crisp from the kiln.",
+  doc: "A gabled roof of tiles, slates or shingles in fine courses, with a gentle kick at the eaves, for code that feels new, crisp and sharp-edged.",
   params: tilesParams,
   build: (p, ctx, plan) => buildTiles(p, ctx, plan),
 });
@@ -169,13 +169,13 @@ export const casementsParams = {
 export const casements = primitive({
   id: "casements@1",
   role: "Openings",
-  doc: "Small-paned casement windows with stone sills, and a wooden door with a step; lamplit at night.",
+  doc: "Small-paned casement windows with stone sills and a wooden door with a step, lit by lamps at night.",
   params: casementsParams,
   build: (p, ctx, plan) => buildCasements(p, ctx, plan),
 });
 
 export const cottageGardenParams = {
-  extras: t.set("What gathers around the cottage", {
+  extras: t.set("What is placed around the cottage", {
     "flower boxes": "Boxes of flowers under the windows",
     lantern: "A lantern on a bracket by the door",
     woodpile: "Split logs stacked against a side wall",
@@ -206,7 +206,7 @@ export const waterwheelParams = {
 export const waterwheel = primitive({
   id: "waterwheel@1",
   role: "Feature",
-  doc: "A wooden waterwheel turning slowly in a stone-lined pit beside the house, for code that feels quaint and old-fashioned, unhurried, doing things the way they were always done. It slows to a stop as the code fails.",
+  doc: "A wooden waterwheel turning slowly in a stone-lined pit beside the house, for code that feels quaint, old-fashioned, unhurried and traditional. Its wheel slows to a stop as vitality falls.",
   params: waterwheelParams,
   // Jev is offered a waterwheel only where the place has running water.
   needs: ["running water"],
@@ -224,7 +224,7 @@ export const towerParams = {
 export const tower = primitive({
   id: "tower@1",
   role: "Feature",
-  doc: "A tall square tower rising from the back corner of the house, its narrow windows lamplit at night, for code that feels dreamy and far-off, with its head in the clouds. It crumbles from the top as the code fails.",
+  doc: "A tall square tower rising from the back corner of the house, its narrow windows lamplit at night, for code that feels dreamy, distant and idealistic. It crumbles from the top as vitality falls.",
   params: towerParams,
   build: (p, ctx, plan) => buildTower(p, ctx, plan),
 });
@@ -239,7 +239,7 @@ export const dovecoteParams = {
 export const dovecote = primitive({
   id: "dovecote@1",
   role: "Feature",
-  doc: "A dovecote beside the house, its little doorways and ledges open to the sky, for code that feels sociable and chatty, forever calling on the others and glad of callers. Its roof rots open and it falls into ruin as the code fails.",
+  doc: "A dovecote beside the house, its little doorways and ledges open to the sky, for code that feels sociable, chatty and busy with the code around it. Its roof rots open and it collapses as vitality falls.",
   params: dovecoteParams,
   build: (p, ctx, plan) => buildDovecote(p, ctx, plan),
 });
@@ -255,7 +255,7 @@ export const wellParams = {
 export const well = primitive({
   id: "well@1",
   role: "Feature",
-  doc: "A round stone well in the yard, its water dark and still, for code that feels mysterious, hard to see into, with depths few have ever explored. Its water sinks away and its bucket falls in as the code fails.",
+  doc: "A round stone well in the yard, its water dark and still, for code that feels mysterious, deep and hard to see into. Its water sinks away and its bucket falls in as vitality drops.",
   params: wellParams,
   build: (p, ctx, plan) => buildWell(p, ctx, plan),
 });
@@ -271,7 +271,7 @@ export const bellParams = {
 export const bell = primitive({
   id: "bell@1",
   role: "Feature",
-  doc: "A dark iron bell hung under a little roof beside the house, for code that feels brash and urgent, quick to sound off and hard to ignore. It hangs askew and then is gone as the code fails.",
+  doc: "A dark iron bell hung under a little roof beside the house, for code that feels brash, urgent and hard to ignore. It hangs askew and then disappears as vitality falls.",
   params: bellParams,
   build: (p, ctx, plan) => buildBell(p, ctx, plan),
 });
@@ -287,7 +287,7 @@ export const forgeParams = {
 export const forge = primitive({
   id: "forge@1",
   role: "Feature",
-  doc: "A smith's forge beside the house, its hearth glowing at dusk under a smoking chimney, for code that feels fierce and raw: hot, rough-edged and still being hammered into shape. It goes cold and its shelter falls in as the code fails.",
+  doc: "A smith's forge beside the house, its hearth glowing at dusk under a smoking chimney, for code that feels fierce, raw and rough-edged, still being worked into shape. It goes cold and its shelter falls in as vitality drops.",
   params: forgeParams,
   build: (p, ctx, plan) => buildForge(p, ctx, plan),
 });
@@ -303,7 +303,7 @@ export const granaryParams = {
 export const granary = primitive({
   id: "granary@1",
   role: "Feature",
-  doc: "A boarded granary raised on mushroom-shaped staddle stones beside the house, for code that feels thrifty and hoarding, saving everything up against a rainy day. It rots through and slumps off its stones as the code fails.",
+  doc: "A boarded granary raised on mushroom-shaped staddle stones beside the house, for code that feels thrifty and hoarding, keeping everything in case it is needed. It rots through and slumps off its stones as vitality falls.",
   params: granaryParams,
   build: (p, ctx, plan) => buildGranary(p, ctx, plan),
 });

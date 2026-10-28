@@ -8,5 +8,5 @@ instructions = "Which of these does `{text}`, imported on line {line}, refer to?
 outside = "Something outside this repository: a library, the standard library or the platform."
 
 [callee]
-instructions = "Which definition does `{text}`, called on line {line}, reach?"
+instructions = "Which definition does `{text}`, called on line {line}, refer to?"
 outside = "Something outside this repository: a library, the standard library or a value passed in."

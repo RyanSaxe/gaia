@@ -4,19 +4,19 @@ import { kind, slot } from "@gaia/schema";
 export const biome = kind({
   id: "biome",
   subject: "region",
-  doc: "The land of one region: its shape, its ground, its air and the palette families native to it.",
+  doc: "The land of one region, with its shape, ground, air and native palette families.",
   slots: {
     relief: slot("Relief", {
-      ask: "its landform is how walking through the directory's code feels underfoot: choose the land whose feel suits it.",
+      ask: "its landform shows how walking through the directory's code feels underfoot. Choose the landform whose feel suits the directory.",
     }),
     cover: slot("Ground", {
-      ask: "its ground cover is what brushes your feet as you walk through the directory's code: choose the cover whose feel suits it.",
+      ask: "its ground cover is what a person walks through in the directory's land. Choose the cover whose feel suits the directory.",
     }),
     air: slot("Atmosphere", {
       optional: true,
-      ask: "its air is the mood that hangs over the directory's code: choose the air whose feel suits it.",
+      ask: "its air sets the mood over the directory's land. Choose the air whose feel suits the directory.",
     }),
-    accents: slot("Accents", { optional: true, ask: "small drifting things, petals, leaves or fireflies, give the air a mood: a directory whose code feels lively, blooming, old and settled, or alive after dark has them; one that feels plain and workmanlike has none." }),
+    accents: slot("Accents", { optional: true, ask: "small drifting things, such as petals, leaves or fireflies, give the air a mood. A directory whose code feels lively, blooming, old and settled, or alive after dark has them. One whose code feels plain and workmanlike has none." }),
     natives: slot("Natives", { ask: "its native families are the colors that belong to the directory's land." }),
   },
   facts: { extent: (r) => r.extent },

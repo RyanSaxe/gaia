@@ -60,7 +60,7 @@ const GRAIN = { round: 0, "north-south": Math.PI / 2, "east-west": 0, diagonal: 
 export const rollingHills = primitive({
   id: "rolling-hills@1",
   role: "Relief",
-  doc: "Rounded grassy hills that roll on in every direction, for code that feels lively and sociable, one friendly rise after another.",
+  doc: "Rounded grassy hills that roll on in every direction, for code that feels lively and sociable.",
   params: rollingHillsParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -109,7 +109,7 @@ const STREAM = { "dry bed": null, trickle: { width: 2.4, depth: 0.45 }, brook: {
 export const valley = primitive({
   id: "valley@1",
   role: "Relief",
-  doc: "A long valley between two gentle shoulders, with a stream bed along its floor, for code that feels like a long journey, everything passing through on its way somewhere else.",
+  doc: "A long valley between two gentle shoulders, with a stream bed along its floor, for code that feels like a through route, where everything passes on to somewhere else.",
   params: valleyParams,
   build: (p, ctx): Landform => {
     const extent = extentOf(ctx);
@@ -187,7 +187,7 @@ const RISER_GRADE = 0.7;
 export const terraces = primitive({
   id: "terraces@1",
   role: "Relief",
-  doc: "Low earthen steps climbing a slope, like old rice terraces, for code that feels orderly, strict and careful, climbing step by deliberate step.",
+  doc: "Low earthen steps climbing a slope, like old rice terraces, for code that feels orderly, strict and careful, built up one step at a time.",
   params: terracesParams,
   build: (p, ctx): Landform => {
     const extent = extentOf(ctx);
@@ -229,7 +229,7 @@ export const basinParams = {
 export const basin = primitive({
   id: "basin@1",
   role: "Relief",
-  doc: "A round hollow in the land that may hold a pond, for code that feels settled and deep, the place everything else comes to rest in.",
+  doc: "A round hollow in the land that may hold a pond, for code that feels settled and deep, where everything else ends up.",
   params: basinParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -261,7 +261,7 @@ const WIND = { "from the west": COMPASS.east, "from the north": COMPASS.south, "
 export const dunes = primitive({
   id: "dunes@1",
   role: "Relief",
-  doc: "Long, gentle wind-shaped ridges, like grassy dunes, for code that feels restless and changeable, reshaped by every wind.",
+  doc: "Long, gentle wind-shaped ridges, like grassy dunes, for code that feels restless and changeable.",
   params: dunesParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -293,7 +293,7 @@ export const meadowParams = {
 export const meadow = primitive({
   id: "meadow@1",
   role: "Relief",
-  doc: "Open, nearly flat ground with a soft undulation, for code that feels quiet, open and at rest, nothing hurrying across it.",
+  doc: "Open, nearly flat ground with a soft undulation, for code that feels quiet, open and calm.",
   params: meadowParams,
   build: (p, ctx): Landform => ({
     height: sum(scale(p.undulation, noise(seedOf(ctx, "meadow"), 55, 3, 0.4)), {

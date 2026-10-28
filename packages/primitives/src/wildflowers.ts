@@ -12,7 +12,7 @@ import { buildDrift } from "./geometry/wildflowers.ts";
 export const driftParams = {
   spread: t.scale("How wide the drift spreads: a small clump for code that feels small and self-contained, a patch for code that feels modest, a wide drift for code that feels spreading and generous", { "a small clump": 0.8, "a patch": 1.6, "a wide drift": 2.8 }),
   density: t.scale("How thickly the flowers grow: sparse for code that feels thin and scattered, a good showing for code that feels healthy, a thick carpet for code that feels lush and abundant", { sparse: 0.4, "a good showing": 0.75, "a thick carpet": 1.2 }),
-  height: t.scale("How tall the flowers stand: low among the grass for code that feels humble and hidden, knee-high for code that feels ordinary, tall for code that feels eager to be seen", { "low among the grass": 0.45, "knee-high": 0.7, tall: 1 }),
+  height: t.scale("How tall the flowers stand: low among the grass for code that feels humble and hidden, knee-high for code that feels ordinary, tall for code that feels prominent", { "low among the grass": 0.45, "knee-high": 0.7, tall: 1 }),
 };
 
 export const daisies = primitive({
@@ -34,7 +34,7 @@ export const cups = primitive({
 export const bells = primitive({
   id: "bells@1",
   role: "Drift",
-  doc: "Arching stems hung with nodding bells, like bluebells or harebells, for code that feels quiet, shy and keeping to itself.",
+  doc: "Arching stems hung with nodding bells, like bluebells or harebells, for code that feels quiet, shy and private.",
   params: driftParams,
   build: (p, ctx) => buildDrift("bells", p, ctx),
 });
@@ -42,7 +42,7 @@ export const bells = primitive({
 export const spikes = primitive({
   id: "spikes@1",
   role: "Drift",
-  doc: "Upright spires of small florets, like lupine or lavender, for code that feels proud, tidy and standing in its ranks.",
+  doc: "Upright spires of small florets, like lupine or lavender, for code that feels proud, tidy and orderly.",
   params: driftParams,
   build: (p, ctx) => buildDrift("spikes", p, ctx),
 });
@@ -73,13 +73,13 @@ export const mushroomParams = {
     pointed: "Slender pointed caps, like a pixie's hat, for code that feels mischievous and odd",
   }),
   // Real mushroom heights in meters. The renderer's mushrooms group grows short turf round each drift, so they stay visible.
-  height: t.scale("How tall the mushrooms stand: barely above the moss for code that feels hidden underfoot, ankle-high for code that feels small but present, a hand high for code that feels quietly thriving", { "barely above the moss": 0.09, "ankle-high": 0.13, "a hand high": 0.19 }),
+  height: t.scale("How tall the mushrooms stand: barely above the moss for code that feels hidden underfoot, ankle-high for code that feels small but present, a hand high for code that feels quietly productive", { "barely above the moss": 0.09, "ankle-high": 0.13, "a hand high": 0.19 }),
 };
 
 export const mushrooms = primitive({
   id: "mushrooms@1",
   role: "Drift",
-  doc: "Capped mushrooms on pale stalks standing up out of the grass, a few young buttons among them, for code that feels hidden, strange and quietly at work underneath.",
+  doc: "Capped mushrooms on pale stalks standing up out of the grass, a few young buttons among them, for code that feels hidden, strange and busy out of sight.",
   params: mushroomParams,
   build: (p, ctx) => buildMushrooms(p, ctx),
 });

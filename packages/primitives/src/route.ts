@@ -19,7 +19,7 @@ export const trailParams = {
     none: "Nothing: the grass meets the tread",
     stones: "Small stones set along both edges",
   }),
-  winding: t.scale("How freely the trail wanders", {
+  winding: t.scale("How much the trail winds", {
     "nearly straight": 0.1,
     "gently curving": 0.45,
     meandering: 0.85,

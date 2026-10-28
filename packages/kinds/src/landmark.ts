@@ -9,13 +9,13 @@ import { kind, slot } from "@gaia/schema";
 export const landmark = kind({
   id: "landmark",
   subject: "thing",
-  doc: "A great thing a person knows from far across the land and finds their way by, standing for one thing in the code: a package, a file or a definition.",
+  doc: "A large structure that a person sees from far across the land and navigates by. It represents one thing in the code: a package, a file or a definition.",
   slots: {
     form: slot("Landmark", {
-      ask: "the great thing is the feeling a person carries away from it across the land: choose the one whose feel suits the code it stands for.",
+      ask: "the landmark is the feeling a person takes away from it. Choose the landmark whose feel suits the code it represents.",
     }),
-    motion: slot("Motion", { optional: true, ask: "whether it moves in the wind, as a living thing does." }),
-    palette: slot("Palette", { ask: "its colors say the mood of the code it stands for, and how it stands out from its land." }),
+    motion: slot("Motion", { optional: true, ask: "whether it moves in the wind, like a living thing." }),
+    palette: slot("Palette", { ask: "its colors show the mood of the code it represents and how it contrasts with its land." }),
   },
   facts: {
     // Scale grows with how much code depends on it, and a little with its line count.

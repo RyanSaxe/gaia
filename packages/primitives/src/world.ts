@@ -106,7 +106,7 @@ export const daylight = primitive({
     moon: t.choice("The moon that lights the world's nights", {
       "silver moon": "A bright full moon that silvers the land, for code that feels clear and calm even in the dark",
       "amber harvest moon": "A large, low, honey-colored full moon, for code that feels abundant and homely",
-      "thin pale crescent": "A slim crescent; dark nights where the lantern matters, for code that feels lean, quiet and a little lonely",
+      "thin pale crescent": "A slim crescent and dark nights lit mostly by lanterns, for code that feels lean, quiet and a little lonely",
     }),
     stars: t.scale("How many stars the night shows: a scattered few for code that feels plain and sparse, many for code that feels rich, a river of stars for code that feels vast and full of wonder", { "a scattered few": 0.2, many: 0.55, "a river of stars": 1 }),
   },
