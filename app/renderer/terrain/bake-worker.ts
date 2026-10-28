@@ -10,7 +10,7 @@
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { type ComposedRows, type LandOutline, type OwnedSite, type ReliefReport, type Terrain, type WorldSpec, composeRows, finishTerrain, landformsOf, ownershipRows, planOf, wildBase } from "@gaia/terrain";
-import { type Chunk, type LandSource, chunkBuffers, cutChunk, standChunk } from "./land-chunks.ts";
+import { type Chunk, type LandSource, chunkBuffers, cutChunk, bakeChunk } from "./land-chunks.ts";
 import { type Placed, type PlaceRequest, placeWorld } from "./place.ts";
 
 export type BakeJob =
@@ -73,7 +73,7 @@ scope.onmessage = (e) => {
       reply = { id: req.id, kind: "kept" };
     } else if (req.kind === "chunk") {
       if (source === null || source.world !== req.world) throw new Error(`No land source for world ${req.world}.`);
-      const chunk = whole === null ? standChunk(source.source, req.k, req.cx, req.cz) : cutChunk(whole, source.source, req.k, req.cx, req.cz);
+      const chunk = whole === null ? bakeChunk(source.source, req.k, req.cx, req.cz) : cutChunk(whole, source.source, req.k, req.cx, req.cz);
       reply = { id: req.id, kind: "chunk", chunk };
       moved = chunkBuffers(chunk);
     } else if (req.kind === "own") {

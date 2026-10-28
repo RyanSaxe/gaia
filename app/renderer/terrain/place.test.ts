@@ -4,7 +4,7 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, ROUTE_PRIMITIVES
 import { link, structure } from "@gaia/kinds";
 import { buildSlots, realize } from "@gaia/realize";
 import { sweep } from "@gaia/world";
-import { SHORE_CAP, bakeTerrain, extentOf, heightAt, planTerrain, siteToWorld, standTile, trailField, trailPlaces, yardsMeet } from "@gaia/terrain";
+import { SHORE_CAP, bakeTerrain, extentOf, heightAt, planTerrain, siteToWorld, bakeEditedTile, trailField, trailPlaces, yardsMeet } from "@gaia/terrain";
 import { sampleWorld } from "@gaia/terrain/testing";
 import { type CodeLayout, type PlaceRequest, houseGround, landmarkGround, placeWorld } from "./place.ts";
 
@@ -145,7 +145,7 @@ describe("standing a world's things on a bake", () => {
     const differ = { heights: 0, water: 0, shore: 0, nearPond: 0, field: 0, places: 0 };
     for (let z0 = 0; z0 < n; z0 += size) {
       for (let x0 = 0; x0 < n; x0 += size) {
-        const tile = standTile(plan, placed.edits, placed.network.ways, x0, z0, size);
+        const tile = bakeEditedTile(plan, placed.edits, placed.network.ways, x0, z0, size);
         for (let j = 0; j < Math.min(size, n - z0); j++) {
           for (let i = 0; i < Math.min(size, n - x0); i++) {
             const w = (z0 + j) * n + x0 + i;
@@ -165,7 +165,7 @@ describe("standing a world's things on a bake", () => {
     // between its own samples, and the treads it eases by that shore, all close to the water.
     for (const stride of [2, 4]) {
       const side = Math.ceil(n / stride);
-      const tile = standTile(plan, placed.edits, placed.network.ways, 0, 0, side, stride);
+      const tile = bakeEditedTile(plan, placed.edits, placed.network.ways, 0, 0, side, stride);
       let wet = 0;
       const coarse = { water: 0, region: 0, dryHeights: 0 };
       for (let j = 0; j * stride < n; j++) {

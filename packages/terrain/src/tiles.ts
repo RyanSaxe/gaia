@@ -20,7 +20,7 @@ export interface LandEdits {
 }
 
 /** A tile of the land with its edits applied and the trail fields measured over it. */
-export interface StoodTile extends TerrainTile {
+export interface EditedTile extends TerrainTile {
   /** Each sample's signed distance to the nearest way's edge (`trailField`). */
   readonly trailField: Float32Array;
   /** Which ways each sample lies on and how far along them (`trailPlaces`), two per sample. */
@@ -41,7 +41,7 @@ export function tileLattice(plan: TerrainPlan, tile: TerrainTile): Lattice {
  * where the shore, measured between its own samples, differs. Its trail
  * places include ways out to `placeReach` past their edge.
  */
-export function standTile(plan: TerrainPlan, edits: LandEdits, ways: readonly Way[], x0: number, z0: number, size: number = TILE.size, stride = 1, placeReach: number = TRAILS.reach): StoodTile {
+export function bakeEditedTile(plan: TerrainPlan, edits: LandEdits, ways: readonly Way[], x0: number, z0: number, size: number = TILE.size, stride = 1, placeReach: number = TRAILS.reach): EditedTile {
   const tile = bakeTile(plan, x0, z0, size, stride);
   const land = { lattice: tileLattice(plan, tile), waterLevel: tile.waterLevel, shore: tile.shore };
   for (const pad of edits.pads) applyPad(land.lattice, pad);
@@ -52,13 +52,13 @@ export function standTile(plan: TerrainPlan, edits: LandEdits, ways: readonly Wa
 
 /**
  * Cuts tile (`x0`, `z0`) from `t`, a whole world's land with its edits
- * applied, matching what `standTile` bakes from the plan. It takes every
+ * applied, matching what `bakeEditedTile` bakes from the plan. It takes every
  * stride-th sample, measures a coarser tile's shore between its own samples,
  * and measures the trail fields with places reaching `placeReach`. A bake
  * that still holds its whole world returns a tile at once this way, where
  * baking it alone would compose it again.
  */
-export function cutTile(t: Terrain, ways: readonly Way[], x0: number, z0: number, size: number, stride = 1, placeReach: number = TRAILS.reach): StoodTile {
+export function cutTile(t: Terrain, ways: readonly Way[], x0: number, z0: number, size: number, stride = 1, placeReach: number = TRAILS.reach): EditedTile {
   const l = t.lattice;
   const m = stride === 1 ? 0 : shoreMargin(l.spacing * stride);
   const side = size + 2 * m;

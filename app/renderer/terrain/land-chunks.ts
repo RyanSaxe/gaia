@@ -2,9 +2,9 @@
 // square of one level, baked from the world's plan and its leveling edits
 // alone. Level k has every 2^k-th lattice sample, so a level 0 chunk has the
 // leveled land's own samples and a coarser chunk the same samples farther
-// apart (`standTile`). It uses no Three.js or DOM, because a worker runs it.
+// apart (`bakeEditedTile`). It uses no Three.js or DOM, because a worker runs it.
 
-import { DRY, type LandEdits, SHORE_CAP, type StoodTile, TRAILS, type Terrain, type TerrainPlan, type Way, cutTile, frameOf, standTile } from "@gaia/terrain";
+import { DRY, type LandEdits, SHORE_CAP, type EditedTile, TRAILS, type Terrain, type TerrainPlan, type Way, cutTile, frameOf, bakeEditedTile } from "@gaia/terrain";
 
 /** What a land worker needs to bake any chunk of a world: its plan, its leveling edits and its ways. */
 export interface LandSource {
@@ -70,7 +70,7 @@ export function emptyChunk(plan: TerrainPlan, k: number, cx: number, cz: number)
 }
 
 /** Packs a leveled tile of a chunk's samples into a `Chunk`. */
-function chunkOf(k: number, cx: number, cz: number, tile: StoodTile): Chunk {
+function chunkOf(k: number, cx: number, cz: number, tile: EditedTile): Chunk {
   const count = CHUNK * CHUNK;
   const ground = new Float32Array(count * 4);
   for (let i = 0; i < count; i++) {
@@ -83,14 +83,14 @@ function chunkOf(k: number, cx: number, cz: number, tile: StoodTile): Chunk {
 }
 
 /** Bakes chunk (cx, cz) of level `k` from `source` alone, giving the leveled land's samples there. */
-export function standChunk(source: LandSource, k: number, cx: number, cz: number): Chunk {
+export function bakeChunk(source: LandSource, k: number, cx: number, cz: number): Chunk {
   const { plan } = source;
   if (chunkPastLand(plan, k, cx, cz)) return emptyChunk(plan, k, cx, cz);
   const frame = frameOf(plan.spec);
-  return chunkOf(k, cx, cz, standTile(plan, source.edits, source.ways, latticeIndex(frame, k, cx * CHUNK), latticeIndex(frame, k, cz * CHUNK), CHUNK, 2 ** k, placeReach(k, frame.spacing)));
+  return chunkOf(k, cx, cz, bakeEditedTile(plan, source.edits, source.ways, latticeIndex(frame, k, cx * CHUNK), latticeIndex(frame, k, cz * CHUNK), CHUNK, 2 ** k, placeReach(k, frame.spacing)));
 }
 
-/** Cuts chunk (cx, cz) of level `k` from `whole`, a world's whole leveled land that a bake still has. It equals what `standChunk` bakes there. */
+/** Cuts chunk (cx, cz) of level `k` from `whole`, a world's whole leveled land that a bake still has. It equals what `bakeChunk` bakes there. */
 export function cutChunk(whole: Terrain, source: LandSource, k: number, cx: number, cz: number): Chunk {
   const { plan } = source;
   if (chunkPastLand(plan, k, cx, cz)) return emptyChunk(plan, k, cx, cz);

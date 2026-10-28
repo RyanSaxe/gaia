@@ -127,7 +127,7 @@ export interface Placed {
   readonly symbols: readonly number[];
   /** Each way's edging stones, in the order of `network.ways`, set on the leveled land, which only the bake thread has in full. */
   readonly edging: readonly (readonly EdgeStone[])[];
-  /** The leveling edits in order, so a tile baked alone can be leveled the same (`standTile` in @gaia/terrain). */
+  /** The leveling edits in order, so a tile baked alone can be leveled the same (`bakeEditedTile` in @gaia/terrain). */
   readonly edits: LandEdits;
   /** Milliseconds each step took: the buildings' sites, the landmarks and trails, the symbols and the edging stones. */
   readonly took: Readonly<Record<string, number>>;
