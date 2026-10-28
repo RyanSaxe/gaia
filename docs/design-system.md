@@ -289,7 +289,9 @@ detail from screen size. Grass narrows smoothly rather than changing height as
 the person approaches.
 
 A far form keeps its tree's outline as it shrinks past the size it turns far
-at. There its edge is sharpened to match the full form's. Smaller, each texel
+at. There its edge is sharpened to match the full form's, and sharpened less
+the barer its tree, since a bare tree is mostly twigs finer than a texel that
+a sharp edge would cut away (`CARD` in [`far.ts`](../packages/render/src/far.ts)). Smaller, each texel
 it reads stands for more of the plant, and a twig, strand or needle finer than
 a texel covers only part of one. The far form draws that part as it is, where
 a sharpened edge would cut it away, so its outer twigs thin with distance as

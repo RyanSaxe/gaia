@@ -495,7 +495,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
  * The bake's version: a far form stored by an earlier version must be baked
  * again. Bump it whenever what a bake writes, or how a card reads it, changes.
  */
-export const FAR_BAKE_VERSION = 7;
+export const FAR_BAKE_VERSION = 8;
 
 /** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
 export interface FarFormData {
@@ -668,11 +668,12 @@ export function crownsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere): 
 const MEMBER_ROW = 256;
 
 /**
- * How a card reads its bake: near the size its form turns far at, the coverage remapped from this range to 0 to 1
- * (smaller, the range widens to 0 to 1 over the first mip level); how far toward the sun, in radii, it reads its
- * shadow; and how far toward the eye, in radii, a card drawn over its full form stands.
+ * How a card reads its bake: near the size its form turns far at, the coverage remapped from this range to 0 to 1,
+ * for a healthy copy and for a bare one at vitality 0 (smaller, the range widens to 0 to 1 over the first mip level);
+ * how far toward the sun, in radii, it reads its shadow; and how far toward the eye, in radii, a card drawn over its
+ * full form stands.
  */
-export const CARD = { coverEdge: [0.25, 0.75], shadowLift: 0.2, overFull: 0.15 } as const;
+export const CARD = { coverEdge: [0.25, 0.75], bareEdge: [0.15, 0.65], shadowLift: 0.2, overFull: 0.15 } as const;
 
 const CARD_VERT = /* glsl */ `
 attribute vec4 aSpot; // x, y, z, yaw
@@ -811,7 +812,7 @@ uniform highp sampler2DArray uLayer2;
 uniform highp sampler2DArray uLayer3;
 uniform highp sampler3D uDroop;
 uniform float uDroopSlots;
-uniform vec2 uCoverEdge;
+uniform vec4 uCoverEdge;
 uniform float uElev[${FAR_VIEWS.elevations.length}];
 const vec2 GRID = vec2(${FAR_VIEWS.azimuths}.0, ${FAR_VIEWS.elevations.length}.0);
 varying vec3 vQ;
@@ -923,15 +924,19 @@ float sliceCover(vec4 l0, vec4 l3, float v) {
 }
 // That share as the card draws it. Near the size the form turns far at, its
 // edge is sharpened: blending four views softens it, and a soft edge would
-// dither into a halo. Smaller on screen, each texel read is a mipmap's average
-// of the plant's pieces: a twig, strand or needle finer than a texel is only a
-// share of it, which a sharpened edge would cut away, so the card's outer
-// twigs would vanish and its crown shrink while the full form's pieces keep
-// covering their share. Over the first mip level the edge gives way to the
-// share as it is.
+// dither into a halo. A bare tree is mostly twigs finer than a texel, which
+// cover only a share of each, so a tree's edge eases as the copy's vitality
+// falls (from the set's healthy edge to its bare one) and keeps more of it.
+// Smaller on screen, each texel read is a mipmap's average of the plant's
+// pieces: a twig, strand or needle finer than a texel is only a share of it,
+// which a sharpened edge would cut away, so the card's outer twigs would
+// vanish and its crown shrink while the full form's pieces keep covering
+// their share. Over the first mip level the edge gives way to the share as
+// it is.
 float coverAt(vec4 l0, vec4 l3, float v) {
   float c = sliceCover(l0, l3, v);
-  vec2 edge = mix(uCoverEdge, vec2(0.0, 1.0), clamp(minified(), 0.0, 1.0));
+  vec2 near = mix(uCoverEdge.zw, uCoverEdge.xy, clamp(v, 0.0, 1.0));
+  vec2 edge = mix(near, vec2(0.0, 1.0), clamp(minified(), 0.0, 1.0));
   return clamp((c - edge.x) / (edge.y - edge.x), 0.0, 1.0);
 }
 `;
@@ -1111,7 +1116,6 @@ const visibleUp = (o: THREE.Object3D): boolean => {
   return true;
 };
 
-/** A set's cards, holding `slots` forms at once, each turning far by `turn`. */
 /**
  * How many mip levels of each atlas a set's slots hold, for views `frame`
  * texels across: a copy draws no card once its crown spans `gone` device
@@ -1127,7 +1131,14 @@ export function farSlotBytes(frame: number, gone: number, slots: number): number
   return slots * (texels * 4 * 4 + DROOP_CELLS ** 3 * 4);
 }
 
-export function createFarCards(light: SceneLight, turn: FarTurn, most: number): FarCards {
+/**
+ * A set's cards, holding `slots` forms at once, each turning far by `turn`.
+ * Near the swap they sharpen a bare copy's coverage by `bareEdge` and a
+ * healthy one's by `CARD.coverEdge`: trees take `CARD.bareEdge`, since a bare
+ * tree is mostly twigs finer than a texel; by default a bare copy sharpens as
+ * a healthy one does.
+ */
+export function createFarCards(light: SceneLight, turn: FarTurn, most: number, bareEdge: readonly [number, number] = CARD.coverEdge): FarCards {
   if (!(most >= 1)) throw new Error(`A set of far cards holds at least one form; it was given ${most} slots.`);
   let slots = most;
   const card = new THREE.PlaneGeometry(2, 2, 1, 5);
@@ -1159,7 +1170,7 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number): 
     uDroop: { value: null as THREE.Texture | null },
     uDroopSlots: { value: slots },
     uElev: { value: [...FAR_VIEWS.elevations] },
-    uCoverEdge: { value: new THREE.Vector2(CARD.coverEdge[0], CARD.coverEdge[1]) },
+    uCoverEdge: { value: new THREE.Vector4(CARD.coverEdge[0], CARD.coverEdge[1], bareEdge[0], bareEdge[1]) },
     uShadowLift: { value: CARD.shadowLift },
   };
   const solidMaterial = new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, uniforms, side: THREE.DoubleSide, alphaToCoverage: true });
