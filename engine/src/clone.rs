@@ -1,17 +1,8 @@
-//! Public GitHub repositories, copied into Gaia's own app-data folder so their
-//! worlds open like any folder's. Only an address of the form
-//! `https://github.com/OWNER/REPO` or `github.com/OWNER/REPO` (with an
-//! optional `.git`) is accepted, and the URL git is given is always rebuilt
-//! from the owner and the repository's name, never taken from the text.
-//!
-//! Every git call here speaks only https, never prompts, reads no system or
-//! global config and no credentials, runs no hooks, skips LFS content and
-//! submodules, and checks symlinks out as plain files. A clone keeps every
-//! commit and tree but fetches file contents only for what it checks out
-//! (`--filter=blob:none`): the project's ID is its root commit and its
-//! history's facts need the first commit, so a shallow copy would rename the
-//! project on every fetch and lose Jev's kept answers. A clone past
-//! `CLONE_BYTES` on disk or `CLONE_SECONDS` is stopped and removed.
+//! Clones public GitHub repositories into Gaia's app-data folder, so their
+//! worlds open like any local folder's. `parse_address` accepts only
+//! `https://github.com/OWNER/REPO` or `github.com/OWNER/REPO`, with an optional
+//! `.git`. `url_of` builds the URL that git receives from the owner and
+//! repository name, never from the text.
 
 use serde_json::{Value, json};
 use std::io::Read;
@@ -20,11 +11,11 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// The longest a clone or a fetch may take.
+/// Time limit in seconds for a clone or a fetch.
 pub const CLONE_SECONDS: u64 = 240;
-/// The most a clone may hold on disk, its history and checkout together.
+/// Disk limit in bytes for a clone, its history and checkout together.
 pub const CLONE_BYTES: u64 = 500 * 1024 * 1024;
-/// The longest asking GitHub whether a repository is there may take.
+/// Time limit in seconds for `locate`'s `git ls-remote`.
 pub const LOCATE_SECONDS: u64 = 20;
 
 /// The owner and repository an address names, or None when it is not exactly a GitHub repository's address.
@@ -49,7 +40,7 @@ pub fn parse_address(text: &str) -> Option<(String, String)> {
     (owner_ok && repo_ok).then(|| (owner.to_string(), repo.to_string()))
 }
 
-/// Where Gaia keeps its copy of a repository under the data folder `data`: GitHub's names ignore case, so the folder's do too.
+/// The folder of Gaia's copy of a repository, `<data>/clones/<owner>/<repo>` in lower case. GitHub's names ignore case, so the folder names do too.
 pub fn folder_in(data: &Path, owner: &str, repo: &str) -> PathBuf {
     data.join("clones")
         .join(owner.to_ascii_lowercase())
@@ -60,7 +51,8 @@ fn url_of(owner: &str, repo: &str) -> String {
     format!("https://github.com/{owner}/{repo}.git")
 }
 
-/// git, fenced: https only, no prompts, no config but the repository's own, no credentials, no hooks, no LFS content, symlinks as plain files.
+/// A git command that uses only https, never prompts, reads no system or global config and no credentials, runs no hooks,
+/// skips LFS content and checks symlinks out as plain files. It also clears inherited variables such as `GIT_DIR`.
 fn git() -> Command {
     let mut c = Command::new("git");
     for inherited in [
@@ -98,7 +90,7 @@ fn git() -> Command {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    // Its own process group lets a timeout stop git and any helpers it started.
+    // A process group of its own lets `run` stop git and any helpers git started.
     isolate_process(&mut c);
     c
 }
@@ -148,7 +140,7 @@ fn size_of(dir: &Path) -> u64 {
         .sum()
 }
 
-/// Runs `cmd`, stopping it (and everything it started) past `seconds`, or once `watch` holds more than `CLONE_BYTES`.
+/// Runs `cmd` and stops it and everything it started after `seconds`, or once `watch` holds more than `CLONE_BYTES`.
 fn run(mut cmd: Command, seconds: u64, watch: Option<&Path>) -> Ran {
     let mut child = match cmd.spawn() {
         Ok(child) => child,
@@ -222,7 +214,7 @@ fn run(mut cmd: Command, seconds: u64, watch: Option<&Path>) -> Ran {
             stop(&mut child);
             return Ran::Slow;
         }
-        // The size is summed once a second; the exit is seen four times as often.
+        // The loop checks for exit every 250 ms and sums `watch`'s size every fourth check, once a second.
         polls += 1;
         if polls.is_multiple_of(4)
             && let Some(dir) = watch
@@ -235,7 +227,8 @@ fn run(mut cmd: Command, seconds: u64, watch: Option<&Path>) -> Ran {
     }
 }
 
-/// Why git could not reach a repository, from what it wrote: no public repository there, or no way to reach GitHub.
+/// Classifies git's error output as `missing`, for no public repository, or `offline`, for no way to reach GitHub.
+/// Unrecognized output counts as `missing`.
 fn why_failed(stderr: &str) -> &'static str {
     let s = stderr.to_ascii_lowercase();
     const MISSING: [&str; 5] = [
@@ -262,7 +255,8 @@ fn why_failed(stderr: &str) -> &'static str {
     }
 }
 
-/// `project.locate`: whether an address names a public repository GitHub will hand over, and where Gaia keeps its copy.
+/// Handles `project.locate`. It checks that an address names a public repository GitHub serves, and returns the folder
+/// for Gaia's copy.
 pub fn locate(address: &str) -> Result<Value, String> {
     let Some((owner, repo)) = parse_address(address) else {
         return Ok(json!({ "found": false, "why": "address" }));
@@ -271,7 +265,7 @@ pub fn locate(address: &str) -> Result<Value, String> {
     let mut cmd = git();
     cmd.args(["ls-remote", "--symref", &url_of(&owner, &repo), "HEAD"]);
     Ok(match run(cmd, LOCATE_SECONDS, None) {
-        // A repository with no commits has nothing to walk through.
+        // An empty `ls-remote` means a repository with no commits, which counts as missing.
         Ran::Done {
             ok: true, stdout, ..
         } if !stdout.trim().is_empty() => json!({
@@ -287,7 +281,11 @@ pub fn locate(address: &str) -> Result<Value, String> {
     })
 }
 
-/// `project.clone`: a fresh copy of the repository in Gaia's data folder, or the copy already there brought up to date.
+/// Handles `project.clone`. It clones the repository into Gaia's data folder, or updates the copy already there.
+///
+/// A clone keeps every commit and tree but fetches file contents only for what it checks out (`--filter=blob:none`).
+/// It is never shallow. The project ID is the root commit and the history's facts need the first commit, so a shallow
+/// copy's root commit would change on every fetch, which changes the project ID and loses Jev's held answers.
 pub fn clone(address: &str) -> Result<Value, String> {
     let Some((owner, repo)) = parse_address(address) else {
         return Ok(json!({ "cloned": false, "why": "address" }));
@@ -304,7 +302,7 @@ pub fn clone(address: &str) -> Result<Value, String> {
         })
     };
 
-    // A copy already here is updated; if GitHub cannot be reached, or the update fails, the copy opens as it was.
+    // Updates a copy that is already here. If the fetch or the reset fails, the copy opens as it was.
     if root.join(".git").is_dir() {
         let mut fetch = git();
         fetch.arg("-C").arg(&root).args([
@@ -328,7 +326,7 @@ pub fn clone(address: &str) -> Result<Value, String> {
         return Ok(cloned(false));
     }
 
-    // A fresh clone lands beside its folder and moves in only once it is whole.
+    // A fresh clone goes to a `.partial-<pid>` folder beside its folder and is renamed into place once it completes.
     let parent = root.parent().ok_or("A clone's folder has no parent.")?;
     std::fs::create_dir_all(parent)
         .map_err(|e| format!("Could not make {}: {e}", parent.display()))?;
@@ -368,7 +366,7 @@ pub fn clone(address: &str) -> Result<Value, String> {
         Ran::Large => "large",
     };
     let _ = std::fs::remove_dir_all(&partial);
-    // The owner's folder goes too when nothing else of theirs is kept.
+    // `remove_dir` removes the owner's folder only when it is empty.
     let _ = std::fs::remove_dir(parent);
     Ok(json!({ "cloned": false, "why": why }))
 }

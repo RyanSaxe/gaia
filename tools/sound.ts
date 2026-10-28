@@ -1,6 +1,6 @@
 // Rebuilds Gaia's sound files into app/renderer/sound/assets/: fetches what they are made from into a cache outside
 // the repository, then cuts the world's sounds and composes, renders, mixes and encodes the music. The work is Python
-// in tools/sound/ (its README says what it needs), run through uv.
+// in tools/sound/ (its README lists what it needs), run through uv.
 // Usage: pnpm sound [world|music] [--out DIR] [--keep]
 
 import { spawnSync } from "node:child_process";

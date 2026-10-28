@@ -1,4 +1,4 @@
-// The protocol between the world service and the Rust engine: newline-delimited
+// The protocol between the world service and the Rust engine, newline-delimited
 // JSON-RPC over the engine's stdin and stdout. The Rust side derives the same
 // shapes from its structs. The OpenRouter key never crosses this boundary.
 
@@ -6,82 +6,79 @@ import type { CodeGraph, NodeId } from "./graph.ts";
 import type { JevRequest, JevResponse } from "./jev.ts";
 
 export interface EngineMethods {
-  /** Answers with the engine's version; the app's first sign the engine is alive. */
+  /** Returns the engine's version. It is the app's first check that the engine is running. */
   "engine.ping": { params: Record<string, never>; result: { version: string } };
   /**
    * Walks and parses the project into its code graph: a node for every
    * directory, file, definition and block, with its lines and history, and
-   * every reference the rules have not resolved as pending. Every language reads the same way,
-   * through its grammar's queries in `engine/queries/`.
+   * every reference the rules have not resolved as pending. The engine parses every language the
+   * same way, through its grammar's queries in `engine/queries/`.
    */
   "project.graph": { params: { root: string; judged?: boolean }; result: CodeGraph };
   /**
-   * Builds every request Jev would be sent to understand the project (its
-   * links, then importance and quality at every level) and looks each up in
-   * the store; sends nothing. A request already answered is kept, never
-   * sent again while its request hash is unchanged.
+   * Builds every request the engine would send Jev to understand the project,
+   * the links first and then importance and quality at every level, and looks
+   * each up in the store. It sends nothing. A request already answered is kept
+   * and never sent again while its request hash is unchanged.
    */
   "understanding.plan": { params: { root: string }; result: UnderstandPlan };
   /**
-   * A file's text as the world reads it, by its path relative to the root:
-   * at `commit` (the graph's), or else at the commit checked out, or from
-   * disk outside git. Null when that snapshot has no such file, it is
-   * binary, or the path leaves the root.
+   * A file's text by its path relative to the root, from the snapshot the
+   * world reads. That is `commit`, the graph's commit, when given, or else the
+   * checked-out commit, or the disk outside git. Null when that snapshot has no
+   * such file, the file is binary, or the path leaves the root.
    */
   "project.source": { params: { root: string; path: string; commit?: string }; result: { lines: readonly string[] | null } };
   /**
-   * The commit a world of `root` would be read from now, as `project.graph`
-   * reads it: the commit checked out, or null when the world would be read
-   * from disk. The start compares it with the last opened commit to
-   * show whether the code has changed.
+   * The commit `project.graph` would read `root` at now: the checked-out
+   * commit, or null when it would read the disk. The start screen compares it
+   * with the last opened commit to show whether the code has changed.
    */
   "project.commit": { params: { root: string }; result: { commit: string | null } };
   /**
-   * How many commits since `from` up to `to` touched a file under `root`,
-   * or null when `from` is not in `to`'s history (after a rebase or a switch
-   * to another branch) or either is not a commit git knows. The start asks
-   * it to tally, on a world's card, the commits since the person last
-   * opened it.
+   * How many commits after `from` up to `to` changed a file under `root`, or
+   * null when `from` is not in `to`'s history, as after a rebase or a switch to
+   * another branch, or either is not a commit git knows. The start screen uses
+   * it to show, on a world's card, the commits since the person last opened it.
    */
   "project.commits": { params: { root: string; from: string; to: string }; result: { commits: number | null } };
   /**
-   * Sends every request whose waits are met, up to `max` (256 by default),
-   * as many at once as Jev takes: the links first, then folders top-down
-   * and each file after its folder. Returns the nodes that settled, so the
-   * waiting screen can paint them. Call it until nothing is left.
+   * Sends every ready request, up to `max`, 256 by default, as many at once as
+   * Jev accepts: the links first, then folders top-down and each file after
+   * its folder. Returns the nodes whose answers are now held, so the waiting
+   * screen can draw them. Call it until nothing is left.
    */
   "understanding.next": { params: { root: string; max?: number }; result: UnderstandProgress };
   /**
-   * Where a GitHub address leads, before anything is cloned: whether it names
-   * a public repository GitHub will hand over (one `git ls-remote`), and the
-   * folder Gaia keeps its copy in. Only `https://github.com/OWNER/REPO` or
+   * Checks a GitHub address before anything is cloned. It returns whether the
+   * address names a public repository GitHub serves, using one `git ls-remote`,
+   * and the folder for Gaia's copy. Only `https://github.com/OWNER/REPO` or
    * `github.com/OWNER/REPO`, with an optional `.git`, is an address.
    */
   "project.locate": { params: { address: string }; result: Located };
   /**
-   * Clones a public GitHub repository into Gaia's app-data folder
-   * (`<data>/clones/<owner>/<repo>`), or fetches into the copy already there;
-   * the copy then opens like any folder. The clone runs no
-   * hooks, skips submodules and LFS content, speaks only https, keeps every
-   * commit but fetches file contents only for the files checked out, and
-   * gives up past a size or time cap.
+   * Clones a public GitHub repository into `<data>/clones/<owner>/<repo>` in
+   * Gaia's app-data folder, or fetches into the copy already there. The copy
+   * then opens like any folder. The clone runs no hooks, skips submodules and
+   * LFS content, uses only https, keeps every commit but fetches file contents
+   * only for the checked-out files, and stops past a size or time cap.
    */
   "project.clone": { params: { address: string }; result: Cloned };
   /**
-   * Sends many requests to Jev with OPENROUTER_API_KEY, up to the engine's
-   * concurrency limit, answering in the order asked: each a response, or the reason that
-   * one request failed. Fails as a whole only when nothing can be sent, such
-   * as when the engine runs without GAIA_JEV=live.
+   * Sends requests to Jev with OPENROUTER_API_KEY, up to the engine's
+   * concurrency limit at once, and returns each response or the reason that
+   * request failed, in request order. It fails as a whole only when nothing can
+   * be sent, such as when the engine runs without GAIA_JEV=live.
    */
   "jev.batch": { params: { requests: JevRequest[] }; result: { responses: (JevResponse | JevFailure)[] } };
   /** What a batch would send and cost, without sending it or reading the key. */
   "jev.estimate": { params: { requests: JevRequest[] }; result: JevEstimate };
   /**
    * Whether OPENROUTER_API_KEY is nonempty and whether this engine runs with
-   * GAIA_JEV=live. Only these two flags cross; the key never does.
+   * GAIA_JEV=live. Only these two flags cross the protocol. The key never does.
    */
   "jev.status": { params: Record<string, never>; result: { key: boolean; live: boolean } };
-  /** Reads one record from a project's app-data store; null when it was never written. */
+  /** Reads one record from a project's app-data store. Null when it was never written. */
   "store.get": { params: { project: string; table: StoreTable; key: string }; result: { value: unknown } | null };
   /** Reads every record of one table of a project's store, by key. */
   "store.read": { params: { project: string; table: StoreTable }; result: { records: Record<string, unknown> } };
@@ -90,13 +87,14 @@ export interface EngineMethods {
 }
 
 /**
- * Why a GitHub address leads nowhere Gaia can go: it is not a repository's
- * address; no public repository is there (missing, or private); GitHub could
- * not be reached; or the repository is past the size or the time cap.
+ * Why Gaia can't open a GitHub address. `address` means it is not a
+ * repository's address, `missing` that no public repository is there, `offline`
+ * that GitHub could not be reached, and `large` or `slow` that the repository
+ * is past the size or time cap.
  */
 export type Unreachable = "address" | "missing" | "offline" | "large" | "slow";
 
-/** Where a GitHub address leads (`project.locate`). `kept` is true when Gaia already holds a copy. */
+/** Where a GitHub address leads (`project.locate`). `kept` is true when Gaia already has a copy. */
 export type Located = { readonly found: true; readonly owner: string; readonly repo: string; readonly root: string; readonly kept: boolean } | { readonly found: false; readonly why: Unreachable };
 
 /** A clone or an update (`project.clone`). `fetched` is true when a copy already there was updated rather than cloned anew. */
@@ -125,7 +123,7 @@ export interface JevEstimate {
   readonly estimatedUsd: number;
   readonly usdPerMillionInputTokens: number;
   readonly concurrency: number;
-  /** Whether this engine would really send them: it runs with GAIA_JEV=live. */
+  /** Whether this engine would send them, which it does when it runs with GAIA_JEV=live. */
   readonly live: boolean;
 }
 
@@ -142,12 +140,12 @@ export interface UnderstandPlan {
 export interface UnderstandProgress {
   readonly sent: number;
   readonly failed: number;
-  /** The first few requests that failed once the engine's client retried them: what each was about, and why. */
+  /** The first few requests that failed after the engine's client retried them, with each one's unit and error. */
   readonly failures: readonly { readonly unit: NodeId; readonly error: string }[];
   readonly left: number;
   /** Nodes whose requests are all answered. */
   readonly settled: readonly NodeId[];
-  /** Each file among `settled` that has its quality now, by path, 0 to 1: the health the world will show for it. */
+  /** The quality, 0 to 1, of each file among `settled` that has one now, by path. The world shows it as the file's health. */
   readonly quality: Readonly<Record<string, number>>;
 }
 

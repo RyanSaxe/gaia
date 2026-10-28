@@ -1,8 +1,9 @@
-//! The engine protocol: newline-delimited JSON-RPC 2.0. The TypeScript side of
-//! the same contract is `EngineMethods` in `packages/schema/src/engine.ts`.
-//! `project.locate` and `project.clone` answer a GitHub address that leads
-//! nowhere (not an address, no public repository there, GitHub unreachable,
-//! past a cap) with an ordinary result naming why, not an error.
+//! Handles the engine protocol, newline-delimited JSON-RPC 2.0.
+//! `EngineMethods` in `packages/schema/src/engine.ts` defines the same contract
+//! in TypeScript. When a GitHub address leads to no repository Gaia can clone,
+//! such as no public repository, GitHub unreachable or a repository past a cap,
+//! `project.locate` and `project.clone` return an ordinary result that names
+//! the reason, not an error.
 
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -20,7 +21,7 @@ struct Request {
 const PARSE_ERROR: i64 = -32700;
 const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
-/// The method ran and failed, such as a root that is not a directory or Jev being off.
+/// Error code for a method that ran and failed, such as on a root that is not a directory or with Jev off.
 const FAILED: i64 = -32000;
 
 /// Turns one request line into one response line.
@@ -51,7 +52,7 @@ pub fn handle(line: &str) -> Value {
         },
         "project.source" => match (p["root"].as_str(), p["path"].as_str()) {
             (Some(root), Some(path)) => {
-                // The commit the world was built from, so the journal shows the code the graph read.
+                // With `commit`, the commit the world was built from, it reads the file at that commit, so the journal shows the code the graph read.
                 let root = Path::new(root);
                 let snapshot = match p["commit"].as_str() {
                     Some(commit) => crate::graph::walk::Snapshot::at(root, commit),
@@ -65,12 +66,12 @@ pub fn handle(line: &str) -> Value {
             _ => Err((INVALID_PARAMS, "project.source needs a root and a path.".into())),
         },
         "project.commit" => match p["root"].as_str() {
-            // The commit a world of the root is read from now, as `project.graph` would read it.
+            // The commit that `project.graph` would read the root at now.
             Some(root) => Ok(json!({ "commit": crate::graph::walk::Snapshot::of(Path::new(root)).commit() })),
             None => Err((INVALID_PARAMS, "project.commit needs a root.".into())),
         },
         "project.commits" => match (p["root"].as_str(), p["from"].as_str(), p["to"].as_str()) {
-            // How far the code has moved on since a commit, or null when that commit is no longer in its history.
+            // How many commits after `from` up to `to` changed a file under the root, or null when `from` is not in `to`'s history.
             (Some(root), Some(from), Some(to)) => Ok(json!({ "commits": crate::graph::git::commits_between(Path::new(root), from, to) })),
             _ => Err((INVALID_PARAMS, "project.commits needs a root, a from and a to.".into())),
         },
@@ -205,7 +206,7 @@ mod tests {
         };
         git(&["init", "-q"]);
         let mut commits = Vec::new();
-        // Three commits touch the folder and one only the repository around it.
+        // Three commits change `sub` and one changes only a file outside it.
         for (file, text) in [("sub/a.ts", "1"), ("sub/a.ts", "2"), ("outside.txt", "3"), ("sub/b.ts", "4")] {
             std::fs::write(repo.join(file), text).unwrap();
             git(&["add", "."]);
@@ -218,7 +219,7 @@ mod tests {
         };
         assert_eq!(ask(&commits[0], &commits[3])["result"], json!({ "commits": 2 }));
         assert_eq!(ask(&commits[3], &commits[3])["result"], json!({ "commits": 0 }));
-        // A commit no longer in the history, as after a rebase, or one git does not know, or not a commit at all.
+        // A `from` that is not in the history, as after a rebase, a hash git does not know, or not a commit at all gives null.
         assert_eq!(ask(&commits[3], &commits[0])["result"], json!({ "commits": null }));
         assert_eq!(ask("0123456789abcdef0123456789abcdef01234567", &commits[3])["result"], json!({ "commits": null }));
         assert_eq!(ask("--all", &commits[3])["result"], json!({ "commits": null }));

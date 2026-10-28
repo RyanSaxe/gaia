@@ -1,13 +1,12 @@
 import { kind, slot } from "@gaia/schema";
 
 /**
- * A building that stands for one thing in the code: an entity, a file or a
- * definition. Jev decides what each thing stands as, among the forms its
- * importance is offered, and composes the building part by part. The
- * footprint lays out the plan; the body, roof, feature, openings and
- * ornaments all build on that one plan, so they agree by construction. The
- * body, roof and feature are settled first, so the openings and ornaments
- * Jev picks suit them.
+ * A building that represents one entity, file or definition. Jev chooses each
+ * thing's form among the forms its importance allows, and composes the
+ * building part by part. The footprint lays out the plan, and the body, roof,
+ * feature, openings and ornaments all build on that one plan, so they agree by
+ * construction. Jev chooses the body, roof and feature first, so the openings
+ * and ornaments it picks suit them.
  */
 export const structure = kind({
   id: "structure",
@@ -42,9 +41,9 @@ export const structure = kind({
     ["openings", "ornaments"],
   ],
   facts: {
-    // Footprint from the line count of the code it stands for, storeys from
-    // its public surface, and how far a feature reaches (how tall a tower
-    // stands) from how much of the code depends on it.
+    // The footprint scales with the line count of the code it represents,
+    // storeys with its exports, and a feature's reach, such as a tower's
+    // height, with how much code depends on it.
     size: (e) => Math.min(1.25, Math.max(0.8, Math.log2(e.lines + 1) / 13)),
     floors: (e) => 1 + Math.min(1, e.exports / 40),
     reach: (e) => Math.min(1, e.dependents.length / 8),

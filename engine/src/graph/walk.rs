@@ -1,10 +1,10 @@
-//! The project's files as the world reads them: a snapshot. In a git folder
-//! with a commit, it is the tree of the commit checked out, so untracked and
-//! ignored files and uncommitted edits are never part of the world, and a
-//! submodule is only a pointer. Outside git, in a repository with no commits
-//! yet, or in a folder nothing of which is committed, it is every file on
-//! disk that .gitignore keeps. `project.graph`, the requests
-//! Jev is sent and the journal's code (`project.source`) all read through it.
+//! Reads a project's files as a `Snapshot`, which `project.graph`, the requests
+//! sent to Jev and the journal's code (`project.source`) all read through. In
+//! a git folder with a commit, the snapshot is the checked-out commit's tree, so
+//! untracked and ignored files and uncommitted edits never reach the world, and
+//! a submodule is only a pointer. Outside git, in a repository with no commits,
+//! or in a folder with nothing committed, it is every file on disk that
+//! .gitignore keeps.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -12,21 +12,21 @@ use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex, OnceLock};
 
-/// A file as the snapshot holds it.
+/// A file in a snapshot.
 pub struct Walked {
     /// Relative to the root, with `/` between parts.
     pub path: String,
     pub bytes: u64,
     pub hash: String,
-    /// None when the file is binary: a zero byte in its first 8,000.
+    /// None when the file is binary, which means a zero byte in its first 8,000 bytes.
     pub text: Option<String>,
 }
 
-/// Files larger than this are left out of the world unread: bundles, data
-/// dumps and vendored blobs, never code a person keeps by hand.
+/// The snapshot leaves out larger files unread. They are bundles, data dumps
+/// and vendored blobs, not code a person writes by hand.
 const MAX_FILE_BYTES: u64 = 2 * 1024 * 1024;
 
-/// FNV-1a over the file's bytes: a content identity, not a security hash.
+/// FNV-1a over the bytes. It identifies content and is not a security hash.
 pub fn content_hash(bytes: &[u8]) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for b in bytes {
@@ -42,14 +42,16 @@ pub struct Snapshot {
     at: Option<At>,
 }
 
-/// A commit's tree under the root: every blob in it, by path relative to the root.
+/// A commit's tree under the root. `blobs` holds each blob's path relative to
+/// the root, its object id and its size.
 struct At {
     commit: String,
     blobs: Vec<(String, String, u64)>,
 }
 
 impl Snapshot {
-    /// What `root` is read from now: its commit checked out, or the disk.
+    /// The snapshot of `root` now. It is the checked-out commit, or the disk when
+    /// there is no commit or the commit has nothing under `root`.
     pub fn of(root: &Path) -> Snapshot {
         let at = head_of(root).and_then(|commit| At::read(root, commit));
         Snapshot { root: root.to_path_buf(), at }
@@ -66,7 +68,7 @@ impl Snapshot {
         self.at.as_ref().map(|a| a.commit.as_str())
     }
 
-    /// Every file, read, in path order.
+    /// Every file with its contents read, in path order.
     pub fn files(&self) -> Vec<Walked> {
         match &self.at {
             Some(at) => {
@@ -81,10 +83,10 @@ impl Snapshot {
         }
     }
 
-    /// One file's text, by its path relative to the root: None when the
-    /// snapshot has no such file or it is binary. Every slice of the
-    /// understanding pass plans every request again, so texts are read once
-    /// per commit, or per change on disk.
+    /// One file's text by its path relative to the root, or None when the
+    /// snapshot has no such file or it is binary. Each slice of the
+    /// understanding pass plans every request again, so the snapshot caches
+    /// texts per commit, or per change on disk.
     pub fn text(&self, path: &str) -> Option<Arc<str>> {
         let relative = Path::new(path);
         if path.is_empty() || !relative.components().all(|c| matches!(c, Component::Normal(_))) {
@@ -128,7 +130,7 @@ fn head_of(root: &Path) -> Option<String> {
 impl At {
     /// The blobs of `commit`'s tree under `root`, or None when it has none there.
     fn read(root: &Path, commit: String) -> Option<At> {
-        // Run in the root, ls-tree lists only what lies under it, by paths relative to it.
+        // Run in the root, `ls-tree` lists only the blobs under it, with paths relative to it.
         let out = git(root).args(["ls-tree", "-r", "-z", "-l", &commit]).output().ok()?;
         if !out.status.success() {
             return None;
@@ -143,7 +145,7 @@ impl At {
             let (Some(mode), Some(kind), Some(object), Some(size)) = (meta.next(), meta.next(), meta.next(), meta.next()) else {
                 continue;
             };
-            // A submodule is a pointer to another project, and a link could lead anywhere.
+            // Skip submodules, which point to another project, and symlinks, which could point anywhere.
             if kind != "blob" || mode == "120000" {
                 continue;
             }
@@ -157,7 +159,7 @@ impl At {
         (!blobs.is_empty()).then_some(At { commit, blobs })
     }
 
-    /// Every blob's bytes, from one `git cat-file --batch`. A blob a partial clone never fetched is left out.
+    /// Every blob's bytes, from one `git cat-file --batch`. It leaves out a blob that a partial clone never fetched.
     fn files(&self, root: &Path) -> Vec<Walked> {
         let Ok(mut child) = git(root).args(["cat-file", "--batch"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
             return Vec::new();
@@ -205,7 +207,8 @@ fn walked(path: String, bytes: Vec<u8>) -> Walked {
     }
 }
 
-/// A file's text on disk, read again only when it changes, and only when it lies inside the root.
+/// A file's text on disk, or None when the file is outside the root. It rereads
+/// the file only when its modified time or size changes.
 fn disk_text(root: &Path, relative: &Path) -> Option<Arc<str>> {
     type Cache = HashMap<PathBuf, (std::time::SystemTime, u64, Arc<str>)>;
     static CACHE: OnceLock<Mutex<Cache>> = OnceLock::new();
@@ -227,18 +230,18 @@ fn disk_text(root: &Path, relative: &Path) -> Option<Arc<str>> {
     Some(text)
 }
 
-/// Every regular file under `root` that .gitignore keeps, in path order.
-/// Nothing outside the root is ever read: symlinks, to files or
-/// directories, are skipped, never followed, and so is any folder below the
-/// root that is a git checkout of its own (a worktree, a nested repository or
-/// a submodule), which is another project.
+/// Every regular file under `root` that .gitignore keeps, in path order. It
+/// never reads outside the root. It skips symlinks to files or directories
+/// without following them. It also skips any folder below the root that is a
+/// git checkout of its own, such as a worktree, a nested repository or a
+/// submodule, since that is another project.
 fn disk(root: &Path) -> Vec<Walked> {
     let mut out = Vec::new();
     let walker = ignore::WalkBuilder::new(root)
         .hidden(false)
         .git_global(false)
         .require_git(false)
-        // A link could lead anywhere on the disk, and a cloned repository chooses its own.
+        // A symlink could point anywhere on the disk, and a cloned repository's author chooses its targets.
         .follow_links(false)
         .filter_entry(|e| e.file_name() != ".git" && !(e.depth() > 0 && e.file_type().is_some_and(|t| t.is_dir()) && e.path().join(".git").exists()))
         .build();
@@ -266,7 +269,7 @@ fn disk(root: &Path) -> Vec<Walked> {
 mod tests {
     use super::*;
 
-    /// A fresh folder for one test, and git run in it.
+    /// A fresh folder for one test, and a function that runs git in it.
     fn repo(name: &str) -> (PathBuf, impl Fn(&[&str]) -> String) {
         let root = std::env::temp_dir().join(format!("gaia-snapshot-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -311,7 +314,7 @@ mod tests {
         assert_eq!(snapshot.text("new.ts"), None);
         assert_eq!(snapshot.text("ignored.ts"), None);
         assert_eq!(snapshot.text("../a.ts"), None);
-        // The graph says which commit it read.
+        // The graph records which commit it read.
         assert_eq!(crate::graph::build(&root).unwrap().commit, Some(head));
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -329,7 +332,7 @@ mod tests {
         let paths: Vec<String> = snapshot.files().into_iter().map(|w| w.path).collect();
         assert_eq!(paths, vec!["src/b.ts".to_string()]);
         assert_eq!(snapshot.text("src/b.ts").as_deref(), Some("export const b = 2;\n"));
-        // A folder nothing of which is committed is read from the disk.
+        // A folder with nothing committed reads from the disk.
         std::fs::create_dir_all(root.join("fresh")).unwrap();
         std::fs::write(root.join("fresh/c.ts"), "export const c = 3;\n").unwrap();
         let fresh = Snapshot::of(&root.join("fresh"));
@@ -360,7 +363,7 @@ mod tests {
         std::fs::create_dir_all(root.join(".claude/worktrees/agent/src")).unwrap();
         std::fs::create_dir_all(root.join("vendor/lib")).unwrap();
         std::fs::write(root.join("src/a.ts"), "export const a = 1;\n").unwrap();
-        // A worktree's .git is a file pointing at its repository; a nested repository's is a folder.
+        // A worktree's .git is a file that points at its repository. A nested repository's .git is a folder.
         std::fs::write(root.join(".claude/worktrees/agent/.git"), "gitdir: /elsewhere\n").unwrap();
         std::fs::write(root.join(".claude/worktrees/agent/src/a.ts"), "export const a = 1;\n").unwrap();
         std::fs::create_dir_all(root.join("vendor/lib/.git")).unwrap();

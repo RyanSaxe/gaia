@@ -5,7 +5,7 @@
   pick a layer by velocity. CC11 stays the expression (volume) control, which sfizz applies by default.
 - vcsl-harp.sfz, vcsl-glock.sfz and fs-celesta.sfz, in the cache's patches/: VCSL's concert harp and soft
   glockenspiel, and the clean, fully decaying notes of a Freesound celesta's middle octave. Each sample is measured
-  (pitch and peak) so the patch tunes and levels it; the celesta's notes are converted to WAV with their lead-in
+  (pitch and peak) so the patch tunes and levels it, and the celesta's notes are converted to WAV with their lead-in
   silence skipped.
 """
 import re
@@ -26,13 +26,13 @@ CELESTA_NOTES = {420489: 69, 420488: 71, 420493: 75, 420491: 76, 420495: 77, 420
 
 
 def write_if_changed(path, text, encoding="utf-8"):
-    """Leave a patch that already reads the same untouched: another render may be reading it."""
+    """Leaves a patch with the same text untouched, because another render may be reading it."""
     if not path.exists() or path.read_text(encoding=encoding) != text:
         path.write_text(text, encoding=encoding)
 
 
 def parse(text):
-    """[(header, {opcode: value})] in file order; comments dropped."""
+    """[(header, {opcode: value})] in file order, with comments dropped."""
     text = re.sub(r"//[^\n]*", "", text)
     items = []
     cur = None

@@ -1,10 +1,9 @@
-//! The rules: an import or call becomes an edge when exactly one target
-//! fits, and anything with several possible targets goes pending,
-//! with every candidate, for Jev. Anything with none is outside the
-//! repository and gets neither, as does an import of a module its language
-//! provides or a package the project installs. The rules read paths, the
-//! language table, the manifests' installs and the parse; no file name means
-//! anything to them.
+//! Resolves each import and call to an edge when exactly one target fits, or to
+//! a pending reference with every candidate for Jev when several fit. A
+//! reference with no target, or an import of a module its language provides or
+//! a package the project installs, points outside the repository and becomes
+//! neither. The rules read only paths, the language table, the manifests'
+//! installs and the parse, and treat no file name specially.
 
 use super::languages::Spec;
 use super::model::{Edge, Filled, PendingRef, Span};
@@ -12,7 +11,7 @@ use super::parse::{Aliased, FileParse, RefKind};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-/// One file, as the rules see it.
+/// One file, with the fields the rules read.
 pub struct Unit<'a> {
     pub path: &'a str,
     pub spec: Option<&'static Spec>,
@@ -31,13 +30,13 @@ impl Unit<'_> {
     }
 }
 
-/// A workspace package, as its manifest declares it: an import that spells
-/// its name, or a subpath through its exports, means a file in it.
+/// A workspace package from its manifest. An import of its name, or of a
+/// subpath through its exports, resolves to a file in it.
 pub struct Package<'a> {
     pub name: &'a str,
     pub root: &'a str,
     pub entry: Option<&'a str>,
-    /// Subpath (`.`, `./sub`) to the file it exports there.
+    /// Maps each subpath, such as `.` or `./sub`, to the file it exports.
     pub exports: &'a std::collections::BTreeMap<String, String>,
 }
 
@@ -46,17 +45,17 @@ pub struct Resolved {
     pub pending: Vec<PendingRef>,
 }
 
-/// What an alias stands for: `name` in `files`, the files its import names.
-/// With no name it is the module itself, and with no files its import leads
-/// outside the repository, where the alias reaches nothing.
+/// What an alias binds to, which is `name` in `files`, the files its import
+/// names. With no name, it binds the module itself. With no files, its import
+/// points outside the repository and the alias resolves to nothing.
 struct Bound<'a> {
     name: Option<&'a str>,
     files: Vec<usize>,
 }
 
-/// What a file passes on to the files that import it from the files it
-/// imports: each name it re-exports, with what the name stands for there,
-/// and the files whose every export it re-exports.
+/// What a file re-exports from the files it imports, for the files that import
+/// it. `named` maps each re-exported name to what it binds to there, and
+/// `every` lists the files whose every export it re-exports.
 #[derive(Default)]
 struct Passes<'a> {
     named: HashMap<&'a str, Vec<Bound<'a>>>,
@@ -66,16 +65,16 @@ struct Passes<'a> {
 /// How many re-exports deep the call rule follows a name.
 const HOPS: usize = 4;
 
-/// Where a name leads from the files `from`, through what they pass on.
+/// Where a name resolves from the files `from`, through their re-exports.
 struct Followed<'a> {
-    /// Each file, with the name it knows it by, that defines it a re-export or more away.
+    /// Each file that defines the name one or more re-exports away, with the name that file uses for it.
     defined: Vec<(usize, &'a str)>,
-    /// The files the name stands for as a whole module, as `ns` does in `export * as ns from './x'`.
+    /// The files the name refers to as a whole module, as `ns` does in `export * as ns from './x'`.
     modules: Vec<usize>,
 }
 
-/// Follows `name` from the files `from` through what each passes on, stopping
-/// at a file that defines it, after `HOPS` re-exports, and at a file and name
+/// Follows `name` from the files `from` through their re-exports. It stops at a
+/// file that defines it, after `HOPS` re-exports, or at a file and name it has
 /// already seen, so a cycle ends.
 fn follow<'a>(
     passes: &[Passes<'a>],
@@ -195,8 +194,8 @@ impl<'a> Paths<'a> {
     }
 
     /// The node ids a path names: the file itself, the file with any of the
-    /// family's extensions, or the directory. A file wins over a directory of
-    /// the same name, as a Rust module `filter.rs` does over `filter/`.
+    /// family's extensions, or the directory. A file takes precedence over a
+    /// directory of the same name, as a Rust module `filter.rs` does over `filter/`.
     fn named(&self, path: &str, extensions: &[&str]) -> Vec<String> {
         let mut files: Vec<String> = Vec::new();
         if self.files.contains(path) {
@@ -216,8 +215,8 @@ impl<'a> Paths<'a> {
         if !files.is_empty() {
             return files;
         }
-        // A directory counts only when it holds code the import could mean,
-        // so `crate::config` never names a folder of YAML.
+        // A directory counts only when it contains code in the import's family,
+        // so `crate::config` never resolves to a folder of YAML.
         let holds = extensions.is_empty()
             || extensions
                 .iter()
@@ -228,8 +227,8 @@ impl<'a> Paths<'a> {
         Vec::new()
     }
 
-    /// True when a node id is a file with one of `extensions`, or a
-    /// directory holding one somewhere below. No extensions admit anything.
+    /// True when a node id is a file with one of `extensions`, or a directory
+    /// with one somewhere below. Empty `extensions` accept any node.
     fn of_family(&self, id: &str, extensions: &[&str]) -> bool {
         if extensions.is_empty() {
             return true;
@@ -268,8 +267,8 @@ impl<'a> Paths<'a> {
     }
 }
 
-/// The specifier as written, cleaned: a Rust `use` list cut at its `{` and a
-/// `use … as b` at its `as`, a glob or query dropped, angle brackets stripped.
+/// Cleans a specifier as written. It cuts a Rust `use` list at its `{` and a
+/// `use … as b` at its `as`, drops a glob or query, and strips angle brackets.
 fn clean_specifier(s: &str) -> String {
     let mut s = s.trim().trim_matches(['<', '>', ';']).to_string();
     if let Some(i) = s.find('{') {
@@ -309,8 +308,8 @@ fn segment_ends(s: &str) -> Vec<usize> {
     ends
 }
 
-/// The leading parts of an import's specifier, longest first: the names a
-/// configuration may give the package it comes from.
+/// The leading parts of an import's specifier, longest first. These are the
+/// names a configuration may give the package it comes from.
 pub(crate) fn leading_names(text: &str) -> Vec<String> {
     let s = clean_specifier(text);
     segment_ends(&s)
@@ -338,7 +337,7 @@ struct Rules<'a> {
     installed: &'a BTreeMap<String, BTreeSet<String>>,
     /// Files that hold configuration rather than code, by index.
     configs: Vec<usize>,
-    /// Candidates by specifier: a package is often imported from many files.
+    /// Candidates cached by specifier, since many files often import the same package.
     candidates_of: RefCell<HashMap<String, Vec<String>>>,
 }
 
@@ -352,7 +351,7 @@ impl Rules<'_> {
             .collect()
     }
 
-    /// `in_module` says the import sits inside a module definition.
+    /// `in_module` is true when the import is inside a module definition.
     fn import(&self, k: usize, text: &str, in_module: bool) -> Outcome {
         let unit = &self.units[k];
         let spec = unit.spec;
@@ -363,7 +362,7 @@ impl Rules<'_> {
         let ext = self.family_extensions(spec);
         let here = dir_of(unit.path);
 
-        // Relative forms resolve from where they point.
+        // Relative forms resolve from the place their prefix names.
         for r in spec.map(|s| s.relative.as_slice()).unwrap_or_default() {
             // A prefix on its own, as Rust's `use super::*` cleans to `super`.
             let bare = r.prefix.trim_end_matches([':', '/']);
@@ -373,7 +372,7 @@ impl Rules<'_> {
                 None => continue,
             };
             if in_module && r.in_module.as_deref() == Some("file") {
-                // One step up from a module inside the file is the file; any
+                // One step up from a module inside the file is the file. Any
                 // further step resolves as it would at the file's top level.
                 if rest == bare || rest.starts_with(r.prefix.as_str()) {
                     return self.import(k, rest, false);
@@ -462,10 +461,10 @@ impl Rules<'_> {
         self.candidates(k, &s)
     }
 
-    /// True when an import names a module its language provides or a
-    /// package the project installs, or a module inside one, which no folder
-    /// of the project ever is. A name followed by one of the family's
-    /// extensions is a file named like it: C++'s `vector` is not `vector.h`.
+    /// True when an import names a module its language provides, a package the
+    /// project installs, or a module inside one. None of these is ever a folder
+    /// of the project. A name followed by one of the family's extensions is a
+    /// file with a similar name, so C++'s `vector.h` is not the builtin `vector`.
     fn provided(&self, spec: Option<&Spec>, s: &str, ext: &[&str]) -> bool {
         let Some(spec) = spec else { return false };
         let names = |name: &str| {
@@ -485,9 +484,10 @@ impl Rules<'_> {
             .any(|name| names(name))
     }
 
-    /// The file an import naming a workspace package means: the target its
-    /// exports give the subpath, else its entry for the package itself, else
-    /// the subpath under its root. None when no package has the name.
+    /// The file an import of a workspace package resolves to. It is the target
+    /// the package's exports give the subpath, else the package's entry for the
+    /// package itself, else the subpath under its root. None when no package
+    /// has the name.
     fn package(&self, s: &str, ext: &[&str]) -> Option<Outcome> {
         let pkg = self
             .packages
@@ -518,10 +518,10 @@ impl Rules<'_> {
         }
     }
 
-    /// A path, then the same with one and two trailing item names dropped,
-    /// as `crate::filter::SizeFilter` names `src/filter/`. `named` is how
-    /// many segments the specifier itself gave, and at least one of them
-    /// always stays, so an import never resolves to where it started.
+    /// Tries a path, then the same path with one and two trailing item names
+    /// dropped, as `crate::filter::SizeFilter` resolves to `src/filter/`.
+    /// `named` is how many segments the specifier itself gave. At least one of
+    /// them always stays, so an import never resolves to where it started.
     fn with_items_dropped(&self, target: &str, named: usize, ext: &[&str]) -> Option<Outcome> {
         let parts: Vec<&str> = target.split('/').collect();
         for drop in 0..=2usize.min(named.saturating_sub(1)) {
@@ -536,9 +536,9 @@ impl Rules<'_> {
         None
     }
 
-    /// Every target an import might mean, for Jev: first the directories
-    /// whose configuration names the specifier's leading segments, then the
-    /// paths ending with its trailing segments.
+    /// Every target an import might resolve to, for Jev. First come the
+    /// directories whose configuration names the specifier's leading segments,
+    /// then the paths ending with its trailing segments.
     fn candidates(&self, k: usize, s: &str) -> Outcome {
         let own = self.units[k].id();
         let spec = self.units[k].spec;
@@ -581,8 +581,8 @@ impl Rules<'_> {
                 if named.is_empty() && !rest.is_empty() {
                     // A sub-path of a package or alias the configuration names,
                     // such as `zustand/vanilla` or `@/utils`, may name a file of
-                    // its family below it by its last segment. A file wins over
-                    // a directory of the same name beside it, as in `named`.
+                    // its family below it by its last segment. A file takes precedence
+                    // over a directory of the same name beside it, as in `named`.
                     let below = |id: &String| {
                         let p = id.trim_start_matches("file:").trim_start_matches("dir:");
                         dir.is_empty() || p.starts_with(&format!("{dir}/"))
@@ -631,8 +631,8 @@ impl Rules<'_> {
     }
 }
 
-/// What an alias stands for, given the files its import names. A default
-/// import binds the default of the one file that exports one; with none, or
+/// What an alias binds to, given the files its import names. A default import
+/// binds the default export of the one file that has one. With none or
 /// several, the alias keeps its own name.
 fn binding<'a>(units: &[Unit<'a>], of: &'a Aliased, files: Vec<usize>) -> Option<Bound<'a>> {
     Some(match of {
@@ -680,7 +680,7 @@ pub fn run(
     };
     let mut edges: Vec<Edge> = Vec::new();
     let mut pending: Vec<PendingRef> = Vec::new();
-    // One edge per site: two calls from one definition to another are two edges.
+    // One edge per site, so two calls from one definition to another are two edges.
     let mut seen: HashSet<(String, String, &'static str, u32)> = HashSet::new();
     let mut push =
         |edges: &mut Vec<Edge>, from: String, to: String, kind: &'static str, at: Span| {
@@ -695,8 +695,9 @@ pub fn run(
             }
         };
 
-    // Imports first: the call rule looks in the files each file imports, and
-    // through the names each binds, with the definition each import sits in.
+    // Imports come first, because the call rule searches the files each file
+    // imports and the names each import binds, with the definition each import
+    // is in.
     let mut imported: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); units.len()];
     type Bindings<'a> = HashMap<&'a str, Vec<(Option<usize>, Bound<'a>)>>;
     let mut bound: Vec<Bindings> = units.iter().map(|_| HashMap::new()).collect();
@@ -721,7 +722,7 @@ pub fn run(
         };
         for r in p.refs.iter().filter(|r| r.kind == RefKind::Import) {
             let outcome = rules.import(k, &r.text, in_module(r.from));
-            // An alias whose import Jev must place keeps its own name.
+            // An alias whose import Jev must resolve keeps its own name.
             let files = match &outcome {
                 Outcome::Edge(to) => Some(files_of(to)),
                 Outcome::Outside => Some(Vec::new()),
@@ -775,8 +776,9 @@ pub fn run(
             by_name.entry(d.name.as_str()).or_default().push((k, i));
         }
     }
-    // What a file passes on of its own: a definition at its top level that,
-    // where its language marks them, it exports. A re-export stops there.
+    // What a file re-exports of its own: a top-level definition that it
+    // exports, where its language marks exports. `follow` stops at such a
+    // definition.
     let own = |k: usize, i: usize| {
         let (Some(p), Some(spec)) = (units[k].parse, units[k].spec) else {
             return false;
@@ -797,8 +799,8 @@ pub fn run(
             continue;
         };
         for r in p.refs.iter().filter(|r| r.kind != RefKind::Import) {
-            // A definition inside a function is local to it: visible only to
-            // code inside that function.
+            // A definition inside a function is visible only to code inside
+            // that function.
             let visible = |kk: usize, i: usize| -> bool {
                 let Some(pp) = units[kk].parse else {
                     return false;
@@ -815,8 +817,8 @@ pub fn run(
                 matches!(q, "self" | "this" | "Self" | "cls" | "@")
                     || caller.and_then(|d| d.self_name.as_deref()) == Some(q)
             };
-            // A name an import binds stands for what it binds, in the files the
-            // import names: `buildV1()` calls `buildSite` there, and `ns.walk()`
+            // A name an import binds refers to what it binds in the files the
+            // import names. So `buildV1()` calls `buildSite` there, and `ns.walk()`
             // calls `walk` in `ns`'s module. An import inside a definition binds
             // only there, as Python's `from m import a as f` inside a function does.
             let alias = |name: &str| {
@@ -836,10 +838,10 @@ pub fn run(
                     None => (r.text.as_str(), Some(q), None),
                 },
             };
-            // A file the call looks in may pass a name on from another, as a
-            // package's index does: `ns.walk()` looks in the module an
-            // `export * as ns from './x'` names, and `walk()` reaches the walk
-            // an `export { walk } from './x'` names.
+            // A file the rule searches may re-export a name from another file, as
+            // a package's index does. `ns.walk()` searches the module that
+            // `export * as ns from './x'` names, and `walk()` resolves to the
+            // `walk` that `export { walk } from './x'` names.
             fn looked<'s>(
                 within: Option<&'s Vec<usize>>,
                 imported: &'s BTreeSet<usize>,
@@ -891,11 +893,11 @@ pub fn run(
                             .parse
                             .is_some_and(|pp| pp.defs[*i].role == "macro"))
             });
-            // What the call names before its name decides how sure the rule can be.
-            // `self.push` in Batch or `Batch::new` names its owner; `utils.join` its
-            // file or package. An unqualified call reaches no other class's
-            // method. A receiver the rule cannot place, such as `err.Error()`,
-            // leaves the call to Jev with its candidates.
+            // The call's qualifier decides how sure the rule can be. `self.push`
+            // in Batch and `Batch::new` name the owner, and `utils.join` names a
+            // file or package. An unqualified call never resolves to another
+            // class's method. When the rule cannot place a receiver, such as
+            // `err` in `err.Error()`, it leaves the call to Jev with its candidates.
             let caller_owner = caller.and_then(|d| d.owner.as_deref());
             let owner_of =
                 |kk: usize, i: usize| units[kk].parse.and_then(|pp| pp.defs[i].owner.as_deref());
@@ -928,10 +930,10 @@ pub fn run(
                     match (named.is_empty(), r.path) {
                         (false, _) => (named, true),
                         // A path that names none of them, as `Vec::new` names
-                        // no `new` here, leads outside.
+                        // no `new` here, resolves outside the repository.
                         (true, true) => (Vec::new(), false),
-                        // A value the rule cannot place reaches a method, or,
-                        // where functions are values, any of them.
+                        // A value the rule cannot place may resolve to any
+                        // method, or to any function where functions are values.
                         (true, false) => (
                             all.iter()
                                 .copied()
@@ -943,8 +945,8 @@ pub fn run(
                         ),
                     }
                 }
-                // Java, C#, Kotlin, Swift, C++ and Ruby reach their own class's
-                // methods without `self`; Python, JavaScript, Go and Rust don't.
+                // Java, C#, Kotlin, Swift, C++ and Ruby call their own class's
+                // methods without `self`. Python, JavaScript, Go and Rust don't.
                 None => (
                     all.iter()
                         .copied()
@@ -956,8 +958,8 @@ pub fn run(
                     true,
                 ),
             };
-            // What a re-export passes on comes after what the imports name
-            // themselves, and before a neighbour that merely shares the name.
+            // A re-exported name ranks after names the imported files define
+            // themselves, and before a neighbour that only shares the name.
             let tiers: [&dyn Fn(usize, usize) -> bool; 4] = [
                 &|kk, _| kk == k,
                 &|kk, _| imported[k].contains(&kk) || within.is_some_and(|w| w.contains(&kk)),
@@ -996,7 +998,7 @@ pub fn run(
                         .map(|(kk, i)| units[*kk].def_ids[*i].clone())
                         .collect(),
                 }),
-                // A type or trait named in several places waits for its own rule.
+                // A type or trait named in several places has no rule yet.
                 _ => {}
             }
         }

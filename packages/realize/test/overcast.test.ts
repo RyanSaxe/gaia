@@ -1,4 +1,4 @@
-// An overcast sky dims and evens the light under it and pales its breaks; a fair sky leaves the daylight exactly as
+// An overcast sky dims and evens the light under it and pales its breaks. A fair sky leaves the daylight exactly as
 // it is, so every fair world looks as it did before skies could be overcast.
 
 import { describe, expect, it } from "vitest";

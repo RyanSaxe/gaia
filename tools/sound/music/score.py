@@ -18,7 +18,7 @@ NAMES = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 
 
 def P(s):
-    """'F#5' -> 78 (C4 = 60); ints pass through."""
+    """'F#5' -> 78 (C4 = 60). Ints pass through."""
     if isinstance(s, int):
         return s
     n = NAMES[s[0]]
@@ -82,7 +82,7 @@ class Part:
         self.notes.append((max(0.0, on2 - self.lead), on + dur + legato, P(p), v))
 
     def line(self, b0, rhythm, v, legato=0.03, shape=None):
-        """rhythm: [(pitch or None, beats)]; v may be a number or a function of the note index."""
+        """rhythm: [(pitch or None, beats)]. v may be a number or a function of the note index."""
         b = b0
         for i, (p, d) in enumerate(rhythm):
             if p is not None:
@@ -194,7 +194,7 @@ class Song:
 
 
 # Gaia's theme, in C major, as (pitch, beats): four two-bar phrases in 4/4.
-# P1 rises a sixth and steps down; P2 answers and stops on the dominant; P3 climbs to the high sixth and is left open;
+# P1 rises a sixth and steps down. P2 answers and stops on the dominant. P3 climbs to the high sixth and is left open.
 # P4 comes down to the tonic.
 THEME4 = {
     "P1": [("G4", 1), ("E5", 1.5), ("D5", .5), ("C5", 1), ("D5", 1), ("E5", 1), ("G5", 2)],
@@ -203,7 +203,7 @@ THEME4 = {
     "P4": [("G5", 1.5), ("F5", .5), ("E5", 1), ("D5", 1), ("C5", 4)],
 }
 def tr(rhythm, semis, minor=False):
-    """Transpose a phrase; minor=True flattens the 3rd, 6th and 7th degrees of C (E, A, B) before transposing."""
+    """Transposes a phrase. minor=True flattens the 3rd, 6th and 7th degrees of C (E, A, B) before transposing."""
     out = []
     for p, d in rhythm:
         if p is None:

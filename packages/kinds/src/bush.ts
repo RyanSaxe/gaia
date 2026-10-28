@@ -1,9 +1,9 @@
 import { type AnyKind, type Slot, kind, slot } from "@gaia/schema";
 
 /**
- * A bush that stands for one thing in the code, as a tree does, composed from
- * a bush's parts alone (its `Composing` library): a shrub's, a bramble's or a
- * sapling's frame, its bark, a crown on the frame and anything hanging in it.
+ * A bush that represents one thing in the code, as a tree does. Jev composes it
+ * from a bush's parts alone (its `Composing` library): a shrub's, a bramble's
+ * or a sapling's frame, its bark, a crown on the frame and anything hanging in it.
  */
 export const bush = kind({
   id: "bush",
@@ -24,7 +24,7 @@ export const bush = kind({
   facts: {},
 });
 
-/** `k`'s slots, each asked in `asks`' words instead of its own: every slot needs words of its own. */
+/** `k`'s slots, each with its `ask` replaced by the words in `asks`. It throws unless `asks` names every slot and no other. */
 function askedAs(k: AnyKind, asks: Readonly<Record<string, string>>): Record<string, Slot> {
   const names = Object.keys(k.slots);
   const missing = names.filter((n) => asks[n] === undefined);
@@ -34,10 +34,10 @@ function askedAs(k: AnyKind, asks: Readonly<Record<string, string>>): Record<str
 }
 
 /**
- * A bush of the wild past the world's land, which stands for no code: the
- * bush kind itself, its slots and parts, so it builds and draws as any bush
- * does, asked in words of the wild land it grows on instead of the code a
- * bush on the land stands for.
+ * A bush of the wild past the world's land, which represents no code. It is
+ * the bush kind with the same slots and parts, so it builds and draws as any
+ * bush does, but its slots' words describe the wild land it grows on instead
+ * of code.
  */
 export const wildBush = kind({
   ...bush,

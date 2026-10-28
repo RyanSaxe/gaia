@@ -1,10 +1,10 @@
 import { kind, slot } from "@gaia/schema";
 
 /**
- * A landmark: a great thing that rises above the land, so a person can see
- * it through the haze and steer by it. It stands for one thing in the code,
- * as a building does: an entity, a file or a definition. Only the things
- * most important to the world are offered it; among them, Jev decides.
+ * A landmark, a large structure that rises above the land, so a person can
+ * see it through the haze and navigate by it. It represents one entity, file
+ * or definition, as a building does. Only the world's most important things
+ * are offered it, and among them Jev decides.
  */
 export const landmark = kind({
   id: "landmark",
@@ -18,7 +18,7 @@ export const landmark = kind({
     palette: slot("Palette", { ask: "its colors say the mood of the code it stands for, and how it stands out from its land." }),
   },
   facts: {
-    // Grows with its reach (how much depends on it) and a little with its size.
+    // Scale grows with how much code depends on it, and a little with its line count.
     scale: (e) => Math.min(1.25, Math.max(0.85, 0.78 + Math.log2(e.dependents.length + 1) / 12 + Math.log2(e.lines + 1) / 160)),
   },
 });

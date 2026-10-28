@@ -70,7 +70,7 @@ const server = createServer((req, res) => {
     res.writeHead(503, { "content-type": "text/plain" }).end("The lab has not built yet. The terminal running pnpm lab:serve shows why.");
     return;
   }
-  // The tag tells the page to post its smoothness reports here.
+  // The meta tag makes the page post its smoothness reports here.
   const html = labPage(bundle).replace("</head>", () => '<meta name="gaia-telemetry" content="/telemetry">\n</head>');
   const gzip = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
   const body = gzip ? gzipSync(html) : Buffer.from(html);

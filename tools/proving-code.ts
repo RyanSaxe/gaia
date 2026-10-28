@@ -1,33 +1,32 @@
-// The proving ground's code: real source for every file the proving ground
-// plans (tools/proving.ts), so the same files test both the world and Jev's
-// judgments of code. Each file is written as its planned health says: a
-// thriving file is small, named and documented steps; a ruined one is long
-// tangles with letters for names, docs about something else, emptied error
-// handlers, state hidden at module level, unrelated helpers, shims marked
-// HACK, copied blocks and TODOs. The manifest says how each file was
-// written: which of those faults it was given, and how badly.
-// The same plan always writes the same code.
+// Writes the proving ground's code: real source for every file the proving
+// ground plans (tools/proving.ts), so the same files test both the world and
+// Jev's judgments of code. Each file follows its planned health. A `thriving`
+// file is small, named and documented steps. A `ruin` file is long tangles
+// with letters for names, docs about something else, emptied error handlers,
+// state hidden at module level, unrelated helpers, shims marked HACK, copied
+// blocks and TODOs. The manifest records which of those faults each file has,
+// and how much. The same plan always writes the same code.
 
 import type { PlannedFacts, PlannedSymbol } from "./proving.ts";
 
 export type Health = "thriving" | "well" | "tired" | "failing" | "ruin" | "decayed";
 
-/** A planned file: its facts, as the proving ground's plan holds them, its health, and the vitality its patch has in the proving ground's world. */
+/** A planned file: its facts from the proving ground's plan, its health, and its patch's vitality in the proving ground's world. */
 export interface PlannedFile {
   readonly facts: PlannedFacts;
   readonly health: Health;
   readonly vitality: number;
 }
 
-/** How badly a file was given one fault: not at all, a little, or throughout. */
+/** How much of one fault a file has: none, a little, or throughout. */
 export type Level = "good" | "fair" | "poor";
 
-/** How one file was written: its plan, and how badly it was given each fault. */
+/** How one file was written: its plan, and how much of each fault it has. */
 export interface ManifestEntry {
   readonly path: string;
-  /** The vitality the file's patch has in the proving ground's world, 0 to 1: what a page shows (decision 43). */
+  /** The vitality of the file's patch in the proving ground's world, 0 to 1, which is what a page shows. */
   readonly vitality: number;
-  /** The plan's word for how the file fares, which picks how it is written; a page never shows it. */
+  /** The plan's health label for the file, which sets how it is written. A page never shows it. */
   readonly health: Health;
   readonly planned: number;
   readonly lines: number;
@@ -164,7 +163,7 @@ const summarize: Recipe = {
   ],
 };
 
-/** What each verb a planned function's name starts with does, so every name says what its code does. */
+/** The recipe for each verb a planned function's name starts with, so every name matches what its code does. */
 const RECIPES: Readonly<Record<string, Recipe>> = {
   gather: {
     doc: (w) => `Gathers the ${w.noun}'s readings that carry \`mark\`, oldest first.`,
@@ -250,7 +249,7 @@ const RECIPES: Readonly<Record<string, Recipe>> = {
     ],
   },
 };
-/** What a class named for a verb gives besides keeping readings: its method, and the helpers it needs. */
+/** What a class named for a verb adds besides keeping readings: its method, and the helpers it needs. */
 const METHODS: Readonly<Record<string, { readonly helpers: readonly string[]; readonly lines: (w: Words) => string[] }>> = {
   gather: { helpers: [], lines: (w) => [`/** Gathers more readings, keeping the newest of each id. */`, `gather(readings: readonly ${w.record}[]): void {`, `  for (const reading of readings) this.add(reading);`, `}`] },
   join: { helpers: [], lines: (w) => [`/** Joins another keeper's readings into this one, the newest of each id winning. */`, `join(other: { all(): ${w.record}[] }): void {`, `  for (const reading of other.all()) this.add(reading);`, `}`] },
@@ -269,7 +268,7 @@ const METHODS: Readonly<Record<string, { readonly helpers: readonly string[]; re
 const verbOf = (agent: string): string => Object.keys(RECIPES).find((verb) => agent.toLowerCase().startsWith(verb.slice(0, 4))) ?? "measure";
 const recipeOf = (name: string): Recipe => RECIPES[Object.keys(RECIPES).find((verb) => name.startsWith(verb)) ?? "measure"] as Recipe;
 
-/** What another file's doc would say: a doc that describes something else. */
+/** Docs that describe something else, as another file's doc would. */
 const WRONG_DOCS = [
   "Parses the configuration file and returns the defaults.",
   "Opens a connection to the database and retries on failure.",
@@ -308,7 +307,7 @@ const HACKS = [
  * A function written as one tangle: `length` lines nested `depth` deep,
  * computing roughly what `recipe` would in the worst way, with letters or
  * abbreviations for names, magic numbers, an emptied handler, copied blocks
- * and TODOs, as `spoil` says.
+ * and TODOs, as `spoil` sets.
  */
 function tangle(name: string, w: Words, length: number, depth: number, spoil: Spoil, r: ReturnType<typeof streamOf>, todo: () => string | null, hack: () => string[] | null, swallow: () => boolean, hidden: boolean): string[] {
   const letter = (): string => (spoil.names >= 0.8 ? r.pick(LETTERS) : spoil.names > 0 && r.next() < spoil.names ? r.pick(ABBREVIATIONS) : r.pick(["total", "count", "level", "best", "seen", "result"]));
@@ -451,7 +450,7 @@ function writeTypeScript(file: PlannedFile, importable: ReadonlyMap<string, Plan
   }
   // Unrelated helpers in a poorly kept file.
   for (let k = 0; k < spoil.unrelated; k++) bodies.push(...(UNRELATED[k % UNRELATED.length] as (n: string) => string[])(UNRELATED_NAMES[k % UNRELATED_NAMES.length] as string), "");
-  // Shared helpers come first, then the functions; a well-kept file fills out its planned length with more small steps.
+  // Shared helpers come first, then the functions.
   for (const h of helpers) out.push(...(HELPERS[h] as (w: Words) => string[])(w), "");
   out.push(...bodies);
   // A well-kept file fills out toward its planned length with the steps it doesn't have yet, each under its own name.
@@ -506,7 +505,7 @@ const EXPECT: Readonly<Record<string, { readonly what: string; readonly call: (n
   carry: { what: "shares the readings between loads", call: (n) => `${n}([west, east], 2)`, gives: "[[east], [west]]" },
 };
 
-/** A test of a file in this health fails, as its facts say its tests do. */
+/** The healths whose files' tests fail, as their facts say. */
 const FAILS: ReadonlySet<Health> = new Set(["failing", "ruin", "decayed"]);
 
 function writeTest(file: PlannedFile, importable: ReadonlyMap<string, PlannedFacts>, health: ReadonlyMap<string, Health>): string {

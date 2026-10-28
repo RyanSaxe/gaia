@@ -1,13 +1,12 @@
-//! A project's entities: the packages and crates its manifests declare. Each
-//! is rooted at the directory of its manifest, which the graph marks with it
-//! (`DirNode::entity`). Only a manifest makes an entity: no file's name decides
-//! what a directory is. The packages those manifests install come from
-//! outside, which the import rule reads (`installed`).
+//! Finds a project's entities, the packages and crates its manifests declare,
+//! each rooted at its manifest's directory (`DirNode::entity`). Only a manifest
+//! makes an entity, never a file's name. `installed` lists the packages the
+//! manifests install from outside, which the import rules read.
 
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// A file as entity detection reads it: its path, and its text when it has one.
+/// A file's path and its text, when it has one.
 pub(crate) struct Listed<'a> {
     pub path: &'a str,
     pub text: Option<&'a str>,
@@ -20,7 +19,7 @@ pub(crate) struct Found {
     pub form: &'static str,
     pub manifest: String,
     pub entry: Option<String>,
-    /// For a package: subpath → target file, from package.json's `exports`.
+    /// For a package, each subpath in package.json's `exports` mapped to its target file.
     pub exports_map: BTreeMap<String, String>,
 }
 
@@ -51,7 +50,7 @@ pub(crate) fn normalize(dir: &str, rel: &str) -> Option<String> {
     Some(parts.join("/"))
 }
 
-/// A value from a TOML section, read line by line: enough for a Cargo.toml's name and description.
+/// Reads a string value from a TOML section line by line, which is enough for a Cargo.toml's package name.
 fn toml_string(text: &str, section: &str, key: &str) -> Option<String> {
     let mut inside = false;
     for line in text.lines() {
@@ -165,11 +164,11 @@ pub(crate) fn manifests(files: &[Listed]) -> Vec<Found> {
 }
 
 /// The packages a project's manifests install, by the language family that
-/// imports them and spelled as its imports spell them: package.json's
-/// dependencies, Cargo.toml's, pyproject.toml's and a requirements file's,
-/// go.mod's requirements and a Gemfile's gems. A package installed from a
-/// path, or one a manifest here names as its own, is left out, since an
-/// import of it means a folder of this project.
+/// imports them, with names spelled as imports spell them. It reads the
+/// dependencies in package.json, Cargo.toml, pyproject.toml and requirements
+/// files, go.mod's requirements and a Gemfile's gems. It leaves out a package
+/// installed from a path and one a manifest here names as its own, since an
+/// import of either means a folder of this project.
 pub(crate) fn installed(files: &[Listed]) -> BTreeMap<String, BTreeSet<String>> {
     let mut named = Named::default();
     for f in files {
@@ -207,7 +206,7 @@ pub(crate) fn installed(files: &[Listed]) -> BTreeMap<String, BTreeSet<String>> 
 struct Named {
     /// Installed from outside.
     installs: BTreeMap<&'static str, BTreeSet<String>>,
-    /// A folder of this project: a manifest's own name, or a package installed from a path.
+    /// Names that mean a folder of this project: a manifest's own name, or a package installed from a path.
     here: BTreeMap<&'static str, BTreeSet<String>>,
 }
 
@@ -346,8 +345,10 @@ fn python_name(name: &str) -> String {
     name.to_lowercase().replace('-', "_")
 }
 
-/// The distribution a requirement names (`requests[socks]>=2 ; python_version > "3"`),
-/// here when it installs from a path. An option such as `-r` names none.
+/// Adds the distribution a requirement line names, such as `requests` in
+/// `requests[socks]>=2 ; python_version > "3"`. A `file:` requirement counts as
+/// a folder of this project. A line that starts with `-`, `.` or `/`, such as
+/// an `-r` option or a path, names none.
 fn requirement(line: &str, named: &mut Named) {
     let line = line.split('#').next().unwrap_or("").trim();
     if line.starts_with(['-', '.', '/']) {

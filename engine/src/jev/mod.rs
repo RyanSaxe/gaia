@@ -1,7 +1,7 @@
-//! Jev: the client that sends requests to OpenRouter (`client.rs`), and the
-//! runner that decides what to ask Jev about the code graph, and when
-//! (`runner.rs`), with the calls it asks (`calls.rs`, and the understanding
-//! pass's in `axes.rs`).
+//! Jev, the model that answers Gaia's questions about code. `client.rs` sends
+//! requests to OpenRouter. `runner.rs` chooses which questions to send about the
+//! code graph, and when, using the calls in `calls.rs` and the understanding
+//! pass's calls in `axes.rs`.
 
 mod axes;
 mod calls;

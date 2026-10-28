@@ -1,12 +1,8 @@
-//! Sends typed requests through OpenRouter's Decisions API, enabled by
-//! `GAIA_JEV=live`. Estimates require no network or key access. The key comes
-//! from `OPENROUTER_API_KEY` and reaches curl through stdin, never through
-//! command-line arguments or the engine's JSON-RPC protocol.
-//!
-//! Tests point the connector at a local stand-in for OpenRouter with
-//! `GAIA_JEV_ENDPOINT`, which accepts only a loopback address. A local
-//! endpoint is sent a placeholder key and the configured key is never read, so the
-//! person's key can only ever go to OpenRouter.
+//! Sends typed requests through OpenRouter's Decisions API when
+//! `GAIA_JEV=live`. The key comes from `OPENROUTER_API_KEY` and reaches curl
+//! only through stdin, never through command-line arguments or the engine's
+//! JSON-RPC protocol. `endpoint` keeps the key from going anywhere but
+//! OpenRouter.
 
 use serde_json::{Value, json};
 use std::io::Write;
@@ -15,14 +11,14 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 pub const ENDPOINT: &str = "https://openrouter.ai/api/alpha/decisions";
-/// USD per million input tokens for typesafe/jev-1.13; output tokens are free.
-/// From OpenRouter's model page as recorded on 2026-10-06.
+/// USD per million input tokens for typesafe/jev-1.13. Output tokens are free.
+/// From OpenRouter's model page on 2026-10-06.
 pub const USD_PER_MILLION_INPUT: f64 = 0.042;
 /// Maximum concurrent requests. The runner reduces concurrency on overload.
 pub const CONCURRENCY: usize = 64;
 /// OpenRouter's own example request is 858 bytes of JSON billed as 476 input
-/// tokens, so Jev counts about 1.8 bytes per token. An estimate until a live
-/// run reports `usage.input_tokens`.
+/// tokens, so Jev bills about 1.8 bytes per token. `price` uses it as an
+/// estimate until a live run reports `usage.input_tokens`.
 pub const BYTES_PER_TOKEN: f64 = 1.8;
 /// The key a local stand-in for OpenRouter receives in place of the person's.
 pub const LOCAL_KEY: &str = "local-stand-in";
@@ -32,7 +28,7 @@ pub fn live() -> bool {
     std::env::var("GAIA_JEV").is_ok_and(|v| v == "live")
 }
 
-/// Where requests go: OpenRouter, or a local stand-in for it (tests only).
+/// Where requests go: OpenRouter, or a local stand-in for it that only tests use.
 enum Endpoint {
     OpenRouter,
     Local(String),
@@ -47,7 +43,10 @@ impl Endpoint {
     }
 }
 
-/// OpenRouter, unless `GAIA_JEV_ENDPOINT` names a loopback address.
+/// OpenRouter, unless `GAIA_JEV_ENDPOINT` names a loopback address, which tests
+/// set for a local stand-in. Any other address is an error. A local endpoint
+/// gets `LOCAL_KEY` and the configured key is never read, so the person's key
+/// only goes to OpenRouter.
 fn endpoint() -> Result<Endpoint, String> {
     match std::env::var("GAIA_JEV_ENDPOINT") {
         Err(_) => Ok(Endpoint::OpenRouter),
@@ -83,6 +82,7 @@ pub fn price(request: &Value) -> (String, u64, f64) {
 }
 
 /// What a batch would send: its endpoint, each body's size and tokens, and the totals.
+/// It needs no network or key.
 pub fn dry_run(requests: &[Value]) -> Value {
     let priced: Vec<(String, u64, f64)> = requests.iter().map(price).collect();
     json!({
@@ -114,8 +114,8 @@ fn key(endpoint: &Endpoint) -> Result<String, String> {
         })
 }
 
-/// Why one request failed: Jev said it was overloaded (429 or 503, after
-/// curl's own retries), or anything else.
+/// Why one request failed. `Overloaded` means Jev returned 429 or 503 after
+/// curl's own retries. `Other` is any other failure.
 pub enum Failure {
     Overloaded(String),
     Other(String),
@@ -131,8 +131,8 @@ impl Failure {
 
 /// Posts one request with curl, passing credentials and body on stdin to
 /// avoid exposing them in arguments or exceeding command-line limits. curl
-/// retries a transient failure (a timeout, 429 or 5xx) twice, and gives up on
-/// one request after 90 seconds.
+/// retries a timeout, 429 or 5xx twice, and gives up on a request after 90
+/// seconds.
 fn send(url: &str, key: &str, request: &Value) -> Result<Value, Failure> {
     let started = Instant::now();
     let mut child = Command::new("curl")
@@ -208,15 +208,16 @@ fn send(url: &str, key: &str, request: &Value) -> Result<Value, Failure> {
     }))
 }
 
-/// Sends every request, CONCURRENCY at a time, answering in the order asked.
-/// Each answer is a `JevResponse`, or `{ "error": … }` for a request that
-/// failed on its own; the whole batch fails only when nothing can be sent.
+/// Sends every request, `CONCURRENCY` at a time, and returns the answers in
+/// request order. Each answer is a `JevResponse`, or `{ "error": … }` for a
+/// request that failed on its own. The whole batch fails only when nothing can
+/// be sent.
 pub fn batch(requests: Vec<Value>) -> Result<Vec<Value>, String> {
     send_all(requests, CONCURRENCY).map(|(answers, _)| answers)
 }
 
-/// Sends every request, `concurrency` at a time, in the order asked, and
-/// says whether Jev reported being overloaded for any of them.
+/// Sends every request, `concurrency` at a time, and returns the answers in
+/// request order with whether Jev reported overload for any of them.
 pub fn send_all(requests: Vec<Value>, concurrency: usize) -> Result<(Vec<Value>, bool), String> {
     if !live() {
         return Err(
@@ -289,7 +290,7 @@ mod tests {
 
     #[test]
     fn nothing_is_sent_while_jev_is_off() {
-        // SAFETY of intent: tests never run live; the flag is off unless set.
+        // With `GAIA_JEV=live` set, the test returns early so it never sends a request.
         if live() {
             return;
         }

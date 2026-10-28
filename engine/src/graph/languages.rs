@@ -1,7 +1,8 @@
-//! The language table (`engine/languages.toml`), and each language's grammar
-//! and queries, loaded once and shared. A grammar is compiled in, or comes
-//! as WebAssembly from its own release, downloaded once, checked against
-//! the table's hash and kept in the app's data folder.
+//! Loads the language table (`engine/languages.toml`) and each language's
+//! grammar and queries once, and shares them. A grammar is either compiled in
+//! or a WebAssembly file from the grammar's own release, which `fetch`
+//! downloads once, checks against the table's SHA-256 and keeps in the app's
+//! data folder.
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
@@ -94,7 +95,7 @@ pub struct Spec {
     /// A call on a value can reach a function that belongs to no class, as
     /// a JavaScript object's own functions do.
     pub functions_as_values: bool,
-    /// Its files say which definitions they export, and a re-export passes on only those.
+    /// Its files declare which definitions they export, and a re-export passes on only those.
     pub marks_exports: bool,
     convention_tags: Vec<String>,
     conventions: GlobSet,
@@ -114,8 +115,8 @@ impl Spec {
     }
 }
 
-/// A language ready to parse: its grammar, the grammar's own tags query if
-/// it ships one, and our query file if we wrote one.
+/// A language ready to parse: its grammar, the grammar's own tags query if it
+/// ships one, and Gaia's query file from `engine/queries` if there is one.
 pub struct Loaded {
     pub language: Language,
     /// True for a WebAssembly grammar, which parses only in a parser given a `WasmStore`.
@@ -166,7 +167,7 @@ pub fn of_path(path: &str) -> Option<&'static Spec> {
     table().values().find(|s| s.extensions.contains(&ext))
 }
 
-/// A compiled grammar, its shipped tags query and our query file, by the table's name.
+/// A compiled grammar, its shipped tags query and Gaia's query file, by the table's name.
 fn compiled(name: &str) -> Option<(Language, Option<String>, &'static str)> {
     let js_tags = tree_sitter_javascript::TAGS_QUERY;
     Some(match name {
@@ -310,8 +311,8 @@ fn sha256_hex(bytes: &[u8]) -> String {
         .collect()
 }
 
-/// A release's file, from the data folder or else downloaded, and checked
-/// against its hash either way.
+/// Reads a release's file from the data folder, or else downloads it, and
+/// checks its SHA-256 either way.
 fn fetch(url: &str, sha256: &str) -> Result<Vec<u8>, String> {
     let ext = url.rsplit('.').next().unwrap_or("bin");
     let path: PathBuf = crate::store::data_dir()?
@@ -394,7 +395,7 @@ fn load_compiled(name: &str) -> Result<Loaded, String> {
 /// The language named in the table, loaded and cached. A compiled grammar
 /// fails only when its query does not compile, which the language contract
 /// test catches first. A grammar from a release fails when it cannot be
-/// downloaded, and its files are then read as having no grammar.
+/// downloaded, and its files then count as having no grammar.
 pub fn load(name: &str) -> Result<Arc<Loaded>, String> {
     static LOADED: OnceLock<Mutex<HashMap<String, Arc<Loaded>>>> = OnceLock::new();
     let cache = LOADED.get_or_init(|| Mutex::new(HashMap::new()));

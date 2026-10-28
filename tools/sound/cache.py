@@ -6,11 +6,11 @@ cache is GAIA_SOUND_CACHE, or ~/.cache/gaia-sound:
   recordings/fs<id>.ogg    the Freesound recordings the world sounds are cut from
   celesta/fs<id>.ogg       the Freesound celesta notes
   vcsl/<path>              the VCSL harp and glockenspiel samples
-  VSCO-2-CE-1.1.0/         Versilian Studios' orchestra (3 GB); the music's own patches are written beside its own
+  VSCO-2-CE-1.1.0/         Versilian Studios' orchestra (3 GB), with the music's own patches written beside its own
   patches/                 the harp, glockenspiel and celesta patches, and the celesta's notes as WAV
   sfizz-1.2.3/bin/         sfizz_render, built from source
 
-A folder already on the machine can stand in for one of these through a symbolic link: it is checked like a download.
+A symbolic link can point one of these at a folder already on the machine, and it is checked like a download.
 """
 import hashlib
 import json
@@ -49,7 +49,7 @@ def sha256(path):
 
 
 def fetch(url, dest, digest=None):
-    """dest from url, unless it is already there with the right digest."""
+    """Downloads url to dest, unless dest is already there with the right digest."""
     if dest.exists() and (digest is None or sha256(dest) == digest):
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)

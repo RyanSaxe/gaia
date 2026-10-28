@@ -1,10 +1,10 @@
-// A local stand-in for OpenRouter's Decisions API, for proving Gaia's path
-// to Jev without calling OpenRouter. It answers POST /api/alpha/decisions in
-// Jev's wire format (`JevResponse` in packages/schema/src/jev.ts, as
-// OpenRouter's API reference shows it): each choice from the options' words
-// that appear in the request's facts plus a tie-break seeded by the request,
-// each probability seeded the same way. It keeps every request it received,
-// so tests can check what went out. The engine sends here only when it runs
+// A local stand-in for OpenRouter's Decisions API, for testing Gaia's path to
+// Jev without calling OpenRouter. It answers POST /api/alpha/decisions in Jev's
+// wire format (`JevResponse` in packages/schema/src/jev.ts, as OpenRouter's API
+// reference shows it). It picks each choice by which options' words appear in
+// the request's facts, plus a tie-break seeded by the request, and seeds each
+// probability the same way. It records every request it receives, so tests can
+// check what went out. The engine sends here only when it runs
 // with GAIA_JEV_ENDPOINT set to this server's loopback address.
 //
 // Usage: pnpm openrouter-stand-in [--port 8787] [--delay 300] [--fail-every 0]

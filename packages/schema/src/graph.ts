@@ -1,15 +1,12 @@
-// The code graph: everything the engine knows about a codebase, as one
-// graph. A node stands for each directory, file, definition and block the
-// parse finds, and an edge for each import, call, reference or
-// implementation between them. Measures are what the engine counts; `judged`
-// holds Jev's answers. Every edge says who filled it, and an edge Jev filled
-// carries its probability. `project.graph` returns it
-// (`engine/src/graph/model.rs` mirrors these types).
+// The code graph that `project.graph` returns, with a node for each directory,
+// file, definition and block and an edge for each import, call, reference or
+// implementation between them. `measures` holds what the engine counts, and
+// `judged` holds Jev's answers. `engine/src/graph/model.rs` mirrors these types.
 
 export interface CodeGraph {
   readonly projectId: string;
   readonly name: string;
-  /** The commit the graph was read from: in git, the tree of the commit checked out, never uncommitted files. Absent when it read the disk. */
+  /** The commit the graph was built from. In git it is the checked-out commit's tree, never uncommitted files. Absent when the engine read the disk. */
   readonly commit?: string;
   readonly nodes: readonly GraphNode[];
   readonly edges: readonly GraphEdge[];
@@ -19,7 +16,7 @@ export interface CodeGraph {
 
 /**
  * Built from paths and names, never line numbers, so it changes on a rename
- * but not on an edit above the node: `dir:src/filter`, `file:src/walk.rs`,
+ * but not on an edit above the node, such as `dir:src/filter`, `file:src/walk.rs`,
  * `def:src/walk.rs#BatchSender.send`, `block:src/walk.rs#BatchSender.send/1`.
  * A second definition with the same name in the same scope gets `~2`.
  */
@@ -29,7 +26,7 @@ export type GraphNode = DirNode | FileNode | DefNode | BlockNode;
 
 interface NodeBase {
   readonly id: NodeId;
-  /** Unchanged through renames and moves; the world seeds geometry from it. */
+  /** Unchanged through renames and moves. The world seeds geometry from it. */
   readonly lineage: string;
   readonly measures: Measures;
   readonly judged?: Judged;
@@ -43,7 +40,7 @@ export interface DirNode extends NodeBase {
   readonly entity?: Entity;
 }
 
-/** What a directory is the root of, as its manifest says. */
+/** The package or crate a directory is the root of, from its manifest. */
 export interface Entity {
   /** The manifest's name, else the directory's. */
   readonly name: string;
@@ -57,7 +54,7 @@ export interface Entity {
 export interface FileNode extends NodeBase {
   readonly kind: "file";
   readonly path: string;
-  /** Null when no grammar reads the file. Jev reads its source either way. */
+  /** Null when no grammar parses the file. Jev reads its source either way. */
   readonly language: string | null;
   readonly bytes: number;
   readonly hash: string;
@@ -103,28 +100,29 @@ export interface Measures {
   readonly history?: History;
 }
 
-/** Jev's answers as held: a fresh answer replaces a held one only when it clearly differs. */
+/** Jev's held answers. A fresh answer replaces a held one only when it clearly differs. */
 export interface Judged {
   /**
-   * The understanding pass's answers, keyed by concept: "importance" (as its
-   * container judged it), and quality concepts such as "readability",
+   * The understanding pass's answers, keyed by concept: "importance", from its
+   * container's request, and quality concepts such as "readability",
    * "cohesion" or "robustness" (`engine/vocab/understanding.toml`).
    */
   readonly axes?: Readonly<Record<string, Score | Choice>>;
-  /** Which of a definition's blocks stand out, as choices over their ids: "key" and "weak". */
+  /** Jev's picks among a definition's blocks, as choices over their ids: "key" and "weak". */
   readonly picks?: Readonly<Record<string, Choice>>;
   /** What more Jev asked to read, by round: "usages", "related", "tests", "docs" or "nothing". */
   readonly more?: Readonly<Record<string, Choice>>;
   /**
-   * What the engine works out from the understanding pass, each from 0 to 1:
-   * importance as the item's container judged it (the root is 1), and
-   * quality gathered upward, each container's parts weighted by their lines
-   * and blended with its own. Null where nothing was answered.
+   * Values the engine computes from the understanding pass, each from 0 to 1.
+   * Importance is Jev's score for the node in its container's request, and 1
+   * for the root. Quality combines upward: each container blends its parts'
+   * quality, weighted by their lines, with its own. Null where nothing was
+   * answered.
    */
   readonly value?: {
     readonly importance: number | null;
     readonly quality: number | null;
-    /** Each concept Jev answered, from 0 to 1; null where the answer doesn't count, such as robustness's "nothing here can fail". */
+    /** Each concept Jev answered, from 0 to 1, or null where the answer doesn't count, such as robustness's "nothing here can fail". */
     readonly concepts: Readonly<Record<string, number | null>>;
   };
 }
@@ -139,7 +137,7 @@ export interface GraphEdge {
 
 export type EdgeKind = "imports" | "calls" | "references" | "implements";
 
-/** The rules are certain; Jev's answers carry its probability. */
+/** Who filled an edge. A rule is certain, and Jev's answer includes its probability. */
 export type Filled = { readonly by: "rule" } | { readonly by: "jev"; readonly call: string; readonly p: number };
 
 export interface PendingRef {
@@ -171,7 +169,7 @@ export interface Choice {
   readonly call: string;
 }
 
-/** Jev's score, and its share of the question's scale, from 0 to 1, which the world reads. */
+/** Jev's score, and `value`, its share of the question's scale from 0 to 1, which the world reads. */
 export interface Score {
   readonly score: number;
   readonly value: number;

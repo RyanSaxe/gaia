@@ -1,9 +1,9 @@
 import { kind, slot } from "@gaia/schema";
 
 /**
- * A stone, a piece of landform or old wood lying in the grass that stands for
- * one thing in the code: an entity, a file or a definition. It never grows;
- * its moss, cracks and rotting wood show how the code fares.
+ * A stone, a piece of landform or old wood lying in the grass that represents
+ * one entity, file or definition. It never grows. Its moss, cracks and rotting
+ * wood show the code's vitality.
  */
 export const rock = kind({
   id: "rock",

@@ -1,11 +1,11 @@
 import { kind, slot } from "@gaia/schema";
 
 /**
- * A trail worn between two entities' places where one depends on the other.
- * Jev decides which dependencies a person would walk between; the
- * composition budget keeps the most probable few, so trails never dominate
- * the world. The terrain finds the route; the blueprint only says how the
- * trail looks. Its wear follows the vitality of the two entities it joins.
+ * A trail between two entities' places where one depends on the other. Jev
+ * decides which dependencies a person would walk between, and the composition
+ * budget keeps the most probable few, so trails never dominate the world. The
+ * terrain finds the route, and the blueprint only sets how the trail looks.
+ * Its wear follows the vitality of the two entities it joins.
  */
 export const link = kind({
   id: "link",

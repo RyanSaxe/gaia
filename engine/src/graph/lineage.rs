@@ -1,25 +1,8 @@
-//! Lineage: an identity each node keeps through renames and moves, so the
-//! world stays recognizable as the code changes. When a project opens, the
-//! engine matches the new graph to the last one it kept, in this order:
-//!
-//! 1. the same id keeps its lineage;
-//! 2. a file git renamed keeps its lineage, and so does each definition in
-//!    it whose qualified name is unchanged;
-//! 3. a definition still unmatched takes the lineage of an unmatched old one
-//!    whose body agrees with its own on 85%, or 60% under the same name;
-//! 4. a file still unmatched takes that of an old one whose text agrees 85%,
-//!    which covers copies and renames git never saw;
-//! 5. a file still unmatched follows its definitions: it takes the lineage
-//!    of the old file that definitions holding at least half its lines came
-//!    from;
-//! 6. a directory follows its files: it takes the lineage of the old
-//!    directory at least half of whose files moved into it together, and a
-//!    file still unmatched in it then keeps the lineage of the old file of
-//!    the same name there, however much it changed;
-//! 7. anything else gets a fresh lineage.
-//!
-//! The project's store keeps the last graph's lineage and fingerprints in
-//! its `lineage` table, under the key `graph`.
+//! Gives each directory, file and definition a lineage, an identity that
+//! survives renames and moves, so the world stays recognizable as the code
+//! changes. The project's store keeps the last graph's lineage and fingerprints
+//! in its `lineage` table under the key `graph`, and `assign` matches each new
+//! graph against them.
 
 use super::parse::similarity;
 use super::walk::content_hash;
@@ -50,7 +33,7 @@ pub struct DefPrint {
     pub fingerprint: String,
 }
 
-/// A node of the new graph, as matching needs it.
+/// A definition of the new graph, with the fields matching needs.
 pub struct Def<'a> {
     pub id: &'a str,
     pub file: &'a str,
@@ -88,7 +71,23 @@ fn dir_of(path: &str) -> &str {
 
 /// Lineage for every directory, file and definition id of the new graph,
 /// and the record to keep for the next open. `renames` maps a path at the
-/// last commit to its path now.
+/// last commit to its path now. It matches in this order:
+///
+/// 1. The same id keeps its lineage.
+/// 2. A file git renamed keeps its lineage, and so does each definition in it
+///    whose qualified name is unchanged.
+/// 3. A definition still unmatched takes the lineage of an unmatched old one
+///    whose body is at least `BODY` similar, or `BODY_SAME_NAME` with the same
+///    name.
+/// 4. A file still unmatched takes the lineage of an old one whose text is at
+///    least `TEXT` similar. This covers copies and renames git never saw.
+/// 5. A file still unmatched takes the lineage of the old file its definitions
+///    came from, when those definitions hold at least half its lines.
+/// 6. A directory takes the lineage of the old directory when at least half of
+///    the old directory's files moved into it together. A file still unmatched
+///    in it then takes the lineage of the old file with the same name there,
+///    however much it changed.
+/// 7. Anything else gets a new lineage.
 pub fn assign(
     previous: Option<&Record>,
     renames: Option<&BTreeMap<String, String>>,
@@ -207,7 +206,7 @@ pub fn assign(
         }
     }
 
-    // 5. Files follow their definitions.
+    // 5. A file takes the lineage of the old file its definitions came from.
     let old_of_lineage: HashMap<&str, &str> = prev
         .nodes
         .iter()
@@ -235,7 +234,7 @@ pub fn assign(
         }
     }
 
-    // 6. Directories follow their files.
+    // 6. A directory takes the lineage of the old directory its files moved from.
     let mut moved: HashMap<&str, HashMap<String, u32>> = HashMap::new();
     let mut held: HashMap<&str, u32> = HashMap::new();
     for old in prev.nodes.keys().filter_map(|id| id.strip_prefix("file:")) {
@@ -266,7 +265,7 @@ pub fn assign(
         }
     }
 
-    // A file in a directory that moved keeps its name's old lineage.
+    // A file in a moved directory takes the lineage of the old file with the same name.
     for f in &current.files {
         let id = format!("file:{}", f.path);
         if out.contains_key(&id) {
@@ -334,8 +333,8 @@ pub fn assign(
     (out, record)
 }
 
-/// Where the last graph's record is kept. The engine keeps it in the
-/// project's store; tests keep it in memory.
+/// Loads and saves the last graph's record. The engine uses the project's
+/// store (`Store`), and tests keep it in memory.
 pub trait Keeper {
     fn load(&self, project: &str) -> Option<Record>;
     fn save(&self, project: &str, record: &Record);

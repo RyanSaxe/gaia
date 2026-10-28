@@ -34,12 +34,12 @@ describe("the proving ground's code", () => {
       expect(e.vitality, e.path).toBeGreaterThanOrEqual(0);
       expect(e.vitality, e.path).toBeLessThanOrEqual(1);
       if (e.health === "thriving") {
-        // A thriving file was given no fault.
+        // A `thriving` file has no fault.
         for (const q of faults) expect(e[q], `${e.path} ${q}`).toBe("good");
         expect(code).not.toMatch(/TODO|FIXME|HACK|catch \(e\) \{\}|: any\b/);
       }
       if (e.health === "ruin" && e.path.endsWith(".ts")) {
-        // A ruined one has every fault the plan gives ruin, throughout.
+        // A `ruin` file has every fault the plan gives `ruin`, throughout.
         for (const q of faults) expect(e[q], `${e.path} ${q}`).toBe("poor");
         expect(code).toMatch(/HACK:/);
         expect(code).toMatch(/catch \(e\) \{\}/);

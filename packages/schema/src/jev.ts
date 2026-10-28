@@ -1,5 +1,5 @@
 // Jev's wire format on OpenRouter's Decisions API, and the client contract.
-// The real client lives in the Rust engine, which holds the key.
+// The client is in the Rust engine, which holds the key.
 
 export type JevQuestion =
   | { readonly type: "choice"; readonly instructions: string; readonly criteria: Readonly<Record<string, string>> }
@@ -36,7 +36,7 @@ export interface JevResponse {
   /** The exact build that answered, such as "typesafe/jev-1.13-20260917". */
   readonly model: string;
   readonly costUsd: number;
-  /** Input tokens OpenRouter billed (`usage.input_tokens`); absent from answers kept before it was recorded. */
+  /** Input tokens OpenRouter billed (`usage.input_tokens`). Absent from answers stored before Gaia recorded it. */
   readonly inputTokens?: number;
   readonly ms: number;
 }
