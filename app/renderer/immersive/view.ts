@@ -157,18 +157,18 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     canvas.height = Math.round(h * dpr);
     const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
     ctx.scale(dpr, dpr);
-    drawLand(ctx, w, h, paper, world.stood(), { x: at.x, z: at.z, zoom: Math.max(w, h) / JUMP.span }, 1.35);
+    drawLand(ctx, w, h, paper, world.baked(), { x: at.x, z: at.z, zoom: Math.max(w, h) / JUMP.span }, 1.35);
     cover.replaceChildren(canvas);
   }
   const map = createFieldMap(
     layer,
-    { stood: world.stood, placeAt: world.placeAt, places: world.places },
+    { baked: world.baked, placeAt: world.placeAt, places: world.places },
     (open) => {
       if (open) setSlip(false);
     },
     jump,
   );
-  const minimap = createMinimap(layer, map, world.stood, world.places, () => journal.open());
+  const minimap = createMinimap(layer, map, world.baked, world.places, () => journal.open());
 
   // ---------- the journal, shut in the corner with the minimap on its cover ----------
 
@@ -216,7 +216,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     const paper = map.paper();
     if (paper === null) return maps?.drawn.get(area) ?? null;
     if (maps?.paper !== paper) maps = { paper, drawn: new Map() };
-    if (!maps.drawn.has(area)) maps.drawn.set(area, drawMapPage({ paper: map.paper, stood: world.stood, places: world.places, placeAt: world.placeAt }, area, w, h, fold));
+    if (!maps.drawn.has(area)) maps.drawn.set(area, drawMapPage({ paper: map.paper, baked: world.baked, places: world.places, placeAt: world.placeAt }, area, w, h, fold));
     return maps.drawn.get(area) ?? null;
   }
   const pages = journalPages({
@@ -345,25 +345,25 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     });
   }
   // Places the trail markers on every bake, before the grass and walking read the ground.
-  world.furnish((stood) => markers.place(stood, (x, z): PlaceArea => world.placeAt(x, z).area));
+  world.furnish((baked) => markers.place(baked, (x, z): PlaceArea => world.placeAt(x, z).area));
   /** Whether the first bake has landed. Until then, no place names show. */
   let standing = false;
-  world.onStood(() => {
+  world.onBaked(() => {
     standing = true;
     // A new world clears the paintings and paints its title page first, or loads a kept one, while the journal is shut.
     paintings.clear();
     paintings.ahead([""], true);
-    const stood = world.code();
-    if (stood !== null) {
+    const codeWorld = world.code();
+    if (codeWorld !== null) {
       const patches = new Map<string, { x: number; z: number; n: number }>();
-      for (const k of stood.cells) {
+      for (const k of codeWorld.cells) {
         if (k.file === null || k.file === undefined) continue;
         const at = patches.get(k.file) ?? { x: 0, z: 0, n: 0 };
         patches.set(k.file, { x: at.x + k.x, z: at.z + k.z, n: at.n + 1 });
       }
       paintable = [
-        ...stood.things.map((t) => ({ id: t.path, x: t.x, z: t.z })),
-        ...stood.symbols.map((d) => ({ id: d.id, x: d.x, z: d.z })),
+        ...codeWorld.things.map((t) => ({ id: t.path, x: t.x, z: t.z })),
+        ...codeWorld.symbols.map((d) => ({ id: d.id, x: d.x, z: d.z })),
         ...[...patches].map(([id, at]) => ({ id, x: at.x / at.n, z: at.z / at.n })),
       ];
       paintedFrom = { x: Infinity, z: Infinity };

@@ -12,7 +12,7 @@ import { rand, seedOf } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
 import type { FilePatch, Settled } from "../../world-service/protocol.ts";
-import type { StoodWorld } from "../terrain/world.ts";
+import type { BakedWorld } from "../terrain/world.ts";
 import { MARGIN, drawRivers, drawTrails, drawingPlants, letterName, nearestAreas, paintRelief, riverCourse, riverStretches, riverStrokes, strokeContours } from "../immersive/field-map.ts";
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
 import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, healthWeight, landWash } from "../immersive/map-styles.ts";
@@ -293,8 +293,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   let land: Land | null = null;
   /** Names, marks and relief that arrived before the land was ready. */
   const namesWaiting = new Set<string>();
-  let marksWaiting: Pick<StoodWorld, "buildings" | "landmarks"> | null = null;
-  let stoodWaiting: StoodWorld | null = null;
+  let marksWaiting: Pick<BakedWorld, "buildings" | "landmarks"> | null = null;
+  let bakedWaiting: BakedWorld | null = null;
   /** Layers fading in that are not yet copied into the sheet below. */
   let showing = 0;
   /** Resolves once `divide` finishes, which ends with placing every name. */
@@ -672,7 +672,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           namesWaiting.clear();
           pace();
           if (marksWaiting !== null) drawMarks(marksWaiting);
-          if (stoodWaiting !== null) relief(stoodWaiting);
+          if (bakedWaiting !== null) relief(bakedWaiting);
           resolve();
         })(),
       ),
@@ -871,7 +871,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   // ---------- marks, while the world bakes ----------
-  function drawMarks(things: Pick<StoodWorld, "buildings" | "landmarks">): void {
+  function drawMarks(things: Pick<BakedWorld, "buildings" | "landmarks">): void {
     const l = land;
     if (l === null) {
       marksWaiting = things;
@@ -933,16 +933,16 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   // ---------- the relief, once the world is built ----------
-  function relief(stood: StoodWorld): void {
+  function relief(baked: BakedWorld): void {
     const l = land;
     if (l === null) {
-      stoodWaiting = stood;
+      bakedWaiting = baked;
       return;
     }
     void (async () => {
       const zoom = side / (l.reach * 2);
       // Starts the pen lines for rivers and trails at once, while the relief is painted off screen.
-      const pens = penLines(l, stood, zoom);
+      const pens = penLines(l, baked, zoom);
       const pensDone = wait(pens.ms);
       layers.append(pens.svg);
       show(pens.svg);
@@ -975,10 +975,10 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
             // `lands` holds what fades in over the areas: hills, ponds, contours and trees. `whole` is the complete relief as
             // the field map draws it, rivers and trails included, which replaces the layers once they are all in.
             const lands = sheetOf(ground);
-            const contours = yield* paintRelief(lands, stood.terrain, STYLE, l.reach, l.device);
+            const contours = yield* paintRelief(lands, baked.terrain, STYLE, l.reach, l.device);
             const whole = sheetOf(lands.canvas);
             whole.setTransform(dpr, 0, 0, dpr, 0, 0);
-            drawRivers(whole, stood.terrain.streams, sx, sx, zoom);
+            drawRivers(whole, baked.terrain.streams, sx, sx, zoom);
             yield;
             for (const c of [lands, whole]) {
               c.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * (side / 2), dpr * (side / 2));
@@ -986,8 +986,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
               c.setTransform(dpr, 0, 0, dpr, 0, 0);
               yield;
             }
-            drawTrails(whole, stood.ways, sx, sx, zoom, 1, STYLE);
-            for (const c of [lands, whole]) yield* drawingPlants(c, stood, sx, sx, zoom, 1, () => true, STEP_MS);
+            drawTrails(whole, baked.ways, sx, sx, zoom, 1, STYLE);
+            for (const c of [lands, whole]) yield* drawingPlants(c, baked, sx, sx, zoom, 1, () => true, STEP_MS);
             yield;
             yield* reliefWashes(l, lands.canvas, lay);
             resolve(whole.canvas);
@@ -1073,7 +1073,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
    * Builds the pen lines over the relief. Each river draws from source to mouth in the field map's wash, edge and water
    * strokes, longest first. Each trail then draws along its course in dots. Returns the SVG and the total duration.
    */
-  function penLines(l: Land, stood: StoodWorld, zoom: number): { readonly svg: SVGSVGElement; readonly ms: number } {
+  function penLines(l: Land, baked: BakedWorld, zoom: number): { readonly svg: SVGSVGElement; readonly ms: number } {
     const svg = document.createElementNS(SVG, "svg");
     svg.setAttribute("class", "wait-pens");
     svg.setAttribute("viewBox", `${-l.reach} ${-l.reach} ${l.reach * 2} ${l.reach * 2}`);
@@ -1090,7 +1090,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     let html = "";
     // Rivers match `drawRivers`: the same course in the same stretches, with every river's wash first, then the edges,
     // then the water. Each river animates stretch by stretch.
-    const streams = [...stood.terrain.streams].filter((s) => s.stations.length > 1).sort((a, b) => b.stations.length - a.stations.length);
+    const streams = [...baked.terrain.streams].filter((s) => s.stations.length > 1).sort((a, b) => b.stations.length - a.stations.length);
     const layers: string[] = ["", "", ""];
     streams.forEach((stream, q) => {
       const st = stream.stations;
@@ -1115,7 +1115,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     const stride = Math.max(2, Math.round(3 / zoom)) * 2;
     let dots = "";
     let reveal = "";
-    stood.ways.forEach((trail, q) => {
+    baked.ways.forEach((trail, q) => {
       const p = trail.points;
       const points: [number, number][] = [];
       for (let k = 0; k < p.length; k += stride) points.push([p[k] as number, p[k + 1] as number]);
@@ -1161,7 +1161,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     chosen: choose,
     face,
     marks: drawMarks,
-    stood: relief,
+    baked: relief,
     night(n) {
       veil.style.setProperty("--night", n.toFixed(2));
     },

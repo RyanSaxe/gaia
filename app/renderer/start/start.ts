@@ -64,8 +64,8 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
     marks(things) {
       held(() => wait.marks(things));
     },
-    stood(world) {
-      held(() => wait.stood(world));
+    baked(world) {
+      held(() => wait.baked(world));
     },
     choose(offer) {
       // An offer that comes after a place was chosen starts the page over.

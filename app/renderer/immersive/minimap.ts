@@ -7,7 +7,7 @@
 
 import type { Place, PlaceArea, WorldPlaces } from "@gaia/terrain";
 import { onTap } from "../tap.ts";
-import type { Heading, StoodWorld } from "../terrain/world.ts";
+import type { Heading, BakedWorld } from "../terrain/world.ts";
 import { type FieldMap, drawLand } from "./field-map.ts";
 import { nameBreaks, nameTails } from "./map-names.ts";
 import { DECKLE_MASK, TRAVELLER_SVG } from "./map-styles.ts";
@@ -172,7 +172,7 @@ const el = (tag: string, cls: string, parent: HTMLElement, html = ""): HTMLEleme
   return node;
 };
 
-export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => StoodWorld, places: () => WorldPlaces, unfold: () => void = () => map.open(true)): Minimap {
+export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => BakedWorld, places: () => WorldPlaces, unfold: () => void = () => map.open(true)): Minimap {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const scrap = el("div", "minimap", root);
   scrap.style.setProperty("--deckle", DECKLE_MASK);
@@ -224,7 +224,7 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = paper.style.paper;
     ctx.fillRect(0, 0, span, span);
-    drawLand(ctx, span, span, paper, stood(), { x: anchor.x, z: anchor.z, zoom: SCALE }, 0.85);
+    drawLand(ctx, span, span, paper, baked(), { x: anchor.x, z: anchor.z, zoom: SCALE }, 0.85);
     redraws++;
     redrawMs = performance.now() - t0;
     place();

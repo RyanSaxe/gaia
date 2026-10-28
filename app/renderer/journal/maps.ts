@@ -8,11 +8,11 @@ import type { Place, WorldPlaces } from "@gaia/terrain";
 import { landReach, pastTheEdge } from "@gaia/terrain";
 import { CLOSE, type Paper, drawLand, haloOf, letter, letterName } from "../immersive/field-map.ts";
 import { SERIF, canvasMeasure, nameFont, nameSpacing, placeNames } from "../immersive/map-names.ts";
-import type { StoodWorld } from "../terrain/world.ts";
+import type { BakedWorld } from "../terrain/world.ts";
 
 export interface MapSource {
   paper(): Paper | null;
-  stood(): StoodWorld;
+  baked(): BakedWorld;
   places(): WorldPlaces;
   placeAt(x: number, z: number): Place;
 }
@@ -61,7 +61,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   if (area === "") view = { x: 0, z: 0, zoom: whole * 1.02 };
   else if (places.patches.some((p) => p.path === area)) view = folderView(places, (k) => k.file === area, w, h, FILE_CLOSEST);
   else view = folderView(places, (k) => k.area === area || k.area.startsWith(`${area}/`), w, h, FOLDER_CLOSEST);
-  drawLand(ctx, w, h, paper, src.stood(), view, 1.35, true);
+  drawLand(ctx, w, h, paper, src.baked(), view, 1.35, true);
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
   const close = Math.max(0, Math.min(1, (view.zoom / whole - CLOSE) / 0.8));

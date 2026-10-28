@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { shownVitality } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
 import { type PlaceArea, type SolidShape, type Way, heightAt, waterDepthAt } from "@gaia/terrain";
-import type { Furnishing, StoodWorld } from "../terrain/world.ts";
+import type { Furnishing, BakedWorld } from "../terrain/world.ts";
 import { type Board, letter } from "../terrain/lettering.ts";
 
 /** The layer markers draw on. The view's camera renders it and the sun's shadow pass does not, since their material samples the shadow map. */
@@ -17,7 +17,7 @@ export const MARKER_LAYER = 1;
 export interface Markers {
   readonly group: THREE.Group;
   /** Places a fingerpost and a boundary stone wherever a trail crosses into another area. Returns the capsules that keep grass off them and the solids that stop a walker. */
-  place(stood: StoodWorld, areaAt: (x: number, z: number) => PlaceArea): Furnishing;
+  place(baked: BakedWorld, areaAt: (x: number, z: number) => PlaceArea): Furnishing;
   /** Weathers each arm with the vitality of the area it names, and each post and stone with the mean of both areas'. */
   vitality(of: (path: string) => number): void;
   /** Each marked crossing with its post and stone positions and the areas on either side, for scripted checks. */
@@ -348,11 +348,11 @@ export function createMarkers(light: SceneLight): Markers {
 
   return {
     group,
-    place(stood, areaAt) {
+    place(baked, areaAt) {
       clear();
-      const t = stood.terrain;
+      const t = baked.terrain;
       const found: { x: number; z: number; tx: number; tz: number; off: number; from: PlaceArea; to: PlaceArea }[] = [];
-      for (const trail of stood.ways) {
+      for (const trail of baked.ways) {
         const p = trail.points;
         const count = p.length / 2;
         for (const c of crossingsOf(trail, areaAt)) {

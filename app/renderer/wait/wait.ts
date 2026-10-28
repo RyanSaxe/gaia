@@ -5,7 +5,7 @@
 // while the main thread builds the world.
 
 import type { ConsentPlan, Opening } from "../../world-service/protocol.ts";
-import type { StoodWorld } from "../terrain/world.ts";
+import type { BakedWorld } from "../terrain/world.ts";
 import { createMapWait } from "./map-wait.ts";
 import "./wait.css";
 
@@ -16,9 +16,9 @@ export interface WaitView {
   /** Called once everything is judged and laid out, as the world starts to bake. `health` is every file's vitality by path. */
   baking(health: Readonly<Record<string, number>>): void;
   /** Draws a mark for each building and landmark at its laid-out place while the world bakes. */
-  marks(things: Pick<StoodWorld, "buildings" | "landmarks">): void;
+  marks(things: Pick<BakedWorld, "buildings" | "landmarks">): void;
   /** Called when the world is built. Its hill shade, contours, water and trees fade in on the sheet. */
-  stood(world: StoodWorld): void;
+  baked(world: BakedWorld): void;
   /** Sets the darkness, from 0 by day to 1 at night, so the wait follows the clock. */
   night(n: number): void;
   /** Called when the world is ready to show. The paper folds away at once with any unfinished drawing, and the promise resolves once the world shows. */

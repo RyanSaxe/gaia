@@ -153,7 +153,7 @@ export interface Tree {
 }
 
 /** A placed tree, stone, bush or drift: its position, vitality, scale relative to its build, and the build. */
-export interface StoodPlant {
+export interface BakedPlant {
   readonly x: number;
   readonly z: number;
   readonly vitality: number;
@@ -162,7 +162,7 @@ export interface StoodPlant {
 }
 
 /** The world after a bake, as the map draws it and places markers beside it. */
-export interface StoodWorld {
+export interface BakedWorld {
   readonly terrain: Terrain;
   /** The paths' ways of tread. */
   readonly ways: readonly Way[];
@@ -171,9 +171,9 @@ export interface StoodWorld {
   /** Each landmark, with the blueprint and colors its map mark is drawn from. */
   readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string; readonly vitality: number; readonly blueprint: Blueprint; readonly palette: Palette }[];
   /** Each tree, with the build its map mark is drawn from. */
-  readonly trees: readonly StoodPlant[];
+  readonly trees: readonly BakedPlant[];
   /** Each stone, bush and drift of flowers, in the same form as `trees`. */
-  readonly understory: readonly StoodPlant[];
+  readonly understory: readonly BakedPlant[];
   /** Each area's ground cover by path, which the ground shader paints its ground with. */
   readonly grounds: ReadonlyMap<string, GroundSpec>;
   /**
@@ -207,13 +207,13 @@ export interface WorldHandle {
   /** The code layout of the current world, or null for a world not laid out from code. */
   code(): CodeWorld | null;
   /** The current world as of its last bake. */
-  stood(): StoodWorld;
+  baked(): BakedWorld;
   /** Calls `listener` after every bake. */
-  onStood(listener: () => void): void;
+  onBaked(listener: () => void): void;
   /** Calls `listener` once the wait screen lifts from the first world. */
   onLifted(listener: () => void): void;
   /** Sets `furnisher`, which each bake calls after routing the trails and before placing anything else, to get what to place beside them. */
-  furnish(furnisher: (stood: StoodWorld) => Furnishing): void;
+  furnish(furnisher: (baked: BakedWorld) => Furnishing): void;
   /** Sets whether the furnishing blocks a walker, which it should while it shows. */
   furnishingSolid(on: boolean): void;
   /**
@@ -265,7 +265,7 @@ export interface WorldHandle {
   thing(of: string): JudgedThing | undefined;
   /**
    * Calls `listener` with the ids of changed things once vitality changes live (`setVitality`), as when the world
-   * heals onto a new commit. From then on, `code`, `places`, `stood` and `thing` return the new values.
+   * heals onto a new commit. From then on, `code`, `places`, `baked` and `thing` return the new values.
    */
   onVitality(listener: (changed: readonly string[]) => void): void;
   /** Calls `listener` with what a person has walked up to when its card opens, and with null when it closes. */
@@ -628,10 +628,10 @@ export function createWorld(root: HTMLElement): World {
   /** The placed landmarks' floors, which a walker stands on like an intact deck. */
   let floors: readonly Floor[] = [];
   let places: WorldPlaces = { name: "", size: world.size, areas: [], patches: [], cells: [] };
-  let furnisher: ((stood: StoodWorld) => Furnishing) | null = null;
+  let furnisher: ((baked: BakedWorld) => Furnishing) | null = null;
   let furnished: Furnishing = UNFURNISHED;
   let furnishSolid = true;
-  const stoodListeners: (() => void)[] = [];
+  const bakedListeners: (() => void)[] = [];
   const liftedListeners: (() => void)[] = [];
 
   // ---------- landmarks and trails ----------
@@ -2023,7 +2023,7 @@ export function createWorld(root: HTMLElement): World {
       allDecks = decksOf(placed.network.ways);
       holdDecks();
       placeWays();
-      furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
+      furnished = furnisher?.(bakedWorld()) ?? UNFURNISHED;
       // In the codebase's world a landmark represents an entity and takes its vitality.
       landmarkViews.forEach((v, i) => v.setVitality(code === null ? 1 : (code.world.things.filter((t) => t.as === "landmark")[i]?.vitality ?? 1)));
       placeBuildings();
@@ -2045,13 +2045,13 @@ export function createWorld(root: HTMLElement): World {
       placeSigns();
       mark("signs");
       endWalk();
-      for (const listener of stoodListeners) listener();
+      for (const listener of bakedListeners) listener();
     } finally {
       letGo();
     }
   }
 
-  function stoodWorld(): StoodWorld {
+  function bakedWorld(): BakedWorld {
     return {
       terrain,
       ways: ways.network.ways,
@@ -2239,7 +2239,7 @@ export function createWorld(root: HTMLElement): World {
   }
 
   /** Each building and landmark of a codebase's world at its laid-out place, with what the map draws its mark from, before a bake places it. */
-  function laidOut(c: OpenedWorld): Pick<StoodWorld, "buildings" | "landmarks"> {
+  function laidOut(c: OpenedWorld): Pick<BakedWorld, "buildings" | "landmarks"> {
     const houses = c.world.things.filter((t) => t.as === "building");
     const rises = c.world.things.filter((t) => t.as === "landmark");
     return {
@@ -2255,10 +2255,10 @@ export function createWorld(root: HTMLElement): World {
   const waiting = takeWait(root.querySelector(".veil") as HTMLElement, OPENING_ASPECT);
   const veil = withStart(waiting.wait, waiting.veil);
   // The wait screen's sheet draws the first world's hills, water and trees as soon as the world is placed.
-  let stoodOnce = false;
-  stoodListeners.push(() => {
-    if (!stoodOnce) veil.stood(stoodWorld());
-    stoodOnce = true;
+  let bakedOnce = false;
+  bakedListeners.push(() => {
+    if (!bakedOnce) veil.baked(bakedWorld());
+    bakedOnce = true;
   });
 
   showAerial(false);
@@ -2337,8 +2337,8 @@ export function createWorld(root: HTMLElement): World {
     const toward = (tx: number, tz: number): number => Math.atan2(-(tx - lx), -(tz - lz));
     // The person faces the area's building or landmark if one is near, else `center`.
     const area = placeAt(places, lx, lz).area;
-    const stood = stoodWorld();
-    const thing = [...stood.buildings, ...stood.landmarks]
+    const baked = bakedWorld();
+    const thing = [...baked.buildings, ...baked.landmarks]
       .filter((t) => area.depth >= 0 && placeAt(places, t.x, t.z).area.path === area.path)
       .map((t) => ({ t, d: Math.hypot(t.x - lx, t.z - lz) }))
       .filter(({ d }) => d > 6 && d < FACE_THING)
@@ -2677,8 +2677,8 @@ export function createWorld(root: HTMLElement): World {
     placeAt: (x, z) => placeAt(places, x, z),
     places: () => places,
     code: () => code?.world ?? null,
-    stood: stoodWorld,
-    onStood: (listener) => stoodListeners.push(listener),
+    baked: bakedWorld,
+    onBaked: (listener) => bakedListeners.push(listener),
     onLifted: (listener) => liftedListeners.push(listener),
     furnish: (f) => {
       furnisher = f;

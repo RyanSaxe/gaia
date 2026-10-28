@@ -12,7 +12,7 @@ import { shownVitality } from "@gaia/realize";
 import { outlinesOf, pastTheEdge, type Place, type PlaceArea, type Terrain, waterDepthAt, type WorldPlaces } from "@gaia/terrain";
 import { areaVitality, groundVitality } from "@gaia/world";
 import { onTap } from "../tap.ts";
-import type { StoodPlant, StoodWorld } from "../terrain/world.ts";
+import type { BakedPlant, BakedWorld } from "../terrain/world.ts";
 import { DECKLE_MASK, MAP_STYLE, type MapStyle, TRAVELLER_SVG, dryness, healthColor, healthField, landWash } from "./map-styles.ts";
 import { contour, contourLines, simplified, slopes } from "./isolines.ts";
 import { type AreaLabel, type Box, CELL, type NameLand, type NamePlace, type NamePlaces, PARENT_FONT, ROSE, SERIF, canvasMeasure, nameFont, nameLand, nameSpacing, placeNames } from "./map-names.ts";
@@ -71,7 +71,7 @@ export interface MinimapAt {
 }
 
 export interface MapSource {
-  stood(): StoodWorld;
+  baked(): BakedWorld;
   placeAt(x: number, z: number): Place;
   /** Every area and file patch, for drawing each file's ground. */
   places(): WorldPlaces;
@@ -164,8 +164,8 @@ function wetDistance(wet: Uint8Array, n: number): Float32Array {
 }
 
 /** Paints the land onto paper, yielding between steps so a driver can spread the work over idle time. */
-function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place, places: WorldPlaces, style: MapStyle): Generator<void, Paper> {
-  const t = stood.terrain;
+function* paintPaper(baked: BakedWorld, placeAt: (x: number, z: number) => Place, places: WorldPlaces, style: MapStyle): Generator<void, Paper> {
+  const t = baked.terrain;
   const size = t.spec.size;
   const half = size / 2;
   // The sheet ends `MARGIN` past the land's half side. The land runs to its edges and the wild fills its corners.
@@ -244,7 +244,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
   // Each area's rim pools in its own ground's vitality color, and dry ground shows the paper through. An area too
   // small for any sample still gets a rim (the second list below).
   const outlineOf = new Map(outlines.areas.map((o) => [o.path, o]));
-  const ground = (path: string): boolean => stood.grounds.has(path);
+  const ground = (path: string): boolean => baked.grounds.has(path);
   const washAreaOf = (path: string, depth: number, rings: readonly (readonly number[])[]): WashArea => ({
     path: ringsPath(rings, px),
     depth,
@@ -289,7 +289,7 @@ function* paintPaper(stood: StoodWorld, placeAt: (x: number, z: number) => Place
 
   // Rasterizes the land for names from the traced outlines and the lots, as the loading screen does from the same
   // land before the world loads.
-  const names = yield* nameLand(traced.areas, size, reach, stood.lots, places.aspect);
+  const names = yield* nameLand(traced.areas, size, reach, baked.lots, places.aspect);
   const labelOf = new Map(names.labels.map((l) => [l.index, l]));
   const labelAt = (x: number, z: number): AreaLabel | undefined => {
     const i = Math.floor((x + reach) / CELL);
@@ -581,7 +581,7 @@ const LINE = { contour: 0.85, index: 1.4, border: 1, hedge: 3.2 };
  * it waits for idle time. Returns the boxes the marks take, which names keep
  * off.
  */
-export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, paper: Paper, stood: StoodWorld, view: LandView, grow: number, now = true): [number, number, number, number][] {
+export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, paper: Paper, baked: BakedWorld, view: LandView, grow: number, now = true): [number, number, number, number][] {
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
   const visible = (x: number, y: number, pad: number): boolean => x > -pad && x < w + pad && y > -pad && y < h + pad;
@@ -607,20 +607,20 @@ export function drawLand(ctx: CanvasRenderingContext2D, w: number, h: number, pa
   ctx.restore();
   ctx.restore();
 
-  drawRivers(ctx, stood.terrain.streams, sx, sy, view.zoom);
-  drawTrails(ctx, stood.ways, sx, sy, view.zoom, grow, style);
-  drawPlants(ctx, stood, sx, sy, view.zoom, grow, visible);
+  drawRivers(ctx, baked.terrain.streams, sx, sy, view.zoom);
+  drawTrails(ctx, baked.ways, sx, sy, view.zoom, grow, style);
+  drawPlants(ctx, baked, sx, sy, view.zoom, grow, visible);
 
   // Buildings and landmarks, each drawn from its blueprint and worn by its vitality. Names keep off the boxes they take.
   const s = markScale(view.zoom, grow);
   const taken: [number, number, number, number][] = [];
-  for (const l of stood.landmarks) {
+  for (const l of baked.landmarks) {
     const x = sx(l.x);
     const y = sy(l.z);
     if (!visible(x, y, 30 * s)) continue;
     taken.push(stampLandmark(ctx, x, y, s, l, shownVitality(l.vitality), l.name));
   }
-  for (const b of stood.buildings) {
+  for (const b of baked.buildings) {
     const x = sx(b.x);
     const y = sy(b.z);
     if (!visible(x, y, 30 * s)) continue;
@@ -731,7 +731,7 @@ export function drawRivers(ctx: CanvasRenderingContext2D, streams: readonly { re
 }
 
 /** Draws trails as dotted lines, scaled by `grow`. */
-export function drawTrails(ctx: CanvasRenderingContext2D, ways: StoodWorld["ways"], sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, style: MapStyle): void {
+export function drawTrails(ctx: CanvasRenderingContext2D, ways: BakedWorld["ways"], sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, style: MapStyle): void {
   ctx.save();
   ctx.lineCap = ctx.lineJoin = "round";
   ctx.setLineDash([0.1, 5.5 * grow]);
@@ -763,22 +763,22 @@ const UNDERSTORY_SHOWS = [3, 6] as const;
  * times `grow` across. A stone, bush or drift draws only at its size on the land, so the understory appears as the
  * map zooms in.
  */
-export function drawPlants(ctx: CanvasRenderingContext2D, stood: Pick<StoodWorld, "trees" | "understory">, sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, visible: (x: number, y: number, pad: number) => boolean): void {
-  for (const _ of drawingPlants(ctx, stood, sx, sy, zoom, grow, visible)) {
+export function drawPlants(ctx: CanvasRenderingContext2D, baked: Pick<BakedWorld, "trees" | "understory">, sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, visible: (x: number, y: number, pad: number) => boolean): void {
+  for (const _ of drawingPlants(ctx, baked, sx, sy, zoom, grow, visible)) {
     // Draws every mark without pausing.
   }
 }
 
 /** Like `drawPlants`, but yields after every `stepMs` of drawing, so a caller drawing one step per frame never stalls. */
-export function* drawingPlants(ctx: CanvasRenderingContext2D, stood: Pick<StoodWorld, "trees" | "understory">, sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, visible: (x: number, y: number, pad: number) => boolean, stepMs = Number.POSITIVE_INFINITY): Generator<void> {
-  const marks: { x: number; y: number; s: number; plant: StoodPlant; alpha: number }[] = [];
-  for (const t of stood.trees) {
+export function* drawingPlants(ctx: CanvasRenderingContext2D, baked: Pick<BakedWorld, "trees" | "understory">, sx: (x: number) => number, sy: (z: number) => number, zoom: number, grow: number, visible: (x: number, y: number, pad: number) => boolean, stepMs = Number.POSITIVE_INFINITY): Generator<void> {
+  const marks: { x: number; y: number; s: number; plant: BakedPlant; alpha: number }[] = [];
+  for (const t of baked.trees) {
     const x = sx(t.x);
     const y = sy(t.z);
     const s = Math.max(zoom * t.scale, (TREE_LEAST * grow) / (2 * t.build.radius));
     if (visible(x, y - t.build.height * s * 0.5, Math.max(t.build.height, t.build.radius * 2) * s)) marks.push({ x, y, s, plant: t, alpha: 1 });
   }
-  for (const u of stood.understory) {
+  for (const u of baked.understory) {
     const s = zoom * u.scale;
     const span = Math.max(u.build.height, u.build.radius * 2) * s;
     if (span < UNDERSTORY_SHOWS[0]) continue;
@@ -956,7 +956,7 @@ export function createFieldMap(
    * minimap has its ink when it first draws.
    */
   function* paperAndInk(): Generator<void, Paper> {
-    const fresh = yield* paintPaper(source.stood(), source.placeAt, source.places(), style);
+    const fresh = yield* paintPaper(source.baked(), source.placeAt, source.places(), style);
     placed = yield* placing(fresh, sheetSide());
     fresh.wild.want([minimapView()]);
     while (fresh.wild.step()) yield;
@@ -1093,7 +1093,7 @@ export function createFieldMap(
     ctx.fillRect(0, 0, w, h);
     // The sheet stays bare until the paper is painted, which happens soon after every bake.
     if (paper === null) return;
-    const stood = source.stood();
+    const baked = source.baked();
     const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
     const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
     const visible = (x: number, y: number, pad: number): boolean => x > -pad && x < w + pad && y > -pad && y < h + pad;
@@ -1105,7 +1105,7 @@ export function createFieldMap(
     // How far the file level has faded in, from 0 at `CLOSE` to 1 at `CLOSE` + 0.8.
     const close = Math.max(0, Math.min(1, (near - CLOSE) / 0.8));
     // Wild ink tiles this view lacks are inked in idle time, and `onLanded` redraws the sheet.
-    const marks = drawLand(ctx, w, h, paper, stood, view, grow, false);
+    const marks = drawLand(ctx, w, h, paper, baked, view, grow, false);
     inkInIdle();
     if (close > 0) {
       ctx.save();
@@ -1180,7 +1180,7 @@ export function createFieldMap(
     // every other name.
     if (near > 1.6) {
       ctx.font = `italic 12.5px ${SERIF}`;
-      const named = [...stood.landmarks.map((l) => ({ ...l, below: 15 })), ...stood.buildings.map((b) => ({ ...b, below: 13 }))];
+      const named = [...baked.landmarks.map((l) => ({ ...l, below: 15 })), ...baked.buildings.map((b) => ({ ...b, below: 13 }))];
       for (const m of named) {
         const x = sx(m.x);
         const y = sy(m.z) + m.below * grow + 6;
