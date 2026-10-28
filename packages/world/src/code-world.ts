@@ -935,11 +935,11 @@ function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>, def
     const d = dirs.get(path) as Dir;
     const own: LandNode[] = [];
     const lot = lots.get(path);
-    if (lot !== undefined) own.push({ id: `lot:${path}`, ground: lot, children: [], heart: true });
+    if (lot !== undefined) own.push({ id: `lot:${path}`, ground: lot, children: [], center: true });
     for (const f of d.files) own.push({ id: `file:${f.path}`, ground: groundOfFile(f, defs.get(f.path)?.length ?? 0), children: [] });
     const subs = d.children.map(node);
     if (subs.length === 0) return { id: `dir:${path}`, ground: 0, children: own };
-    const children = own.length === 0 ? subs : [{ id: `own:${path}`, ground: 0, children: own, heart: path !== "" }, ...subs];
+    const children = own.length === 0 ? subs : [{ id: `own:${path}`, ground: 0, children: own, center: path !== "" }, ...subs];
     return { id: `dir:${path}`, ground: 0, children };
   };
   return node("");
@@ -966,17 +966,17 @@ function plotDefinitions(f: FileFacts, defs: readonly PlacedDef[], leaf: { reado
   const own = (lines: number, within: readonly PlacedDef[]): number => Math.max(1, lines - within.reduce((n, c) => n + c.lines, 0));
   const node = (d: PlacedDef): LandNode => {
     const kids = inside.get(d.id) ?? [];
-    const self: LandNode = { id: `def:${d.id}`, ground: own(d.lines, kids) * perLine + LAYOUT.defGround, children: [], heart: true };
+    const self: LandNode = { id: `def:${d.id}`, ground: own(d.lines, kids) * perLine + LAYOUT.defGround, children: [], center: true };
     return kids.length === 0 ? self : { id: `in:${d.id}`, ground: 0, children: [self, ...kids.map(node)] };
   };
   const top = inside.get("") ?? [];
-  const root: LandNode = { id: `file:${f.path}`, ground: 0, children: [{ id: `own:${f.path}`, ground: own(f.lines, top) * perLine, children: [], heart: true }, ...top.map(node)] };
+  const root: LandNode = { id: `file:${f.path}`, ground: 0, children: [{ id: `own:${f.path}`, ground: own(f.lines, top) * perLine, children: [], center: true }, ...top.map(node)] };
   const near = (c: readonly [number, number]): number => (c[0] - leaf.x) ** 2 + (c[1] - leaf.z) ** 2;
   const core = [...leaf.inner].sort((a, b) => near(a) - near(b)).slice(0, Math.ceil(leaf.inner.length * LAYOUT.cluster));
   const plots = dividePlots(root, core.length > 0 ? core : [[leaf.x, leaf.z]], step);
-  const heart = plots.get(`own:${f.path}`) ?? { x: leaf.x, z: leaf.z };
+  const center = plots.get(`own:${f.path}`) ?? { x: leaf.x, z: leaf.z };
   return {
-    own: { x: heart.x, z: heart.z },
+    own: { x: center.x, z: center.z },
     defs: defs.map((def) => {
       const p = plots.get(`def:${def.id}`) ?? { x: leaf.x, z: leaf.z };
       return { def, x: p.x, z: p.z };
@@ -1157,7 +1157,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
     plants.push({ of, path, name, form, ...small(path), lines, ...(value === undefined ? {} : { importance: value }), x: at.x, z: at.z, ...(file === undefined ? {} : { file }), vitality });
   };
   /** Per directory: total ground, the ground-weighted sum of its leaves' centers, and the centers themselves. */
-  const held = new Map<string, { ground: number; x: number; z: number; hearts: { x: number; z: number }[] }>();
+  const held = new Map<string, { ground: number; x: number; z: number; leafCenters: { x: number; z: number }[] }>();
   const regionSites: LandSite[][] = regionsOf.map(() => []);
   const regionMass = regionsOf.map(() => ({ ground: 0, x: 0, z: 0 }));
   for (const leaf of land.leaves) {
@@ -1172,11 +1172,11 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
     m.x += leaf.x * leaf.ground;
     m.z += leaf.z * leaf.ground;
     for (let p: string | null = area; p !== null; p = p === "" ? null : parentOf(p)) {
-      const h = held.get(p) ?? { ground: 0, x: 0, z: 0, hearts: [] };
+      const h = held.get(p) ?? { ground: 0, x: 0, z: 0, leafCenters: [] };
       h.ground += leaf.ground;
       h.x += leaf.x * leaf.ground;
       h.z += leaf.z * leaf.ground;
-      h.hearts.push({ x: leaf.x, z: leaf.z });
+      h.leafCenters.push({ x: leaf.x, z: leaf.z });
       held.set(p, h);
     }
     if (kind === "lot") {
@@ -1229,11 +1229,11 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
     .filter((d) => held.has(d.path))
     .sort(byPath)
     .map((d) => {
-      const h = held.get(d.path) as { ground: number; x: number; z: number; hearts: { x: number; z: number }[] };
+      const h = held.get(d.path) as { ground: number; x: number; z: number; leafCenters: { x: number; z: number }[] };
       const mx = h.x / h.ground;
       const mz = h.z / h.ground;
-      const heart = h.hearts.reduce((b, p) => (Math.hypot(p.x - mx, p.z - mz) < Math.hypot(b.x - mx, b.z - mz) ? p : b), h.hearts[0] as { x: number; z: number });
-      return { path: d.path, name: d.name, depth: d.depth, parent: d.parent, x: heart.x, z: heart.z, region: regionOfDir(d.path), ground: h.ground };
+      const center = h.leafCenters.reduce((b, p) => (Math.hypot(p.x - mx, p.z - mz) < Math.hypot(b.x - mx, b.z - mz) ? p : b), h.leafCenters[0] as { x: number; z: number });
+      return { path: d.path, name: d.name, depth: d.depth, parent: d.parent, x: center.x, z: center.z, region: regionOfDir(d.path), ground: h.ground };
     });
 
   const regions: CodeRegion[] = regionsOf.map((path, i) => {

@@ -222,9 +222,9 @@ export interface WorldHandle {
    * facing it. Elsewhere they land on the nearest dry ground clear of every
    * solid in the same area, and in the wild only if (x, z) is in the wild.
    * They face along a nearby trail, else toward the area's building or
-   * landmark, else toward `heart`.
+   * landmark, else toward `center`.
    */
-  landing(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null;
+  landing(x: number, z: number, center?: { readonly x: number; readonly z: number }): Landing | null;
   /** Moves the person to a landing at once. Call it only behind a transition, so nothing visibly jumps. Resolves once the land around them has loaded. */
   place(at: Landing): Promise<void>;
   /** Resolves once the land and everything within sight of (x, z) have loaded, as a jump waits for them. */
@@ -552,7 +552,7 @@ export interface WorldInside {
   /** Draws one frame now, even while the page's own loop is paused. */
   frame(dt: number, now: number, at: number): void;
   walkTo(x: number, z: number, yaw: number, pitch?: number): void;
-  landingNear(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null;
+  landingNear(x: number, z: number, center?: { readonly x: number; readonly z: number }): Landing | null;
   travelTo(at: Landing, face: boolean): boolean;
   travelWay(from: Walker, at: Walker): TripWay | null;
   approach(s: Subject): void;
@@ -2291,7 +2291,7 @@ export function createWorld(root: HTMLElement): World {
   }
 
   /** The landing nearest (x, z), as `WorldHandle.landing` describes. */
-  function landingNear(x: number, z: number, heart?: { readonly x: number; readonly z: number }): Landing | null {
+  function landingNear(x: number, z: number, center?: { readonly x: number; readonly z: number }): Landing | null {
     // A spot on or beside a building lands where a person reads its sign, facing the building.
     const house = settlement.buildings.find((b) => Math.hypot(b.site.x - x, b.site.z - z) < Math.max(b.plan.width, b.plan.depth) * 0.5 + 4);
     if (house !== undefined) {
@@ -2335,7 +2335,7 @@ export function createWorld(root: HTMLElement): World {
     }
     const { x: lx, z: lz } = spot;
     const toward = (tx: number, tz: number): number => Math.atan2(-(tx - lx), -(tz - lz));
-    // The person faces the area's building or landmark if one is near, else `heart`.
+    // The person faces the area's building or landmark if one is near, else `center`.
     const area = placeAt(places, lx, lz).area;
     const stood = stoodWorld();
     const thing = [...stood.buildings, ...stood.landmarks]
@@ -2343,7 +2343,7 @@ export function createWorld(root: HTMLElement): World {
       .map((t) => ({ t, d: Math.hypot(t.x - lx, t.z - lz) }))
       .filter(({ d }) => d > 6 && d < FACE_THING)
       .sort((a, b) => a.d - b.d)[0]?.t;
-    const aim = thing ?? (heart !== undefined && Math.hypot(heart.x - lx, heart.z - lz) > 8 ? heart : null);
+    const aim = thing ?? (center !== undefined && Math.hypot(center.x - lx, center.z - lz) > 8 ? center : null);
     // On a path, face along it in the direction closer to what the person would face.
     let best: { d: number; tx: number; tz: number } | null = null;
     for (const way of ways.network.ways) {
@@ -2688,7 +2688,7 @@ export function createWorld(root: HTMLElement): World {
       furnishSolid = on;
       gatherSolids();
     },
-    landing: (x, z, heart) => landingNear(x, z, heart),
+    landing: (x, z, center) => landingNear(x, z, center),
     place: (at) => {
       walkTo(at.x, at.z, at.yaw);
       return handle.around(at.x, at.z);

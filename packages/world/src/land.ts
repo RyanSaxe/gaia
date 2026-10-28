@@ -19,7 +19,7 @@ export interface LandNode {
   readonly ground: number;
   readonly children: readonly LandNode[];
   /** Its site starts at the centroid of the parent's cells and never moves to the centroid of its own. */
-  readonly heart?: boolean;
+  readonly center?: boolean;
 }
 
 /** A leaf's share of the land after the final nearest-site redraw. */
@@ -252,7 +252,7 @@ const SPACING = 48;
 /**
  * Sets each child's starting site within the parent's cells. Each child is a
  * disc, with area proportional to its share, inside a unit disc. A child
- * starts at an angle and radius seeded by its id, and a `heart` child starts
+ * starts at an angle and radius seeded by its id, and a `center` child starts
  * at the center. For `SPACING` passes, overlapping discs push apart and a disc
  * past the rim moves back inside. Spaced discs make round parts instead of
  * wedges. The unit disc is then stretched over the parent's cells by their
@@ -298,7 +298,7 @@ function spaceSites(r: Raster, cells: Int32Array, kids: readonly LandNode[], tar
   kids.forEach((kid, j) => {
     const h = rand(seedOf(kid.id));
     const angle = h.next() * Math.PI * 2;
-    const far = kid.heart === true ? 0 : 0.3 + 0.55 * Math.sqrt(h.next());
+    const far = kid.center === true ? 0 : 0.3 + 0.55 * Math.sqrt(h.next());
     px[j] = Math.cos(angle) * far;
     pz[j] = Math.sin(angle) * far;
   });
@@ -366,7 +366,7 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   const sz = new Float64Array(kids.length);
   spaceSites(r, cells, kids, targets, sx, sz);
   const owner = new Int32Array(cells.length);
-  settle(r, cells, targets, sx, sz, owner, kids.map((kid) => kid.heart === true));
+  settle(r, cells, targets, sx, sz, owner, kids.map((kid) => kid.center === true));
   // Every leaf needs at least one cell. A child with fewer cells than leaves gets the cells nearest its site,
   // reassigned from siblings that keep at least one cell per leaf. A child with no cells first moves its site to the
   // farthest cell of the sibling with the most spare cells, then gets max(leaves, target) cells. Several empty

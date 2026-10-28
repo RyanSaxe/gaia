@@ -842,7 +842,7 @@ export function createFieldMap(
   root: HTMLElement,
   source: MapSource,
   onToggle?: (open: boolean) => void,
-  onPick?: (x: number, z: number, heart: { readonly x: number; readonly z: number } | undefined) => boolean,
+  onPick?: (x: number, z: number, center: { readonly x: number; readonly z: number } | undefined) => boolean,
 ): FieldMap {
   const sheet = document.createElement("div");
   sheet.className = "field-map";
@@ -1466,14 +1466,14 @@ export function createFieldMap(
     const x = name?.x ?? view.x + (px - rect.width / 2) / view.zoom;
     const z = name?.z ?? view.z + (py - rect.height / 2) / view.zoom;
     const label = paper.labelAt(x, z);
-    const heart = label === undefined ? undefined : { x: label.x, z: label.z };
+    const center = label === undefined ? undefined : { x: label.x, z: label.z };
     cancelPick();
     pick = {
       x,
       z,
       timer: window.setTimeout(() => {
         if (pick === null) return;
-        const sent = onPick(pick.x, pick.z, heart);
+        const sent = onPick(pick.x, pick.z, center);
         if (!sent) pick = null;
         draw();
       }, PICK_WAIT_MS),

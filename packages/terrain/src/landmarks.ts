@@ -56,8 +56,8 @@ export const LANDMARK_SITE = {
 export function findLandmarkSite(t: Terrain, region: number, radius: number, avoid: readonly Occupied[], within: Circle | null = null): LandmarkSite | null {
   const l = t.lattice;
   const half = t.spec.size / 2 - LANDMARK_SITE.margin - radius;
-  const heart = within ?? t.spec.regions[region];
-  if (heart === undefined) return null;
+  const center = within ?? t.spec.regions[region];
+  if (center === undefined) return null;
   let best: { x: number; z: number; score: number } | null = null;
   const step = within === null ? LANDMARK_SITE.step : 2;
   const [x0, x1, z0, z1] = within === null ? [-half, half, -half, half] : [Math.max(-half, within.x - within.radius), Math.min(half, within.x + within.radius), Math.max(-half, within.z - within.radius), Math.min(half, within.z + within.radius)];
@@ -82,7 +82,7 @@ export function findLandmarkSite(t: Terrain, region: number, radius: number, avo
         const a = (k / 12) * Math.PI * 2;
         around += heightAt(l, x + Math.cos(a) * LANDMARK_SITE.surround, z + Math.sin(a) * LANDMARK_SITE.surround);
       }
-      const score = h - around / 12 - LANDMARK_SITE.centrality * Math.hypot(x - heart.x, z - heart.z);
+      const score = h - around / 12 - LANDMARK_SITE.centrality * Math.hypot(x - center.x, z - center.z);
       if (best === null || score > best.score) best = { x, z, score };
     }
   }

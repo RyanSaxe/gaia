@@ -292,7 +292,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   const stones: Stone[] = [];
   const lintels: [number, number][] = [];
   /** The arrangement's center, for its center stone. */
-  let heart: [number, number] = [0, 0];
+  let center: [number, number] = [0, 0];
 
   if (p.arrangement === "ring") {
     // The radius keeps at least three quarters of a stone's width between neighbors.
@@ -320,7 +320,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       }
       if (p.lintels && k % 2 === 1) lintels.push([stones.length - 2, stones.length - 1]);
     }
-    heart = [length / 2 + spacing * 1.1, 0];
+    center = [length / 2 + spacing * 1.1, 0];
   } else if (p.arrangement === "dolmen") {
     // A chamber of uprights under one great capstone, in a ring of low kerb stones.
     const legH = Math.max(1.6, h * 0.6);
@@ -349,7 +349,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       const s = stoneAt(sr, Math.cos(a) * kerbR, Math.sin(a) * kerbR * 0.85, -a + Math.PI / 2, { width: h * 0.24 * shape.breadth, depth: h * 0.14 * shape.breadth, height: h * 0.2 }, downwind);
       stones.push({ ...s, toward: a, decline: s.decline.kind === "snap" ? { kind: "tilt", most: sr.range(0.3, 0.7), from: sr.range(0.2, 0.5) } : s.decline });
     }
-    heart = [0, kerbR + 1.8];
+    center = [0, kerbR + 1.8];
   } else if (p.arrangement === "cairn field") {
     const cairns = clamp(Math.round(count * 0.6), 3, 9);
     const spread = Math.max(5, h * 1.6) * shape.spacing;
@@ -366,7 +366,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       emitCairn(out, x, z, tall, p.facets, cr);
       k++;
     }
-    heart = [spread * 0.9, 0];
+    center = [spread * 0.9, 0];
   } else {
     // Lone menhirs scattered loosely, taller than a ring's, some already leaning.
     const spread = Math.max(h * 1.3, Math.sqrt(count) * h * 0.75) * shape.spacing;
@@ -381,8 +381,8 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       const lean = sr.next() < 0.45 ? sr.range(0.12, 0.38) : sr.range(0, 0.05);
       stones.push(stoneAt(sr, x, z, sr.next() * Math.PI, tall, downwind, lean));
     }
-    heart = [0, 0];
-    if (stones.some((s) => Math.hypot(s.x, s.z) < h)) heart = [spread + h * 0.6, 0];
+    center = [0, 0];
+    if (stones.some((s) => Math.hypot(s.x, s.z) < h)) center = [spread + h * 0.6, 0];
   }
 
   stones.forEach((s, k) => emitStone(out, s, p.facets, r.fork(`emit${k}`), s.height > h * 0.4 ? 3 : 2));
@@ -392,8 +392,8 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
     const cr = r.fork("centre");
     const king = p.centre === "a tall king stone";
     const centre: Stone = {
-      x: heart[0],
-      z: heart[1],
+      x: center[0],
+      z: center[1],
       yaw: cr.next() * Math.PI,
       width: king ? size.width * 1.25 : size.width * 1.9,
       depth: king ? size.depth * 1.3 : size.width * 1.1,

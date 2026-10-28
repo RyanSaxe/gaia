@@ -2400,7 +2400,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
   const stones: Stone[] = [];
   const lintels: [number, number][] = [];
   const cairns: [number, number, number][] = [];
-  let heart: [number, number] = [0, 0];
+  let center: [number, number] = [0, 0];
   let cap: { X: number; Z: number; L: number; W: number; h: number } | null = null;
   /** A stone that stands until vitality drops below its own threshold, then tips over a range of vitality until it lies flat, or snaps. */
   const stand = (k: number, X: number, Z: number, height: number, width: number, out: number, leaning = 0): Stone => {
@@ -2432,7 +2432,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
       for (const side of [-1, 1]) stones.push(stand(stones.length, ...at(-length / 2 + k * spacing, (side * across) / 2), h * (0.72 + 0.38 * t), wd, AVENUE + (side * Math.PI) / 2));
       if (p.lintels && k % 2 === 1) lintels.push([stones.length - 2, stones.length - 1]);
     }
-    heart = at(length / 2 + spacing * 1.1, 0);
+    center = at(length / 2 + spacing * 1.1, 0);
   } else if (p.arrangement === "dolmen") {
     // A chamber of uprights under one great capstone, in a ring of low kerb stones.
     const legH = Math.max(1.6, p.height * 0.6) * LK;
@@ -2477,7 +2477,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
   }
   if (p.centre !== "nothing" && p.arrangement !== "dolmen") {
     const king = p.centre === "a tall king stone";
-    stones.push({ X: heart[0], Z: heart[1] + 0.4, h: king ? h * 1.55 : h * 0.3, wd: king ? wd * 1.1 : h * 0.9, a: -Math.PI / 2 + 0.5, lean: ease(w.v, 0.2, 0.04), snapped: false, king });
+    stones.push({ X: center[0], Z: center[1] + 0.4, h: king ? h * 1.55 : h * 0.3, wd: king ? wd * 1.1 : h * 0.9, a: -Math.PI / 2 + 0.5, lean: ease(w.v, 0.2, 0.04), snapped: false, king });
   }
   // The shadow over the whole arrangement.
   const feet: [number, number, number][] = [...stones.map((st) => [st.X, st.Z, st.h * 0.5] as [number, number, number]), ...cairns.map(([X, Z, t]) => [X, Z, t * 0.6] as [number, number, number])];

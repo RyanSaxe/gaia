@@ -85,8 +85,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   cover.className = "jump-cover";
   layer.append(cover);
   let jumping = false;
-  function jump(x: number, z: number, heart?: { readonly x: number; readonly z: number }, watch = false): boolean {
-    const at = world.landing(x, z, heart);
+  function jump(x: number, z: number, center?: { readonly x: number; readonly z: number }, watch = false): boolean {
+    const at = world.landing(x, z, center);
     if (at === null) {
       console.warn(`map: nowhere to land near (${Math.round(x)}, ${Math.round(z)})`);
       return false;
