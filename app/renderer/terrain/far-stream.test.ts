@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { Realized } from "@gaia/realize";
-import { FAR_BAKE_VERSION, FAR_VIEWS, type FarFormData, createSceneLight } from "@gaia/render";
+import { DROOP_CELLS, FAR_BAKE_VERSION, FAR_VIEWS, type FarFormData, createSceneLight } from "@gaia/render";
 import type { FarStore } from "./far-store.ts";
 import { FAR_TURN, createFarStream } from "./far-stream.ts";
 import { FAR, createFarForms } from "./woods.ts";
@@ -16,6 +16,7 @@ const stored: FarFormData = {
   frame: 1,
   sway: 0.2,
   frequency: 1,
+  droop: { cells: new Uint8Array(DROOP_CELLS ** 3 * 4).fill(128), scale: 0, reach: 0 },
   width: FAR_VIEWS.azimuths,
   height: FAR_VIEWS.elevations.length,
   layers: [0, 1, 2, 3].map(() => new Uint8Array(FAR_VIEWS.azimuths * FAR_VIEWS.elevations.length * 4)),

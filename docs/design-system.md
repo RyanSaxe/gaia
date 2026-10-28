@@ -294,10 +294,20 @@ the full form's do rather than vanish. The [likeness probe](development.md#visua
 holds each far form to its full form at a half, a quarter and an eighth of the
 size it turns far at.
 
+A tired tree's boughs sag about their joints and leave the healthy outline its
+far form's views hold, so the bake also keeps a coarse field of where each
+point moves as its boughs sag all the way (`droopField` in
+[`far.ts`](../packages/render/src/far.ts)). The far form finds where the point
+its eye meets came from and reads its views there: its boughs sag as far as its
+tree's do at its copy's vitality, and a change of vitality moves what it reads
+without baking again.
+
 Do not reduce density abruptly to rescue frame time. Batch and instance shared
 geometry, stream ahead of the person, cache far forms, and keep shadow updates
 stable in world space. Memory for far forms is a fixed budget: a build whose
 far form is not held draws its full form, never a coarser card, and a form
 coming in or leaving moves its swap size over many frames rather than
-changing a tree at once. Use the [walking and swap probes](development.md#visual-verification)
+changing a tree at once. The budget holds each form's views at every mip level
+a far form reads before it is too small to see, and its droop field
+(`farSlotBytes`). Use the [walking and swap probes](development.md#visual-verification)
 to check that a performance change preserves the view.

@@ -124,8 +124,8 @@ opening spot fills the slots with. Once the world shows, a form coming in or
 going out turns its copies' swap size up or down over many frames, so each
 copy passes through the same band as when a person walks away from it
 ([`far-stream.ts`](../app/renderer/terrain/far-stream.ts)). Every form's
-cards draw in one batch per set, from texture arrays holding the forms
-exactly as they were baked.
+cards draw in one batch per set, from texture arrays holding the forms as
+they were baked, at every mip level a card reads, and each form's droop field.
 
 The wild past the land stands for no code, and Jev composes its bushes too:
 one for each of the wild's two grounds (`WILD_GROUNDS` in
