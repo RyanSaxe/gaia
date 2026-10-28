@@ -33,7 +33,10 @@ export interface BookPages {
   tabs(): readonly { readonly name: string; readonly at: string; readonly from: string }[];
   /** Settles once everything a place's spread needs, such as a file's text, has come, so its pages are drawn whole. */
   ready?(at: string): Promise<void>;
-  /** Settles once a place's painting is whole: a page is never seen before its painting. */
+  /**
+   * Settles once a place's painting is whole, or found to have nothing to paint: a page is never seen before its
+   * painting, and the book waits on it however long it takes.
+   */
   painted?(at: string): Promise<void>;
   /**
    * What a riffle's leaves show on its way from `from` to `toward`: for the `k`th face of `of`, a page of real code
@@ -63,8 +66,11 @@ export interface JournalBook {
 export const PAGE = { w: 520, h: 660, overhang: 10 } as const;
 /** How wide a page's edge is, its outer fifth, in the book's pixels: a click there turns the page, over a map or a picture too. */
 const EDGE = PAGE.w / 5;
-/** The longest the book waits for a page to be whole, ms, which only text or a painting that failed to come takes. */
-const WHOLE_AT_MOST = 20000;
+/**
+ * The longest the book waits for a page's text, ms, which only text that failed to come takes. Its painting is waited
+ * for however long it takes: one of a place far off waits on land made ready there, which waits while the person travels.
+ */
+const TEXT_AT_MOST = 20000;
 /** How long the next page or the one before waits under a lifted page for its painting, ms, before the book riffles to it. */
 const BESIDE_MS = 1500;
 /**
@@ -320,11 +326,10 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     layEdges();
   }
   const after = (ms: number): Promise<void> => new Promise<void>((r) => window.setTimeout(r, ms));
-  /** Settles once a place's spread can be drawn whole, its code and its painting come; one that never comes is shown as it stands after a while. */
-  const wholeAt = (place: string): Promise<void> =>
-    Promise.race([Promise.all([pages.ready?.(place), pages.painted?.(place)]).then(() => undefined), after(WHOLE_AT_MOST)]);
-  /** Settles once a place's painting is whole, as `wholeAt` does. */
-  const painted = (place: string): Promise<void> => Promise.race([pages.painted?.(place) ?? Promise.resolve(), after(WHOLE_AT_MOST)]);
+  /** Settles once a place's painting is whole. */
+  const painted = (place: string): Promise<void> => pages.painted?.(place) ?? Promise.resolve();
+  /** Settles once a place's spread can be drawn whole, its code and its painting come; code that never comes is shown as it stands after a while. */
+  const wholeAt = (place: string): Promise<void> => Promise.all([Promise.race([pages.ready?.(place), after(TEXT_AT_MOST)]), painted(place)]).then(() => undefined);
   /** Whether a promise has already settled, or settles within a moment. */
   const settledSoon = (p: Promise<void>): Promise<boolean> => Promise.race([p.then(() => true), after(40).then(() => false)]);
   /** Whether `place` lies in the part of the book a tab begins at `chapter`: from it to the next tab's. */
