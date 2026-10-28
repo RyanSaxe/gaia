@@ -221,8 +221,12 @@ watercolor. Survey capitals identify places; handwritten notes identify the
 traveller's marks. Vermilion marks the traveller and travel route. Paper warms
 and dims under lantern light at night.
 
-The maps use real terrain heights and river courses. Building and landmark
-symbols come from their composed blueprints, with the same wear as the world.
+The maps use real terrain heights and river courses. Building, landmark, tree,
+bush, stone and flower symbols come from their composed blueprints, with the
+same wear as the world: a fir draws as tiers up its trunk and a failing one as
+bare whorls. Trees keep a legible size on the whole sheet; stones, bushes and
+flowers stand at their size on the land, so they come in as the map comes
+close.
 Color means health. Outside the code's land, unwashed paper and survey ink
 represent the wild, which has no code health to score.
 
@@ -233,7 +237,9 @@ It never paints fabricated progress or provisional judgments as final health.
 
 [`map-styles.ts`](../app/renderer/immersive/map-styles.ts) defines shared paper
 and map styles. [`marks.ts`](../app/renderer/immersive/marks.ts) draws composed
-symbols; [`map-names.ts`](../app/renderer/immersive/map-names.ts) places names;
+buildings and landmarks and
+[`plant-marks.ts`](../app/renderer/immersive/plant-marks.ts) composed plants and
+stones; [`map-names.ts`](../app/renderer/immersive/map-names.ts) places names;
 [`wait/map-wait.ts`](../app/renderer/wait/map-wait.ts) draws progress.
 
 ## Start page and Gaia's mark

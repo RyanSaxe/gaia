@@ -12,6 +12,7 @@ import type { SceneLight } from "@gaia/render";
 import type { Placement } from "@gaia/terrain";
 import type { Clearings } from "./clearings.ts";
 import type { PlantBuilds, PlantGroup } from "./code-world.ts";
+import { type PlantMark, markOf } from "./plant-mark.ts";
 import { type BuildAsk, made, makeLater, plantAsk } from "./made.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
@@ -105,6 +106,8 @@ export interface Understory {
   setVitality(vitality: ArrayLike<number>): void;
   /** A placed component's reach at the ground in 48 directions and its top above its origin, at scale 1, by the rule and variant its placement names. */
   readonly footprint: (rule: string, variant: number) => { readonly outline: Float32Array; readonly top: number } | undefined;
+  /** A placed component's build as its map mark is drawn, by the rule and variant its placement names. */
+  readonly mark: (rule: string, variant: number) => PlantMark | undefined;
   /** Shows or hides everything, for comparing frame costs. */
   show(on: boolean): void;
   /** What was placed, its triangles at full detail, its meshes, and the triangles the last pass drew. */
@@ -128,12 +131,13 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     const reach = fresh.map(outlineOf);
     const tops = fresh.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
     const far = fresh.map((p, i) => farForms?.add(p, () => makeLater(asks[i] as BuildAsk, lib), g.far));
+    const marks = fresh.map((p, i) => markOf(blueprints[i] as Blueprint, p));
     // Each build is held only until its instances are made (`instancesOf`) and its far form baked; asked for after
     // that, it is realized again, the same build.
     const plants: (Realized | null)[] = [...fresh];
     const plant = (variant: number): Realized => plants[variant] ?? made(asks[variant] as BuildAsk, lib);
     const turf = g.turf;
-    return { group: g, blueprints, plants, plant, far, reach, tops, outlines: reach.map((o) => o.map((r) => r * g.clears)), turfs: turf === undefined ? undefined : reach.map((o) => turfOf(o, turf)) };
+    return { group: g, blueprints, plants, plant, far, reach, tops, marks, outlines: reach.map((o) => o.map((r) => r * g.clears)), turfs: turf === undefined ? undefined : reach.map((o) => turfOf(o, turf)) };
   };
   let built: ReturnType<typeof buildGroup>[] = [];
   const views: { group: Group; view: Copies }[] = [];
@@ -221,6 +225,7 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     all: () => views.map((v) => v.view),
     grouped: () => views.map((v) => ({ group: v.group.id, view: v.view })),
     placements: () => placed,
+    mark: (rule, variant) => built.find((x) => x.group.id === rule)?.marks[variant],
     footprint: (rule, variant) => {
       const b = built.find((x) => x.group.id === rule);
       const outline = b?.reach[variant];
