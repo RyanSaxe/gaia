@@ -223,6 +223,13 @@ fn version_of(vocab: &str, code: u32) -> String {
     format!("{hash}-{code}")
 }
 
+/// A version from a vocabulary file's parsed words, so a change to its
+/// comments or layout keeps every answer.
+pub(super) fn vocab_version(vocab: &str, code: u32) -> String {
+    let table: toml::Table = toml::from_str(vocab).unwrap_or_default();
+    version_of(&toml::Value::Table(table).to_string(), code)
+}
+
 /// A version from one section of a vocabulary file, for calls that share the
 /// file, so a change to one call's words keeps the other calls' answers.
 fn section_version(vocab: &str, section: &str, code: u32) -> String {
@@ -540,6 +547,16 @@ pub fn registry() -> Vec<&'static dyn Call> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A vocabulary's version follows its words, not its comments or layout.
+    #[test]
+    fn a_vocabulary_s_version_follows_its_words_not_its_comments() {
+        let words = "[a]\nx = \"one\"\n";
+        let commented = "# Why a is here.\n[a]\n\n# A note.\nx   =   \"one\" # trailing\n";
+        assert_eq!(vocab_version(words, 1), vocab_version(commented, 1));
+        assert_ne!(vocab_version(words, 1), vocab_version("[a]\nx = \"two\"\n", 1));
+        assert_ne!(vocab_version(words, 1), vocab_version(words, 2));
+    }
 
     /// Every call's vocabulary parses, every question has options or levels,
     /// and every answer goes to a field the graph has.
