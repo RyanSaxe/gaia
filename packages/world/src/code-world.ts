@@ -29,7 +29,7 @@ import {
   seedOf,
 } from "@gaia/schema";
 import { LAND_ASPECT, type LandSite, landArea } from "@gaia/terrain";
-import { type StandingDef, definitionsOf } from "./definitions.ts";
+import { type PlacedDef, definitionsOf } from "./definitions.ts";
 import { type LandNode, divideLand, dividePlots, nearestRung, rung } from "./land.ts";
 import { MODEL, planStructure } from "./planner.ts";
 import { type Composed, type Composing, areaState, composeThing, composeThings, composingState, definitionState, fileState, repositoryState, share, trailState, trim, wildState } from "./compose.ts";
@@ -94,8 +94,8 @@ export interface WorldRequest {
   /** The path of a directory, file or entity root, or "" for the repository. */
   readonly target: string;
   readonly request: JevRequest;
-  /** For a `planStanding` request, the id of the thing each question is about, by question id. */
-  readonly stands?: Readonly<Record<string, string>>;
+  /** For a `planForms` request, the id of the thing each question is about, by question id. */
+  readonly thingByQuestion?: Readonly<Record<string, string>>;
 }
 
 /** Everything Jev decided about a world. */
@@ -111,9 +111,9 @@ export interface Judgments {
    * file's path or a definition's `<file>#<name>`. `composeWorld` requests these from Jev after the understanding pass
    * has judged the code, and offers each thing only the forms its importance allows.
    */
-  readonly stands?: Readonly<Record<string, string>>;
+  readonly forms?: Readonly<Record<string, string>>;
   /**
-   * What each thing appears as and its blueprint from `composeWorld`, by the same ids as `stands`. `layOut` places
+   * What each thing appears as and its blueprint from `composeWorld`, by the same ids as `forms`. `layOut` places
    * no building or landmark that lacks a blueprint.
    */
   readonly things: Readonly<Record<string, { readonly as: FormKind; readonly blueprint?: Blueprint }>>;
@@ -434,7 +434,7 @@ const perFile = (n: number, files: number): string => {
  * that matters can be as tall as a long one. In a form request it also carries Jev's importance for the file and
  * each definition, and each definition's doc.
  */
-export function fileWords(f: FileFacts, standing: readonly StandingDef[] = [], importance?: number): Record<string, unknown> {
+export function fileWords(f: FileFacts, defs: readonly PlacedDef[] = [], importance?: number): Record<string, unknown> {
   const declares: Record<string, string> = {};
   for (const kind of ["function", "class", "type", "module"] as const) {
     const n = f.symbols.filter((s) => s.kind === kind).length;
@@ -448,10 +448,10 @@ export function fileWords(f: FileFacts, standing: readonly StandingDef[] = [], i
     imports: `${howMany(f.imports.length)} project files`,
     importedBy: `${howMany(f.importedBy.length)} project files`,
     ...(share(importance) === undefined ? {} : { importance: share(importance) }),
-    ...(standing.length === 0
+    ...(defs.length === 0
       ? {}
       : {
-          standing: standing.map((d) => ({
+          standing: defs.map((d) => ({
             name: d.id.slice(d.file.length + 1),
             kind: d.kind,
             exported: d.exported,
@@ -574,7 +574,7 @@ function regionFor(regions: ReadonlySet<string>, dir: string): string {
 /**
  * Builds the Jev requests for areas and entities from code structure only, never source. Each area gets a question
  * on whether its land holds water. Each entity gets a question per dependency on whether a person would walk a
- * trail along it. `planStanding` builds the form requests later, after the understanding pass has judged importance.
+ * trail along it. `planForms` builds the form requests later, after the understanding pass has judged importance.
  */
 export function planWorldRequests(facts: CodeFacts, looks: Looks): WorldRequest[] {
   const dirs = directoriesOf(facts, facts.repository.name);
@@ -616,17 +616,17 @@ export function planWorldRequests(facts: CodeFacts, looks: Looks): WorldRequest[
 // ---------- choosing each thing's form ----------
 
 /** An entity, file or definition that gets a form, with Jev's importance once the understanding pass has judged it. */
-export interface StandingThing {
+export interface PlacedThing {
   readonly of: "entity" | "file" | "definition";
-  /** An entity's root path, a file's path or a definition's `<file>#<name>`. It is the key in `Judgments.stands`. */
+  /** An entity's root path, a file's path or a definition's `<file>#<name>`. It is the key in `Judgments.forms`. */
   readonly id: string;
   readonly importance?: number;
 }
 
 /** Every entity, file and definition placed in the world, with its importance. `rankThings` ranks among these. */
-export function standingThings(facts: CodeFacts, graph?: CodeGraph): StandingThing[] {
+export function placedThings(facts: CodeFacts, graph?: CodeGraph): PlacedThing[] {
   const importance = new Map((graph?.nodes ?? []).flatMap((n) => (n.kind !== "block" && typeof n.judged?.value?.importance === "number" ? [[n.id, n.judged.value.importance] as const] : [])));
-  const thing = (of: StandingThing["of"], id: string, value: number | undefined): StandingThing => ({ of, id, ...(value === undefined ? {} : { importance: value }) });
+  const thing = (of: PlacedThing["of"], id: string, value: number | undefined): PlacedThing => ({ of, id, ...(value === undefined ? {} : { importance: value }) });
   return [
     ...[...facts.entities].sort(byPath).map((e) => thing("entity", e.path, importance.get(`dir:${e.path}`))),
     ...[...facts.files].sort(byPath).map((f) => thing("file", f.path, importance.get(`file:${f.path}`))),
@@ -652,8 +652,8 @@ const ENTITY_RANKS = 0.85;
  * any size.
  */
 export function rankThings(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<string, number> {
-  const things = standingThings(facts, graph);
-  const sortedOf = (of: (t: StandingThing) => boolean): number[] => things.filter(of).map((t) => t.importance ?? 0).sort((a, b) => a - b);
+  const things = placedThings(facts, graph);
+  const sortedOf = (of: (t: PlacedThing) => boolean): number[] => things.filter(of).map((t) => t.importance ?? 0).sort((a, b) => a - b);
   const entities = sortedOf((t) => t.of === "entity");
   const rest = sortedOf((t) => t.of !== "entity");
   return new Map(things.map((t) => [t.id, t.of === "entity" ? ENTITY_RANKS + (1 - ENTITY_RANKS) * rankAmong(t.importance ?? 0, entities) : rankAmong(t.importance ?? 0, rest)]));
@@ -667,7 +667,7 @@ export function formsFor(looks: Looks, rank: number): string[] {
 }
 
 /** The form requests, and the form of each thing offered only one, which needs no question. */
-export interface StandingPlan {
+export interface FormPlan {
   readonly requests: readonly WorldRequest[];
   readonly only: Readonly<Record<string, string>>;
 }
@@ -679,10 +679,10 @@ export interface StandingPlan {
  * in the state. A file's question shares a request with its first
  * `LAYOUT.formsPerRequest` definitions. Each entity gets its own request.
  */
-export function planStanding(facts: CodeFacts, looks: Looks, options: PlanOptions = {}): StandingPlan {
+export function planForms(facts: CodeFacts, looks: Looks, options: PlanOptions = {}): FormPlan {
   const { graph } = options;
   const ranks = rankThings(facts, graph);
-  const importance = new Map(standingThings(facts, graph).flatMap((t) => (t.importance === undefined ? [] : [[t.id, t.importance] as const])));
+  const importance = new Map(placedThings(facts, graph).flatMap((t) => (t.importance === undefined ? [] : [[t.id, t.importance] as const])));
   const only: Record<string, string> = {};
   const requests: WorldRequest[] = [];
   const RARE = "Only the forms that suit how much it matters (`importance`) are offered, so a form's size already follows how much it matters, never how long its code is; choose by character.";
@@ -698,13 +698,13 @@ export function planStanding(facts: CodeFacts, looks: Looks, options: PlanOption
   };
   const push = (about: WorldRequest["about"], target: string, state: unknown, asked: readonly (readonly [string, string, JevQuestion | undefined])[]): void => {
     const questions: Record<string, JevQuestion> = {};
-    const stands: Record<string, string> = {};
+    const thingByQuestion: Record<string, string> = {};
     for (const [qid, id, q] of asked) {
       if (q === undefined) continue;
       questions[qid] = q;
-      stands[qid] = id;
+      thingByQuestion[qid] = id;
     }
-    if (Object.keys(questions).length > 0) requests.push({ about, target, request: { model: MODEL, state, questions }, stands });
+    if (Object.keys(questions).length > 0) requests.push({ about, target, request: { model: MODEL, state, questions }, thingByQuestion });
   };
   const defs = definitionsOf(facts, graph);
   for (const f of [...facts.files].sort(byPath)) {
@@ -783,13 +783,13 @@ function nativesOf(land: Blueprint | undefined): readonly string[] {
 }
 
 /** Whether an id is an entity's root directory, a file's path, or else a definition's `<file>#<name>`. */
-function thingKind(facts: CodeFacts, id: string): StandingThing["of"] {
+function thingKind(facts: CodeFacts, id: string): PlacedThing["of"] {
   if (facts.entities.some((e) => e.path === id)) return "entity";
   return facts.files.some((f) => f.path === id) ? "file" : "definition";
 }
 
 /** The file whose patch holds a thing: a file's own path or a definition's file. Undefined for an entity. */
-const fileOfThing = (of: StandingThing["of"], id: string): string | undefined => (of === "entity" ? undefined : of === "file" ? id : id.slice(0, id.indexOf("#")));
+const fileOfThing = (of: PlacedThing["of"], id: string): string | undefined => (of === "entity" ? undefined : of === "file" ? id : id.slice(0, id.indexOf("#")));
 
 /** About how many requests composing a world's things takes after their forms are chosen, and one sample request for pricing. */
 export interface ComposingEstimate {
@@ -804,7 +804,7 @@ export interface ComposingEstimate {
  * comparison. Returns null for a world with no things or no tree form to price by.
  */
 export function composingEstimate(facts: CodeFacts, looks: Looks, graph?: CodeGraph): ComposingEstimate | null {
-  const things = standingThings(facts, graph);
+  const things = placedThings(facts, graph);
   const first = things[0];
   const form = Object.entries(looks.form).find(([, look]) => look.composes === "tree" && look.first !== undefined);
   if (first === undefined || form === undefined) return null;
@@ -822,7 +822,7 @@ export interface ComposeOptions {
 
 /**
  * Composes the world part by part through `jev` after the understanding pass has judged the code. Unless
- * `judged.stands` is set, it first has Jev choose a form for every entity, file and definition (`planStanding`). It then
+ * `judged.forms` is set, it first has Jev choose a form for every entity, file and definition (`planForms`). It then
  * composes the sky, each region's land, each thing with a composing form, and each trail. A thing is composed after
  * its land, with its colors narrowed to the land's native families. Each request carries what `graph` holds about
  * its part of the code (`repositoryState`, `areaState`, `composingState`, `fileState`, `definitionState`,
@@ -875,7 +875,7 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     const place = { has: [], narrow: { [NATIVE_COLORS.thing]: families } };
     return composeThings(looks.compose, jev, looks.wild.map((ground, i): Composed => ({ path: wildId(i), as: "wildBush", state: wildState(ground, s, around, looks.compose.biome), ...place })), concurrency);
   });
-  // Choose each thing's form unless `judged.stands` has it. A thing with a composing form is composed as soon as its answer arrives and its land is composed.
+  // Choose each thing's form unless `judged.forms` has it. A thing with a composing form is composed as soon as its answer arrives and its land is composed.
   const things: Record<string, { as: FormKind; blueprint?: Blueprint }> = { ...judged.things };
   const rising: Promise<unknown>[] = [];
   const compose = (id: string, as: FormKind, form?: string): void => {
@@ -888,27 +888,27 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     things[id] = { as };
     compose(id, as, form);
   };
-  let stands = judged.stands;
-  if (stands === undefined) {
-    const plan = planStanding(facts, looks, graph === undefined ? {} : { graph });
+  let forms = judged.forms;
+  if (forms === undefined) {
+    const plan = planForms(facts, looks, graph === undefined ? {} : { graph });
     const out: Record<string, string> = { ...plan.only };
     for (const [id, form] of Object.entries(plan.only)) raise(id, form);
     await inTurn(plan.requests, concurrency, async (p) => {
       const a = (await jev.ask(p.request)).answers;
-      for (const [qid, id] of Object.entries(p.stands ?? {})) {
+      for (const [qid, id] of Object.entries(p.thingByQuestion ?? {})) {
         out[id] = picked(a, qid, id);
         raise(id, out[id]);
       }
     });
     // Answers arrive in any order. Rebuilding in planning order makes the same answers give the same judgments.
-    stands = Object.fromEntries(standingThings(facts, graph).flatMap((t) => (out[t.id] === undefined ? [] : [[t.id, out[t.id] as string] as const])));
-  } else for (const [id, form] of Object.entries(stands ?? {})) raise(id, form);
+    forms = Object.fromEntries(placedThings(facts, graph).flatMap((t) => (out[t.id] === undefined ? [] : [[t.id, out[t.id] as string] as const])));
+  } else for (const [id, form] of Object.entries(forms ?? {})) raise(id, form);
   const [composedLands, composedSky, composedTrails, composedWild] = await Promise.all([lands, sky, trails, wild, Promise.all(rising)]);
   const blueprints = { ...composedLands, ...composedTrails, ...composedWild };
   const of = (id: string): Blueprint => blueprints[id] ?? (things[id]?.blueprint as Blueprint);
   return {
     ...judged,
-    ...(stands === undefined ? {} : { stands }),
+    ...(forms === undefined ? {} : { forms }),
     sky: composedSky,
     lands: Object.fromEntries(regions.map((path) => [path, of(`land:${path}`)])),
     wild: looks.wild.map((_, i) => of(wildId(i))),
@@ -930,7 +930,7 @@ const groundOfFile = (f: FileFacts, defs: number): number => weightOf(f) * LAYOU
  * exception. Its own ground is placed among the subdirectories so that trails
  * between areas do not all cross it.
  */
-function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>, defs: ReadonlyMap<string, readonly StandingDef[]>): LandNode {
+function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>, defs: ReadonlyMap<string, readonly PlacedDef[]>): LandNode {
   const node = (path: string): LandNode => {
     const d = dirs.get(path) as Dir;
     const own: LandNode[] = [];
@@ -953,18 +953,18 @@ function landTree(dirs: Map<string, Dir>, lots: ReadonlyMap<string, number>, def
  * definition's own lines plus `LAYOUT.defGround`. Each definition is placed at
  * its plot's center.
  */
-function plotDefinitions(f: FileFacts, defs: readonly StandingDef[], leaf: { readonly x: number; readonly z: number; readonly inner: readonly (readonly [number, number])[] }, step: number): { own: { x: number; z: number }; defs: { def: StandingDef; x: number; z: number }[] } {
+function plotDefinitions(f: FileFacts, defs: readonly PlacedDef[], leaf: { readonly x: number; readonly z: number; readonly inner: readonly (readonly [number, number])[] }, step: number): { own: { x: number; z: number }; defs: { def: PlacedDef; x: number; z: number }[] } {
   if (defs.length === 0) return { own: { x: leaf.x, z: leaf.z }, defs: [] };
   const perLine = LAYOUT.m2PerLine;
-  const inside = new Map<string, StandingDef[]>();
+  const inside = new Map<string, PlacedDef[]>();
   for (const d of defs) {
     const key = d.parent ?? "";
     const list = inside.get(key);
     if (list === undefined) inside.set(key, [d]);
     else list.push(d);
   }
-  const own = (lines: number, within: readonly StandingDef[]): number => Math.max(1, lines - within.reduce((n, c) => n + c.lines, 0));
-  const node = (d: StandingDef): LandNode => {
+  const own = (lines: number, within: readonly PlacedDef[]): number => Math.max(1, lines - within.reduce((n, c) => n + c.lines, 0));
+  const node = (d: PlacedDef): LandNode => {
     const kids = inside.get(d.id) ?? [];
     const self: LandNode = { id: `def:${d.id}`, ground: own(d.lines, kids) * perLine + LAYOUT.defGround, children: [], heart: true };
     return kids.length === 0 ? self : { id: `in:${d.id}`, ground: 0, children: [self, ...kids.map(node)] };
@@ -1024,7 +1024,7 @@ interface Division {
   readonly size: number;
   readonly aspect: number;
   readonly land: ReturnType<typeof divideLand>;
-  readonly defs: ReadonlyMap<string, readonly StandingDef[]>;
+  readonly defs: ReadonlyMap<string, readonly PlacedDef[]>;
 }
 
 /** Cached land divisions per facts object, keyed by graph and aspect. A division depends only on the code. */
@@ -1107,7 +1107,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
   // any source, as in a world opened without Jev, gets vitality 1.
   const quality = new Map((graph?.nodes ?? []).flatMap((n) => (n.kind !== "block" && typeof n.judged?.value?.quality === "number" ? [[n.id, n.judged.value.quality] as const] : [])));
   const importance = new Map((graph?.nodes ?? []).flatMap((n) => (n.kind !== "block" && typeof n.judged?.value?.importance === "number" ? [[n.id, n.judged.value.importance] as const] : [])));
-  const stands = judged.stands ?? {};
+  const forms = judged.forms ?? {};
   // For each definition, the ids of the definitions and files that call or reference it.
   const leaning = new Map<string, Set<string>>();
   for (const e of graph?.edges ?? []) {
@@ -1152,7 +1152,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
   const standing: CodeStanding[] = [];
   /** Adds a `CodeStanding` for a file or entity that has a form and no building or landmark. */
   const stand = (of: CodeStanding["of"], path: string, name: string, lines: number, at: { x: number; z: number }, vitality: number, value: number | undefined, file?: string): void => {
-    const form = stands[path];
+    const form = forms[path];
     if (form === undefined || composed(path) !== undefined) return;
     standing.push({ of, path, name, form, ...small(path), lines, ...(value === undefined ? {} : { importance: value }), x: at.x, z: at.z, ...(file === undefined ? {} : { file }), vitality });
   };
@@ -1215,7 +1215,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
         lines: def.lines,
         ...(def.doc === undefined ? {} : { doc: def.doc }),
         ...(def.importance === undefined ? {} : { importance: def.importance }),
-        form: stands[def.id] ?? "",
+        form: forms[def.id] ?? "",
         ...small(def.id),
         x,
         z,

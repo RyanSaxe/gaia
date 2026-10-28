@@ -16,7 +16,7 @@ import { parseArgs } from "node:util";
 import { engineBinary } from "./engine-binary.ts";
 import { cargoEnv } from "./cargo-env.ts";
 import type { CodeGraph, JevEstimate } from "@gaia/schema";
-import { factsOf, planStanding, planWorldRequests } from "@gaia/world";
+import { factsOf, planForms, planWorldRequests } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 import { SNAPSHOT } from "./snapshot-paths.ts";
 
@@ -26,7 +26,7 @@ const graphFile = resolve(values.graph ?? SNAPSHOT.graph);
 if (!existsSync(graphFile)) throw new Error(`No graph snapshot at ${graphFile}: write one with \`GAIA_DATA_DIR=dir pnpm graph-snapshot\`, or pass --graph.`);
 const graph = JSON.parse(readFileSync(graphFile, "utf8")) as CodeGraph;
 const facts = factsOf(graph);
-const planned = [...planWorldRequests(facts, LOOKS), ...planStanding(facts, LOOKS, { graph }).requests];
+const planned = [...planWorldRequests(facts, LOOKS), ...planForms(facts, LOOKS, { graph }).requests];
 const out = positionals[0];
 if (out !== undefined) writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
 else console.log(JSON.stringify(planned.map((p) => p.request), null, 2));

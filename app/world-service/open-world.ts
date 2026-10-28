@@ -6,7 +6,7 @@
 
 import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey, vitalityOf, withLines, withVitality } from "@gaia/world";
+import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planForms, planWorldRequests, requestKey, vitalityOf, withLines, withVitality } from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
 import type { ConsentPlan, Heal, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
@@ -112,7 +112,7 @@ export interface OpenWorldOptions {
 
 /**
  * Returns what a request made after the looks settles, from its state, for the wait's pencil strokes. A request is
- * `composed` when it composes a blueprint and `chosen` when it picks forms (`planStanding`). A file's or definition's
+ * `composed` when it composes a blueprint and `chosen` when it picks forms (`planForms`). A file's or definition's
  * request is reported by its file. An entity's, directory's or the repository's is reported by its area, with "" for
  * the repository. A trail's request returns null.
  */
@@ -163,7 +163,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const keys = planned.map((p) => requestKey(p.request));
   // Form requests depend on the importance the understanding pass judges, so `composeWorld` plans them again after the
   // pass. This early plan uses the stored judgments and only counts the missing requests for the estimate.
-  const standing = planStanding(facts, LOOKS, { graph }).requests;
+  const standing = planForms(facts, LOOKS, { graph }).requests;
 
   // A file's vitality is Jev's quality, so the renderer gets it once the understanding pass has judged the file.
   const healthUnsent = new Set(land.patches.map((p) => p.path));

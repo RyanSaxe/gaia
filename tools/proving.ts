@@ -421,18 +421,18 @@ const facts: CodeFacts = {
 
 // Every other definition of a source file appears as a tree, so each file has trees at its health, and the rest cycle
 // through the stones, bushes and flowers.
-const stands: Record<string, string> = {};
+const forms: Record<string, string> = {};
 const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.composes === "tree");
 const others = Object.keys(FORMS).filter((k) => FORMS[k]?.composes !== "tree");
 let tree = 0;
 let other = 0;
 for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
-  if (f.kind === "source") f.symbols.forEach((s, k) => (stands[`${f.path}#${s.name}`] = k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)));
+  if (f.kind === "source") f.symbols.forEach((s, k) => (forms[`${f.path}#${s.name}`] = k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)));
 }
 /** The forms other than a building or a landmark: a tree, a bush, a stone or flowers. */
 type SmallFormKind = Exclude<FormKind, "building" | "landmark">;
 /** The forms of the definitions. */
-const definitionForms = (): string[] => Object.entries(stands).flatMap(([id, form]) => (id.includes("#") ? [form] : []));
+const definitionForms = (): string[] => Object.entries(forms).flatMap(([id, form]) => (id.includes("#") ? [form] : []));
 // Every file also appears as one thing at its patch's center, cycling through every form. A few files and definitions
 // appear as a building or a landmark, so the proving ground shows a thing of every size at every level of the code.
 const small = Object.keys(FORMS);
@@ -440,10 +440,10 @@ const sources = [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).filter((f)
 /** Every thing that appears as a building or a landmark, by id: the plan's entities, then the raised files and definitions. */
 const raised = new Map<string, "building" | "landmark">(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, d.entity.as] as const])));
 const raise = (id: string, as: "building" | "landmark"): void => {
-  stands[id] = Object.keys(COMPOSED_FORMS).find((key) => COMPOSED_FORMS[key]?.composes === as) as string;
+  forms[id] = Object.keys(COMPOSED_FORMS).find((key) => COMPOSED_FORMS[key]?.composes === as) as string;
   raised.set(id, as);
 };
-[...files].sort((a, b) => (a.path < b.path ? -1 : 1)).forEach((f, k) => (stands[f.path] = small[k % small.length] as string));
+[...files].sort((a, b) => (a.path < b.path ? -1 : 1)).forEach((f, k) => (forms[f.path] = small[k % small.length] as string));
 // Every seventh source file is raised, alternating building and landmark, and every eleventh raises its first
 // definition, alternating landmark and building.
 sources.forEach((f, k) => {
@@ -542,7 +542,7 @@ const smallSweeps: Readonly<Record<SmallFormKind, readonly Blueprint[]>> = {
   flowers: swept("a drift's", COMPOSING.flowers),
 };
 const turns = new Map<string, number>();
-const smallThings = Object.entries(stands).flatMap(([id, form]): [string, { as: SmallFormKind; blueprint: Blueprint }][] => {
+const smallThings = Object.entries(forms).flatMap(([id, form]): [string, { as: SmallFormKind; blueprint: Blueprint }][] => {
   const as = FORMS[form]?.composes;
   if (as === undefined || raisedAs(as)) return [];
   const rows = smallSweeps[as];
@@ -567,7 +567,7 @@ const judged: Judgments = {
   wild,
   waters: Object.fromEntries(regions.map((d) => [d.path, d.water as string])),
   things,
-  stands,
+  forms: forms,
   trails: TRAIL_PLAN.map(([from, to, want], i) => ({ from, to, want, route: routes[i] as Blueprint })),
   quality,
 };
@@ -578,7 +578,7 @@ const missing = (what: string, options: Readonly<Record<string, unknown>>, used:
   const seen = new Set(used);
   return Object.keys(options).filter((k) => !seen.has(k)).map((k) => `${what} "${k}"`);
 };
-gaps.push(...missing("water", WATERS, Object.values(judged.waters)), ...missing("form", FORMS, definitionForms()), ...missing("raised form", COMPOSED_FORMS, Object.values(stands)));
+gaps.push(...missing("water", WATERS, Object.values(judged.waters)), ...missing("form", FORMS, definitionForms()), ...missing("raised form", COMPOSED_FORMS, Object.values(forms)));
 if (gaps.length > 0) throw new Error(`The proving ground lacks ${gaps.join(", ")}.`);
 const world = layoutWorld(facts, judged, undefined, 1);
 const laidOut = world.regions.map((r) => r.area);

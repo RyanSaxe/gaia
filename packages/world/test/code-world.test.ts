@@ -3,7 +3,7 @@ import { biome, bush, landmark, link, rock, structure, tree, wildBush, wildflowe
 import { BUSH_PRIMITIVES, PALETTE_FAMILIES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
 import { type CodeGraph, type CodeFacts, type DefNode, type EntityFacts, type FileFacts, type JevClient, type JevQuestion, type JevRequest, type JevResponse, Library } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
-import { LAYOUT, type LookSet, type Looks, composeWorld, formsFor, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, raisedAs, rankThings, requestKey, validate } from "@gaia/world";
+import { LAYOUT, type LookSet, type Looks, composeWorld, formsFor, journalOf, judgeWorld, keptJev, landOf, layoutWorld, planForms, planWorldRequests, raisedAs, rankThings, requestKey, validate } from "@gaia/world";
 import { fakeJevClient } from "./fixtures.ts";
 
 const file = (path: string, lines: number): FileFacts => ({
@@ -217,7 +217,7 @@ describe("a world laid out from code", () => {
       const judged = await judgeWorld(facts(), looks, jev);
       const everywhere = Object.fromEntries(Object.keys(judged.waters).map((path) => [path, water]));
       const buildings = Object.fromEntries(facts().entities.map((e) => [e.path, { as: "building" as const }]));
-      await composeWorld(facts(), looks, jev, { ...judged, waters: everywhere, things: buildings, stands: {} });
+      await composeWorld(facts(), looks, jev, { ...judged, waters: everywhere, things: buildings, forms: {} });
       return new Set(asked.flatMap((r) => Object.keys((r.questions["feature.use"] as { criteria?: object } | undefined)?.criteria ?? {})));
     };
     const dry = await offered("Dry");
@@ -295,14 +295,14 @@ describe("a world laid out from code", () => {
 
   it("asks Jev only about the code's structure, in requests that fit its window, with options it can answer", async () => {
     const looks = planWorldRequests(facts(), LOOKS);
-    // planWorldRequests asks only about areas and entity trails. planStanding asks for forms later, with one request per
+    // planWorldRequests asks only about areas and entity trails. planForms asks for forms later, with one request per
     // file and one per entity.
     expect(looks.filter((r) => r.about === "file")).toHaveLength(0);
     expect(looks.filter((r) => r.about === "entity").map((r) => r.target)).toEqual(["packages/app"]);
-    const stands = planStanding(facts(), LOOKS).requests;
-    expect(stands.filter((r) => r.about === "file")).toHaveLength(facts().files.length);
-    expect(stands.filter((r) => r.about === "entity")).toHaveLength(3);
-    for (const { request } of [...looks, ...stands]) {
+    const formRequests = planForms(facts(), LOOKS).requests;
+    expect(formRequests.filter((r) => r.about === "file")).toHaveLength(facts().files.length);
+    expect(formRequests.filter((r) => r.about === "entity")).toHaveLength(3);
+    for (const { request } of [...looks, ...formRequests]) {
       expect(JSON.stringify(request.state)).not.toContain("contentHash");
       // Jev's window is 32,000 tokens, which the engine counts as 1.8 bytes each.
       expect(JSON.stringify(request).length / 1.8).toBeLessThan(32_000);
@@ -319,7 +319,7 @@ describe("a world laid out from code", () => {
   });
 
   it("asks a file again after an edit only when its words change", () => {
-    const keyOf = (m: CodeFacts): string => requestKey(planStanding(m, LOOKS).requests.find((p) => p.target === "packages/core/src/math.ts")!.request);
+    const keyOf = (m: CodeFacts): string => requestKey(planForms(m, LOOKS).requests.find((p) => p.target === "packages/core/src/math.ts")!.request);
     const edit = (grow: number, exported = "x"): CodeFacts => ({
       ...facts(),
       files: facts().files.map((f) => (f.path === "packages/core/src/math.ts" ? { ...f, lines: f.lines + grow, symbols: f.symbols.map((x) => ({ ...x, line: (x.line ?? 1) + grow, name: x.name === "x" ? exported : x.name })) } : f)),
@@ -514,8 +514,8 @@ describe("a world laid out from code", () => {
   it("lets Jev choose each symbol's form and each area's water, and chooses trails that join every connected part first", async () => {
     const judged = await composed(facts(), fakeJevClient());
     // Each thing gets its own question among the forms for its rank. `#x` is math.ts's function x.
-    expect(holding(0.5)).toContain(judged.stands?.["packages/core/src/math.ts#x"]);
-    expect(holding(0.5)).toContain(judged.stands?.["packages/core/src/math.ts"]);
+    expect(holding(0.5)).toContain(judged.forms?.["packages/core/src/math.ts#x"]);
+    expect(holding(0.5)).toContain(judged.forms?.["packages/core/src/math.ts"]);
     for (const w of Object.values(judged.waters)) expect(["Dry", "Brook"]).toContain(w);
     const world = layoutWorld(facts(), { ...judged, trails: [{ from: "packages/app", to: "packages/core", want: 0.9 }, { from: "", to: "packages/core", want: 0.6 }, { from: "", to: "packages/app", want: 0.3 }] });
     expect(world.trails.map((t) => `${t.from}->${t.to}`)).toEqual(["packages/app->packages/core", "->packages/core"]);
@@ -523,15 +523,15 @@ describe("a world laid out from code", () => {
   });
 
   it("under the judged design, asks what every file, its definitions and every entity stand as, each on its own, over as many requests as a file needs", async () => {
-    const planned = planStanding(facts(), LOOKS).requests;
+    const planned = planForms(facts(), LOOKS).requests;
     const math = planned.find((p) => p.target === "packages/core/src/math.ts")!;
     expect(Object.keys(math.request.questions).sort()).toEqual(["form", "form#helper", "form#x"]);
-    expect(math.stands).toEqual({ form: "packages/core/src/math.ts", "form#helper": "packages/core/src/math.ts#helper", "form#x": "packages/core/src/math.ts#x" });
+    expect(math.thingByQuestion).toEqual({ form: "packages/core/src/math.ts", "form#helper": "packages/core/src/math.ts#helper", "form#x": "packages/core/src/math.ts#x" });
     // A file with no definitions still gets a form question for itself.
     expect(Object.keys(planned.find((p) => p.target === "README.md")!.request.questions)).toEqual(["form"]);
     // A file with more definitions than `LAYOUT.formsPerRequest` spreads them over several requests, asking about each once.
     const crowded = { ...facts(), files: facts().files.map((f) => (f.path === "packages/core/src/math.ts" ? { ...f, symbols: Array.from({ length: 30 }, (_, k) => ({ name: `f${k}`, kind: "function" as const, exported: false, line: 1 + k * 9, lines: 8 })) } : f)) };
-    const asked = planStanding(crowded, LOOKS).requests.filter((p) => p.target === "packages/core/src/math.ts");
+    const asked = planForms(crowded, LOOKS).requests.filter((p) => p.target === "packages/core/src/math.ts");
     expect(asked.length).toBe(Math.ceil(30 / LAYOUT.formsPerRequest));
     expect(asked.flatMap((p) => Object.keys(p.request.questions)).sort()).toEqual(["form", ...Array.from({ length: 30 }, (_, k) => `form#f${k}`)].sort());
     // A Jev that gives each thing its own form.
@@ -558,9 +558,9 @@ describe("a world laid out from code", () => {
       ],
     };
     const ranks = rankThings(facts(), graph);
-    const planned = planStanding(facts(), LOOKS, { graph }).requests;
+    const planned = planForms(facts(), LOOKS, { graph }).requests;
     for (const p of planned) {
-      for (const [qid, id] of Object.entries(p.stands ?? {})) {
+      for (const [qid, id] of Object.entries(p.thingByQuestion ?? {})) {
         const q = p.request.questions[qid];
         if (q?.type !== "choice") throw new Error(`${qid} is not a choice.`);
         // The offered forms are exactly those whose range holds the thing's rank.
@@ -572,9 +572,9 @@ describe("a world laid out from code", () => {
     expect(holding(ranks.get(`${math}#heart`) as number)).toEqual(["Bush", "Hall", "Spire"]);
     expect(holding(ranks.get(`${math}#helper`) as number)).toEqual(["Stone"]);
     // A thing offered only one form gets it with no question.
-    const plan = planStanding(facts(), LOOKS, { graph });
+    const plan = planForms(facts(), LOOKS, { graph });
     expect(plan.only[`${math}#helper`]).toBe("Stone");
-    expect(Object.values(plan.requests).some((p) => Object.values(p.stands ?? {}).includes(`${math}#helper`))).toBe(false);
+    expect(Object.values(plan.requests).some((p) => Object.values(p.thingByQuestion ?? {}).includes(`${math}#helper`))).toBe(false);
     // Each request's state carries its things' importance.
     const own = planned.find((p) => p.target === math)!;
     const state = own.request.state as { file: { importance?: number; standing?: { name: string; importance?: number }[] } };
@@ -621,7 +621,7 @@ describe("a world laid out from code", () => {
   it("keeps Jev's answers: a stored one is used without asking, and a request Jev cannot answer fails, naming it and why, with nothing guessed", async () => {
     const planned = planWorldRequests(facts(), LOOKS);
     const area = planned.find((p) => p.about === "area");
-    const file = planStanding(facts(), LOOKS).requests.find((p) => p.about === "file");
+    const file = planForms(facts(), LOOKS).requests.find((p) => p.about === "file");
     const stored = await fakeJevClient().ask(area!.request);
     const asked: string[] = [];
     // A Jev that answers every choice with an option it was never offered.

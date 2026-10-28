@@ -11,7 +11,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 import type { CodeGraph, JevResponse } from "@gaia/schema";
-import { composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
+import { composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planForms, planWorldRequests, requestKey } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 import { showcaseFiles } from "../app/renderer/terrain/showcase-code.ts";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
@@ -108,7 +108,7 @@ try {
   const understanding = await client.call("understanding.plan", { root });
   const graph0 = judgedGraph(first);
   const facts0 = factsOf(graph0);
-  const looks = [...planWorldRequests(facts0, LOOKS), ...planStanding(facts0, LOOKS, { graph: graph0 }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
+  const looks = [...planWorldRequests(facts0, LOOKS), ...planForms(facts0, LOOKS, { graph: graph0 }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
   const judging = await client.call("jev.estimate", { requests: looks.map((p) => p.request) });
   // Composing depends on those answers. It takes about two requests per thing, each priced as one that composes a tree.
   const composing = looks.length > 0 ? composingEstimate(facts0, LOOKS, graph0) : null;

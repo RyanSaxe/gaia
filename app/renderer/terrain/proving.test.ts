@@ -70,7 +70,7 @@ describe("the proving ground", () => {
     // Its sky is the first of the sweep's skies.
     expect(judged.sky?.id).toBe(sweep(COMPOSING.world, COMPOSING.lib).blueprints[0]?.id);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
-    expect(used(FORMS, Object.entries(judged.stands ?? {}).flatMap(([id, form]) => (id.includes("#") ? [form] : [])))).toEqual([]);
+    expect(used(FORMS, Object.entries(judged.forms ?? {}).flatMap(([id, form]) => (id.includes("#") ? [form] : [])))).toEqual([]);
     // Any code can appear as any form: an entity, a file and a definition each appear as a building and as a landmark,
     // and every file appears as one thing of its own.
     for (const of of ["entity", "file", "definition"] as const) {

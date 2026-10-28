@@ -24,7 +24,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import type { CodeGraph, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, planStanding, planWorldRequests, requestKey } from "@gaia/world";
+import { composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, planForms, planWorldRequests, requestKey } from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -76,9 +76,9 @@ else throw new Error(`Unknown judge ${judge}; choose jev or local.`);
 const status = await client.call("jev.status", {});
 if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
 
-// What this run would send: the look and form requests (`planWorldRequests`, `planStanding`) with no kept answer, at
+// What this run would send: the look and form requests (`planWorldRequests`, `planForms`) with no kept answer, at
 // most --limit of them.
-const missing = [...planWorldRequests(facts, LOOKS), ...planStanding(facts, LOOKS, { graph }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
+const missing = [...planWorldRequests(facts, LOOKS), ...planForms(facts, LOOKS, { graph }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
 const toSend = missing.slice(0, limit);
 const estimate = await client.call("jev.estimate", { requests: toSend.map((p) => p.request) });
 // Composing depends on those answers. It takes about two requests per thing, each priced as one that composes a tree,

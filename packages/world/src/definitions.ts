@@ -8,7 +8,7 @@
 import type { CodeGraph, CodeFacts, DefNode, SymbolFact } from "@gaia/schema";
 
 /** A definition placed on its file's patch. */
-export interface StandingDef {
+export interface PlacedDef {
   /** `<file>#<name>`, with the name qualified by its enclosing definitions, such as `app/x.ts#World.open`. */
   readonly id: string;
   readonly file: string;
@@ -50,12 +50,12 @@ const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
  * definition before the ones inside it. With a graph, every definition in it
  * is placed. Without one, the facts' top-level symbols are.
  */
-export function definitionsOf(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<string, readonly StandingDef[]> {
+export function definitionsOf(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<string, readonly PlacedDef[]> {
   const files = new Map(facts.files.map((f) => [f.path, f]));
-  const out = new Map<string, StandingDef[]>();
+  const out = new Map<string, PlacedDef[]>();
   if (graph === undefined) {
     for (const f of files.values()) {
-      const defs = f.symbols.map((s): StandingDef => ({ id: `${f.path}#${s.name}`, file: f.path, name: s.name, kind: s.kind, exported: s.exported, line: s.line ?? 0, lines: s.lines ?? 1 }));
+      const defs = f.symbols.map((s): PlacedDef => ({ id: `${f.path}#${s.name}`, file: f.path, name: s.name, kind: s.kind, exported: s.exported, line: s.line ?? 0, lines: s.lines ?? 1 }));
       if (defs.length > 0) out.set(f.path, defs.sort((a, b) => a.line - b.line || (a.id < b.id ? -1 : 1)));
     }
     return out;
@@ -72,7 +72,7 @@ export function definitionsOf(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<
     let parent = n.parent;
     while (parent !== undefined && !kept.has(parent)) parent = every.get(parent)?.parent;
     const importance = n.judged?.value?.importance ?? undefined;
-    const def: StandingDef = {
+    const def: PlacedDef = {
       id: idOf(n),
       file: path,
       ...(parent === undefined ? {} : { parent: idOf(byId.get(parent) as DefNode) }),
