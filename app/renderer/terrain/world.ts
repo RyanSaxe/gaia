@@ -36,7 +36,7 @@ import { type Grass, createGrass } from "./cover.ts";
 import { type GroundMesh, createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
 import { type Water, createWater } from "./water.ts";
-import { type WildGrowth, createWildGrowth, wildBushBuilds } from "./wilds.ts";
+import { type WildGrowth, createWildGrowth } from "./wilds.ts";
 import { type Crown, type Drifts, createDrifts } from "./drifts.ts";
 import { type Understory, createUnderstory, understoryBuilds } from "./understory.ts";
 import { type PlantMark, markOf } from "./plant-mark.ts";
@@ -601,8 +601,6 @@ const overviewAir = (size: number): AtmosphereSpec => ({ ...CLEAR_AIR, density: 
 const UNDERSTORY_LEAST = 0.3;
 /** How far round the eye failing ground murks the air, meters: the band regions' airs blend over, so murk gathers as gradually as a region's air. */
 const MURK_REACH = TERRAIN.blend;
-/** Every build the page makes before any codebase's world opens, whatever it shows: the wild's bushes (made.ts). */
-export const openingBuilds = (): BuildAsk[] => wildBushBuilds();
 
 export function createWorld(root: HTMLElement): World {
   root.innerHTML = TEMPLATE;
@@ -1005,7 +1003,7 @@ export function createWorld(root: HTMLElement): World {
   // Before every pass (the sun's shadow, the water's mirror and the view),
   // each instanced blueprint packs only the cells that pass's camera sees.
   // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
-  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, bushForms);
+  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, clearings, bushForms);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
   // Far forms: each tree and bush build bakes its own far form, drawn as cards
   // where a copy is small on a pass's screen (woods.ts). Each set's cards hold
@@ -2200,12 +2198,13 @@ export function createWorld(root: HTMLElement): World {
     const opened = await codeWorld(veil);
     code = opened;
     reportStage("laid out", { things: opened.world.things.length, symbols: opened.world.symbols.length });
-    // The buildings, landmarks and one build of each distinct tree, stone, bush and flowers are made on other threads
-    // while the wait draws the land.
+    // The buildings, landmarks and one build of each distinct tree, stone, bush and flowers, and the wild's bushes, are
+    // made on other threads while the wait draws the land.
     const composedLandmarks = landmarkAsks(opened);
-    await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks, ...opened.plants.trees.map(plantAsk), ...understoryBuilds(opened.plants)]);
+    await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks, ...opened.plants.trees.map(plantAsk), ...understoryBuilds(opened.plants), ...opened.wild.map(plantAsk)]);
     buildTrees(opened.plants.trees);
     understory.build(opened.plants);
+    wildGrowth.build(opened.wild);
     landmarks = composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, opened.buildings);

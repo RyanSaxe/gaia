@@ -10,9 +10,8 @@ import { watchEngine } from "./engine-status.ts";
 import { setFavicon } from "./brand/logo.ts";
 import { createStats } from "./stats.ts";
 import { reportStage, startTelemetry } from "./telemetry.ts";
-import { OPENING_ASPECT, type World, createWorld, openingBuilds } from "./terrain/world.ts";
+import { OPENING_ASPECT, type World, createWorld } from "./terrain/world.ts";
 import { worldHooks } from "./terrain/hooks.ts";
-import { makeAhead } from "./terrain/made.ts";
 import { type Immersive, createImmersive } from "./immersive/view.ts";
 import { type Sound, createSound } from "./sound/index.ts";
 import { startWaitEarly } from "./wait/wait.ts";
@@ -68,16 +67,15 @@ function loop(now: number): void {
   requestAnimationFrame(loop);
 }
 
-// The wait's sheet shows first, so no one ever sees the world's bare frame. The trees and bushes every world opens
-// with are made on other threads meanwhile, and the world's page is built once they are and the sheet has been drawn.
-const builds = makeAhead(openingBuilds());
+// The wait's sheet shows first, so no one ever sees the world's bare frame, and the world's page is built once the
+// sheet has been drawn.
 // The start's night at the clock's hour, to the twentieth the world's first frame sets it to.
 const sky = realizeSky({ blueprint: START_SKY, kind: worldKind }, new Library(WORLD_PRIMITIVES), seedOf("terrain-lab/sky"), clock.hour());
 // In the app every world opens from the start's map table, chosen there or opened straight, so the sheet waits under it.
 startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT, window.gaiaShell !== undefined);
 const drawn = new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
 /** Settles once the world's page is built: scripted checks look at the world only after it, as a person sees it. */
-const opened: Promise<World> = Promise.all([builds, drawn]).then(() => {
+const opened: Promise<World> = drawn.then(() => {
   const made = createWorld(root);
   // The immersive layer joins the world before its first bake lands, so the markers stand on it.
   immersive = createImmersive(root, made.handle);

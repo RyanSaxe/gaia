@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { biome, bush, landmark, link, rock, structure, tree, wildflowers, world as worldKind } from "@gaia/kinds";
+import { biome, bush, landmark, link, rock, structure, tree, wildBush, wildflowers, world as worldKind } from "@gaia/kinds";
 import { BUSH_PRIMITIVES, PALETTE_FAMILIES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
 import { type CodeGraph, type CodeFacts, type DefNode, type EntityFacts, type FileFacts, type JevClient, type JevQuestion, type JevRequest, type JevResponse, Library } from "@gaia/schema";
 import { cellUnder, placeAt } from "@gaia/terrain";
@@ -65,9 +65,13 @@ const FORMS: LookSet = {
   Spire: { doc: "Option Spire.", needs: [{ rank: [0.8, 1] }], composes: "landmark" },
 };
 const LOOKS: Looks = {
-  compose: { building: structure, landmark, world: worldKind, biome, link, tree, bush, stone: rock, flowers: wildflowers, lib: new Library(PRIMITIVES), offered: { tree: new Library(TREE_PRIMITIVES), bush: new Library(BUSH_PRIMITIVES) } },
+  compose: { building: structure, landmark, world: worldKind, biome, link, tree, bush, stone: rock, flowers: wildflowers, wildBush, lib: new Library(PRIMITIVES), offered: { tree: new Library(TREE_PRIMITIVES), bush: new Library(BUSH_PRIMITIVES), wildBush: new Library(BUSH_PRIMITIVES) } },
   form: FORMS,
   water: set("Dry", "Brook"),
+  wild: [
+    { cover: "lush grass", length: "tall and unkempt" },
+    { cover: "golden steppe", length: "tall and unkempt" },
+  ],
 };
 
 /** The forms whose range holds a rank, worked out here from the ranges themselves. */
@@ -164,6 +168,42 @@ describe("a world laid out from code", () => {
     const laid = layoutWorld(facts(), judged);
     expect(laid.sky).toEqual(judged.sky);
     for (const r of laid.regions) expect(r.biome, r.area).toEqual(judged.lands[r.area]);
+  });
+
+  it("composes a bush for each of the wild's grounds from the world around it, its sky and its lands, and nothing of the code", async () => {
+    const asked: JevRequest[] = [];
+    const fake = standing();
+    const jev: JevClient = { ask: (r) => (asked.push(r), fake.ask(r)) };
+    const m = facts();
+    const judged = await composeWorld(m, LOOKS, jev, await judgeWorld(m, LOOKS, jev));
+    const wild = asked.filter((r) => (r.state as { wild?: unknown }).wild !== undefined);
+    if (judged.sky === undefined) throw new Error("No sky was composed.");
+    const sky = Object.fromEntries(Object.entries(judged.sky.slots).map(([slot, filled]) => [slot, filled.params]));
+    const families = [...new Set(Object.values(judged.lands).flatMap((l) => l.slots.natives?.params.families as string[]))];
+    for (const ground of LOOKS.wild) {
+      const mine = wild.filter((r) => JSON.stringify((r.state as { wild: { ground: unknown } }).wild.ground) === JSON.stringify(ground));
+      // Its parts, then their settings: a few requests, each reading the wild's ground, the world's sky and its lands but their landforms.
+      expect(mine.length).toBe(2);
+      for (const r of mine) {
+        const state = r.state as { sky: unknown; lands: Record<string, unknown>[] };
+        expect(state.sky).toEqual(sky);
+        expect(state.lands.length).toBeGreaterThan(0);
+        for (const land of state.lands) expect(Object.keys(land)).not.toContain("relief");
+        // Nothing of the code: no file, folder, entity or definition, and no word of the code a bush on the land stands for.
+        for (const name of ["repository", "directory", "entity", "file", "definition", "standsAs"]) expect(Object.keys(state)).not.toContain(name);
+        for (const f of m.files) expect(JSON.stringify(r.state)).not.toContain(f.path);
+        for (const q of Object.values(r.questions)) expect(q.instructions).toContain("wild");
+        const offered = r.questions["palette.family"];
+        if (offered?.type === "choice") for (const family of Object.keys(offered.criteria)) expect(families).toContain(family);
+      }
+    }
+    // Each is a bush, built as any bush is, and the laid-out world carries them in the grounds' order.
+    expect(judged.wild?.length).toBe(LOOKS.wild.length);
+    for (const bp of judged.wild ?? []) {
+      expect(bp.kind).toBe(bush.id);
+      expect(validate(bp, bush, new Library(BUSH_PRIMITIVES))).toEqual([]);
+    }
+    expect(layoutWorld(m, judged).wild).toEqual(judged.wild);
   });
 
   it("offers a building only the features its region's water lets stand there, and leaves the pick among them to Jev", async () => {
