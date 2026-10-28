@@ -294,13 +294,17 @@ the full form's do rather than vanish. The [likeness probe](development.md#visua
 holds each far form to its full form at a half, a quarter and an eighth of the
 size it turns far at.
 
-A tired tree's boughs sag about their joints and leave the healthy outline its
-far form's views hold, so the bake also keeps a coarse field of where each
-point moves as its boughs sag all the way (`droopField` in
-[`far.ts`](../packages/render/src/far.ts)). The far form finds where the point
-its eye meets came from and reads its views there: its boughs sag as far as its
-tree's do at its copy's vitality, and a change of vitality moves what it reads
-without baking again.
+A far form declines as its tree does. Its views hold the plant as it stands
+healthy, with how much of each texel it covers at several vitalities down to 0
+(`SLICES` in [`far.ts`](../packages/render/src/far.ts)), so a copy covers what
+its tree still holds, and a copy of the poorest code only what its tree keeps.
+A piece that shows and is gone by vitality 0 keeps its healthy color rather
+than darkening. A tired tree's boughs sag about their joints and leave that
+healthy outline, so the bake also keeps a coarse field of where each point
+moves as its boughs sag all the way (`droopField`). The far form finds where
+the point its eye meets came from and reads its views there: its boughs sag as
+far as its tree's do at its copy's vitality, and a change of vitality moves
+what it reads without baking again.
 
 Do not reduce density abruptly to rescue frame time. Batch and instance shared
 geometry, stream ahead of the person, cache far forms, and keep shadow updates

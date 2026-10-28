@@ -30,8 +30,11 @@ import { closeEachFrame, followVitality } from "./lag.ts";
 
 /** Where the views look from: azimuths all the way round, at these elevations in degrees, crowded where a walker sees far trees. */
 export const FAR_VIEWS = { azimuths: 16, elevations: [-8, 0, 8, 18, 34, 60] } as const;
-/** The vitalities whose coverage is baked: color comes from 1 and 0, and coverage between them is interpolated. */
-const SLICES = [1, 0.6, 0.3, 0.1] as const;
+/**
+ * The vitalities whose coverage is baked, and coverage between them is interpolated. Color comes from 1 and 0. The
+ * last is 0, where a copy of the poorest code stands, so its card holds only what its tree has kept.
+ */
+const SLICES = [1, 0.6, 0.3, 0] as const;
 /** Samples per texel along each side while baking, on top of 4x multisampling: one keeps the bake's GPU work small. */
 const SUPERSAMPLE = 1;
 /** The world's field of view, degrees: where a tree turns far depends on how many pixels a radian covers. */
@@ -215,12 +218,12 @@ interface Pass {
  * healthy plant covers (or, for the withered color, the share at the last
  * slice): 0 healthy color and coverage at 1; 1 withered color (at the last
  * slice's shape) and glow; 2 normal and depth; 3 coverage at 0.6, 0.3 and
- * 0.1, and foliage.
+ * 0, and foliage.
  */
 const PASSES: readonly Pass[] = [
   { output: "cover", vitality: 1, colorVitality: 1, layer: 0, to: [3, -1, -1, -1] },
   { output: "albedo", vitality: 1, colorVitality: 1, layer: 0, to: [0, 1, 2, -1] },
-  { output: "albedo", vitality: 0.1, colorVitality: 0, layer: 1, to: [0, 1, 2, -1] },
+  { output: "albedo", vitality: SLICES[3], colorVitality: 0, layer: 1, to: [0, 1, 2, -1] },
   { output: "glow", vitality: 1, colorVitality: 1, layer: 1, to: [3, -1, -1, -1] },
   { output: "normal", vitality: 1, colorVitality: 1, layer: 2, to: [0, 1, 2, -1] },
   { output: "depth", vitality: 1, colorVitality: 1, layer: 2, to: [3, -1, -1, -1] },
@@ -492,7 +495,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
  * The bake's version: a far form stored by an earlier version must be baked
  * again. Bump it whenever what a bake writes, or how a card reads it, changes.
  */
-export const FAR_BAKE_VERSION = 6;
+export const FAR_BAKE_VERSION = 7;
 
 /** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
 export interface FarFormData {
@@ -947,8 +950,10 @@ void main() {
   if (cover < 0.02) discard;
   vec4 l1 = tap(uLayer1);
   vec4 l2 = tap(uLayer2);
-  // Color between healthy (1) and withered (0), as the plant's wither channel mixes it.
-  vec3 albedo = mix(l0.rgb / healthy, l1.rgb / max(l3.b, 1e-4), 1.0 - vVitality);
+  // Color between healthy (1) and withered (0), as the plant's wither channel mixes it. The withered color is baked
+  // where the plant stands at vitality 0; what shows now and is gone by then keeps its healthy color.
+  float standing = clamp(l3.b / max(sliceCover(l0, l3, vVitality), 1e-4), 0.0, 1.0);
+  vec3 albedo = mix(l0.rgb / healthy, l1.rgb / max(l3.b, 1e-4), (1.0 - vVitality) * standing);
   vec3 nl = normalize(l2.rgb / healthy * 2.0 - 1.0);
   float c = cos(vYaw);
   float s = sin(vYaw);
