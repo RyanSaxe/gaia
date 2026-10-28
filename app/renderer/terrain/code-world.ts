@@ -7,7 +7,7 @@ import { type Blueprint, type EntityFacts, type FileFacts, type RouteSpec, type 
 import { link } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
 import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, type StandsAs, layoutWorld } from "@gaia/world";
+import { type CodeWorld, type FormKind, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, Heal, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
 import SHOWCASE_PAINTING from "../start/showcase-painting.webp";
@@ -107,7 +107,7 @@ export const PLANT_GROUPS: readonly PlantGroup[] = ["trees", "rocks", "shrubs", 
 export type PlantBuilds = Readonly<Record<PlantGroup, readonly Blueprint[]>>;
 
 /** The group that draws a small thing, by the form it appears as. A drift of mushrooms is separate from other flowers. */
-export function plantGroup(as: Exclude<StandsAs, "building" | "landmark">, blueprint: Blueprint): PlantGroup {
+export function plantGroup(as: Exclude<FormKind, "building" | "landmark">, blueprint: Blueprint): PlantGroup {
   if (as === "flowers") return blueprint.slots.drift?.use === "mushrooms@1" ? "mushrooms" : "flowers";
   return as === "tree" ? "trees" : as === "bush" ? "shrubs" : "rocks";
 }
@@ -353,7 +353,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     return k >= 0 ? k : builds.push(blueprint) - 1;
   };
   const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
-  type Small = { readonly x: number; readonly z: number; readonly form: string; readonly as?: StandsAs; readonly blueprint?: Blueprint; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string };
+  type Small = { readonly x: number; readonly z: number; readonly form: string; readonly as?: FormKind; readonly blueprint?: Blueprint; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string };
   const symbol = (s: Small, who: string): StandCode["symbols"][number] => {
     // A definition that appears as a building or landmark is one of the world's things and is placed with them.
     if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };

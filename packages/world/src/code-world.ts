@@ -35,10 +35,10 @@ import { MODEL, planStructure } from "./planner.ts";
 import { type Composed, type Composing, areaState, composeThing, composeThings, composingState, definitionState, fileState, repositoryState, share, trailState, trim, wildState } from "./compose.ts";
 
 /** The form a thing appears as in the world. */
-export type StandsAs = "building" | "landmark" | "tree" | "bush" | "stone" | "flowers";
+export type FormKind = "building" | "landmark" | "tree" | "bush" | "stone" | "flowers";
 
 /** Whether `layOut` places a thing with this form as a `CodeThing`. */
-export const raisedAs = (as: StandsAs): as is "building" | "landmark" => as === "building" || as === "landmark";
+export const raisedAs = (as: FormKind): as is "building" | "landmark" => as === "building" || as === "landmark";
 
 /** One option in a Jev choice. `doc` is the text Jev reads for it. */
 export interface Look {
@@ -52,7 +52,7 @@ export interface Look {
    */
   readonly needs?: readonly Need[];
   /** For a form, what the thing appears as. Jev composes that blueprint part by part. */
-  readonly composes?: StandsAs;
+  readonly composes?: FormKind;
   /**
    * For a small form Jev composes, the part a person sees first, such as a fir's frame or a weeping tree's frame and
    * habit. Choosing the form fills in this part, so Jev is never asked about it. Jev composes the rest.
@@ -116,7 +116,7 @@ export interface Judgments {
    * What each thing appears as and its blueprint from `composeWorld`, by the same ids as `stands`. `layOut` places
    * no building or landmark that lacks a blueprint.
    */
-  readonly things: Readonly<Record<string, { readonly as: StandsAs; readonly blueprint?: Blueprint }>>;
+  readonly things: Readonly<Record<string, { readonly as: FormKind; readonly blueprint?: Blueprint }>>;
   /** Every entity dependency Jev rated as a trail, with its `want`. `composeWorld` adds each trail's `route`. */
   readonly trails: readonly CodeTrail[];
   /**
@@ -179,7 +179,7 @@ export interface CodeStanding {
   /** The form Jev chose for it. */
   readonly form: string;
   /** What it appears as and its blueprint, once composed. */
-  readonly as?: StandsAs;
+  readonly as?: FormKind;
   readonly blueprint?: Blueprint;
   readonly lines: number;
   /** Jev's importance, 0 to 1. Its rendered size scales with this. */
@@ -210,7 +210,7 @@ export interface CodeSymbol {
   /** The form key Jev chose for it, or "" before judging. */
   readonly form: string;
   /** What it appears as and its blueprint, once composed. */
-  readonly as?: StandsAs;
+  readonly as?: FormKind;
   readonly blueprint?: Blueprint;
   readonly x: number;
   readonly z: number;
@@ -851,7 +851,7 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
    * The compose input for a thing, built after its land is composed. Its place provides what its region's water
    * holds, and its colors are narrowed to its land's native families.
    */
-  const raised = async (id: string, as: StandsAs, form?: string): Promise<Composed> => {
+  const raised = async (id: string, as: FormKind, form?: string): Promise<Composed> => {
     const of = thingKind(facts, id);
     const region = regionFor(regionSet, of === "entity" ? id : parentOf(fileOfThing(of, id) as string));
     const place = { has: looks.water[judged.waters[region] ?? ""]?.holds ?? [], narrow: { [NATIVE_COLORS.thing]: nativesOf((await lands)[`land:${region}`]) } };
@@ -876,9 +876,9 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     return composeThings(looks.compose, jev, looks.wild.map((ground, i): Composed => ({ path: wildId(i), as: "wildBush", state: wildState(ground, s, around, looks.compose.biome), ...place })), concurrency);
   });
   // Choose each thing's form unless `judged.stands` has it. A thing with a composing form is composed as soon as its answer arrives and its land is composed.
-  const things: Record<string, { as: StandsAs; blueprint?: Blueprint }> = { ...judged.things };
+  const things: Record<string, { as: FormKind; blueprint?: Blueprint }> = { ...judged.things };
   const rising: Promise<unknown>[] = [];
-  const compose = (id: string, as: StandsAs, form?: string): void => {
+  const compose = (id: string, as: FormKind, form?: string): void => {
     rising.push(raised(id, as, form).then((thing) => composeThing(looks.compose, jev, thing)).then((blueprint) => (things[id] = { as, blueprint })));
   };
   for (const [id, t] of Object.entries(judged.things)) if (t.blueprint === undefined) compose(id, t.as);
@@ -912,7 +912,7 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     sky: composedSky,
     lands: Object.fromEntries(regions.map((path) => [path, of(`land:${path}`)])),
     wild: looks.wild.map((_, i) => of(wildId(i))),
-    things: Object.fromEntries(Object.keys(things).sort().map((id) => [id, { as: (things[id] as { as: StandsAs }).as, blueprint: of(id) }])),
+    things: Object.fromEntries(Object.keys(things).sort().map((id) => [id, { as: (things[id] as { as: FormKind }).as, blueprint: of(id) }])),
     trails: judged.trails.map((t) => ({ ...t, route: of(trailId(t)) })),
   };
 }
@@ -1122,7 +1122,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
     return t?.blueprint === undefined || !raisedAs(t.as) ? undefined : { as: t.as, blueprint: t.blueprint };
   };
   /** The tree, bush, stone or flowers composed for a thing, if it has one. */
-  const small = (id: string): { as: StandsAs; blueprint: Blueprint } | Record<string, never> => {
+  const small = (id: string): { as: FormKind; blueprint: Blueprint } | Record<string, never> => {
     const t = judged.things[id];
     return t?.blueprint === undefined || raisedAs(t.as) ? {} : { as: t.as, blueprint: t.blueprint };
   };

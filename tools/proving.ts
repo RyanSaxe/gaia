@@ -38,7 +38,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import type { AnyKind, Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, Library, SymbolFact } from "@gaia/schema";
-import { type Judgments, type Look, type StandsAs, type SweepPlace, layoutWorld, raisedAs, sweep } from "@gaia/world";
+import { type Judgments, type Look, type FormKind, type SweepPlace, layoutWorld, raisedAs, sweep } from "@gaia/world";
 import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS, WILD_GROUNDS } from "../app/renderer/terrain/looks.ts";
 import { fixtureJson } from "./fixture-json.ts";
 import { provingCode } from "./proving-code.ts";
@@ -430,7 +430,7 @@ for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
   if (f.kind === "source") f.symbols.forEach((s, k) => (stands[`${f.path}#${s.name}`] = k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)));
 }
 /** The forms other than a building or a landmark: a tree, a bush, a stone or flowers. */
-type SmallAs = Exclude<StandsAs, "building" | "landmark">;
+type SmallFormKind = Exclude<FormKind, "building" | "landmark">;
 /** The forms of the definitions. */
 const definitionForms = (): string[] => Object.entries(stands).flatMap(([id, form]) => (id.includes("#") ? [form] : []));
 // Every file also appears as one thing at its patch's center, cycling through every form. A few files and definitions
@@ -535,14 +535,14 @@ const composed = (as: "building" | "landmark", k: AnyKind): [string, { as: "buil
 };
 // Every tree, bush, stone and drift of flowers takes a blueprint from its form's sweep, every frame with every crown.
 // Each health's things cycle through the whole sweep, so every row appears thriving, tired and in ruin.
-const smallSweeps: Readonly<Record<SmallAs, readonly Blueprint[]>> = {
+const smallSweeps: Readonly<Record<SmallFormKind, readonly Blueprint[]>> = {
   tree: swept("a tree's", COMPOSING.tree, undefined, COMPOSING.offered?.tree, [["form", "crown"]]),
   bush: swept("a bush's", COMPOSING.bush, undefined, COMPOSING.offered?.bush, [["form", "crown"]]),
   stone: swept("a stone's", COMPOSING.stone),
   flowers: swept("a drift's", COMPOSING.flowers),
 };
 const turns = new Map<string, number>();
-const smallThings = Object.entries(stands).flatMap(([id, form]): [string, { as: SmallAs; blueprint: Blueprint }][] => {
+const smallThings = Object.entries(stands).flatMap(([id, form]): [string, { as: SmallFormKind; blueprint: Blueprint }][] => {
   const as = FORMS[form]?.composes;
   if (as === undefined || raisedAs(as)) return [];
   const rows = smallSweeps[as];

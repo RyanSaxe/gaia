@@ -7,7 +7,7 @@
 import { biome, bush, landmark, link, rock, structure, tree, wildBush, wildflowers, world } from "@gaia/kinds";
 import { BUSH_PRIMITIVES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
 import { Library } from "@gaia/schema";
-import type { Composing, Look, Looks, StandsAs } from "@gaia/world";
+import type { Composing, Look, Looks, FormKind } from "@gaia/world";
 
 const look = (doc: string): Look => ({ doc });
 
@@ -34,7 +34,7 @@ const sized = (size: Size, vibe: string): Look => ({ doc: `${vibe} ${SIZES[size]
  * A form that Jev composes part by part once chosen, as it does a building. Choosing the form fixes the part a person
  * sees first, its frame and the frame's habit, and Jev chooses the rest.
  */
-const first = (size: Size, as: StandsAs, vibe: string, slot: string, use: string, fixed?: Readonly<Record<string, string>>): Look => ({
+const first = (size: Size, as: FormKind, vibe: string, slot: string, use: string, fixed?: Readonly<Record<string, string>>): Look => ({
   ...sized(size, vibe),
   composes: as,
   first: { slot, use, ...(fixed === undefined ? {} : { fixed }) },
