@@ -3,7 +3,7 @@
 (call_expression function: (scoped_identifier name: (identifier) @name)) @reference.call
 (impl_item type: (_) @owner) @scope
 
-; A name a `use` binds under the file's own: `b` in `use m::a as b`.
+; A name a `use` binds in the file: `b` in `use m::a as b`.
 (use_as_clause path: (_) @imported alias: (identifier) @name) @alias.renamed
 
 ; What a `pub use` passes on to the files that import this one.

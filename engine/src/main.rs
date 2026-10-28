@@ -1,4 +1,4 @@
-//! The gaia-engine binary. `--version` prints its version; `rpc` serves the
+//! The gaia-engine binary. `--version` prints its version. `rpc` serves the
 //! engine protocol over stdin and stdout until stdin closes.
 
 mod clone;
@@ -35,7 +35,8 @@ fn main() -> ExitCode {
     }
 }
 
-/// Answers one JSON-RPC request per input line, one response per output line.
+/// Reads one JSON-RPC request per input line and writes one response per
+/// output line.
 fn serve(input: impl BufRead, mut output: impl Write) -> io::Result<()> {
     for line in input.lines() {
         let line = line?;

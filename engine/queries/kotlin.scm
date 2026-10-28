@@ -1,4 +1,4 @@
-; Kotlin: its grammar ships no tags query, so this file finds definitions too.
+; Kotlin: its grammar ships no tags query, so this file also captures definitions.
 (class_declaration name: (_) @name) @definition.class
 (object_declaration name: (_) @name) @definition.class
 (function_declaration name: (_) @name) @definition.function

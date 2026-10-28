@@ -1,11 +1,11 @@
 import { kind, slot } from "@gaia/schema";
 
 /**
- * A tree that stands for one thing in the code: an entity, a file or a
- * definition. Jev composes it part by part from a tree's parts alone (its
- * `Composing` library): a frame, its bark, a crown on the frame and anything
- * hanging in the crown. Its size comes from the code it stands for when it
- * stands; the blueprint holds only its look.
+ * A tree that represents one entity, file or definition. Jev composes it part
+ * by part from a tree's parts alone (its `Composing` library): a frame, its
+ * bark, a crown on the frame and anything hanging in the crown. Its size comes
+ * from the code it represents when the world places it, and the blueprint
+ * holds only its look.
  */
 export const tree = kind({
   id: "tree",

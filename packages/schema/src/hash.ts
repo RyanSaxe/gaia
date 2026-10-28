@@ -1,5 +1,6 @@
-// Content identity. The real repository ports v2's hash128 and canonical JSON;
-// this mock uses a 53-bit hash with the same canonical form.
+// Content identity. `contentHash` is a 53-bit cyrb53 hash of `canonicalJson`,
+// which sorts object keys and drops undefined values, so equal content always
+// gives the same hash.
 
 import type { Blueprint, BlueprintId, FilledSlot } from "./document.ts";
 

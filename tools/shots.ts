@@ -1,17 +1,19 @@
-// `pnpm shots`: every kind of thing the proving ground stands, photographed
-// where it stands, so a primitive is judged in the light and land it lives
-// in. The proving ground holds every feature a world can show
-// (`docs/proving-ground.md`). Each stop of its tour, one stop for each kind of
-// building and landmark, and one thing standing as each tree, bush, stone and
-// flower build are seen at vitality 1, 0.65 and 0.3 at 15:30, and at 1 at 22:00.
-// The first stop is seen again under each sky the sweep holds (`__lab.terrain.sky`),
-// whole at 15:30, as `sky-K.jpg`.
+// `pnpm shots` photographs every kind of thing in the proving ground where it
+// is placed, so a primitive is judged in the light and land of its world. The
+// proving ground contains every feature a world can show
+// (`docs/proving-ground.md`). Each stop of its tour, with one stop for each
+// kind of building and landmark and one thing of each tree, bush, stone and
+// flower build, is shot at vitality 1, 0.65 and 0.3 at 15:30, and at 1 at
+// 22:00. The first stop is shot again under each sky in the sweep
+// (`__lab.terrain.sky`), at vitality 1 at 15:30, as `sky-K.jpg`.
 // The one-file lab opens in a hidden Electron window (the app's own Chromium,
-// drawing on the GPU) from a browser profile of its own, so the far forms bake
-// as on a first visit, and the run fails on any WebGL error the page reports.
+// drawing on the GPU) with its own browser profile, so the far forms bake as
+// on a first visit, and the run fails on any WebGL error the page reports.
 // Each shot goes to shots/ as a JPEG named for its stop.
-// Usage: pnpm shots [--world showcase|showcase-fixed] [WORD...]  (only the stops whose names hold one of the
-// words, such as `pnpm shots watermill` or `pnpm shots sky`; the proving ground's unless --world names another)
+// Usage: pnpm shots [--world showcase|showcase-fixed] [WORD...]
+// With words, it shoots only the stops whose names contain one of them, such
+// as `pnpm shots watermill` or `pnpm shots sky`. It shoots the proving ground
+// unless --world names another world.
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -22,7 +24,7 @@ import { build } from "esbuild";
 import { webglErrors } from "../app/main/webgl-errors.ts";
 import { LAB_BUILD, labBundle, labPage } from "./lab-page.ts";
 
-/** The window's size in CSS pixels; it draws at twice that and each shot is scaled back down. */
+/** The window's size in CSS pixels. It draws at twice that, and each shot is scaled back down. */
 const WIDTH = 1280;
 const HEIGHT = 800;
 const QUALITY = 88;
@@ -42,7 +44,7 @@ const page = join(scratch, "lab.html");
 const result = join(scratch, "result.json");
 writeFileSync(page, labPage(labBundle(await build(LAB_BUILD))));
 
-// What the page runs: where each stop is, how to wait for the land and what stands on it, and the world's vitality.
+// What the page runs: where each stop is, how to wait for the land and the things on it, and the world's vitality.
 const PAGE = /* js */ `
 window.__shots = (() => {
   const T = window.__lab.terrain;

@@ -1,6 +1,6 @@
 import { kind, slot } from "@gaia/schema";
 
-/** A drift of one species of low plant at ground level (wildflowers, ferns or mushrooms), standing for one thing in the code. */
+/** A drift of one species of low plant at ground level, such as wildflowers, ferns or mushrooms, that represents one thing in the code. */
 export const wildflowers = kind({
   id: "wildflowers",
   subject: "thing",

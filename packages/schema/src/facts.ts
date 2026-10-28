@@ -1,14 +1,12 @@
-// The facts the world is laid out from: each file's and entity's code
-// structure, as the world derives it from the engine's code graph
-// (`factsOf` in @gaia/world). Only what the new engine uses, or what
-// composing needs, is here: sizes, definitions, imports and the entities
-// manifests declare. Tool signals, test coverage, history and file kinds are
-// not facts the world reads.
+// The facts the world is laid out from, which `factsOf` in @gaia/world derives
+// from the engine's code graph. They cover only sizes, definitions, imports
+// and the entities that manifests declare. Tool signals, test coverage,
+// history and file kinds are not facts the world reads.
 
 /**
- * One of a file's definitions as the world reads it: every one it exports,
- * and the functions and classes at its top level (`exported: false`), with
- * the lines it spans.
+ * One of a file's definitions, with the lines it spans. `factsOf` includes
+ * every definition a file exports, and the functions and classes at its top
+ * level with `exported: false`.
  */
 export interface SymbolFact {
   readonly name: string;
@@ -20,11 +18,11 @@ export interface SymbolFact {
   readonly lines?: number;
 }
 
-/** One file as the world reads it. */
+/** One file's facts. */
 export interface FileFacts {
-  /** Project-relative path. This is the item's identity. */
+  /** Project-relative path, which identifies the file. */
   readonly path: string;
-  /** The grammar the engine read it with, or "other". */
+  /** The grammar the engine parsed it with, or "other". */
   readonly language: string;
   readonly lines: number;
   readonly symbols: readonly SymbolFact[];
@@ -33,22 +31,22 @@ export interface FileFacts {
   readonly importedBy: readonly string[];
 }
 
-/** What declares an entity: a package's manifest (`package.json`) or a crate's (`Cargo.toml`). No file's name makes one. */
+/** What declares an entity: a package's `package.json` or a crate's `Cargo.toml`. A file's name never makes one. */
 export type EntityForm = "package" | "crate";
 
 export interface EntityFacts {
-  /** The entity's root directory, project-relative. This is its identity. */
+  /** The entity's project-relative root directory, which identifies it. */
   readonly path: string;
   /** Its own name: the manifest's, else the root directory's. */
   readonly name: string;
   readonly form: EntityForm;
   /** The file that declares it, such as package.json. */
   readonly manifest: string;
-  /** The file that defines its public surface, such as src/index.ts or src/lib.rs. */
+  /** The file that defines its public API, such as src/index.ts or src/lib.rs. */
   readonly entry?: string;
   readonly files: number;
   readonly lines: number;
-  /** Definitions its entry exports: the size of its public surface. */
+  /** How many definitions its entry exports, which measures its public API. */
   readonly exports: number;
   /** Paths of the entities it imports from. */
   readonly dependsOn: readonly string[];
@@ -57,18 +55,18 @@ export interface EntityFacts {
 }
 
 /**
- * What any thing that stands for code is, as a building's or a landmark's
- * numbers read it: an entity (whose facts are these and more), a file or a
- * definition. `dependents` are what lean on it: the entities that import an
- * entity, the files that import a file, the definitions that call or name a
+ * The facts a building's or landmark's numbers read from the code it
+ * represents: an entity, whose facts include these, a file or a definition.
+ * `dependents` are what depends on it: the entities that import an entity,
+ * the files that import a file, or the definitions that call or name a
  * definition.
  */
 export interface ThingFacts {
-  /** Its identity: an entity's root directory, a file's path or a definition's `<file>#<name>`. */
+  /** An entity's root directory, a file's path or a definition's `<file>#<name>`. */
   readonly path: string;
   readonly name: string;
   readonly lines: number;
-  /** How much of it others may use: an entity's exported definitions, a file's, or 1 for an exported definition. */
+  /** How much of it other code may use: the count of an entity's or file's exported definitions, or 1 for an exported definition. */
   readonly exports: number;
   readonly dependents: readonly string[];
 }
@@ -85,8 +83,8 @@ export interface RegionFacts {
 
 /**
  * Facts about one dependency between two entities, which the link kind
- * reads: the entity that imports and the entity it leans on, each with its
- * own facts, so a trail between them can follow both.
+ * reads. It has the importing entity and the entity it depends on, each with
+ * its own facts, so a trail between them can use both.
  */
 export interface DependencyFacts {
   /** The entity that depends on the other. */
@@ -98,7 +96,7 @@ export interface DependencyFacts {
 }
 
 export interface RepositoryFacts {
-  /** By its remote, as the engine's graph names it. */
+  /** The repository's name from its remote, as the engine's graph gives it. */
   readonly name: string;
   readonly files: number;
   readonly lines: number;

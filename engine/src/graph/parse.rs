@@ -1,20 +1,21 @@
-//! The generic loop: one file's tree and query matches into definitions,
-//! blocks and references. Nothing here is about one language; everything
-//! comes from the query captures listed below. Language-specific queries
-//! live in `engine/queries/`:
+//! Turns one file's syntax tree and query matches into definitions, blocks and
+//! references. No code here is specific to one language. Everything comes from
+//! these captures, which the query files in `engine/queries/` use:
 //!
-//! - `@definition.<role>` with `@name`; `@owner` with the `@scope` it covers;
-//!   `@params` (a list of parameters) or `@param` (each one) where a grammar
-//!   has no `parameters` field; `@doc` for a docstring.
+//! - `@definition.<role>` with `@name`, and `@owner` with the `@scope` it
+//!   covers. `@params` for a list of parameters, or `@param` for each one,
+//!   where a grammar has no `parameters` field. `@doc` for a docstring.
 //! - `@reference.import`, `.call`, `.send`, `.class`, `.type`, `.interface`
 //!   and `.implementation`, each with `@name`.
-//! - `@alias.renamed`, `.module` and `.default` inside an import, with
-//!   `@name`, the name the file uses: a name the module calls `@imported`, the
-//!   module itself, or what it exports as its default.
+//! - `@alias.renamed`, `.module` and `.default` inside an import, with `@name`,
+//!   the name the file uses. Each binds that name to, in order, a name the
+//!   module calls `@imported`, the module itself, or the module's default
+//!   export.
 //! - `@reexport.named`, `.renamed` and `.module` inside an import, with
-//!   `@name`, a name the import passes on to the files that import this one:
-//!   the module's own name, a name the module calls `@imported`, or the module
-//!   itself. `@reexport.all` passes on everything the module exports.
+//!   `@name`, a name the import passes on to the files that import this one.
+//!   Each passes on, in order, the module's own name, a name the module calls
+//!   `@imported`, or the module itself. `@reexport.all` passes on everything
+//!   the module exports.
 //! - `@export.default` with `@name`, the definition a file exports as its default.
 //! - `@block.<shape>`.
 
@@ -24,14 +25,14 @@ use std::collections::{HashMap, HashSet};
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Node, Parser, Query, QueryCursor};
 
-/// What one file holds, before ids: indices point into `defs`.
+/// One file's parse. It has no ids yet, so indices point into `defs`.
 pub struct FileParse {
     pub unparsed: u32,
     pub lines: u32,
     pub defs: Vec<Def>,
     pub blocks: Vec<Block>,
     pub refs: Vec<Ref>,
-    /// The name of what it exports as its default: `walk` in `export default function walk`.
+    /// The name of its default export, such as `walk` in `export default function walk`.
     pub default_export: Option<String>,
 }
 
@@ -48,12 +49,12 @@ pub struct Def {
     pub doc: Option<String>,
     /// Its file exports it (`exported`).
     pub exported: bool,
-    /// It takes parameters, or its role says it runs.
+    /// It takes parameters, or its role is in `CALLABLES`.
     pub callable: bool,
-    /// A MinHash of its text's word shingles, which lineage matches by.
+    /// A MinHash of its body's word shingles, which lineage uses to match moved definitions.
     pub fingerprint: Vec<u16>,
-    /// The name its body calls its own receiver by, when a grammar marks it
-    /// with `@self`: the `c` of Go's `func (c *Command)`.
+    /// The name of its receiver in its body, when a grammar marks it with
+    /// `@self`, such as `c` in Go's `func (c *Command)`.
     pub self_name: Option<String>,
 }
 
@@ -62,7 +63,7 @@ pub struct Block {
     pub shape: String,
     pub span: Span,
     pub depth: u32,
-    /// Its place among the blocks of its definition (or its file), in source order.
+    /// Its index among the blocks of its definition, or of its file, in source order.
     pub index: usize,
 }
 
@@ -83,7 +84,7 @@ pub struct Ref {
     pub qualifier: Option<String>,
     /// The qualifier is a path, as `Batch::` is, rather than a value, as `batch.` is.
     pub path: bool,
-    /// A macro invocation, such as Rust's `format!(…)`, which reaches only a macro.
+    /// A macro invocation, such as Rust's `format!(…)`, which can resolve only to a macro.
     pub macro_call: bool,
     /// The names an import binds under names of the file's own.
     pub aliases: Vec<Alias>,
@@ -150,13 +151,13 @@ pub fn fingerprint(text: &str) -> Vec<u16> {
         .collect()
 }
 
-/// The share of hashes two fingerprints agree on: an estimate of their shingles' overlap.
+/// The share of hashes two fingerprints agree on, which estimates the overlap of their shingles.
 pub fn similarity(a: &[u16], b: &[u16]) -> f64 {
     let same = a.iter().zip(b).filter(|(x, y)| x == y).count();
     same as f64 / FINGERPRINT as f64
 }
 
-/// Roles that hold other definitions rather than run.
+/// Roles that contain other definitions rather than run.
 const CONTAINERS: &[&str] = &[
     "class",
     "interface",
@@ -173,7 +174,7 @@ const CONTAINERS: &[&str] = &[
 /// Roles a definition can run as, even with no list of parameters (Ruby's `def walk`).
 const CALLABLES: &[&str] = &["function", "method", "macro", "constructor"];
 
-/// One query match, reduced to the capture that says what it is.
+/// One query match, reduced to the capture that gives its kind.
 struct Hit<'t> {
     what: String,
     node: Node<'t>,
@@ -200,9 +201,9 @@ fn collect<'t>(query: &Query, root: Node<'t>, src: &[u8], from_tags: bool, out: 
                 "imported" => imported = Some(c.node),
                 _ if cn.starts_with('_') => {}
                 _ => {
-                    // The match's own kind: its first capture that isn't a
+                    // The match's kind is its first capture that isn't a
                     // helper. A tags query captures a doc comment before the
-                    // definition it documents, so a doc yields to anything else.
+                    // definition it documents, so any other capture replaces a `doc`.
                     if main.as_ref().is_none_or(|(w, _)| w == "doc") {
                         main = Some((cn.to_string(), c.node));
                     }
@@ -222,9 +223,9 @@ fn collect<'t>(query: &Query, root: Node<'t>, src: &[u8], from_tags: bool, out: 
     }
 }
 
-/// What a language without our query file still yields, read from node
-/// kinds most grammars share: blocks, and definitions too when it has no
-/// tags query either.
+/// Finds blocks, and definitions too when there is no tags query, for a
+/// language without a Gaia query file. It reads node kinds that most grammars
+/// share.
 fn fallback<'t>(root: Node<'t>, definitions: bool, out: &mut Vec<Hit<'t>>) {
     let mut stack = vec![root];
     while let Some(n) = stack.pop() {
@@ -309,9 +310,9 @@ fn clean_owner(s: &str) -> String {
     s[..end].trim().to_string()
 }
 
-/// The node holding a definition's parameters and body: the definition
-/// itself, or a function it wraps, such as `const f = () => {}`. The search
-/// stays out of bodies, so a class never finds its methods' parameters.
+/// The node with a definition's parameters and body, which is the definition
+/// itself or a function it wraps, such as `const f = () => {}`. The search
+/// skips bodies, so a class never finds its methods' parameters.
 fn function_node(def: Node) -> Option<Node> {
     let mut queue = vec![(def, 0)];
     while let Some((n, depth)) = queue.pop() {
@@ -333,7 +334,7 @@ fn function_node(def: Node) -> Option<Node> {
     None
 }
 
-/// Its text up to its body, whitespace collapsed, cut at 240 characters.
+/// A definition's text up to its body, with whitespace collapsed, cut at 240 characters.
 fn signature(def: Node, function: Option<Node>, src: &str) -> String {
     let body = def
         .child_by_field_name("body")
@@ -376,7 +377,7 @@ fn comment_words(s: &str) -> String {
         .join(" ")
 }
 
-/// Comments that only steer a tool, never describe the code.
+/// Whether a comment is a tool directive, such as `eslint-`, rather than a description of the code.
 fn is_directive(words: &str) -> bool {
     [
         "eslint-",
@@ -390,8 +391,9 @@ fn is_directive(words: &str) -> bool {
     .any(|p| words.starts_with(p))
 }
 
-/// The run of comments directly above a definition, read through anything
-/// wrapping it to its end (an `export`, a decorator) and past attributes.
+/// The run of comments directly above a definition and any wrapper that ends
+/// where it ends, such as an `export` or a decorator. It skips attributes and
+/// tool directives.
 fn doc_above(def: Node, src: &str) -> Option<String> {
     let mut node = def;
     while let Some(p) = node.parent() {
@@ -423,8 +425,8 @@ fn doc_above(def: Node, src: &str) -> Option<String> {
     (!doc.is_empty()).then_some(doc)
 }
 
-/// Whether a definition's file exports it: wrapped to its end in an `export`
-/// (TypeScript, JavaScript), or declared `pub` (Rust). Other languages
+/// Whether a definition's file exports it. In TypeScript and JavaScript, an
+/// `export` wraps it to its end. In Rust, it is declared `pub`. Other languages
 /// export by convention, which only Jev reads.
 fn exported(def: Node, src: &str) -> bool {
     let mut node = def;
@@ -520,7 +522,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         }
     }
     let functions: Vec<Option<Node>> = found.iter().map(|(n, _, _)| function_node(*n)).collect();
-    // A definition runs when it takes parameters, or when its role says it does.
+    // A definition runs when it takes parameters, or when its role is in `CALLABLES`.
     let runs: Vec<bool> = (0..found.len())
         .map(|i| {
             let def = found[i].0;
@@ -536,8 +538,8 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         })
         .collect();
 
-    // Parents, and locals dropped: a definition inside a function is kept
-    // only when it runs or holds definitions itself.
+    // Assign parents and drop locals. A definition inside a function stays
+    // only when it runs or contains definitions itself.
     let mut parent: Vec<Option<usize>> = vec![None; found.len()];
     let mut stack: Vec<usize> = Vec::new();
     for i in 0..found.len() {
@@ -582,9 +584,9 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         .filter_map(|h| h.owner.map(|o| (h.node, clean_owner(text(o, src)))))
         .collect();
 
-    // Blocks: each node once; a closure that is a definition's own body is
-    // not a block; a one-line literal is a value, not a table; and data or
-    // markup inside more of the same shape belongs to the outer one.
+    // Blocks, each node once. A closure that is a definition's own body is not
+    // a block. A one-line literal is a value, not a table. Data or markup inside
+    // more of the same shape belongs to the outer block.
     let def_nodes: HashSet<usize> = order.iter().map(|&i| found[i].0.id()).collect();
     let mut block_hits: Vec<(Node, String)> = Vec::new();
     let mut block_seen: HashSet<usize> = HashSet::new();
@@ -652,7 +654,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         *index += 1;
     }
 
-    // Definitions, named.
+    // Name the definitions.
     let docstrings: Vec<Node> = hits
         .iter()
         .filter(|h| h.what == "doc" && !h.from_tags)
@@ -717,7 +719,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             exported: exported(*node, src),
         });
     }
-    // A repeat of a qualified name in the same file is told apart by its order.
+    // A repeated qualified name in the same file gets a `~2`, `~3` suffix in order.
     let mut counts: HashMap<String, usize> = HashMap::new();
     for def in &mut defs {
         let n = counts.entry(def.qualified.clone()).or_insert(0);
@@ -739,8 +741,9 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             };
             let at = h.name.unwrap_or(h.node);
             // The qualifier is the text before the name in the expression that
-            // holds both: the match itself, or, when a tags query captures a
-            // call by its arguments, the name's own parent (`ctx.lineTo`).
+            // contains both. That expression is the match itself, or the name's
+            // parent when a tags query captures a call by its arguments
+            // (`ctx.lineTo`).
             let before = h
                 .name
                 .and_then(|n| {
@@ -781,9 +784,9 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         })
         .collect();
 
-    // Each alias, and each name an import passes on, joins the import holding
-    // it. Of several imports on one statement, as in Python's `import a as x,
-    // b as y`, it joins the one it renames.
+    // Attach each alias, and each name an import passes on, to the import that
+    // contains it. When one statement has several imports, as in Python's
+    // `import a as x, b as y`, it attaches to the one it renames.
     for h in hits.iter() {
         let Some((group @ ("alias" | "reexport"), form)) = h.what.split_once('.') else {
             continue;

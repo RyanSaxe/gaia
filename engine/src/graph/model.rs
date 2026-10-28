@@ -1,6 +1,6 @@
-//! The code graph's types, as `packages/schema/src/graph.ts` declares them.
-//! The engine fills structural facts; Jev's answers (`judged`) join
-//! when the runner exists.
+//! The code graph's types, matching `packages/schema/src/graph.ts`.
+//! `graph::build` fills the structural facts, and `jev::runner::judged_graph`
+//! adds Jev's answers as `judged`.
 
 use serde::Serialize;
 
@@ -35,12 +35,12 @@ pub struct DirNode {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub judged: Option<serde_json::Value>,
     pub path: String,
-    /// The package, crate, module, app or service rooted here (`entities.rs`).
+    /// The package or crate whose manifest is in this directory (`entities.rs`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entity: Option<Entity>,
 }
 
-/// What a directory is the root of, as its manifest says.
+/// The package or crate a directory is the root of, from its manifest.
 #[derive(Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Entity {

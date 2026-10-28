@@ -3,20 +3,20 @@
 One composition, three ways to play it:
 - the piece: 32 bars of 4/4 at 75 BPM in F major (102.4 s, exactly 4,915,200 samples at 48 kHz), as four stems that
   loop together: `bed` (held strings, harp and pizzicato), `melody` (clarinet, flute, oboe, solo violin), `shimmer`
-  (celesta, glockenspiel, high harp, soft high violins) and `minor` (the bed in F minor, darker and sparser);
+  (celesta, glockenspiel, high harp, soft high violins) and `minor` (the bed in F minor, darker and sparser).
 - phrases: seven short standalone pieces built from the same theme, from silence to a natural decay.
 
 Form of the piece (bars):
   A   1-8   the theme on the clarinet over harp eighths      F  Am  Bb  Csus C | Dm  Bb  Gm7 C7 | F
   B   9-16  the answer: flute, then solo violin, then flute   Bb F/A Gm  Dm     | Bb  F/A Gm7 C7 | Csus
-            climbing to a high F left open on C sus; tiptoe pizzicato
+            climbing to a high F left open on C sus, over tiptoe pizzicato
   A'  17-24 the theme on the solo violin (clarinet below), oboe, then flute and clarinet in thirds
   C   25-32 the coda: low clarinet and a far flute echo the head, harp in quarters, and a harp run up bar 32
             leads back into bar 1. The melody breathes through bars 25, 28, 30 and 31.
 
 The minor stem follows the bed bar for bar (F -> Fm, Am -> Ab, Bb -> Bbm, Dm -> Db, Gm -> G half-diminished), and
-the shimmer uses only notes each bar's major and minor chords share, so it sits over either. The melody is major:
-it is not meant to sound over the minor stem.
+the shimmer uses only notes each bar's major and minor chords share, so it fits over either. The melody is major,
+so it is not meant to sound over the minor stem.
 
 The loop is written once, after a one-bar pre-roll, and the mixer folds everything that sounds past bar 32 back onto
 bar 1, so each stem is its own steady state and loops without a seam.
@@ -120,7 +120,7 @@ class Band:
 
 
 PITCHCAL = json.loads((Path(__file__).resolve().parent / "pitchcal.json").read_text())
-EVEN = 0.8  # how much of each pitch's measured correction to apply: some natural register contour stays
+EVEN = 0.8  # how much of each pitch's measured correction to apply, so some natural register contour stays
 STEP = 2  # dB between gain groups
 
 
@@ -156,7 +156,7 @@ def swell(part, b0, b1, lo, hi, peak=0.6, num=11):
 
 
 def strings(band, b0, prog, v=80, voices=("cb", "vc", "va", "vn"), table=STR, tie=True):
-    """Held chords; a voice holding the same pitch into the next chord is tied over."""
+    """Held chords. A voice holding the same pitch into the next chord is tied over."""
     for i, inst in enumerate(voices):
         part = getattr(band, inst)
         b = b0
@@ -201,7 +201,7 @@ def roll(part, b0, pitches, v, spread=0.06, beats=2.0):
 BPM = 75
 BARS = 32
 PRE = 4  # one bar of pre-roll before bar 1, so notes that lead in (strings 0.14 s early) are not clipped
-TAIL = 12  # three bars after bar 32 for every release and the harp's ring; the mixer folds them onto bar 1
+TAIL = 12  # three bars after bar 32 for every release and the harp's ring, which the mixer folds onto bar 1
 
 PROG = [
     [("F", 4)], [("Am", 4)], [("Bb", 4)], [("Csus", 2), ("C7", 2)], [("Dm", 4)], [("Bb", 4)], [("Gm7", 2), ("C7", 2)], [("F", 4)],
@@ -240,7 +240,7 @@ def piece(out):
     T = clock.sec
     bed, mel, sh, mi = Band(s, "bed_"), Band(s, "mel_"), Band(s, "sh_"), Band(s, "min_")
 
-    # ---- bed: strings hold the harmony throughout, softer in the coda; the pulse changes with each section
+    # ---- bed: strings hold the harmony throughout, softer in the coda, and the pulse changes with each section
     flat = [c for bar in PROG for c in bar]
     strings(bed, bb(1), flat, v=80)
     for inst, off in (("cb", -4), ("vc", 0), ("va", -2), ("vn", -8)):
@@ -337,7 +337,7 @@ def piece(out):
             hh = near(common(bar), "C5", "C6")
             sh.hp.n(bb(bar, 2.5), 2.0, hh[0] + 12, 34)
 
-    # ---- minor: the bed in F minor; low strings without violins, a slower harp, fewer plucks, a bassoon in B and C
+    # ---- minor: the bed in F minor, with low strings without violins, a slower harp, fewer plucks, a bassoon in B and C
     mflat = [(TO_MINOR[ch], d) for ch, d in flat]
     strings(mi, bb(1), mflat, v=80, voices=("cb", "vc", "va"), table=STRM)
     for inst, off in (("cb", -4), ("vc", 0), ("va", -2)):
@@ -385,8 +385,8 @@ def piece(out):
 
 def phrase(out, name, bpm, prog, lead, extra_fn=None, intro=1, ring=2, bed="eighths", strings_level=46,
            voices=("cb", "vc", "va", "vn"), table=STR, harp_v=40, seats_adj=None):
-    """prog: per-bar chord lists after the intro bar (the intro bar plays the first chord); lead(band, b0) writes the
-    tune from the first bar after the intro; the last chord rings for `ring` bars."""
+    """prog: per-bar chord lists after the intro bar, which plays the first chord. lead(band, b0) writes the tune from
+    the first bar after the intro. The last chord rings for `ring` bars."""
     bars = [[(prog[0][0][0], 4)]] * intro + prog
     nb = len(bars)
     total = 4 * (nb + ring) + 4
@@ -493,7 +493,7 @@ def day3(out):
 
 
 def day4(out):
-    """The oboe states the head, the bassoon answers below; then the two together in tenths, landing on F."""
+    """The oboe states the head and the bassoon answers below, then the two play together in tenths, landing on F."""
     def lead(band, b0, T):
         ob, bn = band.ob, band.bns
         ob.line(b0, TH["P1"], 62, legato=0.05)
@@ -518,7 +518,7 @@ def day4(out):
 
 
 def night1(out):
-    """Celesta and harp, slow: the head on the celesta, the harp's echo, P3 and the falling close; high violins."""
+    """Celesta and harp, slow: the head on the celesta, the harp's echo, P3 and the falling close, over high violins."""
     prog = [[("F", 4)], [("Dm", 4)], [("Bb", 4)], [("Csus", 4)], [("F", 4)], [("Bb", 4)], [("Gm7", 2), ("C7", 2)], [("Fadd9", 4)]]
 
     def lead(band, b0, T):
@@ -541,7 +541,7 @@ def night1(out):
 
 
 def night2(out):
-    """The harp leads high and soft, the celesta answers each phrase a sixth above; violas and violins hold."""
+    """The harp leads high and soft and the celesta answers each phrase a sixth above, while violas and violins hold."""
     prog = [[("F", 4)], [("Am", 4)], [("Dm", 4)], [("Bb", 4)], [("Gm7", 4)], [("Csus", 2), ("C7", 2)], [("F", 4)]]
 
     def lead(band, b0, T):
@@ -565,8 +565,8 @@ def night2(out):
 
 
 def ruin1(out):
-    """F minor: the oboe alone on the theme's head, a minor sixth now, over low strings; celesta dust; it ends on the
-    ninth over F minor, left hanging."""
+    """F minor: the oboe alone on the theme's head, a minor sixth now, over low strings and sparse celesta. It ends on
+    the ninth over F minor, unresolved."""
     prog = [[("Fm", 4)], [("Db", 4)], [("Bbm", 4)], [("Csus", 2), ("C7", 2)], [("Fm", 4)], [("Db", 4)], [("Fmadd9", 4)]]
     table = dict(STRM)
     table["Fmadd9"] = ("F2", "C3", "Ab3")

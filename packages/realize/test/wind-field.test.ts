@@ -47,7 +47,7 @@ describe("the wind field", () => {
     };
     const here = series(0, 0, 600);
     const downwind = series(30 * dx, 30 * dz, 600);
-    // The lag at which the spot 30 m downwind best repeats this one.
+    // The lag at which the point 30 m downwind best matches this one.
     let best = 0;
     for (let lag = 1; lag < 120; lag++) if (correlation(here.slice(0, -lag), downwind.slice(lag)) > correlation(here.slice(0, -best || undefined), downwind.slice(best))) best = lag;
     expect(best * STEP).toBeCloseTo(30 / WIND_FIELD.gust.speed, 0);

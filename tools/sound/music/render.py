@@ -1,7 +1,7 @@
 """Render every part of every song through its SFZ patch with sfizz_render: 48 kHz float WAVs, three at a time.
 
 sfizz streams long samples from disk in a background thread, and under load a voice can come out silent even when
-rendering offline; each patch is played from a copy that starts with hint_ram_based=1, which loads every sample
+rendering offline, so each patch is played from a copy that starts with hint_ram_based=1, which loads every sample
 whole first. The copy sits beside the patch, because its sample paths are relative to it.
 
 Usage: render.py MIDI_ROOT PARTS_ROOT   (MIDI_ROOT/<song>/ as compose.py writes it; PARTS_ROOT/<song>/<part>.wav)

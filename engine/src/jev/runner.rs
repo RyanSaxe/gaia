@@ -1,21 +1,11 @@
-//! The Jev runner: the one part of the engine that decides what to ask Jev
-//! about the code graph, and when. For each file it gathers every call of a
-//! pass that applies and builds one request: the file's source, an outline
-//! of its definitions, each call's part, and every call's questions; a
-//! directory's request holds an outline of its parts instead of source. A
-//! request too big for Jev's window is cut at the file's top-level
-//! definitions into pieces sized by source and questions together. A
-//! request already answered (the store's `calls` table, by the request's
-//! hash) is never sent again, and a fresh answer replaces a held one (the
-//! `held` table, by lineage) only when it clearly differs (`hold.rs`).
-//!
-//! Every slice rebuilds what it wants from what is answered, so the passes
-//! wait for each other: the understanding pass waits for every link, each
-//! folder for its parent and each file for its folder (`axes.rs`).
-//!
-//! The world drives it in slices: `plan` says what is wanted and what is
-//! already answered, and `next` sends what is ready and returns the nodes
-//! that settled.
+//! Chooses which requests to send Jev about the code graph, and when, in slices
+//! that the world calls: `plan` reports which requests are needed and which are
+//! answered, and `next` sends the ready ones. The store's `calls` table keeps
+//! each answer by request hash, so no request is sent twice, and the `held`
+//! table keeps answers by lineage (`hold.rs`). Each slice rebuilds its requests
+//! from the answers so far, so the understanding pass's requests are ready only
+//! after every link is held, a folder's after its parent's and a file's after
+//! its folder's (`axes.rs`).
 
 use super::calls::{self, Call, Ctx, Question, Unit};
 use super::tokens::tokens;
@@ -30,16 +20,16 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MODEL: &str = "typesafe/jev-1.13";
-/// Jev reads 32,000 tokens. A request stops at 30,000 estimated tokens
+/// Jev's window is 32,000 tokens. A request stops at 30,000 estimated tokens
 /// (`tokens.rs`), which Jev bills at about 30,800 for the densest text and
 /// 22,000 for the median.
 const BUDGET: usize = 30_000;
-/// Billed tokens per estimated token before a project's first answers say
-/// otherwise: the median of the bench's first 720 requests.
+/// Billed tokens per estimated token until a project's first answers report
+/// billing. It is the median of the bench's first 720 requests.
 const START_BILLED_PER_ESTIMATED: f64 = 0.73;
 /// How much of a request the outline of a file's definitions may take.
 const OUTLINE_SHARE: f64 = 0.2;
-/// After a slice Jev took without complaint, this many more requests go at once.
+/// After a slice with no overload from Jev, the runner sends this many more requests at once.
 const CONCURRENCY_STEP: usize = 8;
 const DEFAULT_SLICE: usize = 256;
 /// Held link answers are kept under this prefix and the reference's key.
@@ -52,10 +42,10 @@ struct Planned {
     unit: String,
     request: Value,
     hash: String,
-    /// Bytes of source it read, which weigh a chunk's answers.
+    /// Bytes of source it includes, which weight a chunk's answers (`hold::combine`).
     weight: f64,
     questions: Vec<Asked>,
-    /// Built only so a plan can count it: what it waits on isn't answered
+    /// Built only so `plan` can count it. The answers it depends on aren't in
     /// yet, so it is never sent or held.
     waiting: bool,
 }
@@ -70,7 +60,7 @@ struct Asked {
     line: Option<u32>,
 }
 
-/// How many requests Jev takes at once, for each project root.
+/// How many requests the runner sends Jev at once, for each project root.
 fn concurrencies() -> &'static Mutex<HashMap<PathBuf, usize>> {
     static C: OnceLock<Mutex<HashMap<PathBuf, usize>>> = OnceLock::new();
     C.get_or_init(|| Mutex::new(HashMap::new()))
@@ -95,9 +85,9 @@ fn now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// How many tokens Jev bills for each estimated one, as this project's
-/// answers taught it. It prices requests; it never lays them out, so a
-/// stored answer is always found again.
+/// How many tokens Jev bills for each estimated token, from this project's
+/// answers so far. It only prices requests and never changes how they are
+/// split, so a stored answer is always found again.
 fn billed_per_estimated(project: &str) -> f64 {
     store::get(project, "settings", "jev.billedPerEstimated")
         .ok()
@@ -107,9 +97,9 @@ fn billed_per_estimated(project: &str) -> f64 {
         .unwrap_or(START_BILLED_PER_ESTIMATED)
 }
 
-/// Where a link answer is held: its reference and the candidates it chose
-/// among. A reference whose candidates change with other links (a call
-/// whose receiver's type comes from an import Jev resolved, say) keeps an
+/// The key a link answer is held under: its reference and the candidates Jev
+/// chose among. A reference whose candidates change with other links, such as
+/// a call whose receiver's type comes from an import Jev resolved, keeps an
 /// answer for each set, so applying one never undoes the other.
 fn link_key<S: AsRef<str>>(reference: &str, candidates: &[S]) -> String {
     let joined: Vec<&str> = candidates.iter().map(AsRef::as_ref).collect();
@@ -134,9 +124,10 @@ fn candidates_by_ref(graph: &CodeGraph) -> HashMap<String, Vec<&str>> {
         .collect()
 }
 
-/// The candidates a link answer is held under: its reference's own, every
-/// one, since a question with thousands offers only the nearest that fit
-/// and the graph finds the answer by them all; else those it offered.
+/// The candidates a link answer is held under. They are all of its
+/// reference's candidates, since a question with thousands offers only the
+/// nearest that fit and the graph looks the answer up by all of them. Without
+/// the reference, they are the ones the question offered.
 fn held_candidates<'a>(by_ref: &HashMap<String, Vec<&'a str>>, q: &'a Asked) -> Vec<&'a str> {
     if let Some(c) = by_ref.get(&q.about) {
         return c.clone();
@@ -151,7 +142,7 @@ fn held_candidates<'a>(by_ref: &HashMap<String, Vec<&'a str>>, q: &'a Asked) -> 
 }
 
 /// The references Jev resolved, from the held answers, by reference key.
-/// An answer from an earlier version of its call no longer holds.
+/// An answer from an earlier version of its call no longer applies.
 fn links(held: &Value) -> crate::graph::Links {
     let current: HashSet<String> = calls::registry()
         .into_iter()
@@ -188,11 +179,11 @@ fn links(held: &Value) -> crate::graph::Links {
     out
 }
 
-/// The lines of a file split at its top-level definitions into pieces
-/// whose source and questions together stay within `limit` tokens, or
-/// `first` for the first piece, as 1-based line ranges. `load[i]` is the size of the questions about nodes
-/// that start on line `i + 1`, so a piece carries only its own source and
-/// its own questions, and the source goes out once.
+/// Splits a file's lines at its top-level definitions into pieces whose source
+/// and questions together stay within `limit` tokens, or `first` for the first
+/// piece, and returns them as 1-based line ranges. `load[i]` is the size of the
+/// questions about nodes that start on line `i + 1`, so a piece has only its own
+/// source and questions, and the source goes out once.
 fn chunks(text: &str, starts: &[u32], load: &[usize], limit: usize, first: usize) -> Vec<(u32, u32)> {
     let lines: Vec<&str> = text.lines().collect();
     let total = lines.len() as u32;
@@ -229,9 +220,9 @@ fn chunks(text: &str, starts: &[u32], load: &[usize], limit: usize, first: usize
     out
 }
 
-/// A file's definitions for a request's state, within `limit` tokens: names
-/// and lines beside the whole source, which shows the rest, or full
-/// signatures beside one piece, the piece's own first.
+/// A file's definitions for a request's state, within `limit` tokens. Beside
+/// the whole source, it lists names and lines, since the source shows the
+/// rest. Beside one piece, it lists full signatures, the piece's own first.
 fn outline(ctx: &Ctx, file: &str, (start, end): (u32, u32), piece: bool, limit: usize) -> Value {
     let all = ctx.outline(file);
     let inside = |d: &Value| {
@@ -261,9 +252,9 @@ fn outline(ctx: &Ctx, file: &str, (start, end): (u32, u32), piece: bool, limit: 
     Value::Array(out)
 }
 
-/// A piece of a file: its first and last lines, the bytes it holds, and
-/// whether it cuts a line, starting after a line's start or ending before
-/// its end, as a piece of one minified line does.
+/// A piece of a file: its first and last lines, its byte range, and whether it
+/// cuts a line by starting after a line's start or ending before its end, as a
+/// piece of one minified line does.
 #[derive(Clone, Copy)]
 struct Piece {
     first: u32,
@@ -273,9 +264,9 @@ struct Piece {
     cut: bool,
 }
 
-/// Line ranges as byte ranges. A range longer than `limit` tokens, as a
-/// definition too long for one request leaves, is cut at lines into pieces
-/// of at most `limit` tokens, and a line longer than that alone, such as a
+/// Converts line ranges to byte ranges. It cuts a range longer than `limit`
+/// tokens, such as a definition too long for one request, at lines into pieces
+/// of at most `limit` tokens. It cuts a single line longer than that, such as a
 /// minified file's one line, at character boundaries, so every character is
 /// sent.
 fn pieces_of(text: &str, ranges: &[(u32, u32)], limit: usize) -> Vec<Piece> {
@@ -287,7 +278,7 @@ fn pieces_of(text: &str, ranges: &[(u32, u32)], limit: usize) -> Vec<Piece> {
             .copied()
             .unwrap_or(text.len())
     };
-    // The 1-based line a byte lies on.
+    // The 1-based line a byte is on.
     let line_at = |byte: usize| starts.partition_point(|&s| s <= byte) as u32;
     let limit = limit.max(1);
     let mut out = Vec::new();
@@ -328,10 +319,10 @@ fn pieces_of(text: &str, ranges: &[(u32, u32)], limit: usize) -> Vec<Piece> {
     out
 }
 
-/// The bytes `start..end` of one line in slices of at most `limit` tokens,
-/// at character boundaries: even slices when each comes within `limit`;
-/// otherwise, where the text is denser in one part than another, each
-/// slice as long as it can be within `limit`.
+/// Splits the bytes `start..end` of one line into slices of at most `limit`
+/// tokens, at character boundaries. The slices are even when each fits in
+/// `limit`. Otherwise, where the text is denser in one part than another, each
+/// slice is as long as fits in `limit`.
 fn slices(text: &str, start: usize, end: usize, limit: usize) -> Vec<(usize, usize)> {
     let count = tokens(&text[start..end]).div_ceil(limit);
     let step = (end - start).div_ceil(count).max(1);
@@ -417,8 +408,8 @@ fn pack(
     questions: &[&Asked],
     out: &mut Vec<Planned>,
 ) {
-    // A question takes its quoted id, its JSON, a colon and a comma; the
-    // state, the whole request around it with no questions yet.
+    // A question's size is its quoted id, its JSON, a colon and a comma. The
+    // state's size is the whole request around it with no questions yet.
     let size_of = |q: &Asked| tokens(&json!(q.id).to_string()) + tokens(&q.json.to_string()) + 2;
     let state_size = tokens(&json!({ "model": MODEL, "state": state, "questions": {} }).to_string());
     let mut batch: Vec<&Asked> = Vec::new();
@@ -455,7 +446,7 @@ fn pack(
     flush(&mut batch);
 }
 
-/// The requests one pass makes about a directory: its parts and questions, no source.
+/// The requests one pass makes about a directory: an outline of its parts and its questions, with no source.
 fn dir_requests(ctx: &Ctx, repository: &str, dir: &DirNode, calls: &[&dyn Call]) -> Vec<Planned> {
     let unit = Unit::Dir(dir);
     let calls: Vec<&dyn Call> = calls
@@ -484,8 +475,8 @@ fn dir_requests(ctx: &Ctx, repository: &str, dir: &DirNode, calls: &[&dyn Call])
     let questions = questions_of(ctx, unit, &calls);
     let mut out = Vec::new();
     let room = (BUDGET as f64 * 0.9) as usize;
-    // A folder with more parts than one request holds is asked in several, each with a run of its parts and
-    // the questions about them, marked as which of them it holds; the folder's own questions go with the first.
+    // A folder with more parts than one request fits goes out in several requests. Each has a run of its parts,
+    // the questions about them, and which parts the run covers. The folder's own questions go with the first.
     let listed = calls.iter().find_map(|c| {
         let parts = state.get(c.id())?.get("parts")?.as_array()?;
         Some((c.id(), parts.clone()))
@@ -523,8 +514,10 @@ fn dir_requests(ctx: &Ctx, repository: &str, dir: &DirNode, calls: &[&dyn Call])
     out
 }
 
-/// The requests one pass makes about a file: every applicable call's part
-/// and questions, cut to fit the window.
+/// The requests one pass makes about a file: its source, an outline of its
+/// definitions, and every applicable call's part and questions. A request too
+/// big for Jev's window is cut at the file's top-level definitions into pieces
+/// sized by source and questions together.
 fn file_requests(
     ctx: &Ctx,
     repository: &str,
@@ -551,7 +544,7 @@ fn file_requests(
     if !file.conventions.is_empty() {
         base.insert("conventions".into(), json!(file.conventions));
     }
-    // Blocks are named by their own questions, with their shape, lines and holder.
+    // Blocks need no part of their own, because their questions name each block's shape, lines and definition.
     for c in &calls {
         if let Some(part) = c.part(ctx, unit, budget / 8) {
             base.insert(c.id().into(), part);
@@ -618,8 +611,8 @@ fn file_requests(
     let mut out = Vec::new();
     let pieces = &pieces;
     let holding = |line: u32| (0..pieces.len()).filter(move |&i| pieces[i].first <= line && line <= pieces[i].last);
-    // Where each definition on a line cut into pieces starts: its signature,
-    // found after the one before it on the line, so the line is read once.
+    // Where each definition on a cut line starts, at its signature. Each search
+    // starts after the previous definition on the line, so the line is scanned once.
     let mut signature_at: HashMap<&str, usize> = HashMap::new();
     let mut searched: HashMap<u32, usize> = HashMap::new();
     for d in ctx.defs_of.get(file.id.as_str()).into_iter().flatten() {
@@ -635,9 +628,9 @@ fn file_requests(
             signature_at.insert(d.id.as_str(), *from);
         }
     }
-    // Each question about a line goes to the first piece that holds it, and
-    // a definition's on a cut line to the piece that holds its signature,
-    // so each piece is asked about what it shows.
+    // Each question about a line goes to the first piece that contains the line,
+    // and a question about a definition on a cut line goes to the piece with its
+    // signature, so each piece's questions are about the source it shows.
     let homes: Vec<Option<usize>> = questions
         .iter()
         .map(|q| {
@@ -648,7 +641,7 @@ fn file_requests(
                 .or_else(|| holding(line).next())
         })
         .collect();
-    // The pieces asked about something they hold.
+    // The pieces with at least one question about their own source.
     let homed: HashSet<usize> = homes.iter().flatten().copied().collect();
     for (index, piece) in pieces.iter().enumerate() {
         let mut state = base.clone();
@@ -667,9 +660,9 @@ fn file_requests(
         } else {
             state.insert("source".into(), json!(&text[piece.start..piece.end]));
             let mut chunk = json!({ "lines": [piece.first, piece.last], "of": total_lines });
-            // A piece of a cut line says which of its characters it holds:
-            // from the start of its first line, and to the end of it on its
-            // last, the line's break not counted.
+            // A piece of a cut line states which characters of the line it
+            // contains, from the start of its first line to the end of its last,
+            // not counting the line break.
             if piece.cut {
                 let first_at = line_start.get((piece.first - 1) as usize).copied().unwrap_or(0);
                 let last_at = line_start.get((piece.last - 1) as usize).copied().unwrap_or(0);
@@ -683,12 +676,12 @@ fn file_requests(
             state.insert("chunk".into(), chunk);
         }
         let weight = state["source"].as_str().map_or(0, str::len) as f64;
-        // A question about a line goes in the piece that holds it; one about
-        // the whole file in the first piece, which has the file's whole
-        // outline, and in any piece holding nothing else asked about, such
-        // as the middle of a long definition or of a generated file's one
-        // line, so every character is read and the answers combine by the
-        // bytes each read.
+        // A question about a line goes in the piece that contains it. A question
+        // about the whole file goes in the first piece, which has the file's
+        // whole outline. It also goes in any piece with no other question, such
+        // as the middle of a long definition or of a generated file's one line,
+        // so Jev reads every character and `hold::combine` weights the answers
+        // by each piece's bytes.
         let mine: Vec<&Asked> = questions
             .iter()
             .zip(&homes)
@@ -699,7 +692,7 @@ fn file_requests(
             })
             .map(|(q, _)| q)
             .collect();
-        // A piece carries only the parts of the calls it asks.
+        // A piece includes only the parts of the calls whose questions it has.
         if pieces.len() > 1 {
             let asking: HashSet<&str> = mine
                 .iter()
@@ -723,9 +716,10 @@ fn file_requests(
     out
 }
 
-/// Everything a project wants asked now, given what is answered: the graph
-/// with Jev's links, every request whose waits are met, and the hashes the
-/// store already answered.
+/// Every request a project needs now, given the answers so far: the graph
+/// with Jev's links, every planned request, with those whose dependencies are
+/// unanswered marked `waiting`, and the request hashes the store has answers
+/// for.
 struct Wanted {
     project: String,
     graph: CodeGraph,
@@ -772,10 +766,11 @@ fn wanted(root: &Path) -> Result<Wanted, String> {
     })
 }
 
-/// The understanding pass's requests: folders top-down, each once its
-/// parent's request is answered, and each file once its folder's is, so
-/// every request carries what was found above it. Until then a request is
-/// built on what is known, marked waiting, so a plan can count it.
+/// The understanding pass's requests. Folders go top-down, each once its
+/// parent's request is answered, and each file once its folder's is, so every
+/// request includes the answers above it. Before then, the runner builds a
+/// request from the answers so far and marks it `waiting`, so `plan` can count
+/// it.
 fn understanding(
     ctx: &Ctx,
     graph: &CodeGraph,
@@ -847,14 +842,14 @@ fn summary(w: &Wanted) -> Value {
     })
 }
 
-/// Says what the project wants asked now, and what is already answered.
-/// Sends nothing.
+/// Reports which requests the project needs now and which are already
+/// answered. Sends nothing.
 pub fn plan(root: &Path) -> Result<Value, String> {
     Ok(summary(&wanted(root)?))
 }
 
-/// Sends up to `max` requests that are ready, and holds the answers of
-/// every file or directory a pass has now fully answered.
+/// Sends up to `max` ready requests, and holds the answers of every file or
+/// directory whose requests in a pass are now all answered.
 pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     let concurrency = concurrency_of(root)?;
     let w = wanted(root)?;
@@ -870,8 +865,8 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     if ready.is_empty() && unsettled.is_empty() {
         return Ok(json!({ "sent": 0, "failed": 0, "failures": [], "left": 0, "settled": [], "quality": {} }));
     }
-    // A link held anew changes the graph every other request is built on,
-    // so this slice only holds; the next builds on the graph it leaves.
+    // A newly held link changes the graph every other request is built from, so
+    // this slice only holds answers. The next slice builds on the new graph.
     let ready = if unsettled.iter().any(|(_, pass)| *pass == LINK) {
         Vec::new()
     } else {
@@ -901,7 +896,7 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     let mut writes: Vec<Value> = Vec::new();
     let mut fresh: HashMap<String, Value> = HashMap::new();
     let (mut failed, mut estimated, mut billed) = (0usize, 0usize, 0u64);
-    // Which requests failed, once the client has retried them, and why: a caller fails the world with them.
+    // Which requests failed after the client's retries, and why. A caller fails the world with them.
     let mut failures: Vec<Value> = Vec::new();
     let mut touched: BTreeSet<(&str, &str)> = BTreeSet::new();
     for (&i, answer) in ready.iter().zip(&answers) {
@@ -992,8 +987,9 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
             if field == "link" {
                 value["candidates"] = json!(offered.get(&node));
             }
-            // A link answer chosen among other candidates, or by an earlier
-            // version of its call, never holds: the graph reads only current ones.
+            // A held link answer chosen among other candidates, or by an earlier
+            // version of its call, is never kept, because the graph reads only
+            // current ones.
             let keep = held.get(&key).is_some_and(|h| {
                 h["candidates"] == value["candidates"]
                     && (field != "link" || h["call"] == value["call"])
@@ -1011,15 +1007,15 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     let held_anew = writes.iter().any(|w| w["table"] == "held");
     store::put(&w.project, &writes)?;
     let sent = ready.len() - failed;
-    // What is left counts only requests already known; answers can open
-    // more, such as one with the readings Jev asked for, and so can answers
-    // newly held.
+    // `left` counts only requests already planned. Answers can add more, such
+    // as a request with the readings Jev asked for, and so can newly held
+    // answers.
     let left = w.planned.iter().filter(|p| !answered(&p.hash)).count()
         + usize::from(sent > 0 || held_anew);
-    // Each file this slice settled for good has its quality now, so a caller can show it as the file's health at once
-    // rather than after the whole pass. A file is settled for good once nothing more will be asked about it: its
-    // answers can ask for readings, which a request of their own then asks again, so its requests are planned anew
-    // on what is held now and each must be answered.
+    // Each file this slice finished has its quality now, so a caller can show it as the file's health at once rather
+    // than after the whole pass. A file is finished once no more requests will be sent about it. Its answers can ask
+    // for readings, which a further request then sends, so its requests are planned again from what is held now and
+    // each must be answered.
     let mut quality = serde_json::Map::new();
     if settled.iter().any(|s| s.starts_with("file:")) {
         let held = store::read(&w.project, "held")?;
@@ -1049,9 +1045,9 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     Ok(json!({ "sent": sent, "failed": failed, "failures": failures, "left": left, "settled": settled, "quality": quality }))
 }
 
-/// Units whose requests are all answered but whose answers aren't held as
-/// they are asked now: a link answer held under other candidates or an
-/// older call, or a node's answer never held. They settle without asking.
+/// Units whose requests are all answered but whose answers aren't held in
+/// their current form: a link answer held under other candidates or an older
+/// call, or a node's answer never held. They settle without sending anything.
 fn unsettled<'a>(w: &'a Wanted, held: &Value, calls: &Value) -> BTreeSet<(&'a str, &'static str)> {
     let lineage: HashMap<&str, &str> = w
         .graph
@@ -1093,9 +1089,9 @@ fn unsettled<'a>(w: &'a Wanted, held: &Value, calls: &Value) -> BTreeSet<(&'a st
             out.insert((p.unit.as_str(), p.pass));
         }
     }
-    // A unit with a request still to answer, such as a file whose link
-    // requests a slice cut in two, settles once its last one is answered:
-    // until then it must not stop the rest from being sent.
+    // A unit with a request still unanswered, such as a file whose link
+    // requests a slice split in two, settles once its last one is answered.
+    // Until then it must not block the rest from being sent.
     out.retain(|&(unit, pass)| {
         w.planned
             .iter()
@@ -1115,8 +1111,8 @@ pub fn judged_graph(root: &Path) -> Result<CodeGraph, String> {
 }
 
 /// Fills every node's `judged` from the held answers of the registry's
-/// calls, then works out its value (`axes::values`). Answers a store kept
-/// from calls no longer in the registry are left out.
+/// calls, then computes its value (`axes::values`). It leaves out held answers
+/// from calls no longer in the registry.
 fn judge(graph: &mut CodeGraph, held: &Value) {
     let current: HashSet<&str> = calls::registry()
         .into_iter()
@@ -1218,7 +1214,8 @@ mod tests {
             planned: vec![link(1), link(2)],
             answered: HashSet::from(["h1".to_string()]),
         };
-        // Half answered, nothing can be held yet, so nothing may hold the slice back from asking the other half.
+        // With half the requests answered, nothing can be held yet, so nothing may stop the slice from sending the
+        // other half.
         assert!(unsettled(&w, &json!({}), &calls).is_empty());
         w.answered.insert("h2".into());
         assert_eq!(unsettled(&w, &json!({}), &calls), BTreeSet::from([("file:a.ts", LINK)]));
@@ -1280,7 +1277,7 @@ mod tests {
         file_requests(&ctx, &graph.name, file, &calls_of(pass))
     }
 
-    /// The pieces of source a file's requests carried, in order, with each one's `chunk`.
+    /// The pieces of source a file's requests included, in order, with each one's `chunk`.
     fn pieces_sent(planned: &[Planned]) -> Vec<(Value, String)> {
         let mut out: Vec<(Value, String)> = Vec::new();
         for p in planned {
@@ -1313,7 +1310,7 @@ mod tests {
         let pieces = pieces_sent(&files);
         assert!(pieces.len() > 1);
         assert_eq!(pieces.iter().map(|(_, s)| s.as_str()).collect::<String>(), text);
-        // Each piece names the characters of the line it holds, end to end.
+        // The pieces' character ranges cover the line end to end.
         let mut at = 0;
         for (chunk, source) in &pieces {
             let length = source.trim_end_matches('\n').chars().count();
@@ -1322,7 +1319,7 @@ mod tests {
             at += length;
         }
         assert_eq!(at, 200_000);
-        // Every definition is asked about once, in the piece that shows it.
+        // Each definition gets one question, in the piece that shows it.
         let defs: HashMap<&str, &str> = graph
             .nodes
             .iter()
@@ -1408,7 +1405,7 @@ mod tests {
         let mut all = candidates.clone();
         all.sort();
         let hold = |under: &[String]| json!({ link_key(&about, under): { "answer": answer, "call": "resolve@1", "candidates": under } });
-        // Held under every candidate, as the graph looks it up, it settles; under the ten offered, it would not.
+        // Held under every candidate, as the graph looks it up, it settles. Held under the ten offered, it would not.
         assert!(unsettled(&w, &hold(&all), &calls).is_empty());
         let mut ten = candidates[..10].to_vec();
         ten.sort();
@@ -1432,7 +1429,7 @@ mod tests {
         for p in planned.iter().chain(&top) {
             assert!(tokens(&p.request.to_string()) <= BUDGET, "a request of {} tokens", tokens(&p.request.to_string()));
         }
-        // The parts are held in runs, each once, and each part is asked about once, beside its run.
+        // Each part is in exactly one run, and each part gets one question, in its run's request.
         let mut runs: Vec<(Value, Vec<String>)> = Vec::new();
         for p in &planned {
             let state = &p.request["state"]["folder-axes"];

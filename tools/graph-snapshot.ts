@@ -2,11 +2,11 @@
 // layout reads (`judgedGraph`), to a JSON snapshot that `pnpm jev-world` and
 // `pnpm print-world-requests` lay the project's world out from (`factsOf`).
 // Each node's importance and quality come from the Jev answers held in the store
-// under GAIA_DATA_DIR; nothing is asked. Opening a checkout updates its project's
-// lineage record, so for an older commit point GAIA_DATA_DIR at a copy of
-// the store. The snapshot is written outside the repository unless told
-// otherwise (`SNAPSHOT`), since the repository keeps only the showcase's.
-// Builds the engine first.
+// under GAIA_DATA_DIR, and nothing is sent to Jev. Opening a checkout updates its
+// project's lineage record, so for an older commit point GAIA_DATA_DIR at a copy
+// of the store. The snapshot goes outside the repository by default
+// (`SNAPSHOT`), since the repository keeps only the showcase's. It builds the
+// engine first.
 // Usage: GAIA_DATA_DIR=dir pnpm graph-snapshot [root] [out.json]
 
 import { execFileSync, spawnSync } from "node:child_process";

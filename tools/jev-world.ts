@@ -1,20 +1,19 @@
-// Judges and composes a project's world from its graph snapshot (the facts
-// of what `pnpm graph-snapshot` writes, `factsOf`) once with Jev, the way the
-// app does, and keeps the answers by request key, as the app keeps them per
-// project, so what composing a world asks and costs can be counted outside
-// the app. Both files lie outside the repository unless told otherwise
-// (`SNAPSHOT`): the repository keeps only the showcase's answers, which
-// `pnpm showcase` writes. Answers already kept are never asked again, so a
-// run can be cut short with --limit and finished later; once a whole run has
-// asked every request, answers to requests the world no longer makes are
-// dropped.
+// Judges and composes a project's world with Jev once, the way the app does,
+// from its graph snapshot (`factsOf` of what `pnpm graph-snapshot` writes). It
+// keeps the answers by request key, as the app keeps them per project, so the
+// requests and cost of composing a world can be counted outside the app. Both
+// files are outside the repository unless set otherwise (`SNAPSHOT`), because
+// the repository keeps only the showcase's answers, which `pnpm showcase`
+// writes. Kept answers are never requested again, so a run can stop early
+// with --limit and finish later. Once a whole run has sent every request, it
+// drops answers to requests the world no longer makes.
 //
 // Nothing reaches OpenRouter unless the judge is `jev`, the engine runs with
 // GAIA_JEV=live, and --spend-up-to covers twice the engine's estimate of the
-// looks and of composing, about two requests a thing (`composingEstimate`).
-// Every request is priced before it is sent: one that would take the
-// reported cost past --spend-up-to is not sent, and the run stops there,
-// keeping what was answered.
+// looks and of composing, about two requests per thing (`composingEstimate`).
+// Every request is priced before it is sent. One that would take the reported
+// cost past --spend-up-to is not sent, and the run stops there, keeping what
+// was answered.
 //
 // Usage: pnpm jev-world [--judge jev|local] [--limit 5]
 //          [--spend-up-to 0.05] [--out jev.json] [--ledger ledger.jsonl]
@@ -77,13 +76,13 @@ else throw new Error(`Unknown judge ${judge}; choose jev or local.`);
 const status = await client.call("jev.status", {});
 if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
 
-// What this run would send: the requests not kept yet, at most --limit of them, the looks' and what every thing
-// stands as.
+// What this run would send: the look and form requests (`planWorldRequests`, `planStanding`) with no kept answer, at
+// most --limit of them.
 const missing = [...planWorldRequests(facts, LOOKS), ...planStanding(facts, LOOKS, { graph }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
 const toSend = missing.slice(0, limit);
 const estimate = await client.call("jev.estimate", { requests: toSend.map((p) => p.request) });
-// Composing follows from those answers: about two requests a thing, priced at one that composes a tree, whether or not
-// some of them are kept already, so the figure is never short.
+// Composing depends on those answers. It takes about two requests per thing, each priced as one that composes a tree,
+// counted even if some are kept already, so the estimate is never low.
 const composing = composingEstimate(facts, LOOKS, graph);
 const each = composing === null ? 0 : (await client.call("jev.estimate", { requests: [composing.sample] })).estimatedUsd;
 const composingUsd = each * (composing?.requests ?? 0);
@@ -103,7 +102,7 @@ const ms: number[] = [];
 const guarded: JevClient = {
   async ask(request) {
     if (sent >= limit) throw new Error("over --limit");
-    // Every request is priced before it goes, composing's too, which no plan counts ahead.
+    // Every request is priced before it is sent, including composing's, which no plan counts ahead.
     if (judge === "jev" && spent + (await client.call("jev.estimate", { requests: [request] })).estimatedUsd > allowed) throw new Error("over --spend-up-to");
     sent++;
     const r = await live.ask(request);
@@ -132,8 +131,8 @@ try {
   engine?.kill();
   await closeStandIn?.();
 }
-// Once a whole run has asked every request, answers to requests the world no longer makes (its questions or options
-// changed) are dropped.
+// Once a whole run has sent every request, drop answers to requests the world no longer makes, because their questions
+// or options changed.
 if (stopped === undefined) for (const key of Object.keys(kept.answers)) if (!asked.has(key)) delete kept.answers[key];
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, fixtureJson({ answers: kept.answers }));

@@ -1,14 +1,9 @@
-//! Jev's calls. Each call asks one kind of question about a file or a
-//! directory and the nodes in it: whether it applies, what it adds to the
-//! state, and its questions, each naming the node it is about and where
-//! its answer goes. A call's words live in its vocabulary file in
-//! `engine/vocab/`, and its version is the hash of those words (of its own
-//! section, where calls share a file) and a number bumped when its code
-//! changes, so a new word asks again only what that call answered.
-//!
-//! The link calls (resolve, callee) are here and go first. The
-//! understanding pass (`axes.rs`) waits for every link, then asks
-//! `folders` top-down and `files`, each after its folder.
+//! Jev's calls. A `Call` builds one kind of request about a file or a directory
+//! and its nodes: whether it applies, its part of the state, and its questions,
+//! each naming its node and the field its answer fills. The link calls here,
+//! `Resolve` and `Callee`, go first, and the understanding pass in `axes.rs`
+//! runs after every link, sending `folders` top-down and then `files`, each
+//! after its folder.
 
 use crate::graph::model::{CodeGraph, DefNode, DirNode, FileNode, Node, PendingRef};
 use crate::graph::walk::Snapshot;
@@ -30,7 +25,7 @@ pub struct Question {
     pub field: String,
     pub json: Value,
     /// The line it is about, for a question about a reference rather than a node,
-    /// so a long file's piece holding that line carries it.
+    /// so the question goes with the piece of a long file that contains that line.
     pub line: Option<u32>,
 }
 
@@ -41,12 +36,12 @@ pub enum Unit<'a> {
     Dir(&'a DirNode),
 }
 
-/// A block as a request names it: its id, shape, first and last lines, and the definition holding it.
+/// A block as a request lists it: its id, shape, first and last lines, and its definition's id.
 pub type BlockRow<'a> = (&'a str, &'a str, u32, u32, &'a str);
 
 /// The graph and what Jev already answered, indexed for building requests.
 pub struct Ctx<'a> {
-    /// The project's files as the graph read them, so every request reads the same commit.
+    /// The snapshot the graph was built from, so every request uses the same commit.
     pub snapshot: Snapshot,
     pub defs_of: HashMap<&'a str, Vec<&'a DefNode>>,
     pub blocks_of: HashMap<&'a str, Vec<BlockRow<'a>>>,
@@ -68,7 +63,7 @@ pub struct Ctx<'a> {
     pub calls_out: HashMap<&'a str, Vec<&'a str>>,
 }
 
-/// The file a node id names or lies in: `src/a.ts` for `file:src/a.ts` or `def:src/a.ts#f`.
+/// The file a node id names or is in: `src/a.ts` for `file:src/a.ts` or `def:src/a.ts#f`.
 fn file_part(id: &str) -> &str {
     let rest = id.split_once(':').map_or(id, |(_, r)| r);
     rest.split_once('#').map_or(rest, |(f, _)| f)
@@ -195,7 +190,7 @@ impl<'a> Ctx<'a> {
             .unwrap_or_default()
     }
 
-    /// A file's text, by its path, as the snapshot holds it.
+    /// A file's text from the snapshot, by its path.
     pub fn text(&self, path: &str) -> Option<std::sync::Arc<str>> {
         self.snapshot.text(path)
     }
@@ -216,6 +211,9 @@ pub trait Call: Sync {
     fn questions(&self, ctx: &Ctx, unit: Unit) -> Vec<Question>;
 }
 
+/// A call's version: the first 4 bytes of the SHA-256 of its words in
+/// `engine/vocab/`, and `code`, a number raised when the call's code changes. A
+/// change to a call's words or code sends only that call's questions again.
 fn version_of(vocab: &str, code: u32) -> String {
     let hash: String = Sha256::digest(vocab.as_bytes())
         .iter()
@@ -225,8 +223,8 @@ fn version_of(vocab: &str, code: u32) -> String {
     format!("{hash}-{code}")
 }
 
-/// A version from one section of a vocabulary file, for calls that share
-/// the file, so a change to one call's words leaves the others' answers.
+/// A version from one section of a vocabulary file, for calls that share the
+/// file, so a change to one call's words keeps the other calls' answers.
 fn section_version(vocab: &str, section: &str, code: u32) -> String {
     let table: toml::Table = toml::from_str(vocab).unwrap_or_default();
     let words = table
@@ -240,11 +238,11 @@ fn choice(instructions: &str, options: &BTreeMap<String, String>) -> Value {
     json!({ "type": "choice", "instructions": instructions, "criteria": options })
 }
 
-/// The most tokens one question may take: a tenth of a request, so it always
-/// fits beside a piece of source, which takes at most nine tenths.
+/// The most tokens one question may take. It is a tenth of a request, so it
+/// always fits beside a piece of source, which takes at most nine tenths.
 pub const QUESTION_MOST: usize = 3_000;
 
-/// How many leading path segments two node ids share, as a candidate's nearness to the file asking.
+/// How many leading path segments two node ids share, which measures how near a candidate is to the question's file.
 fn nearness(a: &str, b: &str) -> usize {
     let path = |id: &str| -> Vec<String> {
         let rest = id.split_once(':').map_or(id, |(_, r)| r);
@@ -254,9 +252,9 @@ fn nearness(a: &str, b: &str) -> usize {
     path(a).iter().zip(path(b).iter()).take_while(|(x, y)| x == y).count()
 }
 
-/// A link question over `candidates`, each described by `words`, with "outside" too. When every candidate
-/// will not fit in `QUESTION_MOST`, it offers the nearest to the file asking first, as many as fit, so the
-/// question is always asked.
+/// A link question over `candidates`, each described by `words`, plus "outside". When the candidates don't all
+/// fit in `QUESTION_MOST`, it offers as many as fit, nearest to the question's file first, so the question always
+/// goes out.
 fn link_choice(text: &str, file: &str, candidates: &[String], words: impl Fn(&String) -> String, outside: &str) -> Value {
     let all: BTreeMap<String, String> = candidates
         .iter()
@@ -277,7 +275,7 @@ fn link_choice(text: &str, file: &str, candidates: &[String], words: impl Fn(&St
             .collect();
         choice(text, &options)
     };
-    // The most of the nearest that fit: a question with none fits, and one with all does not.
+    // Binary search for how many of the nearest fit. A question with none fits, and one with all does not.
     let (mut fit, mut over) = (0, near.len());
     while fit + 1 < over {
         let n = (fit + over) / 2;
@@ -343,7 +341,7 @@ fn ref_question(call: &str, r: &PendingRef, n: usize) -> String {
     format!("{call}:{}:{n}", r.at.start)
 }
 
-/// Which file a pending import means.
+/// Which file a pending import resolves to.
 pub struct Resolve;
 
 impl Call for Resolve {
@@ -366,9 +364,9 @@ impl Call for Resolve {
         })
     }
     fn part(&self, ctx: &Ctx, unit: Unit, budget: usize) -> Option<Value> {
-        // The configuration in each candidate directory that names an
-        // import's package, which says what that directory holds: whole when
-        // it fits, or else the lines that name it.
+        // The configuration in each candidate directory that names an import's
+        // package, since it describes what that directory contains. It is whole
+        // when it fits, or else only the lines that name the package.
         let file = file_of(unit)?;
         let imports: Vec<&PendingRef> = ctx
             .pending_of
@@ -405,8 +403,8 @@ impl Call for Resolve {
                 let shown = if used + tokens(&text) <= budget {
                     text.to_string()
                 } else {
-                    // Each named line with the line that opens the key it sits
-                    // under, so a dependency reads as one.
+                    // Each naming line goes with the line that opens its enclosing
+                    // key, so a dependency entry reads as a whole.
                     let keys = ctx.defs_of.get(f.id.as_str()).into_iter().flatten();
                     let mut at: BTreeSet<usize> = naming.iter().copied().collect();
                     for d in keys {
@@ -463,7 +461,7 @@ impl Call for Resolve {
     }
 }
 
-/// Which definition a pending call reaches.
+/// Which definition a pending call resolves to.
 pub struct Callee;
 
 impl Call for Callee {

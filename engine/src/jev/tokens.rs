@@ -1,11 +1,12 @@
-//! Jev's tokens for a text, estimated the same way every time, so a request
-//! is laid out the same way on every open and its stored answer is found
-//! again. A run of letters counts a token for every four, every digit and
-//! every other mark counts one, and a line break one. Fitted on 720
-//! requests the bench billed in step 3: it counted at least as many tokens
-//! as Jev billed for all but the densest, an SVG of path data it
-//! undercounted by 3%, and the median request came to 0.73 of its estimate.
+//! Estimates how many tokens Jev bills for a text. The estimate is
+//! deterministic, so the runner splits text and questions into the same
+//! requests on every open and finds their stored answers again.
 
+/// A run of letters counts one token per four letters, rounded up. Each digit,
+/// other non-space character and line break counts one. On 720 requests the
+/// bench billed, the estimate was at least the billed count for all but the
+/// densest, an SVG of path data that it undercounted by 3%. The median request
+/// billed 0.73 of its estimate.
 pub fn tokens(text: &str) -> usize {
     let mut n: usize = 0;
     let mut letters: usize = 0;

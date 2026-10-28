@@ -1,16 +1,12 @@
-//! The understanding pass: importance and quality at every level.
+//! The understanding pass, which scores importance and quality at every level.
+//! Each request covers one folder or file and its parts. Folders go top-down
+//! and each file goes after its folder, so every request includes the project's
+//! description and the answers above it.
 //!
-//! A request is about one container and its parts. A folder's request
-//! scores how much each of its files and subfolders matters, and the
-//! folder's own quality concepts. A file's request scores how much each of
-//! its definitions matters and each one's quality concepts, picks which
-//! blocks of each definition stand out, and scores the file's own concepts.
-//! A file's best and worst definitions come from their quality weighed by
-//! importance, so a file has no picks of its own. Folders go top-down, each in its parent's
-//! light, and each file after its folder, so every request carries the
-//! project's own description and what was found above it. The engine then
-//! gathers quality upward by arithmetic (`values`). Every word, level,
-//! weight and pick is in `engine/vocab/understanding.toml`.
+//! `values` then combines quality upward by arithmetic. A file's best and worst
+//! definitions come from their quality weighted by importance, so a file's
+//! request picks none. Every word, level, weight and pick is in
+//! `engine/vocab/understanding.toml`.
 
 use super::calls::{Call, Ctx, Question, Unit};
 use super::tokens::tokens;
@@ -34,8 +30,8 @@ struct Scale {
     levels: Vec<String>,
 }
 
-/// One quality concept: a scale of levels, or a choice whose options are
-/// worth `values` (an option left out doesn't count).
+/// One quality concept, either a scale of levels or a choice whose options map
+/// to `values`. An option missing from `values` doesn't count.
 #[derive(Deserialize)]
 struct Concept {
     weight: f64,
@@ -119,8 +115,8 @@ fn about_def(d: &DefNode) -> [(&'static str, String); 3] {
     ]
 }
 
-/// A level's or option's short name: its words before the colon. Each
-/// request carries every concept's full levels once, in its `rubric`, and
+/// A level's or option's short name, which is its text before the colon. Each
+/// request includes every concept's full levels once, in its `rubric`, and
 /// each question offers only the short names, so a long file's questions
 /// don't repeat the same descriptions for every definition.
 fn short(text: &str) -> String {
@@ -145,8 +141,8 @@ fn concept_json(c: &Concept, instructions: String) -> Value {
     }
 }
 
-/// Every concept's full levels or options, and importance's, by name: what
-/// the short names in a request's questions mean.
+/// Every concept's full levels or options, and importance's, by name. They
+/// define the short names in a request's questions.
 fn rubric(concepts: &[&BTreeMap<String, Concept>]) -> Value {
     let mut out = Map::new();
     out.insert("importance".into(), json!(vocab().importance.levels));
@@ -168,8 +164,8 @@ fn is_code(d: &DefNode) -> bool {
     !vocab().parts.skip_roles.iter().any(|r| r == &d.role)
 }
 
-/// The project's own description: the opening of the largest prose file at
-/// its root, in its own words, up to `budget` tokens.
+/// The project's own description, which is the opening of the largest prose
+/// file at its root, up to `budget` tokens.
 fn project_words(ctx: &Ctx, budget: usize) -> Option<String> {
     prose(ctx, "", budget)
 }
@@ -195,9 +191,8 @@ fn prose(ctx: &Ctx, dir: &str, budget: usize) -> Option<String> {
     (!out.trim().is_empty()).then_some(out)
 }
 
-/// What was found above a folder or file: each enclosing folder's
-/// importance and its own quality concepts, from the root down, as typed
-/// answers.
+/// Jev's answers above a folder or file: each enclosing folder's importance
+/// and quality concepts, from the root down, as typed answers.
 fn above(ctx: &Ctx, dir: &str) -> Vec<Value> {
     let mut chain: Vec<&str> = Vec::new();
     let mut d = dir;
@@ -268,10 +263,10 @@ fn pick_questions(
 }
 
 /// The readings Jev asked for in earlier rounds about a node, and which
-/// round's "more" question to ask now, if any. A round whose answer was
-/// "nothing" is asked again as it was, so the request stays the same and
-/// nothing is sent twice; a round that chose readings adds them, and the
-/// next round is asked only while rounds remain.
+/// round's "more" question to send now, if any. A round whose answer was
+/// "nothing" goes out again as it was, so the request stays the same and
+/// nothing is sent twice. A round that chose readings adds them, and the next
+/// round goes out only while rounds remain.
 fn more_state(ctx: &Ctx, id: &str) -> (Vec<String>, Option<usize>) {
     let m = &vocab().more;
     let held = ctx.answers(id);
@@ -489,7 +484,8 @@ impl Call for FolderAxes {
                 .flatten()
                 .map(|f| f.path.rsplit('/').next().unwrap_or(&f.path))
                 .collect();
-            // A folder of thousands of files names as many as fit an eighth of the room, and counts the rest.
+            // For a subfolder of thousands of files, the request names as many as fit in an eighth of the budget
+            // and counts the rest.
             let mut files: Vec<&str> = Vec::new();
             let mut size = 0;
             for name in &names {
@@ -509,8 +505,8 @@ impl Call for FolderAxes {
         if let Some(words) = project_words(ctx, budget / 6) {
             out.insert("project".into(), json!(words));
         }
-        // The folders that hold this one, never itself: the root holds nothing, and a request carrying its own
-        // answers would change once they are held and be asked again, and so would everything below it.
+        // The folders that contain this one, never itself. The root has none. A request that included its own
+        // answers would change once they were held and go out again, and so would every request below it.
         let holders = if dir.path.is_empty() { Vec::new() } else { above(ctx, parent_dir(&dir.path)) };
         out.insert("above".into(), json!(holders));
         if !dir.path.is_empty()
@@ -563,8 +559,9 @@ impl Call for FolderAxes {
     }
 }
 
-/// A file's request: how much each definition matters and its quality, which
-/// definitions and blocks stand out, and the file's own arrangement.
+/// A file's request: each definition's importance and quality concepts, the
+/// notable blocks of each definition that has two or more, and the file's own
+/// quality concepts.
 pub struct FileAxes;
 
 impl Call for FileAxes {
@@ -713,9 +710,9 @@ fn blend(parts: Option<f64>, own: Option<f64>) -> Option<f64> {
 }
 
 /// Fills each node's `judged.value` with its importance and quality from 0
-/// to 1: importance as its container judged it (the root is 1), and quality
-/// gathered upward, each container's parts weighted by their lines and
-/// blended with its own.
+/// to 1. Importance is Jev's score for it in its container's request, and 1
+/// for the root. Quality combines upward: each container blends its parts'
+/// quality, weighted by their lines, with its own.
 pub fn values(graph: &mut CodeGraph) {
     let v = vocab();
     let importance_top = (v.importance.levels.len().max(2) - 1) as f64;
@@ -732,7 +729,7 @@ pub fn values(graph: &mut CodeGraph) {
                 &d.id,
                 &d.judged,
                 Some(&v.definition),
-                // Only top-level definitions gather into their file, so nested code isn't counted twice.
+                // Only top-level definitions count toward their file, so nested code isn't counted twice.
                 if d.parent.is_none() {
                     d.file.clone()
                 } else {
@@ -765,7 +762,7 @@ pub fn values(graph: &mut CodeGraph) {
             importance.insert(id.clone(), (s / importance_top).clamp(0.0, 1.0));
         }
         own.insert(id.clone(), concepts.and_then(|c| own_quality(c, axes)));
-        // Each concept Jev answered, from 0 to 1; null when the answer doesn't count, such as "nothing here can fail".
+        // Each concept Jev answered, from 0 to 1, or null when the answer doesn't count, such as "nothing here can fail".
         let answered: Map<String, Value> = concepts
             .into_iter()
             .flatten()
@@ -796,8 +793,8 @@ pub fn values(graph: &mut CodeGraph) {
         );
     }
     importance.insert("dir:".into(), 1.0);
-    // Deepest first, so every part is settled before what holds it, and by id within a depth, so the sums gather in
-    // one order and the same answers always give the same values to the last bit.
+    // Deepest first, so every part is final before its container, and by id within a depth, so the sums always add
+    // in one order and the same answers give bit-identical values.
     let mut order: Vec<&String> = own.keys().collect();
     order.sort_by(|a, b| depth[*b].cmp(&depth[*a]).then_with(|| a.cmp(b)));
     let mut gathered: HashMap<String, (f64, f64)> = HashMap::new();
@@ -863,9 +860,9 @@ mod tests {
             .unwrap_or(Value::Null)
     }
 
-    /// A definition's quality is its concepts' weighted mean; a file's is its
-    /// top-level definitions' weighted by their lines, blended with its own;
-    /// importance is as the container judged it, and the root's is 1.
+    /// A definition's quality is its concepts' weighted mean. A file's is its
+    /// top-level definitions' quality weighted by their lines, blended with its
+    /// own. Importance is the container's score, and the root's is 1.
     #[test]
     fn quality_gathers_upward_by_lines_and_importance_is_the_container_s_judgment() {
         let root = std::env::temp_dir().join(format!("gaia-axes-{}", std::process::id()));
@@ -878,7 +875,7 @@ mod tests {
         );
         std::fs::write(root.join("src/m.ts"), format!("{short}{long}")).unwrap();
         let mut graph = crate::graph::build(&root).unwrap();
-        // Readability and simplicity 3 of 3 for `a`; 0 of 3 for both on `b`.
+        // Readability and simplicity are 3 of 3 for `a` and 0 of 3 for `b`.
         let top = json!({ "readability": { "score": 3.0 }, "simplicity": { "score": 3.0 }, "importance": { "score": 2.0 } });
         let bottom = json!({ "readability": { "score": 0.0 }, "simplicity": { "score": 0.0 }, "importance": { "score": 4.0 } });
         set(&mut graph, "def:src/m.ts#a", json!({ "axes": top }));
@@ -897,7 +894,7 @@ mod tests {
         assert_eq!(a["quality"], json!(1.0));
         assert_eq!(b["quality"], json!(0.0));
         assert_eq!(a["importance"], json!(0.5));
-        // `a` is 3 lines and `b` 9, so the parts come to 3/12; the file's own is 1.
+        // `a` is 3 lines and `b` is 9, so the parts come to 3/12. The file's own quality is 1.
         let parts = 3.0 / 12.0;
         let g = &vocab().gather;
         let expected = (parts * g.parts + g.own) / (g.parts + g.own);
@@ -914,7 +911,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("gaia-axes-bits-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("src")).unwrap();
-        // Many files side by side, of different lengths and qualities, so a sum gathered in another order would differ.
+        // Many files side by side, of different lengths and qualities, so a sum added in another order would differ.
         for i in 0..40 {
             let body = "  x += 1;\n".repeat(i % 7);
             std::fs::write(root.join(format!("src/f{i}.ts")), format!("export function f{i}(x: number): number {{\n{body}  return x;\n}}\n")).unwrap();

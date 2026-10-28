@@ -9,7 +9,7 @@ type Erased = (p: unknown) => DaySpec;
 const build = daylight.build as unknown as Erased;
 
 const ends = (s: ScaleField): number[] => s.levels.flatMap((l) => [0, 0.999].map((u) => resolveScale(s, l.words, u)));
-/** Every height the sun can ride: each level of daylight@1's path at both ends. */
+/** Every sun path daylight@1 allows: each level of its `path` at both ends. */
 const PATHS = ends(daylight.params.path as ScaleField);
 
 /** Every daylight@1 blueprint, with each scale at both ends of its level. */
@@ -48,8 +48,8 @@ describe("lightAt", () => {
     }
   });
 
-  // The clock is re-read every minute; the fastest change, the sun's light
-  // going out at the horizon, stays under 5% per minute.
+  // The clock is read every minute. The fastest change, the sun's light going
+  // out at the horizon, stays under 5% per minute.
   it("never jumps from one minute to the next", () => {
     for (const day of days.filter((_, i) => i % 7 === 0)) {
       let worst = 0;
@@ -92,9 +92,9 @@ describe("daylight@1's sun", () => {
   };
   const turn = (from: number, to: number): number => ((to - from + 540) % 360) - 180;
 
-  // A real sun sets slanting down the sky, at about 90° less the latitude to the horizon: about 40° at 50° north. A
-  // sun that swings its bearing slides along the horizon, and one that turns a corner at a key changes slant as it
-  // sets. Sampled every minute, as the clock is read, near the horizon where the disc is in view.
+  // A real sun sets at an angle of about 90° minus the latitude to the horizon, about 40° at 50° north. A sun whose
+  // bearing swings slides along the horizon, and one that turns a corner at a key changes slant as it sets. The test
+  // samples every minute, as the clock is read, near the horizon where the disc is in view.
   it("rises and sets on a steady, natural slant, turning one way and never turning a corner", () => {
     for (const path of PATHS) {
       const day = build({ path, warmth: "neutral", brush: "painterly", moon: "silver moon", stars: 0.5 });

@@ -1,5 +1,5 @@
-// The vitality channel math, once. The renderer's shader reads these same
-// constants, and `applyVitality` is the CPU reference tests run against.
+// The vitality channel math, defined once. The renderer's shader reads these
+// same constants, and `applyVitality` is the CPU reference that tests run against.
 
 import { type Part, SPRAYS, type Swatch } from "@gaia/schema";
 import { type WindState, swayAt } from "./sway.ts";
@@ -29,28 +29,29 @@ export const CHANNEL_MATH = {
   spinStop: 0.1,
   spinFull: 0.6,
   /**
-   * The band of vitality a thing's look spans (`shownVitality`): at
-   * `shownRuin` or below it has declined all it will, at `shownWhole` or
-   * above it looks fully healthy, and between them it declines evenly.
-   * Vitality is Jev's quality, a mean of nine or ten concepts, so real code
-   * sits between about 0.36 and 0.99: the band puts the poorest of it at
-   * ruin and the best kept quarter of Gaia's definitions at full health.
+   * The vitality range a thing's look spans (`shownVitality`). At `shownRuin`
+   * or below it shows full decline, at `shownWhole` or above it looks fully
+   * healthy, and between them it declines evenly. Vitality is Jev's quality, a
+   * mean of nine or ten concepts, so real code falls between about 0.36 and
+   * 0.99. The range puts the poorest code at full decline and the best quarter
+   * of Gaia's definitions at full health.
    */
   shownRuin: 0.45,
   shownWhole: 0.85,
   /**
-   * Seconds for each stage of a change in vitality to close about two thirds
-   * of the way: what a thing shows follows the vitality it is given, and
-   * where that was follows what it shows (`followVitality` in @gaia/render),
-   * so a change starts and stops gently.
+   * Seconds for each of two easing stages to close about two thirds of a
+   * vitality change. The shown vitality eases toward the given vitality, and
+   * the previous shown value eases toward the shown one (`followVitality` in
+   * @gaia/render), so a change starts and stops gently.
    */
   vitalityLag: 3,
 } as const;
 
 /**
- * How far along its decline a thing at vitality `v` looks. Every channel
- * reads this, not `v` itself: the renderer hands it to the shaders, and the
- * ground declines by it, so one rule sets how plainly vitality shows.
+ * The shown vitality for vitality `v`, from 0 at `shownRuin` to 1 at
+ * `shownWhole`. Every channel uses this, not `v` itself. The renderer passes
+ * it to the shaders and the ground declines by it, so one rule sets how
+ * plainly vitality shows.
  */
 export const shownVitality = (v: number): number => Math.min(1, Math.max(0, (v - CHANNEL_MATH.shownRuin) / (CHANNEL_MATH.shownWhole - CHANNEL_MATH.shownRuin)));
 
@@ -73,10 +74,10 @@ const smoothRise = (t: number): number => (t <= 0 ? 0 : t >= 1 ? t - 0.5 : t * t
 
 /**
  * smoothstep(e0, e1, v) averaged over the shown vitality from `v + lag` to
- * `v`: how far along a step of its decline a piece shows while a change in
- * vitality eases in, so a step a ramp crosses in one frame spreads over the
- * frames the lag spans (the plant shader's `eased`). With no lag it is the
- * step itself.
+ * `v`. It is how far through one step of its decline a piece looks while a
+ * vitality change eases in, so a step that the change crosses in one frame
+ * spreads over the frames the lag spans. It matches the plant shader's
+ * `eased`. With no lag it is the step itself.
  */
 export function easedStep(e0: number, e1: number, v: number, lag: number): number {
   if (Math.abs(lag) < 1e-4) return smoothstep(e0, e1, v);
@@ -96,7 +97,7 @@ export const REFERENCE_SWATCH: Swatch = { healthy: [0.3, 0.6, 0.3], decline: [0.
 
 /**
  * Rotates a color's hue by `turns` in YIQ space, which the shader does the
- * same way. Brightness is unchanged, so tint never fights shade.
+ * same way. Brightness is unchanged, so tint never alters shade.
  */
 export function hueRotate(rgb: readonly [number, number, number], turns: number): [number, number, number] {
   const [r, g, b] = rgb;
@@ -126,7 +127,7 @@ export const rotAt = (v: number): number => CHANNEL_MATH.rotMost * Math.min(1, M
 /** How fast a spinning piece turns at vitality `v`, as a share of its full speed. */
 export const spinAt = (v: number): number => smoothstep(CHANNEL_MATH.spinStop, CHANNEL_MATH.spinFull, v);
 
-/** A moment's wind over a copy, and whether the part flutters (thin swatches do). */
+/** The wind on a copy at one moment, and whether the part flutters, as thin swatches do. */
 export interface InWind {
   readonly state: WindState;
   readonly flutter: boolean;
@@ -134,13 +135,13 @@ export interface InWind {
 
 /**
  * CPU reference of the plant shader's channel math. Each piece first
- * collapses onto its pivot (or falls about it), in the plant's rest shape;
- * then the wind bends it about its joints (`swayAt`), when given; then droop
- * bends its whole bough down about the bough's joint. Rot holes are cut per
- * fragment, so only `rotAt` says how much shows; spinning pieces stand at
- * their first turn. `lag` is how far the shown vitality lags where it was a
- * moment ago while a change eases in: each step shows averaged over it, and
- * whatever follows vitality evenly shows its middle.
+ * collapses onto its pivot, or falls about it, in the plant's rest shape. Then
+ * the wind, when given, bends it about its joints (`swayAt`). Then droop bends
+ * its whole bough down about the bough's joint. The shader cuts rot holes per
+ * fragment, so only `rotAt` gives how much shows, and spinning pieces stay at
+ * their starting angle. `lag` is how far the shown vitality trails its value a
+ * moment ago while a change eases in. Each step is averaged over that lag, and
+ * anything linear in vitality uses the midpoint.
  */
 export function applyVitality(part: Part, vitality: number, swatch: Swatch = REFERENCE_SWATCH, wind?: InWind, lag = 0): VitalityView {
   const v = Math.min(1, Math.max(0, vitality));
@@ -158,14 +159,14 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
     let ox = (part.positions[i * 3] ?? 0) - px;
     let oy = (part.positions[i * 3 + 1] ?? 0) - py;
     let oz = (part.positions[i * 3 + 2] ?? 0) - pz;
-    // A spray's leaves drop in place, cut away per fragment; every other piece collapses onto its pivot.
+    // A spray's leaves drop in place, cut away per fragment. Every other piece collapses onto its pivot.
     const threshold = SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0)) ? 0 : (loss[i] ?? 0);
     const grows = part.channels.grow?.[i] ?? 0;
     const keep = (threshold > 0 ? easedStep(threshold, threshold + m.lossBand, v, lag) : 1) * (grows > 0 ? 1 - easedStep(grows, grows + m.lossBand, v, lag) : 1);
     ox *= keep;
     oy *= keep;
     oz *= keep;
-    // A spinning piece stands at its first turn here; the shader adds the turning.
+    // A spinning piece stays at its starting angle here. The shader adds the turning.
     const fall = part.channels.fall;
     const from = fall?.[i * 4 + 3] ?? 0;
     if (fall !== undefined && from > 0) {

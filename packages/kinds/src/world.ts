@@ -1,8 +1,8 @@
 import { kind, slot } from "@gaia/schema";
 
 /**
- * The art direction one repository's whole world shares: its light, sky and
- * wind. Regions vary their own ground and air beneath it.
+ * The art direction for one repository's whole world: its light, sky and
+ * wind. Each region sets its own ground and air beneath it.
  */
 export const world = kind({
   id: "world",

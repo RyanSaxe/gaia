@@ -1,46 +1,49 @@
 // Measures the world as a person sees it, in the app's own Chromium (an
 // Electron window drawing on the GPU), through the lab's hooks
-// (`window.__lab`), so every session measures its branch the same way:
+// (`window.__lab`), so every session measures its branch the same way. The
+// tests:
 //
 // - drawn: each spot's frame time, and its draw calls and triangles by kind
 //   and pass (the sun's shadow, the water's mirror and the view).
-// - steps: the walk test. Walking toward the woods with the wind's clock
-//   frozen, what each step changes in the detail drawn, against the wind's
-//   own change over half a second. A step above the wind is a pop.
+// - steps: the walk test. It walks toward the woods with the wind's clock
+//   frozen and measures what each step changes in the detail drawn, against
+//   the wind's own change over half a second. A step above the wind is a pop.
 // - hitch: the app's smoothness probe over a real walk.
-// - swap: the swap test. For every preset that turns far (trees, bushes,
+// - swap: the swap test. For every preset with a far form (trees, bushes,
 //   rocks and drifts of flowers) at vitality 1, 0.5 and 0.15, by day and at
-//   22:00, steps through its change of form: the far form coming in over the
-//   full one, coming to draw whole, the full form dissolving under it, and the
-//   frame where it leaves and the far form stands alone; then, too small to
-//   see, dissolving and gone. Each is held against the wind's half-second change.
-// - likeness: the likeness test. For every preset that turns far, at
-//   vitality 1, 0.65 and 0.3, its card beside its full form at its swap size
-//   and a half, a quarter and an eighth of it, in clear air. Past its swap a
-//   card may stray no farther from the share of the crown its tree covers
-//   than it does at its swap (`LIKENESS_BAR`).
-// - stress: the proving ground as it is, then with every tree that stands for
-//   code standing five times on its own patch.
+//   22:00, it steps through the change of form: the far form fading in over
+//   the full one, drawing whole, the full form dissolving under it, the frame
+//   where the full form disappears and the far form is alone, and then, too
+//   small to see, the far form dissolving and gone. It compares each step with
+//   the wind's half-second change.
+// - likeness: the likeness test. For every preset with a far form, at
+//   vitality 1, 0.65 and 0.3, it draws the card beside the full form at its
+//   swap size and at a half, a quarter and an eighth of it, in clear air. Past
+//   its swap, a card's share of the crown's area may differ from its tree's no
+//   more than it does at its swap (`LIKENESS_BAR`).
+// - stress: the proving ground as it is, then with every tree that represents
+//   code placed five times on its own patch.
 // - paint: the painter check. Standing still in the showcase with the wind's
-//   clock frozen while the journal's painter paints the things farthest
-//   away, the person's view must not change at all; and the page's frames
-//   while it paints, late ones counted. Then 30 s standing still while the
-//   app's own painter works, as it does whenever the person stops: the view
-//   must not change either.
+//   clock frozen while the journal's painter paints the farthest things, the
+//   person's view must not change at all. It also counts the page's late
+//   frames while it paints. Then it stands still for 30 s while the app's own
+//   painter works, as it does whenever the person stops, and the view must not
+//   change either.
 //
-// Every run starts from a browser profile of its own, so the far forms bake
-// as on a first visit, and any WebGL error the page reports fails it
+// Every run starts from its own browser profile, so the far forms bake as on
+// a first visit, and any WebGL error the page reports fails it
 // (`webglErrors`).
 //
-// The window stays hidden, at exactly the size asked for, except for the walk
-// that measures smoothness: a hidden window's frames don't keep the display's
-// pace, so it shows then, without taking focus; leave it uncovered. Timings
-// are only worth comparing from a quiet machine: other work on the GPU or CPU
-// makes them noisy, so the probe prints the load average it ran at.
+// The window stays hidden, at exactly the size asked for, except for the
+// smoothness walk. A hidden window's frames don't keep the display's pace, so
+// the window shows then, without taking focus, and must stay uncovered.
+// Timings are only worth comparing from a quiet machine, because other work on
+// the GPU or CPU makes them noisy, so the probe prints the load average it ran
+// at.
 // Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [likeness] [paint] [--world showcase|proving]
 //          [--spot NAME] [--dpr 1|2] [--json FILE]
 // A spot is "valley", "turned" or a tour stop (`__lab.terrain.tour()` lists
-// them, such as "ruined bridge"); --world and --spot may repeat.
+// them, such as "ruined bridge"). --world and --spot may repeat.
 
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -60,18 +63,19 @@ const SPOTS = {
   showcase: ["valley", "turned"],
   proving: ["valley", "thriving grove", "large area"],
 } as const;
-/** How far the walk test walks from each spot, its step (half a second at walking pace), and the wind's moment, so every run sees the same wind. */
+/** How far the walk test walks from each spot in meters, its step of half a second at walking pace, and the wind's time, so every run has the same wind. */
 const WALK = { meters: 150, step: 0.7, at: 100 };
 /**
- * The least change a step's worst block must make to count as a pop, in
- * 8-bit levels: below it, as in a view of open water and short grass where
+ * The smallest change, in 8-bit levels, a step's worst block must make to
+ * count as a pop. Below it, as in a view of open water and short grass where
  * the wind itself moves almost nothing, a step only shifts the grain of edges.
  */
 const POP_FLOOR = 8;
 /**
  * A swap step that changes no block by a full level of 255 shows nothing,
- * however still the air around it: a far bush turns far where nothing else
- * in its part of the screen moves. Above it, a step must stay under the wind.
+ * however still the air around it, as when a far bush swaps where nothing else
+ * in its part of the screen moves. Above it, a step must stay under the wind's
+ * change.
  */
 const SWAP_FLOOR = 1;
 /**
@@ -82,7 +86,7 @@ const SWAP_FLOOR = 1;
  * less than `floor` levels on average shows too little to judge.
  */
 const LIKENESS_BAR = { each: 1.5, mean: 1.25, floor: 0.2 } as const;
-/** Seconds of walking per smoothness window; the app's probe reads the last ten seconds. */
+/** Seconds of walking per smoothness window. The app's probe reads the last ten seconds. */
 const HITCH_WINDOWS = 2;
 /** The window's size in CSS pixels. */
 const WIDTH = 1280;
@@ -145,18 +149,19 @@ if (measures.has("swap")) {
   for (const world of values.world ?? ["showcase"]) jobs.push({ world, calls });
 }
 if (measures.has("likeness")) {
-  // The proving ground stands every crown on every frame, so it is the world measured unless others are named.
+  // The proving ground has every crown on every frame, so it is the world measured unless others are named.
   for (const world of values.world ?? ["proving"]) {
     const rows = `await (async () => { const rows = []; for (const name of T.swap()) for (const vitality of [1, 0.65, 0.3]) { const row = await T.likeness(name, vitality); if (row !== null) rows.push(row); } return rows; })()`;
     jobs.push({ world, calls: [{ key: "open", js: OPEN }, { key: "likeness", js: `(${go("valley")}, ${settle}, ${rows})` }] });
   }
 }
 if (measures.has("paint")) {
-  // Looking at the view draws frames of its own, so the page's frames are counted again over paintings made unwatched.
+  // Looking at the view draws frames of its own, so the check counts the page's frames again over paintings made
+  // without looking.
   jobs.push({ world: "showcase", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, await T.paintCheck(6))` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }, { key: "stand", js: `(${go("valley")}, ${settle}, await T.standCheck(30))` }] });
 }
 if (measures.has("stress") && (values.world === undefined || values.world.includes("proving"))) {
-  // The proving ground as it stands, then with every tree that stands for code standing five times.
+  // The proving ground as it is, then with every tree that represents code placed five times.
   const measure = `${go("valley")}, ${settle}, { trees: T.scale().trees, ms: ${bench}, drawn: T.drawn() }`;
   jobs.push({
     world: "proving",
@@ -172,7 +177,7 @@ const repo = resolve(import.meta.dirname, "..");
 const scratch = mkdtempSync(join(tmpdir(), "gaia-probe-"));
 const page = join(scratch, "lab.html");
 const out = join(scratch, "out.json");
-// A browser profile of the run's own, so the far forms bake as on a first visit.
+// The run's own browser profile, so the far forms bake as on a first visit.
 const profile = join(scratch, "profile");
 writeFileSync(page, labPage(labBundle(await build(LAB_BUILD))));
 
@@ -288,7 +293,7 @@ for (const [world, calls] of Object.entries(results)) {
       const bar = Math.max(typical, POP_FLOOR);
       const worst = steps.reduce((a, b) => (b[2] > a[2] ? b : a));
       const pops = steps.filter((s) => s[2] > bar);
-      // A walk where neither the steps nor the wind changed a pixel never drew its frames, as on an overloaded machine: it proves nothing.
+      // A walk where neither the steps nor the wind changed a pixel never drew its frames, as on an overloaded machine, so it proves nothing.
       if (typical === 0 && worst[2] === 0) {
         line(`  ${key}: no frame changed, not even with the wind, so the walk measured nothing; run it again`);
         process.exitCode = 1;
@@ -307,7 +312,7 @@ for (const [world, calls] of Object.entries(results)) {
       const late = intervals.filter((t) => t > median * 1.5 + 4);
       line(`  ${key}: ${painted.length} ${key.endsWith("near") ? "near" : "far"} paintings; frames ${intervals.length}, median ${f(median)} ms, ${late.length} late (${late.map((t) => f(t, 0)).join(", ")} ms)`);
     } else if (key === "paint") {
-      // Any change at all to the person's view while the painter paints fails: nothing there moved.
+      // Any change at all to the person's view while the painter paints fails, because nothing there moved.
       const { painted, worst, checks, intervals } = value as { painted: string[]; worst: number; checks: number; intervals: number[] };
       const sorted = [...intervals].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)] ?? 0;

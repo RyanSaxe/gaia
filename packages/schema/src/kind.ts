@@ -7,8 +7,8 @@ export interface Slot<R extends Role = Role> {
   readonly on?: string;
   readonly optional: boolean;
   /**
-   * What this part says about the code, in words Jev reads when it chooses the part and fills it: how the code it
-   * stands for shows in this part. Without it the part is asked about in the kind's words alone.
+   * How the code shows in this part, in words Jev reads when it chooses and fills the part. Without it, Jev gets only
+   * the kind's words for the part.
    */
   readonly ask?: string;
 }
@@ -52,10 +52,10 @@ function feeds(output: string, input: string): boolean {
 }
 
 /**
- * What a kind stands for: one file, one entity (a package, crate, service or
- * module), any one thing that stands for code (an entity, a file or a
- * definition), one directory's region, one dependency between two entities (a
- * link), or the whole repository.
+ * What a kind represents. `file` is one file, `entity` one package or crate,
+ * `thing` any one entity, file or definition, `region` one directory's region,
+ * `link` one dependency between two entities, and `repository` the whole
+ * repository.
  */
 export type Subject = "file" | "entity" | "thing" | "region" | "link" | "repository";
 
@@ -69,15 +69,15 @@ export interface SubjectFacts {
 }
 
 /**
- * A kind of world component. Code, and few of them. Its slots say what a
- * blueprint must fill.
+ * A kind of world component. Kinds are code, and there are few of them. Its
+ * slots list what a blueprint must fill.
  */
 export interface Kind<S extends Subject = Subject> {
   readonly id: string;
   readonly subject: S;
   readonly doc: string;
   readonly slots: Readonly<Record<string, Slot>>;
-  /** Slot groups Jev answers in order; each group sees the earlier groups' answers. One group if absent. */
+  /** Slot groups Jev answers in order. Each group's request includes the earlier groups' answers. One group if absent. */
   readonly stages?: readonly (readonly string[])[];
   /** Numbers bound from the subject's facts. Jev never answers these. */
   readonly facts: Readonly<Record<string, (f: SubjectFacts[S]) => number>>;
