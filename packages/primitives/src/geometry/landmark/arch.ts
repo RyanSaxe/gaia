@@ -3,36 +3,53 @@
 // leaps over it; the way runs along z, which the world turns toward the
 // trail. The ring is swept around the opening's edge and stands in pieces
 // that meet without a seam: on each side a stump and two blocks above it,
-// and over the opening the span in two halves. As vitality falls one half
-// sags and a crack steps open across the span; then each half falls and
-// lies broken in the grass, and the stacks crumble a block at a time to
-// stumps a third to a half of the arch's height, broken on top, their blocks
-// in chunks round them. The stacks are separate pieces, so a walker passes
-// between them.
+// and over the opening the span in two halves. Its decline is spread over
+// the whole of the vitality shown, so a ruin still reads as an arch: one
+// half sags and a crack steps open across the span; that half falls and
+// lies broken in the grass, leaving the other half reaching out over the
+// way; its stack crumbles a block at a time to a stump a third to a half of
+// the arch's height, broken on top, its blocks in chunks round it, while the
+// reaching half breaks part way out, leaving the other stack standing with a
+// stub of the span. The stacks are separate pieces, so a walker passes
+// between them. Each arch's seed picks its proportions within its words
+// (`ROCK_ARCH_SHAPE`): how wide and how high its opening is, how much of it
+// its rounded head takes, and how deep its stone runs along the way.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { rockArchParams } from "../../landmark.ts";
 import { type Channels, PartBuilder, type V3, clamp, cross, fbm3, icosphere, normalize, sub } from "../kit.ts";
-import { lump, still } from "./shared.ts";
+import { type Bands, about, landmarkShape, lump, still } from "./shared.ts";
 
 type ArchParams = Resolved<typeof rockArchParams>;
 
 /**
- * Each form at a stout thickness, meters: the opening's half width, its
- * height under the crown and how much of that its rounded head takes (the
- * rest rises straight), and the stone's thickness across the ring and
- * through it, along the way.
+ * Each form at a stout thickness, in the middle of what its words allow, meters: the opening's half width, its height
+ * under the crown and how much of that its rounded head takes (the rest rises straight), and the stone's thickness
+ * across the ring and through it, along the way. The map's mark draws from these.
  */
 export const ROCK_ARCH_FORMS = {
   "a doorway": { half: 3, rise: 14, head: 4, ring: 4.8, depth: 5 },
   "a gate": { half: 6.5, rise: 16, head: 9.5, ring: 4.4, depth: 4.8 },
   "a great span": { half: 15, rise: 18.5, head: 18.5, ring: 3.9, depth: 4.2 },
 } as const;
+/**
+ * What an arch's seed picks within its words: its opening's half width and its height under the crown, in meters at
+ * scale 1, which its form's words set (a doorway stays narrow and a great span long, whatever the seed); its rounded
+ * head against its form's own, up to the whole height; and its stone's depth along the way against its form's own.
+ */
+export const ROCK_ARCH_SHAPE = {
+  half: { by: "form", bands: { "a doorway": [2.75, 3.25], "a gate": [6, 7], "a great span": [14, 16] } },
+  rise: { by: "form", bands: { "a doorway": [13.2, 14.8], "a gate": [15.2, 16.8], "a great span": [17.6, 19.4] } },
+  head: about(1, 0.1),
+  depth: about(1, 0.08),
+} as const satisfies Bands;
 /** Points round each ring of the sweep, and the spacing of its rings along the opening's edge, meters. */
 const AROUND = 24;
 const SPACING = 0.36;
 /** How deep the feet are set into the ground, meters. */
 const SINK = 0.8;
+/** How far out from its springing toward the crown the standing half's stub reaches, as a share of its rings. */
+export const ROCK_ARCH_STUB = 0.7;
 
 /** The opening's edge from the left foot over the head to the right foot, densely, as x, y pairs. */
 function openingEdge(half: number, rise: number, head: number): [number, number][] {
@@ -84,12 +101,13 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
   const seed = Math.floor(r.next() * 1e6);
   const scale = ctx.facts.scale ?? 1;
   const form = ROCK_ARCH_FORMS[p.form];
-  const half = form.half * scale;
-  const rise = form.rise * scale;
-  const head = form.head * scale;
+  const seeded = landmarkShape(ROCK_ARCH_SHAPE, p, ctx);
+  const half = seeded.half * scale;
+  const rise = seeded.rise * scale;
+  const head = Math.min(rise, (form.head / form.rise) * seeded.head * rise);
   const straight = Math.max(0, rise - head);
   const ringT = form.ring * scale * p.thickness;
-  const depth = form.depth * scale * p.thickness;
+  const depth = form.depth * scale * p.thickness * seeded.depth;
   const facets = p.stone;
   const lean = r.range(-0.025, 0.025);
   const rings = ringsAlong(openingEdge(half, rise, head), straight);
@@ -170,8 +188,14 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
   const rightStump = firstUp(count - 1, rightTop + 4, tall * r.range(0.33, 0.48));
   const leftMid = Math.round((leftStump + leftTop) / 2);
   const rightMid = Math.round((rightStump + rightTop) / 2);
+  // One half of the span sags and falls first, and its stack crumbles; the other stack stands at any vitality, and
+  // its half of the span breaks part way out, leaving a stub reaching over the way.
+  const first = r.range(0.4, 0.42);
+  const sags = r.next() < 0.5 ? 0 : 1;
+  const stage = r.range(0.09, 0.11);
+  const stub = sags === 0 ? rightTop - Math.round((rightTop - crack) * ROCK_ARCH_STUB) : leftTop + Math.round((crack - leftTop) * ROCK_ARCH_STUB);
   // Each break is ragged: its ring's points move along the sweep, by as much as the rings are apart.
-  for (const i of [leftStump, leftMid, leftTop, crack, rightTop, rightMid, rightStump]) {
+  for (const i of [leftStump, leftMid, leftTop, crack, stub, rightTop, rightMid, rightStump]) {
     (grid[i] as V3[]).forEach((q, j) => {
       const next = (grid[Math.min(count - 1, i + 1)] as V3[])[j] as V3;
       const gap = Math.hypot(next[0] - q[0], next[1] - q[1], next[2] - q[2]);
@@ -193,10 +217,12 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
     }),
   );
 
-  // How it gives way. One half of the span sags about the outer edge of its springing, so a crack steps open across
-  // the span; then that half falls, and the other after it, each sinking into the top of its stack; then each stack
-  // crumbles from the top, a block at a time, each sinking onto the joint below it, down to a stump with a broken top.
-  // A piece goes only once everything resting on it has all but gone.
+  // How it gives way, a stage at a time over the whole of its decline, so that even in ruin it reads as an arch. The
+  // half of the span that sags turns about the outer edge of its springing, so a crack steps open across the span;
+  // then that half falls, sinking into the top of its stack, and the other half reaches out alone over the way; the
+  // bare stack's upper block crumbles; the reaching half breaks part way out and its end falls, leaving a stub; last,
+  // the bare stack's lower block crumbles to a stump with a broken top. Each piece sinks onto the joint below it, and
+  // goes only once everything resting on it has all but gone.
   const out = new PartBuilder("stone", "solid");
   const edgeOf = (i: number, side: number): V3 => {
     const ring = grid[i] as V3[];
@@ -204,40 +230,27 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
     for (const q of ring) if (side * q[0] > side * best[0]) best = q;
     return [best[0], best[1], (centers[i] as V3)[2]];
   };
-  const SETTLES = 0.07;
-  const first = r.range(0.4, 0.42);
-  const sags = r.next() < 0.5 ? 0 : 1;
-  const spanGoes = sags === 0 ? [first, first - r.range(0.03, 0.05)] : [first - r.range(0.03, 0.05), first];
-  const sides = [
-    { side: -1, stump: leftStump, mid: leftMid, top: leftTop, span: [leftTop, crack] as const },
-    { side: 1, stump: rightStump, mid: rightMid, top: rightTop, span: [crack, rightTop] as const },
-  ];
+  const goes = { span: first, upper: first - stage, reach: first - 2 * stage, lower: first - 3 * stage };
   const tint = r.range(-0.03, 0.03);
-  const crumbled: { side: number; stump: number; goes: number; size: number }[] = [];
-  sides.forEach((sd, k) => {
-    const span = spanGoes[k] as number;
-    const upper = span - SETTLES;
-    const lower = upper - SETTLES;
-    const hinge = edgeOf(sd.top, sd.side);
-    // The half that sags would drop its crown end a meter, turning about the hinge; it falls before the sag is
-    // done, so it never lies sagged over nothing but its hinge.
-    const reach = Math.hypot((centers[crack] as V3)[0] - hinge[0], (centers[crack] as V3)[1] - hinge[1]);
-    const turn = clamp(1 / Math.max(1, reach), 0.04, 0.1) * sd.side;
-    const spanCh: Channels = { loss: span, droop: 0, wither: 0, glow: 0, pivot: hinge, tint, ...(k === sags ? { fall: [0, 0, turn, span + 0.15] as const } : {}) };
-    const [s0, s1] = sd.span;
-    emitSweep(out, grid, normals, centers, s0, s1, tall, spanCh, seed);
-    const along = (from: number, to: number): [number, number] => (from < to ? [from, to] : [to, from]);
-    const [b0, b1] = along(sd.mid, sd.top);
-    emitSweep(out, grid, normals, centers, b0, b1, tall, { loss: upper, droop: 0, wither: 0, glow: 0, pivot: centers[sd.mid] as V3, tint }, seed);
-    const [a0, a1] = along(sd.stump, sd.mid);
-    emitSweep(out, grid, normals, centers, a0, a1, tall, { loss: lower, droop: 0, wither: 0, glow: 0, pivot: centers[sd.stump] as V3, tint }, seed);
-    const [g0, g1] = along(sd.side < 0 ? 0 : count - 1, sd.stump);
-    emitSweep(out, grid, normals, centers, g0, g1, tall, { loss: 0, droop: 0, wither: 0, glow: 0, pivot: centers[sd.stump] as V3, tint }, seed);
-    crumbled.push({ side: sd.side, stump: sd.stump, goes: upper, size: 1 }, { side: sd.side, stump: sd.stump, goes: lower, size: 0.85 });
-  });
+  const piece = (from: number, to: number, ch: Channels): void => emitSweep(out, grid, normals, centers, Math.min(from, to), Math.max(from, to), tall, ch, seed);
+  const goesAt = (loss: number, pivot: V3): Channels => ({ loss, droop: 0, wither: 0, glow: 0, pivot, tint });
+  const bare = sags === 0 ? { side: -1, foot: 0, stump: leftStump, mid: leftMid, top: leftTop } : { side: 1, foot: count - 1, stump: rightStump, mid: rightMid, top: rightTop };
+  const hinge = edgeOf(bare.top, bare.side);
+  // The half that sags would drop its crown end a meter, turning about the hinge; it falls before the sag is done, so
+  // it never lies sagged over nothing but its hinge.
+  const reach = Math.hypot((centers[crack] as V3)[0] - hinge[0], (centers[crack] as V3)[1] - hinge[1]);
+  const turn = clamp(1 / Math.max(1, reach), 0.04, 0.1) * bare.side;
+  piece(bare.top, crack, { ...goesAt(goes.span, hinge), fall: [0, 0, turn, goes.span + 0.15] });
+  piece(bare.mid, bare.top, goesAt(goes.upper, centers[bare.mid] as V3));
+  piece(bare.stump, bare.mid, goesAt(goes.lower, centers[bare.stump] as V3));
+  piece(bare.foot, bare.stump, goesAt(0, centers[bare.stump] as V3));
+  // The stack that stands, from its foot to its stub, and the end of its half of the span beyond the stub.
+  piece(crack, stub, goesAt(goes.reach, centers[stub] as V3));
+  piece(sags === 0 ? count - 1 : 0, stub, goesAt(0, centers[stub] as V3));
 
-  // What has fallen lies in the grass and grows in as it falls, stopping no walker: the broken span under each half,
-  // and each stack's blocks as chunks round its stump. Old scree lies at both feet at any vitality.
+  // What has fallen lies in the grass and grows in as it falls, stopping no walker: the broken span under the half
+  // that fell and under the reaching half's end, and the bare stack's blocks as chunks round its stump. Old scree lies
+  // at both feet at any vitality.
   const fallen = r.fork("fallen");
   /** The ground ring under a stump: its reach along x and its depth along z. */
   const footing = (stump: number, side: number): { inner: number; outer: number; deep: number } => {
@@ -249,16 +262,20 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
     return { inner: side < 0 ? Math.max(...xs) : Math.min(...xs), outer: side < 0 ? Math.min(...xs) : Math.max(...xs), deep: Math.max(...ring.map((q) => Math.abs(q[2]))) };
   };
   for (const [k, side] of [-1, 1].entries()) {
-    const grow = spanGoes[k] as number;
+    const fell = k === sags;
+    const grow = fell ? goes.span : goes.reach;
+    // The reaching half's end lies between the crown and its stub.
+    const far = fell ? 0.85 : Math.max(0.2, Math.abs((centers[stub] as V3)[0]) / half);
     for (let m = 0; m < 4; m++) {
       const size: V3 = [ringT * fallen.range(0.35, 0.6), ringT * fallen.range(0.22, 0.36), depth * fallen.range(0.25, 0.4)];
-      chunk(out, side * half * fallen.range(0.12, 0.85), fallen.range(-0.45, 0.45) * depth, size, fallen.next() * Math.PI, grow, seed + k * 7 + m, fallen);
+      chunk(out, side * half * fallen.range(0.12 * far, far), fallen.range(-0.45, 0.45) * depth, size, fallen.next() * Math.PI, grow, seed + k * 7 + m, fallen);
     }
-    for (let m = 0; m < 6; m++) rubble(out, side * half * fallen.range(0, 1.1), fallen.range(-0.8, 0.8) * depth, ringT * fallen.range(0.12, 0.22), grow, fallen);
+    for (let m = 0; m < 6; m++) rubble(out, side * half * fallen.range(0, 1.3 * far), fallen.range(-0.8, 0.8) * depth, ringT * fallen.range(0.12, 0.22), grow, fallen);
     const foot = footing(k === 0 ? leftStump : rightStump, side);
     for (let m = 0; m < 4; m++) rubble(out, foot.outer + side * fallen.range(0.2, 1.6), fallen.range(-0.9, 0.9) * depth, ringT * fallen.range(0.08, 0.16), 1, fallen);
-    // The stack's blocks, broken, lie off its stump: out beyond it and in front of it and behind it, clear of it.
-    for (const c of crumbled.filter((x) => x.side === side)) {
+    if (!fell) continue;
+    // The bare stack's blocks, broken, lie off its stump: out beyond it and in front of it and behind it, clear of it.
+    for (const c of [{ goes: goes.upper, size: 1 }, { goes: goes.lower, size: 0.85 }]) {
       for (let m = 0; m < 3; m++) {
         const size: V3 = [ringT * fallen.range(0.3, 0.48) * c.size, ringT * fallen.range(0.22, 0.34) * c.size, ringT * fallen.range(0.28, 0.42) * c.size];
         const reach = Math.max(size[0], size[2]);

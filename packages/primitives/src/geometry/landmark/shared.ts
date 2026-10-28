@@ -1,9 +1,58 @@
-// Small tools every landmark shares: a piece that only withers, smooth
-// normals for lumpy stones, and fallen rubble that grows in at the foot of
-// what breaks.
+// Small tools every landmark shares: the proportions its seed picks within
+// its words, a piece that only withers, smooth normals for lumpy stones, and
+// fallen rubble that grows in at the foot of what breaks.
 
-import type { Part, Rand, Vec3 } from "@gaia/schema";
+import type { BuildContext, Part, Rand, Vec3 } from "@gaia/schema";
 import { type Channels, type PartBuilder, type V3, cross, icosphere, normalize, sub } from "../kit.ts";
+
+/** The least and the most a measure of a landmark may be. */
+export type Band = readonly [number, number];
+
+/**
+ * A measure the words of one field set: each word its own band, or none (`null`) for a word the measure has no part
+ * in, such as a dome's rise over an open ring. The words differ by it, so no two of their bands meet: a build of one
+ * word never takes another's look.
+ */
+export interface ByWord {
+  readonly by: string;
+  readonly bands: Readonly<Record<string, Band | null>>;
+}
+
+/** A landmark's measures: each kept within one band whatever its words, or set by the words of one field. */
+export type Bands = Readonly<Record<string, Band | ByWord>>;
+
+/** A build's measures, each picked inside its band; a measure its word has no part in is 0. */
+export type Shape<B extends Bands> = { readonly [M in keyof B]: number };
+
+/** The band a share either side of `mid`: what a measure no word sets ranges over round its usual look. */
+export const about = (mid: number, share: number): Band => [mid * (1 - share), mid * (1 + share)];
+
+/** The band a measure keeps for a build answered `answers`, or null where its word has no part in it. */
+export function bandOf(measure: Band | ByWord, answers: Readonly<Record<string, unknown>>): Band | null {
+  if (!("by" in measure)) return measure;
+  const word = String(answers[measure.by]);
+  const band = measure.bands[word];
+  if (band === undefined) throw new Error(`No band for ${measure.by} "${word}".`);
+  return band;
+}
+
+/**
+ * The proportions a landmark's seed picks within its words: each measure somewhere in the band its answers allow,
+ * drawn from a stream of its own, so two landmarks Jev answered alike stand differently, each the same on every run,
+ * and a new measure never shifts another.
+ */
+export function landmarkShape<B extends Bands>(bands: B, answers: Readonly<Record<string, unknown>>, ctx: BuildContext): Shape<B> {
+  const r = ctx.rand.fork("shape");
+  const out: Record<string, number> = {};
+  for (const [name, measure] of Object.entries(bands)) {
+    const band = bandOf(measure, answers);
+    out[name] = band === null ? 0 : band[0] + (band[1] - band[0]) * r.fork(name).next();
+  }
+  return out as Shape<B>;
+}
+
+/** How full on a point at angle `a` round a landmark faces weather blowing from `weather`: 1 full on, 0 sheltered behind. */
+export const facing = (a: number, weather: number): number => (1 + Math.cos(a - weather)) / 2;
 
 /** A piece that only withers as vitality falls, unless `extra` says more. */
 export const still = (pivot: Vec3, wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });

@@ -8,13 +8,16 @@
 // itself, through the hub, so the sails (which turn about the same axis)
 // stay on their shaft without a fall of their own. The body stands: it
 // greys, its stage and boards rot through, its lamps go out, and fallen
-// stone and boards gather at its foot.
+// stone and boards gather at its foot. Each mill's seed picks its proportions
+// within its words (`WINDMILL_SHAPE`): how broad its body stands and how much
+// it narrows, how high its stage and curb stand, how far and how broad its
+// sails reach, and how far and to which side its cap lists.
 
 import { type Anchor, type BuildContext, type Built, GRAIN, type Rand, type Resolved, type Vec3 } from "@gaia/schema";
 import type { windmillParams } from "../../landmark.ts";
 import { type Channels, PartBuilder, type V3, add, addScaled, clamp, cross, dot, lossThreshold, normalize, scale, sub } from "../kit.ts";
 import { UP, beam, box, log, quad, tri } from "../blocks.ts";
-import { lump, nonEmpty, still } from "./shared.ts";
+import { type Bands, type Shape, about, landmarkShape, lump, nonEmpty, still } from "./shared.ts";
 import { COURSE, MORTAR, angleDiff, courseSpans, ringBlock, ringNormal, ringPoint } from "./tower.ts";
 
 type MillParams = Resolved<typeof windmillParams>;
@@ -27,6 +30,26 @@ const PLANE_UP: V3 = [0, Math.cos(TILT), -Math.sin(TILT)];
 const ACROSS: V3 = [1, 0, 0];
 /** How far the cap lists once failing, radians, and the shown vitality it starts to at, once the sails have all but stopped; it has listed fully 0.14 lower. */
 const LIST = { cap: 0.3, buck: 0.15, from: 0.16 } as const;
+
+/**
+ * What a mill's seed picks within its words, each against its body's own measure: how broad the body stands at its
+ * foot and how broad at its head, how high its stage (a post mill's buck) and its curb stand, how far its sails reach
+ * as a share of its height and how broad they are, how far its cap lists once failing, in radians (a post mill's
+ * buck half as far), and the bearing its weather comes from, which sets the side it lists to.
+ */
+export const WINDMILL_SHAPE = {
+  foot: about(1, 0.12),
+  head: about(1, 0.12),
+  stage: about(1, 0.2),
+  curb: about(1, 0.03),
+  sweep: about(0.56, 0.07),
+  blade: about(1, 0.09),
+  list: about(LIST.cap, 0.2),
+  weather: [0, Math.PI * 2],
+} as const satisfies Bands;
+
+type MillShape = Shape<typeof WINDMILL_SHAPE>;
+
 /** A cap's profile from its eaves to its apex: shares of its rise and of its radius. */
 type Profile = readonly (readonly [number, number])[];
 const OGEE: Profile = [[0, 1], [0.14, 1.05], [0.32, 0.97], [0.5, 0.8], [0.68, 0.55], [0.84, 0.3], [0.95, 0.1], [1, 0]];
@@ -219,8 +242,8 @@ function curbRing(b: PartBuilder, sides: number, y0: number, y1: number, rad: nu
 }
 
 /** A fantail behind a tower mill's cap, which in a working mill turns the cap to face the wind: two struts carrying six vanes. It lists with the cap. */
-function fantail(parts: Parts, capY: number, capR: number, hub: V3, r: Rand): void {
-  const ch = listing(hub, LIST.cap, 0.65);
+function fantail(parts: Parts, capY: number, capR: number, hub: V3, list: number, r: Rand): void {
+  const ch = listing(hub, list, 0.65);
   const fan: V3 = [0, capY + 1.5, -capR - 1.25];
   for (const x of [-0.35, 0.35]) beam(parts.timber, [x, capY + 0.1, -capR * 0.75], [x * 0.4, fan[1] - 0.1, fan[2]], 0.1, 0.1, [1, 0, 0], 0.42, ch);
   log(parts.timber, [-0.3, fan[1], fan[2]], [0.3, fan[1], fan[2]], 0.09, 0.42, ch, 6);
@@ -339,14 +362,14 @@ function fallen(parts: Parts, foot: number, stones: number, r: Rand): void {
   }
 }
 
-function towerMill(h: number, r: Rand): Body {
-  const curb = h * 0.76;
-  const r0 = h * 0.2;
-  const r1 = h * 0.118;
+function towerMill(h: number, m: MillShape, r: Rand): Body {
+  const curb = h * 0.76 * m.curb;
+  const r0 = h * 0.2 * m.foot;
+  const r1 = h * 0.118 * m.head;
   const ys = coursesOf(0, curb, COURSE, r.fork("courses"));
   const courses = ys.length - 1;
   const wallAt = (y: number): number => r0 + (r1 - r0) * clamp(y / curb, 0, 1);
-  const stageC = Math.round(courses * 0.3);
+  const stageC = Math.round(courses * 0.3 * m.stage);
   const stageY = ys[stageC] as number;
   const capY = curb + 0.32;
   const capR = r1 + 0.42;
@@ -369,19 +392,19 @@ function towerMill(h: number, r: Rand): Body {
       stage(parts, 0, stageY, wallAt(stageY), 1.15, r.fork("stage"));
       curbRing(parts.timber, 0, curb - 0.05, curb + 0.3, r1 + 0.12, 0.45, () => still([0, curb, 0], 0.6), r);
       fan(parts.timber, 0, curb + 0.28, r1 + 0.1, 1, 0.3, still([0, curb, 0], 0.6));
-      cap(parts, 0, capY, capR, rise, OGEE, hub, r);
-      fantail(parts, capY, capR, hub, r);
+      cap(parts, 0, capY, capR, rise, OGEE, hub, capList(m), r);
+      fantail(parts, capY, capR, hub, capList(m), r);
       fallen(parts, r0, 16, r.fork("fallen"));
     },
   };
 }
 
-function smockMill(h: number): Body {
-  const base = h * 0.2;
-  const curb = h * 0.77;
-  const rb = h * 0.2;
-  const s0 = h * 0.185;
-  const s1 = h * 0.112;
+function smockMill(h: number, m: MillShape): Body {
+  const base = h * 0.2 * m.stage;
+  const curb = h * 0.77 * m.curb;
+  const rb = h * 0.2 * m.foot;
+  const s0 = h * 0.185 * m.foot;
+  const s1 = h * 0.112 * m.head;
   const smockAt = (y: number): number => s0 + (s1 - s0) * clamp((y - base) / (curb - base), 0, 1);
   const capY = curb + 0.3;
   const capR = s1 + 0.38;
@@ -413,26 +436,26 @@ function smockMill(h: number): Body {
       }
       curbRing(parts.timber, 8, curb - 0.05, curb + 0.28, s1 + 0.1, 0.4, () => still([0, curb, 0], 0.6), r);
       fan(parts.timber, 8, curb + 0.26, s1 + 0.08, 1, 0.3, still([0, curb, 0], 0.6));
-      cap(parts, 8, capY, capR, rise, BONNET, hub, r);
+      cap(parts, 8, capY, capR, rise, BONNET, hub, capList(m), r);
       fallen(parts, rb, 6, r.fork("fallen"));
     },
   };
 }
 
 /** A tower's or smock's cap: its skirt, a floor over the wall's head, and the dome, all listing about the windshaft as the mill fails. */
-function cap(parts: Parts, sides: number, y0: number, rad: number, rise: number, profile: Profile, hub: V3, r: Rand): void {
-  const ch = (u: number): Channels => listing(hub, LIST.cap, 0.7, { tint: (u - 0.5) * 0.04 });
+function cap(parts: Parts, sides: number, y0: number, rad: number, rise: number, profile: Profile, hub: V3, list: number, r: Rand): void {
+  const ch = (u: number): Channels => listing(hub, list, 0.7, { tint: (u - 0.5) * 0.04 });
   curbRing(parts.timber, sides, y0 - 0.32, y0 + 0.02, rad - 0.02, 0.14, ch, r);
   fan(parts.timber, sides, y0 - 0.3, rad - 0.1, -1, 0.15, ch(0.5));
   dome(parts, sides, y0, rad, rise, profile, ch, r);
 }
 
-function postMill(h: number): Body {
-  const W = h * 0.25;
-  const D = h * 0.34;
-  const yb = h * 0.3;
-  const ye = h * 0.78;
-  const reach = h * 0.2;
+function postMill(h: number, m: MillShape): Body {
+  const W = h * 0.25 * m.foot;
+  const D = h * 0.34 * m.foot;
+  const yb = h * 0.3 * m.stage;
+  const ye = h * 0.78 * m.curb;
+  const reach = h * 0.2 * m.foot;
   const crown: V3 = [0, yb + 0.9, 0];
   return {
     hubY: ye + (h - ye) * 0.3,
@@ -449,7 +472,7 @@ function postMill(h: number): Body {
       for (const a of diag.slice(0, 2)) beam(parts.timber, [Math.cos(a) * reach, 0.8, Math.sin(a) * reach], [-Math.cos(a) * reach, 0.8, -Math.sin(a) * reach], 0.34, 0.32, UP, 0.42, still([0, 0, 0], 0.6));
       log(parts.timber, [0, 0.7, 0], crown, 0.34, 0.42, still([0, 0, 0], 0.6), 8);
       // The buck: a boarded body on the post, its gabled roof, windows, a door and ladder behind and a tail pole.
-      const ch = (u: number, extra: Partial<Channels> = {}): Channels => listing(crown, LIST.buck, 0.65, { tint: (u - 0.5) * 0.04, ...extra });
+      const ch = (u: number, extra: Partial<Channels> = {}): Channels => listing(crown, capList(m) * (LIST.buck / LIST.cap), 0.65, { tint: (u - 0.5) * 0.04, ...extra });
       const corners: V3[] = [[-W / 2, 0, D / 2], [W / 2, 0, D / 2], [W / 2, 0, -D / 2], [-W / 2, 0, -D / 2]];
       const at = (c: V3) => (y: number): V3 => [c[0], y, c[2]];
       box(parts.timber, [0, yb + 0.1, 0], [[1, 0, 0], UP, [0, 0, 1]], [W / 2 + 0.04, 0.12, D / 2 + 0.04], 0.3, ch(0.5));
@@ -493,6 +516,9 @@ function postMill(h: number): Body {
   };
 }
 
+/** How far the cap lists, about the windshaft: to its weather's lee side, which is +x or -x. */
+const capList = (m: MillShape): number => m.list * (Math.cos(m.weather) >= 0 ? 1 : -1);
+
 /** A profile's share of its radius at share `t` of its rise; 1 below the eaves, 0 above the apex. */
 function profileAt(profile: Profile, t: number): number {
   if (t <= 0) return 1;
@@ -511,14 +537,14 @@ function profileAt(profile: Profile, t: number): number {
  * windshaft; canvas tears through and shutters and a few bars rot away as
  * the mill fails, leaving the bare frames.
  */
-function sails(parts: Parts, hub: V3, count: number, R: number, shutters: boolean, shaft: number, r: Rand): void {
+function sails(parts: Parts, hub: V3, count: number, R: number, blade: number, shutters: boolean, shaft: number, r: Rand): void {
   const rate = count === 6 ? 0.12 : 0.15;
   const turning = (wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot: hub, spin: scale(SHAFT, rate), ...extra });
   // The poll end and the windshaft running back into the cap.
   box(parts.frame, addScaled(hub, SHAFT, 0.15), [ACROSS, PLANE_UP, SHAFT], [0.34, 0.34, 0.38], 0.45, turning(0.6));
   log(parts.frame, hub, addScaled(hub, SHAFT, -shaft), 0.22, 0.4, turning(0.6), 8);
   const inner = R * (count === 6 ? 0.26 : 0.2);
-  const width = R * (count === 6 ? 0.17 : 0.22);
+  const width = R * (count === 6 ? 0.17 : 0.22) * blade;
   const lead = width * 0.18;
   const trail = width - lead;
   const bars = Math.max(8, Math.round((R - inner) / 0.55));
@@ -587,16 +613,17 @@ export function buildWindmill(p: MillParams, ctx: BuildContext): Built {
     lath: new PartBuilder("render"),
     frame: new PartBuilder("timber"),
   };
-  const body = p.body === "a stone tower mill" ? towerMill(h, r.fork("tower")) : p.body === "a timber smock mill" ? smockMill(h) : postMill(h);
+  const m = landmarkShape(WINDMILL_SHAPE, p, ctx);
+  const body = p.body === "a stone tower mill" ? towerMill(h, m, r.fork("tower")) : p.body === "a timber smock mill" ? smockMill(h, m) : postMill(h, m);
   const count = p.sails === "six sails" ? 6 : 4;
-  const R = Math.min(h * 0.56, (body.hubY - body.clear) / Math.cos(TILT));
+  const R = Math.min(h * m.sweep, (body.hubY - body.clear) / Math.cos(TILT));
   // The hub stands far enough out that every sail, at every turn, clears the body behind it.
   const setback = R * 0.07 + 0.3;
   let z = body.front(body.hubY) + 0.6;
   for (let L = -R; L <= R; L += 0.25) z = Math.max(z, body.front(body.hubY - L * Math.cos(TILT)) - L * Math.sin(TILT) + setback);
   const hub: V3 = [0, body.hubY, z];
   body.build(parts, hub, r.fork("body"));
-  sails(parts, hub, count, R, p.sails === "four lattice sails", (z - body.front(body.hubY) + 0.9) / Math.cos(TILT), r.fork("sails"));
+  sails(parts, hub, count, R, m.blade, p.sails === "four lattice sails", (z - body.front(body.hubY) + 0.9) / Math.cos(TILT), r.fork("sails"));
   const anchors: Anchor[] = [{ position: [0, h, 0], normal: [0, 1, 0], size: 1 }];
   return { parts: nonEmpty(Object.values(parts).map((b) => b.part())), anchors };
 }

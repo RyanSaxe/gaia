@@ -1,16 +1,18 @@
 // Landmark primitives: great things a person steers by from far away, each
 // 12 to 30 m tall, or spread wide, so it reads through the haze from across
 // the world. A few strong axes per primitive change the whole form, so the
-// same few primitives make very different landmarks. Geometry lives in
-// ./geometry/landmark/.
+// same few primitives make very different landmarks, and each build's seed
+// picks its proportions within its words, so two landmarks Jev answered alike
+// still differ. Geometry lives in ./geometry/landmark/.
 
 import { primitive, t } from "@gaia/schema";
-import { buildRockArch } from "./geometry/landmark/arch.ts";
-import { buildRotunda } from "./geometry/landmark/rotunda.ts";
-import { buildStandingStones } from "./geometry/landmark/stones.ts";
-import { buildLookoutTower } from "./geometry/landmark/tower.ts";
+import { ROCK_ARCH_SHAPE, buildRockArch } from "./geometry/landmark/arch.ts";
+import { ROTUNDA_SHAPE, ROTUNDA_STEPS, buildRotunda } from "./geometry/landmark/rotunda.ts";
+import type { Bands } from "./geometry/landmark/shared.ts";
+import { STANDING_STONES_SHAPE, buildStandingStones } from "./geometry/landmark/stones.ts";
+import { TOWER_SHAPE, buildLookoutTower } from "./geometry/landmark/tower.ts";
 import { buildGreatTree } from "./geometry/landmark/tree.ts";
-import { buildWindmill } from "./geometry/landmark/windmill.ts";
+import { WINDMILL_SHAPE, buildWindmill } from "./geometry/landmark/windmill.ts";
 
 export const lookoutTowerParams = {
   height: t.scale("How tall the tower stands: a squat watchtower for code that feels humble and stubborn, a lookout tower for code that feels ordinary and steady, a tall tower for code that feels proud, a soaring tower for code that feels grand and ambitious", { "a squat watchtower": 12, "a lookout tower": 16, "a tall tower": 21, "a soaring tower": 25 }),
@@ -109,7 +111,7 @@ export const windmillParams = {
     "four lattice sails": "Four sails of white shutters, slatted like blinds, the light flickering through them as they turn, for code that feels fussy and precise, every slat set just so",
     "six sails": "Six slender canvas sails crowding round one hub, a quick, restless whirl, for code that feels restless and hurried, always spinning a little too fast",
   }),
-  height: t.scale("How tall it stands to the top of its cap; its sails reach higher still: a stout mill for code that feels humble and close to the ground, a tall mill for code that feels proud of its work, a towering mill for code that feels ambitious, reaching up for every breath of wind", { "a stout mill": 12, "a tall mill": 15, "a towering mill": 19 }),
+  height: t.scale("How tall it stands to the top of its cap; its sails reach higher still: a stout mill for code that feels humble and close to the ground, a tall mill for code that feels proud of its work, a towering mill for code that feels ambitious, reaching up for every breath of wind", { "a stout mill": 16, "a tall mill": 20, "a towering mill": 25 }),
 };
 
 export const windmill = primitive({
@@ -149,7 +151,7 @@ export const rotundaParams = {
     "a high dome": "A tall dome raised on a drum and crowned by a small lantern, seen from far away, for code that feels proud and showy, dressed up for an occasion",
     "an open ring": "No roof at all: a ring of stone held high on the columns, open to the sky, for code that feels unfinished and open-ended, its top left open to whatever comes",
   }),
-  steps: t.scale("How high its stepped base lifts it: a low plinth of two steps for code that feels approachable and down to earth, three broad steps for code that feels gracious and welcoming, a high podium of five steps for code that feels aloof and hard to approach", { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 }),
+  steps: t.scale("How high its stepped base lifts it: a low plinth of two steps for code that feels approachable and down to earth, three broad steps for code that feels gracious and welcoming, a high podium of five steps for code that feels aloof and hard to approach", ROTUNDA_STEPS),
 };
 
 export const rotunda = primitive({
@@ -161,3 +163,15 @@ export const rotunda = primitive({
 });
 
 export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, windmill, rockArch, rotunda];
+
+/**
+ * What each landmark's seed picks within its words, by primitive: the bands its build's `landmarkShape` keeps to. A
+ * great tree has none: its seed already grows its whole frame, every limb's length and turn.
+ */
+export const LANDMARK_SHAPES: Readonly<Record<string, Bands>> = {
+  [lookoutTower.id]: TOWER_SHAPE,
+  [standingStones.id]: STANDING_STONES_SHAPE,
+  [windmill.id]: WINDMILL_SHAPE,
+  [rockArch.id]: ROCK_ARCH_SHAPE,
+  [rotunda.id]: ROTUNDA_SHAPE,
+};

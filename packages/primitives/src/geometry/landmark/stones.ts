@@ -2,14 +2,30 @@
 // of cairns or a loose group of menhirs, all from one lumpy slab. A stone
 // never bends: as vitality falls it leans whole about its toe, or falls flat
 // into the grass, or snaps, its top lying broken at its foot. Lintels and a
-// dolmen's capstone go first.
+// dolmen's capstone go first. Each group's seed picks its proportions within
+// its words (`STANDING_STONES_SHAPE`): how far apart its stones stand, how
+// broad they are against their height, and the bearing its weather comes
+// from, which most of them lean and fall away from.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { standingStonesParams } from "../../landmark.ts";
 import { type Channels, PartBuilder, type V3, clamp, cross, fbm3, icosphere, lossThreshold, normalize, rotate } from "../kit.ts";
-import { lump, smoothNormals, still } from "./shared.ts";
+import { type Bands, about, landmarkShape, lump, smoothNormals, still } from "./shared.ts";
 
 type StonesParams = Resolved<typeof standingStonesParams>;
+
+/**
+ * What a group's seed picks within its words: how far apart its stones stand (a ring's span, an avenue's rows, a
+ * field's spread) and how broad its stones are, each against its arrangement's own, and the bearing its weather comes
+ * from. A dolmen's chamber keeps its own proportions, as its uprights hold up its capstone.
+ */
+export const STANDING_STONES_SHAPE = {
+  spacing: about(1, 0.12),
+  breadth: about(1, 0.1),
+  weather: [0, Math.PI * 2],
+} as const satisfies Bands;
+/** How far either side of straight downwind a stone may lean or fall, radians. */
+const DOWNWIND = 1.1;
 
 /** How a stone gives way as vitality falls. */
 type Decline =
@@ -241,9 +257,12 @@ function declineOf(sr: Rand, lean: number): Decline {
   return { kind: "tilt", most: Math.PI / 2 - lean, from: sr.range(0.16, 0.34), flat: true };
 }
 
-/** A stone of the arrangement, its size jittered from the arrangement's own. */
-function stoneAt(sr: Rand, x: number, z: number, yaw: number, size: { width: number; depth: number; height: number }, lean = 0): Stone {
-  const toward = sr.next() * Math.PI * 2;
+/**
+ * A stone of the arrangement, its size jittered from the arrangement's own, leaning and falling about `downwind`, or
+ * any way at all where its weather has no say, as under a dolmen's capstone.
+ */
+function stoneAt(sr: Rand, x: number, z: number, yaw: number, size: { width: number; depth: number; height: number }, downwind: number | null, lean = 0): Stone {
+  const toward = downwind === null ? sr.next() * Math.PI * 2 : downwind + (sr.next() * 2 - 1) * DOWNWIND;
   return {
     x,
     z,
@@ -265,10 +284,13 @@ function stoneAt(sr: Rand, x: number, z: number, yaw: number, size: { width: num
 export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   const r = ctx.rand.fork("stones");
   const scale = ctx.facts.scale ?? 1;
+  const shape = landmarkShape(STANDING_STONES_SHAPE, p, ctx);
+  // The weather blows from its bearing, so the stones lean and fall the other way.
+  const downwind = shape.weather + Math.PI;
   // What has fallen grows in only once it has fallen, and stops no walker.
   const out = new PartBuilder("stone", "solid");
   const h = p.height * scale;
-  const size = { width: h * 0.42, depth: h * 0.22, height: h };
+  const size = { width: h * 0.42 * shape.breadth, depth: h * 0.22 * shape.breadth, height: h };
   const count = Math.max(4, Math.round(p.count));
   const stones: Stone[] = [];
   const lintels: [number, number][] = [];
@@ -276,27 +298,28 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   let heart: [number, number] = [0, 0];
 
   if (p.arrangement === "ring") {
-    const ringR = Math.max(h * 1.1, (count * size.width * 1.75) / (Math.PI * 2));
+    // Never so close that less than three quarters of a stone's width opens between two.
+    const ringR = Math.max(h * 1.1 * shape.spacing, (count * size.width * 1.75) / (Math.PI * 2));
     const turn = r.next() * Math.PI * 2;
     for (let k = 0; k < count; k++) {
       const sr = r.fork(`stone${k}`);
       const a = turn + (k / count) * Math.PI * 2 + sr.range(-0.06, 0.06);
       // Faces turn toward the center, as a ring is laid out.
-      stones.push(stoneAt(sr, Math.cos(a) * ringR, Math.sin(a) * ringR, -a + Math.PI / 2, size));
+      stones.push(stoneAt(sr, Math.cos(a) * ringR, Math.sin(a) * ringR, -a + Math.PI / 2, size, downwind));
     }
     if (p.lintels) for (let k = 0; k + 1 < count; k += 2) lintels.push([k, k + 1]);
   } else if (p.arrangement === "avenue") {
     // Two facing rows, rising toward the head, which stands at +x.
     const pairs = Math.max(2, Math.round(count / 2));
-    const spacing = size.width * 2.1;
-    const across = clamp(h * 0.9, 3, 5);
+    const spacing = size.width * 2.1 * shape.spacing;
+    const across = clamp(h * 0.9, 3, 5) * shape.spacing;
     const length = (pairs - 1) * spacing;
     for (let k = 0; k < pairs; k++) {
       const t = pairs === 1 ? 1 : k / (pairs - 1);
       const grade = { ...size, height: h * (0.72 + 0.38 * t) };
       for (const side of [-1, 1]) {
         const sr = r.fork(`stone${k}-${side}`);
-        stones.push(stoneAt(sr, -length / 2 + k * spacing + sr.range(-0.2, 0.2), side * (across / 2 + sr.range(-0.15, 0.15)), 0, grade));
+        stones.push(stoneAt(sr, -length / 2 + k * spacing + sr.range(-0.2, 0.2), side * (across / 2 + sr.range(-0.15, 0.15)), 0, grade, downwind));
       }
       if (p.lintels && k % 2 === 1) lintels.push([stones.length - 2, stones.length - 1]);
     }
@@ -304,6 +327,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   } else if (p.arrangement === "dolmen") {
     // A chamber of uprights under one great capstone, in a ring of low kerb stones.
     const legH = Math.max(1.6, h * 0.6);
+    // The chamber keeps its own proportions, which hold the capstone up as its uprights give way.
     const capL = Math.max(3.4, h * 1.2);
     const capW = capL * 0.66;
     const uprights = clamp(Math.round(count / 3), 3, 5);
@@ -314,7 +338,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
     const firstLeg = stones.length;
     legs.forEach(([fx, fz, yaw], k) => {
       const sr = r.fork(`leg${k}`);
-      const s = stoneAt(sr, fx * capL, fz * capW, yaw, legSize);
+      const s = stoneAt(sr, fx * capL, fz * capW, yaw, legSize, null);
       // The uprights on one side give way outward, and the capstone tips off after them.
       const gives = fx >= 0;
       stones.push({ ...s, height: legH * sr.range(0.96, 1.04), toward: gives ? sr.range(-0.3, 0.3) : s.toward, decline: gives ? { kind: "tilt", most: sr.range(0.9, 1.25), from: sr.range(0.3, 0.38) } : { kind: "tilt", most: sr.range(0.08, 0.2), from: sr.range(0.36, 0.5) } });
@@ -325,13 +349,13 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
     for (let k = 0; k < kerb; k++) {
       const sr = r.fork(`kerb${k}`);
       const a = (k / kerb) * Math.PI * 2 + sr.range(-0.05, 0.05);
-      const s = stoneAt(sr, Math.cos(a) * kerbR, Math.sin(a) * kerbR * 0.85, -a + Math.PI / 2, { width: h * 0.24, depth: h * 0.14, height: h * 0.2 });
+      const s = stoneAt(sr, Math.cos(a) * kerbR, Math.sin(a) * kerbR * 0.85, -a + Math.PI / 2, { width: h * 0.24 * shape.breadth, depth: h * 0.14 * shape.breadth, height: h * 0.2 }, downwind);
       stones.push({ ...s, toward: a, decline: s.decline.kind === "snap" ? { kind: "tilt", most: sr.range(0.3, 0.7), from: sr.range(0.2, 0.5) } : s.decline });
     }
     heart = [0, kerbR + 1.8];
   } else if (p.arrangement === "cairn field") {
     const cairns = clamp(Math.round(count * 0.6), 3, 9);
-    const spread = Math.max(5, h * 1.6);
+    const spread = Math.max(5, h * 1.6) * shape.spacing;
     const placed: [number, number, number][] = [];
     for (let k = 0, tries = 0; k < cairns && tries < 200; tries++) {
       const cr = r.fork(`cairn${tries}`);
@@ -348,7 +372,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
     heart = [spread * 0.9, 0];
   } else {
     // Lone menhirs scattered loosely, taller than a ring's, some already leaning.
-    const spread = Math.max(h * 1.3, Math.sqrt(count) * h * 0.75);
+    const spread = Math.max(h * 1.3, Math.sqrt(count) * h * 0.75) * shape.spacing;
     const tall = { width: size.width * 0.85, depth: size.depth * 1.1, height: h * 1.25 };
     for (let tries = 0; stones.length < count && tries < 300; tries++) {
       const sr = r.fork(`menhir${tries}`);
@@ -358,7 +382,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       const z = Math.sin(a) * d;
       if (stones.some((s) => Math.hypot(s.x - x, s.z - z) < h * 0.9)) continue;
       const lean = sr.next() < 0.45 ? sr.range(0.12, 0.38) : sr.range(0, 0.05);
-      stones.push(stoneAt(sr, x, z, sr.next() * Math.PI, tall, lean));
+      stones.push(stoneAt(sr, x, z, sr.next() * Math.PI, tall, downwind, lean));
     }
     heart = [0, 0];
     if (stones.some((s) => Math.hypot(s.x, s.z) < h)) heart = [spread + h * 0.6, 0];
@@ -377,7 +401,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       width: king ? size.width * 1.25 : size.width * 1.9,
       depth: king ? size.depth * 1.3 : size.width * 1.1,
       height: king ? h * 1.55 : h * 0.3,
-      toward: cr.next() * Math.PI * 2,
+      toward: downwind + (cr.next() * 2 - 1) * DOWNWIND,
       lean: king ? cr.range(0, 0.06) : 0,
       decline: king ? { kind: "tilt", most: cr.range(0.25, 0.4), from: cr.range(0.28, 0.4) } : { kind: "firm" },
     };

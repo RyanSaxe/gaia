@@ -6,7 +6,7 @@ import { buildSlots, realize } from "@gaia/realize";
 import { sweep } from "@gaia/world";
 import { SHORE_CAP, bakeTerrain, extentOf, heightAt, planTerrain, siteToWorld, standTile, trailField, trailPlaces, yardsMeet } from "@gaia/terrain";
 import { sampleWorld } from "@gaia/terrain/testing";
-import { type StandCode, type StandRequest, blockedBy, standWorld } from "./stand.ts";
+import { type StandCode, type StandRequest, houseGround, landmarkGround, standWorld } from "./stand.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
@@ -126,7 +126,8 @@ describe("standing a world's things on a bake", () => {
     pads.forEach((a, i) => pads.forEach((b, k) => expect(k > i && yardsMeet(a, b), `${i} and ${k}`).toBe(false)));
     const [tower] = stood.landmarks;
     expect(tower).toBeDefined();
-    buildings.forEach((b, k) => expect(blockedBy(b, stood.sites[k]!, tower!.site.x, tower!.site.z, request.landmarks[0]!.base), b.name).toBe(false));
+    // Its ground keeps off each house's, measured as its site is found.
+    buildings.forEach((b, k) => expect(Math.hypot(stood.sites[k]!.x - tower!.site.x, stood.sites[k]!.z - tower!.site.z), b.name).toBeGreaterThanOrEqual(houseGround(b) + landmarkGround(request.landmarks[0]!.base)));
   });
 
   // Bakes and levels every 64-sample tile of the land, and the land twice more at coarser strides: two seconds alone,
