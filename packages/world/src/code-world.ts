@@ -1109,12 +1109,12 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
   const importance = new Map((graph?.nodes ?? []).flatMap((n) => (n.kind !== "block" && typeof n.judged?.value?.importance === "number" ? [[n.id, n.judged.value.importance] as const] : [])));
   const forms = judged.forms ?? {};
   // For each definition, the ids of the definitions and files that call or reference it.
-  const leaning = new Map<string, Set<string>>();
+  const dependentsOf = new Map<string, Set<string>>();
   for (const e of graph?.edges ?? []) {
     if ((e.kind !== "calls" && e.kind !== "references") || !e.to.startsWith("def:")) continue;
-    const set = leaning.get(e.to) ?? new Set<string>();
+    const set = dependentsOf.get(e.to) ?? new Set<string>();
     set.add(e.from);
-    leaning.set(e.to, set);
+    dependentsOf.set(e.to, set);
   }
   /** The building or landmark Jev composed for a thing, if it has one. */
   const composed = (id: string): { as: "building" | "landmark"; blueprint: Blueprint } | undefined => {
@@ -1202,7 +1202,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       const mine = quality.get(`def:${def.id}`) ?? vitality;
       // A definition with a building or landmark is also added to `things`, on its own plot.
       const t = composed(def.id);
-      const defFacts: ThingFacts = { path: def.id, name: def.name, lines: def.lines, exports: def.exported ? 1 : 0, dependents: [...(leaning.get(`def:${def.id}`) ?? [])].sort() };
+      const defFacts: ThingFacts = { path: def.id, name: def.name, lines: def.lines, exports: def.exported ? 1 : 0, dependents: [...(dependentsOf.get(`def:${def.id}`) ?? [])].sort() };
       if (t !== undefined) things.push({ path: def.id, of: "definition", name: def.name, as: t.as, blueprint: t.blueprint, area, x, z, lot: LAYOUT.lotReach[t.as], file: path, facts: defFacts, vitality: mine });
       symbols.push({
         id: def.id,
