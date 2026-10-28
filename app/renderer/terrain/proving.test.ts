@@ -13,11 +13,11 @@ import { judged } from "virtual:proving-ground";
 const doc = provingWorld();
 const code = openedWorld(doc);
 const vitalityOf = new Map(doc.world.things.map((t) => [t.path, t.vitality]));
-/** Each trail end's vitality as the world shows it, by the place the trail names: a building's or a landmark's lot, or the path of an entity standing as a plant, a stone or flowers. */
+/** Each trail end's vitality as the world shows it, by the place the trail names: a building's or landmark's lot, or the path of an entity that appears as a plant, stone or flowers. */
 const endVitality = new Map([...vitalityOf, ...doc.world.standing.flatMap((s) => (s.of === "entity" ? [[s.path, s.vitality] as const] : []))]);
 /** Each area's vitality, every file under it pooled by size. */
 const pooled = areaVitality(doc.world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
-/** What a point's own ground is (its file's patch, its area's lot, or the wild), and that ground's vitality. */
+/** The owner of a point's ground: its file's patch, its area's lot, or the wild. `groundAt` below gives that ground's vitality. */
 const ownerOf = (x: number, z: number): string => {
   const here = placeAt(doc.world, x, z);
   return here.area.depth < 0 ? "wild" : (here.file?.path ?? `lot:${here.area.path}`);
@@ -26,13 +26,13 @@ const groundAt = (x: number, z: number): number => {
   const here = placeAt(doc.world, x, z);
   return here.file?.vitality ?? (here.area.depth < 0 ? 1 : (pooled.get(here.area.path) ?? 1));
 };
-/** Points up to 30 m around a point: where the land's warp gathers the ground, a neighbor's cell lies nearer than it looks, so a point is clear of every edge only this far in. */
+/** Offsets up to 30 m around a point. Where the land's warp bunches the ground, a neighbor's cell can be nearer than it looks, so a point counts as clear of every edge only this far in. */
 const AROUND = [10, 20, 30].flatMap((r) => Array.from({ length: 8 }, (_, k) => [Math.cos((k * Math.PI) / 4) * r, Math.sin((k * Math.PI) / 4) * r] as const));
 const clearOfEdges = (x: number, z: number): boolean => {
   const owner = ownerOf(x, z);
   return AROUND.every(([dx, dz]) => ownerOf(x + dx, z + dz) === owner);
 };
-/** The ground's vitality field as the page builds it: whose ground each sample is, weighed by each owner's vitality. */
+/** The ground's vitality field as the page builds it: each sample's owner, weighted by each owner's vitality. */
 const own = ownershipOf(groundSites(code.stand), doc.world, doc.world.size + TERRAIN.skirt * 2);
 const tables = ownerVitality(doc.world, (path) => doc.world.patches.find((p) => p.path === path)?.vitality ?? 1);
 const groundField = vitalityOver(own, tables.ground);
@@ -41,7 +41,7 @@ const waterField = vitalityOver(own, tables.area);
 describe("the proving ground", () => {
   it("stands every part of every land, building, landmark and trail Jev composes, thriving, tired and in ruin, and chooses every option Jev is offered", () => {
     const used = (options: object, chosen: Iterable<string>): string[] => Object.keys(options).filter((k) => ![...chosen].includes(k));
-    // Whole, tired and in ruin, as the world shows each: a thing between tired and ruin counts toward none.
+    // Labels by vitality: "thriving" from 0.85, "tired" from 0.35, and "ruin" below 0.12. A thing between 0.12 and 0.35 gets no label.
     const healths = ["thriving", "tired", "ruin"];
     const stood = (blueprint: Blueprint | undefined, v: number): Stood[] => {
       if (blueprint === undefined) return [];
@@ -49,7 +49,7 @@ describe("the proving ground", () => {
       return [{ blueprint, ...(label === undefined ? {} : { label }) }];
     };
     const lacking = (k: AnyKind, of: readonly Stood[]): string[] => missingFrom(k, COMPOSING.lib, of, { labels: healths });
-    // A land's health is its own ground's: every file standing on it, pooled by size.
+    // A land's vitality is its own ground's: every file on it, pooled by size.
     const regionOf = new Map(doc.world.areas.map((a) => [a.path, a.region]));
     const lands = doc.world.regions.map((r, i) => {
       const own = doc.world.patches.filter((p) => regionOf.get(p.area) === i);
@@ -61,7 +61,7 @@ describe("the proving ground", () => {
       expect(lacking(k, doc.world.things.filter((t) => t.as === as).flatMap((t) => stood(t.blueprint, t.vitality))), as).toEqual([]);
     }
     expect(lacking(COMPOSING.link, doc.world.trails.flatMap((t) => stood(t.route, ((endVitality.get(t.from) ?? 1) + (endVitality.get(t.to) ?? 1)) / 2)))).toEqual([]);
-    // Every tree's and bush's frame with every crown, every stone and every drift, each thriving, tired and in ruin.
+    // Every tree's and bush's frame with every crown, every stone and every drift, each under all three labels.
     const small = [...doc.world.symbols, ...doc.world.standing];
     for (const [as, k, pairs] of [["tree", COMPOSING.tree, [["form", "crown"]]], ["bush", COMPOSING.bush, [["form", "crown"]]], ["stone", COMPOSING.stone, []], ["flowers", COMPOSING.flowers, []]] as const) {
       const of = small.filter((s) => s.as === as).flatMap((s) => stood(s.blueprint, s.vitality));
@@ -71,8 +71,8 @@ describe("the proving ground", () => {
     expect(judged.sky?.id).toBe(sweep(COMPOSING.world, COMPOSING.lib).blueprints[0]?.id);
     expect(used(WATERS, Object.values(judged.waters))).toEqual([]);
     expect(used(FORMS, Object.entries(judged.stands ?? {}).flatMap(([id, form]) => (id.includes("#") ? [form] : [])))).toEqual([]);
-    // Anything stands as anything: an entity, a file and a definition each stand as a building and as a landmark, and
-    // every file stands as one thing of its own.
+    // Any code can appear as any form: an entity, a file and a definition each appear as a building and as a landmark,
+    // and every file appears as one thing of its own.
     for (const of of ["entity", "file", "definition"] as const) {
       for (const as of ["building", "landmark"] as const) expect(doc.world.things.some((t) => (t.of ?? "entity") === of && t.as === as), `a ${of} as a ${as}`).toBe(true);
     }
@@ -116,7 +116,7 @@ describe("the proving ground", () => {
       const sum = looks.get(key)!;
       return { blades: sum.blades / sum.count, dry: sum.dry / sum.count, bare: sum.bare / sum.count, water: sum.water / sum.count };
     };
-    // The failing area reads as ruin all through: its grass thins, its ground dries and bare earth opens; its water clouds.
+    // The "ruins" area has low vitality throughout: its grass thins, its ground dries, bare earth opens and its water clouds.
     const ruins = mean("ruins");
     expect(ruins.blades).toBeLessThan(0.65);
     expect(ruins.dry).toBeGreaterThan(0.7);
@@ -126,12 +126,12 @@ describe("the proving ground", () => {
       const thriving = mean(area);
       expect(thriving.blades, area).toBeGreaterThan(0.97);
       expect(thriving.dry, area).toBeLessThan(0.05);
-      // Bare earth shows only where a failing neighbor's ground eases across the border, as the attic's in ruin does
-      // into the moor.
+      // Bare earth shows only where a declining neighbor's ground eases across the border, as the attic's does into the
+      // moor.
       expect(thriving.bare, area).toBeLessThan(0.005);
       expect(thriving.water, area).toBeGreaterThan(0.9);
     }
-    // A failing grove in a living area is one sick patch: its ground dries, while its neighbor's stays green.
+    // A low-vitality grove in a healthy area is one dry patch, while its neighbor's ground stays green.
     expect(mean("mixed/failing-grove.ts").dry).toBeGreaterThan(0.6);
     expect(mean("mixed/steady.ts").dry).toBeLessThan(0.1);
   });
@@ -140,9 +140,9 @@ describe("the proving ground", () => {
     let terrain: Terrain;
     let stood: Stand;
     let requests: StandBuilding[];
-    // Baking and standing the 560 m world takes about 10 s in one Node thread, longer while other work shares the machine.
+    // Baking and placing the 560 m world takes about 10 s in one Node thread, longer while other work shares the machine.
     beforeAll(() => {
-      // The same buildings, landmarks and trail looks, seeded alike.
+      // The same buildings, landmarks and trail styles, with the same seeds.
       terrain = bakeTerrain(code.spec, new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
       const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
       const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
@@ -173,7 +173,7 @@ describe("the proving ground", () => {
         const w = b.wheel as Extent;
         expect(waterDepthAt(terrain, ...siteToWorld(site, (w.x0 + w.x1) / 2, (w.z0 + w.z1) / 2)), b.name).toBeGreaterThan(0);
         expect(waterDepthAt(terrain, site.x, site.z), b.name).toBe(0);
-        // Its floor stays dry: no water stands as high as the floor anywhere under the house.
+        // Its floor stays dry: no water reaches the floor's height anywhere under the house.
         for (let lz = -b.plan.depth / 2; lz <= b.plan.depth / 2; lz += 0.5) {
           for (let lx = -b.plan.width / 2; lx <= b.plan.width / 2; lx += 0.5) {
             const surface = heightAt(terrain.lattice, ...siteToWorld(site, lx, lz), terrain.waterLevel);
@@ -212,7 +212,7 @@ describe("the proving ground", () => {
         const id = "id" in s ? s.id : s.path;
         const raised = COMPOSED_FORMS[s.form] !== undefined;
         const tree = s.as === "tree";
-        // Each stands once: as its tree, as its placement, or as one of the world's buildings and landmarks.
+        // Each appears once: as its tree, as its placement, or as one of the world's buildings and landmarks.
         expect(trees.has(k), id).toBe(tree);
         expect(i >= 0, id).toBe(!tree && !raised);
         if (raised) {
@@ -222,10 +222,10 @@ describe("the proving ground", () => {
         const p = tree ? trees.get(k)! : stood.placements[i]!;
         if (s.file !== undefined) expect(placeAt(doc.world, p.x, p.z).file?.path, id).toBe(s.file);
       });
-      // No stone, bush or flowers stands for nothing.
+      // Every stone, bush or flowers represents code.
       expect(stood.placements.length).toBe(stood.symbols.filter((i) => i >= 0).length);
-      // A file's or a definition's building or landmark stands on that file's patch, but a building whose wheel needs
-      // running water, which stands on its area's stream's bank.
+      // A file's or definition's building or landmark is on that file's patch, except a building whose wheel needs
+      // running water, which is on its area's stream bank.
       const sited = [...code.buildings.map((b, i) => ({ path: b.facts.path, at: stood.sites[i]! })), ...stood.landmarks.map((l) => ({ path: l.id, at: l.site }))];
       const banked = new Set(requests.flatMap((b, i) => (b.wheel !== undefined ? [code.buildings[i]!.facts.path] : [])));
       for (const t of doc.world.things.filter((x) => x.file !== undefined && !banked.has(x.path))) {

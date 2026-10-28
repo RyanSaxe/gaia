@@ -1,18 +1,13 @@
-// What grows on the wild land past the codebase's land: the wild's own two
-// ground covers (tall green grass and tall dry grass, which the ground and the
-// grass draw) and scattered thickets of the bush Jev composed for each cover
-// from the world around it (`composeWorld`), drawn as instanced copies like
-// the understory. It stands for nothing, so nothing here has a sign, a card
-// or a vitality from code: it is always healthy.
+// Grows the wild land past the codebase's land: the wild's two ground covers,
+// tall green grass and tall dry grass, and scattered thickets of the bush Jev
+// composed for each cover (`composeWorld`), drawn as instanced copies like the
+// understory. The wild represents no code, so it has no signs, cards or code
+// vitality.
 //
-// Bushes stand in seeded thickets on a fixed world grid, so a bush never
-// moves, and each thicket is the bush of the cover it grows in. Only those
-// near enough to be seen stand: around an anchor that follows the person in
-// jumps, out to just past where land has fully dissolved into the sky
-// (1.4 km). The copies that come and go when it jumps lie past that distance,
-// so nothing ever appears or vanishes in view. A wild bush keeps the grass off
-// its feet as a shrub on the land does (`SHRUB_CLEARS`): the clearings ask for
-// the standing bushes near the grass as they draw their window.
+// Thickets are seeded on a fixed world grid, so a bush never moves. Only the
+// thickets around an anchor that follows the person in jumps are placed, and
+// the copies a jump adds or removes lie past 1.4 km, where land has fully
+// dissolved into the sky, so nothing changes in view.
 
 import type * as THREE from "three";
 import { type Blueprint, type GroundSpec, type Library, blueprintOf, seedOf } from "@gaia/schema";
@@ -29,39 +24,40 @@ import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woo
 
 export const WILD_GROWTH = {
   /**
-   * Bushes stand within `reach` of the anchor, which jumps to the person once
-   * they are `recenter` from it, meters: `reach - recenter` stays past the
-   * 1.4 km where land has fully dissolved, so no copy that comes or goes is seen.
+   * Bushes are placed within `reach` meters of the anchor, which jumps to the
+   * person once they are `recenter` meters from it. `reach - recenter` stays
+   * past the 1.4 km where land has fully dissolved, so no copy that comes or
+   * goes is seen.
    */
   reach: 1640,
   recenter: 200,
   /** How far a bush sinks into the ground, meters. */
   sink: 0.08,
-  /** Every wild thing is healthy. */
+  /** The fixed vitality of every wild thing. */
   vitality: 0.9,
-  /** The wild's covers grow this share of their blades: a little sparser than the land, so the tall blades cost no more than a tall cover on the land. */
+  /** The share of blades the wild's covers grow, a little sparser than the land, so the tall blades cost no more than a tall cover on the land. */
   density: 0.9,
 } as const;
 
 export interface WildGrowth {
   /** Every instanced blueprint, for culling each pass, warming and the sun's shadow. */
   readonly all: () => readonly Copies[];
-  /** Each bush's blueprint, build and far form: what the swap test stands alone. */
+  /** Each bush's blueprint, build and far form, for the swap test. */
   readonly farBuilds: () => readonly { readonly blueprint: Blueprint; readonly plant: () => Realized; readonly far: FarOf }[];
   /**
-   * Makes the build of the bush Jev composed for each of the wild's grounds (`CodeWorld.wild`, in `WILD_GROUNDS`'
-   * order), its far form and its instances, once, when the world opens and before anything stands.
+   * Makes the build, far form and instances of the bush Jev composed for each wild ground (`CodeWorld.wild`, in
+   * `WILD_GROUNDS` order), once, when the world opens and before anything is placed.
    */
   build(blueprints: readonly Blueprint[]): void;
-  /** Takes on a new bake: stands the bushes again around the anchor. */
+  /** Updates for a new bake and places the bushes again around the anchor. */
   update(t: Terrain): void;
-  /** Called every frame the person walks: the anchor jumps to them once they are far from it. */
+  /** Call every frame the person walks. The anchor jumps to them once they are `WILD_GROWTH.recenter` from it. */
   follow(x: number, z: number): void;
-  /** Shows the bushes walking and hides them in views from above, where they would stand past the coarse wild ring. */
+  /** Shows the bushes while walking and hides them in views from above, where they would lie past the coarse wild ring. */
   show(on: boolean): void;
 }
 
-/** One world cell's thicket (`wildThicket`), if it holds one: the bush of the ground it grows in, and its bushes standing on the ground. */
+/** One world cell's thicket (`wildThicket`), if it has one: the ground whose bush it uses, and its bushes set on the ground. */
 function thicketIn(t: Terrain, ci: number, cj: number, grounds: number): { ground: number; spots: InstanceSpot[] } | null {
   const thicket = wildThicket(t, ci, cj);
   if (thicket === null) return null;
@@ -79,7 +75,7 @@ function thicketIn(t: Terrain, ci: number, cj: number, grounds: number): { groun
       seed: b.seed,
     };
   });
-  // The ground at the cell's middle, as the covers mingle: the first is the green grass, the last the golden steppe.
+  // Pick the ground at the cell's center as the covers mingle. The first ground is the green grass, the last the golden steppe.
   const { cell } = WILD_THICKETS;
   return { ground: Math.min(grounds - 1, Math.floor(wildPatch((ci + 0.5) * cell, (cj + 0.5) * cell) * grounds)), spots };
 }
@@ -98,7 +94,7 @@ function thicketOf(t: Terrain, ci: number, cj: number, grounds: number, cache: T
   return thicket;
 }
 
-/** Whether cell (ci, cj)'s thicket stands around an anchor at (ax, az): its cell's middle within `WILD_GROWTH.reach`. */
+/** Whether cell (ci, cj)'s thicket is placed around an anchor at (ax, az): its cell's center is within `WILD_GROWTH.reach`. */
 const standsAround = (ci: number, cj: number, ax: number, az: number): boolean => Math.hypot((ci + 0.5) * WILD_THICKETS.cell - ax, (cj + 0.5) * WILD_THICKETS.cell - az) <= WILD_GROWTH.reach;
 
 /**
@@ -125,15 +121,15 @@ function wildSpots(t: Terrain, ax: number, az: number, grounds: number, cache: T
 }
 
 /**
- * The ground kept clear of grass under every bush standing around (ax, az)
- * (`wildSpots`) that could reach from (x0, z0) to (x1, z1). `clears` holds
- * each ground's bush's cleared outline at scale 1.
+ * The ground kept clear of grass under every bush placed around (ax, az)
+ * (`wildSpots`) that could reach the area from (x0, z0) to (x1, z1). `clears`
+ * has each ground's bush's cleared outline at scale 1.
  */
 function wildClearings(t: Terrain, ax: number, az: number, x0: number, z0: number, x1: number, z1: number, clears: readonly Float32Array[], cache: Thickets): Clearing[] {
   const { cell, spread, scale } = WILD_THICKETS;
   let farthest = 0;
   for (const outline of clears) for (const r of outline) farthest = Math.max(farthest, r);
-  // A bush stands within `spread` of its thicket's middle, which lies in the thicket's cell.
+  // A bush lies within `spread` of its thicket's center, which is in the thicket's cell.
   const margin = spread + farthest * scale[1];
   const out: Clearing[] = [];
   for (let cj = Math.floor((z0 - margin) / cell); cj <= Math.floor((z1 + margin) / cell); cj++) {
@@ -163,25 +159,25 @@ function wildGround(lib: Library): [GroundSpec, GroundSpec] {
 }
 
 /**
- * The wild's growth: hands the wild's covers to the ground and the grass,
- * and stands its bushes once a world gives them (`build`), each keeping the
- * grass off its feet in `clearings`. `biomeLib` holds the biome primitives,
- * `floraLib` the flora ones. `farForms` takes each bush's far form; without
- * it, none turns far.
+ * Creates the wild's growth. It gives the wild's covers to the ground and the
+ * grass, and places its bushes once a world provides them (`build`), each
+ * clearing the grass at its base in `clearings`. `biomeLib` has the biome
+ * primitives and `floraLib` the flora ones. `farForms` receives each bush's
+ * far form. Without it, no bush has one.
  */
 export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: RegionCovers, biomeLib: Library, floraLib: Library, clearings: Clearings, farForms?: FarForms): WildGrowth {
   covers.wild(wildGround(biomeLib));
   let views: Copies[] = [];
   let builds: { readonly blueprint: Blueprint; readonly plant: () => Realized; readonly far: FarOf }[] = [];
-  /** Each ground's bush's outline at the ground that keeps the grass off, at scale 1. */
+  /** Each ground's bush's ground outline that clears the grass, at scale 1. */
   let clears: Float32Array[] = [];
   let shown = true;
   let terrain: Terrain | null = null;
   const cache: Thickets = new Map();
   const anchor = { x: 0, z: 0 };
-  // Until the bushes are built there are none, and no thicket is seeded: a thicket's bush is one of the grounds' built bushes.
+  // Until the bushes are built, return none and seed no thicket, since a thicket's bush is one of the grounds' built bushes.
   clearings.setNear((x0, z0, x1, z1) => (terrain === null || clears.length === 0 ? [] : wildClearings(terrain, anchor.x, anchor.z, x0, z0, x1, z1, clears, cache)));
-  /** Respots still to make, one blueprint a frame, so a jump never costs one frame much. */
+  /** Pending respots, one blueprint a frame, so a jump never costs one frame much. */
   let queue: { view: Copies; spots: InstanceSpot[] }[] = [];
   const stand = (t: Terrain, now: boolean): void => {
     if (views.length === 0) return;
@@ -208,7 +204,7 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
         scene.add(view.object);
         return view;
       });
-      // A bush's build goes once its instances are made and its far form baked; the swap test realizes it again.
+      // Drop a bush's build once its instances are made and its far form is baked. The swap test realizes it again.
       builds = asks.flatMap((ask, i) => {
         const far = fars[i];
         return far === undefined ? [] : [{ blueprint: ask.blueprint, plant: () => made(ask, floraLib), far }];

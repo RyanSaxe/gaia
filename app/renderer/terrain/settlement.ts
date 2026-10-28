@@ -1,11 +1,9 @@
-// The world's buildings: one for each entity, file or definition that
-// stands as a building, each the building Jev composed for it, standing on its
-// own leveled pad, apart from the others. The bake thread finds the
-// sites and levels the pads (`standWorld`); the settlement stands each
-// building on its site, every standing building of a tile drawn together as
-// one batch (`createPlantBatch`), a call per material for the whole tile. Their walls and features stop the walk and clear the
-// grass, and each has a signboard at the end of its walk naming what it
-// stands for.
+// Places the world's buildings, one for each entity, file or definition that
+// appears as a building, built from the blueprint Jev composed for it. The
+// bake thread finds the sites and levels the pads (`standWorld`), and each
+// tile's buildings draw together as one batch (`createPlantBatch`), one call
+// per material. Their walls and features block the walk and clear the grass,
+// and each has a signboard at the end of its walk naming what it represents.
 
 import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
@@ -22,24 +20,24 @@ export interface Building {
   readonly represented: Represented;
   /** The building's own name, such as "Watermill". */
   readonly kindName: string;
-  /** Its tile's batch and its place in it while its tile stands (`Settlement.stand`); null while it lies far off. */
+  /** Its tile's batch and its index in it while its tile is placed (`Settlement.stand`), or null while it is far off. */
   standing: { readonly batch: PlantBatch; readonly member: number } | null;
   /** The triangles its build draws. */
   readonly triangles: number;
-  /** Its height and the horizontal radius of its bounds, meters, whether or not it stands. */
+  /** Its height and the horizontal radius of its bounds in meters, whether or not it is placed. */
   readonly height: number;
   readonly radius: number;
-  /** What builds it again when its tile comes near. */
+  /** The build request that rebuilds it when its tile comes near. */
   readonly ask: BuildAsk;
-  /** The vitality it shows, kept while it stands far off. */
+  /** The vitality it shows, kept while it is far off. */
   vitality: number;
-  /** The blueprint it was built from and the colors it was given, which its mark on the map is drawn from. */
+  /** The blueprint and colors it was built with, which the map draws its mark from. */
   readonly blueprint: Blueprint;
   readonly palette: Palette;
   readonly plan: BuildingPlan;
-  /** What stands beside the house, such as a mill wheel, in the house's frame. */
+  /** What is beside the house, such as a mill wheel, in the house's frame. */
   readonly beside: Extent | null;
-  /** Where its feature turns, such as a mill's wheel, in the house's frame. */
+  /** The extent of its turning feature, such as a mill's wheel, in the house's frame. */
   readonly wheel: Extent | null;
   /** Whether its feature is turned by running water, as a waterwheel is. */
   readonly byWater: boolean;
@@ -57,27 +55,27 @@ export interface Settlement {
   readonly buildings: readonly Building[];
   /** What the bake thread needs to site each building, in order. */
   requests(): StandBuilding[];
-  /** Stands each building on the site a bake found for it, in order. */
+  /** Places each building on the site a bake found for it, in order. */
   seat(sites: readonly BuildingSite[]): void;
-  /** True where a wall or a feature stands, within `margin` meters. */
+  /** Whether a wall or a feature lies within `margin` meters of (x, z). */
   blocked(x: number, z: number, margin: number): boolean;
   /** Ground under every building and along every walk, where grass does not grow. */
   clearings(): Capsule[];
-  /** Where a building's signboard stands, facing anyone coming up its walk. */
+  /** Where a building's signboard goes, facing anyone coming up its walk. */
   signOf(b: Building): Spot;
   /** Where a person stops to read the sign and look at the building. */
   standOf(b: Building): { x: number; z: number };
-  /** The batches of the buildings that stand now, one per tile. */
+  /** The batches of the placed buildings, one per tile. */
   views(): PlantBatch[];
   /**
-   * Stands exactly `held` into `scene`, each tile's (`tileOf`) together as one batch: builds the batch of a tile
-   * whose buildings changed, from the builds made for them ahead (`makeAhead`) or else in place, and lets go of the
+   * Places exactly `held` into `scene`, each tile's buildings (`tileOf`) together as one batch. It rebuilds the batch
+   * of a tile whose buildings changed, from the builds made ahead (`makeAhead`) or else in place, and drops the
    * batches of tiles no longer held.
    */
   stand(held: readonly Building[], scene: THREE.Object3D, tileOf: (b: Building) => string): void;
-  /** The standing building a ray hits first, and how far along it. */
+  /** The placed building a ray hits first, and the distance along the ray. */
   pick(raycaster: THREE.Raycaster): { readonly building: Building; readonly distance: number } | undefined;
-  /** Sets a building's vitality, standing or not. */
+  /** Sets a building's vitality, whether or not it is placed. */
   setVitality(b: Building, v: number): void;
 }
 
@@ -114,14 +112,14 @@ export const settlementBuilds = (entities: readonly BuildingOf[]): BuildAsk[] =>
     facts: Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(entity.facts)])),
   }));
 
-/** A building for each thing a world stands as a building, each the building Jev composed for it. */
+/** Creates a building for each thing that appears as a building, from the blueprint Jev composed for it. */
 export function createSettlement(light: SceneLight, entities: readonly BuildingOf[]): Settlement {
   const asks = settlementBuilds(entities);
   const buildings: Building[] = entities.map((entity, i) => {
     const ask = asks[i] as BuildAsk;
     const built = made(ask, lib);
     const represented = entity.represented;
-    // Its bounds as a plant's own meshes measure them: the height of its parts, and how far they reach from its middle.
+    // Measure its bounds as a plant's own meshes do: the height of its parts and how far they reach from its center.
     let height = 0.3;
     let radius = 1;
     for (const p of built.parts) {
@@ -150,7 +148,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
     };
   });
 
-  /** Each standing tile's batch and its buildings, in the batch's order. */
+  /** Each placed tile's batch and its buildings, in the batch's order. */
   const batches = new Map<string, { readonly members: readonly Building[]; readonly batch: PlantBatch }>();
   const atSite = (b: Building) => ({ x: b.site.x, y: b.site.level, z: b.site.z, yaw: b.site.yaw });
   return {
@@ -170,7 +168,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
     stand(held, scene, tileOf) {
       const want = new Map<string, Building[]>();
       for (const b of held) want.set(tileOf(b), [...(want.get(tileOf(b)) ?? []), b]);
-      // A tile no longer held, or whose buildings changed, lets its batch go.
+      // Drop the batch of a tile no longer held or whose buildings changed.
       for (const [key, tile] of [...batches]) {
         const next = want.get(key);
         if (next !== undefined && next.length === tile.members.length && next.every((b) => tile.members.includes(b))) continue;

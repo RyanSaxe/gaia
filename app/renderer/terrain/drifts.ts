@@ -1,18 +1,12 @@
-// Drifts: the small living things a region's biome sets drifting through its
-// air (`drift@1`, the accents Jev chooses for a directory, or none). Petals
-// and leaves fall from the region's trees, and fireflies hover over its
-// ground after dusk, each in the color its accents give it. The world's wind
-// carries them all.
+// Draws the drifts a region's biome sets in its air (`drift@1`, the accents
+// Jev chooses for a directory): petals and leaves falling from the region's
+// trees, and fireflies over its ground after dusk, all carried by the wind.
 //
-// They gather only around the person. Fireflies fill a square around them,
-// anchored to the world, each wrapping to the square's far side only where
-// distance has already faded it out; a falling leaf lets go of a tree near
-// the person and fades out as it lands. Each firefly shows by the region it
-// floats in, as a tree drops its own region's, so the middle of a firefly
-// land is full and its air thins across the land's edge into the next. Each
-// thins as its land declines and none drift in the wild, so nothing appears
-// or vanishes as the person moves. The page keeps the trees near the person
-// once a frame; the shader places and fades every drift.
+// Drifts exist only around the person, and the vertex shader places and fades
+// each one. Fireflies fill a square anchored to the world and wrap to its far
+// side only where distance has already faded them. Density follows each
+// drift's region and thins with the land's decline and in the wild, so
+// nothing appears or vanishes as the person moves.
 
 import * as THREE from "three";
 import type { AccentForm, AccentSpec } from "@gaia/schema";
@@ -21,7 +15,10 @@ import { regionWeights, type WorldSpec } from "@gaia/terrain";
 import { GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
 import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 
-/** How each form moves and shows: its shape (0 a soft dot, 1 a petal, 2 a leaf), how fast it falls, meters a second, the heights it keeps between, how far it wanders, how much it blinks, and its opacity. */
+/**
+ * How a form moves and draws. `shape` is 0 for a soft dot, 1 for a petal and 2 for a leaf. `fall` is in meters a
+ * second, `low` and `high` bound its height above the floor, and `wander` is how far it strays in meters.
+ */
 interface DriftForm {
   readonly shape: number;
   readonly fall: number;
@@ -32,7 +29,6 @@ interface DriftForm {
   readonly opacity: number;
 }
 
-/** Every drifting form. */
 const DRIFT_FORMS: Readonly<Record<AccentForm, DriftForm>> = {
   petals: { shape: 1, fall: 0.35, low: 0, high: 9, wander: 0.6, blink: 0, opacity: 0.95 },
   fireflies: { shape: 0, fall: 0, low: 0.7, high: 2.6, wander: 0.9, blink: 1, opacity: 1 },
@@ -40,13 +36,13 @@ const DRIFT_FORMS: Readonly<Record<AccentForm, DriftForm>> = {
 };
 
 /**
- * A glowing dot's light, a firefly's: its core's radius is `core` of the drift's size, and never under `angle` of the
- * view (radians) or `px` device pixels, so one far off or on a small screen still reads as a point of light; in the
- * dark a halo reaches `halo` times as far, at `haloAlpha` of the core's light. Between flashes it dims to `dim`.
+ * A firefly's glowing dot. Its core radius is `core` times the drift's size, but at least `angle` radians of the view
+ * or `px` device pixels, so a far one or one on a small screen still reads as a point of light. In the dark a halo
+ * reaches `halo` times as far at `haloAlpha` of the core's light. Between flashes it dims to `dim`.
  */
 const GLOW = { core: 0.15, angle: 0.0028, px: 1.4, halo: 3, haloAlpha: 0.3, dim: 0.4 } as const;
 
-/** A drifting thing's color and shape, lit as everything else is: petals darken at night while glowing things shine. */
+/** Draws a drift's color and shape, lit like everything else, so petals darken at night while glowing things shine. */
 const DRIFT_FRAG = /* glsl */ `
 precision highp float;
 uniform float uTime;
@@ -95,53 +91,53 @@ void main() {
 `;
 
 /**
- * Where drifts gather round the person, meters: fireflies fill a square `air`
- * each way, fading out from `fade` of that to its edge; trees drop leaves and
- * petals out to `trees`, fading out from `fade` of it, and keep dropping them
- * until `keep` away, where the wind has carried none back into sight; and
- * anything nearer the eye than `near` fades, so none fills the view.
+ * Drift distances in meters. Fireflies fill a square reaching `air` each way
+ * and fade out from `fade` of that to its edge. Trees drop leaves and petals
+ * out to `trees`, fading out from `fade` of it, and keep dropping them out to
+ * `keep`, where the wind can carry none back into sight. A drift nearer the
+ * eye than `near[1]` fades, and is gone at `near[0]`, so none fills the view.
  */
 export const DRIFT_REACH = { air: 30, trees: 60, keep: 72, fade: 0.7, near: [0.6, 1.8] } as const;
-/** Each form's drifting things at most. */
+/** Most drifts per form. */
 const MOST = 2400;
-/** Trees that drop leaves or petals at once, each letting go of up to `MOST / CROWNS` (50) at a time. */
+/** Most trees dropping leaves or petals at once. Each drops up to `MOST / CROWNS`, which is 50, at a time. */
 const CROWNS = 48;
 /**
- * How much larger than `drift@1`'s size a drift draws. Its sizes were set in a debugging view, whose 40° lens shows a
- * thing 1.5 times as large as the walked world's 58° does; at walking distance a 10 cm leaf at that size covered a
- * few pixels and was lost. A drift is never drawn under `MIN_PX` device pixels across, so far ones stay specks.
+ * Scale from `drift@1`'s size to the drawn size. Its sizes were tuned in a debugging view whose 40° lens shows a thing
+ * 1.5 times as large as the walked world's 58° lens. At walking distance, a 10 cm leaf at that size covered a few
+ * pixels and was lost. A drift is never drawn under `MIN_PX` device pixels across, so far ones stay specks.
  */
 const SCALE = 1.5;
 const MIN_PX = 4;
 /**
- * How full a region's drift fills its form's things, by the drift's count (`drift@1`'s "a few" 70, "some" 180,
- * "many" 380): a tree in a region with many drops all of its share; the air holds as many a square meter as the
- * debugging view's 52 m by 60 m box held, so "some" is 0.06 a square meter.
+ * How a region's drift count sets its fill, the share of a form's drifts that show. `drift@1` counts are 70 for
+ * "a few", 180 for "some" and 380 for "many". A tree in a region with "many" drops its full share. The air holds as
+ * many drifts per square meter as the debugging view's 52 m by 60 m box did, so "some" is 0.06 a square meter.
  */
 const FULL_TREE = 380;
 const AIR_SHARE = (2 * DRIFT_REACH.air) ** 2 / (52 * 60) / MOST;
 /**
- * How sharply a region's air thins past its edge: each region's blend weight (`regionWeights`) to this power. A
- * region's air is full to about 25 m inside its edge and thins across it into the next region's over about 50 m.
- * Weighed by the plain weights, as the ground blends, a small world's regions all lie in each other's 130 m band, and
- * the middle of a firefly land held about a quarter of its fireflies.
+ * How sharply a region's drifts thin past its edge: each region's blend weight (`regionWeights`) is raised to this
+ * power. A region's air is full to about 25 m inside its edge and thins into the next region's over about 50 m. With
+ * the plain weights the ground uses, a small world's regions all lie in each other's 130 m band, and the center of a
+ * firefly region had only about a quarter of its fireflies.
  */
 const EDGE = 12;
 /**
- * The window of a form's fill round the person (`fillAround`): `samples` a side, `spacing` meters apart, on a grid
- * fixed to the world, so a point's fill is the same whichever window holds it. The window moves once the person is
- * `recenter` meters from its middle; 96 m a side, it still holds the fireflies' square round them.
+ * The window of a form's fill around the person (`fillAround`): `samples` a side, `spacing` meters apart, on a grid
+ * fixed to the world, so a point's fill is the same in any window. The window moves once the person is `recenter`
+ * meters from its center. At 96 m a side it still covers the fireflies' square around them.
  */
 const FILL = { samples: 13, spacing: 8, recenter: 16 } as const;
-/** Seconds a tree newly near the person takes to start dropping leaves fully, so none appear at once. */
+/** Seconds a tree newly near the person takes to reach its full drop rate, so its leaves never appear all at once. */
 const CROWN_FADE = 3;
-/** How fast the wind carries a falling leaf, and nudges fireflies a little, meters a second at a breeze. */
+/** Meters a second the wind carries a falling leaf at a breeze. Fireflies move at a fraction of it. */
 const CARRY = 0.6;
-/** The largest a drifting thing is drawn, device pixels. */
+/** Largest drawn drift size in device pixels. */
 const LARGEST = 64;
-/** How many of its cores across a glowing dot's point is: out to 1.8 halos each side, where the halo has faded to nothing. */
+/** A glowing dot's point size in cores. It reaches 1.8 halos each side, where the halo has faded to nothing. */
 const GLOW_POINT = 2 * 1.8 * GLOW.halo;
-/** The forms that fall from trees; fireflies ride the air. */
+/** The forms that fall from trees. Fireflies float in the air instead. */
 const FROM_TREES: ReadonlySet<AccentForm> = new Set(["petals", "leaves"]);
 
 const DRIFT_VERT = /* glsl */ `
@@ -266,7 +262,7 @@ void main() {
 }
 `;
 
-/** A tree near the person that drops leaves or petals: where it stands, how high its crown reaches and how wide, its region and how far its ground has declined. */
+/** A tree near the person that drops leaves or petals: its position, crown heights and radius, region and ground decline. */
 export interface Crown {
   readonly id: number;
   readonly x: number;
@@ -277,30 +273,30 @@ export interface Crown {
   readonly high: number;
   readonly reach: number;
   readonly region: number;
-  /** How far its ground has declined, 0 thriving to 1 (`groundDecline`). */
+  /** Its ground's decline from 0 to 1 (`groundDecline`). */
   readonly decline: number;
 }
 
 export interface Drifts {
   readonly object: THREE.Group;
   /**
-   * Takes each region of `world` and its drift, by region, as its biome
-   * realizes it (`RegionLook.drift`), null where it has none. Forms no region
-   * holds draw nothing.
+   * Sets each region's drift for `world`, by region index, as its biome
+   * realizes it (`RegionLook.drift`), or null where it has none. Forms no
+   * region uses draw nothing.
    */
   regions(world: WorldSpec, drifts: readonly (AccentSpec | null)[]): void;
   /**
-   * Each frame the person walks: carries the air on the wind and keeps the
-   * trees near the eye dropping leaves and petals. `crowns` gives every tree
-   * within `reach` meters of (x, z); `focal` is the view's device pixels a
-   * radian.
+   * Call every frame the person walks. It moves the air with the wind and
+   * assigns the trees near the eye that drop leaves and petals. `crowns`
+   * returns every tree within `reach` meters of (x, z), and `focal` is the
+   * view's device pixels per radian.
    */
   follow(crowns: (x: number, z: number, reach: number) => readonly Crown[], focal: number): void;
-  /** Each form drawn: how full its fullest region holds it, 0 to 1, how many of its things can show, and how many trees drop it now. */
+  /** For each drawn form: its fullest region's fill, 0 to 1, how many of its drifts can show, and how many trees drop it now. */
   state(): Record<string, { readonly most: number; readonly drawn: number; readonly trees: number }>;
 }
 
-/** How one form's drifting things move and show, as its material reads them. */
+/** The uniforms that set how one form's drifts move and draw. */
 function formUniforms(form: AccentForm, carried: THREE.Vector2) {
   const b = DRIFT_FORMS[form];
   return {
@@ -327,7 +323,7 @@ function formUniforms(form: AccentForm, carried: THREE.Vector2) {
   };
 }
 
-/** A form's fill round the person, `FILL.samples` a side, empty until first filled. */
+/** A form's fill texture around the person, `FILL.samples` a side, empty until first filled. */
 function fillTexture(): THREE.DataTexture {
   const t = new THREE.DataTexture(new Uint8Array(FILL.samples * FILL.samples), FILL.samples, FILL.samples, THREE.RedFormat, THREE.UnsignedByteType);
   t.minFilter = THREE.LinearFilter;
@@ -337,16 +333,16 @@ function fillTexture(): THREE.DataTexture {
   return t;
 }
 
-/** One form's drifting things: the material whose uniforms say how they move, and how full each region holds them. */
+/** One form's drifts: its points, the uniforms that set how they move, and each region's fill. */
 interface FormPoints {
   readonly points: THREE.Points;
   readonly uniforms: ReturnType<typeof formUniforms>;
-  /** Each tree dropping this form, by slot, and the id of the tree in it. */
+  /** The id of the tree in each slot that drops this form, or null. */
   readonly slots: (number | null)[];
-  /** How much of its things each region holds, 0 to 1, by region: 0 where the region has another drift or none. */
+  /** Each region's fill for this form, 0 to 1. It is 0 where the region has another drift or none. */
   full: readonly number[];
   spec: AccentSpec;
-  /** The grid sample at the middle of its fill's window (`fillAround`), or null until the window is filled. */
+  /** The grid sample at the center of its fill window (`fillAround`), or null until the window is filled. */
   fillAt: readonly [number, number] | null;
 }
 
@@ -386,14 +382,14 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     });
     const points = new THREE.Points(geometry, material);
     points.frustumCulled = false;
-    // After the water and the far forms' fading cards (renderOrder 2), which would paint over drifts drawn before them, since drifts write no depth.
+    // Draw after the water and the far forms' fading cards (renderOrder 2). Drifts write no depth, so those would paint over drifts drawn before them.
     points.renderOrder = 3;
     points.visible = false;
     object.add(points);
     return { points, uniforms, slots: new Array<number | null>(CROWNS).fill(null), full: [], spec, fillAt: null };
   };
 
-  /** Glowing things show by contrast: faint at noon, bright at dusk. */
+  /** Sets a form's glow for the hour. Glowing things show by contrast, faint at noon and bright at dusk. */
   const shine = (f: FormPoints): void => {
     const dark = Math.min(1, Math.max(0, light.uNightness.value));
     const b = DRIFT_FORMS[f.spec.form];
@@ -405,8 +401,8 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
   let world: WorldSpec | null = null;
   let weights = new Float64Array(0);
   /**
-   * Fills the window round (x, z) with how full the form's air is, as a share of its fullest region's: each region's
-   * by its share where it lies (`EDGE`).
+   * Fills the window around (x, z) with the form's fill as a share of its fullest region's, blending regions by their
+   * weights raised to `EDGE`.
    */
   const fillAround = (f: FormPoints, land: WorldSpec, x: number, z: number): void => {
     const half = (FILL.samples - 1) / 2;
@@ -432,13 +428,14 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     f.uniforms.uFillMap.value.set(i0 * FILL.spacing, j0 * FILL.spacing, FILL.spacing, FILL.samples);
     f.fillAt = [i0 + half, j0 + half];
   };
-  /** Whether the person at (x, z) has walked far enough from the middle of the form's fill to fill it round them again. */
+  /** Whether the person at (x, z) is far enough from the center of the form's fill window to refill it around them. */
   const strayed = (f: FormPoints, x: number, z: number): boolean =>
     f.fillAt === null || Math.max(Math.abs(x - f.fillAt[0] * FILL.spacing), Math.abs(z - f.fillAt[1] * FILL.spacing)) > FILL.recenter;
 
   /**
-   * Keeps each slot's tree while it stays within `keep`, so a slot frees only once nothing it dropped is in sight,
-   * fills free slots nearest first, and sets how much each tree drops from its region and its ground now.
+   * Keeps each slot's tree while it stays within `DRIFT_REACH.keep`, so a slot frees only once nothing it dropped is
+   * in sight. Fills free slots with the nearest trees first, and sets each tree's drop rate from its region's fill and
+   * its ground's decline.
    */
   const tend = (f: FormPoints, near: readonly Crown[], x: number, z: number): void => {
     const at = f.uniforms.uCrownAt.value;
@@ -480,9 +477,9 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
         f.full = drifts.map((d) => (d?.form === form ? Math.min(1, FROM_TREES.has(form) ? d.count / FULL_TREE : d.count * AIR_SHARE) : 0));
         f.uniforms.uFull.value = Math.max(...f.full);
         f.fillAt = null;
-        // A thing ranked past the fullest region's share never shows, so it is not drawn.
+        // A drift ranked past the fullest region's share never shows, so it is not drawn.
         f.points.geometry.setDrawRange(0, Math.min(MOST, Math.ceil(Math.max(...f.full) * MOST) + 1));
-        // Every region's drift of one form shares one look: `drift@1` gives each form one color and size.
+        // All regions' drifts of one form share one look, because `drift@1` gives each form one color and size.
         f.spec = spec;
         f.uniforms.uSize.value = spec.size * SCALE;
         f.uniforms.uColor.value.set(...spec.color);
@@ -498,7 +495,7 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
           .map(([form, f]) => [form, { most: +Math.max(...f.full).toFixed(3), drawn: f.points.geometry.drawRange.count, trees: f.slots.filter((s) => s !== null).length }]),
       ),
     follow(crowns, focal) {
-      // The wind carries the air on as the world's clock runs, never while it is held.
+      // The wind moves the air as the world's clock runs, and not while the clock is frozen.
       const t = light.uTime.value;
       const dt = Math.max(0, t - lastTime);
       lastTime = t;

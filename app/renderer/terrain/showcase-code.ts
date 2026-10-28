@@ -1,6 +1,7 @@
-// The showcase's source, the codebase gaia: every file under its `=== path ===`
-// line in `fixtures/showcase-code.txt`. `pnpm showcase` writes it out for the
-// engine to read, and the page shows it in the journal.
+// Parses the showcase's source, the codebase gaia, from
+// `fixtures/showcase-code.txt`, where each file follows its `=== path ===`
+// line. `pnpm showcase` writes the files out for the engine to read, and the
+// page shows them in the journal.
 
 /** The showcase's files by path, each ending in one newline. */
 export function showcaseFiles(bundle: string): Map<string, string> {

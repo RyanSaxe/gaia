@@ -1,12 +1,10 @@
-// Bakes worlds off the page's thread: a few workers compose bands of lattice
-// rows side by side, then one of them finishes the bake while the others
-// work out, for a world laid out from code, whose ground each part of the
-// land is, so drawing never waits on a bake. The page gets the world's plan
-// and what stands on it, never its whole land: the land workers bake the
-// land around the person from the plan (`land.ts`). Bands go to whichever worker is
-// free, so a band of costly landforms never holds the rest back. Each bake's
-// workers end with it: an idle worker keeps its heap, some 50 MB of a bake's
-// leftovers apiece, until it happens to collect, and a phone cannot spare it.
+// Bakes worlds off the main thread, so drawing never waits on a bake. A few
+// workers compose bands of lattice rows, each taken by whichever worker is
+// free, then one finishes the bake while the others compute each sample's
+// ground owner. The page gets the world's plan and placements, never its whole
+// land (`land.ts`). Each bake's workers end with it, because an idle worker
+// keeps some 50 MB of a bake's leftovers until it happens to collect, and a
+// phone cannot spare that.
 
 import { type ComposedRows, GROUND_VITALITY, type Ownership, type ReliefReport, type WorldSpec, frameOf, ownershipGrid } from "@gaia/terrain";
 import type { BakeJob, BakeReply } from "./bake-worker.ts";
@@ -15,24 +13,24 @@ import { type Stand, type StandRequest, groundSites } from "./stand.ts";
 import BakeWorker from "./bake-worker.ts?worker";
 
 export interface Baked {
-  /** What the land workers bake the world's land around the person from: the whole world's land stays on the bake's thread. */
+  /** The source the land workers bake the land around the person from. The whole world's land stays on the bake's thread. */
   readonly land: LandSource;
-  /** The relief over the walkable square, and the wild land's middle height, which only the whole world can measure. */
+  /** The relief over the walkable square, and the wild land's base height, which only the whole world can measure. */
   readonly report: ReliefReport;
   readonly wildBase: number;
   readonly stand: Stand;
   /**
-   * The bake's finishing thread, which still holds the whole stood world: the
-   * page's land takes it on to cut its first chunks at once, and
-   * ends it when it no longer needs it.
+   * The bake's finishing thread, which still has the whole placed world. The
+   * page's land adopts it to cut its first chunks at once, and ends it when
+   * it no longer needs it.
    */
   readonly whole: Worker;
-  /** Whose ground every part of the land is (`ownershipOf`). */
+  /** The ground owner of every part of the land (`ownershipOf`). */
   readonly ownership: Ownership;
 }
 
 export interface Baker {
-  /** Bakes a world on the workers and stands its things on it; bakes run one after another in the order asked. */
+  /** Bakes a world on the workers and places its things on it. Bakes run one after another in request order. */
   bake(world: WorldSpec, stand: StandRequest): Promise<Baked>;
 }
 
@@ -50,7 +48,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
         waiting.delete(e.data.id);
         job?.resolve(e.data);
       };
-      // A thread that dies (out of memory, say) fails the jobs it held, so the bake fails rather than waiting forever.
+      // A thread that dies, such as from running out of memory, fails its jobs, so the bake fails rather than waiting forever.
       w.onerror = (e) => {
         e.preventDefault();
         for (const [id, job] of waiting) {
@@ -70,7 +68,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
       worker.postMessage({ ...job, id }, transfer);
     });
 
-  /** Whose ground the land is, in bands of rows over `on` (every worker but the one finishing, if there are others). */
+  /** Computes the land's ground owners in bands of rows over `on`, every worker but the finishing one when there are others. */
   async function own(world: WorldSpec, stand: StandRequest, on: readonly Worker[]): Promise<Ownership> {
     const sites = groundSites(stand.code);
     const land = frameOf(world);
@@ -102,7 +100,7 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
     try {
       const baked = await bakeOn(workers, world, stand);
       kept = baked.whole;
-      // The page's land answers the finishing thread from here on.
+      // From here on, the page's land handles the finishing thread's messages.
       kept.onmessage = null;
       return baked;
     } finally {
@@ -137,8 +135,8 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
   return {
     bake(world, stand) {
       const done = queue.then(() => run(world, stand));
-      // The queue waits on the bake but keeps nothing of it: a bake's stand
-      // and terrain are the world's to keep or let go once it takes them on.
+      // The queue waits on the bake but keeps no reference to its result, so
+      // the world alone decides when to drop a bake's stand and terrain.
       queue = done.then(
         () => undefined,
         () => undefined,

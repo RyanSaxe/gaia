@@ -1,7 +1,7 @@
-// Measuring a frame: what each kind of thing draws in each pass, and how much
+// Measures a frame: what each kind of thing draws in each pass, and how much
 // the picture changes between two frames. The world's hooks use these to find
-// where frame time goes and to prove that a change of detail goes unseen: a
-// step of walking may change the picture by less than the wind already does.
+// where frame time goes and to prove a change of detail is invisible, meaning
+// a step of walking changes the picture less than the wind already does.
 
 import type * as THREE from "three";
 
@@ -19,8 +19,9 @@ export type Tally = Record<Pass, Record<string, Drawn>>;
 /**
  * Draws one frame with `draw` while counting what each kind of object draws
  * in each pass. An object's kind is that of its nearest ancestor in `kinds`,
- * or "other". The pass is told by its camera: `view` draws the view, an
- * orthographic camera the sun's shadow, and any other camera the mirror.
+ * or "other". The camera identifies the pass: `view` is the view, an
+ * orthographic camera is the sun's shadow, and any other camera is the
+ * mirror.
  */
 export function tallyFrame(renderer: THREE.WebGLRenderer, scene: THREE.Scene, view: THREE.Camera, kinds: ReadonlyMap<THREE.Object3D, string>, draw: () => void): Tally {
   const tally: Tally = { shadow: {}, mirror: {}, view: {} };
@@ -80,8 +81,8 @@ export type PixelRect = readonly [number, number, number, number];
 /**
  * How much the picture changed between two frames of `width` by `height`
  * RGBA pixels, over the whole frame or only within `rect`. A pop changes one
- * place a lot, so the most-changed block of `block` pixels square tells it
- * apart from change spread thin.
+ * place a lot, so the most-changed square block of `block` pixels separates
+ * it from change spread thin.
  */
 export function pictureChange(a: Uint8Array, b: Uint8Array, width: number, height: number, block = 64, rect?: PixelRect): Change {
   if (a.length !== width * height * 4 || b.length !== a.length) throw new Error(`Frames must both hold ${width}x${height} RGBA pixels.`);

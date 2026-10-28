@@ -1,12 +1,12 @@
-// What a tree's, a stone's, a bush's or a drift's map mark is drawn from (`immersive/plant-marks.ts`), measured once
-// from its build, so every copy of the build shares it.
+// Measures what a tree's, stone's, bush's or drift's map mark is drawn from (`immersive/plant-marks.ts`), once per
+// build, so every copy of the build shares it.
 
 import type { Blueprint, Palette } from "@gaia/schema";
 import type { Realized } from "@gaia/realize";
 
 /**
- * A build as its map mark is drawn: its blueprint and colors, how tall it stands, how far it reaches from its middle
- * and how high its lowest leaves hang (0 for what bears none), meters at scale 1.
+ * A build as its map mark is drawn: its blueprint and colors, its height, its radius from its center, and the height
+ * of its lowest leaves, 0 for a plant with none, in meters at scale 1.
  */
 export interface PlantMark {
   readonly blueprint: Blueprint;
@@ -16,7 +16,7 @@ export interface PlantMark {
   readonly crown: number;
 }
 
-/** A build's map mark, measured from what of it stands above the ground. */
+/** Measures a build's map mark from its parts above the ground. */
 export function markOf(blueprint: Blueprint, plant: Realized): PlantMark {
   let height = 0.05;
   let radius = 0.1;

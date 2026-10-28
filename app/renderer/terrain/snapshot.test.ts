@@ -6,9 +6,9 @@ import { laySnapshot } from "./snapshot.ts";
 import { snapshotFacts, snapshotGraphOf } from "./snapshot-facts.ts";
 
 describe("the showcase's world from its bundled snapshot", () => {
-  // The showcase opens from its snapshot wherever the page runs, and is the world of a page with no engine, with its
-  // old v1 as it is or fixed, so each must lay out on its kept answers alone. Each is laid out whole, judged and all:
-  // about two seconds alone, longer while other work shares the machine.
+  // The showcase opens from its snapshot wherever the page runs and is the world of a page with no engine, with its
+  // old v1 as it is or fixed, so each must lay out from its saved answers alone. Each lays out whole, including
+  // judging, in about two seconds alone and longer while other work shares the machine.
   it.each(["showcase", "showcase-fixed"] as const)("lays %s out on Jev's kept answers alone, with its trails and every file of its graph", { timeout: 60_000 }, async (of) => {
     const { world, summary } = await laySnapshot("a test", of);
     expect(world.trails.length).toBeGreaterThan(0);
@@ -21,7 +21,7 @@ describe("the showcase's world from its bundled snapshot", () => {
   });
 
   // The world shows every answer Jev gives, and the kernel's trickle runs down past the engine's pond. Each showcase is
-  // laid out and its land baked whole: about two seconds alone, longer while other work shares the machine.
+  // laid out and its land baked whole, in about two seconds alone and longer while other work shares the machine.
   it.each(["showcase", "showcase-fixed"] as const)("holds the pond of every area of %s Jev gives a still pond", { timeout: 60_000 }, async (of) => {
     const { world, summary } = await laySnapshot("a test", of);
     const terrain = bakeTerrain(openedWorld({ root: of, facts: snapshotFacts(of), world, summary, judged: {} }).spec, COMPOSING.lib);

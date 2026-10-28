@@ -5,7 +5,7 @@ import { DRY, SHORE_CAP, bakeTerrain, planOf } from "@gaia/terrain";
 import { FULL_WORLD, sampleWorld } from "@gaia/terrain/testing";
 import { CHUNK, chunkPastLand, cutChunk, latticeIndex, standChunk } from "./land-chunks.ts";
 
-// Baked once for the file: the full sample world, 1.2 km across, so its coarser levels' chunks reach past the land.
+// Baked once for the file. The full sample world is 1.2 km across, so its coarser levels' chunks reach past the land.
 const terrain = bakeTerrain(sampleWorld(FULL_WORLD), new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]));
 const source = { plan: planOf(terrain), edits: { pads: [], discs: [], ways: [] }, ways: [] };
 const { n } = terrain.lattice;
@@ -27,7 +27,7 @@ describe("the land's chunks", () => {
           if (chunk.ground[c * 4 + 1] !== terrain.waterLevel[w]) differ.water++;
           if (chunk.region[c] !== terrain.region[w]) differ.region++;
           if (chunk.coverShares[c * 4] !== terrain.coverShares[w * 4] || chunk.coverRegions[c * 4] !== terrain.coverRegions[w * 4]) differ.covers++;
-          // A coarser level measures the shore between its own samples, so only its samples clear of the water are the land's own.
+          // A coarser level measures the shore between its own samples, so only its samples clear of the water match the land's.
           if (k > 0 && (terrain.shore[w] as number) < SHORE_CAP) near++;
           else if (chunk.ground[c * 4] !== terrain.lattice.heights[w] || chunk.ground[c * 4 + 2] !== terrain.shore[w]) differ.heights++;
         }

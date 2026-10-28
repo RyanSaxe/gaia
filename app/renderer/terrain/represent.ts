@@ -1,34 +1,31 @@
-// What a building, a landmark or anything else that stands for code says
-// about what it stands for: its path, the name on its sign, a few words on
-// what it is, and its vitality.
+// The page data of anything that represents code: its path, the name on its
+// sign, a few words on what it is, and its vitality.
 
 import type { Blueprint, EntityFacts, FileFacts, ThingFacts } from "@gaia/schema";
 
 /** Something in the world a person can walk up to and ask about. */
 export interface Represented {
-  /** Its path: its identity. */
+  /** Its path, which identifies it. */
   readonly id: string;
   /** The name painted on its sign. */
   readonly name: string;
   /** What it is, in a few words, such as "Package · TypeScript": the note under its name on its sign. */
   readonly what: string;
-  /** How it is doing, 0 to 1: Jev's quality. */
+  /** Its vitality from 0 to 1, from Jev's quality judgment. */
   readonly vitality: number;
 }
 
 /**
- * What a building stands for and the building: an entity, a file or a
- * definition, with its page (`represented`) and the request that judged what
- * it stands as.
+ * The entity, file or definition a building represents, with its page
+ * (`represented`), the request that judged its form, and the building.
  */
 export interface BuildingOf {
   readonly facts: EntityFacts | ThingFacts;
-  /** What its page says. */
   readonly represented: Represented;
-  /** The request that judged what it stands as; an entity's own when absent. */
+  /** The request that judged its form. Absent when it was the entity's own request. */
   readonly judged?: { readonly about: "file" | "entity"; readonly target: string };
   readonly vitality: number;
-  /** What its building is built from: the parts Jev composed for it. */
+  /** The parts Jev composed for its building. */
   readonly blueprint: Blueprint;
   /** What the building is called, such as "Fieldstone house with a waterwheel". */
   readonly kindName: string;
@@ -36,7 +33,7 @@ export interface BuildingOf {
 
 const FORMS: Readonly<Record<EntityFacts["form"], string>> = { package: "Package", crate: "Rust crate" };
 const LANGUAGES: Readonly<Record<string, string>> = { typescript: "TypeScript", rust: "Rust" };
-/** The last part of a path, which names an entity among its neighbors; the root's entity is the repository's own. */
+/** The last part of a path, which names an entity among its neighbors. The root's entity is "the repository". */
 export const shortName = (path: string): string => path.split("/").filter(Boolean).pop() ?? "the repository";
 
 export function representEntity(e: EntityFacts, vitality: number): Represented {
@@ -48,7 +45,7 @@ export function representEntity(e: EntityFacts, vitality: number): Represented {
   };
 }
 
-/** What stands for a file says about it. */
+/** The page data for a file. */
 export function representFile(f: FileFacts, vitality: number): Represented {
   return {
     id: f.path,

@@ -12,7 +12,7 @@ const frame = (fill: (x: number, y: number) => number): Uint8Array => {
 describe("how much the picture changes", () => {
   it("tells a pop in one place from the same change spread thin", () => {
     const still = frame(() => 100);
-    // One block of 64 pixels square, an eighth of the frame, turns 120 levels brighter.
+    // One 64-pixel square block, an eighth of the frame, gets 120 levels brighter.
     const pop = pictureChange(still, frame((x, y) => (x < 64 && y < 64 ? 220 : 100)), W, H);
     // The same total change, spread over every pixel.
     const spread = pictureChange(still, frame(() => 100 + 120 / 8), W, H);

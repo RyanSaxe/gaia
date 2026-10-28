@@ -4,12 +4,12 @@ import { type Clearing, type Clearings, type ClearingsNear, createClearings } fr
 
 // The clearings read only a bake's lattice: a land 1.2 km across, with its 80 m skirt, so its mask ends 680 m out.
 const land = { lattice: createLattice(1360, 1) } as Terrain;
-// The page's land: a window of the whole around the person, starting at different x and z, ending at x 739 m and z 19 m.
+// The page's land: a window of the whole land around the person, with different x and z starts, ending at x 739 m and z 19 m.
 const window = { lattice: { ...createLattice(640, 1), origin: 100, originZ: -620 } } as Terrain;
 const capsules: Capsule[] = [
   { ax: 4, az: 6, bx: 12, bz: 9, radius: 1.6 },
   { ax: 402, az: -303, bx: 402, bz: -303, radius: 2.4 },
-  // A walk across the page's land window's far edge in z, on into the land the window does not hold.
+  // A walk across the page's land window's far edge in z, into land the window does not contain.
   { ax: 440, az: 10, bx: 452, bz: 34, radius: 1.8 },
 ];
 // A rock's outline: a lobed reach in 16 directions.
@@ -27,7 +27,7 @@ const wild: Clearing[] = [
   { x: 2400, z: 0, yaw: 0, scale: 1, outline },
 ];
 
-/** Whether outline `c` holds the ground at (x, z). */
+/** Whether outline `c` covers the ground at (x, z). */
 function within(c: Clearing, x: number, z: number): boolean {
   const dx = x - c.x;
   const dz = z - c.z;
@@ -37,7 +37,7 @@ function within(c: Clearing, x: number, z: number): boolean {
   return Math.hypot(lx, lz) < (c.outline[Math.floor(a * c.outline.length) % c.outline.length] as number) * c.scale;
 }
 
-/** Whether the ground at (x, z) is kept bare by the capsules, the land's outlines or `more`, from the shapes themselves. */
+/** Whether the capsules, the land's outlines or `more` keep the ground at (x, z) bare, computed from the shapes themselves. */
 function cleared(x: number, z: number, more: readonly Clearing[] = []): boolean {
   for (const c of capsules) {
     const abx = c.bx - c.ax;
@@ -50,9 +50,9 @@ function cleared(x: number, z: number, more: readonly Clearing[] = []): boolean 
 }
 
 /**
- * Follows the grass to (x, z) and holds every texel of the window to `want` at
- * its middle on the ground, as the grass's texture lookup places it. Returns
- * the window's texels and how many are bare.
+ * Moves the grass to (x, z) and checks every window texel against `want` at
+ * its center on the ground, where the grass's texture lookup places it.
+ * Returns the window's texels and how many are bare.
  */
 function holds(clearings: Clearings, x: number, z: number, want: (x: number, z: number) => boolean): { data: Uint8Array; bare: number } {
   clearings.follow(x, z);
@@ -60,7 +60,7 @@ function holds(clearings: Clearings, x: number, z: number, want: (x: number, z: 
   const data = uClearing.value.image.data as Uint8Array;
   const side = uClearing.value.image.width;
   const step = uClearingSize.value / side;
-  // The grass reaches 62 m from where it gathers: the window holds all of it.
+  // The grass reaches 62 m from its center, and the window contains all of it.
   expect(Math.abs(uClearingOrigin.value.x + uClearingSize.value / 2 - x)).toBeLessThan(uClearingSize.value / 2 - 62);
   expect(Math.abs(uClearingOrigin.value.y + uClearingSize.value / 2 - z)).toBeLessThan(uClearingSize.value / 2 - 62);
   let bare = 0;
@@ -74,20 +74,20 @@ function holds(clearings: Clearings, x: number, z: number, want: (x: number, z: 
   return { data: data.slice(), bare };
 }
 
-/** A source of the wild's bushes as the wild gives them: those that could reach the window's ground, with the far one besides, which reaches none of it. */
+/** A source of the wild's bushes, as the wild provides them: those that could reach the window's ground, plus the far one, which reaches none of it. */
 const wildNear: ClearingsNear = (x0, z0, x1, z1) => wild.filter((c, k) => k === 2 || (c.x + 3 > x0 && c.x - 3 < x1 && c.z + 3 > z0 && c.z - 3 < z1));
 
 describe("the clearings' mask", () => {
   it.each([
     ["the whole land", land, [[0, 0], [400, -300]]],
-    // Around (450, -20) the window runs past the land window's edge at z 19 m, where the walk goes on.
+    // Around (450, -20) the window extends past the land window's edge at z 19 m, where the walk continues.
     ["a window of the land", window, [[400, -300], [450, -20]]],
   ] as const)("holds the mask of %s around the grass, each texel cleared exactly where its middle is, and again once the grass moves on", (_, t, spots) => {
     const clearings = createClearings(t);
     clearings.setCapsules(capsules);
     clearings.update(outlines);
     for (const [x, z] of spots) {
-      // The shapes near where the grass gathers are in the window.
+      // The shapes near the grass's center are in the window.
       expect(holds(clearings, x, z, (x, z) => cleared(x, z)).bare).toBeGreaterThan(40);
     }
   });
@@ -109,10 +109,10 @@ describe("the clearings' mask", () => {
       now.data.forEach((v, k) => {
         const at = [uClearingOrigin.value.x + ((k % side) + 0.5) * step, uClearingOrigin.value.y + (Math.floor(k / side) + 0.5) * step] as const;
         if (wild.some((c) => within(c, ...at))) wilder++;
-        // Wherever no wild bush stands the mask is the land's alone.
+        // Wherever there is no wild bush, the mask is the land's alone.
         else if (v !== was.data[k]) expect(v, `texel ${k} around (${x}, ${z})`).toBe(was.data[k]);
       });
-      // Only the window across the edge holds the wild's two near bushes.
+      // Only the window across the edge contains the wild's two near bushes.
       if (x === 650) expect(wilder).toBeGreaterThan(30);
       else expect(wilder).toBe(0);
     }

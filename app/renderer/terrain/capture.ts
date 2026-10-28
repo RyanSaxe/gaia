@@ -1,10 +1,8 @@
-// The world's own view of one thing, for its painting in the journal: the
-// scene drawn from a camera stood back from the thing into a target of its
-// own, and a mask of where the thing itself shows. The mask needs nothing
-// from the thing's kind: the scene is drawn a second time without the
-// ground, grass, water and sky, and the thing is wherever something stands
-// frontmost inside its own bounds. The pixels are read back without waiting
-// on the GPU, so the person's frames never stall.
+// Renders one thing for its journal painting into its own target, with a
+// mask of the thing's own pixels. The mask needs nothing from the thing's
+// kind: a second draw leaves out the ground, grass, water and sky, and the
+// thing is wherever the frontmost surface lies inside its own bounds. Pixels
+// are read back asynchronously, so the person's frames never stall.
 
 import * as THREE from "three";
 
@@ -15,7 +13,7 @@ export interface Pixels {
   readonly height: number;
 }
 
-/** Where the thing stands and how far it reaches: a cylinder from `base` up `height`, `reach` around (x, z). */
+/** The thing's bounds: a cylinder from `base` up `height`, with radius `reach` around (x, z). */
 export interface CaptureBounds {
   readonly x: number;
   readonly z: number;
@@ -27,9 +25,9 @@ export interface CaptureBounds {
 export interface Capture {
   /**
    * Draws `scene` from `camera` at `width` by `height` pixels, and again
-   * without `ground`, and reads back the view and the mask of what stands
-   * inside `bounds`. Every draw happens before it returns; only the reading
-   * back waits.
+   * without `ground`, and reads back the view and the mask of what lies
+   * inside `bounds`. Every draw happens before it returns, and only the
+   * read-back waits.
    */
   shoot(scene: THREE.Scene, camera: THREE.PerspectiveCamera, ground: readonly THREE.Object3D[], bounds: CaptureBounds, width: number, height: number): Promise<{ color: Pixels; mask: Pixels }>;
   dispose(): void;
@@ -42,8 +40,8 @@ void main() {
   gl_Position = vec4(position.xy, 0.0, 1.0);
 }`;
 
-// A pixel is the thing's when something stands frontmost there with the ground hidden as with it shown, and the
-// point it shows lies inside the thing's cylinder.
+// A pixel belongs to the thing when its frontmost surface is the same with the ground hidden as with it shown, and
+// that surface lies inside the thing's cylinder.
 const MASK_FS = /* glsl */ `
 uniform sampler2D tAll;
 uniform sampler2D tThings;

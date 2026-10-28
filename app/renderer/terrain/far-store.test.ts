@@ -13,7 +13,7 @@ describe("a far form's key", () => {
   it("is the same for the same build, and differs for any change to it", () => {
     const same = contentHash([part(1)], { sway: 1 }, "bake@1", 128);
     expect(contentHash([part(1)], { sway: 1 }, "bake@1", 128)).toBe(same);
-    // Key order in an object doesn't matter; every value does.
+    // Object key order doesn't change the hash. Every value does.
     expect(contentHash([{ channels: part(1).channels, indices: part(1).indices, positions: part(1).positions, swatch: "leaf" }], { sway: 1 }, "bake@1", 128)).toBe(same);
     for (const changed of [
       contentHash([part(1.0001)], { sway: 1 }, "bake@1", 128),
@@ -40,7 +40,7 @@ describe("the far-form store", () => {
     vi.useRealTimers();
   });
 
-  /** A visit on `day`: the store opens, and the page reads `keys`. */
+  /** Opens the store on `day` and reads `keys`, as a visit does. */
   const visit = async (day: number, keys: readonly string[] = []): Promise<FarStore | null> => {
     vi.setSystemTime(day * DAY);
     const store = await openFarStore(2);
@@ -66,7 +66,7 @@ describe("the far-form store", () => {
   it("opens nothing, rather than fail or wait, where it can't be opened at the page's bake", async () => {
     await openFarStore(3);
     expect(await openFarStore(2)).toBeNull();
-    // A page that never lets go of an earlier bake's store.
+    // Another page opens the database at an earlier bake and never closes it.
     vi.stubGlobal("indexedDB", new IDBFactory());
     await new Promise((resolve) => {
       indexedDB.open("gaia-far-forms", 1).onsuccess = resolve;
@@ -78,7 +78,7 @@ describe("the far-form store", () => {
     const store = await visit(0);
     await store?.put("summer", { version: 2 });
     await store?.put("autumn", { version: 2 });
-    // The autumn world is opened every week; the summer world never again.
+    // The autumn world opens every week, and the summer world never opens again.
     for (let day = 7; day <= 70; day += 7) await visit(day, ["autumn"]);
     const later = await visit(71);
     expect(await later?.get("autumn")).toEqual({ version: 2 });

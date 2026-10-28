@@ -1,12 +1,8 @@
-// Water surfaces at their solved levels. Streams run downstream along their
-// solved flow, ponds lie still with now and then a ring; both mirror the sky
-// and the banks, clear and see-through looking down and a mirror at a
-// grazing angle, show their bed where they are shallow and deepen in color
-// where they are deep. Rings spread from the person's legs as they wade.
-// At night the moon lays a sparkling path, the lantern a warm one, and
-// living water glows faintly. Water is as alive as the area it flows
-// through (the ground's vitality field): clear and lively in a thriving
-// area, clouded, brown and still in a failing one.
+// Draws the water surfaces at their solved levels: streams moving along their
+// solved flow and still ponds, clear looking down and mirrored at a grazing
+// angle, with rings around the person's legs as they wade. Water follows the
+// vitality of the area it flows through: clear and lively at high vitality,
+// and clouded, brown and still at low vitality.
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
@@ -19,10 +15,10 @@ const RINGS = 8;
 const RING = {
   /** Seconds a ring lives. */
   life: 2.6,
-  /** A ring per step: meters walked between rings, and the shortest gap between them in seconds. */
+  /** One ring per step: `stride` is meters walked between rings, and `gap` the shortest time between them in seconds. */
   stride: 0.6,
   gap: 0.2,
-  /** How far apart the legs stand, and how far the rings start ahead of the eyes, meters. */
+  /** How far apart the legs are and how far ahead of the eyes the rings start, in meters. */
   legs: 0.13,
   ahead: 0.35,
   /** Water shallower than this makes no rings, meters. */
@@ -30,7 +26,7 @@ const RING = {
   /** Seconds over which the water around the legs rises when moving and settles when still. */
   settle: 0.5,
 } as const;
-/** The mirror is drawn at this share of the canvas's size in CSS pixels: it is blurred anyway. */
+/** The mirror renders at this fraction of the canvas's CSS pixel size, since it is blurred anyway. */
 const MIRROR_SCALE = 0.5;
 /** Seconds over which the mirror's plane settles on a new water level. */
 const MIRROR_SETTLE = 0.8;
@@ -381,7 +377,7 @@ export interface Water {
    * is in view. Returns the draw calls it made.
    */
   mirror(renderer: THREE.WebGLRenderer, scene: THREE.Scene, view: THREE.PerspectiveCamera, hide: readonly THREE.Object3D[], show: readonly THREE.Object3D[], dt: number): number;
-  /** Rings spread from the person's legs when they move through water: where they stand, which way they face, how far they moved. */
+  /** Spreads rings from the person's legs as they move through water, given their position, facing and distance moved. */
   wade(x: number, z: number, yaw: number, walked: number, dt: number): void;
   stats(): { mirrorCalls: number; mirrorLevel: number; mirrored: boolean; moon: number[] };
 }
@@ -393,7 +389,7 @@ interface Ribbon {
   readonly index: number[];
 }
 
-/** Past each end the surface runs on this far, so it covers the spring's pool and the seep's wet patch; the ground clips it. */
+/** Meters the surface extends past each end of a stream, so it covers the spring's pool and the seep's wet patch. The ground clips the excess. */
 const RUN_ON = 4;
 
 function ribbon(stream: Terrain["streams"][number]): Ribbon {

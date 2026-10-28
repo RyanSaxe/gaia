@@ -18,7 +18,7 @@ describe("one build for each blueprint", () => {
     });
     expect(small).toBeGreaterThan(500);
     for (const [group, builds] of Object.entries(code.plants)) expect(new Set(builds.map((b) => b.id)).size, group).toBe(builds.length);
-    // More things stand than there are builds: alike answers share.
+    // There are fewer builds than small things, because things with the same blueprint share a build.
     expect(Object.values(code.plants).reduce((n, b) => n + b.length, 0)).toBeLessThan(small);
   });
 
