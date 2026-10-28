@@ -78,7 +78,7 @@ describe("landforms", () => {
         const [lf] = landformsOf(world, lib);
         expect(lf).toBeDefined();
         for (let k = 0; k < 200; k++) expect(Number.isFinite(fieldAt(lf!.height, (k % 20) * 9 - 90, Math.floor(k / 20) * 18 - 90)), p.id).toBe(true);
-        // Plain data: a structured clone evaluates identically.
+        // It is plain data, so a structured clone evaluates identically.
         const clone = structuredClone(lf!);
         expect(fieldAt(clone.height, 13.7, -41.2)).toBe(fieldAt(lf!.height, 13.7, -41.2));
       }
@@ -86,7 +86,7 @@ describe("landforms", () => {
   });
 });
 
-// Some tests here bake a world or read every baked sample: up to a second alone, several when other work shares the machine.
+// Some tests here bake a world or read every baked sample. Each takes up to a second alone, and several when other work shares the machine.
 describe("terrain", { timeout: 20_000 }, () => {
   it("bakes byte-identical ground and water for the same world", () => {
     const a = baked[0] as Terrain;
@@ -270,7 +270,7 @@ describe("terrain", { timeout: 20_000 }, () => {
         const shore = t.shore[i]!;
         const depth = t.waterLevel[i]! - heights[i]!;
         if (depth > 0) wet++;
-        // Thin water, where a stream narrows to nothing, stands a little way back from its banks.
+        // Thin water, where a stream narrows to nothing, has a shore distance above 0, so its banks narrow.
         if (depth > 0 && shore > 0) thin++;
         const ok =
           (shore === 0 ? depth > 0 : depth < BANKED) &&
@@ -313,7 +313,7 @@ describe("terrain", { timeout: 20_000 }, () => {
         cover: { use: "ground-cover@1", params: { cover: "lush grass", length: "natural", wildflowers: "none" } },
         natives: { use: "native-families@1", params: { families: [] } },
       });
-    // A narrow valley's trickle runs down past a basin's pond: its valley, cut deeper than the basin, would drain the pond through its rim.
+    // A narrow valley's trickle runs down past a basin's pond. Its valley, cut deeper than the basin, would drain the pond through its rim.
     const pond = { x: -10, z: 40 };
     const passed = bakeTerrain(
       {
@@ -364,7 +364,7 @@ describe("terrain", { timeout: 20_000 }, () => {
           const b = st[i + 1] as Station;
           // Water only runs downhill.
           expect(b.level).toBeLessThanOrEqual(a.level);
-          // Where it narrows to nothing at its spring or seep, narrower than the lattice draws whole, its bed may not dip.
+          // Where it narrows at its spring or seep below what the lattice draws without gaps, its bed need not dip below the water.
           if (a.halfWidth < 1.1) continue;
           expect(heightAt(t.lattice, a.x, a.z)).toBeLessThan(a.level);
           const len = Math.hypot(b.x - a.x, b.z - a.z);
@@ -374,14 +374,14 @@ describe("terrain", { timeout: 20_000 }, () => {
           for (const side of [-1, 1]) {
             const x = a.x + nx * edge * side;
             const z = a.z + nz * edge * side;
-            // Where another stream runs in, its mouth is the bank, its water meeting this one's at the surface.
+            // Where another stream runs in, its mouth is the bank, and its water meets this one's at the surface.
             const mouth = t.streams.find((o) => o !== s && o.stations.some((q) => Math.hypot(q.x - x, q.z - z) < q.halfWidth));
             if (mouth !== undefined) {
               expect(Math.max(...mouth.stations.filter((q) => Math.hypot(q.x - x, q.z - z) < q.halfWidth).map((q) => q.level)), `mouth at station ${i}`).toBeGreaterThanOrEqual(a.level - 0.05);
               continue;
             }
             // The bank climbs straight from the waterline, so on the inside of the tightest bend, where the surface's
-            // edge comes within 9 cm of the channel's, the ground stands 3 cm above the water.
+            // edge comes within 9 cm of the channel's, the ground is still 3 cm above the water.
             expect(heightAt(t.lattice, x, z), `bank at station ${i}`).toBeGreaterThanOrEqual(a.level + 0.02);
           }
         }
@@ -405,7 +405,7 @@ describe("terrain", { timeout: 20_000 }, () => {
         const p = c.points;
         const count = p.length / 2;
         const floorAt = (k: number): number => t.mean + ((c.floors[k] as number) - t.mean) * t.fit;
-        // The floor ends at the spring: 12 m behind it the ground has risen from the floor, rather than lying flat past the water.
+        // The floor ends at the spring. 12 m behind it the ground has risen from the floor instead of staying flat past the water.
         const hx = (p[0] as number) - (p[2] as number);
         const hz = (p[1] as number) - (p[3] as number);
         const hl = Math.hypot(hx, hz);
@@ -435,7 +435,8 @@ describe("terrain", { timeout: 20_000 }, () => {
 
   // The ground is drawn and walked as flat triangles between its samples, each cell split along the diagonal from
   // its (1, 0) corner to its (0, 1) corner (`heightAt`), so the waterline is where those triangles' edges cross the
-  // water's level. A bank that bends within a sample of the water put it up to 0.3 m off, stepping along the lattice.
+  // water level. A bank that bends within a sample of the water moves the waterline up to 0.3 m off, in steps along
+  // the lattice.
   it("draws each stream's waterline on its channel's edge, where the ground's triangles cross the water's level", () => {
     /** The nearest point to (x, z) on a stream's course, and its level and half width there. */
     const nearestOn = (st: readonly Station[], x: number, z: number): { d: number; level: number; half: number } => {
@@ -481,11 +482,11 @@ describe("terrain", { timeout: 20_000 }, () => {
                 const u = fa / (fa - fb);
                 const x = ax + (bx - ax) * u;
                 const z = az + (bz - az) * u;
-                // Only this stream's own channel: not where it meets other water, nor ground past its banks.
+                // Check only this stream's own channel, not where it meets other water or ground past its banks.
                 if (others.some((o) => nearestOn(o.stations, x, z).d < 12) || t.ponds.some((p) => Math.hypot(x - p.x, z - p.z) < p.reach + 6)) continue;
                 const here = nearestOn(st, x, z);
                 const off = Math.abs(here.d - here.half);
-                // Not where it narrows to nothing at its spring or seep, narrower than the lattice draws whole.
+                // Skip where it narrows at its spring or seep below what the lattice draws without gaps.
                 if (off > 1.5 || here.half < 1.1) continue;
                 offs.push(off);
               }
@@ -496,8 +497,8 @@ describe("terrain", { timeout: 20_000 }, () => {
     }
     expect(offs.length).toBeGreaterThan(5000);
     offs.sort((p, q) => p - q);
-    // With a bank that bent at the water, one crossing in ten lay 0.19 m or more off and one in a hundred 0.36 m;
-    // with straight walls they lie within 3 cm and 9 cm.
+    // With a bank that bent at the water, one crossing in ten lay 0.19 m or more off and one in a hundred 0.36 m.
+    // With straight walls they lie within 3 cm and 9 cm.
     expect(offs[Math.floor(offs.length * 0.9)]).toBeLessThan(0.05);
     expect(offs[Math.floor(offs.length * 0.99)]).toBeLessThan(0.1);
   });
@@ -507,7 +508,7 @@ describe("terrain", { timeout: 20_000 }, () => {
     // Every tree's and every bush's frame, each with every crown.
     const plants = [tree, bush].flatMap((k) => sweep(k, new Library(k === tree ? TREE_PRIMITIVES : BUSH_PRIMITIVES), { pairs: [["form", "crown"]] }).blueprints.map((blueprint) => ({ k, blueprint })));
     type Point = readonly [number, number, number];
-    /** Spots a plant could stand on in world `t`: dry, gentle ground across the land, every 23 m. */
+    /** Spots for a plant in world `t`: dry, gentle ground across the land, every 23 m. */
     const spotsOf = (t: Terrain): { x: number; z: number }[] => {
       const spots: { x: number; z: number }[] = [];
       const half = t.spec.size / 2 - 20;
@@ -517,9 +518,9 @@ describe("terrain", { timeout: 20_000 }, () => {
       return spots;
     };
     /**
-     * A plant's point, stood at `s` on origin height `y`, turned by `turn` (Three's Y rotation, x' = x cos + z sin,
-     * z' = -x sin + z cos) and leaned on the ground's slope there as its copy is, its base following the ground while
-     * its stems stay upright; and the ground's height under it.
+     * A plant's point placed at `s` on origin height `y`, turned by `turn` (Three's Y rotation, x' = x cos + z sin,
+     * z' = -x sin + z cos) and tilted on the ground's slope there as its instance is, with its base following the ground
+     * and its stems upright. Also returns the ground's height under the point.
      */
     const stood = (t: Terrain, s: { x: number; z: number }, y: number, turn: number, [vx, vy, vz]: Point): { at: number; ground: number } => {
       const dx = vx * Math.cos(turn) + vz * Math.sin(turn);
@@ -535,8 +536,8 @@ describe("terrain", { timeout: 20_000 }, () => {
       return { points, skel: built.slots.get("form")?.output as Skeleton };
     };
     /**
-     * Where a plant meets the soil at its root: every bark vertex at the ground near where a trunk, a stem or a cane
-     * leaves it, however many sides or lobes it has (a trunk's root flare reaches under three of its radii).
+     * Every bark vertex at ground level near where a trunk, stem or cane leaves the soil, however many sides or lobes
+     * it has. A trunk's root flare reaches out to three of its radii.
      */
     const rootRing = (points: readonly Point[], skel: Skeleton): Point[] =>
       points.filter((v) => v[1] < 0.05 && skel.limbs.some((l) => l.parent === -1 && Math.hypot(v[0] - l.start[0], v[2] - l.start[2]) < 3.5 * l.startRadius));
@@ -610,7 +611,7 @@ describe("full worlds", () => {
     for (const key of ["waterLevel", "shore", "region", "coverRegions", "coverShares"] as const) expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
     expect(bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights))).toBe(true);
     expect(banded.streams).toEqual(whole.streams);
-    // Composes and finishes a world in bands: about half a second alone, several when other work shares the machine.
+    // Composes and finishes a world in bands. It takes about half a second alone, and several when other work shares the machine.
   }, 20_000);
 
   it("keeps a full world of a score of regions inside the relief budget, with several streams and ponds", () => {
@@ -619,8 +620,8 @@ describe("full worlds", () => {
       expect(withinBudget(t.report)).toBe(true);
       expect(t.streams.length + t.ponds.length).toBeGreaterThanOrEqual(3);
     }
-    // Bakes two full worlds whole: about 15 s alone here, twice that on CI's runners, and more when other work
-    // shares the machine (it took 61.6 s on CI once, against a limit of 60 s).
+    // Bakes two full worlds whole. It takes about 15 s alone here, twice that on CI's runners, and more when other
+    // work shares the machine. It once took 61.6 s on CI against a limit of 60 s.
   }, 150_000);
 });
 
@@ -632,7 +633,7 @@ describe("wild land past the rim", () => {
       for (let k = 0; k < 24; k++) {
         const a = (k / 24) * Math.PI * 2;
         const [cx, cz] = [Math.cos(a), Math.sin(a)];
-        // Across the land's edge the ground never jumps: no step between neighbors a quarter meter apart.
+        // Across the land's edge the ground never jumps, with no step between neighbors a quarter meter apart.
         const cross = h / Math.max(Math.abs(cx), Math.abs(cz));
         for (let r = cross - 20; r < cross + 20; r += 0.25) {
           const step = Math.abs(groundHeightAt(t, cx * (r + 0.25), cz * (r + 0.25)) - groundHeightAt(t, cx * r, cz * r));
@@ -640,9 +641,9 @@ describe("wild land past the rim", () => {
         }
         expect(wildPast(t, cx * cross, cz * cross)).toBeCloseTo(0, 6);
       }
-      // Everything the land stands on is the lattice: the walkable square lies well inside the hand-over.
+      // The walkable square lies well inside `landHalf`, so its ground is the lattice.
       expect(groundHeightAt(t, t.spec.size / 2, -t.spec.size / 2)).toBe(heightAt(t.lattice, t.spec.size / 2, -t.spec.size / 2));
-      // Settled, near the land the wild land rolls gently; kilometers out it is still there, in soft hills.
+      // Past the settle band the wild land rolls gently near the land, and kilometers out it continues as low hills.
       const range = (from: number, to: number): number => {
         let low = Infinity;
         let high = -Infinity;
@@ -671,7 +672,7 @@ describe("wild land past the rim", () => {
     const { cell, thinIn } = WILD_THICKETS;
     for (const t of baked.slice(0, 4)) {
       const h = landHalf(t);
-      // Settled, the ground is the wild's own roll, which the field map draws.
+      // Past the settle band, the ground is the wild roll, which the field map draws.
       expect(groundHeightAt(t, h + WILDS.settle + 40, 17)).toBeCloseTo(wildRollAt(t, h + WILDS.settle + 40, 17), 9);
       expect(wildShare(t, 0, 0)).toBe(0);
       expect(wildShare(t, h + 200, -h - 200)).toBe(1);
@@ -710,7 +711,7 @@ describe("flow", () => {
           const speed = Math.hypot(vx, vz);
           expect(speed).toBeGreaterThanOrEqual(FLOW.slowest - 1e-6);
           expect(speed).toBeLessThanOrEqual(FLOW.fastest + 1e-6);
-          // The next station is downstream: the waterline never rises toward it, and the flow heads its way.
+          // The next station is downstream, so the waterline never rises toward it and the flow heads its way.
           expect(b.level).toBeLessThanOrEqual(a.level);
           expect(vx * (b.x - a.x) + vz * (b.z - a.z)).toBeGreaterThan(0);
           stations++;
@@ -797,7 +798,7 @@ describe("a cottage on the land", () => {
     },
   ];
 
-  /** Sites a building on its own copy of the land, as the world does with what stands beside it, and checks it stands on its ground. */
+  /** Sites a building and its feature on its own copy of the land, as the world does, and checks that it rests on its ground. */
   const expectGrounded = (name: string, built: Realized): void => {
     const plan = built.slots.get("footprint")?.output as BuildingPlan;
     const beside = extentOf(built.slots.get("feature")?.output as Built | undefined);
@@ -818,7 +819,7 @@ describe("a cottage on the land", () => {
         // Stepping stones show above the ground and lie on it.
         if (part.collision === "walkable" && (part.positions[i + 1] as number) > 0) expect(above, `${name} ${part.swatch} stone`).toBeLessThan(0.08);
       }
-      // Each part either reaches into the ground or rests on the stone base at floor level: nothing hangs between.
+      // Each part either reaches into the ground or rests on the stone base at floor level, so nothing hangs between.
       expect(lowest <= 0 || lowest >= plan.floor - 0.12, `${name} ${part.swatch} lowest ${lowest.toFixed(3)}`).toBe(true);
     }
     // The walls' foundation reaches well below the ground, so a slope never shows a gap.
@@ -833,7 +834,7 @@ describe("a cottage on the land", () => {
     });
   }
 
-  // Sites 60 buildings drawn from everything Jev can compose: about 2.5 s alone, longer when the suite runs in parallel.
+  // Sites 60 buildings drawn from everything Jev can compose. It takes about 2.5 s alone, longer when the suite runs in parallel.
   it("stands any building Jev can compose on its ground, never floating", { timeout: 120_000 }, () => {
     const draws = rand(seedOf("grounded draws"));
     for (let i = 0; i < 60; i++) {

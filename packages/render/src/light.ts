@@ -1,5 +1,6 @@
-// Scene-wide light, shared by reference with every material: one write per
-// frame, every shader sees it. Values follow v2's ghibli-default style pack.
+// Scene-wide light uniforms, shared by reference with every material, so one
+// write per frame reaches every shader. Values follow v2's ghibli-default
+// style pack.
 
 import * as THREE from "three";
 import type { LightSpec } from "@gaia/schema";
@@ -19,9 +20,9 @@ export interface SceneLight {
   readonly uTime: { value: number };
   /** Low-lying mist near the ground, 0 to 1. */
   readonly uMist: { value: number };
-  /** Multiplies every sway; the world's wind, 1 by default. */
+  /** The world's wind strength, which multiplies every sway. 1 by default. */
   readonly uWind: { value: number };
-  /** Where the wind blows toward now, over the ground (x, z): `windDirAt` at `uTime`, read whenever a material draws. */
+  /** The direction the wind blows toward now, on the ground plane (x, z): `windDirAt` at `uTime`, read whenever a material draws. */
   readonly uWindDir: { readonly value: THREE.Vector2 };
   readonly uShadowMatrix: { value: THREE.Matrix4 };
   readonly uShadowMap: { value: THREE.Texture | null };
@@ -31,11 +32,11 @@ export interface SceneLight {
   readonly uMoonIntensity: { value: number };
   /** 0 by day, 1 in deep night. */
   readonly uNightness: { value: number };
-  /** The lantern the person carries: where it hangs, its color, and its strength (0 by day). */
+  /** The lantern the person carries: its position, color, and strength, which is 0 by day. */
   readonly uLanternPosition: { value: THREE.Vector3 };
   readonly uLanternColor: { value: THREE.Vector3 };
   readonly uLanternIntensity: { value: number };
-  /** How strongly the shadow map darkens moonlight: 0 while the map follows the sun. */
+  /** How strongly the shadow map darkens moonlight. It is 0 while the map follows the sun. */
   readonly uMoonShadow: { value: number };
   /** The sky's gradient and the hour's horizon glow, read by `skyColor()` in the dome and in `aerial()`. */
   readonly uSkyZenith: { value: THREE.Vector3 };
@@ -46,21 +47,21 @@ export interface SceneLight {
   /** Where the person's eyes are. Every pass thins distant detail from here, so shadows and the mirror agree with the view. */
   readonly uEye: { value: THREE.Vector3 };
   /**
-   * 1 draws everything as if through clear air, with no haze, mist or dissolve into the sky: for a check that compares
-   * two forms of one thing far away, which the air would hide alike. 0 in the world.
+   * 1 draws everything as if through clear air, with no haze, mist or fade into the sky. A check uses it to compare two
+   * forms of one far thing, which the air would hide alike. It is 0 in the world.
    */
   readonly uClearAir: { value: number };
 }
 
-/** The lantern's warm pool: about 12 m across, fading smoothly to nothing by `LANTERN.reach`. */
+/** The lantern's warm pool of light, about 12 m across, fading smoothly to 0 at `LANTERN.reach`. */
 export const LANTERN = {
-  /** Candle orange: little green, so on green grass the pool reads warm, not yellow-olive. */
+  /** Candle orange with little green, so on green grass the pool looks warm, not yellow-olive. */
   color: 0xff6a2a,
   /** Strength at full night. */
   intensity: 2.4,
   /** Distance in meters where its light reaches zero. */
   reach: 7.5,
-  /** Carried at hand height (eye height less this), a little ahead and to the right, in meters. */
+  /** Where the lantern hangs, in meters: `drop` below eye height, `ahead` in front and `side` to the right. */
   drop: 0.75,
   ahead: 0.6,
   side: 0.28,
@@ -78,7 +79,7 @@ const smooth = (lo: number, hi: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-/** Writes one hour's light into the shared uniforms; the lantern's strength follows the night. */
+/** Writes one hour's light into the shared uniforms. The lantern's strength follows the night. */
 export function applyLight(light: SceneLight, l: LightSpec): void {
   light.uSunDirection.value.set(...l.sunDirection).normalize();
   light.uSunColor.value.set(...l.sunColor);
@@ -113,7 +114,7 @@ export function applySky(light: SceneLight, look: AirInput): void {
 export interface Lantern {
   /**
    * Hangs the lantern from the person at `eye` facing `forward`, over ground
-   * at `ground`. `walked` is the distance moved since the last frame; the
+   * at `ground`. `walked` is the distance moved since the last frame. The
    * lantern sways with each stride and settles when the person stops.
    */
   follow(eye: THREE.Vector3, forward: THREE.Vector3, ground: number, walked: number, dt: number): void;
@@ -142,8 +143,8 @@ export const hexToVec3 = (hex: number): THREE.Vector3 =>
   new THREE.Vector3(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
 
 /**
- * A shadow map for a sampler no shadow pass fills: a 1 by 1 depth texture
- * that compares, as `sunShadow`'s sampler2DShadow needs. It is marked for
+ * A 1 by 1 comparison depth texture for a shadow sampler that no shadow pass
+ * fills, as `sunShadow`'s sampler2DShadow needs. It is marked for
  * upload because three binds a color placeholder in place of a texture it has
  * never uploaded, and WebGL fails every draw whose shadow sampler reads one.
  */
@@ -172,7 +173,7 @@ export function createSceneLight(): SceneLight {
     uMist: { value: 0 },
     uWind: { value: 1 },
     uWindDir: {
-      // Follows the clock by itself, so no lab or world has to set it.
+      // A getter computes it from `uTime`, so no lab or world has to set it.
       get value() {
         const [x, z] = windDirAt(uTime.value);
         return windDir.set(x, z);

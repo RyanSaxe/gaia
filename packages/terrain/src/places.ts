@@ -1,13 +1,8 @@
-// Where a person is: the area (a directory) whose ground a point is, and the
-// file whose patch is underfoot, if any. Past the codebase's land lies the
-// wild, which stands for no directory. Everything that tells a person where
-// they are (the slip, the field map, signposts) reads only
-// `placeAt`, and anything that draws the areas reads `outlinesOf`.
-//
-// The land is divided into cells by one rule (`siteAt`): the terrain's
-// regions follow it too, so a point's area, its landform and its cover always
-// agree. A world laid out from code gives every file's patch and every
-// entity's lot a cell.
+// Finds the directory area and file patch at a point, and traces area
+// outlines. Everything that tells a person where they are, such as the slip,
+// the field map and signposts, reads `placeAt`, and anything that draws the
+// areas reads `outlinesOf`. The terrain's regions use the same cell rule
+// (`siteAt`), so a point's area, landform and cover agree.
 
 import type { CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
 import { siteAt } from "./land.ts";
@@ -15,29 +10,29 @@ import { type LandOutline, pastTheEdge } from "./edge.ts";
 
 export type { AreaPlace, CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
 
-/** Where a point is: the directory whose ground it is, and the file whose patch it is on, if any. */
+/** The directory area a point belongs to, and the file patch it is on, if any. */
 export interface Place {
   readonly area: { readonly path: string; readonly name: string; readonly depth: number };
   readonly file: { readonly path: string; readonly name: string; readonly vitality: number } | null;
 }
 
-/** A directory, as the area of land that stands for it: `depth` is 0 for the repository's root and -1 for the wild. */
+/** A directory's area of land. `depth` is 0 for the repository's root and -1 for the wild. */
 export type PlaceArea = Place["area"];
 
-/** The wild land past the codebase's: an area that stands for no directory. */
+/** The wild land past the codebase's land, an area that represents no directory. */
 export const WILD_AREA: PlaceArea = { path: "", name: "The wilds", depth: -1 };
 
-/** Whether (x, z) lies past the codebase's land, where the rim crests (`pastTheEdge`): the wild. */
+/** Whether (x, z) lies past the edge of the codebase's land (`pastTheEdge`), in the wild. */
 export function pastTheLand(land: LandOutline, x: number, z: number): boolean {
   return pastTheEdge(land, x, z) > 0;
 }
 
-/** Side of a patch bucket, meters. */
+/** Side in meters of a patch bucket. */
 const BUCKET = 8;
 const bucketKey = (bx: number, bz: number): number => (bx + 32768) * 65536 + (bz + 32768);
 
 type Area = WorldPlaces["areas"][number];
-/** What a lookup reads quickly: disc patches by bucket, patches and areas by path, and the root. */
+/** A lookup index: disc patches by bucket, patches and areas by path, and the root area. */
 interface Index {
   readonly buckets: ReadonlyMap<number, readonly number[]>;
   readonly patches: ReadonlyMap<string, PatchPlace>;
@@ -69,13 +64,13 @@ function indexOf(world: WorldPlaces): Index {
   return index;
 }
 
-/** The disc patch under (x, z), for a world whose cells say nothing of files. */
+/** The disc patch under (x, z), for a world whose cells name no files. */
 function discAt(world: WorldPlaces, index: Index, x: number, z: number): Place["file"] {
   let file: Place["file"] = null;
   let nearest = Infinity;
   for (const i of index.buckets.get(bucketKey(Math.floor(x / BUCKET), Math.floor(z / BUCKET))) ?? []) {
     const p = world.patches[i] as PatchPlace;
-    // The patch whose middle is nearest for its size: a small patch inside a large one's edge still shows.
+    // Take the patch with the least distance over radius, so a small patch inside a large one's edge still wins.
     const d = Math.hypot(x - p.x, z - p.z) / p.radius;
     if (d <= 1 && d < nearest) {
       nearest = d;
@@ -110,12 +105,12 @@ export function placeAt(world: WorldPlaces, x: number, z: number): Place {
 /** One area's or patch's outline: closed rings of world points, [x0, z0, x1, z1, …], softened. */
 export interface Outline {
   readonly path: string;
-  /** An area's depth; for a patch, its area's depth plus one. */
+  /** An area's depth, or for a patch, its area's depth plus one. */
   readonly depth: number;
   readonly rings: readonly (readonly number[])[];
 }
 
-/** Every area's and every file patch's outline, for drawing: what a map reads instead of guessing shapes. */
+/** Every area's and file patch's outline, for a map to draw. */
 export interface Outlines {
   readonly areas: readonly Outline[];
   readonly patches: readonly Outline[];
@@ -149,7 +144,7 @@ function ringsOf(edges: readonly number[]): number[][] {
   return rings;
 }
 
-/** Softens a closed ring twice by cutting corners, so a raster's steps read as a hand-drawn line. */
+/** Cuts a closed ring's corners twice, so a raster's steps become a smooth line. */
 function soften(points: readonly number[]): number[] {
   let pts = points;
   for (let pass = 0; pass < 2; pass++) {
@@ -168,10 +163,10 @@ function soften(points: readonly number[]): number[] {
 }
 
 /**
- * Outlines every area and patch of a world, sampled every `step` meters over
- * its land with `placeAt`: an area's outline holds its own ground and its
- * subdirectories'; a patch's is its cell in a world laid out from code, or
- * its disc. The same world and step give the same outlines, traced once.
+ * Outlines every area and patch of a world, sampled with `placeAt` every
+ * `step` meters over its land. An area's outline covers its own ground and
+ * its subdirectories'. A patch's outline is its cell in a world laid out from
+ * code, or its disc. Results are cached per world and step.
  */
 const outlined = new WeakMap<WorldPlaces, Map<number, Outlines>>();
 
@@ -193,7 +188,7 @@ function traceOutlines(world: WorldPlaces, step: number): Outlines {
   const patchAt = new Int32Array(n * n).fill(-1);
   const areaIndex = new Map(world.areas.map((a, i) => [a.path, i]));
   const patchIndex = new Map(world.patches.map((p, i) => [p.path, i]));
-  // Each owner's box on the raster, so tracing it reads only its own samples.
+  // Each area's and patch's bounding box on the raster, so tracing reads only its own samples.
   const areaBox = world.areas.map(() => [n, n, -1, -1]);
   const patchBox = world.patches.map(() => [n, n, -1, -1]);
   const grow = (box: number[] | undefined, i: number, j: number): void => {
@@ -218,7 +213,7 @@ function traceOutlines(world: WorldPlaces, step: number): Outlines {
   }
   const corner = (i: number, j: number): number => j * (n + 1) + i;
   const toWorld = (ring: readonly number[]): number[] => soften(ring.flatMap((c) => [x0 + (c % (n + 1)) * step, x0 + Math.floor(c / (n + 1)) * step]));
-  // The raster edges between a sample an owner holds and one it does not, chained into rings.
+  // Chain the raster edges between samples inside and outside an outline into rings.
   const trace = (box: readonly number[], holds: (k: number) => boolean): number[][] => {
     const edges: number[] = [];
     const inside = (i: number, j: number): boolean => i >= 0 && j >= 0 && i < n && j < n && holds(j * n + i);

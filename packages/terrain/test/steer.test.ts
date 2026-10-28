@@ -58,7 +58,7 @@ describe("walking comfortably", () => {
   });
 
   it("turns at the steady rate however a press falls between frames", () => {
-    // As the page steps: a key pressed between frames is seen at the next frame, which steps on from then.
+    // Step as the page does. A key pressed between frames is seen at the next frame, which steps from then.
     const step = 1 / 60;
     for (const pressed of [0.101, 0.105, 0.112]) {
       let s = steering();

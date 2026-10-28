@@ -1,14 +1,9 @@
-// Many plants drawn together, such as a tile's buildings: every member's
-// parts that share a material are joined into one mesh, so the batch draws
-// one call per material instead of one per part of every member. Each vertex
-// names its member and its part's swatch (`aBatch`), and a small float
-// texture holds what each plant's own uniforms held: its placement, vitality
-// and how far that lags as a change eases in, seed, turn, height and motion,
-// the colors a spray borrows, and each
-// swatch's colors, foliage, lamp and flutter. The plant shaders read the
-// texture in place of those uniforms, so each member draws exactly what it
-// drew alone, with every channel (wind, vitality, ruin, spin), and a change
-// in a member's vitality rewrites one texel and never rebuilds geometry.
+// Draws many plants together, such as a tile's buildings, by joining every
+// member's parts that share a material into one mesh, so the batch makes one
+// draw call per material. A small float texture holds, per member and per
+// swatch, what each plant's own uniforms held, and each vertex names its
+// member and swatch (`aBatch`). Each member draws exactly what it drew alone,
+// and a change in its vitality rewrites one texel and never rebuilds geometry.
 
 import * as THREE from "three";
 import type { Part } from "@gaia/schema";
@@ -18,7 +13,7 @@ import { CLOSED, DEPTH_FRAG, DEPTH_VERT, FOLIAGE, LAMP, PLANT_FRAG, PLANT_VERT, 
 import { createSmokeMaterial } from "./smoke.ts";
 import { closeEachFrame, followVitality } from "./lag.ts";
 
-/** One plant in a batch: what it is, where it stands and turns, and its vitality. */
+/** One plant in a batch: the plant, its position and yaw, and its vitality. */
 export interface BatchMember {
   readonly plant: Realized;
   readonly x: number;
@@ -28,17 +23,17 @@ export interface BatchMember {
   readonly vitality: number;
 }
 
-/** A batch of plants as one set of meshes: what a shadow pass and a scene take of a plant, and each member's vitality. */
+/** A batch of plants as one set of meshes, with the parts of a plant view that a scene and a shadow pass use, and each member's vitality. */
 export interface PlantBatch extends Pick<PlantView, "object" | "triangles" | "useDepth" | "dispose"> {
   readonly members: number;
   setVitality(member: number, v: number): void;
-  /** Stands a member somewhere else, as a new bake's site puts it: its texels, its ray test and the batch's bounds follow. */
+  /** Moves a member to a new bake's site. Its texels, its ray test and the batch's bounds follow. */
   move(member: number, at: Pick<BatchMember, "x" | "y" | "z" | "yaw">): void;
-  /** The member the ray hits first, and how far along the ray; its parts as built, as a plant's own ray test reads them. */
+  /** The member the ray hits first and the distance along the ray, tested against its parts as built, as a plant's own ray test is. */
   pick(raycaster: THREE.Raycaster): { readonly member: number; readonly distance: number } | undefined;
 }
 
-/** Texels at the head of each member's row: its matrix (four), its life (vitality, seed, turn, height), its motion, and a spray's bark, stem and bloom. */
+/** Texels at the head of each member's row: four for its matrix, one for vitality, seed, turn and height, one for motion, and three for a spray's bark, stem and bloom. */
 const HEAD = 9;
 /** Texels for each swatch after the head: healthy color and foliage, decline color and lamp, and flutter. */
 const PER_SWATCH = 3;
@@ -67,7 +62,7 @@ mat4 batchModel() { return mat4(batchAt(0), batchAt(1), batchAt(2), batchAt(3));
   out = swap(out, "uniform float uVitalityLag;", "#define uVitalityLag (batchAt(5).z)");
   out = swap(out, "uniform float uFlutter;", `#define uFlutter (batchAt(${HEAD} + ${PER_SWATCH} * int(aBatch.y + 0.5) + 2).x)`);
   out = swap(out, "uniform float uTurn;", "#define uTurn (batchAt(4).z)");
-  // The texture's matrix places each member; the meshes themselves stand at the origin.
+  // The texture's matrix places each member. The meshes themselves sit at the origin.
   out = swap(out, "modelMatrix", "batchModel()");
   out = swap(out, "void main() {", "void main() {\n  vBatch = aBatch;");
   return out;
@@ -96,7 +91,7 @@ const BATCH_VERT = batched(PLANT_VERT);
 const BATCH_FRAG = batchedFragment(PLANT_FRAG);
 const BATCH_DEPTH = batched(DEPTH_VERT);
 
-/** How a part draws: which material it shares with the others' parts. */
+/** The key of the material a part shares with other members' parts. */
 const materialOf = (part: Part): string => `${CLOSED.has(part.swatch) ? "front" : "both"}|${part.cutout.some((c) => c !== 0) ? "cover" : "solid"}|${hasRuin(part) ? "ruin" : "plain"}`;
 
 /** Each member's parts merged by swatch as a plant's are, its bounds, and the swatch slot each part takes. */
@@ -104,7 +99,7 @@ interface Prepared {
   readonly parts: readonly Part[];
   matrix: THREE.Matrix4;
   readonly height: number;
-  /** Its bounds about its own origin, padded for wind and decline, and as it stands. */
+  /** Its bounds about its own origin, padded for wind and decline (`local`), and as placed (`bounds`). */
   readonly local: THREE.Sphere;
   bounds: THREE.Sphere;
 }
@@ -170,7 +165,7 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     texture.needsUpdate = true;
   };
 
-  // Every member's parts that share a material, joined: each vertex keeps its member and its swatch's slot.
+  // Join every member's parts that share a material. Each vertex keeps its member and its swatch's slot.
   const groups = new Map<string, { parts: Part[]; batch: number[] }>();
   const smokes: { member: number; part: Part }[] = [];
   prepared.forEach((p, member) => {
@@ -188,7 +183,7 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
       for (let v = 0; v < part.shade.length; v++) g.batch.push(member, slot);
     }
   });
-  // The meshes stand at the origin and the texture places each member, so a mesh's bounds are every member's as it stands.
+  // The meshes sit at the origin and the texture places each member, so a mesh's bounds enclose every placed member.
   const sphere = new THREE.Sphere();
   const box = new THREE.Box3();
   const bound = (): void => {
@@ -270,7 +265,7 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     return lagging.size > 0;
   };
 
-  // What a ray is tested against: each member's parts as built, placed as it stands, as a plant's own meshes are.
+  // Each member's parts as built and placed, which a ray is tested against as a plant's own meshes are.
   const picks = prepared.map((p) => {
     const group = new THREE.Group();
     for (const part of p.parts) {

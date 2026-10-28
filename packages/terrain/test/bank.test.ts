@@ -20,12 +20,12 @@ const mill = blueprintOf("structure", {
   ornaments: { use: "cottage-garden@1", params: { extras: ["lantern", "woodpile"], walk: "flagstones" } },
   palette: { use: "palette@1", params: { family: "teal-gold", contrast: "balanced" } },
 });
-// The mill the size of the median building that has a wheel in Gaia's world and the proving ground, about 54 m².
+// The mill is the size of the median building with a wheel in Gaia's world and the proving ground, about 54 m².
 const built = realize(mill, structure, new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]), { seed: 7, facts: { size: 0.7, floors: 1 } });
 const plan = built.slots.get("footprint")?.output as BuildingPlan;
 const beside = extentOf(built.slots.get("feature")?.output as Built | undefined)!;
 const turning = turningExtent(built.slots.get("feature")?.output as Built | undefined)!;
-/** The wheel: its middle in the house's frame, and the lowest its paddles reach below the floor. */
+/** The wheel: its center in the house's frame, and the lowest its paddles reach below the floor. */
 const wheel = (() => {
   let x = 0;
   let z = 0;
@@ -46,7 +46,7 @@ const wheel = (() => {
 })();
 
 describe("a building whose wheel needs running water", () => {
-  // Fifty small worlds, each baked and its banks searched: about a minute alone, more when other work shares the machine.
+  // Bakes fifty small worlds and searches their banks. It takes about a minute alone, more when other work shares the machine.
   it("finds a bank in every region given running water, in fifty random worlds, its house dry and its wheel in the stream", () => {
     let regions = 0;
     for (let seed = 9000; seed < 9050; seed++) {
@@ -61,7 +61,7 @@ describe("a building whose wheel needs running water", () => {
         expect(site, `world ${seed}, region ${r.id}`).not.toBeNull();
         if (site === null) return;
         const at = (lx: number, lz: number): [number, number] => siteToWorld(site, lx, lz);
-        // The house stands on dry ground, and its pad sits close enough to all the ground under it.
+        // The house is on dry ground, and its pad is close enough to all the ground under it.
         for (let lx = -plan.width / 2; lx <= plan.width / 2; lx += 1) for (let lz = -plan.depth / 2; lz <= plan.depth / 2; lz += 1) {
           expect(waterDepthAt(t, ...at(lx, lz))).toBe(0);
           expect(Math.abs(heightAt(t.lattice, ...at(lx, lz)) - site.level)).toBeLessThanOrEqual(BANK_SITE.blended + 1e-6);
@@ -71,7 +71,7 @@ describe("a building whose wheel needs running water", () => {
         levelPad(terrain, plan, site, beside);
         const [x, z] = at(wheel.x, wheel.z);
         expect(site.level + wheel.lowest).toBeLessThan(heightAt(terrain.lattice, x, z, terrain.waterLevel));
-        // The pad leaves the stream as it lies: water still runs under the wheel and past it.
+        // The pad leaves the stream unchanged, so water still runs under the wheel and past it.
         expect(waterDepthAt(terrain, x, z)).toBeGreaterThan(0);
       });
     }

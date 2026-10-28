@@ -1,7 +1,7 @@
-// Worlds for the tests: named regions with chosen landforms, and uniform
-// random draws over every Relief primitive's declared fields, at either of two
-// scales, so a property holds over every land Jev could compose. Regions sit
-// on seeded, evenly spread sites, standing in for a layout from code.
+// Test worlds: named regions with chosen landforms, and uniform random draws
+// over every Relief primitive's declared fields, at either of two scales, so a
+// property holds over every land Jev could compose. Regions sit on seeded,
+// evenly spread sites in place of a layout from code.
 
 import { type FilledSlot, type Library, type PrimitiveId, blueprintOf, rand } from "@gaia/schema";
 import type { WorldSpec } from "@gaia/terrain";
@@ -65,7 +65,7 @@ function layoutSites(seed: number, count: number, size: number): Site[] {
   return pts.map(([x, z]) => ({ x, z, base: r.range(-2.5, 2.5) }));
 }
 
-/** How big a world is: the side of its walkable square, meters, and how many regions it holds, fewest and most. */
+/** A world's size: the side of its walkable square in meters, and its fewest and most regions. */
 export interface WorldScale {
   readonly size: number;
   readonly regions: readonly [number, number];
@@ -73,7 +73,7 @@ export interface WorldScale {
 
 /** A small world of a few regions, quick to bake: the one the tests walk. */
 export const SMALL_WORLD: WorldScale = { size: 320, regions: [3, 5] };
-/** A full world to wander: 1.2 km across with a score of regions, each a little wider than a small world's. */
+/** A full world, 1.2 km across with about twenty regions, each a little wider than a small world's. */
 export const FULL_WORLD: WorldScale = { size: 1200, regions: [18, 22] };
 
 const NAMES = [
@@ -81,7 +81,7 @@ const NAMES = [
   "src/io", "src/net", "assets", "examples", "bench", "src/store", "src/jobs", "vendor", "config", "src/auth", "src/cli", "migrations",
 ];
 
-/** A biome blueprint with the given relief and ground cover; natives empty means every palette family. */
+/** A biome blueprint with the given relief and ground cover. Empty natives means every palette family. */
 const biome = (use: string, params: FilledSlot["params"], cover = "lush grass") =>
   blueprintOf("biome", {
     relief: { use: use as PrimitiveId, params },

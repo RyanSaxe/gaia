@@ -1,11 +1,8 @@
-// The one wind field in GLSL: every shader that moves in the wind (plants,
-// grass, smoke) reads its breeze and gusts from here, so a gust that bows
-// the grass reaches the trees standing in it at the same moment. `gustAt` is
-// a line-for-line transcription of `gustAt` in @gaia/realize, with
-// WIND_FIELD's numbers; a test runs this text against it. The wind's
-// direction is one value a frame, so the scene light computes it with
-// `windDirAt` (`uWindDir`) rather than every vertex turning it again. How a
-// plant answers the field is `SWAY_GLSL`.
+// The wind field in GLSL. Every shader that moves in the wind, such as plants,
+// grass and smoke, reads its breeze and gusts here, so a gust that bends the
+// grass reaches the trees in it at the same moment. `gustAt` transcribes
+// `gustAt` in @gaia/realize line for line with WIND_FIELD's numbers, and a
+// test runs this text against it.
 
 import { WIND_FIELD } from "@gaia/realize";
 
@@ -13,8 +10,10 @@ const f = (x: number): string => x.toFixed(8);
 const { breeze, gust } = WIND_FIELD;
 
 /**
- * `WIND_DIR`, where the wind blows toward now (the scene light's `uWindDir`,
- * which every material using this chunk takes), and `gustAt(p, t)`.
+ * `WIND_DIR`, the direction the wind blows toward now, and `gustAt(p, t)`.
+ * `WIND_DIR` is the scene light's `uWindDir`, which the light computes once a
+ * frame with `windDirAt` instead of every vertex computing it. `SWAY_GLSL`
+ * moves a plant in this field.
  */
 export const WIND_FIELD_GLSL = /* glsl */ `
 const vec2 WIND_MEAN = vec2(${f(WIND_FIELD.dir[0])}, ${f(WIND_FIELD.dir[1])});

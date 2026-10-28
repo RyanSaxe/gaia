@@ -1,16 +1,16 @@
-// How water moves: a stream runs down its solved waterline, faster where its
-// channel narrows or its line falls, and a pond lies still. The renderer
-// scrolls the surface along this flow and lets wading rings drift with it.
+// Computes water velocity. A stream flows down its solved waterline, faster
+// where its channel narrows or its level falls, and a pond has no flow. The
+// renderer scrolls the water surface and moves wading rings with this flow.
 
 import { type SolvedStream, type Station, flowSection, surfaceHalfWidth } from "./water.ts";
 import type { Terrain } from "./world.ts";
 
 export const FLOW = {
-  /** Speed where a stream's channel is its typical size and its line is level, meters per second. */
+  /** Speed in meters per second where a stream's channel is its median size and its level is flat. */
   pace: 0.55,
   slowest: 0.2,
   fastest: 1.6,
-  /** Each meter of fall per meter run adds this share of speed. */
+  /** Speed scales by 1 + `fall` × slope, where slope is meters of drop per meter of run. */
   fall: 6,
 } as const;
 
@@ -24,8 +24,9 @@ const flows = new WeakMap<SolvedStream, Float32Array>();
 
 
 /**
- * The velocity at each station, as x, z pairs: along the stream toward its
- * lower end, where the same water through a narrower channel runs faster.
+ * The velocity at each station as x, z pairs, pointing toward the stream's
+ * lower end. A station narrower than the median section flows faster. Cached
+ * per stream.
  */
 export function streamFlow(stream: SolvedStream): Float32Array {
   const cached = flows.get(stream);
@@ -36,7 +37,7 @@ export function streamFlow(stream: SolvedStream): Float32Array {
   const typical = [...st].map(flowSection).sort((a, b) => a - b)[Math.floor(n / 2)] ?? 1;
   const at = (i: number): Station => st[Math.max(0, Math.min(n - 1, i))] as Station;
   for (let i = 0; i < n; i++) {
-    // Heading: the chord over a few stations, so a kink in the path never kinks the flow.
+    // The heading is the chord from two stations back to two ahead, so a kink in the path does not kink the flow.
     const a = at(i - 2);
     const b = at(i + 2);
     const run = Math.hypot(b.x - a.x, b.z - a.z);
@@ -52,7 +53,7 @@ export function streamFlow(stream: SolvedStream): Float32Array {
 
 const STILL: Velocity = { x: 0, z: 0 };
 
-/** The water's velocity at a point: the nearest stream's flow where its surface reaches, still elsewhere. */
+/** The water's velocity at a point. Inside a stream's surface it is the nearest segment's flow, and elsewhere it is zero. */
 export function flowAt(t: Terrain, x: number, z: number): Velocity {
   let best = Infinity;
   let vx = 0;

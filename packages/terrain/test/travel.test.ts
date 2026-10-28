@@ -9,7 +9,7 @@ const STYLE: RouteSpec = { width: 1.4, wear: 0.7, edging: "none", winding: 0.45,
 const DT = 1 / 60;
 const turnTo = (a: number, b: number): number => Math.atan2(Math.sin(b - a), Math.cos(b - a));
 
-/** The sample world's trails between every pair of region hearts, planned once and only read. */
+/** The sample world's trails between every pair of region centers, planned once and only read. */
 const t = bakeTerrain(sampleWorld(), lib);
 const ends: TrailEnd[] = t.spec.regions.map((r) => ({ id: r.id, x: r.x * 0.8, z: r.z * 0.8 }));
 const requests: TrailRequest[] = ends.flatMap((a, i) => ends.slice(i + 1).map((b, j) => ({ id: `${i}-${j}`, from: a, to: b, style: STYLE, want: 1 - (i + j) / 20 })));
@@ -25,7 +25,7 @@ function take(trip: Trip, yaw: number, stopAt = Infinity): Travel[] {
   return steps;
 }
 
-/** The farthest-apart pair of region hearts, where the longest trip runs. */
+/** The farthest-apart pair of region centers, where the longest trip runs. */
 const [far0, far1] = ends.flatMap((a) => ends.map((b) => [a, b] as const)).reduce((m, p) => (Math.hypot(p[0].x - p[1].x, p[0].z - p[1].z) > Math.hypot(m[0].x - m[1].x, m[0].z - m[1].z) ? p : m));
 const way = trailWay(network, far0, far1) as Walker[];
 
@@ -44,7 +44,7 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
 
   it("turns the view no faster than a held key, sets off only facing the way, and gets going and slows at its steady rates", () => {
     const trip = planTrip(way, { start: 0, end: 0 });
-    // Facing back the way it goes: the view turns about first.
+    // Facing almost backward, the view turns around first.
     const steps = take(trip, (trip.heading[0] as number) + Math.PI - 0.1);
     const last = steps[steps.length - 1] as Travel;
     expect(last.done).toBe(true);
@@ -57,13 +57,13 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
       expect(b.v).toBeLessThanOrEqual(TRAVEL.pace + 1e-6);
       if (!b.going) expect(b.s).toBe(0);
     }
-    // Slowing to arrive is the steady rate's, but for the last creep.
+    // Slowing to arrive stays at the steady rate, except for the last creep.
     for (let k = 1; k < steps.length; k++) {
       const a = steps[k - 1] as Travel;
       const b = steps[k] as Travel;
       if (b.v >= TRAVEL.creep) expect(a.v - b.v).toBeLessThanOrEqual(TRAVEL.accel * DT * 1.05 + 1e-6);
     }
-    // Once going, the view stays on the way ahead: the bends never outrun it.
+    // Once going, the view stays on the way ahead, and the bends never outrun it.
     const going = steps.findIndex((s) => s.going);
     const offWay = steps.slice(going).map((s) => Math.abs(turnTo(s.yaw, headingNear(trip, s.s))));
     expect(Math.max(...offWay)).toBeLessThan(TRAVEL.facing);
@@ -147,7 +147,7 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
 
   it("slows at the brake's steady rate once the person takes the keys, and never turns the view", () => {
     const trip = planTrip(way, { start: 0, end: 0 });
-    // The keys are taken where the trip goes fastest.
+    // The person takes over with the keys where the trip goes fastest.
     const whole = take(trip, trip.heading[0] as number);
     const fastest = whole.reduce((m, s, k) => (s.v > (whole[m] as Travel).v ? k : m), 0);
     const steps = take(trip, trip.heading[0] as number, fastest);
@@ -165,10 +165,10 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
   it("waits where the world ahead is not yet ready, slowing at its steady rate, and goes on once it is", () => {
     const trip = planTrip(way, { start: 0, end: 0 });
     let at = travelFrom(trip, trip.heading[0] as number);
-    // Nothing is ready: the view turns, but the body stands.
+    // With nothing ready, the view turns but the body stays put.
     for (let k = 0; k < 60; k++) at = travelStep(trip, at, DT, at.yaw, false, 0);
     expect(at.s).toBe(0);
-    // Ready to 200 m: it goes, and slows to stand there.
+    // With the world ready to 200 m, it goes and slows to a stop there.
     for (let k = 0; k < 60 * 40; k++) {
       const next = travelStep(trip, at, DT, at.yaw, false, 200);
       expect(next.s).toBeLessThanOrEqual(200);
@@ -177,7 +177,7 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     }
     expect(at.s).toBeGreaterThan(199);
     expect(at.v).toBeLessThan(0.5);
-    // Ready to the end: it goes on and arrives.
+    // With the world ready to the end, it goes on and arrives.
     for (let k = 0; k < 60 * 600 && !at.done; k++) at = travelStep(trip, at, DT, at.yaw);
     expect(at.done).toBe(true);
     expect(at.s).toBeCloseTo(trip.length, 2);
@@ -215,7 +215,7 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     };
     // Straight over, it would swim the pond.
     expect(Math.max(...along(from, to).map((p) => waterDepthAt(t, p.x, p.z)))).toBeGreaterThan(1);
-    // A boulder stands on the bank on the way round.
+    // Boulders sit on the banks on the way around.
     const solids = solidsOf([{ x: pond.x, z: pond.z - pond.reach * 1.3, radius: 3 }, { x: pond.x, z: pond.z + pond.reach * 1.3, radius: 3 }]);
     for (const s of [NO_SOLIDS, solids]) {
       const way = acrossWay(t, s, from, to) as Walker[];
