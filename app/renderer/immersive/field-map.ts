@@ -878,6 +878,8 @@ export function createFieldMap(
   let fittedTo: number | null = null;
   /** The person's position and heading, and whether they are in the wild, which has no area. */
   const person = { x: 0, z: 0, yaw: 0, wild: false };
+  /** The person's position and heading when the traveller was last placed. Every draw places it. */
+  const traveller = { x: 0, z: 0, yaw: 0 };
   /** The person's position and wild flag when the wild's ink was last queued, and the paper it was queued for. */
   let warmed = { x: Number.NaN, z: Number.NaN, wild: false, paper: null as Paper | null };
   /** The minimap's last reported scale in pixels per meter. */
@@ -1083,6 +1085,9 @@ export function createFieldMap(
     hereFile.hidden = x !== fx || y !== fy;
     here.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     steps.setAttribute("transform", `rotate(${((-person.yaw * 180) / Math.PI).toFixed(1)})`);
+    traveller.x = person.x;
+    traveller.z = person.z;
+    traveller.yaw = person.yaw;
   }
 
   function draw(): void {
@@ -1503,7 +1508,6 @@ export function createFieldMap(
     paper: () => paper,
     onPainted: (listener) => painted.push(listener),
     frame(x, z, yaw, place) {
-      const moved = Math.hypot(x - person.x, z - person.z) > 0.5 || Math.abs(yaw - person.yaw) > 0.03;
       person.x = x;
       person.z = z;
       person.yaw = yaw;
@@ -1514,7 +1518,9 @@ export function createFieldMap(
         lastPlace = key;
         hereFile.textContent = place.file?.name ?? "";
       }
-      // Moves the traveller only when the person moved more than 0.5 m or turned more than 0.03 rad since the last frame.
+      // Moves the traveller once the person is half a pixel or 0.03 rad from where it was last placed. A frame's step is
+      // far smaller, so comparing against the last frame would never move it.
+      const moved = Math.hypot(x - traveller.x, z - traveller.z) * view.zoom >= 0.5 || Math.abs(yaw - traveller.yaw) >= 0.03;
       if (isOpen && moved) placeHere();
     },
     show(on) {
