@@ -1,32 +1,26 @@
-// The compass in the top right corner, where the menu's rose was: a round of
-// the map's paper with an inked ring of ticks that stays put, its top tick
-// marking the way the person faces, and a needle whose north half is in the
-// traveller's vermilion. Only the needle turns, to point north, on a damped
-// spring, so after a sudden turn it swings a little past and settles within
-// about a second. A tap on it still opens the slip (`view.ts`).
-//
-// The face is drawn once and casts the shadow; the needle is its own layer,
-// turned by a CSS transform, and touched only when it has moved by more than
-// a tenth of a degree, so a person walking straight costs it nothing.
+// The compass in the top right corner, which also opens the slip (`view.ts`).
+// Its face is a fixed SVG whose top tick marks the way the person faces. Only
+// the needle turns to point north, on a damped spring, and its CSS transform
+// changes only when it moves more than a tenth of a degree.
 
 import { rand } from "@gaia/schema";
 
-/** The needle: its angle on the screen, radians clockwise from up, and how fast it is turning, radians a second. */
+/** The needle's screen angle in radians clockwise from up, and its angular speed in radians per second. */
 export interface Needle {
   angle: number;
   speed: number;
 }
 
-/** How fast the needle answers a turn (radians a second) and how much it is damped: it swings about a tenth past and settles within about 1 s. */
+/** The spring's natural frequency in radians per second and its damping ratio. The needle overshoots by about a tenth and settles within about 1 s. */
 export const NEEDLE = { rate: 7, damping: 0.6 } as const;
 
 const TAU = Math.PI * 2;
-/** The spring's step, seconds: short enough to stay steady at any frame rate. */
+/** The spring's integration step in seconds, short enough to stay stable at any frame rate. */
 const STEP = 1 / 240;
 
 /**
- * Swings the needle `dt` seconds toward `bearing` (radians clockwise from up),
- * always the short way round, as a damped spring.
+ * Advances the needle's damped spring `dt` seconds toward `bearing`, in
+ * radians clockwise from up, always the short way around.
  */
 export function swing(needle: Needle, bearing: number, dt: number): void {
   const target = needle.angle + ((((bearing - needle.angle) % TAU) + TAU * 1.5) % TAU) - Math.PI;
@@ -41,12 +35,12 @@ export function swing(needle: Needle, bearing: number, dt: number): void {
 const INK = "#4a3c2c";
 const PAPER = "#f4ecd6";
 
-/** One point of the needle, half shaded from the light as the field map inks its rose's. */
+/** One point of the needle as SVG, with a dark half and a light half, as the field map draws its rose. */
 function point(length: number, half: number, turn: number, dark: string, light: string, line: string): string {
   return `<g transform="rotate(${turn})"><path d="M0 ${-length} L${-half} ${-half} L0 0Z" fill="${dark}" stroke="${line}" stroke-width=".5" stroke-linejoin="round"/><path d="M0 ${-length} L${half} ${-half} L0 0Z" fill="${light}" stroke="${line}" stroke-width=".5" stroke-linejoin="round"/></g>`;
 }
 
-/** A round of paper whose rim wanders a little, as a torn disc's does. */
+/** An SVG path for a paper disc whose rim varies by about `wander` around `radius`, like a torn edge. */
 function disc(radius: number, wander: number): string {
   const r = rand(3);
   const phase = [r.next() * TAU, r.next() * TAU];
@@ -59,7 +53,7 @@ function disc(radius: number, wander: number): string {
   return `${d}Z`;
 }
 
-/** The face: the paper, the ring and its ticks, and the mark at the top for the way you face. */
+/** The face SVG: the paper disc, the ring and ticks, and the top mark for the way the person faces. */
 const FACE = ((): string => {
   let ticks = "";
   for (let k = 1; k < 16; k++) {
@@ -75,14 +69,14 @@ const FACE = ((): string => {
   </svg>`;
 })();
 
-/** The needle, its north half vermilion and its south half ink, on a paper pin. */
+/** The needle SVG: a vermilion north half and an ink south half on a paper-colored pin. */
 const NEEDLE_SVG = /* html */ `<svg class="compass-needle" viewBox="-22 -22 44 44" aria-hidden="true">
   ${point(11.6, 2.3, 0, "#9b3823", "#cf6a4c", "#5a2414")}${point(11.6, 2.3, 180, INK, PAPER, INK)}
   <circle r="1.25" fill="#f1e3c0" stroke="${INK}" stroke-width=".6"/>
 </svg>`;
 
 export interface Compass {
-  /** Follows the way the person faces (`yaw`, the walker's, radians) for `dt` seconds. */
+  /** Swings the needle for `dt` seconds toward the person's `yaw` in radians. */
   turn(yaw: number, dt: number): void;
   /** The needle's angle on the screen, degrees clockwise from up, for scripted checks. */
   state(): { readonly needle: number };

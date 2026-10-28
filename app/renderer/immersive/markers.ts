@@ -1,14 +1,8 @@
-// Markers in the world: where a trail crosses from one area into the next, a
-// fingerpost stands beside it with an arm pointing each way along the trail,
-// each painted with the name of the area that way, and across the trail a
-// low boundary stone faces the tread, carved with the two areas' names, the
-// one to the left above a cut line and the one to the right below it, each
-// pointing its way. They draw as three instanced meshes, their
-// names from two atlases, lit like everything else. Every name fits its
-// board (`lettering.ts`): a long one breaks onto two lines and its arm grows
-// longer, and a name on a stone shrinks to its line. An arm's paint fades and
-// its wood greys, and it droops on its nail, with the vitality of the area it
-// names; a stone's moss recedes and the stone bleaches with both areas'.
+// Places a fingerpost and a boundary stone where a trail crosses from one area
+// into another. The post's two arms carry the names of the areas each way
+// along the trail, and the stone is carved with both names. They draw as three
+// instanced meshes with names from two canvas atlases, and each marker
+// weathers with the vitality of the areas it names.
 
 import * as THREE from "three";
 import { shownVitality } from "@gaia/realize";
@@ -17,41 +11,41 @@ import { type PlaceArea, type SolidShape, type Way, heightAt, waterDepthAt } fro
 import type { Furnishing, StoodWorld } from "../terrain/world.ts";
 import { type Board, letter } from "../terrain/lettering.ts";
 
-/** The layer markers draw on: the view's camera sees it, the sun's shadow pass does not, since their material reads the shadow map. */
+/** The layer markers draw on. The view's camera renders it and the sun's shadow pass does not, since their material samples the shadow map. */
 export const MARKER_LAYER = 1;
 
 export interface Markers {
   readonly group: THREE.Group;
-  /** Stands a fingerpost and a boundary stone wherever a trail crosses into another area: what they keep bare and what stops a walker. */
+  /** Places a fingerpost and a boundary stone wherever a trail crosses into another area. Returns the capsules that keep grass off them and the solids that stop a walker. */
   place(stood: StoodWorld, areaAt: (x: number, z: number) => PlaceArea): Furnishing;
-  /** Weathers each name with the vitality of the area it names. */
+  /** Weathers each arm with the vitality of the area it names, and each post and stone with the mean of both areas'. */
   vitality(of: (path: string) => number): void;
-  /** Each crossing: where its post and stone stand and the areas on either side, for scripted checks. */
+  /** Each marked crossing with its post and stone positions and the areas on either side, for scripted checks. */
   crossings(): readonly MarkerCrossing[];
 }
 
 export interface MarkerCrossing {
   readonly x: number;
   readonly z: number;
-  /** The area the trail comes from and the one it enters, by its points' order. */
+  /** The area the trail leaves and the one it enters, in the order of its points. */
   readonly from: PlaceArea;
   readonly to: PlaceArea;
   readonly post: { readonly x: number; readonly z: number };
   readonly stone: { readonly x: number; readonly z: number };
 }
 
-/** A run of a trail inside one area shorter than this, meters, is a border's wobble, not an area the trail passes through. */
+/** A trail run inside one area shorter than this many points, which are about a meter apart, is a wobble along a border, not a pass through the area. */
 const MIN_RUN = 14;
-/** Two crossings between the same two areas closer than this, meters, share one set of markers. */
+/** Two crossings between the same two areas closer than this many meters share one set of markers. */
 const SPACING = 40;
 const ARM = { length: 1.15, height: 0.22, thick: 0.04, tip: 0.15, root: 0.07 };
 const POST = { height: 2.3, half: 0.06, sink: 0.25 };
 const STONE = { width: 0.64, height: 1, thick: 0.28, sink: 0.18 };
 /** The stone's lettered band, meters above its foot. */
 const BAND = { from: 0.34, to: 0.86 };
-/** How far each arm turns away from the trail, radians, so its face meets a person walking the way it points. */
+/** How far each arm turns away from the trail in radians, so its face is toward a person walking the way it points. */
 const SPLAY = 0.5;
-// Each slot has its board's or band's own proportions, so letters keep their shape.
+// Each atlas slot has the proportions of its arm board or stone band, so letters keep their shape.
 const ARM_SLOT = { w: 512, h: 120, cols: 4 };
 const STONE_SLOT = { w: 512, h: 412, cols: 4 };
 
@@ -66,7 +60,7 @@ interface Build {
 }
 const build = (): Build => ({ pos: [], nrm: [], uv: [], face: [], idx: [] });
 
-/** A flat polygon facing `n`, fanned from its first corner; `uv` per corner, `face` 1 where names are painted. */
+/** Adds a flat polygon facing `n`, fanned from its first corner. `uv` is per corner, and `face` is 1 where names are painted. */
 function polygon(b: Build, corners: readonly (readonly [number, number, number])[], n: readonly [number, number, number], uv: readonly (readonly [number, number])[], face: number): void {
   const base = b.pos.length / 3;
   corners.forEach((c, i) => {
@@ -86,7 +80,7 @@ function polygon(b: Build, corners: readonly (readonly [number, number, number])
   }
 }
 
-/** A prism: the outline in x and y, extruded from z = -half to +half; front and back carry the outline's uvs, the back's mirrored. */
+/** Adds a prism of the outline in x and y, extruded from z = -half to +half. The front and back carry the outline's uvs, mirrored on the back. */
 function prism(b: Build, outline: readonly (readonly [number, number])[], half: number, uvOf: (x: number, y: number) => readonly [number, number], painted: boolean): void {
   const front = outline.map(([x, y]) => [x, y, half] as const);
   const back = outline.map(([x, y]) => [x, y, -half] as const);
@@ -111,7 +105,7 @@ function geometryOf(b: Build): THREE.BufferGeometry {
   return g;
 }
 
-/** An arm: a board from the post (x = 0) out to a pointed tip (x = length), its names on both faces. */
+/** An arm board from the post (x = 0) out to a pointed tip (x = length), with the name on both faces. */
 function armGeometry(): THREE.BufferGeometry {
   const { length: L, height: h, thick, tip, root } = ARM;
   const outline: [number, number][] = [[root, -h / 2], [L - tip, -h / 2], [L, 0], [L - tip, h / 2], [root, h / 2]];
@@ -140,7 +134,7 @@ function postGeometry(): THREE.BufferGeometry {
   return geometryOf(b);
 }
 
-/** A squat standing stone with a rounded top; its front (+z) carries the carving. */
+/** A squat standing stone with a rounded top. Its front (+z) carries the carving. */
 function stoneGeometry(): THREE.BufferGeometry {
   const { width: w, height: H, thick, sink } = STONE;
   const outline: [number, number][] = [[-w / 2, -sink], [w / 2, -sink], [w / 2, H - w * 0.32]];
@@ -269,9 +263,9 @@ const measureOn = (ctx: CanvasRenderingContext2D, style: string) => (text: strin
   ctx.font = `${style} ${size}px ${SERIF}`;
   return ctx.measureText(text).width;
 };
-/** An arm's name: one line or two, and the arm grows up to a third longer before its letters shrink further. */
+/** An arm's lettering: one or two lines, and the arm grows up to 1.35 times longer before its letters shrink further. */
 const ARM_BOARD: Board = { width: ARM_SLOT.w - 50, height: ARM_SLOT.h, size: 78, least: 46, twoLines: true, widen: 1.35 };
-/** Each name on a stone keeps to its own line, above or below the cut, and shrinks to fit. */
+/** Each name on a stone stays on one line, above or below the cut, and shrinks to fit. */
 const STONE_BOARD: Board = { width: STONE_SLOT.w - 70, height: STONE_SLOT.h * 0.42, size: 74, least: 74, twoLines: false, widen: 1 };
 
 function atlas(cols: number, rows: number, slot: { w: number; h: number }): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture } {
@@ -289,7 +283,7 @@ function atlas(cols: number, rows: number, slot: { w: number; h: number }): { ca
   return { canvas, ctx, texture };
 }
 
-/** Where a trail runs from one area into the next, once each border's wobble is set aside. */
+/** Returns each point index where a trail passes from one area into another, ignoring short runs along a border. */
 function crossingsOf(trail: Way, areaAt: (x: number, z: number) => PlaceArea): { i: number; from: PlaceArea; to: PlaceArea }[] {
   const p = trail.points;
   const count = p.length / 2;
@@ -300,7 +294,7 @@ function crossingsOf(trail: Way, areaAt: (x: number, z: number) => PlaceArea): {
     if (last !== undefined && last.area.path === area.path && last.area.depth === area.depth) last.end = i;
     else runs.push({ area, start: i, end: i });
   }
-  // A short run is a border's wobble: it joins the run before it.
+  // A short run is a wobble along a border, so it merges into the run before it.
   const kept: typeof runs = [];
   for (const r of runs) {
     const last = kept[kept.length - 1];
@@ -328,7 +322,7 @@ export function createMarkers(light: SceneLight): Markers {
   let armAtlas: ReturnType<typeof atlas> | null = null;
   let stoneAtlas: ReturnType<typeof atlas> | null = null;
   let placed: MarkerCrossing[] = [];
-  /** The path each arm names, and the two paths each stone parts. */
+  /** The area path each arm names, and the two area paths on each stone. */
   let armNames: string[] = [];
   let stoneNames: [string, string][] = [];
 
@@ -372,7 +366,7 @@ export function createMarkers(light: SceneLight): Markers {
           const pair = [c.from.path, c.to.path].sort().join("|");
           if (found.some((f) => [f.from.path, f.to.path].sort().join("|") === pair && Math.hypot(f.x - x, f.z - z) < SPACING)) continue;
           const off = trail.style.width / 2 + 0.9;
-          // Never in the water or at a crossing's footbridge.
+          // Skips a crossing whose post or stone would stand in water or near a footbridge.
           const dry = (sx: number, sz: number): boolean => waterDepthAt(t, sx, sz) <= 0 && trail.crossings.every((k) => Math.hypot(k.x - sx, k.z - sz) > k.span / 2 + 3);
           const nx = dz / len;
           const nz = -dx / len;
@@ -421,7 +415,7 @@ export function createMarkers(light: SceneLight): Markers {
       armNames = [];
       stoneNames = [];
       found.forEach((f, k) => {
-        // The post stands on the trail's right as it runs from `from` to `to`; the stone across from it.
+        // The post goes on the trail's right as it runs from `from` to `to`, and the stone on the opposite side.
         const nx = f.tz;
         const nz = -f.tx;
         const px = f.x + nx * f.off;
@@ -432,7 +426,7 @@ export function createMarkers(light: SceneLight): Markers {
         m4.compose(new THREE.Vector3(px, py, pz), q.identity(), one);
         posts?.setMatrixAt(k, m4);
         postMark.setXYZ(k, 1, 0, 0);
-        // Two arms, one each way along the trail, splayed away from it so a person walking that way reads it.
+        // Two arms, one each way along the trail, turned `SPLAY` away from it so a person walking that way can read it.
         for (const [j, dir, area, height] of [[0, 1, f.to, 2.0], [1, -1, f.from, 1.68]] as const) {
           const ax = f.tx * dir * Math.cos(SPLAY) + nx * Math.sin(SPLAY);
           const az = f.tz * dir * Math.cos(SPLAY) + nz * Math.sin(SPLAY);
@@ -440,7 +434,7 @@ export function createMarkers(light: SceneLight): Markers {
           q.setFromAxisAngle(up, Math.atan2(-az, ax));
           const slot = k * 2 + j;
           const name = letter(area.name, ARM_BOARD, measureOn(actx, "italic 600"));
-          // A long name's arm grows longer, and its letters are painted narrower by as much, so they keep their shape.
+          // A long name's arm is scaled longer by `name.widen`, and its letters are painted narrower by the same factor, so they keep their shape.
           m4.compose(new THREE.Vector3(px + ax * POST.half, py + height, pz + az * POST.half), q, new THREE.Vector3(name.widen, 1, 1));
           arms?.setMatrixAt(slot, m4);
           armMark.setXYZ(slot, 1, slot, 0);
@@ -452,7 +446,7 @@ export function createMarkers(light: SceneLight): Markers {
           name.lines.forEach((line, n) => actx.fillText(line, 0, (n - (name.lines.length - 1) / 2) * name.size * 1.02));
           actx.setTransform(1, 0, 0, 1, 0, 0);
         }
-        // The stone faces the tread; seen from the trail, each area's name is on its own side of the cut.
+        // The stone faces the trail. Seen from there, the area to the left is lettered above the cut and the area to the right below it.
         const fx = nx;
         const fz = nz;
         const yaw = Math.atan2(fx, fz);
@@ -472,7 +466,7 @@ export function createMarkers(light: SceneLight): Markers {
         const ox = (k % STONE_SLOT.cols) * STONE_SLOT.w;
         const oy = Math.floor(k / STONE_SLOT.cols) * STONE_SLOT.h;
         const half = STONE_SLOT.w / 2;
-        // Capitals, as stone is cut: the area to the left over a cut line, the one to the right beneath it, each pointing its way.
+        // Letters each name in capitals, as on carved stone, with an arrow toward its area's side.
         for (const [text, cy] of [[`‹ ${left.name.toUpperCase()}`, 0.27], [`${right.name.toUpperCase()} ›`, 0.73]] as const) {
           sctx.font = `600 ${letter(text, STONE_BOARD, measureOn(sctx, "600")).size}px ${SERIF}`;
           sctx.fillText(text, ox + half, oy + STONE_SLOT.h * cy);

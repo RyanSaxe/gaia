@@ -36,10 +36,10 @@ describe("where the sheets letter areas' names", () => {
       if (step.done === true) return step.value;
     }
   };
-  // Capitals as wide as their letters and spacing, as near as a test can measure without a browser.
+  // Approximates a capital's width from the font size and spacing, since the test has no browser to measure with.
   const measure: Measure = (text, font, spacing) => text.length * (0.72 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
-  // The proving ground's land as the world service sends it before anything is judged: every area's outline and
-  // every lot where a building or landmark will stand. Laid out once and only read.
+  // The proving ground's land as the world service sends it before Jev judges anything: every area's outline and
+  // every lot for a building or landmark. Laid out once and only read.
   const world = layoutWorld(provingFacts, provingJudged, undefined, 1);
   const landWith = (lots: readonly LotPlace[]): NameLand => run(nameLand(outlinesOf(world).areas, world.size, world.size / 2, lots));
   const land = landWith(world.things.map(({ x, z }) => ({ x, z })));
@@ -50,7 +50,7 @@ describe("where the sheets letter areas' names", () => {
     return [x + p.box[0], y + p.box[1], x + p.box[2], y + p.box[3]];
   });
   const hits = (a: Box, b: Box): boolean => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
-  // The ground any building's or landmark's mark may take round each lot, wherever on it the thing stands.
+  // The area any building's or landmark's mark may cover around each lot, wherever on the lot it is placed.
   const markGround = (placed: NamePlaces, lots: readonly LotPlace[]): Box[] => {
     const s = markScale(placed.scale, 1);
     const lot = Math.max(...Object.values(LAYOUT.lotReach)) * placed.scale;
@@ -75,7 +75,7 @@ describe("where the sheets letter areas' names", () => {
 
   it("never sets two names end to end along one line so close that they read as one name", () => {
     for (const placed of sheets) {
-      // Each name's capitals: their middle on the sheet, the way they run, and half their length, pixels.
+      // Each name's capitals: center on the sheet, angle, and half length in pixels.
       const lines = placed.places.map((p) => ({ x: (p.x + land.reach) * placed.scale, y: (p.z + land.reach) * placed.scale, angle: p.label.angle, half: p.halfW - 4, name: p.label.area.name }));
       const joined: string[] = [];
       for (const a of lines) {
@@ -83,7 +83,7 @@ describe("where the sheets letter areas' names", () => {
           if (a === b) continue;
           const along = (b.x - a.x) * Math.cos(a.angle) + (b.y - a.y) * Math.sin(a.angle);
           const across = (b.y - a.y) * Math.cos(a.angle) - (b.x - a.x) * Math.sin(a.angle);
-          // On one line: middles within 18 px of it. Read as one: under 26 px of paper between their capitals.
+          // Two names share a line when their centers are within 18 px of it, and read as one name with under 26 px of paper between their capitals.
           if (Math.abs(across) < 18 && Math.abs(along) - a.half - b.half < 26) joined.push(`${a.name} ${b.name}`);
         }
       }
@@ -96,10 +96,10 @@ describe("where the sheets letter areas' names", () => {
     const marks = markGround(wide, land.lots);
     const clear = boxes(wide).filter((_, i) => !(wide.places[i] as NamePlaces["places"][number]).over);
     for (const b of clear) expect(marks.filter((m) => hits(b, m))).toEqual([]);
-    // On a wide sheet most names find room clear of the marks: three in five, where the proving ground crowds its
-    // fifty-odd areas and sixty buildings and landmarks onto one sheet.
+    // On a wide sheet at least three in five names fit clear of the marks, though the proving ground puts about fifty
+    // areas and sixty buildings and landmarks on one sheet.
     expect(clear.length).toBeGreaterThan(wide.places.length * 0.6);
-    // Where lots stand so close that no ground is clear of them, every name is still lettered, over them.
+    // When lots are so dense that no ground is clear of them, every name is still lettered, over the marks.
     const lots: LotPlace[] = [];
     for (let x = -world.size / 2; x <= world.size / 2; x += 60) for (let z = -world.size / 2; z <= world.size / 2; z += 60) lots.push({ x, z });
     const crowded = run(placeNames(landWith(lots), 800, measure));
@@ -113,7 +113,7 @@ describe("where the sheets letter areas' names", () => {
 });
 
 describe("contours on steep ground", () => {
-  // Ground 5 m a sample that rises gently (1 in 20) for 100 m, then steeply (1 in 2.5), as a valley's side does.
+  // Ground sampled every 5 m that rises gently (1 in 20) for 100 m, then steeply (1 in 2.5), like a valley's side.
   const n = 40;
   const cell = 5;
   const rise = (i: number): number => (i < 20 ? 0.05 * cell * i : 0.05 * cell * 20 + 0.4 * cell * (i - 20));
@@ -150,7 +150,7 @@ describe("contours on steep ground", () => {
 });
 
 describe("a contour round a hilltop", () => {
-  // A round hill on a grid 5 m a sample, its 3 m contour a closed ring about 30 m across.
+  // A round hill on a grid sampled every 5 m. Its 3 m contour is a closed ring about 30 m across.
   const n = 24;
   const hill = Float32Array.from({ length: n * n }, (_, k) => 6 - Math.hypot((k % n) - 11.5, Math.floor(k / n) - 11.5) * 0.9);
   const segments: number[] = [];
@@ -221,9 +221,9 @@ describe("the wild past the land", () => {
       const a = (k / 16) * Math.PI * 2;
       const [cx, cz] = [Math.cos(a), Math.sin(a)];
       expect(reliefAt(t, cx * out * 1.5, cz * out * 1.5)).toBeCloseTo(groundHeightAt(t, cx * out * 1.5, cz * out * 1.5), 6);
-      // From where the rim's easing begins, across the rim and far out into the wild, the easing never steps, so no
-      // contours crowd into a ring where the land ends: on the land it is never steeper than the land itself, whose
-      // own banks and risers may be, and past it never more than a gentle slope.
+      // From where the rim blend begins, across the rim and far into the wild, the relief has no step, so no contours
+      // crowd into a ring where the land ends. On the land it is never steeper than the land itself, which may have
+      // steep banks and risers. Past the rim it is never more than a gentle slope.
       for (let r = t.spec.size / 2 - RIM.inner - 20; r < out * 1.5; r += 0.5) {
         const step = Math.abs(reliefAt(t, cx * (r + 0.5), cz * (r + 0.5)) - reliefAt(t, cx * r, cz * r));
         const onLand = pastTheEdge(t.spec, cx * (r + 0.5), cz * (r + 0.5)) <= 0;

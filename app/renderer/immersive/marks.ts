@@ -1,15 +1,11 @@
-// The map's marks for buildings and landmarks, each drawn from its own composition and never chosen by name. A
-// building's mark is its realized plan seen from above: every mass (the body, a wing, a porch, a lean-to, a turret)
-// drawn back to front at the plan's own size, its walls and roofs inked as the primitive in each slot says and
-// washed in the palette's colors, its features drawn by their own primitives, and one wear rule for every mass. A
-// landmark's mark is drawn from its primitive's own words: a tower's plan, profile, galleries and crown; the stones'
-// arrangement; a great tree's form and age. So a new combination of primitives draws with no new code, and a new
-// primitive needs one entry in `INKS`, which a contract test asks for.
+// Draws the map's marks for buildings and landmarks from their compositions, never from a kind name. A building's
+// mark is its realized plan seen from above, and a landmark's is drawn from its primitive's parameters, so a new
+// combination of primitives needs no new code. A new structure or landmark primitive needs one entry in `INKS`,
+// which a contract test checks.
 //
-// Every mark is one ink drawing over watercolor washes, seen from the south-southwest and a little above and lit
-// from the northwest: west faces and the upper left of roofs and crowns catch the light, south faces fall into a
-// cool half shade, and a soft shadow lies on the paper to the southeast. A unit is about a pixel on the whole sheet
-// at s = 1. Nothing here depends on where the mark is on the screen, so a mark never changes as the map moves.
+// Every mark is an ink drawing over washes, viewed from the south-southwest and a little above and lit from the
+// northwest. A unit is about a pixel on the whole sheet at s = 1. Nothing depends on the mark's screen position, so a
+// mark never changes as the map moves.
 
 import type { Blueprint, BuildingPlan, Mass, Opening, Palette, Params, Resolved, RoofForm, Rgb } from "@gaia/schema";
 import {
@@ -43,25 +39,25 @@ export type Pt = readonly [number, number];
 type P3 = readonly [number, number, number];
 
 export const INK = "#3a2f22";
-/** What a wash fades toward as its thing tires: dry straw on the paper. */
+/** The straw color a wash fades toward as vitality falls. */
 const FADED = "#cdbf9c";
-/** The sheet's own paper, which every wash lets show through a little. */
+/** The sheet's paper color, which every wash mixes in a little. */
 export const PAPER = "#efe5cb";
-/** The cool violet that shade leans toward, as the map shades its hills. */
+/** The cool violet that shaded faces mix toward, as in the map's hill shading. */
 export const SHADE = "#4a4660";
-/** The warm light on a lit face. */
+/** The warm color that lit faces mix toward. */
 const LIGHT = "#fff4d6";
 const GLASS = "#3f3a36";
 /** The dark inside a broken roof or wall. */
 const HOLLOW = "rgba(44,34,25,0.86)";
 
-/** Units a meter on a building's mark: a unit is `MARK_METERS` of land, so close in a building stands at the land's own size. */
+/** Units per meter on a building's mark. A unit is `MARK_METERS` of land, so zoomed in, a building draws at the land's own size. */
 const K = 1.5;
-/** Units a meter on a landmark's mark, a little under the land's own size, so a soaring tower stays a mark. */
+/** Units per meter on a landmark's mark, a little under the land's own size, so a tall tower stays mark-sized. */
 const LK = 1.15;
-/** Floor to floor, meters, as a plan lays out its storeys. */
+/** Floor-to-floor height in meters, as a plan lays out its storeys. */
 const STOREY = 2.3;
-/** How much taller a roof is drawn than it stands: a little steeper, as a mapmaker draws it, so its covering carries the mark. */
+/** How much taller a roof is drawn than its true height. The steeper roof shows more of its covering. */
 const ROOF_LIFT = 1.25;
 
 export const clamp01 = (t: number): number => Math.max(0, Math.min(1, t));
@@ -87,7 +83,7 @@ const rgbOf = (hex: string): [number, number, number] => {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
 export const hexOf = (c: Rgb): string => `#${c.map((v) => Math.round(clamp01(v) * 255).toString(16).padStart(2, "0")).join("")}`;
-/** The color `t` of the way from `a` to `b`, as hex. */
+/** Mixes hex colors `a` and `b` by `t` and returns hex. */
 export const mix = (a: string, b: string, t: number): string => {
   const pa = rgbOf(a);
   const pb = rgbOf(b);
@@ -97,16 +93,16 @@ export const mix = (a: string, b: string, t: number): string => {
 export const rgba = (hex: string, a: number): string => `rgba(${rgbOf(hex).join(",")},${a.toFixed(3)})`;
 const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
-/** How a mark is worn by its shown vitality (`shownVitality`), as its thing is in the world: each from 0 (sound) to 1 (gone). */
+/** How worn a mark is at its shown vitality (`shownVitality`), matching its thing in the world. Each field runs from 0 (intact) to 1 (fully worn). */
 interface Wear {
   readonly v: number;
-  /** Washes dried toward straw. */
+  /** How far washes fade toward straw. */
   readonly dry: number;
-  /** A roof rotted through from its weak corner. */
+  /** How far a roof has rotted through from its weak corner. */
   readonly rot: number;
-  /** A wall broken down at the weak corner. */
+  /** How far a wall has broken down at the weak corner. */
   readonly breach: number;
-  /** Ivy and moss taking the walls. */
+  /** How much ivy and moss cover the walls. */
   readonly ivy: number;
   /** How strongly the chimney smokes, from 0 (cold) to 1. */
   readonly smoke: number;
@@ -125,7 +121,7 @@ function wearOf(v: number, seed: number): Wear {
   };
 }
 
-/** A wash's color as its thing wears: fading toward straw, and, for a roof, darkening with rot. */
+/** A wash's worn color: faded toward straw, and for a roof (`rots`), darkened by rot. */
 const worn = (c: string, w: Wear, rots = 0): string => mix(mix(mix(c, PAPER, 0.12), FADED, w.dry * 0.72), "#6a5f4b", w.rot * rots);
 const shaded = (c: string, t = 0.2): string => mix(c, SHADE, t);
 const lit = (c: string, t = 0.2): string => mix(c, LIGHT, t);
@@ -137,17 +133,17 @@ export interface Pen {
   readonly line: number;
   /** How strongly fine work (timbers, courses, joints) shows: it fades out as a unit shrinks from 2.2 to 1.2 device pixels, so a small mark keeps a clean silhouette. */
   readonly fine: number;
-  /** Where a point east, north and up from the foot falls on the sheet. */
+  /** Projects a point east, north and up from the base onto the sheet. */
   at(X: number, Z: number, H: number): Pt;
-  /** A point `dx` units right of the foot and `h` up on the sheet itself, for what is drawn flat to the eye, as a tree's crown is. */
+  /** A point `dx` units right of and `h` units above the base on the sheet, for shapes drawn flat to the viewer, such as a tree's crown. */
   up(dx: number, h: number): Pt;
-  /** Takes a round thing `r` pixels across at (`px`, `py`) on the sheet into the box. */
+  /** Grows the box to hold a circle of radius `r` pixels at (`px`, `py`). */
   reach(px: number, py: number, r?: number): void;
-  /** The box every point placed so far falls in, in pixels: left, top, right, bottom. */
+  /** The bounding box in pixels of every point placed so far: left, top, right, bottom. */
   readonly box: [number, number, number, number];
 }
 
-/** The view: east runs right and a little up, north runs up and to the left. `lean` tips the thing east as it rises. */
+/** Creates a pen whose projection runs east to the right and a little up, and north up and to the left. `lean` shifts points east in proportion to their height. */
 export function penFor(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, lean = 0): Pen {
   const m = ctx.getTransform();
   const device = s * Math.hypot(m.a, m.b);
@@ -179,12 +175,12 @@ export function penFor(ctx: CanvasRenderingContext2D, x: number, y: number, s: n
 
 const on = (pen: Pen, pts: readonly P3[]): Pt[] => pts.map(([X, Z, H]) => pen.at(X, Z, H));
 
-/** A path through `pts`; a closed one may round its corners by `round` pixels, as plump thatch is. */
+/** Traces a path through `pts`. A closed path may round its corners by `round` pixels, as for thatch. */
 export function trace(ctx: CanvasRenderingContext2D, pts: readonly Pt[], close = true, round = 0): void {
   ctx.beginPath();
   if (close && round > 0 && pts.length > 2) {
-    // Each corner's curve meets its edges within the nearer half of the shorter one, so a short edge or a sharp
-    // corner never throws the curve wide.
+    // Each corner's arc stays within 45% of the shorter adjacent edge, so a short edge or a sharp corner never pushes
+    // the curve wide.
     const p = pts.filter((q, i) => {
       const next = pts[(i + 1) % pts.length] as Pt;
       return Math.hypot(q[0] - next[0], q[1] - next[1]) > 0.05;
@@ -217,7 +213,7 @@ export function trace(ctx: CanvasRenderingContext2D, pts: readonly Pt[], close =
   if (close) ctx.closePath();
 }
 
-/** Washes a shape, the brush a touch off the pen's line to the southeast as a hand's is. */
+/** Fills a shape offset slightly to the southeast of its ink line, like a hand-laid wash. */
 export function wash(pen: Pen, pts: readonly Pt[], color: string, round = 0): void {
   const d = 0.22 * pen.s;
   trace(pen.ctx, pts.map(([px, py]) => [px + d, py + d * 0.8] as Pt), true, round);
@@ -240,7 +236,7 @@ function face(pen: Pen, pts: readonly P3[], color: string, weight = 1, round = 0
   return p;
 }
 
-/** Fine lines in the drawing (timbers, courses, joints): thin, and in a lighter ink. */
+/** Strokes fine lines such as timbers, courses and joints, thin and faded by `pen.fine`. */
 function hatch(pen: Pen, lines: readonly (readonly P3[])[], color: string, weight = 0.55): void {
   if (lines.length === 0 || pen.fine < 0.02) return;
   const { ctx } = pen;
@@ -269,7 +265,7 @@ function hull(pts: readonly Pt[]): Pt[] {
   return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
 
-/** The shadow things cast on the paper to the southeast, soft at its edge: each point of their feet, with the height standing over it. */
+/** Washes a soft shadow on the paper to the southeast. `feet` are ground points, each with the height above it. */
 export function castShadow(pen: Pen, feet: readonly (readonly [number, number, number])[], strength = 1): void {
   const pts: Pt[] = [];
   for (const [X, Z, height] of feet) {
@@ -282,7 +278,7 @@ export function castShadow(pen: Pen, feet: readonly (readonly [number, number, n
   const cy = h.reduce((a, q) => a + q[1], 0) / h.length;
   for (const [grow, a] of [[1.14, 0.09], [0.96, 0.13]] as const) {
     const soft = h.map(([px, py]): Pt => [cx + (px - cx) * grow, cy + (py - cy) * grow]);
-    // The soft edge reaches past the feet, so the box a mark reports holds it.
+    // The soft edge extends past the feet, so the mark's box includes it.
     for (const [px, py] of soft) pen.reach(px, py);
     wash(pen, soft, `rgba(80,66,48,${(a * strength).toFixed(3)})`);
   }
@@ -292,8 +288,9 @@ export const ellipseFeet = (X: number, Z: number, rx: number, rz: number, height
   Array.from({ length: 12 }, (_, k) => [X + Math.cos((k / 12) * Math.PI * 2) * rx, Z + Math.sin((k / 12) * Math.PI * 2) * rz, height] as [number, number, number]);
 
 /**
- * A roof rotted through from its weak eave corner `a`, by `amount` from 0 (sound) to 1 (most of the covering gone):
- * the dark inside and the bare rafters over it. `b` is the eave's other end, `c` and `d` the ridge above `b` and `a`.
+ * Draws a rot hole in a roof from its weak eave corner `a`, with `amount` from 0 (intact) to 1 (most of the covering
+ * gone): the dark inside and the bare rafters over it. `b` is the eave's other end, and `c` and `d` the ridge above
+ * `b` and `a`.
  */
 function rotHole(pen: Pen, a: Pt, b: Pt, c: Pt, d: Pt, amount: number, seed: number): void {
   if (amount < 0.04) return;
@@ -310,7 +307,7 @@ function rotHole(pen: Pen, a: Pt, b: Pt, c: Pt, d: Pt, amount: number, seed: num
   const hole = [a, ...edge];
   const { ctx } = pen;
   wash(pen, hole, HOLLOW);
-  // Bare rafters up the slope and a purlin across, each only as far as the hole's (smoothed) edge.
+  // Bare rafters up the slope and a purlin across, each reaching only the hole's smoothed edge.
   const reach = (u: number, ru0: number, rt0: number): number => rt0 * 0.74 * Math.sqrt(Math.max(0, 1 - (u / (ru0 * 0.74)) ** 2));
   ctx.beginPath();
   for (let k = 0; k <= 7; k++) {
@@ -335,7 +332,7 @@ function rotHole(pen: Pen, a: Pt, b: Pt, c: Pt, d: Pt, amount: number, seed: num
   ink(pen, edge, false, 0.7);
 }
 
-/** Moss and ivy greening a failing roof's sound part in a few soft dabs. */
+/** Dabs moss on a roof's intact part, by `w.ivy`. */
 function moss(pen: Pen, a: Pt, b: Pt, c: Pt, d: Pt, w: Wear): void {
   const at = (u: number, t: number): Pt => lerp(lerp(a, b, u), lerp(d, c, u), t);
   const { ctx } = pen;
@@ -350,7 +347,7 @@ function moss(pen: Pen, a: Pt, b: Pt, c: Pt, d: Pt, w: Wear): void {
   ctx.fill();
 }
 
-/** Ivy climbing a south wall from its corner at (`X`, `Z`): a ragged green wash from the ground up, `amount` of the wall's height, spreading along the wall from the corner; `dir` is the corner's side (east +1). */
+/** Washes ivy on a south wall from its corner at (`X`, `Z`): a ragged green shape from the ground up to `amount` of the wall's height, spreading along the wall. `dir` is the corner's side, +1 for east. */
 function ivy(pen: Pen, X: number, Z: number, height: number, amount: number, seed: number, dir = 1): void {
   if (amount < 0.05) return;
   const top = height * amount;
@@ -361,7 +358,7 @@ function ivy(pen: Pen, X: number, Z: number, height: number, amount: number, see
   wash(pen, pts, rgba("#5f7f3e", 0.75));
 }
 
-/** A south wall broken down at its corner (`X`, `Z`): a ragged gap into the dark inside, its stones lying at its foot; `dir` is the corner's side (east +1). */
+/** Breaks a south wall down at its corner (`X`, `Z`): a ragged gap into the dark inside, with rubble at its base. `dir` is the corner's side, +1 for east. */
 function breach(pen: Pen, X: number, Z: number, dir: number, height: number, amount: number, seed: number): void {
   if (amount < 0.04) return;
   const width = 1 + amount * 3.6;
@@ -393,7 +390,7 @@ function rubble(pen: Pen, X: number, Z: number, spread: number, seed: number, st
   }
 }
 
-/** Grass at a thing's foot in a few quick strokes of the pen, growing rank round a ruin. */
+/** Grass tufts at a thing's base, drawn taller as `w.ivy` rises. */
 function tufts(pen: Pen, spots: readonly (readonly [number, number])[], w: Wear): void {
   const { ctx, s } = pen;
   const tall = 1 + w.ivy * 1.1;
@@ -418,7 +415,7 @@ function box(pen: Pen, x0: number, x1: number, z0: number, z1: number, h0: numbe
   face(pen, [[x0, z0, h1], [x1, z0, h1], [x1, z1, h1], [x0, z1, h1]], top ?? lit(color, 0.3), weight);
 }
 
-/** Chimney smoke drifting east on the wind: a soft grey wisp and a fine curl of ink, thinning away as the building tires. */
+/** Chimney smoke drifting east: a soft grey wisp and a fine ink curl, shorter and fainter as `amount` falls. */
 function smoke(pen: Pen, [px, py]: Pt, amount: number): void {
   if (amount < 0.04) return;
   const { ctx, s } = pen;
@@ -456,13 +453,13 @@ function pane(pen: Pen, quad: readonly P3[], color = GLASS, frame = false): Pt[]
 // ---------------------------------------------------------------------------------------------------------------
 // What a mark is drawn from.
 
-/** What a mark is drawn from: the blueprint Jev filled (each slot's primitive and the words chosen for it) and the colors realizing it gave. */
+/** A mark's inputs: the blueprint Jev filled, with each slot's primitive and chosen words, and the colors realization gave it. */
 export interface Composition {
   readonly blueprint: Blueprint;
   readonly palette: Palette;
 }
 
-/** A building's composition, with the plan its footprint realized: the masses every part of it is built against. */
+/** A building's composition with its realized plan, whose masses every part is placed against. */
 export interface BuildingComposition extends Composition {
   readonly plan: BuildingPlan;
 }
@@ -471,7 +468,7 @@ export type Values = Readonly<Record<string, unknown>>;
 
 const PRIMITIVE = new Map(PRIMITIVES.map((p) => [p.id as string, p] as const));
 
-/** A slot's words as its primitive's build reads them, each scale at its level's own value rather than a seeded draw within it. */
+/** Converts a slot's words into the values its primitive's build reads. Each scale takes its level's own value, not a seeded draw within the level. */
 export function valuesOf(id: string, words: Values): Values {
   const p = PRIMITIVE.get(id);
   if (p === undefined) return words;
@@ -483,7 +480,7 @@ export function valuesOf(id: string, words: Values): Values {
   return out;
 }
 
-/** The colors a mark is washed in: the palette's healthy colors, which the wear then dries. */
+/** A mark's colors: the palette's healthy colors, which `worn` then fades. */
 interface Look {
   readonly w: Wear;
   /** A swatch's healthy color as hex, or `fallback` where the palette has none. */
@@ -498,15 +495,15 @@ const lookOf = (palette: Palette, w: Wear): Look => ({
   },
 });
 
-/** One face of a mass's walls that shows, for its walls' ink to draw fine work on. */
+/** A visible face of a mass's walls, which the walls' ink draws fine work on. */
 interface WallFace {
-  /** Where the face meets the ground, from one corner along it to the other. */
+  /** The face's base line on the ground, from one corner to the other. */
   readonly from: readonly [number, number];
   readonly to: readonly [number, number];
   /** The plinth's top and the walls' top at the eaves, in units. */
   readonly floor: number;
   readonly eave: number;
-  /** The face's top a share `u` of the way along it: the eaves, or a gable's slopes. */
+  /** The face's top height at share `u` along it: the eaves, or a gable's slopes. */
   top(u: number): number;
   readonly storeys: number;
   /** Whether it is an end wall, which may rise into a gable. */
@@ -522,14 +519,14 @@ interface Slope {
   readonly d: Pt;
 }
 
-/** How the map inks a building's plan: every mass it lays out, with no drawing of its own. */
+/** The ink entry for a building's footprint. The other entries draw its masses, so it draws nothing itself. */
 interface FootprintInk {
   readonly role: "Footprint";
 }
 
-// Each kind of entry reads its primitive's parameters, `V`: a scale as its level's number, a choice as its word.
+// Each entry reads its primitive's parameters as `V`: a scale as its level's number and a choice as its word.
 
-/** How the map inks a wall material: the walls' wash, and the fine work on each face that shows. */
+/** How the map inks a wall material: the walls' wash color, and the fine work on each visible face. */
 interface WallInk<V = Values> {
   readonly role: "Walls";
   wash(look: Look, p: V): string;
@@ -539,40 +536,40 @@ interface WallInk<V = Values> {
 /** How the map inks a roof covering. */
 interface RoofInk<V = Values> {
   readonly role: "Roof";
-  /** How far its eaves and verges reach past the walls, meters. */
+  /** How far in meters its eaves and verges extend past the walls. */
   overhang(p: V): number;
-  /** How plump its edges are, as a rounding in units: thatch is soft, tiles are sharp. */
+  /** The rounding of its edges in units, larger for thatch than for tiles. */
   plump(p: V): number;
   chimney(p: V): "gable" | "ridge" | "none";
-  /** Its courses on a slope toward the viewer, between the slope's wash and its outline. */
+  /** Draws its courses on a slope toward the viewer, after the slope's wash and before its outline. */
   courses(pen: Pen, s: Slope, look: Look, p: V): void;
-  /** Touches over the slope's outline, such as thatch's rolled eave. */
+  /** Draws details over the slope's outline, such as thatch's rolled eave. */
   edge?(pen: Pen, s: Slope, look: Look, p: V): void;
-  /** How the material turns the palette's roof color, as straw warms it. */
+  /** Adjusts the palette's roof color for the material, as straw warms it. */
   tint?(c: string, p: V): string;
 }
 
-/** How the map inks a building's windows and doors: each at its place in the plan, `q` its corners on the wall (bottom left, bottom right, top right, top left). */
+/** How the map inks a building's windows and doors, each at its place in the plan. `q` holds its corners on the wall: bottom left, bottom right, top right, top left. */
 interface OpeningsInk<V = Values> {
   readonly role: "Openings";
   window(pen: Pen, q: readonly P3[], look: Look, p: V): void;
   door(pen: Pen, q: readonly P3[], look: Look, p: V): void;
 }
 
-/** How the map inks what gathers round a building, drawn in front of it. */
+/** How the map inks things around a building, such as a garden walk or a woodpile, drawn in front of it. */
 interface DressingInk<V = Values> {
   readonly role: "Dressing";
   draw(pen: Pen, house: House, look: Look, p: V): void;
 }
 
-/** How the map inks a feature: where it stands, so it is drawn in turn with the masses, and its own drawing. */
+/** How the map inks a feature: its position, so it is drawn in depth order with the masses, and its drawing. */
 interface FeatureInk<V = Values> {
   readonly role: "Feature";
   place(house: House, p: V): readonly [number, number];
   draw(pen: Pen, house: House, look: Look, p: V): void;
 }
 
-/** How the map inks a landmark, from its foot. */
+/** How the map inks a landmark, drawn from its base. */
 interface LandmarkInk<V = Values> {
   readonly role: "Landmark";
   draw(pen: Pen, look: Look, p: V, seed: number): void;
@@ -591,11 +588,11 @@ const landmark = <P extends Params>(_: P, ink: Omit<LandmarkInk<Resolved<P>>, "r
 // ---------------------------------------------------------------------------------------------------------------
 // A building's masses as the mark draws them.
 
-/** One mass as the mark draws it, in units east (X), north (Z) and up from the middle of the building's footprint. */
+/** One mass as the mark draws it, in units east (X), north (Z) and up from the center of the building's footprint. */
 interface Block {
   readonly index: number;
   readonly round: boolean;
-  /** Its footprint, trimmed back where it runs into a mass laid out before it. */
+  /** Its footprint, trimmed where it overlaps a mass laid out before it. */
   readonly x0: number;
   readonly x1: number;
   readonly z0: number;
@@ -607,14 +604,14 @@ interface Block {
   /** Its ridge runs east-west ("x") or north-south ("z"). */
   readonly along: "x" | "z";
   readonly form: RoofForm;
-  /** Whether its near end (west, or south) and its far end stand free; a joined end is never hipped. */
+  /** Whether its near end (west or south) and its far end are free. A joined end is never hipped. */
   readonly ends: readonly [boolean, boolean];
   /** Which way across its span a lean-to's slope falls: toward the viewer (-1) or away. */
   readonly fall: 1 | -1;
   readonly storeys: number;
 }
 
-/** A point in a plan's frame (x east, y up, z toward the door, meters) in the mark's units: the door faces the viewer. */
+/** Converts a point in a plan's frame (x east, y up, z toward the door, in meters) to the mark's units, so the door faces the viewer. */
 const fromPlan = (x: number, y: number, z: number): P3 => [x * K, -z * K, y * K];
 
 function blocksOf(plan: BuildingPlan): Block[] {
@@ -632,13 +629,13 @@ function blocksOf(plan: BuildingPlan): Block[] {
       rise: m.rise * K * (m.roof === "cone" ? 1 : ROOF_LIFT),
       along: m.ridge,
       form: m.roof,
-      // North is the plan's -z, so a ridge along z runs its ends the other way.
+      // North is the plan's -z, so a ridge along z swaps its ends.
       ends: m.ridge === "x" ? m.ends : [m.ends[1], m.ends[0]],
       fall: m.ridge === "x" ? (-m.fall as 1 | -1) : m.fall,
       storeys: m.storeys,
     };
   });
-  // Joined masses overlap where they meet; the later one stops at the earlier one's wall, so no wall shows inside another.
+  // Joined masses overlap. The later one is trimmed at the earlier one's wall, so no wall shows inside another.
   for (let i = 1; i < blocks.length; i++) {
     let k = blocks[i] as Block;
     if (k.round) continue;
@@ -656,7 +653,7 @@ function blocksOf(plan: BuildingPlan): Block[] {
   return blocks;
 }
 
-/** How far a thing lies from the viewer: the mark draws the farthest first. */
+/** A point's depth from the viewer. The mark draws the farthest first. */
 const depthOf = (X: number, Z: number): number => 0.42 * X + 0.92 * Z;
 
 /** A building being drawn: its plan, its masses, and what every part of it shares. */
@@ -673,7 +670,7 @@ interface House {
 const inFoot = (m: Mass, x: number, z: number, margin: number): boolean =>
   m.round ? Math.hypot(x - m.x, z - m.z) < m.width / 2 + margin : Math.abs(x - m.x) < m.width / 2 + margin && Math.abs(z - m.z) < m.depth / 2 + margin;
 
-/** The end of the main body's ridge (-1 or +1 along it, in the plan) a gable chimney climbs, as the roofs choose it: a free gable, never one facing the door, with the fewest windows; 0 when it has none. */
+/** The end of the main body's ridge, -1 or +1 along it in the plan, where a gable chimney goes. It picks a free gable that does not face the door, with the fewest windows, or returns 0 when there is none. */
 function chimneyEnd(plan: BuildingPlan): -1 | 0 | 1 {
   const m = plan.masses[0];
   if (m === undefined || (m.roof !== "gable" && m.roof !== "half-hip")) return 0;
@@ -693,7 +690,7 @@ function chimneyEnd(plan: BuildingPlan): -1 | 0 | 1 {
   return ends.reduce((best, e) => (count(e) < count(best) ? e : best));
 }
 
-/** Where a building gives way first, as its ruin does: the front corner away from the door, and how far the collapse reaches. */
+/** Where a building's collapse starts, as in the world: the front corner away from the door, and how far the collapse reaches. */
 function weakOf(plan: BuildingPlan): { X: number; Z: number; reach: number } {
   const door = plan.openings.find((o) => o.kind === "door");
   const side = door !== undefined && Math.abs(door.position[0]) > 0.05 ? -Math.sign(door.position[0]) : plan.width > plan.depth ? 1 : -1;
@@ -713,7 +710,7 @@ const ruinAt = (weak: { X: number; Z: number; reach: number }, X: number, Z: num
   return t * t * (3 - 2 * t);
 };
 
-/** A rectangular mass's roof and walls in 3D, from its block: `a` runs along its ridge and `b` across, each from its middle, so the viewer always looks from -a and -b. */
+/** A rectangular mass's roof and walls in 3D, from its block. `a` runs along its ridge and `b` across, each from its center, so the viewer always looks from -a and -b. */
 interface Shape {
   readonly at: (a: number, b: number, h: number) => P3;
   readonly L: number;
@@ -746,7 +743,7 @@ function shapeOf(k: Block, e: number, seed: number): Shape {
   const E = k.eave;
   const R = k.rise;
   const ridge = E + R;
-  // The long wall faces south under a ridge along x, west under one along z; the near end the other way.
+  // The long wall faces south under a ridge along x and west under a ridge along z. The near end wall faces the other way.
   const longLit = !alongX;
   const wallFace = (outline: readonly P3[], from: P3, to: P3, top: (u: number) => number, end: boolean, lit: boolean): Shape["walls"][number] => ({
     outline,
@@ -836,7 +833,7 @@ function shapeOf(k: Block, e: number, seed: number): Shape {
   };
 }
 
-/** What a building's slots say, each read by its entry in the table. */
+/** A building's slots, each paired with its `INKS` entry and values. */
 interface Parts {
   readonly walls: { readonly ink: WallInk; readonly p: Values } | null;
   readonly roof: { readonly ink: RoofInk; readonly p: Values } | null;
@@ -864,7 +861,7 @@ function partsOf(bp: Blueprint): Parts {
   return { walls: wallsPart, roof: roofPart, openings: openingsPart, dressing: dressingParts, features };
 }
 
-/** The roofs' color: the palette's, as the covering's material turns it. */
+/** The roof color: the palette's, adjusted by the covering's `tint`. */
 const roofHue = (look: Look, part: Parts["roof"]): string => {
   const c = look.hue("roof", "#8a7a62");
   return part?.ink.tint?.(c, part.p) ?? c;
@@ -873,12 +870,12 @@ const roofHue = (look: Look, part: Parts["roof"]): string => {
 /** Walls with no ink of their own: plain plaster. */
 const PLAIN_WALLS: WallInk = { role: "Walls", wash: (look) => look.hue("wall", "#efe6d2"), face: () => {} };
 
-/** The openings that look toward the viewer, on mass `index`: each its corners on its wall, and whether it is the door. */
+/** The openings on mass `index` that face the viewer, each with its corners on the wall and whether it is the door. */
 function openingsOn(plan: BuildingPlan, index: number): { q: P3[]; door: boolean }[] {
   const out: { q: P3[]; door: boolean }[] = [];
   for (const o of plan.openings as readonly Opening[]) {
     if (o.mass !== index) continue;
-    // The normal in the mark's frame (east, north): it shows when it turns toward the viewer at the south-southwest.
+    // The normal in the mark's frame (east, north). The opening shows when it faces the viewer at the south-southwest.
     const nx = o.normal[0];
     const nz = -o.normal[2];
     if (-0.42 * nx - 0.92 * nz < 0.2) continue;
@@ -903,14 +900,14 @@ function plinth(pen: Pen, f: WallFace, color: string): void {
   ink(pen, [p[3] as Pt, p[2] as Pt], false, 0.5, rgba(INK, 0.7));
 }
 
-/** A slope toward the viewer: its wash, the light along its ridge and the shade under its eave, its courses, then rot and moss as the building fails. */
+/** Draws a slope toward the viewer: its wash, light along the ridge, shade under the eave, its courses, then rot and moss as vitality falls. */
 function frontSlope(pen: Pen, outline: readonly P3[], quad: readonly [P3, P3, P3, P3], weakFar: boolean, color: string, round: number, roofPart: Parts["roof"], look: Look, rot: number): void {
   const w = look.w;
   const p = on(pen, outline);
   const [n0, f0, f1, n1] = on(pen, quad) as [Pt, Pt, Pt, Pt];
   const s: Slope = weakFar ? { a: f0, b: n0, c: n1, d: f1 } : { a: n0, b: f0, c: f1, d: n1 };
   wash(pen, p, color, round);
-  // The light along the ridge, the shade under the eave; each band lies within the slope, so needs no clip.
+  // The light band along the ridge and the shade band under the eave lie within the slope, so they need no clip.
   const inset = round > 0 ? 0.06 : 0;
   const at = (u: number, t: number): Pt => lerp(lerp(s.a, s.b, u), lerp(s.d, s.c, u), t);
   wash(pen, [at(inset, 0.62), at(1 - inset, 0.62), at(1 - inset, 1 - inset * 0.5), at(inset, 1 - inset * 0.5)], rgba(LIGHT, 0.22));
@@ -941,7 +938,7 @@ function drawBlock(pen: Pen, house: House, k: Block, parts: Parts, look: Look, w
     wallsPart.ink.face(pen, wall.face, look, wallsPart.p);
   }
   drawOpenings(pen, house, k.index, parts, look);
-  // Ivy climbs the corner nearest the collapse, the more the nearer.
+  // Ivy grows on the corner nearest the collapse, more the nearer it is.
   const corners: [number, number][] = [[k.x0, k.z0], [k.x1, k.z0]];
   const [ivyX, ivyZ] = corners.reduce((best, c) => (ruinAt(weak, c[0], c[1]) > ruinAt(weak, best[0], best[1]) ? c : best));
   const near = ruinAt(weak, ivyX, ivyZ);
@@ -957,7 +954,7 @@ function drawBlock(pen: Pen, house: House, k: Block, parts: Parts, look: Look, w
   if (sh.lean !== null) caveIn(pen, sh.lean, w);
 }
 
-/** A lean-to's whole slope caving in about its high edge as its building fails: the dark inside showing from its low eave up. */
+/** Caves in a lean-to's slope from its low eave up as vitality falls, showing the dark inside. */
 function caveIn(pen: Pen, quad: readonly [P3, P3, P3, P3], w: Wear): void {
   const fall = ease(w.v, 0.35, 0.1);
   if (fall < 0.05) return;
@@ -974,7 +971,7 @@ function drawOpenings(pen: Pen, house: House, index: number, parts: Parts, look:
   }
 }
 
-/** A round turret under its own cone, which rots through and loses its finial as the building fails. */
+/** A round turret under its cone. As vitality falls the cone rots through and loses its finial. */
 function drawTurret(pen: Pen, house: House, k: Block, parts: Parts, look: Look): void {
   const w = look.w;
   const { ctx, s } = pen;
@@ -1013,7 +1010,7 @@ function drawTurret(pen: Pen, house: House, k: Block, parts: Parts, look: Look):
   ctx.strokeStyle = INK;
   ctx.stroke(body);
   drawOpenings(pen, house, k.index, parts, look);
-  // The cone, eaves flaring past the wall; failing, it rots down from its tip.
+  // The cone, its eaves past the wall. As vitality falls it rots down from its tip.
   const apex = k.eave + k.rise;
   const cone = apex - k.rise * 0.55 * ease(w.v, 0.35, 0.05);
   const er = (r + (roofPart?.ink.overhang(roofPart.p) ?? 0.4) * K * 0.75) * s;
@@ -1047,7 +1044,7 @@ function drawTurret(pen: Pen, house: House, k: Block, parts: Parts, look: Look):
   else rotHole(pen, [tx + er * 0.2, ty + er * 0.3], [tx + er, ty], [ax + er * 0.35, ay], [ax, ay + 0.2 * s], w.rot * 0.8, w.seed + 3);
 }
 
-/** A chimney stack `wx` by `wz` units, toppling along the ridge toward `fallX`, `fallZ` as its building fails and smoking while it lives; returns the top it smokes from. */
+/** A chimney stack `wx` by `wz` units that topples along the ridge toward `fall` as vitality falls. Returns the top point that smoke rises from. */
 function chimney(pen: Pen, X: number, Z: number, h0: number, h1: number, wx: number, wz: number, ridge: number, fall: readonly [number, number], color: string, w: Wear, shoulder = 0): Pt {
   const fallen = ease(w.v, 0.2, 0.05);
   const top = Math.max(h0 + 0.5, h1 - (h1 - ridge) * 1.2 * fallen);
@@ -1097,7 +1094,7 @@ function timberFace(pen: Pen, f: WallFace, look: Look, framing: string): void {
   hatch(pen, lines, timber, 0.62);
 }
 
-/** Fieldstone: rounded stones in rough courses up a face, as big as the walls' stones are. */
+/** Draws fieldstone on a face: rounded stones of size `size` in rough courses, up to `upTo`. */
 function stoneFace(pen: Pen, f: WallFace, size: number, upTo: (u: number) => number): void {
   if (pen.fine < 0.02) return;
   const { ctx } = pen;
@@ -1145,8 +1142,8 @@ function towerDoor(pen: Pen, X: number, Z: number, half: number, height: number,
 }
 
 /**
- * Every structure and landmark primitive, by id: how the map inks it. A primitive missing here fails the marks'
- * contract test, so a new one is never drawn as something else.
+ * How the map inks every structure and landmark primitive, by id. A primitive missing here fails the marks' contract
+ * test, so a new one is never drawn as something else.
  */
 export const INKS: Readonly<Record<string, Ink>> = {
   "cottage-plan@1": { role: "Footprint" },
@@ -1157,7 +1154,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
   }),
 
   "fieldstone@1": walls(fieldstoneParams, {
-    // Stones in pale lime mortar read, at a distance, as the two together.
+    // Mixes the wall and masonry colors, since stones in pale lime mortar read as one color at a distance.
     wash: (look) => mix(look.hue("wall", "#e6e0d0"), look.hue("masonry", "#a89d8a"), 0.42),
     face: (pen, f, look, p) => {
       stoneFace(pen, f, p.stones, (u) => (p.gables === "stone" || !f.end ? f.top(u) : Math.min(f.top(u), f.eave)));
@@ -1182,11 +1179,11 @@ export const INKS: Readonly<Record<string, Ink>> = {
   "thatch@1": roof(thatchParams, {
     overhang: (p) => 0.35 + p.overhang * 0.7,
     plump: (p) => 0.6 + p.thickness * 2.2,
-    // Straw warms whatever color the palette gives the roof.
+    // Mixes the palette's roof color halfway toward straw.
     tint: (c) => mix(c, "#d4a752", 0.5),
     chimney: (p) => p.chimney,
     courses: (pen, s, look) => {
-      // Soft strokes of straw down the slope from the ridge.
+      // Short straw strokes up the slope from the eave.
       const lines: [Pt, Pt][] = [];
       for (let k = 1; k < 9; k++) {
         const u = k / 9 + (noise(look.w.seed, k) - 0.5) * 0.04;
@@ -1196,7 +1193,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
       strokeLines(pen, lines, 0.5, 0.4);
     },
     edge: (pen, s) => {
-      // Thatch is plump: a thick, rounded eave, and the ridge capped.
+      // A line just above the eave and one just below the ridge, for thatch's rolled eave and capped ridge.
       ink(pen, [lerp(s.a, s.d, 0.1), lerp(s.b, s.c, 0.1)], false, 0.6, rgba(INK, 0.6));
       ink(pen, [lerp(s.d, s.a, 0.08), lerp(s.c, s.b, 0.08)], false, 0.6, rgba(INK, 0.6));
     },
@@ -1207,7 +1204,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
     plump: () => 0,
     chimney: (p) => p.chimney,
     courses: (pen, s, _look, p) => {
-      // Slates lie in many fine courses; pantiles in fewer, rippled by their rounded rolls; shingles in staggered courses.
+      // Slates get five fine courses. Pantiles and shingles get three, with ticks for pantiles' rolls and staggered ticks for shingles.
       if (p.covering === "slates") {
         strokeLines(pen, courseLines(s, [0.18, 0.34, 0.5, 0.66, 0.82]), 0.45, 0.42);
         return;
@@ -1231,7 +1228,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
   "casements@1": openings(casementsParams, {
     window: (pen, q, look, p) => {
       const w = look.w;
-      // Dark panes with a little lamplight while the house is lived in, darker and empty as it fails.
+      // Dark panes with a little lamplight that fades as the washes dry, darker as the wall breaks.
       const glass = mix(mix(GLASS, look.hue("glass", "#ffbf66"), 0.22 * (1 - w.dry)), "#241c15", w.breach * 0.8);
       if (p.shutters && w.v > 0.18) {
         const [bl, br, tr, tl] = q as [P3, P3, P3, P3];
@@ -1239,7 +1236,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
         const uz = (br[1] - bl[1]) * 0.55;
         const trim = worn(look.hue("trim", "#7fa36a"), w);
         pane(pen, [[bl[0] - ux, bl[1] - uz, bl[2]], bl, tl, [tl[0] - ux, tl[1] - uz, tl[2]]], trim);
-        // One shutter hangs askew on a tired house.
+        // One shutter hangs askew as vitality falls from 0.6 to 0.35.
         const hang = ease(w.v, 0.6, 0.35) * 0.35 * (tr[2] - br[2]);
         pane(pen, [br, [br[0] + ux, br[1] + uz, br[2] - hang], [tr[0] + ux, tr[1] + uz, tr[2] - hang], tr], trim);
       }
@@ -1308,7 +1305,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
         }
       }
       if (extras.has("fence")) {
-        // A low picket fence round the front garden, gapped for the walk; pickets drop out as the house fails.
+        // A low picket fence across the front garden with a gap for the walk. Pickets drop out as vitality falls.
         const Z = walkTo + 0.4;
         const lines: P3[][] = [];
         const top = 0.95 * K;
@@ -1340,7 +1337,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
         }
       }
       if (extras.has("flower boxes") && w.v > 0.35) {
-        // Flowers under the ground floor's windows toward the walk.
+        // Flowers under the ground floor windows that face the viewer.
         const bloom = mix(look.hue("bloom", "#e8a0b0"), "#d86a5a", 0.25);
         ctx.fillStyle = rgba(bloom, 0.9 * ease(w.v, 0.35, 0.6));
         ctx.beginPath();
@@ -1422,7 +1419,7 @@ export const INKS: Readonly<Record<string, Ink>> = {
 /** How far a mill's wheel is turned toward the viewer from its true plane, radians. */
 const TURN = (35 * Math.PI) / 180;
 
-/** Where a mill's wheel turns, as the wheel stands it: beside the free end, its axle out of the wall; in units, with its radius. */
+/** The mill wheel's center and radius in units, placed as the waterwheel primitive places it: beside the free end, its axle out of the wall. */
 function wheelAt(house: House, radius: number): [number, number, number, number] {
   const { plan, side } = house;
   const W = 0.62 + 0.12 * radius;
@@ -1432,7 +1429,7 @@ function wheelAt(house: House, radius: number): [number, number, number, number]
   return [X, Z, H, radius * K];
 }
 
-/** The mill's great wheel, rimmed and spoked with paddles all round, in its own upright plane; a flume pours onto an overshot wheel, a race runs under an undershot one. It breaks up as the mill fails. */
+/** Draws the mill wheel, rimmed and spoked with paddles all around, in its upright plane. An overshot wheel gets a flume over its top, and an undershot one a race under it. It breaks up as vitality falls. */
 function drawWaterwheel(pen: Pen, house: House, look: Look, radius: number, drive: string): void {
   const w = look.w;
   const { ctx } = pen;
@@ -1440,12 +1437,12 @@ function drawWaterwheel(pen: Pen, house: House, look: Look, radius: number, driv
   const wood = worn(look.hue("timber", "#7a5636"), w);
   const water = ease(w.v, 0.12, 0.5);
   const broken = ease(w.v, 0.3, 0.04);
-  // The wheel turns in the plane across the end wall, which from the south-southwest shows it nearly edge on; it is
-  // drawn turned 35 degrees toward the viewer, as a draughtsman turns a wheel so it reads as one.
+  // The wheel's true plane is across the end wall, which the south-southwest view shows nearly edge on. It is drawn
+  // turned `TURN` (35 degrees) toward the viewer so it reads as a wheel.
   const [ux, uz] = [-Math.sin(TURN), Math.cos(TURN)];
   // `across` runs along the axle, away from the viewer.
   const pt = (t: number, rad: number, across = 0): P3 => [X + Math.cos(t) * rad * ux + across * uz, Z + Math.cos(t) * rad * uz - across * ux, H + Math.sin(t) * rad];
-  // The race: water running out from the pit toward the viewer, dry when the mill has failed.
+  // The race runs out from the pit toward the viewer and dries as vitality falls.
   const race = on(pen, [[X - 1.4, Z + r * 0.4, 0], [X + 1.4, Z + r * 0.4, 0], [X + 1.8, Z - r - 4.5, 0], [X - 1.8, Z - r - 4.5, 0]]);
   wash(pen, race, rgba(mix("#8fa8a6", "#6f9fb4", water), 0.3 + water * 0.4));
   const gap = broken * 1.8;
@@ -1496,7 +1493,7 @@ function drawWaterwheel(pen: Pen, house: House, look: Look, radius: number, driv
   ctx.fillStyle = INK;
   ctx.fill();
   if (drive === "overshot") {
-    // The flume on its trestles, coming in from behind the house over the wheel's top; it sags and drops as the mill fails.
+    // The flume on its trestles, coming from behind the house over the wheel's top. It sags as vitality falls.
     const sag = broken * 2.6;
     const top = H + r + 1.1;
     const z0 = (house.plan.depth / 2 + 2.4) * K;
@@ -1506,16 +1503,16 @@ function drawWaterwheel(pen: Pen, house: House, look: Look, radius: number, driv
     hatch(pen, [[[X, z0 - 1.5, 0], [X, z0 - 1.5, top - 0.8 - sag * 0.9]], [[X, (z0 + Z) / 2, 0], [X + broken * 1.6, (z0 + Z) / 2, top - 0.8 - sag * 0.6]]], INK, 0.8);
     if (water > 0.05) ink(pen, on(pen, [[X, Z + 0.1, top - 0.5], [X, Z - 0.5, top - 1.6], [X, Z - 0.8, top - 2.6]]), false, 1.3 * water, rgba("#5f93b0", 0.9));
   } else if (water > 0.05) {
-    // The race running under the wheel's foot.
+    // Water running under the wheel's base.
     ink(pen, on(pen, [[X, Z + r, 0.3], [X, Z, 0.4], [X, Z - r, 0.3]]), false, 1.6 * water, rgba("#5f93b0", 0.85));
   }
 }
 
-/** Where an archive's tower stands, as the tower stands it: at the back corner on the free side, joined to the house a little; in units, with its side and height. */
+/** The archive tower's position, side and height in units, placed as the tower primitive places it: at the back corner on the free side, overlapping the house a little. */
 function towerAt(house: House, rise: number): { X: number; Z: number; T: number; H: number } {
   const { plan, side } = house;
   const T = clamp(Math.min(plan.width, plan.depth) * 0.62, 3, 3.8);
-  // How far it rises also follows how much leans on its entity; the mark takes the middle of that.
+  // `buildTower` also adds 2.5 times the entity's `reach` fact. The mark uses the default reach of 0.5, which adds 1.25.
   const H = clamp(house.top + rise + 1.25, 8, 19);
   const [X, Z] = fromPlan(side * (plan.width / 2 + T / 2 - 0.35), 0, -plan.depth / 2 - T / 2 + 1.05);
   return { X, Z, T: T * K, H: H * K };
@@ -1530,7 +1527,7 @@ function jagged(xa: number, xb: number, z: number, h: number, fallen: number, se
   return pts;
 }
 
-/** The west face's top edge, straight or jagged as the tower falls, from the front corner back. */
+/** The west face's top edge from the back corner to the front, jagged as `fallen` grows. */
 function jaggedWest(x: number, za: number, zb: number, h: number, fallen: number, seed: number): P3[] {
   if (fallen < 0.05) return [[x, zb, h], [x, za, h]];
   const pts: P3[] = [];
@@ -1538,7 +1535,7 @@ function jaggedWest(x: number, za: number, zb: number, h: number, fallen: number
   return pts;
 }
 
-/** An archive's square tower, rendered between stone quoins with narrow lamplit windows, under a steep cap or an open lantern room; it crumbles from the top as the archive fails. */
+/** Draws an archive's square rendered tower with stone quoins and narrow lamplit windows, under a steep cap or an open lantern room. It crumbles from the top as vitality falls. */
 function drawArchiveTower(pen: Pen, house: House, look: Look, rise: number, cap: string): void {
   const w = look.w;
   const t = towerAt(house, rise);
@@ -1552,7 +1549,7 @@ function drawArchiveTower(pen: Pen, house: House, look: Look, rise: number, cap:
   const stone = worn(look.hue("masonry", "#b8b0a0"), w);
   face(pen, [[x0, z0, 0], [x0, z1, 0], ...jaggedWest(x0, z0, z1, top, fallen, w.seed + 4)], lit(render, 0.14));
   face(pen, [[x0, z0, 0], [x1, z0, 0], ...jagged(x1, x0, z0, top, fallen, w.seed + 1)], shaded(render, 0.16));
-  // Quoins up its front corners, narrow lamplit windows.
+  // Quoins up its front corners, then narrow lamplit windows.
   for (let h = 0.4, k = 0; h < top - 0.6 - fallen * 3; h += 1.3, k++) {
     const long = k % 2 === 0 ? 0.8 : 0.55;
     for (const [X, dir] of [[x1, -1], [x0, 1]] as const) pane(pen, [[X, z0, h], [X + dir * long, z0, h], [X + dir * long, z0, h + 0.6], [X, z0, h + 0.6]], shaded(stone, 0.1));
@@ -1564,7 +1561,7 @@ function drawArchiveTower(pen: Pen, house: House, look: Look, rise: number, cap:
     if (cap === "lantern") lantern(pen, t.X, t.Z, t.T / 2 - 0.3, top, look);
     else pyramid(pen, t.X, t.Z, t.T / 2 + 0.5, top, t.T * 0.95, look);
   } else {
-    // Its face holed where blocks have fallen out, ivy over the stump, stone at its foot.
+    // Holes where blocks have fallen out, ivy over the stump, and rubble at its base.
     for (const [X, h, r] of [[t.X - t.T * 0.15, top - 3.6, 0.7], [t.X + t.T * 0.2, top - 6.2, 0.55]] as const) {
       const hole = on(pen, [[X - r, z0, h - r], [X + r * 0.6, z0, h - r * 1.2], [X + r, z0, h + r * 0.3], [X - r * 0.2, z0, h + r], [X - r * 1.1, z0, h + r * 0.2]]);
       wash(pen, hole, rgba("#2c2219", fallen * 0.85));
@@ -1574,7 +1571,7 @@ function drawArchiveTower(pen: Pen, house: House, look: Look, rise: number, cap:
   }
 }
 
-/** A steep four-sided cap with a finial, which sinks and loses its finial as its tower fails. */
+/** A steep four-sided cap with a finial. As vitality falls it sinks and loses the finial. */
 function pyramid(pen: Pen, X: number, Z: number, half: number, base: number, height: number, look: Look): void {
   const w = look.w;
   const gone = ease(w.v, 0.62, 0.38);
@@ -1588,7 +1585,7 @@ function pyramid(pen: Pen, X: number, Z: number, half: number, base: number, hei
   }
 }
 
-/** An open lantern room: four posts and a glow under a pyramid cap, which goes first as its tower fails. */
+/** An open lantern room: four posts and a glow under a pyramid cap. As vitality falls the cap goes first, then the posts. */
 function lantern(pen: Pen, X: number, Z: number, half: number, base: number, look: Look): void {
   const w = look.w;
   const capGone = ease(w.v, 0.62, 0.42);
@@ -1609,15 +1606,15 @@ function lantern(pen: Pen, X: number, Z: number, half: number, base: number, loo
   }
 }
 
-// Features in the yard: each stands where its own build puts it, `x` meters out from the free side and `z` along it.
+// Yard features: each is placed where its primitive's build places it, `x` meters out from the free side and `z` along it.
 
-/** Where a feature in the yard stands, in units: `x` meters out from the house's free side and `z` along it toward the door. */
+/** A yard feature's position in units: `x` meters out from the house's free side and `z` along it toward the door. */
 function yardAt(house: House, x: number, z: number): [number, number] {
   const [X, Z] = fromPlan(house.side * (house.plan.width / 2 + x), 0, z);
   return [X, Z];
 }
 
-/** A round column at (`X`, `Z`) from `h0` up to `h1` units, `r` units round: lit from the west, its top a disc, course lines every `course` units when given. */
+/** A round column of radius `r` at (`X`, `Z`) from `h0` up to `h1` units, lit from the west. `top` fills its top disc, and `course` adds course lines that many units apart. */
 function column(pen: Pen, X: number, Z: number, h0: number, h1: number, r: number, color: string, top: string | null, course?: number): void {
   const { ctx, s } = pen;
   const [bx, by] = pen.at(X, Z, h0);
@@ -1665,7 +1662,7 @@ function column(pen: Pen, X: number, Z: number, h0: number, h1: number, r: numbe
   }
 }
 
-/** A cone at (`X`, `Z`) from a ring `r` units round at `base` up to `apex`, lit from the west. */
+/** A cone at (`X`, `Z`) from radius `r` at `base` up to `apex`, lit from the west. */
 function cone(pen: Pen, X: number, Z: number, base: number, r: number, apex: number, color: string): void {
   const { ctx, s } = pen;
   const [bx, by] = pen.at(X, Z, base);
@@ -1688,7 +1685,7 @@ function cone(pen: Pen, X: number, Z: number, base: number, r: number, apex: num
   ctx.stroke(body);
 }
 
-/** A gabled roof whose ridge runs north and south over [x0, x1] × [z0, z1] units, its eaves at `eave` and its ridge at `ridge`; `gable` washes its south gable, or leaves it open. */
+/** A gabled roof whose ridge runs north and south over [x0, x1] × [z0, z1] units, with its eaves at `eave` and its ridge at `ridge`. `gable` is the south gable's color, or null to leave it open. */
 function gableRoof(pen: Pen, x0: number, x1: number, z0: number, z1: number, eave: number, ridge: number, color: string, gable: string | null): void {
   const xc = (x0 + x1) / 2;
   face(pen, [[xc, z0, ridge], [x1, z0, eave], [x1, z1, eave], [xc, z1, ridge]], shaded(color, 0.22));
@@ -1696,7 +1693,7 @@ function gableRoof(pen: Pen, x0: number, x1: number, z0: number, z1: number, eav
   if (gable !== null) face(pen, [[x0 + 0.3, z0, eave], [x1 - 0.3, z0, eave], [xc, z0, ridge - 0.3]], shaded(gable, 0.14));
 }
 
-/** A dovecote: a squat round stone cote under a cone and lantern, or a painted box on a post; its cone rots open, or the post leans, as the code fails. */
+/** A dovecote: a squat round stone cote under a cone and lantern, or a painted box on a post. As vitality falls the cone rots open or the box shifts off its post. */
 function drawDovecote(pen: Pen, house: House, look: Look, cote: string): void {
   const w = look.w;
   const roofC = worn(look.hue("roof", "#8a6a50"), w, 0.6);
@@ -1754,7 +1751,7 @@ function drawDovecote(pen: Pen, house: House, look: Look, cote: string): void {
   ivy(pen, X + R * K * 0.7, Z - R * K * 0.6, H * K, w.ivy * 0.55, w.seed + 13, 1);
 }
 
-/** A well: a ring of stone round dark water, under a little roof on two posts or beside a sweep; its water dulls and its bucket goes as the code fails. */
+/** A well: a stone ring around water, under a small roof on two posts or beside a sweep. As vitality falls its water darkens and its bucket goes. */
 function drawWell(pen: Pen, house: House, look: Look, head: string, width: number): void {
   const w = look.w;
   const outer = width + 0.3;
@@ -1797,7 +1794,7 @@ function drawWell(pen: Pen, house: House, look: Look, head: string, width: numbe
   if (bucket) box(pen, X - 0.22, X + 0.22, Z - 0.2, Z + 0.2, 0.98 * K, 1.26 * K, timber);
 }
 
-/** A bell under a little roof, its arch or frame facing the front, in stone or raked timbers; it hangs askew and then is gone as the code fails. */
+/** A bell under a small roof, in a stone arch or a raked timber frame facing the front. As vitality falls it hangs askew and then is gone. */
 function drawBell(pen: Pen, house: House, look: Look, hanging: string, size: number): void {
   const w = look.w;
   const [X, Z] = yardAt(house, 2.4, -house.plan.depth * 0.18);
@@ -1830,7 +1827,7 @@ function drawBell(pen: Pen, house: House, look: Look, hanging: string, size: num
     ridge = wallTop + 0.55 * K;
     span = half + pier + 0.18 * K;
   }
-  // The bell in the opening, dark iron, hanging askew as the code fails and then gone.
+  // The dark iron bell in the opening, tilting as vitality falls and gone below 0.14.
   if (w.v > 0.14) {
     const tilt = ease(w.v, 0.4, 0.26) * 0.5;
     const hang: P3 = [X, front - 0.1, spring - 0.05 * K];
@@ -1839,7 +1836,7 @@ function drawBell(pen: Pen, house: House, look: Look, hanging: string, size: num
     const H = 1.2 * B;
     face(pen, [bell(-0.45 * B, 0), bell(0.45 * B, 0), bell(0.62 * B, H * 0.55), bell(B, H), bell(-B, H), bell(-0.62 * B, H * 0.55)], mix("#4a4440", "#2f2b29", 0.3));
   }
-  // The little roof, its ridge along the arch, a slope toward the viewer.
+  // The small roof, with its ridge along the arch and a slope toward the viewer.
   const eave = ridge - 0.55 * K;
   const ez = (hanging === "a timber frame" ? 0.62 : 0.53) * K;
   const roofC = worn(look.hue("roof", "#8a6a50"), w, 0.6);
@@ -1848,7 +1845,7 @@ function drawBell(pen: Pen, house: House, look: Look, hanging: string, size: num
   face(pen, [[X - span, Z - ez, eave], [X - span, Z, ridge], [X - span, Z + ez, eave]], lit(timber, 0.15));
 }
 
-/** A smith's forge: a tall stack and a hearth under a hood, smoking and glowing while the code is healthy, in an open shed or under the sky. */
+/** A smith's forge: a stack, a hearth and an anvil, in an open shed or in the open. Its smoke and the hearth's glow fade as vitality falls. */
 function drawForge(pen: Pen, house: House, look: Look, shelter: string, stack: number): void {
   const w = look.w;
   const at = (x: number, z: number): [number, number] => yardAt(house, x, -house.plan.depth * 0.2 + z);
@@ -1892,7 +1889,7 @@ function drawForge(pen: Pen, house: House, look: Look, shelter: string, stack: n
   box(pen, ax - 0.45, ax + 0.45, Z - 0.65, Z - 0.05, 0.75 * K, 0.88 * K, "#3f3a36");
 }
 
-/** A boarded granary raised on staddle stones, gabled or hipped; it slumps over as the code fails. */
+/** A boarded granary raised on staddle stones, gabled or hipped. It slumps sideways as vitality falls. */
 function drawGranary(pen: Pen, house: House, look: Look, size: number, roofForm: string): void {
   const w = look.w;
   const L = size;
@@ -1938,15 +1935,15 @@ function ringPoint(sides: number, a: number, r: number): [number, number] {
   return [Math.cos(a) * k, Math.sin(a) * k];
 }
 
-/** How a face turned toward `a` takes the northwest light: above 0 lit, below 0 in shade. */
+/** How much a face turned toward `a` is lit from the northwest: above 0 lit, below 0 in shade. */
 const lightOf = (a: number): number => -0.8 * Math.cos(a) + 0.6 * Math.sin(a);
-/** How far a face turned toward `a` looks toward the viewer at the south-southwest. */
+/** How much a face turned toward `a` faces the viewer at the south-southwest. */
 const viewOf = (a: number): number => -0.415 * Math.cos(a) - 0.91 * Math.sin(a);
 
 /**
- * One drum of a tower between heights `h0` and `h1` (units), its wall `r0` out at the foot and `r1` at the top: round,
- * or a polygon of `sides` faces, each face lit by how it turns to the light. With `jag` its top is broken into a
- * jagged edge. Course lines every `course` units, when given.
+ * One drum of a tower between heights `h0` and `h1` in units, with wall radius `r0` at the base and `r1` at the top.
+ * It is round, or a polygon of `sides` faces each shaded by its angle to the light. `jag` breaks its top into a jagged
+ * edge, and `course` adds course lines that many units apart.
  */
 function drum(pen: Pen, sides: number, h0: number, r0: number, h1: number, r1: number, color: string, opts: { jag?: number; seed?: number; course?: number; weight?: number; alpha?: number } = {}): void {
   const { ctx, s } = pen;
@@ -2044,7 +2041,7 @@ function disc(pen: Pen, sides: number, h: number, r: number, color: string, weig
   face(pen, pts, color, weight);
 }
 
-/** A tower's open lantern room: posts round a glow, which go as its tower fails. */
+/** A tower's open lantern room: posts around a glow. `posts` and `glass` give how far each has gone, from 0 to 1. */
 function lanternRoom(pen: Pen, sides: number, base: number, r: number, height: number, look: Look, posts: number, glass: number): void {
   const glow = 1 - glass;
   const top = base + height;
@@ -2062,7 +2059,7 @@ function lanternRoom(pen: Pen, sides: number, base: number, r: number, height: n
   }
 }
 
-/** A tower's walkway on corbels at height `h`, ringing a wall `r` out: the corbels, the floor and the parapet, `parapet` units high. */
+/** A tower's gallery on corbels at height `h` around a wall of radius `r`: the corbels, the floor, and a parapet `parapet` units high. */
 function gallery(pen: Pen, sides: number, h: number, r: number, parapet: number, stone: string): void {
   const out = r + 0.95 * LK;
   drum(pen, sides, h - 0.8 * LK, r, h, out, shaded(stone, 0.22));
@@ -2070,7 +2067,7 @@ function gallery(pen: Pen, sides: number, h: number, r: number, parapet: number,
   if (parapet > 0) drum(pen, sides, h, out, h + parapet, out, stone, { weight: 0.8 });
 }
 
-/** Battlements round an open top at `h`, on a wall `r` out: far merlons, the walk, the near parapet and its merlons, each going one by one as the tower fails. */
+/** Battlements around an open top at `h` on a wall of radius `r`: far merlons, the walk, the near parapet and its merlons. Merlons drop out one by one as vitality falls. */
 function battlements(pen: Pen, sides: number, h: number, r: number, stone: string, w: Wear, seed: number): void {
   const n = Math.max(6, Math.round((Math.PI * 2 * r) / (1.9 * LK)));
   const kept = (k: number): boolean => noise(seed, k + 400) * 0.5 + 0.38 < w.v;
@@ -2085,7 +2082,7 @@ function battlements(pen: Pen, sides: number, h: number, r: number, stone: strin
   for (let k = 0; k < n; k++) if (Math.sin((k / n) * Math.PI * 2) <= 0 && kept(k)) merlon(k, h + 1, h + 1.8 * LK);
 }
 
-/** A cone or a many-sided spire from a ring `r` out at `h0` up to its point at `h1`, rotting through as its tower fails; a finial while it is whole. */
+/** A cone or many-sided spire from radius `r` at `h0` up to its point at `h1`. It has a finial while whole and rots through as `gone` rises. */
 function spire(pen: Pen, sides: number, h0: number, r: number, h1: number, look: Look, gone: number, seed: number): void {
   const c = worn(look.hue("roof", "#5d8a7a"), look.w, 0.5);
   const apex = h0 + (h1 - h0) * (1 - 0.55 * gone);
@@ -2101,7 +2098,7 @@ function spire(pen: Pen, sides: number, h0: number, r: number, h1: number, look:
   }
 }
 
-/** A stone tower from its own words: its plan, how it rises, its galleries and crown; the crown goes first, then the shaft falls from the top. */
+/** Draws a stone tower from its parameters: plan, profile, galleries and crown. As vitality falls the crown goes first, then the shaft falls from the top. */
 function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerParams>, seed: number): void {
   const w = look.w;
   const sides = p.plan === "round" ? 0 : p.plan === "square" ? 4 : 8;
@@ -2132,7 +2129,7 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
   castShadow(pen, ellipseFeet(0, 0, r0, r0, top * 0.8));
   // The hollow inside a crumbling top, its far wall in shade.
   if (jag > 0.05) disc(pen, sides, top - jag * 1.2, wallAt((top / LK) * 0.99) * 0.9, shaded(stone, 0.55), 0.6);
-  // The shaft, stage by stage, a string course where each sets back.
+  // The shaft stage by stage, with a string course where each stage sets back.
   const breaks = [0, ...stagesM.map((y) => y * LK).filter((y) => y < top - 0.5), top];
   for (let i = 0; i + 1 < breaks.length; i++) {
     const h0 = breaks[i] as number;
@@ -2150,7 +2147,7 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
   const [dX, dZ] = ringPoint(sides, sides === 0 ? ahead : -Math.PI / 2, r0);
   towerDoor(pen, dX, dZ, 0.75, 2.6, worn("#5a4030", w));
   tufts(pen, [[-r0 - 0.6, -r0 * 0.5], [r0 + 0.4, -r0 * 0.4]], w);
-  // Galleries where the stages meet, while they stand.
+  // Galleries where the stages meet, until vitality drops them.
   const tiers = { cap: ease(w.v, 0.66, 0.46), glass: ease(w.v, 0.6, 0.4), posts: ease(w.v, 0.5, 0.38), gallery: ease(w.v, 0.42, 0.34) };
   if (p.galleries === "a gallery at every stage" && tiers.gallery < 0.9) for (const y of stagesM) if (y * LK < top - 1) gallery(pen, sides, y * LK, wallAt(y), 0.9 * LK, stone);
   if (jag > 0.05) {
@@ -2176,7 +2173,7 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
     lanternRoom(pen, sides, crownBase, lr, lh, look, tiers.posts, tiers.glass);
     if (tiers.cap < 0.9) spire(pen, sides, crownBase + lh * (1 - tiers.posts), lr + 0.5 * LK, Math.max(crownBase + lh + 1.4 * LK, m * LK), look, tiers.cap, seed);
   } else if (tiers.cap < 0.9) {
-    // A drum inside the gallery carries the roof, whose eaves sit about three quarters up.
+    // With a gallery, a drum inside it carries the roof, so the eaves sit about three quarters of the way up the tower.
     let eaves = crownBase;
     let eavesR = head + 0.4 * LK;
     if (hasGallery) {
@@ -2189,8 +2186,8 @@ function drawLookoutTower(pen: Pen, look: Look, p: Resolved<typeof lookoutTowerP
 }
 
 /**
- * A windmill from its own words: its body and cap, and its sails turned to the viewer, in front. As it fails its
- * sails go bare to their frames, then its cap (a post mill's whole body) tips to one side.
+ * Draws a windmill from its parameters: body, cap, and sails facing the viewer in front. As vitality falls the sails
+ * go bare to their frames, then the cap, or a post mill's whole body, tips to one side.
  */
 function drawWindmill(pen: Pen, look: Look, p: Resolved<typeof windmillParams>): void {
   const w = look.w;
@@ -2200,7 +2197,7 @@ function drawWindmill(pen: Pen, look: Look, p: Resolved<typeof windmillParams>):
   const timber = worn(look.hue("timber", "#6b4f3a"), w);
   const roof = worn(look.hue("roof", "#8f7f62"), w, 0.5);
   const boards = worn(look.hue("render", "#e2d4b6"), w);
-  /** A point tipped east about height `from` as the mill fails. */
+  /** Shifts a point east by `tip` times its height above `from`. */
   const tipped = (from: number) => ([X, Z, H]: P3): P3 => [X + tip * Math.max(0, H - from), Z, H];
   let hub: P3;
   let clear: number;
@@ -2246,7 +2243,7 @@ function drawWindmill(pen: Pen, look: Look, p: Resolved<typeof windmillParams>):
     hub = t([0, -capR - 1.0 * LK, curb + rise * 0.28]);
     clear = stageAt + 1.4 * LK;
   }
-  // The sails, flat to the eye about the hub.
+  // The sails, drawn flat to the viewer around the hub.
   const [hx, hy] = pen.at(...hub);
   const count = p.sails === "six sails" ? 6 : 4;
   const R = Math.min(m * 0.56, hub[2] - clear);
@@ -2278,7 +2275,7 @@ function drawWindmill(pen: Pen, look: Look, p: Resolved<typeof windmillParams>):
 /** Which way an avenue of stones runs, radians from east toward north. */
 const AVENUE = (32 * Math.PI) / 180;
 
-/** A standing stone at (`X`, `Z`): `h` tall and `wd` wide; it leans whole about its foot toward `a` (radians from east toward north) as `lean` grows to 1, lying in the grass, or snaps. */
+/** A standing stone at (`X`, `Z`), `h` tall and `wd` wide. As `lean` grows to 1 it tips about its base toward `a` (radians from east toward north) until it lies flat, or it snaps. */
 interface Stone {
   readonly X: number;
   readonly Z: number;
@@ -2291,7 +2288,7 @@ interface Stone {
   readonly broken?: boolean;
 }
 
-/** One standing stone: a tall slab with a rounded or a faceted top, lit on its west edge; leaning out about its foot as `lean` grows, and lying in the grass at 1. */
+/** Draws one standing stone: a tall slab with a rounded or faceted top, lit on its west edge. It tips about its base as `lean` grows and lies flat at 1. */
 function drawStone(pen: Pen, st: Stone, grey: string, sharp: boolean, seed: number): void {
   const t = st.lean * (Math.PI / 2) * 0.96;
   const ox = Math.cos(st.a);
@@ -2299,7 +2296,7 @@ function drawStone(pen: Pen, st: Stone, grey: string, sharp: boolean, seed: numb
   const up = Math.cos(t);
   const out = Math.sin(t);
   const half = st.wd / 2;
-  // Across the slab: a standing stone shows the viewer its broad face; one lying down lies across its fall.
+  // The slab's width axis. A standing stone shows the viewer its broad face, and a fallen one lies across its fall direction.
   const ax = 1 + (-oz - 1) * st.lean;
   const az = ox * st.lean;
   const al = Math.hypot(ax, az) || 1;
@@ -2329,7 +2326,7 @@ function drawStone(pen: Pen, st: Stone, grey: string, sharp: boolean, seed: numb
   if (noise(seed, 1) > 0.4 && st.lean < 0.5) hatch(pen, [[tipAt(0.3, -0.2), tipAt(0.55, 0.15)]], rgba(INK, 0.4), 0.45);
 }
 
-/** A cairn: small stones piled in a rounded cone at (`X`, `Z`), `tall` units high; its top stones tumble first, sliding down the pile. */
+/** A cairn of small stones in a rounded cone at (`X`, `Z`), `tall` units high. As vitality falls it loses height and spreads, with rubble at its base. */
 function drawCairn(pen: Pen, X: number, Z: number, tall: number, grey: string, w: Wear, seed: number): void {
   const { ctx, s } = pen;
   const lost = ease(w.v, 0.42 + noise(seed, 3) * 0.2, 0.05) * 0.55;
@@ -2380,9 +2377,9 @@ function drawCairn(pen: Pen, X: number, Z: number, tall: number, grey: string, w
   rubble(pen, X + R * 0.6, Z - R * 0.5, lost * tall * 0.6, seed, grey);
 }
 
-/** A dolmen's capstone across its uprights' tops, tipping off as it fails until its far edge rests on the ground. */
+/** A dolmen's capstone across its uprights' tops. As `tip` rises to 1 its east end comes down to the ground. */
 function capstone(pen: Pen, X: number, Z: number, L: number, W: number, h: number, thick: number, tip: number, grey: string): void {
-  // It tips about its west edge: its east end comes down.
+  // It tips about its west edge, so its east end comes down.
   const east = h * (1 - tip);
   const pts = (dh: number): P3[] => [[X - L / 2, Z - W / 2, h + dh], [X + L / 2, Z - W / 2, east + dh], [X + L / 2, Z + W / 2, east + dh], [X - L / 2, Z + W / 2, h + dh]];
   const [b0, b1] = pts(0);
@@ -2392,7 +2389,7 @@ function capstone(pen: Pen, X: number, Z: number, L: number, W: number, h: numbe
   face(pen, [t0 as P3, t1 as P3, t2 as P3, t3 as P3], lit(grey, 0.28));
 }
 
-/** Great stones in their arrangement: a ring, an avenue, a dolmen, a field of cairns or loose menhirs. The lintels and capstone go first; then the stones lean, snap or lie down. */
+/** Draws standing stones in their arrangement: a ring, an avenue, a dolmen, a cairn field or loose menhirs. As vitality falls the lintels and capstone go first, then the stones lean, snap or lie flat. */
 function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParams>, seed: number): void {
   const w = look.w;
   const h = p.height * LK;
@@ -2405,7 +2402,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
   const cairns: [number, number, number][] = [];
   let heart: [number, number] = [0, 0];
   let cap: { X: number; Z: number; L: number; W: number; h: number } | null = null;
-  /** A stone that stands until vitality drops past its own threshold, then leans out over a stretch and lies down, or snaps. */
+  /** A stone that stands until vitality drops below its own threshold, then tips over a range of vitality until it lies flat, or snaps. */
   const stand = (k: number, X: number, Z: number, height: number, width: number, out: number, leaning = 0): Stone => {
     const th = -0.04 + noise(seed, k + 600) * 0.56;
     const snaps = noise(seed, k + 640) < 0.3;
@@ -2417,13 +2414,13 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
     const turn = noise(seed, 1) * Math.PI * 2;
     for (let k = 0; k < n; k++) {
       const a = turn + (k / n) * Math.PI * 2;
-      // A fallen stone lies along the ring more than out of it, so the ring still shows in the grass.
+      // A stone falls mostly along the ring rather than outward, so the ring still reads.
       stones.push(stand(k, Math.cos(a) * R, Math.sin(a) * R, h * (0.88 + noise(seed, k + 610) * 0.26), wd * (0.9 + noise(seed, k + 620) * 0.25), a));
     }
     if (p.lintels) for (let k = 0; k + 1 < n; k += 2) lintels.push([k, k + 1]);
   } else if (p.arrangement === "avenue") {
-    // Two facing rows, rising toward the head. Seen side on the rows would stand in one line like a fence, so the
-    // avenue is drawn running away from the viewer at a slant, its head to the east-northeast.
+    // Two facing rows that rise toward the head. Seen side on, the rows would overlap in one line, so the avenue runs
+    // away from the viewer at a slant (`AVENUE`), with its head to the east-northeast.
     const pairs = Math.max(2, Math.round(n / 2));
     const spacing = wd * 2.1;
     const across = clamp(p.height * 0.9, 3, 5) * LK;
@@ -2449,7 +2446,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
       const a = (k / kerb) * Math.PI * 2;
       stones.push(stand(k + 50, Math.cos(a) * kerbR, Math.sin(a) * kerbR * 0.85, h * 0.2, h * 0.24, a));
     }
-    // The uprights on the east side give way outward, after the capstone has tipped off.
+    // The east uprights lean outward once the capstone has tipped off.
     for (const [fx, fz] of legs) stones.push({ X: fx * capL, Z: fz * capW, h: legH, wd: capW * 0.42, a: fx >= 0 ? 0 : Math.PI, lean: fx >= 0 ? ease(w.v, 0.3, 0.12) * 0.7 : ease(w.v, 0.2, 0.05) * 0.15, snapped: false, king: false });
     cap = { X: 0, Z: 0, L: capL, W: capW, h: legH };
   } else if (p.arrangement === "cairn field") {
@@ -2485,7 +2482,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
   // The shadow over the whole arrangement.
   const feet: [number, number, number][] = [...stones.map((st) => [st.X, st.Z, st.h * 0.5] as [number, number, number]), ...cairns.map(([X, Z, t]) => [X, Z, t * 0.6] as [number, number, number])];
   castShadow(pen, feet, 0.7);
-  // Lintels drop first, before their stones.
+  // Lintels drop before their stones.
   const up = (k: number): boolean => (stones[k] as Stone).lean < 0.02 && !(stones[k] as Stone).snapped;
   const standing = lintels.filter(([i, j]) => w.v > 0.5 + noise(seed, i + 650) * 0.35 && up(i) && up(j));
   const things: { depth: number; draw: () => void }[] = [];
@@ -2494,7 +2491,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
       depth: depthOf(st.X, st.Z),
       draw: () => {
         if (st.snapped) {
-          // The top lies at the foot, then the stump stands over it.
+          // Draws the fallen top first, then the stump over it.
           drawStone(pen, { ...st, X: st.X + Math.cos(st.a) * 1.6, Z: st.Z + Math.sin(st.a) * 1.6, h: st.h * 0.6, lean: 1 }, grey, sharp, seed + i);
           drawStone(pen, { ...st, h: st.h * 0.42, broken: true }, grey, sharp, seed + i);
         } else drawStone(pen, st, grey, sharp, seed + i);
@@ -2509,7 +2506,7 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
       depth: Math.min(depthOf(a.X, a.Z), depthOf(b.X, b.Z)) - 0.01,
       draw: () => {
         face(pen, [[a.X, a.Z, lh - 0.2], [b.X, b.Z, lh - 0.2], [b.X, b.Z, lh + 1], [a.X, a.Z, lh + 1]], shaded(grey, 0.12), 0.85);
-        // Its top, seen past its near face: the slab's depth runs across the line between its stones, away from the viewer.
+        // The lintel's top. Its depth runs across the line between its stones, away from the viewer.
         const len = Math.hypot(b.X - a.X, b.Z - a.Z) || 1;
         const [px, pz] = [(-(b.Z - a.Z) / len) * 0.9, ((b.X - a.X) / len) * 0.9];
         const [dx, dz] = pz >= 0 ? [px, pz] : [-px, -pz];
@@ -2528,9 +2525,9 @@ function drawStones(pen: Pen, look: Look, p: Resolved<typeof standingStonesParam
 }
 
 /**
- * A rock arch from its form and thickness: the ring's face toward the viewer over its far face in shade. As it fails,
- * at the shown vitalities `buildRockArch` gives way at: the crack opens at its crown; one half of the span falls; its
- * stack crumbles to a stump over the rubble while the other half breaks part way out, leaving its stack with a stub.
+ * Draws a rock arch from its form and thickness: the near face over the far face in shade. It fails at the same shown
+ * vitalities as `buildRockArch`. A crack opens at the crown, then one half of the span falls. That half's stack
+ * crumbles to a stump over the rubble, and the other half breaks part way out, leaving a stub on its stack.
  */
 function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, seed: number): void {
   const w = look.w;
@@ -2542,11 +2539,11 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
   const stone = worn(look.hue("stone", "#c4b498"), w);
   const crack = ease(w.v, 0.56, 0.48);
   const fallen = w.v < 0.45;
-  /** How high the bare stack stands, as a share of the rise: to its springing, then its middle block, then its stump. */
+  /** The bare stack's height as a share of the rise, dropping from its springing to its middle block to its stump as vitality falls. */
   const bare = w.v < 0.15 ? 0.4 : w.v < 0.35 ? 0.6 : 0.76;
   const stubbed = w.v < 0.25;
-  // The opening's edge from foot to foot, up each straight side a few points at a time so a stack can break off at
-  // any height, each point with its normal out into the stone; and the ring's outside, thicker low down.
+  // The opening's edge from base to base, with several points up each straight side so a stack can break off at any
+  // height. Each point carries its normal into the stone. `outer` is the ring's outside, thicker low down.
   const n = 24;
   const legs = 6;
   const head_ = (k: number): { x: number; h: number; nx: number; nh: number } => {
@@ -2577,8 +2574,8 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
     piece(0, mid, -crack * 0.5);
     piece(mid, inner.length - 1, crack * 0.5);
   } else {
-    // The bare stack on the left, the one that stands on the right: its half of the span whole, then broken part way
-    // out from its springing, as far as the world's.
+    // The bare stack on the left, and on the right the standing half of the span. Below vitality 0.25 that half breaks
+    // part way out from its springing, matching the world (`ROCK_ARCH_STUB`).
     const left = Math.max(1, inner.findIndex(([, h], i) => i > 0 && h >= bare * rise));
     const spring = Math.min(inner.length - 2, inner.length - 1 - [...inner].reverse().findIndex(([, h], i) => i > 0 && h >= 0.76 * rise));
     piece(0, left, -0.5);
@@ -2589,8 +2586,8 @@ function drawRockArch(pen: Pen, look: Look, p: Resolved<typeof rockArchParams>, 
 }
 
 /**
- * A rotunda from its columns, roof and steps: the stepped base, the columns, the ring over them and its dome. As it
- * fails the dome sinks to its foot and is gone, then the columns lie fallen outward round the steps.
+ * Draws a rotunda from its columns, roof and steps: the stepped base, the columns, the entablature ring and the dome.
+ * As vitality falls the dome sinks and is gone, then the columns fall outward around the steps.
  */
 function drawRotunda(pen: Pen, look: Look, p: Resolved<typeof rotundaParams>, seed: number): void {
   const w = look.w;
@@ -2608,7 +2605,7 @@ function drawRotunda(pen: Pen, look: Look, p: Resolved<typeof rotundaParams>, se
   const down = ease(w.v, 0.2, 0.04);
   castShadow(pen, ellipseFeet(0, 0, top + steps * M.step.tread * LK, top, colH * 0.8));
   const angles = Array.from({ length: n }, (_, k) => Math.PI / 2 + ((k + 0.5) / n) * Math.PI * 2);
-  // Columns lie fallen outward once they go, one by one as vitality falls.
+  // Columns fall outward one by one as vitality falls.
   const fallenAt = angles.map((_, k) => noise(seed, k + 40));
   const isDown = (k: number): boolean => (fallenAt[k] as number) < down;
   angles.forEach((a, k) => {
@@ -2639,9 +2636,9 @@ function drawRotunda(pen: Pen, look: Look, p: Resolved<typeof rotundaParams>, se
     spring += 2 * LK;
   }
   const foot = ring + M.eave * LK;
-  // A shallow dome drawn a little higher than it stands, as a mapmaker draws a roof, so it reads as a dome.
+  // A shallow dome is drawn a little higher than its true rise (`ROOF_LIFT`), so it reads as a dome.
   const riseH = (high ? 0.65 : 0.38 * ROOF_LIFT * 1.2) * foot;
-  // Fallen in from its crown: what stands ends in a ragged edge.
+  // As the dome falls in from its crown, the remaining part ends in a ragged edge.
   const cap = spring + riseH * dome;
   face(pen, Array.from({ length: 17 }, (_, k): P3 => {
     const H = spring + riseH * Math.sin((k / 16) * Math.PI);
@@ -2650,7 +2647,7 @@ function drawRotunda(pen: Pen, look: Look, p: Resolved<typeof rotundaParams>, se
   if (high && dome > 0.95) drum(pen, 0, spring + riseH, foot * 0.16, spring + riseH + 2 * LK, foot * 0.12, stone);
 }
 
-/** How each great tree grows, at "vast": its trunk, its crown as lobes (east, up, radius in units), its great limbs, and its green. */
+/** Each great tree form at size "vast": trunk height, girth, crown lobes as (east, up, radius) in units, main limbs and green. */
 const TREE_FORMS: Readonly<Record<string, { trunk: number; girth: number; crown: (seed: number) => [number, number, number][]; green: string; limbs: readonly (readonly [readonly (readonly [number, number])[], number])[] }>> = {
   "a spreading oak": {
     trunk: 4.6,
@@ -2682,7 +2679,7 @@ const TREE_FORMS: Readonly<Record<string, { trunk: number; girth: number; crown:
   },
 };
 
-/** Lobes over a dome centered `h` up, `rx` across and `ry` high: a ring round its outline and a few inside, each about `r`. */
+/** Crown lobes over a dome centered `h` up, `rx` across and `ry` high: a ring along its outline and a few inside, each about radius `r`. */
 function dome(seed: number, dx: number, h: number, rx: number, ry: number, r: number, count: number): [number, number, number][] {
   const out: [number, number, number][] = [];
   const rim = Math.ceil(count * 0.65);
@@ -2694,7 +2691,7 @@ function dome(seed: number, dx: number, h: number, rx: number, ry: number, r: nu
   return out;
 }
 
-/** A great tree from its form and age: a lobed crown on a trunk that flares and forks lower as it ages, bare limbs above an ancient crown; it thins, browns and stands bare as it fails. */
+/** Draws a great tree from its form and age: a lobed crown on a trunk that flares more with age, with bare limbs above an old crown. As vitality falls the crown thins, browns and goes bare. */
 function drawGreatTree(pen: Pen, look: Look, p: Resolved<typeof greatTreeParams>, seed: number): void {
   if (p.form === "a great willow") {
     greatWillow(pen, look, p.size / 2.7, p.age, seed);
@@ -2703,7 +2700,7 @@ function drawGreatTree(pen: Pen, look: Look, p: Resolved<typeof greatTreeParams>
   const form = TREE_FORMS[p.form] ?? (TREE_FORMS["a spreading oak"] as NonNullable<(typeof TREE_FORMS)[string]>);
   const w = look.w;
   const { ctx } = pen;
-  // A young giant stands a little taller; an ancient one spreads lower and wider.
+  // A young tree is a little taller, and an old one lower and wider.
   const f = (p.size / 2.7) * (1.06 - 0.12 * p.age);
   const at = (dx: number, h: number): Pt => pen.up(dx * f * (1 + 0.1 * p.age), h * f);
   const leaf = ease(w.v, 0.1, 0.8);
@@ -2712,9 +2709,9 @@ function drawGreatTree(pen: Pen, look: Look, p: Resolved<typeof greatTreeParams>
   castShadow(pen, ellipseFeet(width * f * 0.25, -width * f * 0.3, width * f * 0.85 * (0.5 + leaf * 0.5), width * f * 0.55 * (0.5 + leaf * 0.5), 0), 0.5 + leaf * 0.6);
   const bark = worn(mix(look.hue("bark", "#6d533a"), "#6d533a", 0.5), w);
   const g = form.girth * (0.8 + 0.4 * p.age);
-  // On a ruin one great bough has snapped and lies below.
+  // Below vitality 0.125, one main limb has snapped and lies on the ground.
   const snapped = ease(w.v, 0.2, 0.05);
-  // Stag-headed: an old tree's highest limbs stand bare above its crown.
+  // Stag-headed: above age 0.6, the highest limbs show bare above the crown.
   const crownTop = Math.max(...lobes.map(([, h, r]) => h + r));
   const stag: (readonly [readonly (readonly [number, number])[], number])[] = p.age > 0.6 ? [[[[-1.5, crownTop - 4], [-2.4, crownTop + 1.6], [-1.4, crownTop + 3.4]], 0.45], [[[1.6, crownTop - 4], [2.6, crownTop + 2.2]], 0.4]] : [];
   const limbs = [...form.limbs.slice(0, snapped > 0.5 ? -1 : undefined), ...stag];
@@ -2743,7 +2740,7 @@ function drawGreatTree(pen: Pen, look: Look, p: Resolved<typeof greatTreeParams>
     ink(pen, fallen, false, 2.6);
     ink(pen, fallen, false, 1.5, bark);
   }
-  // The crown in lobes, each going as the tree fails past its own threshold; their union inked round its edge only.
+  // The crown in lobes. Each lobe shrinks away below its own vitality threshold, and only the union's outline is inked.
   const full = 0.82 + 0.18 * p.fullness;
   const kept = lobes.map(([dx, h, r], k) => ({ dx, h, r: r * full * clamp01((w.v - (0.1 + noise(seed, k + 700) * 0.55)) / 0.25) * (0.8 + leaf * 0.2) })).filter((l) => l.r > 0.5);
   if (kept.length === 0) return;
@@ -2791,7 +2788,7 @@ function drawGreatTree(pen: Pen, look: Look, p: Resolved<typeof greatTreeParams>
   ctx.restore();
 }
 
-/** A great willow: an arching dome on a gnarled trunk, its curtain of hanging strands sweeping almost to the ground; failing, the strands shorten and thin to bare whips. */
+/** A great willow: an arching dome on a gnarled trunk, with a curtain of hanging strands almost to the ground. As vitality falls the strands shorten and thin to bare whips. */
 function greatWillow(pen: Pen, look: Look, f: number, age: number, seed: number): void {
   const w = look.w;
   const { ctx } = pen;
@@ -2823,7 +2820,7 @@ function greatWillow(pen: Pen, look: Look, f: number, age: number, seed: number)
   ctx.lineWidth = 1.5 * s;
   ctx.strokeStyle = bark;
   ctx.stroke();
-  // Bare whips hang from the boughs; leaves dress them while the tree lives.
+  // Bare whips hang from the boughs, covered in leaves while vitality is high.
   const whips = 13;
   const strands = newPath();
   const curtain = newPath();
@@ -2898,21 +2895,21 @@ function greatWillow(pen: Pen, look: Look, f: number, age: number, seed: number)
 /** A box in pixels: left, top, right, bottom. */
 export type MarkBox = [number, number, number, number];
 
-/** How a mark grows with the land close in: its scale per pixel a meter, about a building's width over its drawing's. */
+/** Meters of land per mark unit once the map is zoomed in far enough that marks grow with the land. */
 const MARK_METERS = 0.67;
-/** A mark's scale at `zoom` pixels a meter: a legible size on the whole sheet, growing with the land as the map comes close, as the trees do. */
+/** A mark's scale in pixels per unit at `zoom` pixels per meter: at least 1.1 times `grow` so it stays legible, and growing with the land when zoomed in, as the trees do. */
 export const markScale = (zoom: number, grow: number): number => Math.max(1.1 * grow, MARK_METERS * zoom);
 /**
- * How far any mark reaches from its foot, units, its ink included: the widest range and the tallest tower and its
- * smoke. The sheets keep names off this much round every lot before they know what will stand there, so a mark that
- * would reach farther is drawn smaller (`withinReach`), and a contract test holds every building and landmark to it.
+ * How far in units any mark extends from its base, ink included, set by the widest range and the tallest tower with
+ * its smoke. The sheets keep names this far from every lot before they know what will stand there. `withinReach`
+ * draws a larger mark smaller, and a contract test checks every building and landmark against it.
  */
 export const MARK_REACH = { left: 22, right: 24, up: 37, down: 11 } as const;
 
-/** How far a mark's strokes reach past the points its paths pass through, units: about the widest stroke. */
+/** How far in units a mark's strokes extend past its path points, about the widest stroke. */
 const INK_REACH = 3;
 
-/** The points a path passes through, so a mark can be measured before it is drawn. */
+/** A stand-in path that records its points, so a mark can be measured before it is drawn. */
 class Traced {
   readonly pts: number[] = [];
   moveTo(x: number, y: number): void {
@@ -2945,10 +2942,10 @@ class Traced {
 }
 
 let tracing = false;
-/** A new path: a canvas's own, or while a mark is measured, one that keeps its points. */
+/** Returns a new Path2D, or a `Traced` path while a mark is being measured. */
 const newPath = (): Path2D => (tracing ? (new Traced() as unknown as Path2D) : new Path2D());
 
-/** Measures what `draw` inks without drawing it: the box the points of every path it fills or strokes fall in, in pixels. */
+/** Measures what `draw` would ink without drawing it. Returns the pixel bounding box of every path point it fills or strokes. */
 function inkedBox(ctx: CanvasRenderingContext2D, draw: (c: CanvasRenderingContext2D) => void): MarkBox {
   const box: MarkBox = [Infinity, Infinity, -Infinity, -Infinity];
   const take = (pts: readonly number[]): void => {
@@ -2982,9 +2979,9 @@ function inkedBox(ctx: CanvasRenderingContext2D, draw: (c: CanvasRenderingContex
 }
 
 /**
- * Draws a mark at (x, y) at `s` pixels a unit, or smaller where its ink would reach past `MARK_REACH`: a composition
- * the reach was not set for (the tallest tower on the longest range) is drawn just small enough to keep within it, so
- * the names the sheets keep off the reach never meet it. Returns the box it took.
+ * Draws a mark at (x, y) at `s` pixels per unit, or smaller if its ink would extend past `MARK_REACH`. A composition
+ * larger than the reach allows, such as the tallest tower on the longest range, is drawn just small enough to fit, so
+ * it never meets the names kept outside the reach. Returns the box it took.
  */
 function withinReach(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, draw: (c: CanvasRenderingContext2D, scale: number) => MarkBox): MarkBox {
   let scale = s;
@@ -3000,8 +2997,8 @@ function withinReach(ctx: CanvasRenderingContext2D, x: number, y: number, s: num
 }
 
 /**
- * Draws a building at (x, y), the middle of its footprint on the ground there, at `s` pixels a unit, worn by its
- * shown `vitality`; `name` seeds its wear, so each building fails in its own way. Returns the box it took.
+ * Draws a building with its footprint centered on the ground at (x, y), at `s` pixels per unit, worn by its shown
+ * `vitality`. `name` seeds the wear, so each building wears differently. Returns the box it took.
  */
 export function drawBuilding(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, b: BuildingComposition, vitality = 1, name = ""): MarkBox {
   return withinReach(ctx, x, y, s, (c, scale) => drawBuildingAt(c, x, y, scale, b, vitality, name));
@@ -3027,7 +3024,7 @@ function drawBuildingAt(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   castShadow(pen, blocks.flatMap((k) => [[k.x0, k.z0], [k.x1, k.z0], [k.x1, k.z1], [k.x0, k.z1]].map(([X, Z]) => [X as number, Z as number, (k.eave + k.rise) * 0.75] as [number, number, number])));
-  // Everything that stands, drawn from the farthest to the nearest.
+  // Draws masses, features and the chimney from farthest to nearest.
   const things: { depth: number; draw: () => void }[] = blocks.map((k) => ({
     depth: depthOf((k.x0 + k.x1) / 2, (k.z0 + k.z1) / 2),
     draw: () => (k.round ? drawTurret(pen, house, k, parts, look) : drawBlock(pen, house, k, parts, look, weak)),
@@ -3060,7 +3057,7 @@ function drawBuildingAt(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
     });
   }
   things.sort((p, q) => q.depth - p.depth).forEach((t) => t.draw());
-  // The wall breaks at the weak corner, on the mass whose front corner it is.
+  // Breaks the wall at the front corner nearest the weak corner.
   const corners = blocks.filter((k) => !k.round).flatMap((k) => [{ k, east: false, X: k.x0 }, { k, east: true, X: k.x1 }]);
   const broken = corners.reduce<(typeof corners)[number] | undefined>((best, c) => (best === undefined || Math.hypot(c.X - weak.X, c.k.z0 - weak.Z) < Math.hypot(best.X - weak.X, best.k.z0 - weak.Z) ? c : best), undefined);
   if (broken !== undefined) breach(pen, broken.X, broken.k.z0, broken.east ? 1 : -1, broken.k.eave, w.breach, w.seed);
@@ -3075,8 +3072,8 @@ function drawBuildingAt(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
 }
 
 /**
- * Draws a landmark at (x, y), its foot on the ground there, at `s` pixels a unit, worn by its shown `vitality`;
- * `name` seeds its wear. Returns the box it took.
+ * Draws a landmark with its base on the ground at (x, y), at `s` pixels per unit, worn by its shown `vitality`.
+ * `name` seeds the wear. Returns the box it took.
  */
 export function drawLandmark(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, l: Composition, vitality = 1, name = ""): MarkBox {
   return withinReach(ctx, x, y, s, (c, scale) => drawLandmarkAt(c, x, y, scale, l, vitality, name));
@@ -3100,16 +3097,16 @@ function drawLandmarkAt(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Stamps. The map redraws on every frame of a glide or a zoom, and a composed mark is many strokes, so each mark is
-// drawn once into a bitmap at the size it shows and stamped from then on. A stamp is kept at sizes a quarter of a
-// doubling apart and drawn shrunk to the size asked for, never grown, so it stays as crisp as the ink.
+// Stamps. The map redraws every frame of a glide or zoom, and a composed mark has many strokes, so each mark is drawn
+// once into a bitmap and copied from then on. Stamps are cached at sizes 2^(1/4) apart and drawn scaled down to the
+// requested size, never up, so they stay crisp.
 
-/** Sizes are kept in steps of 2^(1/4): a glide draws a mark anew about every fifth of the way to twice its size. */
+/** Stamp sizes are cached in steps of 2^(1/4), so a glide redraws a mark about every 19% of size change. */
 const STAMP_STEPS = 4;
-/** The bitmap a stamp is first drawn into, in units round the mark's foot: room for the widest range and the tallest tower. */
+/** The scratch area a stamp is first drawn into, in units around the mark's base, with room for the widest range and the tallest tower. */
 const SCRATCH: StampRoom = { width: 180, height: 170, footX: 90, footY: 125 };
 
-/** The room a mark is drawn in before its stamp is cut from it, in units round its foot. */
+/** The area a mark is drawn into before its stamp is cropped from it, in units around its base. */
 export interface StampRoom {
   readonly width: number;
   readonly height: number;
@@ -3119,14 +3116,14 @@ export interface StampRoom {
 
 interface Stamp {
   readonly canvas: HTMLCanvasElement;
-  /** Where its top left lies from the mark's foot, and its size, in pixels at its own scale. */
+  /** Its top left offset from the mark's base and its size, in pixels at its own scale. */
   readonly left: number;
   readonly top: number;
   readonly width: number;
   readonly height: number;
 }
 
-/** Stamps kept for reuse, the least recently stamped going first once there are `most` or their bitmaps hold more than `bytes`. */
+/** A stamp cache. It evicts the least recently used stamp once it holds `most` stamps or more than `bytes` of bitmaps. */
 export interface Stamps {
   readonly kept: Map<string, Stamp>;
   readonly most: number;
@@ -3136,7 +3133,7 @@ export interface Stamps {
 
 export const stampSet = (most: number, bytes = Number.POSITIVE_INFINITY): Stamps => ({ kept: new Map(), most, bytes, held: 0 });
 
-/** The buildings' and landmarks' stamps: one sheet's worth of each at a size or two. */
+/** The building and landmark stamp cache, sized for one sheet's marks at one or two sizes. */
 const MARK_STAMPS = stampSet(160);
 let scratch: CanvasRenderingContext2D | null = null;
 
@@ -3156,7 +3153,7 @@ function stampOf(s: number, device: number, draw: (c: CanvasRenderingContext2D, 
   const fx = room.footX * s;
   const fy = room.footY * s;
   const box = draw(c, fx, fy, s);
-  // A little room for the ink's width and the brush's offset past the points the mark placed.
+  // Padding for the ink's width and the wash's offset past the mark's points.
   const pad = 1 + s;
   const x0 = Math.max(0, Math.floor((box[0] - pad) * device));
   const y0 = Math.max(0, Math.floor((box[1] - pad) * device));
@@ -3170,8 +3167,8 @@ function stampOf(s: number, device: number, draw: (c: CanvasRenderingContext2D, 
 }
 
 /**
- * Stamps the mark `key` names at (x, y), `s` pixels a unit, drawing it into `room` with `draw` only when `stamps`
- * keeps no stamp of it at this size and on this screen.
+ * Stamps the mark named `key` at (x, y) at `s` pixels per unit. It draws the mark into `room` with `draw` only when
+ * `stamps` has no stamp for it at this size and device pixel ratio.
  */
 export function stamp(
   ctx: CanvasRenderingContext2D,
@@ -3202,7 +3199,7 @@ export function stamp(
   }
   stamps.kept.set(id, st);
   const k = s / kept;
-  // On whole device pixels, so a stamp shown at its own size is copied rather than resampled.
+  // Snaps to whole device pixels, so a stamp shown at its own size is copied rather than resampled.
   const left = Math.round((x + st.left * k) * device) / device;
   const top = Math.round((y + st.top * k) * device) / device;
   ctx.drawImage(st.canvas, left, top, st.width * k, st.height * k);

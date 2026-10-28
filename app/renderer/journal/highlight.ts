@@ -1,9 +1,7 @@
-// Code reads like code on a journal's page: each line in pieces by what they
-// are, keywords, strings, numbers, called names, types, properties and
-// comments, inked in slate hues with enough contrast against cream paper.
-// It reads a definition's lines as one text, so a comment or a string that
-// runs over several lines is inked as one, and knows a language only by how
-// its file's comments are written.
+// Syntax highlighting for the journal's code: splits each line into keywords,
+// strings, numbers, called names, types, properties and comments. It scans a
+// definition's lines as one text, so a multi-line comment or string is one
+// piece, and it tells languages apart only by their comment syntax.
 
 export type Ink = "kw" | "str" | "num" | "fn" | "type" | "prop" | "com";
 
@@ -21,7 +19,7 @@ const KEYWORDS = new Set(
   ).split(" "),
 );
 
-/** How a file's comments are written, by its extension: a line comment's mark, and whether it has block comments. */
+/** A file's comment syntax by extension: the line comment marker, and whether it has block comments. */
 function commentsOf(path: string): { readonly line: string; readonly block: boolean } {
   const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
   if (["py", "toml", "sh", "yml", "yaml", "rb"].includes(ext)) return { line: "#", block: false };
@@ -29,7 +27,7 @@ function commentsOf(path: string): { readonly line: string; readonly block: bool
   return { line: "//", block: true };
 }
 
-/** `lines` of the file at `path`, each as its pieces. */
+/** Splits `lines` of the file at `path` into highlighted pieces, one array per line. */
 export function highlight(lines: readonly string[], path: string): Piece[][] {
   const comments = commentsOf(path);
   const text = lines.join("\n");
@@ -37,11 +35,11 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
   const push = (t: string, ink?: Ink): void => {
     if (t === "") return;
     const last = pieces[pieces.length - 1];
-    // Plain text runs on as one piece.
+    // Merges adjacent plain text into one piece.
     if (ink === undefined && last !== undefined && last.ink === undefined) pieces[pieces.length - 1] = { text: last.text + t };
     else pieces.push(ink === undefined ? { text: t } : { text: t, ink });
   };
-  // Each kind of piece, matched where the reading stands (sticky), so a long definition is read in one pass.
+  // Sticky regexes match at the current position, so a long definition is scanned in one pass.
   const at = (re: RegExp, k: number): string | null => {
     re.lastIndex = k;
     return re.exec(text)?.[0] ?? null;
@@ -49,7 +47,7 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
   const NUMBER = /\d[\d_]*(?:\.\d+)?/y;
   const WORD = /[A-Za-z_$][\w$]*/y;
   const CALLED = /\s*(?:\(|<[^>\n]*>\(|!\()/y;
-  /** The last character before `k` that isn't space. */
+  /** The last non-space character before `k`. */
   const before = (k: number): string => {
     let b = k - 1;
     while (b >= 0 && /\s/.test(text[b] as string)) b--;
@@ -96,7 +94,7 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
     push(c);
     i += 1;
   }
-  // Back into lines: a piece that runs over a line's end is split there, each part keeping its ink.
+  // Splits the pieces back into lines. A piece that spans a line break is split there, and each part keeps its ink.
   const out: Piece[][] = [[]];
   for (const p of pieces) {
     p.text.split("\n").forEach((part, k) => {

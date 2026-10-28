@@ -1,24 +1,9 @@
-// The minimap: a torn scrap of the field map on the closed journal, about 156 px
-// square, showing the land around the person as the map paints it, turned
-// with them so the way they face is always up. The traveller stands a little
-// below its middle, so more of the way ahead shows. It is the local land,
-// about 130 m across, not the whole. Its paint thins out over 6 px into 4 px
-// of bare paper at its torn edge, and it carries no north: the compass in the
-// top right corner points north (`compass.ts`). After 2.5 s in a new area the
-// old name fades and the new one is lettered across the land, as the field
-// map letters areas; in the wild the old name fades and nothing is written.
-// A tap on its land unfolds the field map out of it, or does what the view
-// asks instead: in the app, it opens the journal at its map. A tap on its
-// outer edge tucks it down past the screen's foot, leaving its top 50 px (the
-// name and a band of turning land), and a tap on what shows brings it back. Walking up
-// to a thing, a vermilion pencil ring is drawn round it with its name over it in
-// the traveller's hand, on at most two lines, the ring and the name both on the paper.
-//
-// Cheap by construction: its canvas holds a window of the land wide enough to
-// cover the scrap at any heading with room to walk, drawn from the field map's
-// painted paper. One transform turns it about the traveller and slides it as
-// they walk, so a frame touches one style at most; it is drawn again only when
-// the person nears the window's edge, or the paper is painted afresh.
+// The minimap is a 156 px scrap of the field map on the shut journal. It shows
+// about 130 m of land around the person, rotated so the way they face is up,
+// letters the area they are in and rings the thing they walk toward. Its canvas
+// holds a window of the field map's paper wide enough for any heading, so most
+// frames change only a CSS transform, and it redraws only when the person nears
+// the window's edge or the paper repaints.
 
 import type { Place, PlaceArea, WorldPlaces } from "@gaia/terrain";
 import { onTap } from "../tap.ts";
@@ -28,51 +13,51 @@ import { nameBreaks, nameTails } from "./map-names.ts";
 import { DECKLE_MASK, TRAVELLER_SVG } from "./map-styles.ts";
 
 export interface Minimap {
-  /** Follows the person: where they stand and the way they face, and the frame's time. */
+  /** Moves the scrap with the person's position and heading. `dt` is the frame time in seconds. */
   frame(x: number, z: number, yaw: number, place: Place, dt: number): void;
-  /** Whether the scrap shows; either way the area the person stands in is written afresh. */
+  /** Shows or hides the scrap. Either way, the next frame letters the person's area again. */
   show(on: boolean): void;
-  /** Tucks the scrap below the screen's foot, or brings it back, as a tap on its edge does. */
+  /** Tucks the scrap below the bottom of the screen or brings it back, as a tap on its edge does. */
   tuck(on: boolean): void;
-  /** The thing the person is walking up to, ringed on the scrap, or null. */
+  /** Sets the thing the person walks toward, which the scrap rings, or null for none. */
   heading(thing: Heading | null): void;
-  /** What the scrap shows, for scripted checks, and how long its window last took to draw, ms. */
+  /** What the scrap shows and how long its last window redraw took in ms, for scripted checks. */
   state(): { readonly area: string | null; readonly marked: string | null; readonly tucked: boolean; readonly redraws: number; readonly redrawMs: number };
 }
 
-/** The scrap's side, CSS pixels, and how many meters of land it shows. */
+/** The scrap's side in CSS pixels, and the meters of land across it. */
 const SIDE = 156;
 const METERS = 130;
 const SCALE = SIDE / METERS;
-/** Where the traveller stands on the scrap, as fractions of its side: a little low, so more of the way ahead shows. */
+/** The traveller's position on the scrap as fractions of its side. It sits below center so more of the land ahead shows. */
 const HERE = { x: 0.5, y: 0.6 } as const;
-/** The paint thins out over `fade` px into `bare` px of bare paper at the torn edge. */
+/** The paint fades out over `fade` px, then leaves `bare` px of bare paper at the torn edge. */
 const EDGE = { bare: 4, fade: 6 } as const;
-/** A tap within `edge` px of the scrap's edge, or up to `past` px beyond it, tucks it; px. */
+/** A tap within `edge` px inside the scrap's edge, or up to `past` px outside it, tucks the scrap. */
 const TAP = { edge: 16, past: 6 } as const;
-/** How long a person must stay in a new area before its name is written, seconds: a border walked along never flickers. */
+/** Seconds a person must stay in a new area before its name is lettered, so walking along a border does not flicker names. */
 const SETTLE = 2.5;
-/** The farthest the scrap reaches from the traveller, px: the window must cover this much round them at any heading. */
+/** The distance in px from the traveller to the scrap's farthest corner. The window must cover this radius at any heading. */
 const REACH = Math.ceil(Math.hypot(Math.max(HERE.x, 1 - HERE.x) * SIDE, Math.max(HERE.y, 1 - HERE.y) * SIDE));
-/** How far the person may walk from where the window was drawn before it must be drawn again, px. */
+/** How far in px the person may walk from the window's center before it must be drawn again. */
 const SLACK = 90;
-/** The area's name in the field map's lettering for areas: at most its size, smaller for a long name, never below legible; px. */
+/** The area name's lettering in px, as the field map letters areas. A long name shrinks from `size` to fit `room`, but not below `least`. */
 const NAME = { size: 13.5, least: 9.5, spacing: 0.17, room: SIDE - 32 } as const;
 const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
 /**
- * The ring round a thing walked up to and its name keep `keep` px inside the torn edge, where the paint is whole,
- * so the name is at most `SIDE - 2 * keep`, 136 px, wide (lab.css). The name stands `gap` px off the ring, and above
- * it only below the scrap's top `under` px, where the area's name is lettered.
+ * The ring and name of the thing the person walks toward stay `keep` px inside the torn edge, where the paint is
+ * solid. So the name is at most `SIDE - 2 * keep`, 136 px, wide (lab.css). The name sits `gap` px from the ring, and
+ * goes above it only if it clears the top `under` px, where the area's name is lettered.
  */
 const MARK = { keep: EDGE.bare + EDGE.fade, gap: 3, under: 30 } as const;
 
 /**
- * Which area the minimap letters as the person walks. The first place is
- * lettered at once; after that a new area only once the person has stayed in
- * it `settle` seconds, so a border walked along never flickers a name. The
- * wild stands for no directory, so after the same pause it letters nothing.
- * `next` returns the area to letter whenever that changes (null for none),
- * and undefined when it does not.
+ * Chooses which area the minimap letters as the person walks. It letters the
+ * first place at once. After that it letters a new area only once the person
+ * has stayed in it `settle` seconds, so walking along a border does not
+ * flicker names. The wild (depth below 0) represents no directory, so after
+ * the same pause it letters nothing. `next` returns the area to letter when
+ * that changes, null for none, and undefined when nothing changes.
  */
 export function createNamer(settle = SETTLE): { next(area: PlaceArea, dt: number): PlaceArea | null | undefined; reset(): void } {
   let announced: string | null = null;
@@ -106,9 +91,9 @@ export function createNamer(settle = SETTLE): { next(area: PlaceArea, dt: number
 }
 
 /**
- * What a tap at (x, y) does, in px from the scrap's top left: on its outer
- * 16 px or up to 6 px past its torn edge it tucks the scrap away, and on its
- * land it unfolds the field map; farther off, nothing.
+ * Returns what a tap at (x, y), in px from the scrap's top left, does. Within
+ * `TAP.edge` px inside the edge or `TAP.past` px outside it, the tap tucks the
+ * scrap. Farther in, it unfolds the field map. Farther out, it does nothing.
  */
 export function tapOn(x: number, y: number, side = SIDE): "tuck" | "unfold" | null {
   const inward = Math.min(x, y, side - x, side - y);
@@ -117,10 +102,10 @@ export function tapOn(x: number, y: number, side = SIDE): "tuck" | "unfold" | nu
 }
 
 /**
- * Where the ring round a thing at (x, y) on the scrap goes, `r` px round, and the thing's name, `w` by `h` px: the
- * ring at the thing, or at the edge toward it when the thing is past it; the name centred over the ring, under it
- * when there is no room above, slid along so the whole of it stays on the paper. Both in px from the scrap's top
- * left, the name by its top left corner.
+ * Places the ring, radius `r` px, around a thing at (x, y) on the scrap, and the thing's `w` by `h` px name. The ring
+ * sits on the thing, or at the edge toward it when the thing is off the scrap. The name is centered above the ring,
+ * or below it when there is no room above, and shifted sideways to stay on the paper. Both positions are px from the
+ * scrap's top left, the name's by its top left corner.
  */
 export function markAt(x: number, y: number, r: number, w: number, h: number, side = SIDE): { ring: [number, number]; name: [number, number] } {
   const within = (v: number, least: number, most: number): number => Math.max(least, Math.min(most, v));
@@ -131,7 +116,7 @@ export function markAt(x: number, y: number, r: number, w: number, h: number, si
   return { ring: [rx, ry], name: [within(rx - w / 2, MARK.keep, side - MARK.keep - w), top] };
 }
 
-/** Smooth noise between 0 and 1 over a grid of unit cells, the same on every run. */
+/** Deterministic value noise from 0 to 1, smoothly interpolated over a grid of unit cells. */
 function noise(x: number, y: number, seed: number): number {
   const at = (i: number, j: number): number => {
     const s = Math.sin(i * 127.1 + j * 311.7 + seed * 74.7) * 43758.5453;
@@ -147,9 +132,9 @@ function noise(x: number, y: number, seed: number): number {
 }
 
 /**
- * Where the paint lies on the scrap, as a mask: full inside, thinning out
- * unevenly over `EDGE.fade` px into `EDGE.bare` px of bare paper at the edge,
- * as a wash does where it dries into dry paper, its corners rounded.
+ * Returns the scrap's paint mask as a CSS url. It is opaque inside, fades
+ * over `EDGE.fade` px with noise along the edge, and leaves `EDGE.bare` px of
+ * bare paper at the edge, with rounded corners.
  */
 function paintMask(dpr: number): string {
   const n = Math.round(SIDE * dpr);
@@ -204,7 +189,7 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
   const mark = el("div", "minimap-mark", face, `<svg viewBox="-24 -24 48 48" aria-hidden="true"><path pathLength="1" d="M-1 -15C9 -16 16 -8 15 1S6 15 -2 14S-16 6 -15 -3S-9 -13 3 -15"/></svg><span></span>`);
   const markName = mark.querySelector("span") as HTMLElement;
   const markRing = mark.querySelector("svg") as SVGSVGElement;
-  // Taps land on a layer reaching a little past the torn edge, so a finger finds the edge easily.
+  // Taps go to a layer that extends a little past the torn edge, so a finger hits the edge easily.
   const touch = el("div", "minimap-touch", scrap);
   touch.setAttribute("role", "button");
   touch.setAttribute("tabindex", "0");
@@ -213,24 +198,24 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
   const span = 2 * (REACH + SLACK);
   canvas.width = canvas.height = Math.round(span * dpr);
   canvas.style.width = canvas.style.height = `${span}px`;
-  /** Where the canvas's window is centered, meters; NaN until it is first drawn. */
+  /** The world position in meters at the window's center. NaN until the first draw. */
   const anchor = { x: Number.NaN, z: Number.NaN };
   const person = { x: 0, z: 0, yaw: 0 };
   let redraws = 0;
   let redrawMs = 0;
-  /** A redraw waiting for the page's idle time. */
+  /** The id of the idle callback waiting to redraw, or 0. */
   let idle = 0;
   let shown = false;
   let tucked = false;
   let marked: Heading | null = null;
-  /** The ring's radius and its name's size, px, measured once a thing so walking never asks the page for its layout. */
+  /** The ring's radius and the name's size in px, measured once per thing so walking never forces a layout. */
   const markSize = { r: 0, w: 0, h: 0 };
 
   function redraw(): void {
     const paper = map.paper();
     if (idle !== 0) window.cancelIdleCallback(idle);
     idle = 0;
-    // Until its paper is painted the scrap is bare paper, and its land washes in once it is (lab.css).
+    // The scrap shows bare paper until the field map paper is painted. Then lab.css fades the land in.
     canvas.classList.toggle("painted", paper !== null);
     if (paper === null) return;
     const t0 = performance.now();
@@ -244,12 +229,12 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     redrawMs = performance.now() - t0;
     place();
   }
-  /** What the scrap shows now, so a frame that would change nothing a person can see touches nothing. */
+  /** The last transforms written, so a frame that changes nothing visible writes no style. */
   const last = { land: "", mark: "", name: "" };
-  /** Turns and slides the window under the scrap so the traveller stays put and the way they face is up; moves the ring with what they walk to. */
+  /** Rotates and translates the window under the scrap so the traveller stays fixed and faces up, and moves the ring with the thing they walk toward. */
   function place(): void {
-    // A quarter of a pixel and a twentieth of a degree are too little to see, and moving no more often than that
-    // keeps the page still most frames of a straight walk.
+    // Rounds to a quarter pixel and a twentieth of a degree, which are too small to see. Most frames of a straight
+    // walk then write no style.
     const q = (v: number): string => (Math.round(v * 4) / 4).toFixed(2);
     const degrees = ((((person.yaw * 180) / Math.PI) % 360) + 360) % 360;
     const ox = span / 2 + (person.x - anchor.x) * SCALE;
@@ -257,7 +242,7 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     const land = `translate(${HERE.x * SIDE}px, ${HERE.y * SIDE}px) rotate(${(Math.round(degrees * 20) / 20).toFixed(2)}deg) translate(${q(-ox)}px, ${q(-oz)}px)`;
     if (land !== last.land) canvas.style.transform = last.land = land;
     if (marked !== null) {
-      // The thing turns with the land; out past the scrap's edge, the ring waits at the edge toward it, its name with it.
+      // The thing rotates with the land. When it is off the scrap, `markAt` keeps the ring and name at the edge toward it.
       const c = Math.cos(person.yaw);
       const s = Math.sin(person.yaw);
       const rx = (marked.x - person.x) * SCALE;
@@ -273,7 +258,7 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     if (shown) redraw();
   });
 
-  // The field map unfolds out of the scrap, turning from the way the person faces to north, and folds back into it.
+  // The field map opens from the scrap's rect, rotating from the person's heading to north, and closes back into it.
   map.unfoldsFrom(() => {
     if (!shown) return null;
     const layer = root.getBoundingClientRect();
@@ -301,20 +286,20 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
     else unfold();
   });
 
-  // ---------- the area's name, lettered afresh on crossing into another ----------
+  // ---------- the area name, lettered again on entering another area ----------
   const namer = createNamer();
   let current = 0;
-  /** The folders lettered above each repeated name, as the field map letters them, worked out once a world. */
+  /** The parent folders lettered above each repeated area name, as on the field map, computed once per world. */
   let tails: { of: WorldPlaces; above: Map<string, string> } | null = null;
   const measure = document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D;
-  /** The largest size, up to the map's own, at which `label` in widely spaced capitals fits across the land. */
+  /** The largest font size, from `NAME.least` to `NAME.size`, at which `label` in spaced capitals fits `NAME.room`. */
   function fitted(label: string): number {
     measure.font = `600 ${NAME.size}px ${SERIF}`;
     measure.letterSpacing = `${(NAME.size * NAME.spacing).toFixed(2)}px`;
     const width = measure.measureText(label).width;
     return Math.max(NAME.least, Math.min(NAME.size, (NAME.size * NAME.room) / Math.max(1, width)));
   }
-  /** Fades the name lettered now, and letters `area`'s in its place; nothing for none. */
+  /** Fades out the current name and letters `area`'s in its place. Null letters nothing. */
   function write(area: PlaceArea | null): void {
     (names[current] as HTMLElement).classList.remove("on");
     if (area === null) return;
@@ -337,8 +322,8 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
       person.z = z;
       person.yaw = yaw;
       if (!shown) return;
-      // The window is drawn again only as the person nears its edge: in the page's idle time once they are halfway
-      // there, and at once only if no idle moment came before they reached it.
+      // Redraws the window only as the person nears its edge. Past 45% of `SLACK` it redraws in idle time, and past
+      // 85% it redraws at once.
       const off = Math.max(Math.abs(x - anchor.x), Math.abs(z - anchor.z)) * SCALE;
       if (!(off < SLACK * 0.85)) redraw();
       else {
@@ -365,7 +350,7 @@ export function createMinimap(root: HTMLElement, map: FieldMap, stood: () => Sto
       markSize.h = markName.offsetHeight;
       markRing.style.width = markRing.style.height = `${(markSize.r * 2 * 48) / 30}px`;
       place();
-      // A frame later, so the pencil draws the ring from nothing.
+      // Waits two frames so the ring's draw transition starts from empty.
       requestAnimationFrame(() => requestAnimationFrame(() => mark.classList.toggle("on", marked === thing)));
     },
     state: () => {

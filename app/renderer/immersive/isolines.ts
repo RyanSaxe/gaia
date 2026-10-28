@@ -1,16 +1,15 @@
-// Tracing lines over a grid, for the field sheet's contours and shores:
-// marching squares, the segments joined into lines, lines eased of the
-// points that add nothing, and contours thinned on steep ground as a survey
-// thins them.
+// Traces lines over a grid for the field sheet's contours and shores. It runs
+// marching squares, joins the segments into polylines, simplifies them, and
+// thins contours on steep ground as survey maps do.
 
-/** How far round each sample its grade is averaged, samples: a survey thins its lines over whole slopes, not single cells. */
+/** The radius in samples over which `slopes` averages each sample's grade, so thinning follows whole slopes, not single cells. */
 const SLOPE_REACH = 2;
-/** The shortest open piece of a thinned line kept, cells: a shorter one is a stub the thinning left behind. */
+/** The shortest open piece of a thinned line kept, in cells. A shorter piece is a stub left by thinning. */
 const STUB = 6;
 
 /**
- * Marching squares over a grid between columns i0..i1 and rows j0..j1: line
- * segments, in grid coordinates, around the cells where `inside` holds.
+ * Runs marching squares over columns i0..i1 and rows j0..j1, emitting segments
+ * in grid coordinates around the cells where `inside` is true.
  */
 export function contour(i0: number, i1: number, j0: number, j1: number, inside: (i: number, j: number) => boolean, emit: (x0: number, y0: number, x1: number, y1: number) => void): void {
   for (let j = j0; j < j1; j++) {
@@ -40,11 +39,10 @@ export function contour(i0: number, i1: number, j0: number, j1: number, inside: 
 }
 
 /**
- * Marching squares over a grid of heights `n` on a side, between columns i0..i1
- * and rows j0..j1: line segments, in grid coordinates, where the ground crosses
- * `level`, each end placed along its cell edge where the height passes the
- * level, so a contour runs smooth. Cells with a height not known (NaN) are
- * skipped.
+ * Runs marching squares over a grid of heights `n` on a side, between columns
+ * i0..i1 and rows j0..j1, emitting segments in grid coordinates where the
+ * ground crosses `level`. Each end is interpolated along its cell edge, so a
+ * contour runs smooth. It skips cells with a NaN corner.
  */
 export function isoline(h: Float32Array, n: number, level: number, emit: (x0: number, y0: number, x1: number, y1: number) => void, i0 = 0, i1 = n - 1, j0 = 0, j1 = n - 1): void {
   const at = (i: number, j: number): number => h[j * n + i] as number;
@@ -55,7 +53,6 @@ export function isoline(h: Float32Array, n: number, level: number, emit: (x0: nu
       const b = at(i + 1, j);
       const c = at(i + 1, j + 1);
       const d = at(i, j + 1);
-      // A cell with a corner the grid does not know draws nothing.
       if (Number.isNaN(a + b + c + d)) continue;
       const k = (a > level ? 1 : 0) | (b > level ? 2 : 0) | (c > level ? 4 : 0) | (d > level ? 8 : 0);
       if (k === 0 || k === 15) continue;
@@ -83,7 +80,7 @@ export function isoline(h: Float32Array, n: number, level: number, emit: (x0: nu
 
 /** Joins line segments (x0, y0, x1, y1 each) that share ends into polylines, x and y pairs. */
 export function chained(segments: readonly number[]): number[][] {
-  // Ends meet exactly where two segments share a cell's edge; a millimeter's grid makes them one key.
+  // Two segments that share a cell edge end at exactly the same point. Rounding to a millimeter gives them one key.
   const key = (x: number, y: number): number => (Math.round(x * 1000) + 2 ** 24) * 2 ** 26 + (Math.round(y * 1000) + 2 ** 24);
   const at = new Map<number, number[]>();
   const count = segments.length / 4;
@@ -97,7 +94,7 @@ export function chained(segments: readonly number[]): number[][] {
   }
   const used = new Uint8Array(count);
   const lines: number[][] = [];
-  // From a segment, walks on through the segment sharing its far end until none is left.
+  // From a segment, follows the unused segment sharing its far end until none is left.
   const walk = (k: number, fromEnd: number, line: number[]): void => {
     let seg = k;
     let end = fromEnd;
@@ -129,9 +126,9 @@ export function chained(segments: readonly number[]): number[][] {
 }
 
 /**
- * A polyline (x and y pairs) with the points that stray less than `tolerance` from the line through their neighbors
- * dropped. A closed one, its last point its first, keeps its shape: measured from that point, its farthest one is kept
- * first, and each half is eased as an open line.
+ * Simplifies a polyline of x and y pairs by Douglas-Peucker, dropping points within `tolerance` of the chord between
+ * kept points. For a closed line, whose last point is its first, the point farthest from that shared point is kept
+ * first, and each half is simplified as an open line.
  */
 export function simplified(line: readonly number[], tolerance: number): number[] {
   const n = line.length / 2;
@@ -150,7 +147,7 @@ export function simplified(line: readonly number[], tolerance: number): number[]
     let at = -1;
     for (let i = a + 1; i < b; i++) {
       const [px, py] = [(line[i * 2] as number) - ax, (line[i * 2 + 1] as number) - ay];
-      // Between two ends at one point, as a closed line's are, a point strays by its distance from them.
+      // When both ends are the same point, as on a closed line, the distance is from that point.
       const d = length > 1e-9 ? Math.abs(px * dy - py * dx) / length : Math.hypot(px, py);
       if (d > worst) [worst, at] = [d, i];
     }
@@ -191,10 +188,10 @@ export function slopes(h: Float32Array, n: number, cell: number): Float32Array {
 }
 
 /**
- * A contour's lines at `level` through a grid of heights `n` on a side, in grid coordinates, joined from the segments
- * `keep` takes (`isoline`, `chained`). Given each sample's grade (`slopes`), the contour is thinned as a survey thins
- * the lines between its heavier ones: no line where the ground is steeper than `steepest`, and no open piece shorter
- * than `STUB` cells, which is what thinning leaves at a steep patch's edge.
+ * Returns a contour's polylines at `level` through a grid of heights `n` on a side, in grid coordinates, from the
+ * segments `keep` accepts (`isoline`, `chained`). With `thin`, it drops segments where the grade (`slopes`) is steeper
+ * than `steepest`, and open pieces shorter than `STUB` cells, which thinning leaves at a steep patch's edge. Survey
+ * maps thin the lines between their heavier contours the same way.
  */
 export function contourLines(h: Float32Array, n: number, level: number, keep: (x0: number, y0: number, x1: number, y1: number) => boolean, thin?: { readonly slopes: Float32Array; readonly steepest: number }): number[][] {
   const segments: number[] = [];

@@ -1,6 +1,6 @@
-/* The traveller's journal (book.ts, page.ts): a worn leather book, its cream pages printed in serif type, at
-   the lower left when closed with the minimap on a slip under a strap, held open in the middle of the view. The
-   book's own pixels: a page is --pw by --ph, the boards overhang by --ov. */
+/* The journal (book.ts, page.ts): a leather book with cream pages, in the lower left corner when shut with the minimap
+   on a slip, and in the middle of the view when open. In the book's pixels, a page is --pw by --ph and the boards
+   overhang by --ov. */
 .journal { position: absolute; inset: 0; pointer-events: none; perspective: 2400px; perspective-origin: 50% 46%; z-index: 3; }
 .journal-catch { position: absolute; inset: 0; }
 .journal.open .journal-catch { pointer-events: auto; }
@@ -8,9 +8,9 @@
 .jb-inner { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-style: preserve-3d; }
 .jb-inner > div, .jb-inner > button { position: absolute; }
 
-/* The spine, one piece of leather the boards are bound to, showing at the head and tail between them; the back board
-   under the right-hand pages; and the block of leaves under each open page, their edges showing at the fore-edge, the
-   head and the tail, and dipping into the gutter with the page. */
+/* The spine, showing at the top and bottom between the boards, the back board under the right-hand pages, and the
+   block of leaves under each open page, with page edges showing at the fore-edge, top and bottom and dipping into the
+   gutter with the page. */
 .jb-spine {
   left: -9px; top: calc(var(--ph) / -2 - var(--ov) - 2px); width: 18px; height: calc(var(--ph) + var(--ov) * 2 + 4px); border-radius: 5px;
   background: var(--leather) 50% 50% / 800px; filter: brightness(0.72); box-shadow: inset 4px 0 5px rgba(10, 4, 0, 0.5), inset -4px 0 5px rgba(10, 4, 0, 0.5);
@@ -40,20 +40,20 @@
     linear-gradient(270deg, #b9a983, #d9cdae 4%, #e5dabe);
   clip-path: path("M0 0 L 480 0 C 500 0, 514 0.6, 524 2 L 524 662 C 514 663.4, 500 664, 480 664 L 0 664 Z");
 }
-/* The right-hand page stands in the book's own 3D space rather than flattened onto its holder: flattened, Chromium's
-   hit test misses the page's clipped shape over its lower half and finds the holder, so a click there missed what it
-   was on, a row or the map. */
+/* The right-hand page keeps the book's 3D space rather than being flattened onto its holder. Flattened, Chromium's hit
+   test misses the page's clipped shape over its lower half and hits the holder, so clicks on a row or the map there
+   are lost. */
 .jb-right { left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); pointer-events: auto; transform-style: preserve-3d; }
 
-/* The cover swings on the spine: shut, it lies over the right-hand pages; open, its back is the left-hand page. */
+/* The cover rotates on the spine. Shut, it lies over the right-hand pages. Open, its back is the left-hand page. */
 .jb-cover {
   left: 0; top: calc(var(--ph) / -2 - var(--ov)); width: calc(var(--pw) + var(--ov)); height: calc(var(--ph) + var(--ov) * 2);
   transform-origin: 0 50%; transform-style: preserve-3d; transform: translateZ(3px) rotateY(0deg);
   transition: transform 900ms cubic-bezier(.45, .05, .3, 1);
 }
 .jb-cover.open { transform: translateZ(0.4px) rotateY(-179.6deg); }
-/* Open, the cover's front is turned away under the left-hand page: the minimap's touch on its slip would otherwise
-   still catch clicks meant for the page's top corner. */
+/* When open, the cover's front faces away under the left-hand page. Without this, the minimap's touch layer on the
+   slip would catch clicks meant for the page's top corner. */
 .jb-cover.open > .front * { pointer-events: none; }
 .jb-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .jb-face.back { transform: rotateY(180deg); }
@@ -73,10 +73,10 @@
 }
 .jb-left { position: absolute; left: var(--ov); top: var(--ov); width: var(--pw); height: var(--ph); }
 
-/* The minimap, lying on the slip: it keeps its own drawing, laid in the slip instead of the screen's corner. */
+/* The minimap on the slip, positioned in the slip instead of the screen's corner. */
 .jb-slip .minimap { position: absolute; left: 0; top: 0; right: auto; bottom: auto; }
 
-/* A leaf turning over the spine, a page on each face. */
+/* A leaf turning over the spine, with a page on each face. */
 .jb-leaf {
   left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); transform-origin: 0 50%; transform-style: preserve-3d;
   transform: translateZ(1.2px) rotateY(0deg);
@@ -85,15 +85,15 @@
 .jb-leaf.turning { transition: transform 720ms cubic-bezier(.45, .05, .3, 1); }
 .jb-leaf[hidden] { display: none; }
 
-/* The outer margins, a fifth of each page, turn it. They draw nothing and only catch the pointer. Where no page lies
-   that way a margin stands aside for what is under it. The tabs on the fore-edge open each top chapter. */
+/* The outer margins, a fifth of each page, turn it. They draw nothing and only catch the pointer. Where there is no
+   spread that way, a margin passes clicks through. The tabs on the fore-edge open each top chapter. */
 .jb-margin { top: calc(var(--ph) / -2); width: var(--edge); height: var(--ph); cursor: pointer; pointer-events: auto; transform: translateZ(2px); }
 .jb-margin.right { left: calc(var(--pw) - var(--edge)); }
 .jb-margin.none { pointer-events: none; }
 .jb-margin.left { left: calc(var(--pw) * -1); }
 .journal:not(.open) .jb-margin { display: none; }
-/* The tabs are cut into the leaves under the right-hand page: they stand out past its edge and past the boards, on the
-   shut book in its corner as on the open one, and go wherever the book goes. */
+/* The tabs sit in the leaves under the right-hand page and extend past its edge and the boards, on the shut book as
+   on the open one, and move with the book. */
 .jb-tabs { left: calc(var(--pw) - 4px); top: calc(var(--ph) / -2); width: 0; height: var(--ph); transform: translateZ(-2px); }
 .jb-tab {
   position: absolute; left: 0; width: 40px; height: 74px; border: 0; padding: 0; border-radius: 0 7px 7px 0; cursor: pointer; pointer-events: auto;
@@ -102,17 +102,17 @@
 .jb-tab span { position: absolute; left: 50%; top: 50%; transform: translate(-42%, -50%) rotate(90deg); font: 14px/1 "Bradley Hand", Georgia, cursive; color: #5a4532; white-space: nowrap; }
 .jb-tab.on { width: 46px; background-color: #f6eedb; }
 
-/* A page: cream paper, the spine's shadow falling across its inner edge. */
-/* The code's gutter: its line numbers' 2.4em and the 1.1em after them, at the code's 10.7px. A fold and a mark's label
-   start where the code does; a document set as prose has no gutter. */
+/* A page: cream paper with the spine's shadow across its inner edge. */
+/* The code gutter: the line numbers' 2.4em plus the 1.1em after them, at the code's 10.7px. A fold and a mark's label
+   start where the code does. A document set as prose has no gutter. */
 .jp { --code-gutter: 37.45px; }
 .jp-body:has(> .jp-code.prose) { --code-gutter: 0px; }
 .jp {
   position: absolute; inset: 0; overflow: hidden; color: #3b3026; background: var(--paper) center / cover; background-color: #f1e7cf;
   display: flex; flex-direction: column; box-sizing: border-box; padding: 40px 40px 50px 58px;
 }
-/* An open page bends down into the gutter: its head and tail dip toward the spine, and the bend is shaded, darkest in the
-   fold, easing off, then a faint light where the page rises toward you. */
+/* An open page curves down into the gutter. Its top and bottom edges dip toward the spine, and the curve is shaded
+   darkest in the fold, lighter outward, with a faint highlight where the page rises toward the viewer. */
 .jb-right .jp, .jb-leaf .front .jp { clip-path: path("M0 4.5 C 10 1.6, 24 0, 44 0 L 517 0 Q 520 0, 520 3 L 520 657 Q 520 660, 517 660 L 44 660 C 24 660, 10 658.4, 0 655.5 Z"); }
 .jb-left .jp, .jb-leaf .back .jp { clip-path: path("M3 0 L 476 0 C 496 0, 510 1.6, 520 4.5 L 520 655.5 C 510 658.4, 496 660, 476 660 L 3 660 Q 0 660, 0 657 L 0 3 Q 0 0, 3 0 Z"); }
 .jp::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
@@ -130,23 +130,23 @@
 .jp-head { margin-right: 12px; flex: none; }
 .jp-where { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; }
 .jp-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 8px; }
-/* Titles speak in Gaia's own face, the mark's Fraunces at 600 (title-face.ts). */
+/* Titles use the logo's Fraunces at 600 (title-face.ts). */
 .jp-name { font: 600 30px/1.08 "Gaia title", Georgia, serif; color: #33281d; overflow-wrap: anywhere; }
-/* A score: a short meter filled to its share, a quality's in its health color and an importance's in ink, then its percentage. */
+/* A score: a short meter filled to its share, in the vitality color for quality and in ink for importance, then its percentage. */
 .jp-meter { display: flex; align-items: center; gap: 9px; font: 20px/1 "Bradley Hand", Georgia, cursive; color: #4a3a26; }
 .jp-track { display: block; width: 40px; height: 6px; border-radius: 3px; background: rgba(120, 95, 65, 0.16); overflow: hidden; }
 .jp-track b { display: block; height: 100%; border-radius: 3px; opacity: 0.85; }
-/* Each percentage keeps one width, so a row's meters line up down the list. */
+/* Each percentage has a fixed width, so the meters line up down the list. */
 .jp-pct { display: inline-block; min-width: 2.3em; text-align: right; }
 .jp-numbers { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 .jp-number { display: flex; align-items: center; gap: 10px; }
 .jp-number-label { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .18em; text-transform: uppercase; color: #8a7458; }
-/* A file's or folder's lead: its most important definition at a glance, before its list. */
+/* A file's or folder's lead: a snippet of its most important definition, before its list. */
 .jp-lead { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; position: relative; }
 .jp-snippet { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 0; font: inherit; color: inherit; position: relative; }
 .jp-snippet-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 3px; }
-/* What a marked block is, in its stroke's color: beside a snippet's name, in a column of its own so the names after it
-   line up, and above a definition's block, where its code starts. */
+/* A marked block's label in its stroke's color: beside a snippet's name, in its own column so the names after it line
+   up, and above a definition's block where its code starts. */
 .jp-line[data-label]::before { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .18em; text-transform: uppercase; color: var(--mark, #8a7458); }
 .jp-line[data-label]::before { content: attr(data-label); grid-column: 1 / -1; margin: 6px 0 2px var(--code-gutter); }
 .jp-snippet-name { font: italic 600 15px/1.2 "Iowan Old Style", Georgia, serif; color: #33281d; }
@@ -154,12 +154,12 @@
 .jp-snippet-code .jp-line { display: grid; }
 .jp-sig { font: 10.6px/1.45 "SF Mono", ui-monospace, Menlo, monospace; color: #5c4c3a; margin-top: 12px; overflow-wrap: anywhere; }
 .jp-rule { height: 1px; margin: 18px 0 0; background: linear-gradient(90deg, rgba(120, 92, 60, 0.35), rgba(120, 92, 60, 0.1)); }
-/* Nothing on a page scrolls: what the page can't hold is left off at a whole line (book.ts). */
-/* The body reaches a little left of the text, so a mark in the gutter beside a row is not cut off. */
+/* Nothing on a page scrolls. What the page cannot hold is cut at a whole line (book.ts). */
+/* The body extends a little left of the text, so a mark in the gutter beside a row is not clipped. */
 .jp-body { flex: 1; min-height: 0; margin-top: 14px; overflow: hidden; position: relative; margin-left: -20px; padding-left: 20px; }
 .jp-past { visibility: hidden; }
 
-/* A list: each row its name, a dotted leader, its vitality and its page; a tap turns there. */
+/* A list row: its name, a dotted leader, its meters and its page. A tap turns there. */
 .jp-rows { display: flex; flex-direction: column; font-family: "Iowan Old Style", Georgia, serif; padding-right: 12px; }
 .jp-row {
   display: flex; align-items: baseline; border: 0; background: none; padding: 0; text-align: left; cursor: pointer; color: inherit;
@@ -173,12 +173,12 @@
 .jp-row-meter .jp-track { width: 22px; height: 5px; }
 .jp-row-page { font: 14px/1 "Bradley Hand", Georgia, cursive; color: #7a5f45; min-width: 38px; text-align: right; font-style: normal; font-weight: normal; }
 
-/* Code: serif type, its line numbers by hand down a pencil-ruled gutter; a long line wraps under a hanging indent. */
+/* Code in monospace type, with handwritten line numbers in a ruled gutter. A long line wraps under a hanging indent. */
 .jp-code { font: 10.7px/1.6 "SF Mono", ui-monospace, Menlo, monospace; color: #3a2f24; }
 .jp-line { display: grid; grid-template-columns: 2.4em 1fr; column-gap: 1.1em; position: relative; }
 .jp-ln { text-align: right; color: #8f7a5c; font: 12.5px/1.6 "Bradley Hand", Georgia, cursive; border-right: 1px solid rgba(120, 95, 65, 0.38); padding-right: 0.5em; }
 .jp-text { white-space: pre-wrap; overflow-wrap: anywhere; padding-left: calc(var(--ind) * 1ch + 2ch); text-indent: -2ch; }
-/* Slate highlighting with contrast against cream paper. */
+/* Highlight colors with enough contrast against the cream paper. */
 .ink-kw { color: #3a49b4; }
 .ink-str { color: #93407f; }
 .ink-num { color: #4f6b8f; }
@@ -187,17 +187,18 @@
 .ink-prop { color: #4a4036; }
 .ink-com { color: #8a7f6c; font-style: italic; }
 
-/* Jev's mark: a soft brush stroke in the gutter beside what it points out, its color the kind and its strength how
-   sure; one stroke runs the length of a marked block of lines (book.ts paints them once a page is laid out). */
+/* Jev's mark: a soft brush stroke in the gutter beside the marked lines, colored by its kind. One stroke covers a whole
+   marked block (`paintMarks` in book.ts draws them once a page is laid out). */
 .jp-rows, .jp-code { position: relative; }
 .jp-stroke { position: absolute; width: 5px; border-radius: 3px; pointer-events: none; filter: url(#jp-brush); }
 .jp-stroke.row { left: -15px; }
 .jp-stroke.line { left: -15px; }
 
-/* A definition's name turns to it in full, in the appendix. */
+/* A definition's name is a button that turns to it in full in the appendix. */
 button.jp-name { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; }
-/* Lines folded away, wherever code is shown: "⋯ 20 lines" by hand where the code starts. One that can be read elsewhere
-   is a tap there. A long definition's page folds where it ends, placed once the page is laid out (book.ts). */
+/* A fold for hidden lines anywhere code is shown, such as "⋯ 20 lines" in handwriting where the code starts. A fold for
+   lines readable elsewhere turns there on a tap. A long definition's page gets a fold where it ends, placed once the
+   page is laid out (book.ts). */
 .jp-fold { display: block; margin-left: var(--code-gutter); border: 0; background: none; padding: 0; text-align: left; font: 12px/1.6 "Bradley Hand", Georgia, cursive; color: #7a5f45; }
 .jp-fold::before { content: "⋯ "; }
 .jp-fold.after { display: none; position: absolute; left: 20px; }
@@ -205,25 +206,24 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 
 .jp-back { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; display: block; width: 100%; }
 
-/* A page a list runs on to carries a running head instead of the heading. */
+/* A list's continuation page has a running head instead of the heading. */
 .jp-running { font: 600 9px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .22em; text-transform: uppercase; color: #8a7458; padding-bottom: 8px; border-bottom: 1px solid rgba(120, 92, 60, 0.18); }
 
-/* The title page: a frontispiece painting to the page's edges and the world's name lettered across its sky as Gaia's
-   mark letters its name, lowercase in the mark's face and ink (paint.ts), with a soft glow of the paper's tone. */
+/* The title page: a full-bleed painting with the world's name lettered across its sky in the logo's face and ink
+   (brand/paint.ts), with a soft glow in the paper's color. */
 .jp-title-lettering { position: absolute; left: 44px; right: 44px; top: 13%; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
-/* A long name breaks where page.ts lets it (`nameBreaks`) into centred lines of about one length, and page.ts letters it
-   smaller when it is very long (`titleSize`); a run longer than a line breaks where it must. The paper's glow round
-   the letters keeps its share of the size. */
+/* A long name breaks at `nameBreaks` points into centered lines of similar length, and page.ts shrinks a very long
+   name (`titleSize`). A piece longer than a line breaks wherever it must. The glow around the letters scales with the
+   font size. */
 .jp-book-name {
   font: 600 52px/1.1 "Gaia title", Georgia, "Times New Roman", serif; color: #2b2721;
   max-width: 100%; text-align: center; text-wrap: balance; overflow-wrap: anywhere;
   text-shadow: 0 0 0.06em rgba(241, 231, 207, 0.95), 0 0 0.22em rgba(241, 231, 207, 0.75);
 }
 
-/* A map or a painting can be tapped: a map's land and a page's picture take you into the world. */
-/* On a computer, everything that can be clicked answers the pointer and nothing else does: a name, a row, a fold or a
-   way back inks darker with a pencil underline, a painting lifts a little, and the pointer is a hand. A phone, with no
-   pointer to answer, stays as it is. */
+/* A map or a painting can be tapped. A map's land and a page's picture travel into the world. */
+/* With a mouse, only clickable things react to the pointer: a name, row, fold or back reference darkens with an
+   underline, a painting lifts a little, and the cursor is a pointer. On touch screens nothing changes. */
 .jp-row, button.jp-name, button.jp-fold, .jp-back { cursor: default; }
 @media (hover: hover) and (pointer: fine) {
   .jp-row, button.jp-name, button.jp-fold, .jp-back, .jp-picture .jp-tap:not(.jp-map) { cursor: pointer; }
@@ -237,19 +237,19 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .jp-cross path { fill: none; stroke: #b8452c; stroke-width: 2.6; stroke-linecap: round; }
 .jp-name-line { position: absolute; height: 0; border-bottom: 1.4px solid rgba(58, 47, 34, 0.55); pointer-events: none; }
 
-/* You are here on a map's page: the field map's own traveller, standing on the land, never above the page. */
+/* The traveller marker on a map page, the same as the field map's. */
 .jp-here { position: absolute; width: 0; height: 0; pointer-events: none; }
 .jp-here .field-map-traveller { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; overflow: visible; }
-/* A trip's way ahead on a map's page, from the traveller to the cross where it ends, in the cross's vermilion pencil:
-   pencilled in from the traveller over 1.2 s as the trip sets off (a page drawn later in the trip starts part way,
-   `--pencil-delay` in pages.ts), shortening as they go, and fading with its cross once the trip is over. */
+/* A trip's route on a map page, from the traveller to its end cross, in vermilion. The line draws in from the traveller
+   over 1.2 s as the trip starts, and a page drawn later in the trip starts part way (`--pencil-delay` in pages.ts).
+   It shortens as the person moves and fades with its cross when the trip ends. */
 .jp-way { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .jp-way path { fill: none; stroke: #b8452c; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1 1; stroke-dashoffset: 1; }
 .jp-way.on path { stroke-dashoffset: 0; transition: stroke-dashoffset 1.2s cubic-bezier(0.45, 0.05, 0.4, 1) var(--pencil-delay, 0ms); }
 .jp-way.over path, .jp-cross.over { opacity: 0; transition: opacity 0.5s ease; }
 
-/* A page is taken by hand: touch draws the leaf rather than panning; under the pointer, a page's outer edge lifts a
-   little; and the tabs slide in and out as the part of the book changes. */
+/* Dragging pages: touch drags the leaf instead of panning, a page's outer edge lifts a little under the pointer, and
+   the tabs slide in and out as the open part of the book changes. */
 .jb-right, .jb-left, .jb-margin { touch-action: none; }
 .journal { user-select: none; -webkit-user-select: none; }
 .jb-right { transform-origin: 0 50%; transition: transform 260ms ease-out; }
@@ -258,8 +258,8 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .jb-tab { transition: width 380ms cubic-bezier(.3, .1, .3, 1), background-color 380ms ease; }
 .journal.taking, .journal.taking * { cursor: grabbing !important; }
 
-/* What Jev says of a thing, lettered across the foot of its picture as a plate's caption: each label in small spaced
-   capitals, each answer by hand, on the paper's tone rising out of the picture so it reads over any painting. */
+/* Jev's caption across the bottom of a picture: each label in small spaced capitals and each value in handwriting,
+   over a paper-colored gradient so it reads over any painting. */
 .jp-caption {
   position: absolute; left: 0; right: 0; bottom: 0; padding: 30px 34px 38px; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; pointer-events: none;
   background: linear-gradient(0deg, rgba(241, 231, 207, 0.94), rgba(241, 231, 207, 0.74) 70%, rgba(241, 231, 207, 0));
@@ -270,7 +270,7 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .jp-picture .jp-folio { z-index: 1; }
 
 
-/* A document set as prose: in the book's own type, its lines unnumbered, a heading set as one. */
+/* A document set as prose in the book's serif, without line numbers, with headings styled as headings. */
 .jp-code.prose { font: 12.5px/1.55 "Iowan Old Style", Georgia, serif; color: #3a2f24; }
 .jp-code.prose .jp-line { grid-template-columns: 1fr; }
 .jp-code.prose .jp-ln { display: none; }
@@ -281,9 +281,8 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .jp-code.prose .jp-line.pre { font: 10.4px/1.5 "SF Mono", ui-monospace, Menlo, monospace; color: #4a3d2e; }
 .jp-code.prose .jp-line.pre .jp-text { padding-left: 1.2em; }
 
-/* The finder: a slip of the journal's paper laid over the world when "/" is pressed. What is typed is written in
-   ink on a pencil rule; each thing found is a row as the journal's contents set them, the letters that matched
-   inked darker, where it lives in small capitals, and its page by hand. */
+/* The finder: a paper slip over the world, opened with "/". The input sits on a ruled line. Each result is a row like
+   the contents' rows, with matched letters in bold, its location in small capitals and its page in handwriting. */
 .finder { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: center; align-items: flex-start; padding-top: 14vh; }
 .finder[hidden] { display: none; }
 .finder-slip {
@@ -306,7 +305,7 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
 .finder-where { font: 600 8.5px/1.3 "Iowan Old Style", Georgia, serif; letter-spacing: .16em; text-transform: uppercase; color: #8a7458; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .finder-page { font: 14px/1 "Bradley Hand", Georgia, cursive; color: #7a5f45; }
 
-/* An entity's trails at its page's foot, by their way, each name a tap to its page. */
+/* An entity's trails at the foot of its page. Each name turns to its page. */
 .jp-trails { margin-top: 18px; padding-top: 10px; border-top: 1px solid rgba(120, 92, 60, 0.18); display: flex; flex-direction: column; gap: 6px; }
 .jp-trail-line { display: grid; grid-template-columns: 64px 1fr; align-items: baseline; }
 .jp-trail-names { font: italic 14.5px/1.5 "Iowan Old Style", Georgia, serif; color: #33281d; }
@@ -316,12 +315,12 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
   .jp-trail-name:hover { color: #1e160e; text-decoration: underline; text-decoration-color: rgba(122, 95, 69, 0.6); text-decoration-thickness: 1.2px; text-underline-offset: 4px; }
 }
 
-/* A reference by hand at a page's foot or under a snippet's code, saying where its code is set in full or where its
-   page is; code that is a tap to itself in full; and the path's folders, each a tap. */
+/* A handwritten cross-reference at a page's foot or under a snippet's code, giving the page of the full code or of the
+   journal page. Also code that turns to its full text on a tap, and the path's folders, each a button. */
 .jp-xref { position: absolute; left: 58px; bottom: 13px; border: 0; background: none; padding: 0; font: 15px/1 "Bradley Hand", Georgia, cursive; color: #7a5f45; cursor: pointer; }
 .jp-xref::before { content: "→ "; }
 .jp-xref.back::before { content: "← "; }
-/* On a left-hand page the folio stands at the outer corner, so the reference goes to the inner one. */
+/* On a left-hand page the folio is in the outer corner, so the reference goes in the inner one. */
 .jb-left .jp-xref, .jb-leaf .back .jp-xref, .jb-curl .back .jp-xref { left: auto; right: 40px; }
 .jp-snippet-code .jp-xref { position: static; display: block; margin: 2px 0 0 var(--code-gutter); font-size: 13px; }
 .jp-crumb { border: 0; background: none; padding: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer; }
@@ -332,35 +331,35 @@ button.jp-name { border: 0; background: none; padding: 0; text-align: left; curs
   .jp-tapcode:hover { background-color: rgba(122, 95, 69, 0.07); box-shadow: 0 0 0 5px rgba(122, 95, 69, 0.07); }
 }
 
-/* The silk ribbon, drawn once in ribbon.ts in the book's own pixels and posed about the spine (RIBBON_POSES, set by
-   book.ts as --here, --after and --before-*): on its page above the paper; under the right-hand leaves; or on the
-   left-hand leaves, which the cover carries, so it swings with the cover. There it lies over the left-hand page, so
-   all of it between the pages' head and foot (--head, --foot) is hidden (--hid). A leaf that turns, or the lift that
-   lays it on the page a jump leaves, poses it by hand (data-side "carried"). */
+/* The ribbon, drawn once in ribbon.ts in the book's pixels and posed about the spine (`RIBBON_POSES`, set by book.ts
+   as --here, --after and --before-*): on its page above the paper, under the right-hand leaves, or on the left-hand
+   leaves, which rotate with the cover. On the left it lies over the left-hand page, so the part between the pages' top
+   and bottom (--head, --foot) is hidden (--hid). A turning leaf, or the lift onto the page a riffle leaves, sets its
+   transform directly (data-side "carried"). */
 .jb-ribbon {
   pointer-events: none; --before: var(--before-shut); --hid: var(--head);
   clip-path: polygon(-100% -100%, 200% -100%, 200% var(--head), -100% var(--head), -100% var(--hid), 200% var(--hid), 200% 200%, -100% 200%);
 }
 .jb-cover.open ~ .jb-ribbon { --before: var(--before-open); }
-/* The cover's edge lifting under the pointer lifts the leaves it carries, and the ribbon among them, as fast. */
+/* When the cover's edge lifts under the pointer, the ribbon on its leaves lifts with it at the same speed. */
 .jb-cover.open.lift ~ .jb-ribbon { --before: var(--before-lifted); }
 .jb-cover.open.lift ~ .jb-ribbon[data-side="before"] { transition: transform 260ms ease-out; }
 .jb-ribbon[data-side="here"] { transform: var(--here); }
 .jb-ribbon[data-side="after"] { transform: var(--after); }
 .jb-ribbon[data-side="before"] { transform: var(--before); --hid: var(--foot); transition: transform 900ms cubic-bezier(.45, .05, .3, 1); }
 .jb-ribbon svg { position: absolute; left: 0; top: 0; }
-/* Only the silk itself takes a tap, and only in the open book: its box, much larger, lies over the page's inner
-   margin, which keeps its own clicks. */
+/* Only the ribbon's painted shape takes a tap, and only in the open book. Its much larger box lies over the page's
+   inner margin, which keeps its own clicks. */
 .jb-ribbon svg path { pointer-events: visiblePainted; cursor: pointer; }
 .journal:not(.open) .jb-ribbon svg path { pointer-events: none; }
-/* Its free end swings a little and settles, as silk does when the book is moved. */
+/* Its free end swings a little and settles when the book moves. */
 @keyframes jb-silk-sway { 0% { transform: rotate(0deg); } 22% { transform: rotate(3.2deg); } 48% { transform: rotate(-1.8deg); } 72% { transform: rotate(0.8deg); } 100% { transform: rotate(0deg); } }
 .jb-ribbon.sway .jb-ribbon-free { animation: jb-silk-sway 1800ms cubic-bezier(.3, .1, .3, 1); }
 
 
-/* The strips a turning leaf is cut into, laid where the leaf is, each
-   hinged to the one before; each face a window onto its part of the page, shaded by how far it is turned from the
-   light. The leaf's own faces hide while its strips show it. The shadow it casts lies just over each page. */
+/* The strips a turning leaf is cut into (`curl.ts`), positioned like the leaf, each hinged to the one before and
+   shaded by how far it is turned. The leaf's own faces hide while its strips show. Its shadow layer lies just over each
+   page. */
 .jb-curl { left: 0; top: calc(var(--ph) / -2); width: var(--pw); height: var(--ph); transform-origin: 0 50%; transform-style: preserve-3d; transform: translateZ(1.3px); pointer-events: none; }
 .jb-leaf.curled > .jb-face { visibility: hidden; }
 .jb-curl .front .jp { clip-path: path("M0 4.5 C 10 1.6, 24 0, 44 0 L 517 0 Q 520 0, 520 3 L 520 657 Q 520 660, 517 660 L 44 660 C 24 660, 10 658.4, 0 655.5 Z"); }
