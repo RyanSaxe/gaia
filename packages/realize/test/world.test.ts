@@ -96,7 +96,7 @@ describe("the air over failing ground and from above", () => {
   type Erased = (p: unknown) => ReturnType<typeof airPrimitive.build>;
   const airs = Object.keys((airPrimitive.params.air as ChoiceField).options).map((name) => (airPrimitive.build as unknown as Erased)({ air: name, distance: "softened distance" }));
 
-  it("leaves thriving and tired ground's air as it was, and thickens and greys it as the ground fails, gradually", () => {
+  it("leaves the air as it was until the ground's decline passes `MURK.from`, then thickens and greys it gradually", () => {
     for (const air of airs) {
       for (const decline of [0, 0.1, MURK.from]) expect(murkyAir(air, decline)).toEqual(air);
       const failed = murkyAir(air, 1);

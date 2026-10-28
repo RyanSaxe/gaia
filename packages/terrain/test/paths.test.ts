@@ -213,7 +213,7 @@ describe("trails", { timeout: 20_000 }, () => {
     for (let i = 0; i < field.length; i += 97) if ((field[i] as number) >= TRAILS.reach) expect(places[i * 2]).toBe(-1);
   });
 
-  it("wears a trail by the vitality of the entities it joins: bare between thriving ones, grown over toward a failing one", () => {
+  it("wears a trail by the vitality of the entities it joins: bare between ones at high vitality, grown over toward one at low vitality", () => {
     const wear = 0.8;
     expect(trailWearAt(wear, 1, 1, 0.5)).toBeCloseTo(wear, 5);
     // Each end holds its own entity's vitality, and the wear runs smoothly between them.

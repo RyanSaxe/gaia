@@ -115,7 +115,7 @@ describe("where a person comes back to in a world they were in before", () => {
   /** The world after an edit: `edit` changes its things, and so its layout. */
   const edited = (edit: (things: (typeof world.things)[number][]) => (typeof world.things)[number][]): typeof world => ({ ...world, things: edit([...world.things]) });
 
-  it("keeps the nearest thing that stands for code by its path, with where it stood", () => {
+  it("keeps the nearest thing that represents code by its path, with where the person stood", () => {
     expect(stood.by).toEqual({ path: house.path, x: house.x, z: house.z });
   });
 

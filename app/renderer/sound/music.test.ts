@@ -62,7 +62,7 @@ function layersAt(ear: Earshot): Record<Stem, number> {
 }
 
 describe("the music in layers", () => {
-  it("never stops, by day or night, on thriving or failing land", () => {
+  it("never stops, by day or night, at any decline of the land", () => {
     for (const night of [0, 0.5, 1])
       for (const decline of [0, 0.2, 0.5, 1]) {
         const parts = layersAt({ ...NOON, night, decline });

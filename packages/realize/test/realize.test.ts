@@ -116,7 +116,7 @@ describe("vitality response", () => {
     });
   }
 
-  it("shows vitality 0.85 and up fully healthy, 0.45 and below as ruin, and falls evenly between with nothing that jumps", () => {
+  it("shows vitality 0.85 and up as 1 and 0.45 and below as 0, and rises evenly between with nothing that jumps", () => {
     for (const v of [0.85, 0.9, 0.99, 1]) expect(shownVitality(v)).toBe(1);
     for (const v of [0, 0.1, 0.36, 0.45]) expect(shownVitality(v)).toBe(0);
     for (let v = 0; v < 1; v += 0.001) {
@@ -254,7 +254,7 @@ describe("structures", () => {
   });
 
   for (const [name, blueprint] of [["A cottage", cottage], ["A mill", mill]] as const) {
-    it(`${name} falls to ruin as vitality drops, and shows none of it while healthy`, () => {
+    it(`${name} collapses as vitality drops, and shows no collapse at high vitality`, () => {
       const parts = mergeParts(realize(blueprint, structure, structureLib, { seed: 4, facts }).parts);
       /** The largest distance a falling piece has moved from where it was built. */
       const moved = (v: number): number =>
@@ -307,7 +307,7 @@ describe("structures", () => {
     expect(new Set(built.parts.map((p) => p.swatch))).toEqual(new Set(["masonry", "wall", "timber", "roof", "smoke", "glass", "trim", "leaf", "bloom", "moss"]));
   });
 
-  it("turns a mill's wheel while healthy, slows it as it fails and stops it near the bottom", () => {
+  it("turns a mill's wheel at full speed at vitality 1, slower at 0.4, and not at all near 0", () => {
     expect(validate(mill, structure, structureLib)).toEqual([]);
     const parts = realize(mill, structure, structureLib, { seed: 4, facts }).parts;
     expect(parts.some((p) => p.channels.spin?.some((x) => x !== 0))).toBe(true);
@@ -317,7 +317,7 @@ describe("structures", () => {
     expect(spinAt(0.05)).toBe(0);
   });
 
-  it("lights windows and smokes only while healthy", () => {
+  it("lights windows brightest and smokes at high vitality, and has no smoke at low vitality", () => {
     const built = realize(cottage, structure, structureLib, { seed: 4, facts });
     const emitted = (v: number) => built.parts.filter((p) => p.swatch === "glass").reduce((sum, p) => sum + applyVitality(p, v).emission.reduce((a, b) => a + b, 0), 0);
     expect(emitted(1)).toBeGreaterThan(emitted(0.4) * 2);
@@ -362,7 +362,7 @@ describe("the understory", () => {
     { blueprints: sweep(wildflowers, all).blueprints, kind: wildflowers },
   ];
   for (const { blueprints, kind } of groups) {
-    it(`stands every ${kind.id} part valid and light enough to place by the hundred`, () => {
+    it(`builds every ${kind.id} part valid and light enough to place by the hundred`, () => {
       const over: string[] = [];
       for (const blueprint of blueprints) {
         expect(validate(blueprint, kind, all), named(blueprint)).toEqual([]);

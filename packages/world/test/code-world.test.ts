@@ -483,7 +483,7 @@ describe("a world laid out from code", () => {
     }
   });
 
-  it("holds still under small edits: one that crosses no rung moves nothing, and a new file moves only its own folder", async () => {
+  it("keeps its layout under small edits: one that crosses no rung moves nothing, and a new file moves only its own folder", async () => {
     const judged = await composed(facts());
     const before = layoutWorld(facts(), judged);
     const moved = (after: typeof before): string[] =>

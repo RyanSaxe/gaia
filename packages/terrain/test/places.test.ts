@@ -64,7 +64,7 @@ describe("where a person is", () => {
 });
 
 describe("whose ground a point is, and how alive it is", () => {
-  it("takes its owner's vitality away from borders, eases into a neighbor's across a few meters, and thrives in the wild", () => {
+  it("takes its owner's vitality away from borders, eases into a neighbor's across a few meters, and has vitality 1 in the wild", () => {
     // Cells every 16 m, as a world from code lays them: a patch at vitality 1 to the west, one at 0.1 to the east, and one at 0.45 inside the west.
     const size = 300;
     const sites: OwnedSite[] = [];

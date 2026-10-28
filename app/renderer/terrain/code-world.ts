@@ -279,11 +279,11 @@ export interface SymbolOf {
 const representNaturalThing = (s: CodeWorld["naturalThings"][number], files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): Represented => {
   if (s.of === "file") {
     const f = files.get(s.path);
-    if (f === undefined) throw new Error(`${s.path} stands in the world but is not among its files.`);
+    if (f === undefined) throw new Error(`${s.path} is placed in the world but is not among its files.`);
     return representFile(f, s.vitality);
   }
   const e = entities.get(s.path);
-  if (e === undefined) throw new Error(`${s.path || "The repository's root"} stands as an entity but is not one.`);
+  if (e === undefined) throw new Error(`${s.path || "The repository's root"} is placed as an entity but is not one.`);
   return representEntity(e, s.vitality);
 };
 
@@ -292,15 +292,15 @@ function thingOf(t: CodeWorld["things"][number], world: CodeWorld, files: Readon
   const of = t.of ?? "entity";
   if (of === "entity") {
     const e = entities.get(t.path);
-    if (e === undefined) throw new Error(`${t.path || "The repository's root"} stands as an entity but is not one.`);
+    if (e === undefined) throw new Error(`${t.path || "The repository's root"} is placed as an entity but is not one.`);
     return { facts: e, represented: representEntity(e, t.vitality) };
   }
   const file = files.get(t.file ?? "");
-  if (file === undefined) throw new Error(`${t.path} stands on ${t.file ?? "no file"}, which is not among the world's files.`);
+  if (file === undefined) throw new Error(`${t.path} is placed on ${t.file ?? "no file"}, which is not among the world's files.`);
   const facts: ThingFacts = t.facts ?? { path: t.path, name: t.name, lines: file.lines, exports: 0, dependents: [] };
   if (of === "file") return { facts, represented: representFile(file, t.vitality) };
   const sym = world.symbols.find((s) => s.id === t.path);
-  if (sym === undefined) throw new Error(`${t.path} stands as a definition but is not one.`);
+  if (sym === undefined) throw new Error(`${t.path} is placed as a definition but is not one.`);
   return { facts, represented: representSymbol(sym, file) };
 }
 
@@ -358,7 +358,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     // A definition that appears as a building or landmark is one of the world's things and is placed with them.
     if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };
     // Every thing uses the blueprint Jev composed for it. One without a blueprint is an error, never a default form.
-    if (s.as === undefined || s.blueprint === undefined || s.as === "building" || s.as === "landmark") throw new Error(`${who} stands as "${s.form}" with no blueprint of a tree, a bush, a stone or flowers.`);
+    if (s.as === undefined || s.blueprint === undefined || s.as === "building" || s.as === "landmark") throw new Error(`${who} has the form "${s.form}" but no blueprint of a tree, a bush, a stone or flowers.`);
     const group = plantGroup(s.as, s.blueprint);
     const patch = s.file === undefined ? undefined : patchOf.get(s.file);
     return { x: s.x, z: s.z, rule: group, variant: variantOf(group, s.blueprint), radius: group === "flowers" || group === "mushrooms" ? 0.8 : 1, scale: symbolScale(s.lines, group, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };

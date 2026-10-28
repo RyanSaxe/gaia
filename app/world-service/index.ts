@@ -136,13 +136,13 @@ function watchCommits(port: MessagePortMain, document: WorldDocument): void {
     openedOn.set(port, { folder: shown.root, ...(shown.commit === undefined ? {} : { commit: shown.commit }) });
     if (refreshed.update !== null) send(port, refreshed.update);
     const changed = Object.keys(refreshed.update?.vitality ?? {}).length;
-    console.log(`gaia: healed ${shown.root} at ${now.slice(0, 8)} in ${Date.now() - started} ms: ${changed} things' vitality changed${shown.commit === now ? "" : "; the land moved, so its new shape waits for the next open"}`);
+    console.log(`gaia: refreshed ${shown.root} at ${now.slice(0, 8)} in ${Date.now() - started} ms: ${changed} things' vitality changed${shown.commit === now ? "" : "; the land changed, so its new layout appears at the next open"}`);
   };
   const timer = setInterval(() => {
     if (refreshing) return;
     refreshing = true;
     refresh()
-      .catch((error: unknown) => console.error(`gaia: could not heal ${shown.root}: ${(error as Error).message}`))
+      .catch((error: unknown) => console.error(`gaia: could not refresh ${shown.root}: ${(error as Error).message}`))
       .finally(() => (refreshing = false));
   }, COMMIT_EVERY_MS);
   watching = { port, timer };

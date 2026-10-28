@@ -41,7 +41,7 @@ function placeAsThePage(t: Terrain, code: OpenedWorld, buildings: BuildingToPlac
   return { land, placed, landmarks };
 }
 
-describe("the showcase, as it is and fixed, and the proving ground, stood as the page stands them", () => {
+describe("the showcase, as it is and fixed, and the proving ground, placed as the page places them", () => {
   let worlds: { root: string; code: OpenedWorld; t: Terrain; buildings: BuildingToPlace[]; land: Terrain; placed: Placed; landmarks: LandmarkToPlace[] }[] = [];
   // Bakes and places all three worlds whole, about two minutes while other work shares the machine, most of it for the proving ground.
   beforeAll(async () => {
@@ -83,7 +83,7 @@ describe("the showcase, as it is and fixed, and the proving ground, stood as the
     }
   });
 
-  it("stand every house with a waterwheel on a stream's bank, its wheel turning in the water", () => {
+  it("place every house with a waterwheel on a stream's bank, its wheel turning in the water", () => {
     for (const { root, buildings, land, placed } of worlds) {
       expect(placed.dry, root).toEqual([]);
       const wheels = buildings.filter((b) => b.wheel !== undefined && b.wheel !== null);
@@ -97,7 +97,7 @@ describe("the showcase, as it is and fixed, and the proving ground, stood as the
     }
   });
 
-  it("run every river and stand every mill on the land its areas are laid out on, never past its outline", () => {
+  it("run every river and place every mill on the land its areas are laid out on, never past its outline", () => {
     for (const { root, code, t, buildings, placed } of worlds) {
       const land = { size: code.world.size, ...(code.world.aspect === undefined ? {} : { aspect: code.world.aspect }) };
       const past = t.streams.flatMap((s, i) => (s.stations.some((p) => pastTheEdge(land, p.x, p.z) > 0) ? [`stream ${i}`] : []));
@@ -120,7 +120,7 @@ describe("the showcase, as it is and fixed, and the proving ground, stood as the
     }
   });
 
-  it("stand every house on dry ground, never in a pond or a stream", () => {
+  it("place every house on dry ground, never in a pond or a stream", () => {
     for (const { root, buildings, land, placed } of worlds) {
       // A house with a wheel sits on a stream's bank with its wheel in the water. Every other house is wholly on dry ground.
       buildings.forEach((b, i) => {
@@ -133,7 +133,7 @@ describe("the showcase, as it is and fixed, and the proving ground, stood as the
     }
   });
 
-  it("stand no house's yard on another's, and no landmark on a house, on what stands beside it or on another landmark", () => {
+  it("place no house's yard on another's, and no landmark on a house, on what is beside it or on another landmark", () => {
     for (const { root, buildings, placed, landmarks } of worlds) {
       const pads = placed.edits.pads;
       const yards = pads.flatMap((a, i) => pads.flatMap((b, k) => (k > i && yardsMeet(a, b) ? [`${buildings[i]!.name} and ${buildings[k]!.name}`] : [])));
@@ -148,7 +148,7 @@ describe("the showcase, as it is and fixed, and the proving ground, stood as the
     }
   });
 
-  it("stand every definition, file and entity the layout lays out as a tree, a stone, a bush or flowers, however crowded its patch", () => {
+  it("place every definition, file and entity the layout lays out as a tree, a stone, a bush or flowers, however crowded its patch", () => {
     for (const { root, code, placed } of worlds) {
       const trees = new Set(placed.trees.map((tree) => tree.symbol));
       const left = code.layout.symbols.flatMap((s, i) => (s.rule === AS_THING || placed.symbols[i]! >= 0 || trees.has(i) ? [] : [code.symbolOf(i)?.represented.id ?? String(i)]));

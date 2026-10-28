@@ -8,7 +8,7 @@ describe("one build for each blueprint", () => {
   const code = openedWorld(doc);
   const things = [...doc.world.symbols, ...doc.world.naturalThings];
 
-  it("stands each tree, bush, stone and flowers as its own blueprint's build: things answered alike share one, and no two blueprints do", () => {
+  it("places each tree, bush, stone and flowers as its own blueprint's build: things answered alike share one, and no two blueprints do", () => {
     let small = 0;
     code.layout.symbols.forEach((sym, k) => {
       if (sym.rule === AS_THING) return;

@@ -13,8 +13,8 @@ const FOCAL = 2000;
 /** The tile's center in meters. */
 const middle = (ti: number, tj: number): [number, number] => [worldOf(frame, (ti + 0.5) * TILE.size), worldOf(frame, (tj + 0.5) * TILE.size)];
 
-describe("what stands on the land, tile by tile", () => {
-  it("stands each thing's tiles as far as the largest of its kind can be seen, and lets go of tiles well past that", async () => {
+describe("what is placed on the land, tile by tile", () => {
+  it("places each thing's tiles as far as the largest of its kind can be seen, and drops tiles well past that", async () => {
     const placed: string[][] = [];
     const tiles = createThingTiles(() => FOCAL);
     tiles.add<string>({ name: "stones", largest: () => 0.5, tile: (ti, tj) => [`${ti},${tj}`], place: (things) => placed.push([...things]) });
@@ -68,7 +68,7 @@ describe("what stands on the land, tile by tile", () => {
     expect(asked.size).toBeGreaterThan(byTrip);
   });
 
-  it("never holds a trip on a tile that fails: it lets it go with a warning and asks for it again", async () => {
+  it("never holds a trip on a tile that fails: it drops the tile with a warning and requests it again", async () => {
     let fails = 1;
     const placed: string[][] = [];
     const tiles = createThingTiles(() => FOCAL);

@@ -137,7 +137,7 @@ export function createThingTiles(focal: () => number): ThingTiles {
         },
         (error: unknown) => {
           h.pending.delete(key);
-          console.warn(`standing: ${h.layer.name} tile ${key} failed and will be asked for again`, error);
+          console.warn(`tiles: ${h.layer.name} tile ${key} failed and will be requested again`, error);
         },
       );
       h.pending.set(key, wait);

@@ -94,7 +94,7 @@ describe("stump", () => {
     expect(reach(build(2.2))).toBeGreaterThan(reach(build(0.5)) + 0.3);
   });
 
-  it("crumbles from its heart into a hollow as it fails", () => {
+  it("crumbles from the center into a hollow as vitality falls", () => {
     const wood = partOf(build(1.1), "wood");
     const heart = (v: number): number => {
       const p = applyVitality(wood, v).positions;

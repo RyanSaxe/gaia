@@ -39,7 +39,7 @@ const groundField = vitalityOver(own, tables.ground);
 const waterField = vitalityOver(own, tables.area);
 
 describe("the proving ground", () => {
-  it("stands every part of every land, building, landmark and trail Jev composes, thriving, tired and in ruin, and chooses every option Jev is offered", () => {
+  it("places every part of every land, building, landmark and trail Jev composes, at high, middle and low vitality, and chooses every option Jev is offered", () => {
     const used = (options: object, chosen: Iterable<string>): string[] => Object.keys(options).filter((k) => ![...chosen].includes(k));
     // Labels by vitality: "thriving" from 0.85, "tired" from 0.35, and "ruin" below 0.12. A thing between 0.12 and 0.35 gets no label.
     const healths = ["thriving", "tired", "ruin"];
@@ -80,7 +80,7 @@ describe("the proving ground", () => {
     expect(used(FORMS, doc.world.naturalThings.map((s) => s.form))).toEqual([]);
   });
 
-  it("lays out every planned land, a whole area in ruin beside thriving ones, a tiny area and deep nesting", () => {
+  it("lays out every planned land, a whole area at low vitality beside ones at high vitality, a tiny area and deep nesting", () => {
     expect(doc.world.regions.map((r) => r.area).sort()).toEqual(Object.keys(judged.lands).sort());
     const ground = groundVitality(doc.world.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
     expect(ground.get("ruins")).toBeLessThan(0.1);
@@ -90,7 +90,7 @@ describe("the proving ground", () => {
     expect(Math.max(...doc.world.areas.map((a) => a.depth))).toBeGreaterThanOrEqual(6);
   });
 
-  it("dries the ground of its failing area and failing grove, keeps its thriving ground green, and clouds the failing area's water", () => {
+  it("dries the ground of its low-vitality area and grove, keeps its high-vitality ground green, and clouds the low-vitality area's water", () => {
     const looks = new Map<string, { blades: number; dry: number; bare: number; water: number; count: number }>();
     let inside = 0;
     const half = doc.world.size / 2 - 20;
@@ -136,7 +136,7 @@ describe("the proving ground", () => {
     expect(mean("mixed/steady.ts").dry).toBeLessThan(0.1);
   });
 
-  describe("stood as the page stands it", () => {
+  describe("placed as the page places it", () => {
     let terrain: Terrain;
     let placed: Placed;
     let requests: BuildingToPlace[];
@@ -163,7 +163,7 @@ describe("the proving ground", () => {
       });
     }, 120_000);
 
-    it("stands each building whose wheel needs running water on its stream's bank, its wheel in the water and its floor dry", () => {
+    it("places each building whose wheel needs running water on its stream's bank, its wheel in the water and its floor dry", () => {
       expect(placed.dry).toEqual([]);
       const banked = requests.flatMap((b, i) => (b.wheel !== undefined ? [{ b, site: placed.sites[i] as BuildingSite }] : []));
       expect(banked.length).toBeGreaterThan(2);
@@ -183,7 +183,7 @@ describe("the proving ground", () => {
       }
     });
 
-    it("crosses its streams on footbridges and stepping stones, and has cairns where ways meet, thriving and in ruin", () => {
+    it("crosses its streams on footbridges and stepping stones, and has cairns where ways meet, at high and low vitality", () => {
       const net = placed.network;
       const place = (id: string): number => endVitality.get(id) ?? 1;
       const crossings = net.ways.flatMap((w, i) => w.crossings.map(() => ({ kind: w.style.crossing, vitality: wayVitalityAt(net, i, 0.5, place) })));
@@ -203,7 +203,7 @@ describe("the proving ground", () => {
       expect(terrain.ponds.length).toBeGreaterThanOrEqual(2);
     });
 
-    it("stands every definition, file and entity the layout lays out, as a tree, a stone, a bush, flowers or one of the world's things, each on its own file's patch, however crowded its ground, and nothing else", () => {
+    it("places every definition, file and entity the layout lays out, as a tree, a stone, a bush, flowers or one of the world's things, each on its own file's patch, however crowded its ground, and nothing else", () => {
       expect(placed.symbols.length).toBe(doc.world.symbols.length + doc.world.naturalThings.length);
       const trees = new Map(placed.trees.map((t) => [t.symbol, t]));
       expect(trees.size).toBeGreaterThan(0);
@@ -235,7 +235,7 @@ describe("the proving ground", () => {
       }
     });
 
-    it("shows each stone, bush and drift of flowers at the vitality of what it stands for", () => {
+    it("shows each stone, bush and drift of flowers at the vitality of the code it represents", () => {
       const shown = understoryVitality(placed, (k) => code.layout.symbols[k]!.vitality);
       expect(shown.length).toBe(placed.placements.length);
       placed.symbols.forEach((i, k) => {

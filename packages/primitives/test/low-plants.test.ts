@@ -58,7 +58,7 @@ function settings(id: string): Record<string, string>[] {
 }
 
 describe("the lowest drifts", () => {
-  it.each(["ferns@1", "mushrooms@1"])("%s stays light enough to stand by the hundred at every setting", (id) => {
+  it.each(["ferns@1", "mushrooms@1"])("%s stays light enough to place by the hundred at every setting", (id) => {
     for (const stored of settings(id)) {
       const triangles = build(id, stored, 3).reduce((n, p) => n + p.indices.length / 3, 0);
       expect(triangles, JSON.stringify(stored)).toBeLessThan(12_000);

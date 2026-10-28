@@ -48,7 +48,7 @@ describe("a set's far cards", () => {
   const crown = new THREE.Sphere(new THREE.Vector3(0.2, 3, -0.1), 4);
   const meshesOf = (cards: FarCards): [THREE.Mesh<THREE.InstancedBufferGeometry>, THREE.Mesh<THREE.InstancedBufferGeometry>] => cards.object.children as [THREE.Mesh<THREE.InstancedBufferGeometry>, THREE.Mesh<THREE.InstancedBufferGeometry>];
 
-  it("stand each plant's copies in buffers written when they are placed, which no pass writes again", () => {
+  it("keep each plant's copies in buffers written when they are placed, which no pass writes again", () => {
     const cards = createFarCards(createSceneLight(), TURN, 2);
     const copies = cards.copies(new THREE.Group());
     copies.place(placesOf(spots), crownsOf(spots, crown));

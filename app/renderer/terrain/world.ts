@@ -1134,7 +1134,7 @@ export function createWorld(root: HTMLElement): World {
 
   /** The request the bake thread places the codebase's world from: plain data for its buildings, landmarks, trails and code things. */
   const placeRequest = (): PlaceRequest => {
-    if (code === null) throw new Error("No world to stand: a codebase's world opens first.");
+    if (code === null) throw new Error("No world to place: a codebase's world opens first.");
     // A stone, bush or flowers keeps clear of the rest by its build's widest reach at the ground, which for a fallen log runs along its length.
     const symbols = code.layout.symbols.map((s) => {
       const outline = s.rule === "trees" || s.rule === AS_THING ? undefined : understory.footprint(s.rule, s.variant)?.outline;
@@ -1186,7 +1186,7 @@ export function createWorld(root: HTMLElement): World {
     // Each tree represents a definition, file or entity and takes its vitality.
     trees = placed.trees.map((t) => {
       const sym = treeSymbol(t);
-      if (sym === undefined) throw new Error(`Tree ${t.index} stands for nothing in the world's code.`);
+      if (sym === undefined) throw new Error(`Tree ${t.index} represents nothing in the world's code.`);
       return { ...t, represented: sym.represented };
     });
     treesByTile = new Map();
@@ -2092,7 +2092,7 @@ export function createWorld(root: HTMLElement): World {
     openingSteps = { ...baked.placed.took };
     reportStage("baked", { size: next.size, bakeMs: Math.round(bakeMs) });
     await adopt(next, baked);
-    reportStage("stood", { size: next.size, trees: trees.length });
+    reportStage("placed", { size: next.size, trees: trees.length });
     return true;
   }
 

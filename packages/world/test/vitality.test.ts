@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { areaVitality, groundVitality, pooledVitality } from "@gaia/world";
 
 describe("area vitality", () => {
-  it("weighs each file by its size, so a large tired file outweighs a small thriving one", () => {
+  it("weighs each file by its size, so a large file at low vitality outweighs a small one at high vitality", () => {
     expect(pooledVitality([{ vitality: 0.2, size: 900 }, { vitality: 1, size: 100 }])).toBeCloseTo(0.28);
     expect(pooledVitality([])).toBe(1);
   });

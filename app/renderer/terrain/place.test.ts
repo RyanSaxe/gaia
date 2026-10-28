@@ -49,8 +49,8 @@ const pristine = structuredClone(baked);
 const forTiles = structuredClone(baked);
 const forOneLot = structuredClone(baked);
 
-describe("standing a world's things on a bake", () => {
-  it("stands the same things whether the bake crossed to another thread or not, leveling the pads first", () => {
+describe("placing a world's things on a bake", () => {
+  it("places the same things whether the bake crossed to another thread or not, leveling the pads first", () => {
     const here = baked;
     // A worker's bake arrives as a structured clone.
     const there = structuredClone(pristine);
@@ -77,7 +77,7 @@ describe("standing a world's things on a bake", () => {
     }
   });
 
-  it("stands a world laid out from code: each building and landmark on its lot, each definition near its spot as a tree, a stone, a bush or flowers and nothing else besides, trails between lots", () => {
+  it("places a world laid out from code: each building and landmark on its lot, each definition near its spot as a tree, a stone, a bush or flowers and nothing else besides, trails between lots", () => {
     const t = pristine;
     const code = request.code;
     const placed = placeWorld(t, request);
@@ -107,7 +107,7 @@ describe("standing a world's things on a bake", () => {
     for (const tr of placed.network.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
   });
 
-  it("stands buildings and a landmark laid out on one lot each on ground of its own, as a crowded file's definitions are", () => {
+  it("places buildings and a landmark laid out on one lot each on ground of its own, as a crowded file's definitions are", () => {
     const buildings = houses.map((blueprint, i) => {
       const built = realize(blueprint, structure, buildingLib, { seed: seedOf(`crowded-${i}`), facts: { size: 1, floors: 1 } });
       return { name: `crowded-${i}`, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
@@ -132,7 +132,7 @@ describe("standing a world's things on a bake", () => {
 
   // Bakes and levels every 64-sample tile of the land, and the land twice more at coarser strides, in two seconds alone
   // and several when other work shares the machine.
-  it("bakes each tile of the land alone, leveled as standing leveled the world, sample for sample", { timeout: 20_000 }, () => {
+  it("bakes each tile of the land alone, leveled as placing leveled the world, sample for sample", { timeout: 20_000 }, () => {
     const t = forTiles;
     const placed = placeWorld(t, request);
     expect(placed.edits.pads.length).toBe(request.buildings.length);

@@ -208,7 +208,7 @@ function keepingEngine(at: { graph: CodeGraph }): { engine: EngineClient; asked:
   return { engine, asked };
 }
 
-describe("healing an open world", () => {
+describe("refreshing an open world", () => {
   const wheel = "crossings/mill/wheel.ts";
   const open = (engine: EngineClient) => openWorld({ engine, root: "proving", consent: async () => true, progress: () => {} });
 
@@ -243,7 +243,7 @@ describe("healing an open world", () => {
     expect(refreshed.shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius])).toEqual(shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius]));
   });
 
-  it("when the commit only shifts code within its files, heals in place, and the journal reads each definition on its new lines", { timeout: 40_000 }, async () => {
+  it("when the commit only shifts code within its files, refreshes in place, and the journal reads each definition on its new lines", { timeout: 40_000 }, async () => {
     const at = { graph: judgedAt("c0ffee") };
     const { engine } = keepingEngine(at);
     const shown = await open(engine);
@@ -261,7 +261,7 @@ describe("healing an open world", () => {
     expect(refreshed.shown.world.symbols.filter((d) => d.file === wheel).map((d) => [d.id, d.line, d.x, d.z])).toEqual(was.map((d) => [d.id, d.line + 1, d.x, d.z]));
   });
 
-  it("when the commit would move the land, sends the new vitality of what still stands under the same name, and leaves the rest to the next open", { timeout: 40_000 }, async () => {
+  it("when the commit would move the land, sends the new vitality of what still exists under the same name, and leaves the rest to the next open", { timeout: 40_000 }, async () => {
     const at = { graph: judgedAt("c0ffee") };
     const { engine } = keepingEngine(at);
     const shown = await open(engine);
