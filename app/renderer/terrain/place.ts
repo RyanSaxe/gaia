@@ -455,7 +455,7 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
   // from every other tree, so each tree reads as one thing. Where the whole patch lies in that room, such as under a
   // great tree's crown, a second pass relaxes the rules: a stone, bush or flowers may go under a crown and near a
   // house, trail or landmark, and a tree under another's crown. Every definition is placed.
-  const standing: Placement[] = [];
+  const placements: Placement[] = [];
   /** The crowns of the trees placed so far, which the first pass keeps every other symbol out from under. */
   const crowned: Occupied[] = [];
   const crownOf = (sym: LayoutSymbol): number => Math.max(TRUNK_GAP / 2, (crowns[sym.variant] ?? 4) * 0.55);
@@ -508,11 +508,11 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
       continue;
     }
     occupied.push({ x, z, radius: reach + 0.4 });
-    standing.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: (i * 2.399) % (Math.PI * 2), scale, radius: reach, vitality: sym.vitality, slope });
-    symbols[i] = standing.length - 1;
+    placements.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: (i * 2.399) % (Math.PI * 2), scale, radius: reach, vitality: sym.vitality, slope });
+    symbols[i] = placements.length - 1;
   }
   mark("symbols");
   const edging = network.ways.map((way) => edgeStones(t, way, seedOf(`${way.id}/edging`)));
   mark("edging");
-  return { sites, landmarks, network, trees, placements: standing, symbols, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took, dry };
+  return { sites, landmarks, network, trees, placements, symbols, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took, dry };
 }

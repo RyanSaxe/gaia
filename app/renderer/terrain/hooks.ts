@@ -408,16 +408,16 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** The distance at which the crown spans `px` device pixels. */
     const at = (px: number): number => (2 * crown.radius * focal) / px;
     /** Places the copy where its crown spans `from` pixels and measures moving the detail center back until it spans `to`. */
-    const step = (stood: Copies, from: number, to: number): SwapStep => walk(stood, from, at(to) - at(from), 0);
+    const step = (copies: Copies, from: number, to: number): SwapStep => walk(copies, from, at(to) - at(from), 0);
     /**
      * Places the copy where its crown spans `from` pixels and measures moving the detail center back `back` meters,
      * over the crown's part of the screen and at least a `block`-pixel square around it.
      */
-    const walk = (stood: Copies, from: number, back: number, block: number): SwapStep => {
+    const walk = (copies: Copies, from: number, back: number, block: number): SwapStep => {
       const distance = at(from);
       // Put the crown's center at eye height, straight ahead.
-      stood.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
-      stood.setVitality(vitality);
+      copies.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
+      copies.setVitality(vitality);
       const corners = [-1, 1].flatMap((sx) => [-1, 1].flatMap((sy) => [-1, 1].map((sz) => new THREE.Vector3(eye.x + dx * distance + sx * crown.radius, eye.y + sy * crown.radius, eye.z + dz * distance + sz * crown.radius).project(world.camera))));
       const px = corners.map((c) => ((c.x + 1) / 2) * gl.drawingBufferWidth);
       const py = corners.map((c) => ((c.y + 1) / 2) * gl.drawingBufferHeight);
@@ -495,16 +495,16 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       world.scene.add(copy.object);
       swapCopies.set(preset.far, copy);
     }
-    const stood = copy;
-    const crown = stood.crown;
+    const copies = copy;
+    const crown = copies.crown;
     const dx = -Math.sin(world.walker.yaw);
     const dz = -Math.cos(world.walker.yaw);
     const eye = world.camera.position.clone();
     // Leave only the sky behind the copy, so nothing else hides it at any distance.
-    const keep = new Set<THREE.Object3D>([world.sky.mesh, stood.object, world.treeSet.forms.cards.object, world.bushSet.forms.cards.object]);
-    const hidden = [...world.scene.children.filter((o) => o.visible && !keep.has(o) && !(o as THREE.Light).isLight), ...world.instanced().flatMap((o) => (o.object.visible && o !== stood ? [o.object] : []))];
+    const keep = new Set<THREE.Object3D>([world.sky.mesh, copies.object, world.treeSet.forms.cards.object, world.bushSet.forms.cards.object]);
+    const hidden = [...world.scene.children.filter((o) => o.visible && !keep.has(o) && !(o as THREE.Light).isLight), ...world.instanced().flatMap((o) => (o.object.visible && o !== copies ? [o.object] : []))];
     for (const o of hidden) o.visible = false;
-    world.swapping = stood;
+    world.swapping = copies;
     const was = world.frozen;
     world.frozen = world.light.uTime.value;
     world.detailPin = { x: eye.x, z: eye.z };
@@ -527,23 +527,23 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const measure = (px: number): LikenessSize | null => {
       const distance = (2 * crown.radius * focal) / px;
       if (distance - crown.radius >= AIR.dissolveEnd) return null;
-      stood.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
-      stood.setVitality(vitality);
+      copies.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
+      copies.setVitality(vitality);
       settleVitality();
       const corners = [-1, 1].flatMap((sx) => [-1, 1].flatMap((sy) => [-1, 1].map((sz) => new THREE.Vector3(eye.x + dx * distance + sx * crown.radius, eye.y + sy * crown.radius, eye.z + dz * distance + sz * crown.radius).project(world.camera))));
       const xs = corners.map((c) => ((c.x + 1) / 2) * width);
       const ys = corners.map((c) => ((c.y + 1) / 2) * height);
       const rect = [Math.max(0, Math.floor(Math.min(...xs)) - 2), Math.max(0, Math.floor(Math.min(...ys)) - 2), Math.min(width, Math.ceil(Math.max(...xs)) + 2), Math.min(height, Math.ceil(Math.max(...ys)) + 2)] as const;
-      stood.object.visible = false;
+      copies.object.visible = false;
       const empty = grabFrame(3);
-      stood.object.visible = true;
+      copies.object.visible = true;
       // Draw the card alone by raising the form's swap size well above this span for now, so the full form stops drawing.
       forms.set(form, slot, Math.max(swapPx, px * FAR.leave * 1.25));
       const card = grabFrame(3);
       forms.set(form, slot, swapPx);
-      stood.detail = "full";
+      copies.detail = "full";
       const full = grabFrame(3);
-      stood.detail = "auto";
+      copies.detail = "auto";
       const [x0, y0, x1, y1] = rect;
       const drawn = (pixels: Uint8Array): FormDrawn => {
         let covered = 0;
@@ -605,10 +605,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     } finally {
       release();
       forms.set(form, slot, swapPx);
-      stood.detail = "auto";
+      copies.detail = "auto";
       world.light.uClearAir.value = 0;
       world.swapping = null;
-      stood.object.visible = false;
+      copies.object.visible = false;
       for (const o of hidden) o.visible = true;
       world.detailPin = null;
       world.frozen = was;
