@@ -1,85 +1,85 @@
-// What stands on a freshly baked world, worked out from plain data: each
-// building's site and leveled pad, the landmarks' sites, the trails between
-// them leveled into the ground, and the trees and the stones, bushes and
-// flowers that stand for code kept off all of these; and who owns each cell's ground, whose
-// vitality the ground shows. It levels the lattice and says how
-// (`Stand.edits`), so a tile of the land baked alone is leveled the same.
-// No Three.js and no DOM: the bake worker runs it, and the same terrain and
-// request give the same stand on any thread.
+// Places everything on a freshly baked world from plain data: each building's
+// site and leveled pad, the landmarks' sites, the trails leveled into the
+// ground, and the code's trees, stones, bushes and flowers clear of all of
+// these. It records how it leveled the lattice (`Stand.edits`), so a tile
+// baked alone is leveled the same. It uses no Three.js or DOM, because the
+// bake worker runs it, and the same terrain and request give the same result
+// on any thread.
 
 import { type Blueprint, type BuildingPlan, type Built, type Library, type RouteSpec, seedOf } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
 import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, groundSlope, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, waterDepthAt } from "@gaia/terrain";
 
-/** A building to site: its plan, what stands beside it, the name its trails go by, and whether it stands on a stream's bank. */
+/** A building to site: its plan, what is beside it, the name its trails use, and its wheel if it needs a stream's bank. */
 export interface StandBuilding {
   readonly name: string;
   readonly plan: BuildingPlan;
   readonly beside: Extent | null;
-  /** Where its feature turns, for a building whose feature needs running water (`needsBank`): it stands on the bank of its area's stream, its wheel in the water (`findBankSite`). */
+  /**
+   * The extent of its turning feature, for a building whose feature needs running water (`needsBank`). The building
+   * goes on the bank of its area's stream with its wheel in the water (`findBankSite`).
+   */
   readonly wheel?: Extent | null;
 }
 
-/** Whether a building's feature needs running water, so the building stands on a stream's bank. */
+/** Whether a building's feature needs running water, which puts the building on a stream's bank. */
 export function needsBank(blueprint: Blueprint, lib: Library): boolean {
   const use = blueprint.slots.feature?.use;
   return use !== undefined && (lib.get(use).needs ?? []).includes("running water");
 }
 
-/** How far a landmark's footprint reaches at the ground, meters, and whether it is a great tree, whose crown trees keep clear of. */
+/** A landmark's ground radius in meters, and whether it is a great tree, whose crown other trees keep clear of. */
 export interface StandLandmark {
   readonly base: number;
   readonly tree: boolean;
 }
 
-/** A building's or landmark's lot from a world's layout: the ground kept for it, named by its entity's path. */
+/** A building's or landmark's lot from the layout: the ground reserved for it, with its entity's path as `id`. */
 export interface StandLot extends Circle {
   readonly id: string;
 }
 
-/** One file's patch: its middle and how far its ground reaches. */
+/** One file's patch: its center and radius. */
 export type StandPatch = Circle;
 
-/** The rule of a symbol that stands as a building or a landmark, one of the world's things: the symbols stand none of it. */
+/** The `rule` of a symbol that appears as a building or landmark, one of the world's things. `standWorld` skips these symbols. */
 export const AS_THING = "thing";
 
-/** A definition, a file or an entity standing as a tree or as one of the understory's blueprints; or, by `AS_THING`, as one of the world's things. */
+/** A definition, file or entity that appears as a tree or an understory blueprint, or, with `AS_THING`, as one of the world's things. */
 export interface StandSymbol {
   readonly x: number;
   readonly z: number;
-  /** The group it stands in and its build among the group's (`OpenedWorld.plants`), or `AS_THING` for a building or a landmark. */
+  /** Its plant group and build index in that group (`OpenedWorld.plants`), or `AS_THING` for a building or landmark. */
   readonly rule: string;
   readonly variant: number;
-  /** Its footprint's radius at scale 1, meters (a tree's comes from its crown), and its scale. */
+  /** Its footprint radius at scale 1 in meters, and its scale. `standWorld` sizes a tree's footprint from its crown instead. */
   readonly radius: number;
   readonly scale: number;
-  /** Its own vitality. */
   readonly vitality: number;
-  /** Its file's patch, by index into `StandCode.patches`: it never stands off it. */
+  /** Its file's patch, by index into `StandCode.patches`. It is never placed off that patch. */
   readonly patch?: number;
 }
 
 /**
  * A world laid out from code (`layoutWorld` in @gaia/world): each building
- * and landmark on its entity's lot, each definition on its file's patch as
- * a tree or as part of the understory, and the trails Jev wants between
- * entities.
+ * and landmark on its entity's lot, each definition on its file's patch as a
+ * tree or understory, and the trails Jev chose between entities.
  */
 export interface StandCode {
   /** Each building's lot, in the order of `buildings`. */
   readonly lots: readonly StandLot[];
-  /** Each landmark standing for a thing: which of `landmarks`, on which lot. */
+  /** Each landmark that represents a thing: its index in `landmarks` and its lot. */
   readonly landmarks: readonly { readonly landmark: number; readonly lot: StandLot }[];
-  /** Each entity standing as neither a building nor a landmark, by its path: its trails end at its lot's middle. */
+  /** Each entity that appears as neither a building nor a landmark, by path. Its trails end at its lot's center. */
   readonly places?: readonly StandLot[];
   readonly patches: readonly StandPatch[];
   /**
-   * The land's cells, each part of one patch (its index) or of a lot (-1): a definition stands only on its own patch's cells.
-   * `area` indexes the world's areas: the directory whose ground the cell is.
+   * The land's cells. `patch` is the cell's patch index, or -1 for a lot, and a definition goes only on its own patch's
+   * cells. `area` indexes the world's areas, the directory the cell's ground belongs to.
    */
   readonly cells: readonly (LandSite & { readonly patch: number; readonly area: number })[];
   readonly symbols: readonly StandSymbol[];
-  /** Trails between lots by id, each with its own route as Jev composed it; the most wanted route first. */
+  /** Trails between lots by id, each with the route Jev composed for it, most wanted first. */
   readonly trails: readonly { readonly from: string; readonly to: string; readonly want: number; readonly style: RouteSpec }[];
 }
 
@@ -87,12 +87,12 @@ export interface StandRequest {
   readonly buildings: readonly StandBuilding[];
   /** Each landmark Jev composed, in the order `StandCode.landmarks` names them. */
   readonly landmarks: readonly StandLandmark[];
-  /** Each tree build's trunk and crown radius, by the variant a tree's symbol names: a tree copies its blueprint's one build. */
+  /** Each tree build's trunk and crown radius, by variant. A tree copies its blueprint's single build. */
   readonly trees: { readonly bases: readonly number[]; readonly crowns: readonly number[] };
   readonly code: StandCode;
 }
 
-/** Where one tree stands and which build it copies; `index` is its place among the trees. */
+/** One tree's position and the build it copies. `index` is its position in `Stand.trees`. */
 export interface StandTree {
   readonly index: number;
   readonly x: number;
@@ -101,13 +101,13 @@ export interface StandTree {
   readonly variant: number;
   readonly scale: number;
   readonly yaw: number;
-  /** The ground's slope under it, dy/dx and dy/dz, which its copy takes (`Placement.slope`). */
+  /** The ground's slope under it, dy/dx and dy/dz, passed to its copy (`Placement.slope`). */
   readonly slope: readonly [number, number];
-  /** What it stands for, by index into `StandCode.symbols`. */
+  /** The symbol it represents, by index into `StandCode.symbols`. */
   readonly symbol: number;
 }
 
-/** A landmark standing on its site; `landmark` indexes the request's landmarks, and `id` is the place its trails name. */
+/** A landmark placed on its site. `landmark` indexes the request's landmarks, and `id` is the place its trails name. */
 export interface StandingLandmark {
   readonly landmark: number;
   readonly id: string;
@@ -118,27 +118,26 @@ export interface Stand {
   /** Each building's site, in the request's order. */
   readonly sites: readonly BuildingSite[];
   readonly landmarks: readonly StandingLandmark[];
-  /** The paths: the ways of tread, the trails (dependencies) walking them, the junctions and any trail dropped, with why. */
+  /** The paths: the ways of tread, the dependency trails that use them, the junctions, and each dropped trail with its reason. */
   readonly network: TrailNetwork;
   readonly trees: readonly StandTree[];
-  /** Each symbol standing as a stone, a bush or flowers: nothing else stands among them. */
+  /** A placement for each symbol that appears as a stone, bush or flowers, and nothing else. */
   readonly placements: readonly Placement[];
-  /** In a world laid out from code, each symbol's placement in `placements`, or -1 where it stands as a tree or nothing could stand. */
+  /** Each symbol's index in `placements`, or -1 for a tree or a world thing (`AS_THING`). */
   readonly symbols: readonly number[];
-  /** Each way's edging stones, in the order of `network.ways`, set on the stood land, which only the bake's thread holds whole. */
+  /** Each way's edging stones, in the order of `network.ways`, set on the leveled land, which only the bake thread has in full. */
   readonly edging: readonly (readonly EdgeStone[])[];
-  /** What standing did to the land, in order, so a tile of it baked alone can be leveled the same (`standTile` in @gaia/terrain). */
+  /** The leveling edits in order, so a tile baked alone can be leveled the same (`standTile` in @gaia/terrain). */
   readonly edits: LandEdits;
-  /** Milliseconds each step of standing took: the buildings' sites, the landmarks and trails, the symbols and the edging stones. */
+  /** Milliseconds each step took: the buildings' sites, the landmarks and trails, the symbols and the edging stones. */
   readonly took: Readonly<Record<string, number>>;
-  /** Each building whose feature needs running water that found no stream's bank to stand on, by name: none in any world the tests know. */
+  /** The names of buildings that need running water but found no stream bank. No test world has one. */
   readonly dry: readonly string[];
 }
 
 /**
- * How far a landmark reaches at the ground: its standing pieces within a meter of it, as far as its farthest foot,
- * a massive great span's some 31 m away at its largest. Fallen stone that grows in at its foot is walked over, so it
- * does not count.
+ * A landmark's ground radius: the farthest vertex lower than 1 m, at least 1 m. For the largest massive great span
+ * it is about 31 m. Fallen stone that grows in at its foot is walked over, so it does not count.
  */
 export function landmarkBase(built: Pick<Built, "parts">): number {
   let base = 1;
@@ -152,18 +151,18 @@ export function landmarkBase(built: Pick<Built, "parts">): number {
 }
 
 /**
- * The ground a landmark keeps on its lot: a disc round its middle a little wider than its reach at the ground
- * (`landmarkBase`). Its site is found where that disc meets neither another landmark's nor a house's ground.
+ * The radius of the ground a landmark reserves on its lot, a little wider than its `landmarkBase`. Its site is where
+ * that disc overlaps neither another landmark's nor a house's ground.
  */
 export const landmarkGround = (base: number): number => base + 1.5;
 
-/** The ground round a house that no landmark's ground may reach into: a circle round its middle, past its walls and what stands beside it. */
+/** The radius around a house that no landmark's ground may enter, 2 m past its walls and what is beside it. */
 export const houseGround = (b: { readonly plan: BuildingPlan; readonly beside: Extent | null }): number => reachOf(b) + 2;
 
 /**
- * Where a landmark meets the ground, in its own frame: a disc round where each piece it stands on meets the ground
- * (a step, a stone, a foot, a tower's lowest blocks, a great tree's roots), from the middle of that footing, leaving
- * out any disc another holds. The grass is cleared under each, however far the landmark reaches. Fallen stone that
+ * Where a landmark meets the ground, in its own frame: a disc around each solid piece that touches the ground, such as
+ * a step, a stone, a foot, a tower's lowest blocks or a great tree's roots, centered on that piece's footing. A disc
+ * inside a larger one is dropped. The grass is cleared under each, however far the landmark reaches. Fallen stone that
  * grows in does not count.
  */
 export function landmarkFeet(built: Pick<Built, "parts">): { readonly x: number; readonly z: number; readonly radius: number }[] {
@@ -198,20 +197,20 @@ export function landmarkFeet(built: Pick<Built, "parts">): { readonly x: number;
 }
 
 /**
- * Who owns each cell's ground (`groundOwners` in @gaia/terrain): a file's
- * patch by its index, or an area's own ground (a lot) as the number of
- * patches plus its area's index, so the ground takes its file's vitality or,
- * on a lot, its area's.
+ * The owner of each cell's ground (`groundOwners` in @gaia/terrain): a
+ * file's patch by its index, or a lot as the number of patches plus its
+ * area's index. The ground then shows its file's vitality, or on a lot its
+ * area's.
  */
 export function groundSites(code: Pick<StandCode, "cells" | "patches">): OwnedSite[] {
   return code.cells.map((c) => ({ x: c.x, z: c.z, ...(c.reach === undefined ? {} : { reach: c.reach }), owner: c.patch >= 0 ? c.patch : code.patches.length + c.area }));
 }
 
 /**
- * Each owner's vitality, numbered as `groundSites` numbers them: on its
- * ground (a file's own, or on a lot its area's, every file under the area
- * pooled by size: `areaVitality` in @gaia/world), and on the water of the
- * area its ground lies in, which follows that area's pooled vitality.
+ * Each owner's vitality, numbered as `groundSites` numbers owners. `ground`
+ * is a file's own vitality, or for a lot its area's, pooling every file under
+ * the area by size (`areaVitality` in @gaia/world). `area` is the pooled
+ * vitality of the owner's area, which its water follows.
  */
 export function ownerVitality(
   world: { readonly patches: readonly { readonly path: string; readonly area: string; readonly radius: number }[]; readonly areas: readonly { readonly path: string }[] },
@@ -233,9 +232,9 @@ export function ownerVitality(
 }
 
 /**
- * The vitality each placement shows, in the order of `Stand.placements`:
- * that of the symbol it stands for (`symbolVitality`, by its index in
- * `StandCode.symbols`), so it follows a live change in vitality.
+ * The vitality each placement shows, in the order of `Stand.placements`. It
+ * is the vitality of the symbol it represents (`symbolVitality`, by index in
+ * `StandCode.symbols`), so it follows a live change.
  */
 export function understoryVitality(stand: Pick<Stand, "placements" | "symbols">, symbolVitality: (symbol: number) => number): Float32Array {
   const shown = new Float32Array(stand.placements.length).fill(1);
@@ -245,7 +244,7 @@ export function understoryVitality(stand: Pick<Stand, "placements" | "symbols">,
   return shown;
 }
 
-/** The middle of a building's door along its front wall, in its own frame. */
+/** The center of a building's door along its front wall, in its own frame. */
 const doorOf = (plan: BuildingPlan): number => plan.openings.find((o) => o.kind === "door")?.position[0] ?? 0;
 
 /** Where a person stops to read a building's sign and look at it. */
@@ -254,7 +253,7 @@ export function standOf(plan: BuildingPlan, site: BuildingSite): { x: number; z:
   return { x, z };
 }
 
-/** Where a building's signboard stands, facing anyone coming up its walk. */
+/** Where a building's signboard goes, facing anyone coming up its walk. */
 export function signOf(plan: BuildingPlan, site: BuildingSite): { x: number; z: number; yaw: number } {
   const [x, z] = siteToWorld(site, doorOf(plan) + 1.35, plan.depth / 2 + 4.9);
   return { x, z, yaw: site.yaw };
@@ -268,7 +267,7 @@ function local(site: BuildingSite, x: number, z: number): [number, number] {
   return [dx * c - dz * s, dx * s + dz * c];
 }
 
-/** True where a building's walls or what stands beside it lie within `margin` meters. */
+/** Whether a building's walls or what is beside it lie within `margin` meters of (x, z). */
 export function blockedBy(b: { readonly plan: BuildingPlan; readonly beside: Extent | null }, site: BuildingSite, x: number, z: number, margin: number): boolean {
   const [lx, lz] = local(site, x, z);
   const inHouse = Math.abs(lx) < b.plan.width / 2 + margin && Math.abs(lz) < b.plan.depth / 2 + margin;
@@ -276,14 +275,14 @@ export function blockedBy(b: { readonly plan: BuildingPlan; readonly beside: Ext
   return inHouse || (e !== null && lx > e.x0 - margin && lx < e.x1 + margin && lz > e.z0 - margin && lz < e.z1 + margin);
 }
 
-/** How far a building's walls and what stands beside it reach from its middle, meters. */
+/** How far in meters a building's walls and what is beside it reach from its center. */
 function reachOf(b: { readonly plan: BuildingPlan; readonly beside: Extent | null }): number {
   const house = Math.hypot(b.plan.width, b.plan.depth) / 2;
   const e = b.beside;
   return e === null ? house : Math.max(house, Math.hypot(Math.max(-e.x0, e.x1), Math.max(-e.z0, e.z1)));
 }
 
-/** Ground under a building, along its walk and under what stands beside it, where nothing grows. */
+/** Ground under a building, along its walk and under what is beside it, where nothing grows. */
 export function buildingClearings(b: { readonly plan: BuildingPlan; readonly beside: Extent | null }, site: BuildingSite): Capsule[] {
   const out = clearingsOf(b.plan, site);
   const e = b.beside;
@@ -300,16 +299,19 @@ export function buildingClearings(b: { readonly plan: BuildingPlan; readonly bes
   return out;
 }
 
-/** The sizes a crowded definition tries, largest first, before it is left out: its own, then a little smaller. */
+/** The scales a crowded definition tries, largest first: its own, then a little smaller. */
 const SHRINKS = [1, 0.75, 0.55] as const;
 
-/** How far trees keep from a landmark's middle: a great tree's crown needs room. */
+/** How far trees keep from a landmark's center. A great tree's crown needs more room. */
 const treeClearance = (lm: StandLandmark): number => lm.base + (lm.tree ? 12 : 5);
 
-/** How far a trail's end moved out of water keeps from it, meters, and the farthest it moves to find ground that clear. */
+/** How far in meters a trail end moved out of water keeps from it, and the farthest it moves to find such ground. */
 const DRY_END = { clearance: 1, reach: 40 } as const;
 
-/** (x, z) when it is dry, or else the nearest point to it whose ground lies `DRY_END.clearance` clear of water, on rings a meter apart; (x, z) when none within `DRY_END.reach` does. */
+/**
+ * Returns (x, z) when it is dry, or else the nearest point `DRY_END.clearance` clear of water, searching rings a meter
+ * apart. Returns (x, z) when no point within `DRY_END.reach` is clear.
+ */
 function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
   if (waterDepthAt(t, x, z) === 0) return { x, z };
   for (let r = 1; r <= DRY_END.reach; r++) {
@@ -323,8 +325,8 @@ function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
 }
 
 /**
- * A world laid out from code: each building on its lot, each landmark on
- * its lot, and the trails Jev wants between them, leveled into the ground.
+ * Places each landmark on its lot and routes the trails Jev chose between
+ * the sited buildings and the landmarks, leveled into the ground.
  */
 function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
   const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite, id: code.lots[i]?.id ?? b.name }));
@@ -340,9 +342,9 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
     ids.push(lot.id);
     avoid.push({ x: site.x, z: site.z, radius: landmarkGround(lm.base) });
   }
-  // A trail ends at a building's door, at a landmark's foot facing the mean way to its trails' other ends, one spot per
-  // place so they share it, or for an entity that stands as neither, at its lot's middle. A foot or a lot in water
-  // gives way to the nearest dry ground, so no trail begins or ends in water.
+  // A trail ends at a building's door, at a landmark's foot on the side facing the mean direction to its trails' other
+  // ends, or for an entity that is neither, at its lot's center. Each place has one end spot that its trails share. A
+  // foot or lot in water moves to the nearest dry ground, so no trail begins or ends in water.
   const end = (id: string, toward: { x: number; z: number } | null): TrailEnd | null => {
     const home = homes.find((b) => b.id === id);
     if (home !== undefined) return { id, ...standOf(home.plan, home.site) };
@@ -390,7 +392,7 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
 /** Fewest meters between trunks, whatever the crowns. */
 const TRUNK_GAP = 4.5;
 
-/** Stands everything on a finished bake, leveling the lattice under the buildings and the trails first. */
+/** Places everything on a finished bake, leveling the lattice under the buildings and the trails first. */
 export function standWorld(t: Terrain, req: StandRequest): Stand {
   const took: Record<string, number> = {};
   let since = performance.now();
@@ -403,8 +405,8 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const sites: BuildingSite[] = [];
   const pads: PadEdit[] = [];
   const dry: string[] = [];
-  // A building whose wheel needs running water stands on the bank of its own area's stream, so it is sited before
-  // the others, while the banks are free.
+  // A building whose wheel needs running water goes on the bank of its own area's stream, so it is sited before the
+  // others while the banks are free.
   const onBank = (i: number): boolean => {
     const b = req.buildings[i] as StandBuilding;
     return b.wheel !== undefined && b.wheel !== null && b.beside !== null;
@@ -432,9 +434,9 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const clear: Occupied[] = [...trailDiscs(network, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as StandLandmark) }))];
   const blocked = (x: number, z: number): boolean => req.buildings.some((b, k) => blockedBy(b, sites[k] as BuildingSite, x, z, 6)) || clear.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius);
   const { bases, crowns } = req.trees;
-  // Every tree is a definition, a file or an entity, stood with the rest of them below.
+  // Every tree represents a definition, file or entity, and is placed with the other symbols below.
   const trees: StandTree[] = [];
-  // No stone, bush or flowers stands in a building, on its walk, on a trail or under a landmark.
+  // No stone, bush or flowers goes in a building, on its walk, on a trail or under a landmark.
   const homes = req.buildings.flatMap((b, k) =>
     buildingClearings(b, sites[k] as BuildingSite).flatMap((c) => {
       const steps = Math.max(1, Math.ceil(Math.hypot(c.bx - c.ax, c.bz - c.az)));
@@ -447,15 +449,14 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     ...trailDiscs(network, 0.5),
     ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 1 })),
   ];
-  // A file's definitions stand where the layout put them, kept off water, steep ground and whatever else stands:
-  // the largest first, so a file's landmark keeps its plot, each moved a little where its spot is taken (elsewhere
-  // on its patch if nothing near is clear, never off it), and stood a size smaller rather than left out. One that
-  // stands as a tree keeps its crown's width from every other, so each tree reads as one thing. Where its whole
-  // patch lies in that room, under a great tree's crown say, it stands in it: a stone, a bush or flowers under a
-  // crown and as near a house, a trail or a landmark as anything stands, a tree under another's crown. Every one
-  // stands.
+  // Place a file's definitions where the layout put them, off water, steep ground and everything already placed,
+  // largest footprint first. A definition whose spot is taken moves a little, or elsewhere on its patch if nothing
+  // near is clear, but never off it, and shrinks a size rather than being left out. A tree keeps its crown's width
+  // from every other tree, so each tree reads as one thing. Where the whole patch lies in that room, such as under a
+  // great tree's crown, a second pass relaxes the rules: a stone, bush or flowers may go under a crown and near a
+  // house, trail or landmark, and a tree under another's crown. Every definition is placed.
   const standing: Placement[] = [];
-  /** The crowns of the trees stood so far, which nothing else that stands for code stands under. */
+  /** The crowns of the trees placed so far, which the first pass keeps every other symbol out from under. */
   const crowned: Occupied[] = [];
   const crownOf = (sym: StandSymbol): number => Math.max(TRUNK_GAP / 2, (crowns[sym.variant] ?? 4) * 0.55);
   const footprint = (sym: StandSymbol): number => (sym.rule === "trees" ? crownOf(sym) : sym.radius) * sym.scale;
@@ -468,7 +469,7 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
     if (sym.rule === AS_THING) continue;
     const tree = sym.rule === "trees";
     let at: [number, number, number] | null = null;
-    // Where it may try: around its plot's middle, then around each of its patch's other cells, nearest first.
+    // Try around its plot's center, then around each of its patch's cells, nearest first.
     const own = sym.patch === undefined || cells.length === 0 ? [] : cells.filter((c) => c.patch === sym.patch).sort((a, b) => Math.hypot(a.x - sym.x, a.z - sym.z) - Math.hypot(b.x - sym.x, b.z - sym.z));
     for (const crowded of [false, true]) {
       for (const from of [{ x: sym.x, z: sym.z }, ...own]) {
@@ -493,13 +494,13 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
       }
       if (at !== null) break;
     }
-    // With no room anywhere on its patch even so, it stands where the layout put it, at its smallest.
+    // With no room anywhere on its patch even then, place it where the layout put it, at its smallest scale.
     const [x, z, shrink] = at ?? [sym.x, sym.z, SHRINKS[SHRINKS.length - 1] as number];
     const scale = sym.scale * shrink;
     const reach = footprint(sym) * shrink;
     const slope = groundSlope(t.lattice, x, z);
     if (tree) {
-      // Nothing else that stands for code stands under a tree's crown.
+      // Record the crown, which the first pass keeps other symbols out from under.
       const variant = sym.variant;
       trees.push({ index: trees.length, x, y: groundedBase(t.lattice, x, z, (bases[variant] ?? 0.5) * scale), z, variant, scale, yaw: (i * 2.399) % (Math.PI * 2), slope, symbol: i });
       occupied.push({ x, z, radius: 1.6 });

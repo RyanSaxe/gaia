@@ -1,21 +1,15 @@
-// The baked lattice as Three.js: the ground around the person as nested
-// rings that follow them, the same rings at a quarter of their detail for the
-// water's mirror, a coarse whole-world mesh and a coarse ring of the wild
-// land past the rim for views from above, built only once a view from above
-// asks for them, the lattice as a clipmap around the person for every shader that
-// stands on the ground (`CLIP`), and the painterly ground material, colored by each region's ground
-// cover and dried by the ground's vitality. Past the land the rings draw the
-// wild land themselves, from the same function the walk stands on
-// (`wildHeightAt` and its twin here, `WILD_GLSL`), so wherever the person
-// goes the ground goes on.
+// Draws the baked lattice as the ground: nested rings that follow the person,
+// the same rings at a quarter of their detail for the water's mirror, and a
+// coarse whole-world mesh and wild ring for views from above. Past the land
+// the rings draw the wild land from `WILD_GLSL`, the shader copy of
+// `wildHeightAt`, so the ground continues wherever the person goes.
 //
-// The rings never change shape on the CPU: each is a fixed grid, and its
-// vertex shader reads heights from its own level of the clipmap. Every ring's vertices
-// are lattice samples, each coarser ring's a strict subset of the finer one's.
-// Toward its outer edge a ring morphs, by the person's distance, into exactly
-// the next ring's surface (the lattice's own triangle split makes the fine
-// triangles lie on the coarse ones), so where rings meet there is no seam,
-// and as the person walks and the rings follow, no vertex ever jumps.
+// Each ring is a fixed grid whose vertex shader reads heights from its own
+// clipmap level (`CLIP`), and each coarser ring's vertices are a subset of the
+// finer ring's lattice samples. Toward its outer edge a ring morphs into
+// exactly the next ring's surface, because the lattice's triangle split puts
+// the fine triangles on the coarse ones. So rings meet without a seam, and no
+// vertex jumps as the rings follow the person.
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
@@ -29,17 +23,16 @@ import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
 import { GROUND_DECLINE } from "@gaia/terrain";
 
 /**
- * The land as a clipmap: every texture that holds a value per lattice sample
- * (the ground's height, water level and distances to the water and to the
- * nearest trail's edge; the covers; the ways each sample lies on), held only
- * around the person, as games hold their terrain. Level k holds every 2^k-th
- * lattice sample in a square of `CLIP.size` of them centered near the
- * person, on the world's own grid of 2^k spacings, which is where ring k of
- * the ground's rings sets its vertices: so each ring reads exactly the
- * samples it drew from before, and the land's memory on the GPU is the same
- * at any world size. Every texture shares the same windows, laid again
- * together. Readers between samples take the finest level that holds the
- * point, blended into the next one near its window's edge (`clipLevel`).
+ * The land as a clipmap. Every per-sample texture, such as height, water
+ * level, distances to the water and to the nearest trail's edge, the covers
+ * and the ways, is kept only around the person, as games keep their terrain.
+ * Level k stores every 2^k-th lattice sample in a square of `CLIP.size`
+ * samples near the person, aligned to the world's grid of 2^k spacings, which
+ * is where ring k puts its vertices. So each ring reads exactly the samples it
+ * drew before, and the land's GPU memory is the same at any world size. All
+ * textures share the same windows and move together. A read between samples
+ * uses the finest level whose window contains the point, blended into the
+ * next level near the window's edge (`clipLevel`).
  */
 export { CLIP };
 
@@ -51,7 +44,7 @@ export interface GroundTexture {
     readonly uClip: { value: THREE.DataArrayTexture };
     /** Each level's first sample, in that level's own grid units (world over spacing times 2^k). */
     readonly uClipOrigin: { value: THREE.Vector2[] };
-    /** The layer each level is read from: its own, but while a painting of a far place is drawn (`PageLand.aside`). */
+    /** The texture layer each level reads: its own, except while a painting of a far place draws (`PageLand.aside`). */
     readonly uClipLayer: { value: number[] };
     /** Each sample's cover as the bake gave it (`Terrain.coverRegions` and `coverShares`), read by `REGIONS_GLSL`. */
     readonly uCoverRegions: { value: THREE.DataArrayTexture };
@@ -61,19 +54,19 @@ export interface GroundTexture {
     readonly uGroundN: { value: number };
     readonly uGroundOrigin: { value: number };
     readonly uGroundSpacing: { value: number };
-    /** 1 where a sample's nearest water is a pond's (`Terrain.nearPond`): its banks keep their full sand (`bankWidth`). */
+    /** 1 where a sample's nearest water is a pond (`Terrain.nearPond`), so its bank keeps the full sand width (`bankWidth`). */
     readonly uNearPond: { value: THREE.DataArrayTexture };
-    /** The half side of the land's square, where it hands over to the wild land, and the wild roll's middle. */
+    /** Half the side of the land's square, where the wild land begins, and the wild land's base height (`wildBase`). */
     readonly uLand: { value: number };
     readonly uWildBase: { value: number };
   };
-  /** Takes on the world the land just opened. */
+  /** Updates the uniforms for the world the land just opened. */
   update(t: Terrain): void;
 }
 
 /**
- * A texture over every layer of the page's land, `data` layer after layer: the levels', then those set aside for a
- * painting. A layer uploads in the frame after it changes.
+ * A texture array over every layer of the page's land, with `data` in layer order: the levels' layers, then the
+ * layers set aside for a painting. A layer uploads in the frame after it changes.
  */
 function clipTexture(data: Float32Array | Uint8Array, format: THREE.PixelFormat, type: THREE.TextureDataType): THREE.DataArrayTexture {
   const texture = new THREE.DataArrayTexture(data, CLIP.size, CLIP.size, CLIP.levels + CLIP.aside);
@@ -82,12 +75,12 @@ function clipTexture(data: Float32Array | Uint8Array, format: THREE.PixelFormat,
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
   texture.generateMipmaps = false;
-  // Three uploads only the layers marked since the last upload; a new world marks none and uploads all.
+  // Three uploads only the layers marked since the last upload. A new world marks none and uploads all.
   texture.onUpdate = () => texture.clearLayerUpdates();
   return texture;
 }
 
-/** The land's textures over `land`'s levels, whose data they are: every level's layers and its window move together. */
+/** Creates the textures over `land`'s level data. Each level's layers and window move together. */
 export function createGroundTexture(land: PageLand): GroundTexture {
   const { levels } = CLIP;
   const ground = clipTexture(land.ground, THREE.RGBAFormat, THREE.FloatType);
@@ -146,9 +139,9 @@ export function createGroundTexture(land: PageLand): GroundTexture {
 }
 
 /**
- * The sand beside water, meters: `narrow` along a straight stretch and the outside of a bend, `wide` round the
- * inside of a bend and round a pond, between a contour curvature of `straight` and `curved` (one over the radius), measured
- * `along` meters either way along the shore's contour.
+ * Sand bank widths in meters: `narrow` along a straight stretch and the outside of a bend, and `wide` around the
+ * inside of a bend and around a pond. The width blends between them as the shore's contour curvature, one over the
+ * radius, goes from `straight` to `curved`, measured `along` meters either way along the contour.
  */
 export const BANKS = { narrow: 0.7, wide: 2.6, straight: 0.012, curved: 0.04, along: 2.5 } as const;
 
@@ -242,9 +235,10 @@ float bankWidth(vec2 xz, float shore) {
 
 
 /**
- * The wild land past the hand-over circle, the twin of `wildHeightAt` and
- * `wildNoise` in @gaia/terrain: the same integer hash, so the drawn ground
- * and the ground the walk stands on agree. Needs GROUND_SAMPLE_GLSL first.
+ * The wild land past the land's square, a shader copy of `wildHeightAt` and
+ * `wildNoise` in @gaia/terrain. It uses the same integer hash, so the drawn
+ * ground matches the ground a walker stands on. Include `GROUND_SAMPLE_GLSL`
+ * before it.
  */
 export const WILD_GLSL = /* glsl */ `
 uniform float uLand;
@@ -313,14 +307,14 @@ float wildScrub(vec2 xz) { return smoothstep(-0.1, 0.5, wildNoise(xz * 0.6 + 100
 float wildPatch(vec2 xz) { return smoothstep(-0.3, 0.3, wildNoise(xz * 1.5 + 97.0)); }
 `;
 
-/** The rings around the person: how many, and how many quads on a side each. */
+/** Ring count and sizes for the ground around the person. */
 export const RINGS = {
   levels: 5,
-  /** Quads per side of every ring; ring k's quads are 2^k lattice spacings wide, so it reaches 2^k * 128 m each way. */
+  /** Quads per side of every ring. Ring k's quads are 2^k lattice spacings wide, so it reaches 2^k * 128 m each way. */
   quads: 256,
   /** Quad size of the whole-world mesh a view from above draws, and of the mirror's innermost ring, in lattice spacings. */
   coarse: 4,
-  /** Quads per side of each of the mirror's rings: with quads `coarse` times as large, about six of the mirror's pixels each at any distance. */
+  /** Quads per side of each mirror ring. Its quads are `coarse` times as large and span about six mirror pixels at any distance. */
   mirrorQuads: 128,
 } as const;
 
@@ -566,26 +560,26 @@ void main() {
 export interface GroundMesh {
   /** The ground around the person, as nested rings that follow them. */
   readonly fine: THREE.Mesh;
-  /** The whole lattice, coarsely, for a view from above and its water's mirror: empty until `aerial` builds it. */
+  /** The whole lattice at coarse detail, for a view from above and its water's mirror. Empty until `aerial` builds it. */
   readonly coarse: THREE.Mesh;
   /**
-   * The rings at `RINGS.coarse` times their quad size, around the person,
-   * for the water's mirror while they walk: as fine as the whole-world mesh
-   * near them, and as cheap however large the world grows.
+   * The rings at `RINGS.coarse` times their quad size, for the water's mirror
+   * while the person walks. Near the person they are as fine as the
+   * whole-world mesh, and they cost the same at any world size.
    */
   readonly mirror: THREE.Mesh;
-  /** A coarse ring of the wild land past the rim, for views from above: empty until `aerial` builds it. Walking, the rings draw the wild land. */
+  /** A coarse ring of the wild land past the rim, for views from above. Empty until `aerial` builds it. While walking, the rings draw the wild land. */
   readonly wilds: THREE.Mesh;
   readonly material: THREE.ShaderMaterial;
-  /** Takes on a new bake. */
+  /** Updates for a new bake. */
   update(t: Terrain): void;
-  /** Builds `coarse` and `wilds` for the land now baked, and again on every bake after, since only a view from above draws them. */
+  /** Builds `coarse` and `wilds` for the current bake and rebuilds them on every later bake. Only a view from above draws them. */
   aerial(): void;
-  /** Centers the rings on the person; call every frame they walk. */
+  /** Centers the rings on the person. Call it every frame they walk. */
   follow(x: number, z: number): void;
 }
 
-/** A grid of quads, `quads` on a side around its center, as columns and rows; `keep` says which quads to draw. */
+/** Appends to `into` a grid of `quads` by `quads` quads around its center, as columns and rows. `keep` chooses which quads to draw. */
 function grid(quads: number, level: number, keep: (i: number, j: number) => boolean, into: { pos: number[]; index: number[] }): void {
   const first = into.pos.length / 3;
   const side = quads + 1;
@@ -609,12 +603,12 @@ function meshOf(pos: number[], index: number[], material: THREE.ShaderMaterial):
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(index);
   const mesh = new THREE.Mesh(g, material);
-  // The vertex shader places every vertex; the grid's own positions mean nothing to culling.
+  // The vertex shader places every vertex, so the grid's own positions mean nothing to culling.
   mesh.frustumCulled = false;
   return mesh;
 }
 
-/** The rings: ring 0 whole, each ring after it with a hole where the ring inside it lies. */
+/** Builds the rings: ring 0 whole, and each later ring with a hole where the ring inside it lies. */
 function ringsMesh(material: THREE.ShaderMaterial, q: number = RINGS.quads): THREE.Mesh {
   const into = { pos: [] as number[], index: [] as number[] };
   for (let level = 0; level < RINGS.levels; level++) {
@@ -623,7 +617,7 @@ function ringsMesh(material: THREE.ShaderMaterial, q: number = RINGS.quads): THR
   return meshOf(into.pos, into.index, material);
 }
 
-/** The wild ring as geometry the ground material can draw: no water anywhere near. */
+/** The wild ring as geometry the ground material can draw, with no water or trails. */
 function wildsGeometry(t: Terrain): THREE.BufferGeometry {
   const ring = wildsRing(t);
   const count = ring.positions.length / 3;

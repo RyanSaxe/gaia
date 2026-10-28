@@ -1,15 +1,12 @@
-// Where grass does not grow: the ground under rocks and bushes, as a mask the
-// grass shader reads, so no blade ever pierces a stone. Each cleared shape
-// follows its component's own outline at the ground, not a disc. The same
-// mask holds capsules of ground kept bare, such as buildings' floors and
-// walks and landmarks' feet, however many a world has. A second mask holds
-// where grass grows only as short turf, round things too low to show over it,
-// such as a drift of mushrooms. Only the grass reads them, and the grass grows
-// only around the person, so each mask is a window around the grass, drawn
-// again as the grass moves on: each texel from the shapes at its own place,
-// on the land or past it. The land's outlines are handed over at once and
-// sorted into cells; the wild's bushes, far too many for that, are asked for
-// the window's ground as it is drawn (`setNear`).
+// Builds the masks of where grass does not grow, which the grass shader reads
+// so no blade pierces a stone. One mask marks bare ground under each rock's or
+// bush's own ground outline and under capsules such as buildings' floors and
+// walks and landmarks' feet. A second marks short turf around things too low
+// to show over the grass, such as a drift of mushrooms.
+//
+// Each mask is a window around the grass, redrawn as the grass moves. The
+// land's outlines arrive all at once and are sorted into cells, while the
+// wild's bushes, far too many for that, are queried per window (`setNear`).
 
 import * as THREE from "three";
 import type { Capsule, Terrain } from "@gaia/terrain";
@@ -17,13 +14,13 @@ import type { Capsule, Terrain } from "@gaia/terrain";
 /** Meters per mask texel. */
 const RESOLUTION = 0.5;
 
-/** How far past its outline a patch of short turf eases back into the grass around it, meters. */
+/** Meters past its outline over which a patch of short turf eases back into the grass. */
 const TURF_EASE = 0.9;
 
 /**
- * The window: texels per side (256 m, the grass reaching 62 m from its
- * middle), and how far, in texels, the grass may move from the window's
- * middle before it is drawn again around it.
+ * The mask window. `size` is texels per side, 256 m, while the grass reaches
+ * 62 m from its center. `recenter` is how far in texels the grass may move
+ * from the window's center before the window is redrawn around it.
  */
 const WINDOW = { size: 512, recenter: 64 } as const;
 
@@ -42,34 +39,34 @@ export interface Clearing {
 }
 
 /**
- * Outlines asked for as each window is drawn rather than handed over at
- * once: every one that could reach the ground from (x0, z0) to (x1, z1).
+ * Returns the outlines that could reach the ground from (x0, z0) to (x1, z1),
+ * queried as each window is drawn rather than given all at once.
  */
 export type ClearingsNear = (x0: number, z0: number, x1: number, z1: number) => Iterable<Clearing>;
 
 export interface Clearings {
   readonly uniforms: {
     readonly uClearing: { value: THREE.DataTexture };
-    /** Where the grass grows only as short turf: the same window, 1 in the turf. */
+    /** Where the grass grows only as short turf, over the same window: 1 in the turf. */
     readonly uTurf: { value: THREE.DataTexture };
     /** The window's corner on the ground, x and z. */
     readonly uClearingOrigin: { value: THREE.Vector2 };
     /** The window's side, meters. */
     readonly uClearingSize: { value: number };
   };
-  /** Clears the ground under each component's outline (or keeps it short turf), and the capsules set last. */
+  /** Clears the ground, or marks short turf, under each component's outline, plus the capsules set last. */
   update(clearings: readonly Clearing[]): void;
-  /** Takes on a bake of another size; the mask is drawn again by the next `update`. */
+  /** Resizes for a bake of another size. The next `update` redraws the mask. */
   fit(t: Terrain): void;
-  /** Ground kept bare whatever the components are, such as buildings and their walks; drawn by the next `update`, and kept until set again. */
+  /** Sets ground kept bare regardless of components, such as buildings and their walks. The next `update` draws it, and it stays until set again. */
   setCapsules(capsules: readonly Capsule[]): void;
-  /** Keeps the window around the grass's middle at (x, z), drawing it again once the grass has moved far enough. */
+  /** Keeps the window around the grass's center at (x, z), redrawing it once the grass has moved far enough. */
   follow(x: number, z: number): void;
-  /** Clears the ground under the outlines `near` gives for each window too, after `update`'s; drawn by the next `update`, and kept until set again. */
+  /** Also clears the ground under the outlines `near` returns for each window, after `update`'s. The next `update` draws them, and `near` stays until set again. */
   setNear(near: ClearingsNear): void;
 }
 
-/** How far an outline reaches from its middle, meters, its turf's ease included. */
+/** How far in meters an outline reaches from its center, including its turf's ease. */
 function reachOf(c: Clearing): number {
   let reach = 0;
   for (const r of c.outline) reach = Math.max(reach, r);
@@ -78,7 +75,7 @@ function reachOf(c: Clearing): number {
 
 export function createClearings(t: Terrain): Clearings {
   let l = t.lattice;
-  /** Texels per side of the land's mask: the ground whose cells the land's outlines are sorted into. */
+  /** Texels per side of the land's mask, the area whose cells the land's outlines are sorted into. */
   let n = Math.ceil(((l.n - 1) * l.spacing) / RESOLUTION);
   const { size } = WINDOW;
   const mask = (): { data: Uint8Array; texture: THREE.DataTexture } => {
@@ -100,14 +97,14 @@ export function createClearings(t: Terrain): Clearings {
   let outlines: readonly Clearing[] = [];
   /** Each outline's farthest reach, meters. */
   let reaches = new Float64Array(0);
-  /** The land's first sample in z: the page's land is a window around the person, so it need not match x's. */
+  /** The land's first sample in z. The page's land is a window around the person, so it need not match x's. */
   const originZ = (): number => l.originZ ?? l.origin;
   /**
-   * The outlines by the cell of `CELL` meters over the land's mask their
-   * middles lie in (past it, its edge cell): cell k's are `order` from
-   * `starts[k]` to `starts[k + 1]`. `reach` is the farthest any reaches.
-   * The cells start at the land's first sample when they were sorted
-   * (`x`, `z`), since the land's window moves on with the person.
+   * The outlines sorted by the `CELL`-meter cell of the land's mask their
+   * centers lie in, or the edge cell for one past it. Cell k's outlines are
+   * `order` from `starts[k]` to `starts[k + 1]`, and `reach` is the farthest
+   * any reaches. The cells start at the land's first sample at sorting time
+   * (`x`, `z`), since the land's window moves with the person.
    */
   let cells = { side: 1, starts: new Int32Array(2), order: new Int32Array(0), reach: 0, x: 0, z: 0 };
   const cellAt = (v: number, from: number, side: number): number => Math.max(0, Math.min(side - 1, Math.floor((v - from) / CELL)));
@@ -131,10 +128,10 @@ export function createClearings(t: Terrain): Clearings {
   };
   let capsules: readonly Capsule[] = [];
   let near: ClearingsNear | null = null;
-  /** The window's first texel, x and z, counted on the land's mask from its first sample; null until drawn. */
+  /** The window's first texel, x and z, counted on the land's mask from its first sample, or null until drawn. */
   let corner: { i: number; j: number } | null = null;
   let middle = { x: 0, z: 0 };
-  /** Draws the window whose first texel is (i, j): each texel from the shapes at its middle, on the land or past it. */
+  /** Draws the window whose first texel is (i, j), testing each texel's center against the shapes, on the land or past it. */
   const draw = (i: number, j: number): void => {
     corner = { i, j };
     const oz = originZ();
@@ -147,10 +144,9 @@ export function createClearings(t: Terrain): Clearings {
     data.fill(0);
     turf.data.fill(0);
     /**
-     * Marks every texel of the window over texels [i0, i1] by [j0, j1],
-     * counted as its corner is, by how far `inside` holds its middle, 0 to 1,
-     * keeping the most any shape gives it, in `into` (the bare ground's mask
-     * unless given).
+     * Marks each window texel in [i0, i1] by [j0, j1], counted as the corner
+     * is, by `inside` at its center, from 0 to 1, keeping the largest value
+     * any shape gives. Writes into `into`, the bare ground mask by default.
      */
     const clear = (i0: number, i1: number, j0: number, j1: number, inside: (x: number, z: number) => boolean | number, into: Uint8Array = data): void => {
       const c0 = Math.max(0, i0 - i);
@@ -179,7 +175,7 @@ export function createClearings(t: Terrain): Clearings {
         return Math.hypot(x - c.ax - abx * t, z - c.az - abz * t) < c.radius;
       });
     }
-    /** Draws outline `c`, which reaches `reach` from its middle. */
+    /** Draws outline `c`, which reaches `reach` from its center. */
     const outline = (c: Clearing, reach: number): void => {
       const k = c.outline.length;
       const i0 = Math.floor((c.x - reach - l.origin) / RESOLUTION);
@@ -188,7 +184,7 @@ export function createClearings(t: Terrain): Clearings {
       const j1 = Math.ceil((c.z + reach - oz) / RESOLUTION);
       const cos = Math.cos(c.yaw);
       const sin = Math.sin(c.yaw);
-      // Past its farthest reach, with room for rounding, no direction of the outline holds a texel.
+      // Past its farthest reach, with room for rounding, no direction of the outline covers a texel.
       const beyond = (reach * (1 + 1e-6) + 1e-6) ** 2;
       clear(i0, i1, j0, j1, (x, z) => {
         const dx = x - c.x;
@@ -200,11 +196,11 @@ export function createClearings(t: Terrain): Clearings {
         const a = ((Math.atan2(lz, lx) / (Math.PI * 2)) % 1 + 1) % 1;
         const r = (c.outline[Math.floor(a * k) % k] as number) * c.scale;
         const d = Math.hypot(lx, lz);
-        // Turf eases back into the grass past its outline; bare ground stops at it.
+        // Turf eases back into the grass past its outline, while bare ground stops at it.
         return c.turf === true ? Math.min(1, Math.max(0, 1 - (d - r) / TURF_EASE)) : d < r;
       }, c.turf === true ? turf.data : data);
     };
-    // Only the cells whose outlines could reach the window's texels.
+    // Visit only the cells whose outlines could reach the window's texels.
     const { side, starts, order, reach } = cells;
     const ci0 = cellAt(x0 - reach, cells.x, side);
     const ci1 = cellAt(x1 + reach, cells.x, side);
@@ -223,7 +219,7 @@ export function createClearings(t: Terrain): Clearings {
     texture.needsUpdate = true;
     turf.texture.needsUpdate = true;
   };
-  /** The window's first texel for grass around (x, z): on a step of `WINDOW.recenter`. */
+  /** The window's first texel for grass around (x, z), snapped to a step of `WINDOW.recenter`. */
   const cornerAt = (x: number, z: number): { i: number; j: number } => {
     const snap = (v: number, from: number): number => Math.round((v - from) / RESOLUTION / WINDOW.recenter) * WINDOW.recenter - size / 2;
     return { i: snap(x, l.origin), j: snap(z, originZ()) };

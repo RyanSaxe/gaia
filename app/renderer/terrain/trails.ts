@@ -1,16 +1,15 @@
-// The paths as the ground and the grass read them, and the things built
-// along them. The trail field rides in the ground texture's fourth channel,
-// so the ground paints worn earth and the grass parts from the same samples.
-// A trail stands for a dependency between two entities and walks the ways of
-// one network; each way's wear follows the vitality of every trail walking
-// it (`wayWear` in @gaia/terrain): a second texture of the land's clipmap
-// says which ways each sample lies on and how far along them, baked from the
-// ways themselves with the land's chunks (`land-chunks.ts`), and a tiny one holds each way's wear at
-// a few stations along it, rewritten live, so a way between thriving
-// entities is worn bare and one only failing entities walk grows over, with
-// nothing rebaked. The footbridges, stepping stones, edging stones and the
-// junctions' cairns are ordinary components in the plant material, so they
-// wither with their way's vitality like everything else.
+// Draws the trails into the ground and grass, and builds the things along
+// them. A trail represents a dependency between two entities and follows the
+// ways of one network. The trail distance is the ground texture's fourth
+// channel, so the ground paints worn earth and the grass parts from the same
+// samples.
+//
+// Each way's wear follows the vitality of every trail on it (`wayWear` in
+// @gaia/terrain). A clipmap texture records which ways each sample lies on
+// and how far along them, and a small texture stores each way's wear at a few
+// stations and is rewritten live, so wear changes with nothing rebaked. The
+// footbridges, stepping stones, edging stones and cairns use the plant
+// material, so they decline with their way's vitality like everything else.
 
 import * as THREE from "three";
 import { type Built, type Library, seedOf } from "@gaia/schema";
@@ -20,12 +19,11 @@ import { type PlantView, type SceneLight, createPlant } from "@gaia/render";
 import { type Crossing, type EdgeStone, type Terrain, type TrailNetwork, type Way, crossingSeed, edgeStones, junctionVitality, wayVitalityAt, wayWear } from "@gaia/terrain";
 
 /**
- * GLSL: the signed distance to the nearest way's edge, meters, negative on
- * the tread, read with the mesh's own triangle interpolation; and how worn
- * the ways are at a point, blended between each way's stations as
- * `wayWearAt` in @gaia/terrain does. Where ways meet, the more worn one
- * shows. Needs the ground texture's uniforms (GROUND_SAMPLE_GLSL) declared
- * first.
+ * GLSL for the signed distance in meters to the nearest way's edge, negative
+ * on the tread, read with the mesh's own triangle interpolation, and for the
+ * ways' wear at a point, blended between each way's stations as `wayWearAt`
+ * in @gaia/terrain does. Where ways meet, the more worn one shows. Declare
+ * the ground texture's uniforms (`GROUND_SAMPLE_GLSL`) first.
  */
 export const TRAIL_GLSL = /* glsl */ `
 uniform highp sampler2DArray uTrailPlace;
@@ -77,9 +75,9 @@ export const trailUniforms = {
 };
 
 /**
- * Each way's wear at its stations, from the vitality of the entities every
- * trail walking it joins (`wayWear`). Call it again whenever an entity's
- * vitality changes; it only rewrites a texel per way.
+ * Writes each way's wear at its stations from the vitality of the entities
+ * every trail on it joins (`wayWear`). Call it whenever an entity's vitality
+ * changes. It only rewrites a texel per way.
  */
 export function setTrailEnds(network: TrailNetwork, vitalityOf: (place: string) => number): void {
   const n = Math.max(1, network.ways.length);
@@ -96,7 +94,7 @@ export function setTrailEnds(network: TrailNetwork, vitalityOf: (place: string) 
 
 /** One thing built along the trails: a crossing, a square of a way's edging stones, or a cairn. */
 export interface WayPiece {
-  /** Its middle, and how far it reaches from there, meters. */
+  /** Its center, and its radius in meters. */
   readonly x: number;
   readonly z: number;
   readonly reach: number;
@@ -105,15 +103,15 @@ export interface WayPiece {
 }
 
 export interface Ways {
-  /** Every component built along the trails that stands now, for shadows and the mirror. */
+  /** Every component built along the trails that is placed now, for shadows and the mirror. */
   readonly views: readonly PlantView[];
-  /** Every piece, to stand by the tile that holds its middle. */
+  /** Every piece, placed by the tile that contains its center. */
   readonly pieces: readonly WayPiece[];
   /** The radius of the largest single thing among the pieces, meters. */
   readonly largest: number;
-  /** Stands exactly these pieces: builds any not built and lets go of the rest. */
+  /** Places exactly these pieces, building any not yet built and dropping the rest. */
   stand(pieces: readonly WayPiece[]): void;
-  /** Sets each crossing's, edging's and cairn's vitality from the trails walking its way (`wayVitalityAt`, `junctionVitality`). */
+  /** Sets each crossing's, edging's and cairn's vitality from the trails on its way (`wayVitalityAt`, `junctionVitality`). */
   setVitality(vitalityOf: (place: string) => number): void;
   dispose(): void;
 }
@@ -123,7 +121,7 @@ const STONE_PALETTE = (lib: Library): Realized["palette"] => {
   return (palette.build as (p: unknown) => Realized["palette"])({ family: "spring-meadow", contrast: 1 });
 };
 
-/** The vitality a way's crossing shows: its liveliest trail's where it stands (`wayVitalityAt`). */
+/** The vitality a way's crossing shows, from the way's trails at the crossing (`wayVitalityAt`). */
 export const crossingVitality = (network: TrailNetwork, way: number, c: Crossing, of: (place: string) => number): number =>
   wayVitalityAt(network, way, alongOf(network.ways[way] as Way, c.x, c.z), of);
 
@@ -143,14 +141,14 @@ function alongOf(trail: Way, x: number, z: number): number {
   return best / Math.max(1, count - 1);
 }
 
-/** Side of the squares a way's edging stones are built in, meters: each square's stones are one mesh, held while it is near. */
+/** Side in meters of the squares a way's edging stones are built in. Each square's stones are one mesh, kept while it is near. */
 const EDGING_SQUARE = 256;
 
 /**
- * Each way's crossings and edging stones, and each junction's cairn, as
- * pieces that stand only while their tile does (`stand`), a way's edging
- * stones a square of the land at a time. `edging` is each way's stones when
- * the bake set them on the whole land; otherwise they are set on `t`.
+ * Builds each way's crossings and edging stones, and each junction's cairn,
+ * as pieces placed only while their tile is (`stand`), with a way's edging
+ * stones grouped by square. `edging` is each way's stones when the bake set
+ * them on the whole land. Otherwise they are set on `t`.
  */
 export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, t: Terrain, network: TrailNetwork, edging?: readonly (readonly EdgeStone[])[]): Ways {
   const palette = STONE_PALETTE(lib);
@@ -169,7 +167,7 @@ export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, 
       if (trail.style.crossing === "footbridge") piece(c.x, c.z, c.span, c.span / 2, () => ({ built: buildFootbridge(c.span, trail.style.width, seed), at: [c.x, c.bank, c.z, c.yaw] }), vitality);
       else piece(c.x, c.z, c.span, c.span / 2, () => ({ built: buildSteppingStones(c.span, seed), at: [c.x, c.level, c.z, c.yaw] }), vitality);
     });
-    // The edging stones of a way, a square at a time, each square's one mesh following its way's vitality.
+    // A way's edging stones, one mesh per square, each following its way's vitality.
     const stones = edging?.[i] ?? edgeStones(t, trail, seedOf(`${trail.id}/edging`));
     const squares = new Map<string, EdgeStone[]>();
     for (const st of stones) {
@@ -183,7 +181,7 @@ export function createWays(scene: THREE.Scene, light: SceneLight, lib: Library, 
       piece((sx + 0.5) * EDGING_SQUARE, (sz + 0.5) * EDGING_SQUARE, EDGING_SQUARE * Math.SQRT1_2, list.reduce((r, st) => Math.max(r, st.size / 2), 0), () => ({ built: buildEdgingStones(list, seedOf(`${trail.id}/edging-stones/${key}`)), at: [0, 0, 0, 0] }), (of) => wayVitalityAt(network, i, 0.5, of));
     }
   });
-  // A small cairn beside a junction, where it suits.
+  // A small cairn beside each junction that has one.
   for (const j of network.junctions) {
     const cairn = j.cairn;
     if (cairn === null) continue;

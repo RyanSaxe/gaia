@@ -14,17 +14,17 @@ import { createWildGrowth } from "./wilds.ts";
 
 const biomeLib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const floraLib = new Library(FLORA_PRIMITIVES);
-// A flat land 400 m across: the wild's thickets read only where the land ends and the ground's height.
+// A flat land 400 m across. The wild's thickets read only where the land ends and the ground's height.
 const spec = { size: 400 } as WorldSpec;
 const terrain = { spec, lattice: latticeOf(spec) } as Terrain;
 // One bush for both of the wild's grounds, so whichever ground a thicket grows in, its bushes are this one.
 const [bush] = sweep(COMPOSING.wildBush, COMPOSING.offered?.wildBush ?? COMPOSING.lib, { places: [{}] }).blueprints;
 if (bush === undefined) throw new Error("The wild bush's sweep gives no bush.");
 
-/** The wild's growth on `terrain`, its bushes keeping the grass off their feet in `clearings`. */
+/** The wild's growth on `terrain`, with its bushes clearing the grass at their bases in `clearings`. */
 const wildOn = (clearings: ReturnType<typeof createClearings>) => createWildGrowth(new THREE.Scene(), createSceneLight(), createRegionCovers(), biomeLib, floraLib, clearings);
 
-/** Whether `outline`, at bush `b`'s turn and size, holds the ground at (x, z), as the clearings read an outline. */
+/** Whether `outline`, at bush `b`'s rotation and size, covers the ground at (x, z), as the clearings read an outline. */
 function within(b: WildBush, outline: Float32Array, x: number, z: number): boolean {
   const dx = x - b.x;
   const dz = z - b.z;
@@ -40,14 +40,14 @@ describe("the wild's bushes", () => {
     const wild = wildOn(clearings);
     wild.build(WILD_GROUNDS.map(() => bush));
     wild.update(terrain);
-    // The land's own outlines: none here. Handing them over draws the window.
+    // The land's own outlines, none here. Passing them draws the window.
     clearings.update([]);
     const ground = outlineOf(made(plantAsk(bush), floraLib));
     const kept = ground.map((r) => r * SHRUB_CLEARS);
-    // Every bush of every thicket the window could hold.
+    // Every bush of every thicket the window could contain.
     const bushes: WildBush[] = [];
     for (let cj = -12; cj <= 12; cj++) for (let ci = -12; ci <= 12; ci++) bushes.push(...(wildThicket(terrain, ci, cj)?.bushes ?? []));
-    // Out past the land's edge, where the wild's thickets gather.
+    // Out past the land's edge, where the wild's thickets are.
     const [x, z] = [380, 20];
     expect(wildPast(terrain, x, z)).toBeGreaterThan(60);
     clearings.follow(x, z);
@@ -65,14 +65,14 @@ describe("the wild's bushes", () => {
         const want = near.some((b) => within(b, kept, tx, tz)) ? 255 : 0;
         if (data[r * side + c] !== want) expect(data[r * side + c], `texel (${c}, ${r})`).toBe(want);
         if (want === 255) bare++;
-        // Round a bush's edge, within its outline but past the shrubs' share, the grass stays.
+        // Around a bush's edge, within its outline but past `SHRUB_CLEARS`, the grass stays.
         else if (near.some((b) => within(b, ground, tx, tz))) edge++;
       }
     }
-    // The window holds a few dozen bushes.
+    // The window contains a few dozen bushes.
     expect(bare).toBeGreaterThan(20);
     expect(edge).toBeGreaterThan(bare);
-    // Builds the bush and reads every texel of a 512-texel window against 625 thickets: about 2.5 s alone, past 5 s when other work shares the machine.
+    // Builds the bush and checks every texel of a 512-texel window against 625 thickets, about 2.5 s alone and over 5 s when other work shares the machine.
   }, 30_000);
 
   it("clear nothing before a world gives them, and their own ground once it does", () => {

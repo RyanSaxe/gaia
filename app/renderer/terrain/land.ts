@@ -1,87 +1,79 @@
-// The land as the page holds it: a clipmap of the stood land around the
-// person, as games hold their terrain. Level k holds every 2^k-th sample of
-// the world's lattice in a window of `CLIP.size` of them a side, centered
-// near the person on the world's own grid of 2^k spacings. The land workers
-// bake each window in chunks from the world's plan alone (`land-chunks.ts`),
-// so the page never holds the whole world's land: a world of any size holds
+// Keeps the page's land as a clipmap around the person, as games keep their
+// terrain. Level k stores every 2^k-th lattice sample in a window `CLIP.size`
+// samples wide near the person, and land workers bake each window in chunks
+// from the world's plan alone (`land-chunks.ts`), so a world of any size uses
 // the same seven windows.
 //
-// The ground texture draws from the same windows (`ground` is its data), and
-// level 0, the land within a few hundred meters to the meter, is the page's
-// `Terrain`: walking, the paths and everything placed near the person read
-// it as they read a whole world's land. A read past it falls to the finest
-// level that holds the point (`Lattice.beyond`). When the person walks a
-// chunk from a level's middle, the workers bake the chunks its window moves
-// onto, and the level moves once they all have come, so a window never shows
-// half old and half new. Through a world's opening the bake's own finishing
-// thread, which still holds the whole stood world, cuts the chunks
-// asked of it at once (`LandWorld.whole`).
+// Level 0, the land within a few hundred meters at full resolution, is the
+// page's `Terrain`, and a read past it falls back to the finest level that
+// contains the point (`Lattice.beyond`). A level moves only once every chunk
+// of its new window has arrived, so a window never shows half old and half
+// new data.
 
 import { type Lattice, type ReliefReport, type Terrain, type WorldSpec, frameOf, heightAt, knowWildBase, worldOf, worldOfZ } from "@gaia/terrain";
 import type { BakeJob, BakeReply } from "./bake-worker.ts";
 import { CHUNK, type Chunk, type LandSource, chunkPastLand, emptyChunk, latticeIndex } from "./land-chunks.ts";
 import BakeWorker from "./bake-worker.ts?worker";
 
-/** The land's levels around the person. */
+/** Clipmap level sizes. */
 export const CLIP = {
   /** Samples per side of every level: a whole number of chunks. */
   size: 512,
-  /** Levels: the ground's rings and the water's mirror reach the seventh, 64 spacings a sample. */
+  /** Level count. The ground's rings and the water's mirror reach the seventh level, at 64 spacings a sample. */
   levels: 7,
-  /** How far, in its own samples, the person may move from a level's middle before it moves around them: one chunk. */
+  /** How far in its own samples the person may move from a level's center before the level recenters: one chunk. */
   recenter: CHUNK,
   /**
-   * Layers past the levels where a painting of a far place has its own finest
-   * levels made ready (`PageLand.aside`): 512 m at 1 m and 1 km at 2 m. The
-   * person's levels are never drawn from them.
+   * Extra layers after the levels, where a painting of a far place gets its
+   * own finest levels (`PageLand.aside`): 512 m at 1 m spacing and 1 km at
+   * 2 m. The person's view never draws from them.
    */
   aside: 2,
 } as const;
 
-/** A world's land as the page takes it on: the source the workers bake from, and what only the whole world could measure. */
+/** A world's land as the page receives it: the source the workers bake from, and the values only the whole world could measure. */
 export interface LandWorld {
   readonly source: LandSource;
   readonly report: ReliefReport;
   readonly wildBase: number;
-  /** The bake's finishing thread, which still holds the whole stood world and cuts the opening's chunks at once (`Baked.whole`). */
+  /** The bake's finishing thread, which still has the whole placed world and cuts the opening's chunks at once (`Baked.whole`). */
   readonly whole?: Worker;
 }
 
-/** How long the land keeps a bake's finishing thread after its world opens, ms: through the opening and a first jump. */
+/** Milliseconds the land keeps a bake's finishing thread after its world opens, long enough for the opening and a first jump. */
 const KEEP_WHOLE_MS = 30_000;
 
 export interface PageLand {
-  /** The land near the person, to the meter: level 0's window as a `Terrain`. The same object for the page's life; its arrays change in place as the window moves. */
+  /** Level 0's window as a `Terrain`, the land near the person at full resolution. It is the same object for the page's life, and its arrays change in place as the window moves. */
   readonly terrain: Terrain;
   /** Every level's height, water level, distance to the water and signed distance to a trail's edge, four floats a sample: the ground texture's data. */
   readonly ground: Float32Array;
-  /** Every level's region, covers and trail places, sample for sample with `ground`, level after level, as a texture array holds them. */
+  /** Every level's region, covers and trail places, sample for sample with `ground` and level after level, as a texture array stores them. */
   readonly region: Uint8Array;
-  /** 1 where a sample's nearest water is a pond's (`nearPond`). */
+  /** 1 where a sample's nearest water is a pond (`nearPond`). */
   readonly nearPond: Uint8Array;
   readonly coverRegions: Uint8Array;
   readonly coverShares: Uint8Array;
   readonly trailPlaces: Float32Array;
   /** Each level's first sample, in its own grid units (world meters over the lattice's spacing times 2^k). */
   readonly origins: readonly { readonly x: number; readonly z: number }[];
-  /** Takes on a world: bakes every level around (x, z), and resolves once all of them hold it. */
+  /** Opens a world: bakes every level around (x, z), and resolves once all of them contain it. */
   open(world: LandWorld, x: number, z: number): Promise<void>;
-  /** Called every frame the person moves: a level they have walked a chunk from moves around them. */
+  /** Call every frame the person moves. A level whose center is a chunk away from them moves around them. */
   follow(x: number, z: number): void;
-  /** Moves every level around (x, z), as after a jump: resolves once all of them hold it. */
+  /** Moves every level around (x, z), as after a jump. Resolves once all of them contain it. */
   around(x: number, z: number): Promise<void>;
   /**
-   * The land a painting of a place far from the person needs, made ready to
-   * one side while the levels go on following the person: each of the finest
-   * levels whose window around (x, z) is not the person's own is baked into a
-   * layer of its own (`CLIP.aside`).
-   * Resolves with `paint`, which runs `draw` with those levels drawn from
-   * their layers and points them back at the person's own before it returns,
-   * so no frame drawn for the person ever shows them; null if another world
-   * opened first.
+   * Prepares the land a painting of a far place needs, while the levels keep
+   * following the person. Each of the finest levels whose window around
+   * (x, z) differs from the person's is baked into its own layer
+   * (`CLIP.aside`). Resolves with `paint`, which runs `draw` with those
+   * levels reading their aside layers and points them back at the person's
+   * layers before it returns, so no frame drawn for the person shows them.
+   * Resolves with null if another world opened first.
    */
   aside(x: number, z: number): Promise<{ paint<T>(draw: () => T): T } | null>;
-  /** Which layer each level is drawn from: its own, or a painting's set aside while that painting is drawn. */
+  /** The layer each level reads: its own, or a painting's aside layer while that painting draws. */
   readonly layers: readonly number[];
   /** The land workers' report: jobs waiting on each, and how long each kind took lately. */
   workers(): { readonly waiting: readonly number[]; readonly whole: boolean; readonly took: Record<string, { readonly n: number; readonly mean: number; readonly max: number }> };
@@ -110,7 +102,7 @@ const levelOf = (): Level => ({
   trailPlaces: new Float32Array(LAYER * 2),
 });
 
-/** Level k's window around (x, z): its first sample, in its own grid units, on a step of a chunk. */
+/** Level k's window around (x, z): its first sample in its own grid units, snapped to a chunk step. */
 function windowAt(spacing: number, k: number, x: number, z: number): { x: number; z: number } {
   const unit = spacing * 2 ** k;
   const snap = (v: number): number => Math.round(v / unit / CLIP.recenter) * CLIP.recenter - CLIP.size / 2;
@@ -157,23 +149,23 @@ function carry(cx: number, cz: number, from: Level, fx: number, fz: number, to: 
   }
 }
 
-/** A job given to a land worker, and who waits on its answer: null when the worker ended first and the job's world has since closed. */
+/** A job given to a land worker, and the callback for its reply. The reply is null when the worker ended first and the job's world has since closed. */
 interface Pending {
   readonly job: BakeJob & { readonly world: number };
   readonly answer: (reply: BakeReply | null) => void;
-  /** How soon it is wanted: lower first (`JOB_PRIORITY`). */
+  /** Its priority, lower first (`JOB_PRIORITY`). */
   readonly priority: number;
   /** When it was sent, for the workers' report. */
   sent?: number;
 }
 
 /**
- * How soon each kind of job is wanted. The person's own land comes first, so
- * its windows keep up with them; then the land a painting sets aside, which
- * nobody sees until the painting is done.
+ * Priority of each kind of job. The person's own land comes first, so its
+ * windows keep up with them. The land a painting sets aside comes next, since
+ * nobody sees it until the painting is done.
  */
 export const JOB_PRIORITY = { land: 0, aside: 1 } as const;
-/** Jobs each worker holds at once: one under way and the next, so it never idles, and the rest wait their turn on the page. */
+/** Jobs each worker has at once: one running and the next, so it never idles. The rest wait in the page's queue. */
 const IN_FLIGHT = 2;
 
 /** A land worker and the jobs it has yet to answer. */
@@ -184,15 +176,15 @@ interface Thread {
 
 /**
  * A few workers that bake chunks of the land, each keeping the source of the
- * world it was last given. A worker that ends while it still has jobs, as
- * the kept finishing thread does when it is let go, or that dies, hands them
- * to the others, so nothing waits on an answer that will never come.
+ * world it was last given. When a worker ends or dies with jobs left, as the
+ * kept finishing thread does when dropped, its jobs go to the others, so
+ * nothing waits on a reply that will never come.
  */
 function createLandWorkers(threads: number) {
   let nextId = 0;
-  /** The world the workers hold the source of, and that source, for a worker that starts after it was given. */
+  /** The world whose source the workers have, and that source, to give a worker that starts later. */
   let kept: { readonly world: number; readonly source: LandSource } | null = null;
-  /** How long each kind of job took lately, sent to answered, ms. */
+  /** Recent milliseconds from send to reply for each kind of job. */
   const took = new Map<string, number[]>();
   const listen = (worker: Worker): Thread => {
     const on: Thread = { worker, jobs: new Map() };
@@ -210,7 +202,7 @@ function createLandWorkers(threads: number) {
     return on;
   };
   const workers = Array.from({ length: threads }, () => listen(new BakeWorker()));
-  /** A bake's finishing thread while it is kept: chunks of its world go to it first. */
+  /** A bake's finishing thread while it is kept. Chunks of its world go to it first. */
   let whole: Thread | null = null;
   const send = (on: Thread, pending: Pending): void => {
     const id = nextId++;
@@ -218,9 +210,9 @@ function createLandWorkers(threads: number) {
     on.jobs.set(id, pending);
     on.worker.postMessage({ ...pending.job, id });
   };
-  /** Jobs no worker holds yet, taken soonest-wanted first and in the order asked within a priority. */
+  /** Jobs no worker has yet, taken by priority and in request order within a priority. */
   const queue: Pending[] = [];
-  /** Gives each thread with room the soonest-wanted jobs waiting: the finishing thread while it is kept, then the workers. */
+  /** Gives each thread with room the highest-priority waiting jobs: the finishing thread while it is kept, then the workers. */
   const pump = (): void => {
     for (const on of [...(whole === null ? [] : [whole]), ...workers]) {
       while (on.jobs.size < IN_FLIGHT && queue.length > 0) {
@@ -235,7 +227,7 @@ function createLandWorkers(threads: number) {
       queue.push({ job, answer, priority });
       pump();
     });
-  /** Ends a thread: what it had yet to answer goes to another while its world is still `open`, and is let go if not. */
+  /** Ends a thread. Its unanswered jobs return to the queue if their world is still `open`, and are answered with null if not. */
   const end = (on: Thread, open: number | undefined): void => {
     on.worker.terminate();
     const jobs = [...on.jobs.values()];
@@ -246,7 +238,7 @@ function createLandWorkers(threads: number) {
     }
     pump();
   };
-  /** A land worker that died is replaced by a fresh one given the kept world's source; a finishing thread that died is let go. */
+  /** Replaces a dead land worker with a fresh one given the kept world's source. A dead finishing thread is dropped. */
   const replace = (on: Thread): void => {
     if (on === whole) whole = null;
     const i = workers.indexOf(on);
@@ -262,7 +254,7 @@ function createLandWorkers(threads: number) {
       kept = { world, source };
       await Promise.all([...workers, ...(whole === null ? [] : [whole])].map((on) => new Promise<BakeReply | null>((answer) => send(on, { job: { kind: "land", world, source }, answer, priority: JOB_PRIORITY.land }))));
     },
-    /** Takes on a new world's finishing thread, ending the one kept before and letting go of what it had yet to answer. */
+    /** Adopts a new world's finishing thread, ending the previous one and answering its unanswered jobs with null. */
     adopt(worker: Worker): void {
       const was = whole;
       whole = listen(worker);
@@ -274,13 +266,13 @@ function createLandWorkers(threads: number) {
       whole: whole !== null,
       took: Object.fromEntries([...took].map(([k, v]) => [k, { n: v.length, mean: Math.round(v.reduce((a, b) => a + b, 0) / Math.max(1, v.length)), max: Math.round(Math.max(0, ...v)) }])),
     }),
-    /** Ends the kept finishing thread, letting go of the whole world it holds; the land workers take on what it had yet to answer. */
+    /** Ends the kept finishing thread, freeing the whole world it has. The land workers take its unanswered jobs. */
     drop(): void {
       const was = whole;
       whole = null;
       if (was !== null) end(was, kept?.world);
     },
-    /** Chunk (cx, cz) of level `k`, as soon as `priority` says; null when world `world` closed before a worker could answer. */
+    /** Chunk (cx, cz) of level `k`, at `priority`. Null when world `world` closed before a worker could answer. */
     async chunk(world: number, k: number, cx: number, cz: number, priority: number = JOB_PRIORITY.land): Promise<Chunk | null> {
       const reply = await ask({ kind: "chunk", world, k, cx, cz }, priority);
       if (reply === null) return null;
@@ -291,7 +283,7 @@ function createLandWorkers(threads: number) {
   };
 }
 
-/** What the page's land reads as until its first world opens: level, dry ground. */
+/** The page's land until its first world opens: level, dry ground. */
 const PLACEHOLDER: WorldSpec = { size: 320, regions: [] };
 
 /** The page's land, baked on `threads` workers of its own. */
@@ -315,20 +307,20 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     coverShares: all.coverShares.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
     trailPlaces: all.trailPlaces.subarray(k * LAYER * 2, (k + 1) * LAYER * 2),
   }));
-  /** Each level's samples as the land is read: its own layer, but for the moment a painting is drawn. */
+  /** Each level's samples as reads see them: its own layer, except while a painting draws. */
   const store: Level[] = layered.slice(0, levels);
   const layers = Array.from({ length: levels }, (_, k) => k);
-  /** Where each level's window starts; NaN until a world's land lies there. */
+  /** Where each level's window starts, or NaN until a world's land is there. */
   const origins = Array.from({ length: levels }, () => ({ x: Number.NaN, z: Number.NaN }));
-  /** Each level's move under way, if any: one at a time, and the next follows once it is in. */
+  /** Each level's move in progress, if any. A level moves once at a time, and the next move starts after it finishes. */
   const moving: (Promise<void> | null)[] = Array.from({ length: levels }, () => null);
-  /** Which world the levels hold: a chunk baked for an earlier one is dropped. */
+  /** The world the levels contain. A chunk baked for an earlier world is dropped. */
   let generation = 0;
   let source: LandSource | null = null;
   /** Meters between the world lattice's samples. */
   let spacing = 1;
   let onMoved: ((k: number, fresh: boolean) => void) | null = null;
-  /** When the kept finishing thread is let go. */
+  /** The timer that drops the kept finishing thread. */
   let letGo: ReturnType<typeof setTimeout> | undefined;
 
   const level0 = store[0] as Level;
@@ -336,7 +328,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   const waterLevel = new Float32Array(LAYER);
   const shore = new Float32Array(LAYER);
 
-  /** Level k at (gx, gz) in its own grid units, one of its four channels, between samples as the ground texture reads it. */
+  /** Reads one of level k's four channels at (gx, gz) in its grid units, interpolating between samples as the ground texture does. */
   const sampleLevel = (k: number, channel: number, gx: number, gz: number): number => {
     const data = (store[k] as Level).ground;
     const cx = Math.min(size - 1.000001, Math.max(0, gx));
@@ -354,10 +346,10 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     return h11 + (1 - fx) * (h01 - h11) + (1 - fz) * (h10 - h11);
   };
   const lattice: { -readonly [K in keyof Lattice]: Lattice[K] } = { n: size, spacing: 1, origin: 0, originZ: 0, heights };
-  /** A read of level 0's window past its edge: from the finest coarser level that holds the point. */
+  /** Reads past level 0's window from the finest coarser level that contains the point. */
   lattice.beyond = (x, z, values) => {
     const channel = values === heights ? 0 : values === waterLevel ? 1 : values === shore ? 2 : -1;
-    // An array no level holds is read at the window's edge, as a lattice without `beyond` would read it.
+    // An array no level stores is read at the window's edge, as a lattice without `beyond` would read it.
     if (channel < 0) return heightAt({ n: size, spacing: lattice.spacing, origin: lattice.origin, originZ: lattice.originZ ?? lattice.origin, heights }, x, z, values);
     for (let k = 1; k < levels; k++) {
       const o = origins[k] as { x: number; z: number };
@@ -386,7 +378,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     landforms: [],
   };
 
-  /** Level 0's window as the page's `Terrain`: its samples where the world's lattice holds them. */
+  /** Copies level 0's window into the page's `Terrain` and aligns its lattice with the world's. */
   const showLevel0 = (): void => {
     const o = origins[0] as { x: number; z: number };
     const world = frameOf(view.spec);
@@ -402,14 +394,14 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   };
 
   /**
-   * Fills `into` with level `k`'s window at (ox, oz): the chunks the level's window now holds are carried over,
-   * the rest baked. Resolves once all are in.
+   * Fills `into` with level `k`'s window at (ox, oz). It copies the chunks the current window already has and bakes
+   * the rest. Resolves once all have arrived.
    */
   function fill(k: number, ox: number, oz: number, into: Level, mine: number, src: LandSource, priority: number = JOB_PRIORITY.land): Promise<void> {
     const from = store[k] as Level;
     const was = origins[k] as { x: number; z: number };
     const per = size / CHUNK;
-    // Nearest the person first: the window's middle chunks.
+    // Request the window's center chunks first, nearest the person.
     const order: [number, number][] = [];
     for (let j = 0; j < per; j++) for (let i = 0; i < per; i++) order.push([i, j]);
     const middle = (c: [number, number]): number => Math.hypot(c[0] - per / 2 + 0.5, c[1] - per / 2 + 0.5);
@@ -426,20 +418,20 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     return Promise.all(asks).then(() => undefined);
   }
 
-  /** Moves level `k` to window (ox, oz): carries over the chunks both windows hold, bakes the rest, and takes over once all are in. */
+  /** Moves level `k` to window (ox, oz). It copies the chunks both windows share, bakes the rest, and switches once all have arrived. */
   async function move(k: number, ox: number, oz: number): Promise<void> {
     const mine = generation;
     const src = source;
     if (src === null) return;
     const from = store[k] as Level;
     const was = origins[k] as { x: number; z: number };
-    // A level holding nothing yet, as when a world opens, takes its chunks as they come: nothing draws it until
-    // they all have. A level that is drawn takes its new window aside, and all at once.
+    // An empty level, as when a world opens, takes its chunks as they arrive, since nothing draws it until all have.
+    // A level in use fills its new window in a separate buffer and switches all at once.
     const fresh = Number.isNaN(was.x);
     const into = fresh ? from : levelOf();
     await fill(k, ox, oz, into, mine, src);
     if (mine !== generation) return;
-    // The new window takes over whole, in one frame.
+    // Switch to the new window whole, in one frame.
     if (!fresh) copyLevel(into, from);
     was.x = ox;
     was.z = oz;
@@ -447,7 +439,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     onMoved?.(k, true);
   }
 
-  /** Moves level `k` around (x, z) unless it is already there; after any move under way. Resolves once it holds (x, z). */
+  /** Moves level `k` around (x, z) unless it is already there, after any move in progress. Resolves once it contains (x, z). */
   function moveAround(k: number, x: number, z: number): Promise<void> {
     const going = moving[k];
     if (going !== null && going !== undefined) return going.then(() => moveAround(k, x, z));
@@ -495,7 +487,7 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       view.landforms = plan.landforms;
       knowWildBase(view, next.wildBase);
       spacing = frameOf(plan.spec).spacing;
-      // Nothing of the last world's land is carried into this one's.
+      // Carry nothing of the last world's land into this one.
       for (const o of origins) o.x = o.z = Number.NaN;
       await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
     },
@@ -511,8 +503,8 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       const mine = generation;
       const src = source;
       if (src === null) return null;
-      // Only the finest levels are set aside, into layers of their own: past them a painting's distance is drawn
-      // from the person's own coarser levels, which hold it as well as the land they see.
+      // Only the finest levels get aside layers. Past them, a painting's distance draws from the person's coarser
+      // levels, which cover it along with the person's own land.
       const apart: { k: number; ox: number; oz: number }[] = [];
       const fills: Promise<void>[] = [];
       for (let k = 0; k < CLIP.aside; k++) {
@@ -527,8 +519,8 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       let fresh = true;
       return {
         paint(draw) {
-          // Drawing from the set-aside layers and back takes one task, so no frame drawn for the person falls
-          // between; their own layers are never touched, so nothing of theirs goes to the GPU again.
+          // Switching to the aside layers and back happens within one task, so no frame drawn for the person falls
+          // between. Their own layers are never touched, so none of their data uploads again.
           const kept = apart.map(({ k, ox, oz }) => {
             const o = origins[k] as { x: number; z: number };
             const was = { x: o.x, z: o.z };

@@ -1,9 +1,9 @@
-// The hooks scripted checks drive the world through, `window.__lab.terrain`:
-// what stands in the world and where the person is, walking and travelling
-// as a person would, setting vitality live, and measuring what a frame draws
-// and what a step of walking changes in it. `pnpm probe`, `pnpm shots`, the
-// proving ground's tour and capture scripts use them. They reach inside the
-// world (`WorldInside`), and nothing a person sees calls them.
+// The `window.__lab.terrain` hooks that scripted checks use to inspect and
+// drive the world: what is placed and where the person is, walking and travel,
+// live vitality, and what a frame draws or a step of walking changes. `pnpm
+// probe`, `pnpm shots` and the proving ground's tour and capture scripts call
+// them. They read the world's internals through `WorldInside`, and no
+// user-facing code calls them.
 
 import * as THREE from "three";
 import { AIR, type Realized } from "@gaia/realize";
@@ -21,26 +21,26 @@ import { type Copies, type DetailMode, FAR, type FarOf, GONE, createCopies } fro
 import { composedName } from "./settlement.ts";
 import { type FarSet, PAINTING, type Subject, type TreeVariant, type ViewPin, type WorldInside } from "./world.ts";
 
-/** A step of walking: half a second at walking pace, as the walk test steps. */
+/** Meters in a step of walking, half a second at walking pace. The walk test uses the same step. */
 const WALK_STEP = 0.7;
-/** One step of the swap test: how much it changes the tree's part of the screen, the wind's change there, and how far away the tree stands. */
+/** One step of the swap test: its change to the plant's part of the screen, the wind's change there, and the plant's distance. */
 interface SwapStep {
   readonly change: Change;
   readonly wind: Change;
   readonly distance: number;
 }
 /**
- * The likeness test's measures: a pixel counts as covered by a form that changes one of its channels from the empty
- * view by more than `covered` 8-bit levels, and the two forms are compared in square cells `cells` times smaller than
- * the crown's span, at least `least` pixels across.
+ * Likeness test thresholds. A form covers a pixel when it changes one of the pixel's channels from the empty view by
+ * more than `covered` 8-bit levels. The test compares the two forms in square cells `cells` times smaller than the
+ * crown's span and at least `least` pixels across.
  */
 const LIKENESS = { covered: 6, cells: 8, least: 2 } as const;
-/** How one form of a copy draws over the crown's part of the screen: the share of it covered, and the mean change from the empty view in 8-bit levels. */
+/** How one form draws over the crown's part of the screen. `area` is the share covered, and `ink` is the mean change from the empty view in 8-bit levels. */
 interface FormDrawn {
   readonly area: number;
   readonly ink: number;
 }
-/** One size of the likeness test: the crown's span and distance, how each form draws, and how unlike the card is to the full form. */
+/** One size of the likeness test: the crown's span and distance, how each form draws, and how much the card differs from the full form. */
 interface LikenessSize {
   readonly px: number;
   readonly distance: number;
@@ -50,9 +50,9 @@ interface LikenessSize {
   readonly pictures?: { readonly empty: string; readonly card: string; readonly full: string };
 }
 
-/** Every hook of `window.__lab.terrain`, reading and steering `world` from inside. */
+/** Returns every hook of `window.__lab.terrain`, which read and drive `world`. */
 export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>> {
-  /** Each preset's copy the swap test stands alone, by its far form: the trees' and the bushes' forms are numbered apart. */
+  /** The single copy the swap and likeness tests show for each preset, keyed by `FarOf` because tree and bush forms are numbered separately. */
   const swapCopies = new Map<FarOf, Copies>();
 
   /** The region of the lattice sample nearest (x, z). */
@@ -63,9 +63,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     return world.terrain.region[Math.max(0, Math.min(l.n - 1, iz)) * l.n + Math.max(0, Math.min(l.n - 1, ix))] ?? 0;
   }
 
-  /** The places worth seeing in the world now shown, each with where to stand and which way to look (`tourStops`). */
+  /** The tour stops of the current world, each with where to stand and which way to look (`tourStops`). */
   function tour(): TourStop[] {
-    // A file's trees, its definitions that stand as trees, make its grove.
+    // A file's grove is the trees of its definitions.
     const groves = new Map<string, { x: number; z: number; trees: number }>();
     for (const t of world.trees) {
       const file = world.treeFile(t);
@@ -117,16 +117,16 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   }
 
   /**
-   * The walk test. From where the person stands, walks `meters` along the
-   * view in steps of `step` meters with the wind's clock frozen. At each step
-   * the view holds while only the point detail is chosen from moves one step
-   * on, so the change measured is exactly what the step does to the detail
-   * drawn: levels, thinning, the grass, the ground's rings. A step is held
-   * to the wind's own change over half a second, a change people already see
-   * all the time, measured along the same walk every `windEvery` steps, each
-   * time 1.7 s further on, so the samples span the breeze's lulls and gusts.
-   * The wind's clock stands at `at` seconds, or where it is now. Returns each
-   * step's [meters walked, mean, worst block] and the wind's worst blocks.
+   * The walk test. From the person's spot, walks `meters` along the view in
+   * steps of `step` meters with the wind's clock frozen at `at` seconds. At
+   * each step the view stays fixed and only the detail center (`detailPin`)
+   * moves one step on, so the measured change is exactly what the step does
+   * to the detail drawn: levels, thinning, the grass and the ground's rings.
+   * The reference is the wind's change over half a second, which people see
+   * all the time. The test samples it every `windEvery` steps, each sample
+   * 1.7 s later on the wind's clock, so the samples cover lulls and gusts.
+   * Returns each step's [meters walked, mean, worst block] and the wind's
+   * worst blocks.
    */
   function walkSteps(meters: number, step: number, at = world.light.uTime.value, windEvery = 10): { steps: [number, number, number][]; wind: number[] } {
     const start = { x: world.walker.x, z: world.walker.z, yaw: world.walker.yaw, pitch: world.walker.pitch };
@@ -163,16 +163,16 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   }
 
   /**
-   * The ramp test. With the wind's clock frozen, takes vitality from `from` to
-   * `to` over `seconds`, setting it with `set` once a frame at `fps`, each
-   * frame's time passing for the change to ease in, then holds `to` for
-   * `hold` seconds more while what is still easing in settles, and measures
-   * what each frame changes. A frame is held to the wind's own change over
-   * half a second at the same view, measured at rest at the ramp's start,
-   * middle and end, three moments 1.7 s apart at each. Returns each frame's
-   * [vitality, mean, worst block], the wind's worst blocks, and the frames
-   * named in `snaps` (0 at rest before it, then counted through the ramp and
-   * the hold) as JPEG data URLs.
+   * The ramp test. With the wind's clock frozen, ramps vitality from `from` to
+   * `to` over `seconds`, calling `set` once a frame at `fps`. Each frame
+   * advances time so the change eases in. It then keeps `to` for `hold` more
+   * seconds while the easing settles, and measures what each frame changes.
+   * The reference is the wind's change over half a second at the same view,
+   * measured at rest at the start, middle and end vitality, at three moments
+   * 1.7 s apart each. Returns each frame's [vitality, mean, worst block], the
+   * wind's worst blocks, and the frames listed in `snaps` as JPEG data URLs.
+   * Frame 0 is the rest frame before the ramp, and later numbers count
+   * through the ramp and the hold.
    */
   function vitalityRamp(set: (v: number) => void, seconds = 6, from = 0.05, to = 0.95, fps = 60, snaps: readonly number[] = [], hold = 0): { steps: [number, number, number][]; wind: number[]; snaps: Record<number, string> } {
     const was = world.frozen;
@@ -200,7 +200,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       for (let k = 1; k <= frames + Math.round(hold * fps); k++) {
         const v = from + ((to - from) * Math.min(k, frames)) / frames;
         if (k <= frames) set(v);
-        // A frame's time passes for the change to ease in; the wind's clock stays frozen.
+        // Advance one frame of time so the change eases in. The wind's clock stays frozen.
         world.frame(1 / fps, performance.now(), world.hour);
         const now = grabFrame(1);
         if (snaps.includes(k)) shots[k] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
@@ -214,7 +214,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     return { steps, wind, snaps: shots };
   }
 
-  /** The view held at `pin`, detail chosen from there and nothing streaming, drawn and read back. */
+  /** Draws the view fixed at `pin`, with detail chosen from there and streaming paused, and returns its pixels. */
   function heldView(pin: ViewPin): Uint8Array {
     world.viewPin = pin;
     world.detailPin = { x: pin.x, z: pin.z };
@@ -229,23 +229,23 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   }
 
   /**
-   * The travel test. Stands the person at (x0, z0) with the land and
-   * everything on it in, then sends them to the landing nearest (x1, z1) at
-   * `pace` meters a second along the tread, driving the frames itself in
-   * real time with the wind's clock frozen. Every `every` frames the view is
-   * held where it was and drawn again, its detail chosen from there too, so
-   * the change measured is only what streaming did meanwhile: the land's
-   * windows moving and tiles standing. Each frame's work is timed to the
-   * GPU's finish. Returns the trip's length and seconds, how long it took to
-   * set off and how long it waited on the way ahead, each check's [meters
-   * along, pace, mean change, worst block, the land levels that moved as
-   * bits, the water's depth under the person, how far the water's mirror
-   * plane moved, and where the view was held], the frames' work in
-   * milliseconds, the land's least lead, and every tile that stood within
-   * sight of the person.
+   * The travel test. Places the person at (x0, z0) once the land and
+   * everything on it has loaded, then sends them to the landing nearest
+   * (x1, z1) at `pace` meters a second along the tread. It drives the frames
+   * itself in real time with the wind's clock frozen. Every `every` frames it
+   * redraws the earlier view from the same pin and detail center, so the
+   * measured change is only what streaming did in between: land windows
+   * moving and tiles appearing. Each frame's work is timed to the GPU's
+   * finish. Returns the trip's length and seconds, the time to set off and
+   * the time spent waiting on the way ahead, each check's [meters along,
+   * pace, mean change, worst block, moved land levels as bits, water depth
+   * under the person, how far the mirror plane moved, pinned x, pinned z],
+   * the frames' work in milliseconds, the land's smallest lead, every tile
+   * placed within sight of the person, and the largest gap between
+   * `waterDepthAt` and the land's water level (`ghosts`).
    */
   async function travelTest(x0: number, z0: number, x1: number, z1: number, pace: number, every = 3, cap = 400, pitch = -0.05) {
-    // The trip starts where a person stands: the point given may be a thing's own middle, inside it.
+    // Start at a landing, since the given point may be inside a thing.
     const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
     x0 = start.x;
     z0 = start.z;
@@ -264,18 +264,18 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     world.driving = true;
     world.standing.late();
     const checks: [number, number, number, number, number, number, number, number, number][] = [];
-    /** Which land levels moved since `held`'s view was drawn, one bit a level. */
+    /** Each land level's window origin, to find which levels moved since `held`'s view was drawn. */
     const windows = (): string => world.land.origins.map((o) => `${o.x},${o.z}`).join(" ");
     const work: number[] = [];
     let lead = Infinity;
     let ended = Number.NaN;
     let held: { pin: ViewPin; image: Uint8Array; s: number; windows: string; mirror: number } | null = null;
-    /** The most the depth walking reads ever differed from the land's own water level under the person, meters. */
+    /** The largest difference in meters between the depth walking reads and the land's water level under the person. */
     let ghosts = 0;
     let last = performance.now();
     try {
       for (let k = 0; world.trip === t && performance.now() - t.began < cap * 1000; k++) {
-        // The workers' answers come in between frames, as they do between the app's own.
+        // Yield so worker replies arrive between frames, as they do in the app.
         await new Promise((r) => setTimeout(r, 0));
         if (held === null && k % every === 0) {
           const pin = { x: world.walker.x, z: world.walker.z, eye: world.walker.eye, yaw: world.walker.yaw, pitch: world.walker.pitch };
@@ -301,12 +301,12 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
           const moved = windows()
             .split(" ")
             .reduce((bits, w, k) => (w === before[k] ? bits : bits | (1 << k)), 0);
-          // How deep the water is under the person, from the land's own water level: wading spreads rings.
+          // The water depth under the person, from the land's own water level. Wading spreads rings.
           const level = heightAt(world.terrain.lattice, world.walker.x, world.walker.z, world.terrain.waterLevel);
           const depth = level > -500 ? Math.max(0, level - heightAt(world.terrain.lattice, world.walker.x, world.walker.z)) : 0;
-          // The water's mirror follows the person's eye, not the held view's: how far its plane moved between the two draws.
+          // The water's mirror plane follows the person's eye, not the pinned view's, so record how far it moved between the two draws.
           const mirrored = +(world.water.stats().mirrorLevel - held.mirror).toFixed(3);
-          // The depth walking reads (`waterDepthAt`), against the land's own water level just above.
+          // Compare the depth walking reads (`waterDepthAt`) with the depth from the land's water level above.
           const cached = waterDepthAt(world.terrain, world.walker.x, world.walker.z);
           ghosts = Math.max(ghosts, Math.abs(cached - depth));
           checks.push([+held.s.toFixed(1), +t.at.v.toFixed(1), +change.mean.toFixed(3), +change.worst.toFixed(2), moved, +depth.toFixed(2), mirrored, Math.round(held.pin.x), Math.round(held.pin.z)]);
@@ -316,7 +316,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     } finally {
       world.driving = false;
       world.frozen = was;
-      // A trip the test stopped early ends where it was.
+      // End a trip that the test stopped early where it is.
       if (world.trip === t) world.trip = null;
     }
     return {
@@ -333,7 +333,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     };
   }
 
-  /** Every build that turns far, by a name from its parts: each of the world's tree builds, its understory's and the wild's bushes. */
+  /** Every build with a far form, named from its parts: the world's tree builds, then the understory's and the wild's. */
   const farPresets = (): readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[] => {
     const named = new Map<string, number>();
     const unique = (name: string): string => {
@@ -349,34 +349,34 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   };
 
   /**
-   * The swap test: whether a tree's or a bush's change of form ever shows.
-   * One copy of preset `name`'s first build (`farPresets`), at `vitality`,
-   * stands alone straight ahead of the eye. With the wind's clock frozen, only the point detail is
-   * chosen from moves back, so the crown's span on screen shrinks:
-   * - `middle`: from halfway into the band to 5% farther, the far form
-   *   coming in over the full one;
-   * - `whole`: from just inside the band's far end to just past it, where
-   *   the far form comes to draw whole over the full one;
-   * - `leaving`: from halfway through the full form's dissolve past the band
+   * The swap test: whether a tree's or bush's change of form ever shows. One
+   * copy of preset `name` (`farPresets`) at `vitality` is placed alone
+   * straight ahead of the eye. With the wind's clock frozen, only the detail
+   * center moves back, so the crown's span on screen shrinks. The steps are:
+   * - `middle`: from halfway into the band to 5% farther, as the far form
+   *   fades in over the full one;
+   * - `whole`: across `swapPx`, where the far form starts to draw whole over
+   *   the full one;
+   * - `leaving`: from halfway through the full form's dissolve below the band
    *   (`FAR.leave`) to 5% farther;
-   * - `end`: from just before the dissolve's end to just past it, the frame
-   *   where the full form leaves and the far form stands alone;
-   * - `dissolving`: from halfway into the band where a crown too small to see
-   *   dissolves (`GONE`), one step of walking farther;
-   * - `gone`: the step of walking across that band's end, where the copy
-   *   stops drawing;
-   * these two over at least a 64-pixel block around the copy, as the walk
-   * test measures, since the crown spans only a few pixels.
-   * Each is held to the wind's half-second change at the same spot, all
-   * measured over the plant's own part of the screen. Every other plant that
-   * turns far and the grass hide while it runs. A plant whose crown is still
-   * too large to dissolve where the air has already hidden it stands there
-   * all the same, and changes nothing. Null when there is no such preset.
+   * - `end`: across the dissolve's end, the frame where the full form stops
+   *   drawing and the far form draws alone;
+   * - `dissolving`: from halfway through the `GONE` dissolve to one step of
+   *   walking farther;
+   * - `gone`: the step of walking across `GONE.end`, where the copy stops
+   *   drawing.
+   * The last two measure at least a 64-pixel block around the copy, as the
+   * walk test does, since the crown spans only a few pixels. Each step is
+   * compared with the wind's half-second change at the same spot, over the
+   * plant's part of the screen. The grass and every other plant with a far
+   * form are hidden while the test runs. A plant still too large to dissolve
+   * where the air already hides it stays drawn and changes nothing. Returns
+   * null when there is no such preset.
    */
   async function swapTest(name: string, vitality: number): Promise<{ middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep; dissolving: SwapStep; gone: SwapStep } | null> {
     const preset = farPresets().find((f) => f.name === name);
     if (preset === undefined) return null;
-    // Its far form holds a slot, turned all the way in, while it runs.
+    // Keep its far form in a slot at full size while the test runs.
     const set = [world.treeSet, world.bushSet].find((s) => s.forms === preset.far.forms);
     if (set === undefined) throw new Error(`The swap test's ${name} belongs to no set of far forms.`);
     const release = await set.stream.hold(preset.far.form);
@@ -405,17 +405,17 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     world.swapping = copy;
     const was = world.frozen;
     const t = world.light.uTime.value;
-    /** Stands the tree where its crown spans `from` pixels, and measures moving the detail back until it spans `to`. */
+    /** The distance at which the crown spans `px` device pixels. */
     const at = (px: number): number => (2 * crown.radius * focal) / px;
-    /** Stands the copy where its crown spans `from` pixels, and measures moving the detail back until it spans `to`. */
+    /** Places the copy where its crown spans `from` pixels and measures moving the detail center back until it spans `to`. */
     const step = (stood: Copies, from: number, to: number): SwapStep => walk(stood, from, at(to) - at(from), 0);
     /**
-     * Stands the copy where its crown spans `from` pixels, and measures moving the detail back `back` meters, over the
-     * crown's part of the screen and at least a `block`-pixel square around it.
+     * Places the copy where its crown spans `from` pixels and measures moving the detail center back `back` meters,
+     * over the crown's part of the screen and at least a `block`-pixel square around it.
      */
     const walk = (stood: Copies, from: number, back: number, block: number): SwapStep => {
       const distance = at(from);
-      // The crown's middle at the eye's height, straight ahead.
+      // Put the crown's center at eye height, straight ahead.
       stood.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
       stood.setVitality(vitality);
       const corners = [-1, 1].flatMap((sx) => [-1, 1].flatMap((sy) => [-1, 1].map((sz) => new THREE.Vector3(eye.x + dx * distance + sx * crown.radius, eye.y + sy * crown.radius, eye.z + dz * distance + sz * crown.radius).project(world.camera))));
@@ -442,7 +442,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         whole: step(copy, span(0.995), swapPx - 0.1),
         leaving: step(copy, leaving(0.5), leaving(0.55)),
         end: step(copy, leavePx + 0.1, leavePx - 0.1),
-        // Too small to see, a crown dissolves over hundreds of meters: each is held to a step of walking, over a block.
+        // A crown too small to see dissolves over hundreds of meters, so each of these is one step of walking, measured over a block.
         dissolving: walk(copy, going(0.5), WALK_STEP, 64),
         gone: walk(copy, (2 * crown.radius * focal) / (at(GONE.end) - WALK_STEP / 2), WALK_STEP, 64),
       };
@@ -458,22 +458,22 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   }
 
   /**
-   * The likeness test: whether a far form looks like its own full form
-   * wherever it draws, not only where it swaps. One copy of preset `name`'s
-   * first build, at `vitality`, stands alone straight ahead of the eye, its
-   * form held in a slot, at each crown span in `sizes` (device pixels; by
-   * default its swap size and a half, a quarter and an eighth of it, above
-   * the size where a crown dissolves). With the wind's clock frozen it is
-   * drawn three ways: not at all, as its card alone and as its full form
-   * alone. Only the sky stands behind it, and the air is clear (`uClearAir`):
-   * both forms pass through the same air, which would hide what they share.
-   * A size whose crown lies past where the air dissolves everything draws in
-   * neither form and is left out. Each size gives, over the crown's part of
-   * the screen, each form's covered `area` and `ink`, and `unlike`: the mean
-   * difference of the two forms in cells of an eighth of the crown, over the
-   * full form's own difference from the empty view. With `pictures`, the
-   * three views of the crown as PNG data URLs. Null when there is no such
-   * preset.
+   * The likeness test: whether a far form looks like its full form wherever
+   * it draws, not only where they swap. One copy of preset `name` at
+   * `vitality` is placed alone straight ahead of the eye, with its form held
+   * in a slot, at each crown span in `sizes`, in device pixels. The default
+   * sizes are `swapPx` and a half, a quarter and an eighth of it, keeping
+   * those above `GONE.start`. With the wind's clock frozen, each size draws
+   * three ways: empty, the card alone and the full form alone. Only the sky
+   * is behind the copy, and the air is clear (`uClearAir`), because both
+   * forms pass through the same air, which would hide what they share. A size
+   * whose crown lies past `AIR.dissolveEnd` draws in neither form and is
+   * skipped. Each size reports, over the crown's part of the screen, each
+   * form's covered `area` and `ink`, and `unlike`: the mean difference
+   * between the two forms in cells of an eighth of the crown, divided by the
+   * full form's own difference from the empty view. With `pictures`, it also
+   * returns the three views of the crown as PNG data URLs. Returns null when
+   * there is no such preset.
    */
   async function likenessTest(name: string, vitality: number, sizes?: readonly number[], pictures = false): Promise<{ name: string; vitality: number; swapPx: number; sizes: LikenessSize[] } | null> {
     const preset = farPresets().find((f) => f.name === name);
@@ -500,7 +500,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const dx = -Math.sin(world.walker.yaw);
     const dz = -Math.cos(world.walker.yaw);
     const eye = world.camera.position.clone();
-    // Only the sky stands behind the copy, so nothing else in the world hides it however far away it stands.
+    // Leave only the sky behind the copy, so nothing else hides it at any distance.
     const keep = new Set<THREE.Object3D>([world.sky.mesh, stood.object, world.treeSet.forms.cards.object, world.bushSet.forms.cards.object]);
     const hidden = [...world.scene.children.filter((o) => o.visible && !keep.has(o) && !(o as THREE.Light).isLight), ...world.instanced().flatMap((o) => (o.object.visible && o !== stood ? [o.object] : []))];
     for (const o of hidden) o.visible = false;
@@ -537,7 +537,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       stood.object.visible = false;
       const empty = grabFrame(3);
       stood.object.visible = true;
-      // The card alone: its form turns far well above this size for the moment, so the full form has left.
+      // Draw the card alone by raising the form's swap size well above this span for now, so the full form stops drawing.
       forms.set(form, slot, Math.max(swapPx, px * FAR.leave * 1.25));
       const card = grabFrame(3);
       forms.set(form, slot, swapPx);
@@ -563,7 +563,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       };
       const side = Math.max(LIKENESS.least, Math.round(px / LIKENESS.cells));
       const cols = Math.ceil((x1 - x0) / side);
-      /** Each cell's mean red, green and blue, and how many pixels it holds. */
+      /** Each cell's summed red, green and blue, and its pixel count. */
       const cells = (pixels: Uint8Array): Float64Array => {
         const sums = new Float64Array(cols * Math.ceil((y1 - y0) / side) * 4);
         for (let y = y0; y < y1; y++) {
@@ -616,9 +616,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   }
 
   /**
-   * Walks for `seconds` of real time as a person would: forward all along,
-   * turning the view about 70° left or right every 2.5 s as a hand drags it,
-   * over half a second, and running a third of the time with Shift. The
+   * Walks for `seconds` of real time as a person would: forward throughout,
+   * turning the view about 70° left or right over half a second every 2.5 s,
+   * as a dragging hand does, and running with Shift a third of the time. The
    * app's smoothness probe (`__lab.smoothness()`) reads the frames.
    */
   function wander(seconds: number): Promise<{ x: number; z: number }> {
@@ -648,7 +648,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     });
   }
 
-  /** A set of far forms as reports show it: its slots and what holds them, in plain numbers. */
+  /** A far form set's slot usage as plain numbers, for reports. */
   const farCards = (set: FarSet): Record<string, number> => {
     const st = set.stream.stats();
     return { slots: st.slots, forms: set.forms.count, held: st.held, turnedIn: st.turnedIn, mb: Math.round(st.bytes / 2 ** 20), wanted: st.wanted, farCopies: st.farCopies, carded: st.carded, read: st.read, baked: st.baked };
@@ -656,8 +656,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
 
   return {
     /**
-     * Shows the sweep's sky `k`, of every light, sky and wind Jev composes skies from (`sweep`), until the next world
-     * opens; the proving ground stands the first. Gives how many skies the sweep holds.
+     * Shows sky `k` of the sweep over every light, sky and wind Jev composes skies from (`sweep`), until the next world
+     * opens. The proving ground uses sky 0. Returns how many skies the sweep has.
      */
     sky: (k: number): number => {
       const skies = sweep(COMPOSING.world, COMPOSING.lib).blueprints;
@@ -666,20 +666,23 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       world.skyWorld = sky;
       return skies.length;
     },
-    /** Each standing landmark: its name, site, height and triangles. */
+    /** Each placed landmark's name, site, height and triangles. */
     landmarks: () =>
       world.ways.sites.map((s, i) => ({ name: world.landmarks[s.landmark]?.name, ...s.site, height: world.landmarkViews[i]?.height, triangles: world.landmarkViews[i]?.triangles })),
-    /** Sets every landmark's entity's vitality, 0 to 1, and with it the trails they join. */
+    /** Sets the vitality of every landmark's entity, 0 to 1, which also changes the trails they join. */
     landmarkVitality: (v: number) => {
       world.setVitality(new Map(world.landmarkEntities.map((e) => [e.id, v])));
       for (const view of world.landmarkPool.values()) view.setVitality(v);
     },
-    /** Sets a thing's vitality by its path, or every building's or landmark's entity's with that name: wherever it shows, and the wear of every trail it joins, live. */
+    /**
+     * Sets vitality live by a thing's path, or for every building or landmark entity with that name. It changes
+     * everywhere the thing shows and the wear of every trail it joins.
+     */
     entityVitality: (key: string, v: number) => {
       const named = [...world.settlement.buildings.map((b) => b.represented), ...world.landmarkEntities].filter((r) => r.name === key).map((r) => r.id);
       world.setVitality(new Map((world.thingVitality.has(key) ? [key] : named).map((id) => [id, v])));
     },
-    /** Each trail (a dependency): its ends, length and the ways it walks. */
+    /** Each trail, which is a dependency, with its ends, length and the ways it follows. */
     trails: () =>
       world.ways.network.trails.map((t) => ({
         id: t.id,
@@ -688,7 +691,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         length: Math.round(t.length),
         ways: t.ways.map((w) => w.way),
       })),
-    /** Each way of tread: its ends, length, width, crossings, the trails walking it, its wear now and a point every 10 m. */
+    /** Each way of tread: its ends, length, width, crossings, the trails that use it, its current wear and a point every 10 m. */
     ways: () =>
       world.ways.network.ways.map((w, i) => ({
         id: w.id,
@@ -702,7 +705,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         wear: wayWear(world.ways.network, i, world.vitalityOfPlace).map((v) => +v.toFixed(2)),
         points: Array.from({ length: Math.ceil(w.points.length / 20) }, (_, k) => [Math.round(w.points[k * 20] ?? 0), Math.round(w.points[k * 20 + 1] ?? 0)]),
       })),
-    /** Every building: what it stands for, where, and its vitality now. */
+    /** Every building: what it represents, where it is, and its current vitality. */
     buildings: () =>
       world.settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.triangles, vitality: b.vitality, sign: world.settlement.signOf(b), stand: world.settlement.standOf(b) })),
     /** Sets building `i`'s vitality, and its sign's. */
@@ -719,7 +722,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     card: () => (world.shown === null ? null : { name: world.shown.name, what: world.shown.what }),
     closeCard: () => world.hideCard(),
     walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => world.walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
-    /** Sends the person to the landing nearest (x, z), as a pick on the map does, at `pace` on the tread and straight across; false where neither goes. */
+    /** Sends the person to the landing nearest (x, z), as a pick on the map does, at `pace` along the tread or straight across. Returns false when neither route reaches it. */
     travel: (x: number, z: number, pace: number = TRAVEL.pace) => {
       const at = world.landingNear(x, z);
       world.travelPace = pace;
@@ -727,7 +730,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       world.travelPace = TRAVEL.pace;
       return going;
     },
-    /** How far the person stands inside each land level's window, meters, finest first: the land's lead on them, which a trip must not outrun. */
+    /** How far inside each land level's window the person is, in meters, finest first. This is the land's lead, which a trip must not outrun. */
     landLead: () => {
       const spacing = frameOf(world.terrain.spec).spacing;
       return world.land.origins.map((o, k) => {
@@ -739,23 +742,25 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     },
     /** Where a person sent to (x, z) would stand (`landingNear`), or null. */
     landingNear: (x: number, z: number) => world.landingNear(x, z),
-    /** The travel test (`travelTest`). */
     travelTest,
-    /** Each tile that stood within sight of the person since last asked (`Standing.late`): things that could be seen appearing. */
+    /** Each tile placed within sight of the person since the last call (`Standing.late`), whose things could be seen appearing. */
     standingLate: () => world.standing.late(),
-    /** The tiles each stander still waits for (`Standing.asking`). */
+    /** The tiles each stander still waits for (`Standing.asking`), and the land's workers. */
     standingAsking: () => ({ ...world.standing.asking(), workers: world.land.workers() }),
-    /** The walk's own state: the keys it holds, whether a tap's walk is under way, and why the last trip ended. */
+    /** The walk's state: the held keys, whether a tap's walk or a trip is under way, and why the last trip ended. */
     walkState: () => ({ keys: [...world.keys], goal: world.goal !== null, trip: world.trip !== null, lastEnd: world.tripEnd }),
-    /** The trip under way, or null: how far along it and how long, its pace, whether its view follows the way, and how many times its own pace it goes under paper. */
+    /**
+     * The trip under way, or null: distance along and total length, pace, whether the view follows the way, and how
+     * many times its own pace it goes while paper hides the world (`hurry`).
+     */
     trip: () => (world.trip === null ? null : { s: +world.trip.at.s.toFixed(1), length: Math.round(world.trip.plan.length), v: +world.trip.at.v.toFixed(2), going: world.trip.at.going, follows: world.trip.at.follows, stopping: world.trip.stopping, hurry: world.trip.hurry === null ? null : +world.trip.hurry.toFixed(2), unready: world.trip.marks.filter((m) => !m.ready).length, asked: world.trip.marks.filter((m) => m.asked).length, yaw: +world.trip.at.yaw.toFixed(2) }),
     /**
-     * A trip from (x0, z0) to the landing nearest (x1, z1), planned and
-     * taken at 60 frames a second without moving anyone: its length, how
-     * much of it is on the tread, and how long it takes.
+     * Plans a trip from (x0, z0) to the landing nearest (x1, z1) and steps it
+     * at 60 frames a second without moving the person. Returns its length,
+     * how much of it is on the tread and how long it takes.
      */
     tripTime: (x0: number, z0: number, x1: number, z1: number) => {
-      // A trip starts where a person stands: the point given may be a thing's own middle, inside it.
+      // Start at a landing, since the given point may be inside a thing.
       const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
       x0 = start.x;
       z0 = start.z;
@@ -777,10 +782,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       return { by: chosen.by, planMs, gap: Math.round(Math.hypot(end.x - at.x, end.z - at.z)), off: [Math.round(chosen.off.start), Math.round(chosen.off.end)], straight: Math.round(Math.hypot(at.x - x0, at.z - z0)), length: Math.round(plan.length), trails, seconds: Math.round(seconds), walking: Math.round(plan.length / WALK_TO.pace) };
     },
     /**
-     * The tour (`tourStops`): with no name, every stop's name, what is there
-     * and where; with a name, such as "ruined building", "bridge",
-     * "stepping stones", "cairn" or "watermill (ruin)", walks there, looking
-     * at it, and returns the stop, or null when this world has none.
+     * The tour (`tourStops`). With no name, returns every stop's name, what is
+     * there and where. With a name, such as "ruined building", "bridge",
+     * "stepping stones", "cairn" or "watermill (ruin)", walks there facing it
+     * and returns the stop, or null when this world has none.
      */
     tour: (name?: string) => {
       const stops = tour();
@@ -789,18 +794,18 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       if (s !== undefined) world.walkTo(s.x, s.z, s.yaw, s.pitch);
       return s ?? null;
     },
-    /** Opens where the world's next open would land the person, as if they last stood at `stood`, or as on a first visit. */
+    /** Moves to where the world's next open would land the person, as if they last stood at `stood`, or as on a first visit. */
     valley: (stood?: StoodSpot) => world.valleyView(stood),
-    /** Where the person stands, as the page keeps it with the world (`stoodBy`). */
+    /** The person's spot, as the page saves it with the world (`stoodBy`). */
     stood: () => (world.code === null ? null : stoodBy(world.code.world, world.walker.x, world.walker.z, world.walker.yaw)),
     walker: () => ({ x: world.walker.x, z: world.walker.z, yawDeg: (world.walker.yaw * 180) / Math.PI, pitchDeg: (world.walker.pitch * 180) / Math.PI, eye: world.walker.eye }),
     /**
-     * Looks at the land from above for a capture, from `pos` toward `target` (the world's middle unless given, or
-     * where the last call looked), the camera exactly there; `walk` or any trip goes back to walking.
+     * Points the camera at the land from above for a capture, from exactly `pos` toward `target`. Without them it
+     * uses the world's center or where the last call looked. `walk` or any trip returns to walking.
      */
     overview: (pos?: [number, number, number], target?: [number, number, number]) => world.lookFromAbove(pos, target),
     freeze: (t: number | null) => (world.frozen = t),
-    /** Film only: holds the camera at `pin` (eye is the camera's height in world meters), the walker under it, or lets go with null. */
+    /** For filming only. Fixes the camera at `pin`, with the walker under it, where `eye` is the camera's height in world meters. Null releases it. */
     film: (pin: { x: number; z: number; eye: number; yaw: number; pitch: number } | null) => {
       world.viewPin = pin;
       if (pin === null) return;
@@ -810,16 +815,16 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     streams: () => world.terrain.streams.map((s) => s.stations.filter((_, k) => k % 10 === 0).map((p) => [Math.round(p.x), Math.round(p.z), +p.level.toFixed(2)])),
     report: () => ({ ...world.terrain.report, fit: world.terrain.fit, bakeMs: Math.round(world.bakeMs), steps: world.openingSteps }),
     info: () => world.renderer.info.render,
-    /** Draw calls in the whole last frame (shadow, mirror and view), and the water's mirror. */
+    /** The water's mirror stats, and draw calls in the whole last frame: shadow, mirror and view. */
     water: () => ({ ...world.water.stats(), frameCalls: world.frameCalls }),
     /** Draw calls and triangles of each pass in the last frame: the sun's shadow, the water's mirror and the view. */
     passes: () => structuredClone(world.passes),
     /**
-     * Sets the vitality of a file and its definitions, or of every file under
-     * a directory, by its path ("" for every file), live, as a heal does
-     * (`setVitality`): what stands for them, their patches of ground and what
-     * grows there, and the lots and water of the areas pooling them. Nothing
-     * rebakes. Returns how many files it set.
+     * Sets vitality live for a file and its definitions, or for every file
+     * under a directory, by path. "" sets every file. Like a heal, it goes
+     * through `setVitality` and changes what represents the files, their
+     * patches and what grows there, and the lots and water of the areas that
+     * pool them. Nothing rebakes. Returns how many files it set.
      */
     fileVitality: (path: string, v: number) => {
       const under = (p: string): boolean => path === "" || p === path || p.startsWith(`${path}/`);
@@ -828,18 +833,18 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       world.setVitality(new Map([...files.map((p) => p.path), ...definitions.map((s) => s.id)].map((id) => [id, v])));
       return files.length;
     },
-    /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, the ground and the water read them. */
+    /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, ground and water use them. */
     groundVitality: (x?: number, z?: number) => groundVitalityAt(x ?? world.walker.x, z ?? world.walker.z),
-    /** The air last laid where the eye is: the ground's decline around it, its height above the land, and the air itself. */
+    /** The air settings last applied at the eye: the ground's decline around it, the eye's height above the land, and the air values. */
     air: () => world.breathed,
     understory: () => world.understory.stats(),
-    /** A hash of the baked land (heights, water levels and shore distances), to prove a change to the bake leaves it byte for byte. */
+    /** A hash of the baked heights, water levels and shore distances, to prove a change leaves the bake identical byte for byte. */
     bakeHash: () => contentHash(world.terrain.lattice.heights, world.terrain.waterLevel, world.terrain.shore),
     /** Copies and triangles each kind of the understory drew in the last pass. */
     understoryDrawn: () => world.understory.drawnByKind(),
     /** Shows or hides the wild bushes, for comparing frame costs. */
     showWilds: (on: boolean) => world.wildGrowth.show(on),
-    /** The wild bushes: copies standing and drawn in the last pass, per blueprint, and each blueprint's triangles. */
+    /** Per wild bush blueprint: copies placed, triangles per copy, levels, and what the last pass drew. */
     wilds: () => world.wildGrowth.all().map((v) => ({ standing: v.count, perCopy: v.triangles / Math.max(1, v.count), levels: v.levels, ...v.drawn() })),
     placements: () => world.understory.placements(),
     showUnderstory: (on: boolean) => world.understory.show(on),
@@ -847,26 +852,26 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     showDrifts: (on: boolean) => {
       world.drifts.object.visible = on;
     },
-    /** Each form drifting: how full its fullest region holds it, 0 to 1, how many of its things can show, and how many trees drop it now. */
+    /** For each drifting form: its density in its densest region, 0 to 1, how many of its pieces can show, and how many trees shed it now. */
     drifts: () => world.drifts.state(),
     /** Shows or hides the grass, for comparing frame costs and looking at the bare ground. */
     showGrass: (on: boolean) => {
       world.grass.mesh.visible = on;
     },
     /**
-     * Holds the point every detail is chosen from (the trees' and bushes'
-     * levels and thinning, the grass, the ground's rings and the wild
-     * bushes) at (x, z), at the eye's height, while the view stays put; or
-     * lets it follow the eye again (null). Moving only this point shows
+     * Fixes the detail center at (x, z) and the eye's height while the view
+     * stays put, or with null lets it follow the eye again. Every detail
+     * choice uses this point: tree and bush levels and thinning, the grass,
+     * the ground's rings and the wild bushes. Moving only this point shows
      * exactly what a step of walking changes in the detail drawn.
      */
     detailCenter: (at: [number, number] | null) => {
       world.detailPin = at === null ? null : { x: at[0], z: at[1] };
     },
     /**
-     * Draws one frame and counts each kind's draw calls and triangles in
-     * each pass (the sun's shadow, the water's mirror and the view), from
-     * what the renderer actually drew.
+     * Draws one frame and counts each kind's draw calls and triangles in each
+     * pass, from what the renderer drew. The passes are the sun's shadow, the
+     * water's mirror and the view.
      */
     drawn: () => {
       const kinds = new Map<THREE.Object3D, string>();
@@ -876,7 +881,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       name("trees", world.treeViews.map((v) => v.object));
       name("understory", [...world.understory.all().map((v) => v.object), ...world.understory.quiet()]);
       name("wild bushes", world.wildGrowth.all().map((v) => v.object));
-      // Each set's cards draw in one batch: the trees', and the bushes', stones' and flowers'.
+      // Each far set's cards draw in one batch. The bush set also covers stones and flowers.
       name("far trees", [world.treeSet.forms.cards.object]);
       name("far understory", [world.bushSet.forms.cards.object]);
       name("grass", [world.grass.mesh]);
@@ -900,16 +905,16 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     change: frameChange,
     /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
     steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
-    /** The ramp test: what each frame of a vitality ramp changes, against the wind (see `vitalityRamp`). */
+    /** The ramp test (`vitalityRamp`): what each frame of a vitality ramp changes, compared with the wind. */
     ramp: vitalityRamp,
-    /** Lets every change in vitality settle at once, so what is drawn next shows exactly the vitality set. */
+    /** Finishes every vitality ease at once, so the next draw shows exactly the vitality set. */
     settleVitality: () => settleVitality(),
     /**
      * The stand check. The person stands still for `seconds` with the wind's
-     * clock frozen while the page goes on as it does, the journal's painter
-     * included; every half second their view is drawn and held against the
-     * first. Nothing they see may change. Returns the worst change, and each
-     * look's [seconds, change, level 0's window].
+     * clock frozen while the page keeps running, including the journal's
+     * painter. Every half second it draws the view and compares it with the
+     * first. Nothing the person sees may change. Returns the worst change and
+     * each look's [seconds, change, level 0's window origin].
      */
     standCheck: async (seconds = 30) => {
       const was = world.frozen;
@@ -930,16 +935,16 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       }
     },
     /**
-     * The painter check. With the person standing still and the wind's clock
-     * frozen, asks one at a time for paintings of the `count` things farthest
-     * from them, as the journal does, while the page's own frames go on.
-     * Every 100 ms, and once each painting is done, the person's view is
-     * drawn and held against how it was: a painting must change nothing the
-     * person sees. Returns the worst change, the frames' intervals while
-     * painting, milliseconds, and the first painting as a JPEG. Without
-     * `look` it only paints, so the frames' intervals are the painter's own;
-     * with `near` it paints the nearest things instead, which need no land
-     * of their own, for comparing what a painting costs by itself.
+     * The painter check. With the person still and the wind's clock frozen,
+     * requests paintings of the `count` farthest things one at a time, as the
+     * journal does, while the page keeps drawing frames. Every 100 ms, and
+     * after each painting, it draws the person's view and compares it with
+     * the first. A painting must change nothing the person sees. Returns the
+     * painted ids, the worst change, the number of checks, the frame
+     * intervals in milliseconds while painting, and the first painting as a
+     * JPEG. Without `look` it only paints, so the intervals show the
+     * painter's own cost. With `near` it paints the nearest things instead,
+     * which need no land of their own, to measure a painting by itself.
      */
     paintCheck: async (count = 6, look = true, near = false) => {
       const from = (s: Subject): number => Math.hypot(s.x - world.walker.x, s.z - world.walker.z);
@@ -991,23 +996,23 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         world.frozen = was;
       }
     },
-    /** The swap test (`swapTest`) for preset `name` at `vitality`, and every tree and bush preset's name with none. */
+    /** The swap test (`swapTest`) for preset `name` at `vitality`. With no name, returns every tree and bush preset's name. */
     swap: (name?: string, vitality = 1) => (name === undefined ? farPresets().map((p) => p.name) : swapTest(name, vitality)),
     /** The likeness test (`likenessTest`) for preset `name` at `vitality`, at each crown span in `sizes` or the default ones. */
     likeness: (name: string, vitality = 1, sizes?: readonly number[], pictures = false) => likenessTest(name, vitality, sizes, pictures),
-    /** Resolves once the bushes' far forms, which come in after the wait lifts, are in too, and both sets have settled. */
+    /** Resolves once the bushes' far forms, which load after the loading screen closes, have loaded and both sets have settled. */
     farReady: () => world.bushesBaked,
-    /** Resolves once both sets' far forms have settled where the person stands now: none being brought or turning. */
+    /** Resolves once both far sets have settled at the person's current spot, with no form loading or fading. */
     farSettled: () => Promise.all([world.treeSet.stream.settled(), world.bushSet.stream.settled()]).then(() => undefined),
     /** Walks as a person would for `seconds` of real time (`wander`). */
     wander,
-    /** Shows or hides the far trees' cards alone, for seeing what they draw. */
+    /** Shows or hides the far tree cards, to see what they draw. */
     showFarTrees: (on: boolean) => world.treeSet.forms.cards.show(on),
     /** Shows or hides every tree, for comparing frame costs. */
     showTrees: (on: boolean) => {
       for (const v of world.treeViews) v.object.visible = on;
     },
-    /** Draw calls in one whole frame: the shadow pass and the view together. */
+    /** Draw calls in one whole frame: the shadow, mirror and view passes together. */
     calls: () => {
       world.renderer.info.autoReset = false;
       world.renderer.info.reset();
@@ -1038,11 +1043,11 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       return { x: world.walker.x, z: world.walker.z, depth: waterDepthAt(world.terrain, world.walker.x, world.walker.z) };
     },
     depth: () => waterDepthAt(world.terrain, world.walker.x, world.walker.z),
-    /** The body now: its speed, its eyes' ride and what the stride adds, and the footing under it. */
+    /** The body's speed, its eye height, the camera height with the stride added, and the footing under it. */
     gait: () => (world.body === null ? null : { speed: Math.hypot(world.body.vx, world.body.vz), eye: world.body.eye, camera: world.camera.position.y, footing: footingAt(world.terrain, world.decks, world.walker.x, world.walker.z) }),
-    /** Every footbridge deck a walk stands on: its middle, the way it runs along, its span and its top at the middle. */
+    /** Every footbridge deck a walker can stand on: its center, its direction, its span and width, and its top at the center. */
     decks: () => world.decks.flatMap((d) => ("tops" in d ? [] : [{ x: d.x, z: d.z, along: [d.cos, -d.sin], span: d.half * 2, width: d.halfWidth * 2, top: d.base + d.topAt(0) }])),
-    /** The ground (bridges left out), how a person stood there before decks, and the footing now, at each (x, z). */
+    /** At each (x, z): the ground height without bridges, the stance without decks (`stanceAt`), and the footing with decks. */
     profile: (points: readonly (readonly [number, number])[]) =>
       points.map(([x, z]) => {
         const s = stanceAt(world.terrain, x, z);
@@ -1050,9 +1055,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         return { ground: groundHeightAt(world.terrain, x, z), eye: s.eye, depth: s.depth, swim: s.swim, footing: f.ground, deck: f.deck };
       }),
     /**
-     * Walks the world's own walk for `seconds` at 60 frames a second without
-     * drawing, holding `keys` (codes) for `hold` seconds or walking a tap to
-     * `to`, and records each frame: [t, x, z, speed, camera y, eye ride, footing, depth, on a deck, facing (yaw)].
+     * Runs the world's walk for `seconds` at 60 frames a second without
+     * drawing, holding the key codes in `keys` for `hold` seconds or walking a
+     * tap to `to`. Records each frame as [t, x, z, speed, camera y, eye
+     * height, footing, depth, on a deck, yaw].
      */
     trace: (seconds: number, drive: { keys?: readonly string[]; hold?: number; to?: readonly [number, number] }) => {
       world.release();
@@ -1071,13 +1077,13 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     },
     /** Where a tap's walk is headed, or null, and the corners of its way. */
     goal: () => ({ goal: world.goal === null ? null : { ...world.goal.target }, way: world.goal?.way.map((p) => [p.x, p.z]) ?? null }),
-    /** How far (x, z) is from the nearest solid's edge, at most 2 m; negative inside one. */
+    /** How far (x, z) is from the nearest solid's edge, at most 2 m, and negative inside one. */
     clearance: (x: number, z: number) => clearanceAt(world.solids, x, z),
-    /** The trunks, rocks and bushes and walls that stop a walker. */
+    /** How many trunks, rocks, bushes and walls block a walker. */
     solids: () => world.solids.count,
-    /** The eyes' height, the water's depth and how far the person swims where they stand. */
+    /** The eye height, the water depth and how far the person swims at their spot. */
     stance: () => stanceAt(world.terrain, world.walker.x, world.walker.z),
-    /** Where the ground at (x, z) shows on screen, in CSS pixels from the page's top left; null when it is behind the view. */
+    /** Where the ground at (x, z) shows on screen, in CSS pixels from the page's top left. Null when it is behind the view. */
     onScreen: (x: number, z: number) => {
       const p = new THREE.Vector3(x, groundHeightAt(world.terrain, x, z), z).project(world.camera);
       if (p.z > 1) return null;
@@ -1087,8 +1093,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     ponds: () => world.terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
     plants: () => world.trees.map((t) => ({ x: t.x, z: t.z, height: (world.variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z), preset: composedName(world.treeBlueprints[t.variant] as Blueprint), vitality: t.represented.vitality })),
     /**
-     * Stands every tree that stands for code `copies` times, each copy on its own patch, for measuring at scale;
-     * 1 stands the world as it is. The bake thread stands them again. Never in a world a person walks.
+     * Places every code tree `copies` times, each copy on its own patch, to measure at scale. 1 restores the world as
+     * it is. The bake thread places them again. Not for a world a person walks.
      */
     forest: async (copies: number) => {
       world.forestCopies = Math.max(1, Math.round(copies));
@@ -1106,18 +1112,18 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       levels: world.instanced().map((v) => v.levels),
       drawn: world.instanced().reduce((n, v) => n + v.drawn().copies, 0),
       drawnTriangles: world.instanced().reduce((n, v) => n + v.drawn().triangles, 0),
-      /** The crown span trees turn far at, in device pixels (`FAR.swapPx`). */
+      /** The crown span in device pixels at which trees switch to their far form (`FAR.swapPx`). */
       swapPx: FAR.swapPx,
-      /** Milliseconds bringing the trees' far forms took, baking or reading them, and then the bushes'. */
+      /** Milliseconds spent loading the trees' far forms, by baking or reading, and then the bushes'. */
       farBakeMs: world.treeSet.stream.stats().ms,
       bushBakeMs: world.bushSet.stream.stats().ms,
       /**
-       * Each set's far forms: its slots and the forms holding them, the GPU memory the slots take (MB), the forms a
-       * view would draw far and their far copies, those drawn as cards now, and the forms read and baked so far.
+       * Each far set's slots and the forms in them, the slots' GPU memory in MB, the forms a view would draw far and
+       * their far copies, the copies drawn as cards now, and the forms read and baked so far.
        */
       treeCards: farCards(world.treeSet),
       bushCards: farCards(world.bushSet),
-      /** The understory's distinct builds by group: one for each distinct blueprint its things take. */
+      /** The understory's build count by group, one build per distinct blueprint. */
       understoryBuilds: Object.fromEntries(Object.entries(world.code?.plants ?? {}).map(([group, builds]) => [group, builds.length])),
       /** Trees in the last pass in the band, or small enough on screen to draw as far forms. */
       treesInBand: world.treeViews.reduce((n, v) => n + v.drawn().band, 0),

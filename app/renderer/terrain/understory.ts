@@ -1,9 +1,8 @@
-// The world's understory: the stones, bushes and flowers that code
-// stands as, one build of each distinct blueprint the world's things take
-// (`OpenedWorld.plants`), drawn as one InstancedMesh per part and level of
-// detail of each build, so a hundred bushes cost a handful of draw calls,
-// and each pass draws only the cells it can see. Nothing here stands for
-// nothing: the land between them is grass, ground and water.
+// Draws the understory, the stones, bushes and flowers that represent code.
+// Each distinct blueprint (`OpenedWorld.plants`) has one build, drawn as
+// instances per part and level of detail, so a hundred bushes cost a handful
+// of draw calls, and each pass draws only the cells it sees. Every copy
+// represents code, and the land between them is grass, ground and water.
 
 import * as THREE from "three";
 import type { Blueprint, Library } from "@gaia/schema";
@@ -23,23 +22,23 @@ interface Group {
   /** How much of its outline at the ground is kept clear of grass, 0 for none. */
   readonly clears: number;
   /**
-   * A patch of short turf round each copy, for things too low to show over
-   * the grass: how far past its outline the patch reaches, as a share of the
-   * outline and in meters. Absent for none.
+   * A patch of short turf around each copy, for things too low to show over
+   * the grass: how far past its outline the patch reaches, as a fraction of
+   * the outline (`share`) and in meters (`beyond`). Absent for none.
    */
   readonly turf?: { readonly share: number; readonly beyond: number };
   /**
-   * The crown span, as a share of `FAR.swapPx`, at which a copy small on
-   * screen draws as its build's far form, and its form bakes: one texel to a
-   * pixel where it turns.
+   * The crown span, as a fraction of `FAR.swapPx`, at which a copy small on
+   * screen switches to its build's far form and at which that form bakes,
+   * one texel per pixel.
    */
   readonly far: number;
 }
 
 /**
- * How much of a bush's outline at the ground is kept clear of grass, on the
- * land and in the wild (`createWildGrowth`): grass grows thin under a shrub's
- * own canopy, and stays tall round its edge.
+ * The share of a bush's ground outline kept clear of grass, on the land and
+ * in the wild (`createWildGrowth`). Grass is thin under a shrub's own canopy
+ * and stays tall around its edge.
  */
 export const SHRUB_CLEARS = 0.55;
 
@@ -51,13 +50,13 @@ const GROUPS: readonly Group[] = [
   { id: "mushrooms", casts: false, clears: 0, turf: { share: 1.25, beyond: 0.35 }, far: FAR.bush },
 ];
 
-/** The least a patch of turf reaches from a copy's middle, meters: a mask texel is half a meter, so a smaller patch could miss every texel. */
+/** The smallest radius in meters a turf patch reaches from a copy's center. A mask texel is half a meter, so a smaller patch could miss every texel. */
 const TURF_LEAST = 0.6;
 
 /**
- * A patch of turf round `outline`, reaching `turf` past it, never less than
- * `TURF_LEAST`, its edge wandering in and out a little so it reads as turf
- * worn short, not a cut disc.
+ * A patch of turf around `outline`, reaching `turf` past it and at least
+ * `TURF_LEAST`, with an edge that varies a little so it reads as turf worn
+ * short, not a cut disc.
  */
 function turfOf(outline: Float32Array, turf: NonNullable<Group["turf"]>): Float32Array {
   const k = outline.length;
@@ -67,7 +66,7 @@ function turfOf(outline: Float32Array, turf: NonNullable<Group["turf"]>): Float3
   });
 }
 
-/** Every build the understory makes for a world's things, for making ahead: one per distinct blueprint. */
+/** The build requests for a world's understory, one per distinct blueprint, for making ahead. */
 export const understoryBuilds = (plants: PlantBuilds): BuildAsk[] => GROUPS.flatMap((g) => plants[g.id].map(plantAsk));
 
 /** A component's reach where it meets the ground, in 48 directions around its origin. */
@@ -92,7 +91,7 @@ export function outlineOf(plant: Realized): Float32Array {
 }
 
 export interface Understory {
-  /** Stands exactly `placed`, what the bake stood for code, moving each blueprint's copies. */
+  /** Places exactly `placed`, the bake's code placements, by moving each blueprint's copies. */
   place(placed: readonly Placement[]): void;
   /** Instances that cast into the sun's shadow map. */
   readonly casters: () => readonly Copies[];
@@ -100,20 +99,20 @@ export interface Understory {
   readonly quiet: () => readonly THREE.Object3D[];
   /** Every instanced blueprint, for culling each pass and forcing detail. */
   readonly all: () => readonly Copies[];
-  /** Every instanced blueprint and the group it stands for, such as "rocks", for counting what each kind draws. */
+  /** Every instanced blueprint and its group, such as "rocks", for counting what each kind draws. */
   readonly grouped: () => readonly { readonly group: string; readonly view: Copies }[];
   readonly placements: () => readonly Placement[];
   /**
    * Makes the instances of every blueprint `placements` uses that has none
-   * yet, one blueprint between each `wait`, so standing them (`place`) only
-   * moves copies. They are made in the order `place` would make them.
+   * yet, one blueprint per `wait`, so `place` only moves copies. It makes them
+   * in the order `place` would.
    */
   prepare(placements: readonly Placement[], wait: () => Promise<void>): Promise<void>;
-  /** Sets each placement's vitality, by its index in `placements()`, on its copy; nothing moves or rebuilds. */
+  /** Sets each placement's vitality on its copy, by its index in `placements()`. Nothing moves or rebuilds. */
   setVitality(vitality: ArrayLike<number>): void;
   /** A placed component's reach at the ground in 48 directions and its top above its origin, at scale 1, by the rule and variant its placement names. */
   readonly footprint: (rule: string, variant: number) => { readonly outline: Float32Array; readonly top: number } | undefined;
-  /** A placed component's build as its map mark is drawn, by the rule and variant its placement names. */
+  /** The map mark of a placed component's build, by the rule and variant its placement names. */
   readonly mark: (rule: string, variant: number) => PlantMark | undefined;
   /** Shows or hides everything, for comparing frame costs. */
   show(on: boolean): void;
@@ -122,15 +121,15 @@ export interface Understory {
   /** Copies and triangles each kind of the understory drew in the last pass. */
   readonly drawnByKind: () => Record<string, { copies: number; triangles: number }>;
   /**
-   * Makes one build of every distinct blueprint the world's things take and its far form, once, when the world opens
-   * and before anything stands: `place` then only moves copies.
+   * Makes one build and far form for every distinct blueprint, once, when the world opens and before anything is
+   * placed, so `place` only moves copies.
    */
   build(plants: PlantBuilds): void;
-  /** Each build that turns far, with its blueprint: what the swap test stands alone. */
+  /** Each build with a far form, and its blueprint, for the swap test. */
   readonly farBuilds: () => readonly { readonly blueprint: Blueprint; readonly plant: () => Realized; readonly far: FarOf }[];
 }
 
-/** `farForms` takes the far form of every build whose group turns far; without it, nothing does. */
+/** `farForms` receives every build's far form. Without it, no build has one. */
 export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Library, clearings: Clearings, farForms?: FarForms): Understory {
   const buildGroup = (g: Group, blueprints: readonly Blueprint[]) => {
     const asks = blueprints.map(plantAsk);
@@ -139,8 +138,8 @@ export function createUnderstory(scene: THREE.Scene, light: SceneLight, lib: Lib
     const tops = fresh.map((p) => p.parts.reduce((top, part) => part.positions.reduce((t, v, i) => (i % 3 === 1 ? Math.max(t, v) : t), top), 0));
     const far = fresh.map((p, i) => farForms?.add(p, () => makeLater(asks[i] as BuildAsk, lib), g.far));
     const marks = fresh.map((p, i) => markOf(blueprints[i] as Blueprint, p));
-    // Each build is held only until its instances are made (`instancesOf`) and its far form baked; asked for after
-    // that, it is realized again, the same build.
+    // Each build is kept only until its instances are made (`instancesOf`) and its far form is baked. A later request
+    // realizes the same build again.
     const plants: (Realized | null)[] = [...fresh];
     const plant = (variant: number): Realized => plants[variant] ?? made(asks[variant] as BuildAsk, lib);
     const turf = g.turf;

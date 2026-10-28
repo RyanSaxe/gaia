@@ -1,30 +1,29 @@
-// The places worth seeing in a world, for anyone testing a feature: every
-// building and landmark by its kind and health, the healthiest and the most
-// ruined footbridge, stepping stones and cairn, ponds, groves and areas from
-// thriving to failing, the largest, the smallest and the most deeply nested.
-// Each stop says where to stand and which way to look. Found from the world
-// as it stands, so any world has a tour; the proving ground (`?world=proving`)
-// is built to have every stop.
+// Lists the places worth seeing in a world, for testing a feature: every
+// building and landmark by kind and vitality, the most and least vital
+// footbridge, stepping stones and cairn, ponds, groves, and areas by vitality,
+// size and depth. Each stop gives where to stand and which way to look. Any
+// world has a tour, and the proving ground (`?world=proving`) is built to have
+// every stop.
 
 import type { Junction, TrailNetwork } from "@gaia/terrain";
 
-/** A building or landmark standing for an entity. */
+/** A building or landmark that represents an entity. */
 export interface TourThing {
   readonly as: "building" | "landmark";
   /** Its kind, such as "Watermill". */
   readonly kind: string;
-  /** The entity it stands for. */
+  /** The entity it represents. */
   readonly name: string;
   readonly x: number;
   readonly z: number;
   readonly vitality: number;
-  /** How far it reaches from its middle, meters. */
+  /** Its radius in meters. */
   readonly reach: number;
-  /** The way its front faces, for a building: a unit vector. */
+  /** For a building, the unit vector its front faces. */
   readonly front?: { readonly x: number; readonly z: number };
 }
 
-/** An area of a codebase's world: its heart, its ground and its own ground's vitality. */
+/** An area of a codebase's world: its center, its ground and its own ground's vitality. */
 export interface TourArea {
   readonly path: string;
   readonly x: number;
@@ -34,7 +33,7 @@ export interface TourArea {
   readonly vitality: number;
 }
 
-/** A file's grove: the middle of its trees, how many there are, and its file's vitality. */
+/** A file's grove: the center of its trees, their count, and its file's vitality. */
 export interface TourGrove {
   readonly path: string;
   readonly x: number;
@@ -72,13 +71,13 @@ export interface TourStop {
   readonly at: { readonly x: number; readonly z: number };
 }
 
-/** Health in words, by vitality. */
+/** A word for a vitality band, for stop names. */
 export const healthOf = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" : v >= 0.35 ? "tired" : v >= 0.12 ? "failing" : "ruin");
 
 const DEG = Math.PI / 180;
 const yawToward = (x: number, z: number, tx: number, tz: number): number => Math.atan2(-(tx - x), -(tz - z));
 
-/** The first standable spot `distance` from (tx, tz), trying `prefer`'s side first and turning from it, a little nearer and farther. */
+/** The first standable spot `distance` from (tx, tz), trying `prefer`'s side first and turning away from it, then a little nearer and farther. */
 function viewpoint(w: TourWorld, tx: number, tz: number, distance: number, prefer: number): { x: number; z: number } {
   for (const d of [distance, distance * 1.3, distance * 0.75, distance * 1.7]) {
     for (let k = 0; k < 24; k++) {
@@ -91,14 +90,14 @@ function viewpoint(w: TourWorld, tx: number, tz: number, distance: number, prefe
   return { x: tx + Math.cos(prefer) * distance, z: tz + Math.sin(prefer) * distance };
 }
 
-/** The side to look from by default: from the world's middle, so the view looks outward across the thing. */
+/** The side to view from by default: from the world's center, so the view looks outward across the thing. */
 const outward = (x: number, z: number): number => (Math.hypot(x, z) < 1 ? 0 : Math.atan2(z, x));
 
 function stop(name: string, what: string, from: { x: number; z: number }, at: { x: number; z: number }, pitchDeg: number): TourStop {
   return { name, what, x: from.x, z: from.z, yaw: yawToward(from.x, from.z, at.x, at.z), pitch: pitchDeg * DEG, at: { x: at.x, z: at.z } };
 }
 
-/** Every stop in a world: the things by kind and health, then crossings, cairns, ponds, groves and areas. */
+/** Every stop in a world: the things by kind and vitality, then crossings, cairns, ponds, groves and areas. */
 export function tourStops(w: TourWorld): TourStop[] {
   const stops: TourStop[] = [];
   const named = new Map<string, number>();
@@ -158,7 +157,7 @@ export function tourStops(w: TourWorld): TourStop[] {
 
   for (const p of w.ponds) add(stop("pond", `A pond ${(p.reach * 2).toFixed(0)} m across`, viewpoint(w, p.x, p.z, p.reach + 5, outward(p.x, p.z)), p, -4));
 
-  // The largest thriving grove and the largest failing one.
+  // The largest grove with vitality of at least 0.85, and the largest below 0.35.
   const groveStop = (g: TourGrove, name: string): TourStop => stop(name, `${g.trees} trees on ${g.path}, vitality ${g.vitality.toFixed(2)}`, viewpoint(w, g.x, g.z, 22, outward(g.x, g.z)), g, 6);
   const largest = (groves: readonly TourGrove[]): TourGrove | undefined => [...groves].sort((a, b) => b.trees - a.trees || (a.path < b.path ? -1 : 1))[0];
   const thrivingGrove = largest(w.groves.filter((g) => g.vitality >= 0.85));
@@ -166,7 +165,7 @@ export function tourStops(w: TourWorld): TourStop[] {
   if (thrivingGrove !== undefined) add(groveStop(thrivingGrove, "thriving grove"));
   if (failingGrove !== undefined) add(groveStop(failingGrove, "failing grove"));
 
-  // Areas: the healthiest and the most failing of any size, the largest, the smallest and the most deeply nested.
+  // Areas: the most and least vital of any size, the largest, the smallest and the most deeply nested.
   const areaStop = (a: TourArea, name: string): TourStop => stop(name, `${a.path === "" ? "The repository's root" : a.path}: ${Math.round(a.ground).toLocaleString("en-US")} m², ${a.depth} deep, vitality ${a.vitality.toFixed(2)}`, viewpoint(w, a.x, a.z, 30, outward(a.x, a.z)), a, 2);
   const sizable = w.areas.filter((a) => a.depth === 1).sort((a, b) => b.vitality - a.vitality || b.ground - a.ground);
   const pick: [string, TourArea | undefined][] = [

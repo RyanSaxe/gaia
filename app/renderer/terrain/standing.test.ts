@@ -3,14 +3,14 @@ import { TILE, type WorldSpec, frameOf, worldOf } from "@gaia/terrain";
 import { createStanding, seenTo } from "./standing.ts";
 import { GONE } from "./woods.ts";
 
-// A 3 km world: its land is some thirteen tiles a side.
+// A 3 km world, whose land is about thirteen tiles a side.
 const spec: WorldSpec = { size: 3000, regions: [] };
 const frame = frameOf(spec);
 const per = Math.ceil(frame.n / TILE.size);
-/** A screen that sees a 1 m thing to about 500 m. */
+/** A focal length at which a 1 m thing stays visible to about 500 m. */
 const FOCAL = 2000;
 
-/** The tile's middle, meters. */
+/** The tile's center in meters. */
 const middle = (ti: number, tj: number): [number, number] => [worldOf(frame, (ti + 0.5) * TILE.size), worldOf(frame, (tj + 0.5) * TILE.size)];
 
 describe("what stands on the land, tile by tile", () => {
@@ -23,17 +23,17 @@ describe("what stands on the land, tile by tile", () => {
     const reach = seenTo(0.5, FOCAL);
     expect(reach).toBeCloseTo((2 * 0.5 * FOCAL) / GONE.end);
     const held = new Set(stood[stood.length - 1]);
-    // Every tile within reach of the middle stands; none far past it does.
+    // Every tile within reach of the center is placed, and none far past it is.
     for (let tj = 0; tj < per; tj++) {
       for (let ti = 0; ti < per; ti++) {
         const [x, z] = middle(ti, tj);
         const near = Math.hypot(x, z) - (TILE.size * Math.SQRT2) / 2;
         if (Math.hypot(x, z) + TILE.size < reach) expect(held.has(`${ti},${tj}`), `tile ${ti},${tj}`).toBe(true);
-        // Tiles are asked for 150 m before they can be seen, so one a worker brings comes in time.
+        // Tiles are requested 150 m before they can be seen, so one from a worker arrives in time.
         if (near > reach + 150) expect(held.has(`${ti},${tj}`), `tile ${ti},${tj}`).toBe(false);
       }
     }
-    // Walking far off lets the old tiles go once they lie well past the reach, and stands the new ones.
+    // Walking far off drops the old tiles once they are well past the reach, and places the new ones.
     standing.follow(1300, 1300);
     for (let k = 0; k < 4; k++) standing.follow(1300, 1300);
     const now = new Set(stood[stood.length - 1]);
@@ -52,7 +52,7 @@ describe("what stands on the land, tile by tile", () => {
     standing.open(spec);
     await standing.fetch(0, 0);
     const reach = seenTo(0.5, FOCAL);
-    // Every tile within sight of the mark is asked for, and none past it: no walking lead.
+    // Every tile within sight of the mark is requested, and none past it, with no walking lead.
     for (const key of asked) {
       const [ti, tj] = key.split(",").map(Number) as [number, number];
       const [x, z] = middle(ti, tj);
@@ -60,10 +60,10 @@ describe("what stands on the land, tile by tile", () => {
     }
     const byTrip = asked.size;
     expect(byTrip).toBeGreaterThan(0);
-    // Walking on far off while a trip asks: no tiles of its own.
+    // Walking on far off while a trip requests tiles adds no tiles of the walk's own.
     standing.follow(1300, 1300, false);
     expect(asked.size).toBe(byTrip);
-    // Walking without a trip asks for its lead as before.
+    // Walking without a trip requests its lead as before.
     standing.follow(1300, 1300);
     expect(asked.size).toBeGreaterThan(byTrip);
   });
@@ -83,10 +83,10 @@ describe("what stands on the land, tile by tile", () => {
     const warned: unknown[] = [];
     console.warn = (...args: unknown[]) => void warned.push(args);
     try {
-      // The fetch settles even though a tile failed, and the failure is said.
+      // The fetch resolves even though a tile failed, and the failure is logged.
       await standing.fetch(0, 0);
       expect(warned.length).toBe(1);
-      // Asked again, the tile comes and stands.
+      // Requested again, the tile arrives and is placed.
       await standing.ready(0, 0);
       expect((stood[stood.length - 1] ?? []).length).toBeGreaterThan(0);
     } finally {
@@ -102,7 +102,7 @@ describe("what stands on the land, tile by tile", () => {
     standing.add<number>({ name: "late", largest: () => 0.1, tile: () => late.then(() => [1]), stand: (things) => stood.push([...things]) });
     standing.open(spec);
     standing.follow(0, 0);
-    // Another world opens before the first's tiles come.
+    // Another world opens before the first's tiles arrive.
     standing.open(spec);
     (release as unknown as () => void)();
     await late;

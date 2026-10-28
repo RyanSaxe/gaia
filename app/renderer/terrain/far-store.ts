@@ -1,28 +1,25 @@
-// Far forms kept between visits. Baking a tree build into its far form takes
-// seconds of frames under the wait, and the same builds stand in every
-// world, so each form is stored in this browser's IndexedDB, keyed by
-// everything that makes it, and baked again only when the build or the bake
-// changes. The database's version is the bake's: a form of an earlier bake is
-// never read again and holds megabytes, so the first open at a newer bake
-// empties the store. A second, small store records when each form was last
-// used, so each open also deletes the forms of builds no recent visit drew,
-// such as a season no world wears any more, reading no form.
+// Stores far forms between visits in this browser's IndexedDB. Baking a
+// tree's far form takes seconds of the loading screen, so each form is keyed
+// by a hash of everything that makes it and bakes again only when its build or
+// the bake changes. The database version is the bake version, and opening at a
+// newer bake empties the store. A second store, `used`, records when each form
+// was last used, so each open deletes the forms no recent visit used.
 
 /**
- * How long before the last visit a form must have been used to be kept: a
- * world opened once a week, or once in three, keeps its forms. It counts back
- * from the last visit, not from today, so a person back after months away
- * finds every form they last saw.
+ * A form is kept if it was used within this time before the last visit, so a
+ * world opened once every three weeks keeps its forms. The window ends at the
+ * last visit rather than today, so a person who returns after months away
+ * still has every form they last saw.
  */
 const KEPT_FOR_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** Two 32-bit FNV-1a lanes, so the key is 64 bits: accidental matches never happen in practice. */
+/** Seeds for two 32-bit FNV-1a lanes. Together they make a 64-bit key, so accidental collisions don't occur in practice. */
 const LANES = [0x811c9dc5, 0x01000193 ^ 0x5bd1e995] as const;
 
 /**
- * A stable hash of `values`, as 16 hex digits: every typed array's bytes,
- * every array's and object's fields (objects in key order), every string,
- * number and boolean. Equal content hashes equal; any change hashes apart.
+ * Returns a stable hash of `values` as 16 hex digits. It covers every typed
+ * array's bytes, every array element, every object field in key order, and
+ * every string, number and boolean. Equal content gives equal hashes.
  */
 export function contentHash(...values: unknown[]): string {
   const h = [LANES[0], LANES[1]];
@@ -69,16 +66,16 @@ export interface FarStore {
 }
 
 /**
- * This browser's far forms of bake `version`, or null where the store can't
- * be opened at that version at once: where IndexedDB is unavailable, as in
- * some private windows, where a page of a later bake has opened it, or while
- * a page of an earlier one holds it open. The forms then bake as on a first
- * visit, and none is kept.
+ * Opens this browser's far forms for bake `version`. Returns null when the
+ * store can't open at that version right away: IndexedDB is unavailable, as
+ * in some private windows, a page with a later bake has opened it, or a page
+ * with an earlier bake holds it open. Forms then bake as on a first visit,
+ * and none is stored.
  */
 export async function openFarStore(version: number): Promise<FarStore | null> {
   let db = await openDatabase(version);
   if (db !== null && !db.objectStoreNames.contains("used")) {
-    // A store made before forms recorded their use starts over, as at a new bake.
+    // A database created before the `used` store existed starts over, as at a new bake.
     db.close();
     db = (await deleteDatabase()) ? await openDatabase(version) : null;
   }
@@ -118,11 +115,11 @@ function openDatabase(version: number): Promise<IDBDatabase | null> {
         const db = open.result;
         for (const name of ["forms", "used"]) if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
         db.createObjectStore("forms");
-        // Each form's key, with the time of the last visit that read or stored it.
+        // Maps each form's key to the time of the last visit that read or stored it.
         db.createObjectStore("used");
       };
       open.onsuccess = () => {
-        // A page of a later bake waits on every page holding the store open.
+        // A page with a later bake waits until every page holding the database closes it.
         open.result.onversionchange = () => open.result.close();
         resolve(open.result);
       };
@@ -134,7 +131,7 @@ function openDatabase(version: number): Promise<IDBDatabase | null> {
   });
 }
 
-/** Deletes the whole store, or resolves false where another page holds it open. */
+/** Deletes the whole database. Resolves false when another page holds it open. */
 function deleteDatabase(): Promise<boolean> {
   return new Promise((resolve) => {
     try {
@@ -149,9 +146,9 @@ function deleteDatabase(): Promise<boolean> {
 }
 
 /**
- * Deletes every form no visit used in the `KEPT_FOR_MS` before the last
- * visit, reading only the forms' keys and when each was last used, and
- * resolves with this visit's time.
+ * Deletes every form unused in the `KEPT_FOR_MS` before the last visit. It
+ * reads only keys and use times, never forms, and resolves with this visit's
+ * time.
  */
 function prune(db: IDBDatabase): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -165,7 +162,7 @@ function prune(db: IDBDatabase): Promise<number> {
     usedAt.onsuccess = () => {
       const lastUse = new Map(usedKeys.result.map((key, i) => [key, usedAt.result[i] as number]));
       const last = Math.max(0, ...lastUse.values());
-      // A clock set back never makes this visit look older than the last.
+      // If the clock was set back, this visit still counts as no older than the last.
       visit = Math.max(visit, last);
       for (const key of formKeys.result) {
         if ((lastUse.get(key) ?? 0) < last - KEPT_FOR_MS) {

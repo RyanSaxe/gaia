@@ -11,11 +11,11 @@ import { type StandCode, type StandRequest, houseGround, landmarkGround, standWo
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const buildingLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 const routeLib = new Library(ROUTE_PRIMITIVES);
-/** The first two trails of a sweep of a trail's parts: one crossing streams on a footbridge, the other on stepping stones. */
+/** The first two trail styles from a sweep over a trail's parts: one crosses streams on a footbridge, the other on stepping stones. */
 const styles = sweep(link, routeLib).blueprints.slice(0, 2).map((b) => buildSlots(b, link, routeLib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec);
-/** The first three houses of a sweep of a building's parts that stand as a single block and need no stream, small enough for this world's lots. */
+/** The first three houses from a sweep over a building's parts that are a single block and need no stream, small enough for this world's lots. */
 const houses = sweep(structure, buildingLib).blueprints.filter((b) => b.slots.footprint?.params.massing === "a single block" && b.slots.feature?.use !== "waterwheel@1").slice(0, 3);
-/** A world laid out from code, as small as the tests need: two buildings' lots, a landmark's, three files' patches and what stands on them. */
+/** A world laid out from code, as small as the tests need: two buildings' lots, a landmark's, three files' patches and the symbols on them. */
 const code: StandCode = {
   lots: [{ id: "packages/a", x: -40, z: 30, radius: 9 }, { id: "packages/b", x: 50, z: -20, radius: 9 }],
   landmarks: [{ landmark: 0, lot: { id: "packages/c", x: 10, z: 70, radius: 7 } }],
@@ -43,7 +43,7 @@ const request: StandRequest = {
   code,
 };
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-/** A test world, baked once; standing levels a bake's ground, so each test stands its own copy. */
+/** A test world, baked once. `standWorld` levels a bake's ground, so each test uses its own copy. */
 const baked = bakeTerrain(sampleWorld(), lib);
 const pristine = structuredClone(baked);
 const forTiles = structuredClone(baked);
@@ -71,7 +71,7 @@ describe("standing a world's things on a bake", () => {
         expect(Math.abs(heightAt(here.lattice, x, z) - site.level)).toBeLessThan(0.02);
       }
     });
-    // Nothing stands in a house: trees keep six meters off its walls.
+    // Nothing is placed in a house, and trees keep 6 m off its walls.
     for (const t of a.trees) {
       for (const site of a.sites) expect(Math.hypot(t.x - site.x, t.z - site.z)).toBeGreaterThan(4);
     }
@@ -88,8 +88,8 @@ describe("standing a world's things on a bake", () => {
     const [lm] = stood.landmarks;
     expect(lm?.landmark).toBe(0);
     expect(Math.hypot(lm!.site.x - 10, lm!.site.z - 70)).toBeLessThanOrEqual(7 + 1e-6);
-    // Every tree is a definition that stands as one, near where the layout put it, as the tree it was given; nothing
-    // else grows trees.
+    // Every tree is a definition that appears as one, near where the layout put it, with the tree blueprint it was
+    // given. Nothing else grows trees.
     expect(stood.trees.map((tree) => tree.symbol).sort()).toEqual([1, 2]);
     for (const tree of stood.trees) {
       const sym = code.symbols[tree.symbol!]!;
@@ -97,11 +97,11 @@ describe("standing a world's things on a bake", () => {
       expect(tree.variant).toBe(sym.variant);
     }
     expect(stood.symbols.slice(1)).toEqual([-1, -1]);
-    // A file's function stands near where the layout put it, as the blueprint it was given, with its own vitality.
+    // A file's function is placed near where the layout put it, with the blueprint it was given and its own vitality.
     const sym = stood.placements[stood.symbols[0]!]!;
     expect(sym).toMatchObject({ rule: "rocks", variant: 0, vitality: 0.3 });
     expect(Math.hypot(sym.x + 55, sym.z + 40)).toBeLessThan(5);
-    // No stone, bush or flowers stands for nothing: the land between the things that stand for code is grass, ground and water.
+    // Every stone, bush or flowers represents code. The land between the things that represent code is grass, ground and water.
     expect(stood.placements).toEqual([sym]);
     expect(stood.network.trails.length).toBeGreaterThan(0);
     for (const tr of stood.network.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
@@ -112,7 +112,7 @@ describe("standing a world's things on a bake", () => {
       const built = realize(blueprint, structure, buildingLib, { seed: seedOf(`crowded-${i}`), facts: { size: 1, floors: 1 } });
       return { name: `crowded-${i}`, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
     });
-    // One middle for all four, with the lots the layout gives a building and a landmark.
+    // One center for all four, with the lots the layout gives a building and a landmark.
     const code: StandCode = {
       lots: buildings.map((b) => ({ id: b.name, x: -40, z: 30, radius: 5.4 })),
       landmarks: [{ landmark: 0, lot: { id: "tower", x: -40, z: 30, radius: 4.2 } }],
@@ -126,12 +126,12 @@ describe("standing a world's things on a bake", () => {
     pads.forEach((a, i) => pads.forEach((b, k) => expect(k > i && yardsMeet(a, b), `${i} and ${k}`).toBe(false)));
     const [tower] = stood.landmarks;
     expect(tower).toBeDefined();
-    // Its ground keeps off each house's, measured as its site is found.
+    // Its ground stays clear of each house's, measured the way its site is found.
     buildings.forEach((b, k) => expect(Math.hypot(stood.sites[k]!.x - tower!.site.x, stood.sites[k]!.z - tower!.site.z), b.name).toBeGreaterThanOrEqual(houseGround(b) + landmarkGround(request.landmarks[0]!.base)));
   });
 
-  // Bakes and levels every 64-sample tile of the land, and the land twice more at coarser strides: two seconds alone,
-  // several when other work shares the machine.
+  // Bakes and levels every 64-sample tile of the land, and the land twice more at coarser strides, in two seconds alone
+  // and several when other work shares the machine.
   it("bakes each tile of the land alone, leveled as standing leveled the world, sample for sample", { timeout: 20_000 }, () => {
     const t = forTiles;
     const stood = standWorld(t, request);
@@ -161,8 +161,8 @@ describe("standing a world's things on a bake", () => {
       }
     }
     expect(differ).toEqual({ heights: 0, water: 0, shore: 0, nearPond: 0, field: 0, places: 0 });
-    // A coarser level takes every stride-th sample: the same land, but for the shore it measures between its own
-    // samples, and the treads it eases by that shore, all close to the water.
+    // A coarser level takes every stride-th sample. It is the same land except for the shore, which it measures
+    // between its own samples, and the treads it eases by that shore, all close to the water.
     for (const stride of [2, 4]) {
       const side = Math.ceil(n / stride);
       const tile = standTile(plan, stood.edits, stood.network.ways, 0, 0, side, stride);

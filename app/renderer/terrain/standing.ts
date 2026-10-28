@@ -1,93 +1,88 @@
-// What stands on the land, a tile at a time. Every component that stands in
-// the world adds a stander: how large its largest thing can be, what stands in
-// a tile of the land, and how to stand a set of its things. A thing is seen
-// only while it spans a few pixels on screen (`GONE` in woods.ts), as the grass ends a
-// short way out, so how far a stander's tiles reach follows from its largest
-// thing's size, up to where the air dissolves the land. The world holds every
-// tile within that reach of the person, asks for a tile's things a little
-// before it comes that near (at once from the world's plan, or from a
-// worker), lets go of a tile left well behind, and stands a stander's things again when its tiles
-// change, one stander a frame. A new component stands by tiles by adding a
-// stander, with no tiling of its own; a world of any size holds only what can
-// be seen.
+// Places the world's things one land tile at a time, so a world of any size
+// keeps only what can be seen. Each component adds a `Stander` that gives its
+// largest thing's size, the things in a tile, and a `stand` call that places a
+// set of them. A thing is visible only while it spans a few pixels (`GONE` in
+// woods.ts), so a stander's tiles reach as far as its largest thing can be
+// seen, up to where the air dissolves the land.
 
 import { AIR } from "@gaia/realize";
 import { TILE, type WorldSpec, frameOf, worldOf } from "@gaia/terrain";
 import { goneAt } from "./woods.ts";
 
-/** How far a thing of `radius` meters stays seen, for a screen of `focal` device pixels a radian: until it is gone (`goneAt`), or the air dissolves it. */
+/** How far a thing of `radius` meters stays visible on a screen of `focal` device pixels per radian: until it is too small (`goneAt`) or the air dissolves it. */
 export const seenTo = (radius: number, focal: number): number => Math.min(AIR.dissolveEnd, goneAt(radius, focal));
 
 export interface Stander<T> {
-  /** Names it in reports. */
+  /** Its name in reports. */
   readonly name: string;
-  /** The radius, meters, of the largest thing it stands: its tiles stand as far out as that can be seen (`seenTo`). */
+  /** The radius in meters of its largest thing. Its tiles are placed as far out as that thing can be seen (`seenTo`). */
   readonly largest: () => number;
-  /** What stands in tile (ti, tj): at once, or from a worker; null when another world has opened since it was asked. */
+  /** The things in tile (ti, tj), at once or from a worker. Null when another world has opened since the request. */
   tile(ti: number, tj: number): readonly T[] | Promise<readonly T[] | null>;
-  /** Stands exactly these: the things of every tile held, tile by tile. */
+  /** Places exactly these things, the things of every held tile. */
   stand(things: readonly T[]): void;
 }
 
 export interface Standing {
   add<T>(stander: Stander<T>): void;
   /**
-   * Takes on a new world, letting go of every tile. `given` is what the bake
-   * already stood for some tiles, by stander name and then by "ti,tj".
+   * Opens a new world and drops every tile. `given` has the things the bake
+   * already placed for some tiles, by stander name and then by "ti,tj".
    */
   open(spec: WorldSpec, given?: ReadonlyMap<string, ReadonlyMap<string, readonly unknown[]>>): void;
   /**
-   * Called every frame with the person's place: holds the tiles near, lets
-   * far ones go, and stands one changed stander. Without `asking` it asks for
-   * no tiles of its own, as while a trip asks for what its way will see.
+   * Call every frame with the person's position. It keeps the near tiles,
+   * drops far ones, and places one changed stander. Without `asking` it
+   * requests no tiles of its own, as while a trip requests what its way will
+   * see.
    */
   follow(x: number, z: number, asking?: boolean): void;
-  /** Resolves once every stander's tiles within sight of (x, z) stand. */
+  /** Resolves once every stander's tiles within sight of (x, z) are placed. */
   ready(x: number, z: number): Promise<void>;
   /**
-   * Resolves once every stander holds its tiles within sight of (x, z),
-   * those already on their way included, for the frames that follow to
-   * stand one stander at a time: what a trip asks of the way ahead. It asks
-   * for no lead past sight: a trip's marks lie close enough together that
-   * their sights cover everything seen from its way.
+   * Resolves once every stander has its tiles within sight of (x, z),
+   * including those already requested, for later frames to place one
+   * stander at a time. A trip uses it for the way ahead. It requests no lead
+   * past sight, since a trip's marks are close enough that their sights cover
+   * everything visible from its way.
    */
   fetch(x: number, z: number): Promise<void>;
   /**
-   * Each tile that stood while the person was within its stander's sight of
-   * it since the last call, where its things could have been seen to
-   * appear: by stander, how near the person was, and that sight.
+   * Each tile placed since the last call while the person was within its
+   * stander's sight, so its things could have been seen appearing: the
+   * stander, the person's distance and that sight.
    */
   late(): readonly { readonly stander: string; readonly distance: number; readonly sight: number }[];
-  /** How many tiles each stander holds, for reports. */
+  /** How many tiles each stander has, for reports. */
   held(): Record<string, number>;
-  /** The tiles each stander has asked for and not yet had, by name: how many, and a few of them. */
+  /** The tiles each stander has requested and not yet received, by name: a count and a few keys. */
   asking(): Record<string, { readonly count: number; readonly some: readonly string[] }>;
 }
 
-/** How far ahead of its sight a tile is asked for, meters: one a worker brings has come before any of it can be seen. */
+/** Meters beyond its sight at which a tile is requested, so a tile from a worker arrives before any of it can be seen. */
 const AHEAD = 150;
-/** How far past that a held tile goes, meters: a step back and forth keeps it. */
+/** Meters beyond that at which a held tile is dropped, so stepping back and forth keeps it. */
 const LET_GO = 200;
-/** How far the person walks before the tiles near them are weighed again, meters. */
+/** Meters the person walks before the tiles near them are checked again. */
 const STEP = 24;
 
 interface Held<T> {
   readonly stander: Stander<T>;
   readonly tiles: Map<string, readonly T[]>;
-  /** The tiles on their way, each with its wait. */
+  /** The tiles requested and not yet received, each with its promise. */
   readonly asking: Map<string, Promise<void>>;
-  /** The tiles its things last stood from. */
+  /** The tiles whose things were last placed. */
   stood: Set<string>;
   dirty: boolean;
 }
 
-/** `focal` is the view's device pixels a radian, which says how far a thing of a given size can be seen. */
+/** `focal` is the view's device pixels per radian, which sets how far a thing of a given size can be seen. */
 export function createStanding(focal: () => number): Standing {
   const all: Held<unknown>[] = [];
   let spec: WorldSpec | null = null;
   let generation = 0;
   let at = { x: Number.NaN, z: Number.NaN };
-  /** Where walking last asked for tiles from. */
+  /** Where walking last requested tiles. */
   let askedAt = { x: Number.NaN, z: Number.NaN };
   /** Where the person was at the last follow. */
   let person = { x: Number.NaN, z: Number.NaN };
@@ -112,9 +107,9 @@ export function createStanding(focal: () => number): Standing {
   /** How far a stander's tiles reach: as far as its largest thing can be seen. */
   const sight = <T>(h: Held<T>): number => seenTo(h.stander.largest(), focal());
   /**
-   * Asks for every tile within the stander's sight of (x, z), and `lead`
-   * meters more, that it does not hold; resolves when all have come. A tile
-   * that fails is let go of with a warning, and asked for again next time.
+   * Requests every tile within the stander's sight of (x, z) plus `lead`
+   * meters that it does not have. The promises resolve when the tiles arrive.
+   * A failed tile is dropped with a warning and requested again next time.
    */
   const ask = <T>(h: Held<T>, x: number, z: number, lead = AHEAD): Promise<void>[] => {
     const mine = generation;
@@ -198,13 +193,13 @@ export function createStanding(focal: () => number): Standing {
           }
         }
       }
-      // Asked from where it last asked: once asking resumes, as when a trip ends, it asks at once.
+      // Clear the last request spot while not asking, so requests resume at once when asking does, as when a trip ends.
       if (!asking) askedAt = { x: Number.NaN, z: Number.NaN };
       else if (!(Math.hypot(x - askedAt.x, z - askedAt.z) < STEP)) {
         askedAt = { x, z };
         for (const h of all) void ask(h, x, z);
       }
-      // One stander a frame, so no frame stands everything at once.
+      // Place one stander a frame, so no frame places everything at once.
       const next = all.find((h) => h.dirty);
       if (next !== undefined) stand(next);
     },

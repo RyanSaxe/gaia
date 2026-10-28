@@ -1,16 +1,12 @@
-// Which far forms the GPU holds. A set of far cards holds a fixed number of
-// forms at once (`FAR_SLOTS`), whatever the world's size, and a world may
-// stand many more distinct builds than that in sight: Gaia's own stands all
-// of its 115 trees' builds within reach of every spot. So the forms are
-// weighed by how many of their copies a view from the person would draw far,
-// in any direction, and the heaviest hold the slots: most far copies then draw
-// as cards, and every copy of a form that holds none keeps its full form,
-// never anything less. A form brought into a slot is read from the far-form
-// store when an earlier visit baked it, and is baked a few views a frame
-// otherwise, then stored. Once the world shows, a form comes in, or goes out,
-// by turning the crown span its copies turn far at between nothing and its
-// own over `FAR_TURN.seconds` of frames: each copy passes through the band as
-// it does when a person walks away from it, never changing form at once.
+// Chooses which far forms get the card set's `FAR_SLOTS` slots. A world can
+// show more builds than there are slots, so each form's weight is the number
+// of its copies a view from the person would draw far, and the heaviest forms
+// get the slots. A form without a slot keeps its full form on every copy.
+//
+// A form entering a slot is read from the far-form store, or baked a few views
+// a frame and then stored. After the world opens, a form fades in or out by
+// moving its `swapPx` between 0 and its own size over `FAR_TURN.seconds`, so
+// each copy crosses the band as it would if the person walked away from it.
 
 import type * as THREE from "three";
 import { type FarForm, type FarFormData, farFormData, farFormFrom, startFarBake } from "@gaia/render";
@@ -18,19 +14,18 @@ import { contentHash, type FarStore } from "./far-store.ts";
 import { FAR, type FarForms, GONE } from "./woods.ts";
 
 /**
- * How a form turns in or out once the world shows: over `seconds` of frames
- * from no card to its own swap size, moving its crown span by the same share
- * each frame. Each half second then moves a copy through its band no further
- * than the swap test's smallest step (from halfway through the full form's
- * dissolve to 5% farther, 0.7% of the crown's span), which stays under the
- * wind's change over half a second. The forms are weighed again every
- * `weighEvery` seconds or `weighAfter` meters walked; a form holding a slot
- * keeps it until one without outweighs it `outweigh` times over, so a few
- * copies crossing the band never trade slots.
+ * Timing for far form fades after the world opens. A fade takes `seconds` and
+ * scales `swapPx` by the same ratio each frame (`swapAt`). Half a second of
+ * fade changes `swapPx` by about 0.7%, which is less than the swap test's
+ * smallest step, 5% farther from halfway through the full form's dissolve,
+ * and less than the wind changes a crown in that time. The stream reweighs
+ * the forms every `weighEvery` seconds or `weighAfter` meters walked. A form
+ * with a slot keeps it until a form without one weighs `outweigh` times as
+ * much, so a few copies crossing the band never trade slots.
  */
 export const FAR_TURN = { seconds: 280, weighEvery: 0.5, weighAfter: 8, outweigh: 2 } as const;
 
-/** How a bake paces itself: at most `views` views of a form a frame, within `ms` milliseconds. */
+/** A bake's budget per frame: at most `views` views of a form, within `ms` milliseconds. */
 export interface BakePace {
   readonly views: number;
   readonly ms: number;
@@ -38,62 +33,62 @@ export interface BakePace {
 
 export interface FarStream {
   /**
-   * Weighs the forms from `eye` and brings every form the slots hold there,
-   * each turned in at once, before anything shows: the wait lifts on it.
-   * `focal` is the view's device pixels a radian. Until it settles, `follow`
-   * only turns.
+   * Weighs the forms from `eye` and loads a form into every slot at full size
+   * before the world shows. The loading screen waits on the returned promise.
+   * `focal` is the view's device pixels per radian. Until it resolves,
+   * `follow` only advances fades.
    */
   open(eye: THREE.Vector3, focal: number): Promise<void>;
-  /** Called every frame the world draws, with the frame's seconds: weighs the forms now and then, brings the heaviest and turns each in or out. */
+  /** Runs every frame the world draws, with the frame's `dt` in seconds. It reweighs on `FAR_TURN`'s schedule, loads the heaviest forms and advances every fade. */
   follow(eye: THREE.Vector3, focal: number, dt: number): void;
-  /** Holds form `form` in a slot, turned in, until the returned release: the swap test stands one copy of it alone. */
+  /** Keeps `form` in a slot at full size until the returned function releases it. The swap test uses it to show one copy alone. */
   hold(form: number): Promise<() => void>;
-  /** Resolves once nothing is being brought or turned. */
+  /** Resolves once no form is loading or fading. */
   settled(): Promise<void>;
-  /** What the slots hold, for reports. */
+  /** Slot usage, for reports. */
   stats(): FarStreamStats;
 }
 
 export interface FarStreamStats {
   readonly slots: number;
-  /** Forms holding a slot, and those of them turned all the way in. */
+  /** Forms with a slot, and how many of those are fully faded in. */
   readonly held: number;
   readonly turnedIn: number;
-  /** Forms with copies a view would draw far, and how many of those copies draw as cards now. */
+  /** Forms with copies a view would draw far, the count of those copies, and how many of them draw as cards now. */
   readonly wanted: number;
   readonly farCopies: number;
   readonly carded: number;
-  /** Forms brought from the store and baked since the world opened, and milliseconds spent bringing them. */
+  /** Forms read from the store and forms baked since the stream opened, and milliseconds spent loading them. */
   readonly read: number;
   readonly baked: number;
   readonly ms: number;
-  /** GPU memory the slots take, bytes. */
+  /** GPU memory the slots use, in bytes. */
   readonly bytes: number;
 }
 
 interface Form {
   slot: number;
-  /** How far it has turned in, 0 none to 1 its own swap size, and which way it is turning. */
+  /** Fade progress from 0, no card, to 1, its own swap size, and the direction it is moving. */
   turn: number;
   target: 0 | 1;
   weight: number;
   key: string | null;
   held: number;
-  /** Whether bringing it failed: it keeps its full form and is not asked for again. */
+  /** Whether loading it failed. A failed form keeps its full form and is not loaded again. */
   failed: boolean;
 }
 
 const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
 /**
- * Streams `forms`' far forms into their cards' slots, reading and storing
- * them in `store`, baking at `pace` until the world shows and at `walking`
- * after.
+ * Streams `forms`' far forms into the cards' slots, reading and storing them
+ * in `store`. Bakes run at `pace.opening` until the world opens and at
+ * `pace.walking` after.
  */
 export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, store: Promise<FarStore | null>, pace: { readonly opening: BakePace; readonly walking: BakePace }): FarStream {
   let slots = 0;
   const state: Form[] = [];
-  /** Which form each slot holds, -1 for none; made when the stream opens, with no more slots than forms. */
+  /** The form in each slot, or -1. `open` creates it after `fit` sizes the slots, with no more slots than forms. */
   let owner: number[] = [];
   let opened = false;
   let bringing: Promise<void> | null = null;
@@ -103,14 +98,17 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
   let baked = 0;
   let ms = 0;
   const waiting: (() => void)[] = [];
-  /** Whether what the slots should hold may have changed since it was last decided: a weighing, a form brought, a slot freed. */
+  /** Whether a reweigh, a finished load or a freed slot may have changed which forms should have slots since `decide` last ran. */
   let undecided = true;
 
   const formOf = (k: number): Form => {
     while (state.length <= k) state.push({ slot: -1, turn: 0, target: 0, weight: 0, key: null, held: 0, failed: false });
     return state[k] as Form;
   };
-  /** The crown span form `k`'s copies turn far at, turned `t` of the way in: from where no card draws (the band's top at a crown too small to see) to its own. */
+  /**
+   * The `swapPx` of form `k` at fade progress `t`. It rises geometrically from `GONE.end / FAR.band`, where the band's
+   * top is too small to see and no card draws, to the form's own `px`.
+   */
   const swapAt = (k: number, t: number): number => {
     const px = (forms.plants[k] as (typeof forms.plants)[number]).px;
     if (t <= 0) return 0;
@@ -123,7 +121,7 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
     forms.set(k, f.slot, swapAt(k, f.turn));
   };
 
-  /** Brings form `k`'s far form into `slot`: read from the store, else baked and stored. */
+  /** Loads form `k`'s far form into `slot`, reading it from the store or else baking and storing it. */
   async function bring(k: number, slot: number): Promise<void> {
     const t0 = performance.now();
     const f = formOf(k);
@@ -157,26 +155,26 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
       baked++;
     }
     if (stored !== null && opened) {
-      // Read while the world shows, its atlases upload one a frame, so no frame takes them all.
+      // After the world opens, a stored form uploads one atlas layer a frame, so no single frame uploads them all.
       for (const layer of form.atlas.layers.keys()) {
         forms.cards.fill(renderer, slot, form, layer);
         await nextFrame();
       }
     } else forms.cards.fill(renderer, slot, form);
     if (stored === null && kept !== null) {
-      // A failed write only means the build bakes again next time.
+      // A failed write only means the form bakes again on the next visit.
       const key = f.key;
       void farFormData(renderer, form)
         .then((d) => kept.put(key, d))
         .catch(() => undefined)
         .finally(() => form.dispose());
     } else form.dispose();
-    // Its build goes once its form is made; a later bake makes it again.
+    // Drop the realized plant once its form is made. A later bake realizes it again with `again`.
     entry.plant = null;
     ms += performance.now() - t0;
   }
 
-  /** Starts bringing form `k` into a free slot, turning in from nothing once it is there (or at once, before the world shows). */
+  /** Starts loading form `k` into the free `slot`. Once loaded it fades in from 0, or shows at full size when `instant`. */
   const start = (k: number, slot: number, instant: boolean): Promise<void> => {
     const f = formOf(k);
     owner[slot] = k;
@@ -203,7 +201,10 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
     return run;
   };
 
-  /** Every form by weight, heaviest first: a form already holding a slot counts `outweigh` times, so only a much heavier one takes it. */
+  /**
+   * Forms by weight, heaviest first. A held form ranks first, and a form with a slot counts `outweigh` times its
+   * weight, so only a much heavier form takes the slot.
+   */
   const ranked = (): number[] => {
     const score = (k: number): number => {
       const f = formOf(k);
@@ -225,9 +226,10 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
   };
 
   /**
-   * Turns out, lightest first, as many forms the slots no longer hold for as
-   * wanted forms wait for a slot, keeping the rest turned in; and starts
-   * bringing the heaviest wanted form into a free slot.
+   * Fades out the lightest forms that have a slot but no longer rank in the
+   * top `slots`, one for each wanted form that no free slot can take, and
+   * fades the rest back in. Then starts loading the heaviest wanted form that
+   * has no slot into a free slot.
    */
   const decide = (): void => {
     const want = new Set(ranked().slice(0, slots));
@@ -250,7 +252,7 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
     }
   };
 
-  /** Moves every form in a slot `dt` seconds along its turn, and frees the slot of one turned all the way out. */
+  /** Advances every slotted form's fade by `dt` seconds and frees the slot of a form fully faded out. Returns whether any fade still moves. */
   const turn = (dt: number): boolean => {
     let moving = false;
     const step = dt / FAR_TURN.seconds;
@@ -272,7 +274,7 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
   const idle = (moving: boolean): boolean => {
     if (moving || bringing !== null) return false;
     const want = ranked().slice(0, slots);
-    // Nothing waits for a slot it would take: all wanted hold one, or none is free for them.
+    // Idle when no wanted form can still get a slot: all have one, or no slot is free.
     return want.every((k) => formOf(k).slot >= 0) || !owner.includes(-1);
   };
 
@@ -288,7 +290,7 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
         if (free < 0) break;
         await start(k, free, true);
       }
-      // Builds no slot holds are let go of; one wanted later is made again.
+      // Drop every realized plant. A form loaded later realizes its plant again.
       for (const p of forms.plants) p.plant = null;
       opened = true;
     },
@@ -308,7 +310,7 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
       const f = formOf(k);
       f.held++;
       if (f.slot === -1 && !owner.includes(-1)) {
-        // The lightest form gives its slot up at once: the swap test hides every other copy while it runs.
+        // Free the lightest form's slot at once without a fade, since the swap test hides every other copy while it runs.
         const lightest = ranked()
           .reverse()
           .find((j) => formOf(j).slot >= 0 && formOf(j).held === 0);
@@ -320,7 +322,7 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
           forms.set(lightest, -1, 0);
         }
       }
-      // A held form outranks every other, so the next free slot brings it.
+      // A held form ranks first, so `decide` loads it into the next free slot.
       undecided = true;
       while (f.slot < 0) {
         if (f.failed) throw new Error(`Far form ${k} could not be brought.`);

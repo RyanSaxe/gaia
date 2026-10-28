@@ -1,7 +1,7 @@
-// A thread that makes builds ahead of the page (made.ts): it realizes each
-// build it is handed and hands back its geometry, moved rather than copied.
-// It runs the same pure realize the page would, so a build made here is the
-// same, byte for byte, as one made on the page.
+// A worker that makes builds ahead for the page (made.ts). It realizes each
+// build request and transfers its geometry back rather than copying it. It
+// runs the same pure realize as the page, so a build made here is byte for
+// byte the same as one made on the page.
 
 import { type AnyKind, Library } from "@gaia/schema";
 import { FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, ROCK_PRIMITIVES, STRUCTURE_PRIMITIVES, WILDFLOWER_PRIMITIVES } from "@gaia/primitives";

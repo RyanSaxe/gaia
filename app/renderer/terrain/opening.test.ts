@@ -12,13 +12,13 @@ import { snapshotFacts } from "./snapshot-facts.ts";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 
-/** A world's terrain as the page bakes it, and where it lands the person. */
+/** A world's terrain as the page bakes it, and where the world opens the person. */
 function landing(document: WorldDocument): { terrain: Terrain; at: ReturnType<typeof openingSpot>; world: WorldDocument["world"] } {
   const terrain = bakeTerrain(openedWorld(document).spec, lib);
   return { terrain, at: openingSpot(terrain, document.world), world: document.world };
 }
 
-/** A made-up codebase of `seed`: a few packages of folders and files of every size, which imports and depends as it likes. */
+/** A random codebase from `seed`: a few packages of folders and files of every size, with random imports and dependencies. */
 function randomFacts(seed: number): CodeFacts {
   const r = rand(seedOf(`opening-${seed}`));
   const packages = 2 + Math.floor(r.next() * 4);
@@ -57,7 +57,7 @@ async function randomWorld(seed: number): Promise<WorldDocument> {
 function expectAmongCode({ terrain, at, world }: ReturnType<typeof landing>, what: string): void {
   expect(amongCode(world, at.x, at.z), `${what} lands among the code`).toBe(true);
   expect(waterDepthAt(terrain, at.x, at.z), `${what} lands on dry ground`).toBeLessThanOrEqual(OPENING.dry);
-  // Clear of every tree, bush, stone, building and landmark by a few meters, so turning round never fills the view.
+  // A few meters clear of every tree, bush, stone, building and landmark, so turning around never fills the view.
   expect(clearOfCode(world, at.x, at.z), `${what} lands clear of what stands for code`).toBe(true);
   expect(Number.isFinite(at.yaw), what).toBe(true);
 }
@@ -77,7 +77,7 @@ function expectLooksDownstream({ terrain, at }: ReturnType<typeof landing>, what
   expect(along, `${what}: the person looks downstream`).toBeGreaterThan(Math.SQRT1_2);
 }
 
-/** The view is open, the ground ahead never rising to fill it, and something that stands for code is in it. */
+/** The view is open, with no ground ahead rising to fill it, and something that represents code is in it. */
 function expectGoodView({ terrain, at, world }: ReturnType<typeof landing>, what: string): void {
   const view = openingView(terrain, world, at.x, at.z, at.yaw);
   expect(view.rise, `${what}: the ground ahead stays below the eye`).toBeLessThanOrEqual(OPENING.rise);
@@ -85,7 +85,7 @@ function expectGoodView({ terrain, at, world }: ReturnType<typeof landing>, what
 }
 
 describe("where a person first stands in a world from code", () => {
-  // The showcase bakes whole here, as the page bakes it: about ten seconds while other work shares the machine.
+  // The showcase bakes whole here, as the page bakes it, in about ten seconds while other work shares the machine.
   it("is among the showcase's code, on dry ground beside a stream, looking downstream over open ground at code", { timeout: 120_000 }, async () => {
     const { world, summary } = await laySnapshot("a test", "showcase");
     const laid = landing({ root: world.name, facts: snapshotFacts("showcase"), world, summary, judged: {} });
@@ -101,7 +101,7 @@ describe("where a person first stands in a world from code", () => {
     expectGoodView(laid, "the proving ground");
   });
 
-  // Each made-up world is judged by a fake Jev and baked whole: five to eight seconds each.
+  // A fake Jev judges each random world, which then bakes whole, in five to eight seconds each.
   it("is among the code in made-up codebases of every shape, wherever their rivers run", { timeout: 300_000 }, async () => {
     for (const seed of [2, 4, 5]) expectAmongCode(landing(await randomWorld(seed)), `made-up world ${seed}`);
   });
