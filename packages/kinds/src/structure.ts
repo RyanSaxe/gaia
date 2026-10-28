@@ -18,7 +18,7 @@ export const structure = kind({
     }),
     body: slot("Walls", {
       on: "footprint",
-      ask: "its walls are the first thing a person notices about it from the path. Choose the walls whose feel suits the code it represents.",
+      ask: "its walls are the first thing a person feels about it from the path. Choose the walls whose feel suits the code it represents.",
     }),
     roof: slot("Roof", {
       on: "footprint",

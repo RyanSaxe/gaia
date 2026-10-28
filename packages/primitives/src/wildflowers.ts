@@ -73,13 +73,13 @@ export const mushroomParams = {
     pointed: "Slender pointed caps, like a pixie's hat, for code that feels mischievous and odd",
   }),
   // Real mushroom heights in meters. The renderer's mushrooms group grows short turf round each drift, so they stay visible.
-  height: t.scale("How tall the mushrooms stand: barely above the moss for code that feels hidden underfoot, ankle-high for code that feels small but present, a hand high for code that feels quietly productive", { "barely above the moss": 0.09, "ankle-high": 0.13, "a hand high": 0.19 }),
+  height: t.scale("How tall the mushrooms stand: barely above the moss for code that feels hidden underfoot, ankle-high for code that feels small but present, a hand high for code that feels quietly healthy", { "barely above the moss": 0.09, "ankle-high": 0.13, "a hand high": 0.19 }),
 };
 
 export const mushrooms = primitive({
   id: "mushrooms@1",
   role: "Drift",
-  doc: "Capped mushrooms on pale stalks standing up out of the grass, a few young buttons among them, for code that feels hidden, strange and busy out of sight.",
+  doc: "Capped mushrooms on pale stalks standing up out of the grass, a few young buttons among them, for code that feels hidden, strange and quietly at work underneath.",
   params: mushroomParams,
   build: (p, ctx) => buildMushrooms(p, ctx),
 });

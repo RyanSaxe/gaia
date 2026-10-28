@@ -109,7 +109,7 @@ const STREAM = { "dry bed": null, trickle: { width: 2.4, depth: 0.45 }, brook: {
 export const valley = primitive({
   id: "valley@1",
   role: "Relief",
-  doc: "A long valley between two gentle shoulders, with a stream bed along its floor, for code that feels like a through route, where everything passes on to somewhere else.",
+  doc: "A long valley between two gentle shoulders, with a stream bed along its floor, for code that feels like a long journey, with everything passing through on its way somewhere else.",
   params: valleyParams,
   build: (p, ctx): Landform => {
     const extent = extentOf(ctx);

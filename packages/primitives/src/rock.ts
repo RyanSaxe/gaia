@@ -69,7 +69,7 @@ export const stoneCluster = primitive({
 });
 
 export const outcropParams = {
-  length: t.scale("How far the ledge runs: short for code that feels like a glimpse of something deeper, long for code that feels far-reaching, a long ridge for code that feels foundational to everything around it", { short: 4, long: 7, "a long ridge": 11 }),
+  length: t.scale("How far the ledge runs: short for code that feels like a glimpse of something deeper, long for code that feels far-reaching, a long ridge for code that feels like the backbone of its area", { short: 4, long: 7, "a long ridge": 11 }),
   height: t.scale("How high it stands from the ground: barely breaking the turf for code that feels buried and quiet, knee-high for code that feels half exposed, waist-high for code that feels bare and unyielding", {
     "barely breaking the turf": 0.5,
     "knee-high": 0.9,

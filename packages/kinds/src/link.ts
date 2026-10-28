@@ -13,7 +13,7 @@ export const link = kind({
   doc: "A trail worn into the ground between two entities where one depends on the other.",
   slots: {
     route: slot("Route", {
-      ask: "the trail shows how much one entity depends on the other. It is wide and well trodden when most of its files import the other, a beaten path edged with stones for a deliberate, maintained connection, and a faint track for one or a few imports. How directly it runs shows how direct the dependency is.",
+      ask: "the trail shows how much one entity depends on the other: wide and well trodden when most of its files import the other, a beaten path edged with stones for a deliberate, kept connection, and a faint track for one or a few imports. How directly it runs shows how direct the dependency is.",
     }),
   },
   facts: {},

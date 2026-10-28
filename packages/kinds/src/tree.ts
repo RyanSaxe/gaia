@@ -10,7 +10,7 @@ import { kind, slot } from "@gaia/schema";
 export const tree = kind({
   id: "tree",
   subject: "thing",
-  doc: "A tree, taller than a person, that represents one thing in the code. Its shape, bark, leaves and movement show how that code feels.",
+  doc: "A tree that grows taller than a person, representing one thing in the code: how it rises, what grows on it and how it moves show how that code feels.",
   slots: {
     form: slot("Skeleton", { ask: "its frame sets how the tree rises and spreads. Choose the frame whose feel suits the code it represents." }),
     bark: slot("Surface", { on: "form", ask: "its bark shows how weathered the code it represents feels." }),
@@ -18,7 +18,7 @@ export const tree = kind({
     bloom: slot("Ornament", {
       on: "crown",
       optional: true,
-      ask: "flowers, pods, berries or fruit in its crown show that the code it represents feels generous or in its prime. A tree whose code feels plain and workmanlike has none.",
+      ask: "flowers, pods, berries or fruit in its crown show that the code it represents feels generous or in its season. A tree whose code feels plain and workmanlike has none.",
     }),
     motion: slot("Motion", { ask: "how it moves in the wind shows how restless or settled the code it represents feels." }),
     palette: slot("Palette", { ask: "its colors show the mood of the code it represents and how it fits with its land." }),

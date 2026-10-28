@@ -171,7 +171,7 @@ export const blossomsParams = {
 export const blossoms = primitive({
   id: "blossoms@1",
   role: "Ornament",
-  doc: "Flowers, pods or berries among the foliage, for code that feels in its prime.",
+  doc: "Flowers, pods or berries among the foliage, for code that feels in its season.",
   params: blossomsParams,
   build: (p, ctx, anchors) => buildBlossoms(p, ctx, anchors),
 });
@@ -197,7 +197,7 @@ export const sway = primitive({
   role: "Motion",
   doc: "Movement in the wind, as restless or as settled as the code feels.",
   params: {
-    stiffness: t.scale("How the wind moves it: stiff for code that feels rigid and fixed, gently swaying for code that feels easy, supple for code that feels flexible and yielding", { supple: 0.9, "gently swaying": 0.55, stiff: 0.2 }),
+    stiffness: t.scale("How the wind moves it: stiff for code that feels rigid and unchanging, gently swaying for code that feels easy, supple for code that feels flexible and yielding", { supple: 0.9, "gently swaying": 0.55, stiff: 0.2 }),
     rhythm: t.scale("How quickly it moves: slow for code that feels calm and unhurried, gentle for code that feels relaxed, quick for code that feels nervous and lively", { slow: 0.35, gentle: 0.6, quick: 1.1 }),
   },
   build: (p) => ({ sway: p.stiffness, frequency: p.rhythm }),
@@ -259,7 +259,7 @@ export const leafMoundParams = {
 export const leafMound = primitive({
   id: "leaf-mound@1",
   role: "Foliage",
-  doc: "Crowded leaf clusters on short twigs that fill a shrub's frame down to the ground, with a ragged outline, so it looks like one leafy mass, for code that feels full and close-knit. On scrub it grows tufts at the tips instead.",
+  doc: "Crowded leaf clusters on short twigs that fill a shrub's frame down to the ground, with a ragged outline, so it looks like one leafy mass, for code that feels full and close-knit, or tufts at its tips, for scrub.",
   params: leafMoundParams,
   build: (p, ctx, skeleton) => buildLeafMound(p, ctx, skeleton),
 });

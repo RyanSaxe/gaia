@@ -83,7 +83,7 @@ export const groundCover = primitive({
     cover: t.choice("What covers the ground", {
       "lush grass": "Soft green grass, for code that feels fresh, eager and cared for",
       "golden steppe": "Dry golden grassland, for code that feels sun-baked, spare and wide open",
-      "silver grass": "Tall pale plumed grass that ripples in the wind, for code that feels restless, airy and always changing",
+      "silver grass": "Tall pale plumed grass that ripples in the wind, for code that feels restless, airy and always on the move",
       moss: "A deep cushion of moss, for code that feels old, quiet and settled",
       heather: "Low purple heather, for code that feels wild, tough and a little lonely",
       "sand and scrub": "Pale sand with clumps of scrub, for code that feels sparse, dry and hard-won",

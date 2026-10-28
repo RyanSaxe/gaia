@@ -62,7 +62,7 @@ export const cottagePlanParams = {
 export const cottagePlan = primitive({
   id: "cottage-plan@1",
   role: "Footprint",
-  doc: "A building's plan, which sets the volumes it is built from, their storeys and roof forms, and where the door and windows go. The volumes are a single block, an L, a T, a long range or a cluster, with a porch, a lean-to or a turret.",
+  doc: "A building's plan: the volumes it is put together from, such as a single block, an L, a T, a long range or a cluster, with a porch, a lean-to or a turret, their storeys and roof forms, and where the door and windows go.",
   params: cottagePlanParams,
   build: (p, ctx) => layOutCottage(p, ctx),
 });
@@ -224,7 +224,7 @@ export const towerParams = {
 export const tower = primitive({
   id: "tower@1",
   role: "Feature",
-  doc: "A tall square tower rising from the back corner of the house, its narrow windows lamplit at night, for code that feels dreamy, distant and idealistic. It crumbles from the top as vitality falls.",
+  doc: "A tall square tower rising from the back corner of the house, its narrow windows lamplit at night, for code that feels dreamy, far-off and impractical. It crumbles from the top as vitality falls.",
   params: towerParams,
   build: (p, ctx, plan) => buildTower(p, ctx, plan),
 });
@@ -239,7 +239,7 @@ export const dovecoteParams = {
 export const dovecote = primitive({
   id: "dovecote@1",
   role: "Feature",
-  doc: "A dovecote beside the house, its little doorways and ledges open to the sky, for code that feels sociable, chatty and busy with the code around it. Its roof rots open and it collapses as vitality falls.",
+  doc: "A dovecote beside the house, its little doorways and ledges open to the sky, for code that feels sociable and chatty, with visitors coming and going. Its roof rots open and it collapses as vitality falls.",
   params: dovecoteParams,
   build: (p, ctx, plan) => buildDovecote(p, ctx, plan),
 });

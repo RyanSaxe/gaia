@@ -41,7 +41,7 @@ export const lookoutTowerParams = {
 export const lookoutTower = primitive({
   id: "lookout-tower@1",
   role: "Landmark",
-  doc: "A stone tower, round, square or eight-sided, straight, tapering or in stages, with corbelled galleries and a roof, battlements or a lantern room, for code that feels lonely, exposed and watchful. Its slit windows are lit at night. It crumbles from the top down as vitality falls.",
+  doc: "A stone tower, round, square or eight-sided, straight, tapering or in stages, with corbelled galleries and a roof, battlements or a lantern room, for code that feels lonely and weathered. Its slit windows are lit at night. It crumbles from the top down as vitality falls.",
   params: lookoutTowerParams,
   build: (p, ctx) => buildLookoutTower(p, ctx),
 });
@@ -156,7 +156,7 @@ export const rotundaParams = {
 export const rotunda = primitive({
   id: "rotunda@1",
   role: "Landmark",
-  doc: "A small round stone temple, like a garden folly, with a ring of columns on a stepped base carrying a dome or an open ring, for code that feels graceful, contemplative and set a little apart. As vitality falls the dome falls in from the top, and then the columns topple outward one by one onto the steps.",
+  doc: "A small round stone temple, like a garden folly, with a ring of columns on a stepped base carrying a dome or an open ring, for code that feels graceful and contemplative, a quiet place set a little apart. As vitality falls the dome falls in from the top, and then the columns topple outward one by one onto the steps.",
   params: rotundaParams,
   build: (p, ctx) => buildRotunda(p, ctx),
 });
