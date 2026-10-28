@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, GRAIN, Library, type Part, type Skeleton, rand } from "@gaia/schema";
 import * as primitivesModule from "@gaia/primitives";
-import { PRIMITIVES } from "@gaia/primitives";
+import { BUSH_PRIMITIVES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
 import { applyVitality, detailAt, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
@@ -213,6 +213,72 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
       return healthy.positions.some((x, i) => x !== failing.positions[i]) || healthy.colors.some((x, i) => x !== failing.colors[i]);
     });
     expect(changed).toBe(true);
+  });
+});
+
+/** A crown as full as Jev's "full": every scale at its middle level, with every choice option cycled through. */
+function full(p: AnyPrimitive): Stored[] {
+  return samples(p).map((s) => {
+    const out: Stored = { ...s };
+    for (const [name, f] of Object.entries(p.params) as [string, Field][]) if (f.type === "scale") out[name] = f.levels[Math.floor(f.levels.length / 2)]?.words ?? "";
+    return out;
+  });
+}
+
+/**
+ * How many deep a crown's leaves lie over its silhouette seen from the side:
+ * the area of its leaf cards over the ellipse its leaves span. A crown whose
+ * frame shows through between thin fringes or scattered clusters lies about
+ * one or two deep; a full one, several.
+ */
+function leafLayers(parts: readonly Part[]): number {
+  let area = 0;
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (const part of parts.filter((q) => q.swatch === "leaf")) {
+    const q = part.positions;
+    q.forEach((v, k) => {
+      lo[k % 3] = Math.min(lo[k % 3] as number, v);
+      hi[k % 3] = Math.max(hi[k % 3] as number, v);
+    });
+    for (let t = 0; t < part.indices.length; t += 3) {
+      const [a, b, c] = [0, 1, 2].map((j) => (part.indices[t + j] as number) * 3) as [number, number, number];
+      const e = [0, 1, 2].map((k) => (q[b + k] as number) - (q[a + k] as number)) as [number, number, number];
+      const f = [0, 1, 2].map((k) => (q[c + k] as number) - (q[a + k] as number)) as [number, number, number];
+      area += 0.5 * Math.hypot(e[1] * f[2] - e[2] * f[1], e[2] * f[0] - e[0] * f[2], e[0] * f[1] - e[1] * f[0]);
+    }
+  }
+  const span = (k: number): number => Math.max(0, (hi[k] as number) - (lo[k] as number));
+  return area / Math.max(1e-6, Math.PI * ((span(0) + span(2)) / 4) * (span(1) / 2));
+}
+
+/**
+ * The fewest layers a full crown's leaves lie in over its silhouette
+ * (`leafLayers`). The sparse crowns this guards against, a bush's leaf mound
+ * stretched over a tree's frame or a fir's fronds along a broadleaf's limbs,
+ * lay one to two deep; a bramble's leaves sleeve its canes, with ground
+ * between them, about two and a half deep.
+ */
+const FULL_LAYERS = 2.4;
+
+/** The frames each crown is composed on: a tree's crowns on a tree's frames, and a bush's on a bush's (`TREE_PRIMITIVES`, `BUSH_PRIMITIVES`). */
+const framesFor = (crown: AnyPrimitive): { name: string; frame: Skeleton }[] =>
+  [TREE_PRIMITIVES, BUSH_PRIMITIVES].flatMap((parts) => {
+    const ids = new Set(parts.map((q) => q.id));
+    if (!ids.has(crown.id)) return [];
+    return lib.forRole("Skeleton").filter((q) => ids.has(q.id)).flatMap((q) => samples(q).map((s, i) => ({ name: `${q.id} sample ${i}`, frame: build(q, s, null, 11) as Skeleton })));
+  });
+
+describe.each(lib.forRole("Foliage").map((p) => [p.id, p] as const))("%s", { timeout: 60_000 }, (_id, p) => {
+  it("when full, lies several leaves deep over its silhouette on every frame it is composed on", () => {
+    const thin: string[] = [];
+    for (const { name, frame } of framesFor(p)) {
+      full(p).forEach((s, i) => {
+        const layers = leafLayers((build(p, s, frame, 7 + i) as Built).parts as Part[]);
+        if (layers < FULL_LAYERS) thin.push(`on ${name}, ${JSON.stringify(s)}: ${layers.toFixed(1)} deep`);
+      });
+    }
+    expect(thin).toEqual([]);
   });
 });
 

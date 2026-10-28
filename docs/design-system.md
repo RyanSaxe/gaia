@@ -64,7 +64,10 @@ calculates geometry and positions.
 
 Build full canopies from overlapping sprays and layered leaves on branches.
 Never hide a dark ball or body inside a crown, bush or fir frond. Gaps should
-reveal twigs, deeper foliage and sky.
+reveal twigs, deeper foliage and sky. A crown is as full on a large frame as
+on a small one: a leaf mound on a tree's frame grows as many clusters for its
+size as a bush's, and needles hang as a fir's fronds along whorled limbs but
+gather in a pine's tufts at the tips of a broadleaf's forking limbs.
 
 Leaf cuts, bark and canopy lighting are shared across components. Leaves read
 as individual shapes close up and coherent masses farther away. Bark faces
