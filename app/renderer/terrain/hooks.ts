@@ -718,7 +718,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       const s = world.subjects[i];
       if (s !== undefined) world.approach(s);
     },
-    subjects: () => world.subjects.map((s) => ({ name: s.represented.name, standsAs: s.standsAs, ...(s.built === undefined ? {} : { built: s.built }), x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
+    subjects: () => world.subjects.map((s) => ({ name: s.represented.name, formName: s.formName, ...(s.built === undefined ? {} : { built: s.built }), x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
     card: () => (world.shown === null ? null : { name: world.shown.name, what: world.shown.what }),
     closeCard: () => world.hideCard(),
     walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => world.walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),

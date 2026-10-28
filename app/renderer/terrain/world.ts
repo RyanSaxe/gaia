@@ -122,7 +122,7 @@ export interface TreeVariant {
 export interface Subject {
   readonly represented: Represented;
   /** Its form in the world, such as "a watermill". */
-  readonly standsAs: string;
+  readonly formName: string;
   /** For a tree, bush, stone or flowers, its build's name from its parts (`composedName`). Other things may share it. */
   readonly built?: string;
   /** Its position. `readingSpot` gives where a person stops to read its sign, which for a tree depends on where they come from. */
@@ -323,7 +323,7 @@ export interface Heading {
 /** What a person walked up to: what it represents, and its form in the world, such as "A watermill". */
 export interface CardThing {
   readonly represented: Represented;
-  readonly standsAs: string;
+  readonly formName: string;
 }
 
 /** Where a person lands, and their yaw in radians with 0 facing -z. */
@@ -1325,7 +1325,7 @@ export function createWorld(root: HTMLElement): World {
   function placeSigns(): void {
     const buildingSubjects: Subject[] = settlement.buildings.map((b) => ({
       represented: b.represented,
-      standsAs: withArticle(b.kindName),
+      formName: withArticle(b.kindName),
       x: b.site.x,
       z: b.site.z,
       readingSpot: () => settlement.readingSpotOf(b),
@@ -1343,7 +1343,7 @@ export function createWorld(root: HTMLElement): World {
           const { x, z } = s.site;
           return [{
             represented: thing.represented,
-            standsAs: withArticle(lm.name),
+            formName: withArticle(lm.name),
             x,
             z,
             height: landmarkViews[i]?.height ?? 6,
@@ -1362,7 +1362,7 @@ export function createWorld(root: HTMLElement): World {
       const sym = treeSymbol(tree);
       return {
         represented: tree.represented,
-        standsAs: sym === undefined ? "A tree" : withArticle(sym.form),
+        formName: sym === undefined ? "A tree" : withArticle(sym.form),
         built: composedName(treeAsks[tree.variant]?.blueprint as Blueprint),
         x,
         z,
@@ -1388,7 +1388,7 @@ export function createWorld(root: HTMLElement): World {
           const { x, z } = p;
           return [[at, {
             represented: sym.represented,
-            standsAs: withArticle(sym.form),
+            formName: withArticle(sym.form),
             ...(code?.plants[p.rule as PlantGroup]?.[p.variant] === undefined ? {} : { built: composedName(code.plants[p.rule as PlantGroup][p.variant] as Blueprint) }),
             x,
             z,
@@ -1439,7 +1439,7 @@ export function createWorld(root: HTMLElement): World {
   let cardAt: { x: number; z: number } | null = null;
   const cardListeners: ((thing: CardThing | null) => void)[] = [];
   function showCard(s: Subject): void {
-    for (const l of cardListeners) l({ represented: s.represented, standsAs: s.standsAs });
+    for (const l of cardListeners) l({ represented: s.represented, formName: s.formName });
     shown = s.represented;
     cardAt = { x: walker.x, z: walker.z };
   }

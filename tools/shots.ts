@@ -68,7 +68,7 @@ window.__shots = (() => {
       }
       const forms = new Set(stops.map((s) => s.name));
       for (const s of T.subjects()) {
-        const form = s.built === undefined ? bare(s.standsAs) : s.built.toLowerCase();
+        const form = s.built === undefined ? bare(s.formName) : s.built.toLowerCase();
         if (forms.has(form)) continue;
         forms.add(form);
         stops.push({ name: form, at: { x: s.x, z: s.z, height: s.height } });

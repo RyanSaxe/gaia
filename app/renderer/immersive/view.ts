@@ -181,13 +181,13 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
    * `keyOf`. A painting's key joins the project, world size, `PAINTER`, thing
    * id, this form and the thing's vitality, so a change to any of them repaints it.
    */
-  let standsAs: { readonly code: CodeWorld; readonly as: ReadonlyMap<string, string> } | null = null;
+  let formCache: { readonly code: CodeWorld; readonly as: ReadonlyMap<string, string> } | null = null;
   const keyOf = (thing: string, wide: boolean): string | null => {
     const code = world.code();
     if (code === null || words === null) return null;
-    if (standsAs?.code !== code) standsAs = { code, as: new Map([...[...code.symbols.map((s) => [s.id, s] as const), ...code.plants.map((s) => [s.path, s] as const)].map(([id, s]) => [id, s.blueprint?.id ?? s.form] as const), ...code.things.map((t) => [t.path, t.blueprint.id] as const)]) };
+    if (formCache?.code !== code) formCache = { code, as: new Map([...[...code.symbols.map((s) => [s.id, s] as const), ...code.plants.map((s) => [s.path, s] as const)].map(([id, s]) => [id, s.blueprint?.id ?? s.form] as const), ...code.things.map((t) => [t.path, t.blueprint.id] as const)]) };
     const of = words.journal.entry(entityOf(thing)) !== undefined ? entityOf(thing) : thing;
-    return [code.projectId, Math.round(code.size), PAINTER, wide ? `${FRONTISPIECE}:${thing}` : thing, standsAs.as.get(thing) ?? "", words.vitality(of).toFixed(2)].join("|");
+    return [code.projectId, Math.round(code.size), PAINTER, wide ? `${FRONTISPIECE}:${thing}` : thing, formCache.as.get(thing) ?? "", words.vitality(of).toFixed(2)].join("|");
   };
   /** Paints each thing from the world's view before its page opens, only while the person is not walking, and stores the paintings in `browserPaintings`. */
   const paintings = createPaintings({ view: world.view, store: browserPaintings(), keyOf, idle: () => !world.person().walking });
