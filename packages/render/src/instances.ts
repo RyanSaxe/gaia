@@ -1,15 +1,11 @@
-// Many copies of one realized component, drawn as one InstancedMesh per part
-// and level of detail: a rock, a bush, a drift or a tree placed a hundred
-// times costs a few draw calls. The material is the plant material itself,
-// with the instance's matrix, vitality, seed and hue read per instance. The
-// plant shader uses most of WebGL's 16 attribute slots, so vitality, hue and
-// seed ride in the instance matrix's unused bottom row, and only how far a
-// copy's vitality lags a change (`easeVitality`) takes a slot of its own.
-//
-// Each level of detail leaves out whole pieces (`detailAt` in @gaia/realize).
-// Which copies draw, and at which level, is chosen before every pass by the
-// one who stands the copies (the world's woods): `draw` packs the
-// copies it is given into each level's instance buffer.
+// Draws many copies of one realized component with the plant material, as one
+// InstancedMesh per part and level of detail, so a rock, bush, drift or tree
+// placed a hundred times costs a few draw calls. The plant shader uses most of
+// WebGL's 16 attribute slots, so vitality, hue and seed go in the instance
+// matrix's unused bottom row, and only a copy's vitality lag (`easeVitality`)
+// takes its own slot. The caller, the world's woods, chooses before every pass
+// which copies draw at which level, and `draw` packs them into each level's
+// instance buffer.
 
 import * as THREE from "three";
 import type { Part, Swatch } from "@gaia/schema";
@@ -18,23 +14,23 @@ import type { SceneLight } from "./light.ts";
 import { DEPTH_FRAG, DEPTH_VERT, FOLIAGE, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, letGoOnUpload, sprayColors } from "./plant.ts";
 import { closeEachFrame, followVitality } from "./lag.ts";
 
-/** Where one copy stands. */
+/** One copy's placement. */
 export interface InstanceSpot {
   readonly x: number;
   readonly y: number;
   readonly z: number;
   readonly yaw: number;
   readonly scale: number;
-  /** The ground's slope under the copy, dy/dx and dy/dz: stems stay upright while the base follows it. */
+  /** The ground's slope under the copy as dy/dx and dy/dz. The base follows it and stems stay upright. */
   readonly slope?: readonly [number, number];
   readonly vitality?: number;
   /** A hue shift in turns for this copy, so neighbors of one blueprint differ a little. */
   readonly hue?: number;
-  /** The copy's own seed, 0 to 1, so neighbors of one blueprint never flutter in step. Drawn from its place when absent. */
+  /** The copy's own seed, 0 to 1, so neighbors of one blueprint never flutter in step. Derived from its position when absent. */
   readonly seed?: number;
 }
 
-/** A copy's own seed, 0 to 1, drawn from where it stands when its spot gives none: neighbors never flutter in step. */
+/** A copy's seed, 0 to 1, hashed from its position when its spot gives none, so neighbors never flutter in step. */
 export function copySeed(spot: InstanceSpot): number {
   return spot.seed ?? (((Math.sin(spot.x * 12.9898 + spot.z * 78.233) * 43758.5453) % 1) + 1) % 1;
 }
@@ -45,7 +41,7 @@ const MAX_LEVELS = 3;
 /** A level must leave out at least half the triangles of the level before it to earn its draw calls. */
 const LEVEL_GAIN = 0.5;
 
-/** The copies one level draws in a pass, and a name for that choice: the same name again draws without repacking. */
+/** The copies one level draws in a pass, and a key for that choice. The same key again draws without repacking. */
 export interface LevelCopies {
   readonly copies: readonly number[];
   readonly key: string;
@@ -54,38 +50,39 @@ export interface LevelCopies {
 export interface PlantInstances extends PlantView {
   readonly count: number;
   /**
-   * The distance from which each level may draw, starting with 0 for the
-   * full detail: every piece a level leaves out has already left on screen
-   * at that distance.
+   * The distance from which each level may draw, starting with 0 for full
+   * detail. A level leaves out whole pieces (`detailAt` in @gaia/realize)
+   * that have already faded out on screen at that distance.
    */
   readonly levels: readonly number[];
-  /** Encloses the plant as built, at scale 1 where it stands, so no piece's center lies outside it. A copy: changing it changes nothing. */
+  /** Encloses the plant as built, at scale 1 about its origin, so no piece's center lies outside it. It is a copy, so changing it has no effect. */
   readonly built: THREE.Sphere;
   /** How much farther than `built` the plant reaches as drawn: wind, decline and far pieces growing toward a pixel's size. */
   readonly reach: number;
-  /** Sets one copy's vitality; the shader reads it per instance. */
+  /** Sets one copy's vitality. The shader reads it per instance. */
   setVitalityAt(index: number, v: number): void;
   /**
-   * For the pass about to render, at `focal` device pixels of focal length:
-   * a copy whose crown spans fewer than `from` pixels dissolves, gone at
-   * `to`, where only its far card draws (0 and 0 for no far card); and,
-   * far card or not, a copy whose crown spans fewer than `gone[0]` pixels
-   * dissolves, gone at `gone[1]`, too small to see. A focal of 0 dissolves
-   * nothing.
+   * Sets up the pass about to render, at `focal` device pixels of focal
+   * length. A copy whose crown spans fewer than `from` pixels dissolves and is
+   * gone at `to`, where only its far card draws. `from` and `to` are 0 for no
+   * far card. With or without a far card, a copy whose crown spans fewer than
+   * `gone[0]` pixels dissolves and is gone at `gone[1]`, too small to see. A
+   * focal of 0 dissolves nothing.
    */
   nearLeaves(focal: number, from: number, to: number, gone: readonly [number, number]): void;
-  /** Draws, in the pass about to render, the copies given for each level, packed into its instance buffer; levels not given draw nothing. */
+  /** Draws, in the pass about to render, the copies given for each level, packed into its instance buffer. Levels not given draw nothing. */
   draw(levels: readonly LevelCopies[]): void;
   /**
    * Readies every level to draw one copy, so the next render uploads every
-   * geometry at once, while a loading screen or a rebake already holds the
-   * frame, never later as a level first comes into view. The next `draw` undoes it.
+   * geometry at once while a loading screen or a rebake already holds the
+   * frame, never later when a level first comes into view. The next `draw`
+   * undoes it.
    */
   warm(): void;
   /**
-   * Moves the copies to new spots, as many as there are: a world's new bake
-   * stands the same blueprints elsewhere. The geometry, its levels and the
-   * materials stay, so this costs only the copies' matrices.
+   * Moves the copies to new spots, as many as there are, as when a world's new
+   * bake places the same blueprints elsewhere. The geometry, its levels and
+   * the materials stay, so this costs only the copies' matrices.
    */
   respot(spots: readonly InstanceSpot[]): void;
   /** Copies and triangles the last pass drew. */
@@ -113,14 +110,14 @@ function instanced(vertex: string): string {
 }
 
 /**
- * The near form leaving: once a copy's crown spans fewer device pixels than
- * `uNearLeaves.y` on this pass's screen, the copy dissolves, until at
- * `uNearLeaves.z` it is gone and its far card stands alone; and below
- * `uNearGone.x` pixels it dissolves too small to see, gone at `uNearGone.y`.
- * Its crown is measured as `crownsOf` in @gaia/render measures it, from the
- * copy's own matrix, so the dissolve ends where the copy stops drawing.
- * `uNearLeaves.x` is the pass's focal length in device pixels; 0 never
- * dissolves.
+ * Fades out the near form. Once a copy's crown spans fewer device pixels than
+ * `uNearLeaves.y` on this pass's screen, the copy dissolves, and at
+ * `uNearLeaves.z` it is gone and its far card draws alone. Below
+ * `uNearGone.x` pixels it also dissolves for being too small to see, gone at
+ * `uNearGone.y`. It measures the crown as `crownsOf` in @gaia/render does,
+ * from the copy's own matrix, so the dissolve ends where the copy stops
+ * drawing. `uNearLeaves.x` is the pass's focal length in device pixels, and 0
+ * never dissolves.
  */
 const NEAR_LEAVES_VERT = /* glsl */ `
   {
@@ -139,11 +136,11 @@ const INSTANCED_VERT = swap(
   NEAR_LEAVES_VERT,
 );
 const INSTANCED_DEPTH = instanced(DEPTH_VERT);
-// A leaving copy thins through its coverage, sample by sample, whatever it
-// is made of. It leaves under its far card, which covers its finest pieces
-// only in part, and bark screened away a whole pixel at a time showed
-// through the card there as a stipple. Bark covers every sample, so each
-// part draws exactly as before until the copy leaves.
+// A copy fading out thins through its coverage, sample by sample, whatever it
+// is made of. It fades under its far card, which covers its finest pieces
+// only in part, and bark screened away a whole pixel at a time showed through
+// the card there as a stipple. Bark covers every sample, so each part draws
+// unchanged until the copy starts to fade.
 const INSTANCED_FRAG = swap(
   swap(PLANT_FRAG, "void main() {", "varying float vNearGone;\nvoid main() {"),
   "  gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);",
@@ -171,21 +168,21 @@ function levelsOf(parts: readonly Part[]): { at: number; parts: readonly Part[] 
 interface Level {
   readonly at: number;
   readonly meshes: { mesh: THREE.InstancedMesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial; triangles: number }[];
-  /** One instance buffer every part of the level shares, and the name of the choice of copies it holds now. */
+  /** One instance buffer that every part of the level shares, and `key`, the choice of copies it holds now. */
   attribute: THREE.InstancedBufferAttribute;
   /** Each copy's vitality lag, packed as the matrices are. */
   lags: THREE.InstancedBufferAttribute;
   key: string;
-  /** The copies' data as packed: a copy's change since repacks the level. */
+  /** The data generation the level was packed at. A copy's change since then repacks the level. */
   generation: number;
 }
 
 export function createPlantInstances(plant: Realized, light: SceneLight, spots: readonly InstanceSpot[]): PlantInstances {
-  // Only the palette is read once the copies stand, so the parts' arrays go once the levels are made.
+  // Only the palette is read after building, so the parts' arrays are freed once the levels are made.
   const { palette } = plant;
   const object = new THREE.Group();
 
-  // Bounded by what stands above the soil: a bramble's canes root a metre or more under it, where no one sees them.
+  // Bound only what is above the soil. A bramble's canes root a meter or more below ground, where no one sees them.
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
   for (const part of plant.parts) {
@@ -197,7 +194,8 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   const radius = Math.max(Math.abs(box.min.x), box.max.x, Math.abs(box.min.z), box.max.z, 0.3);
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   // Wind and decline move vertices past the built mesh, a slope shears it,
-  // and far pieces grow toward a pixel's size: the drawn bounds allow for all.
+  // and far pieces grow toward a pixel's size. The drawn bounds allow for all
+  // of these.
   const reach = 3 + 0.15 * height;
 
   // Every copy's matrix, with vitality, hue and seed in its bottom row, and its vitality's lag.
@@ -226,7 +224,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   const place = (next: readonly InstanceSpot[]): void => {
     count = next.length;
     source = new Float32Array(Math.max(1, count) * 16);
-    // Copies stood anew show their vitality at rest.
+    // Newly placed copies show their vitality without easing.
     lagSource = new Float32Array(Math.max(1, count));
     targets = new Float32Array(Math.max(1, count));
     lagging.clear();
@@ -295,7 +293,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
     attribute.setUsage(THREE.DynamicDrawUsage);
     return attribute;
   };
-  // A tree's twigs are bark like its limbs: parts of one swatch draw as one mesh.
+  // Parts of one swatch draw as one mesh, so a tree's twigs join its bark limbs.
   const levels: Level[] = levelsOf(mergeParts(plant.parts)).map(({ at, parts }) => {
     const attribute = bufferFor(count);
     const lags = bufferFor(count, 1);
@@ -358,7 +356,7 @@ export function createPlantInstances(plant: Realized, light: SceneLight, spots: 
   const perCopy = trianglesOf(plant.parts);
   let all = 1;
   const write = (index: number, v: number): void => {
-    // The copy's shown vitality eases toward it from where it is; a copy already resting there needs nothing.
+    // The copy's shown vitality eases toward it from where it is. A copy already at rest there needs nothing.
     if (v === targets[index] && (lagging.has(index) || source[index * 16 + 3] === v)) return;
     targets[index] = v;
     lagging.add(index);

@@ -1,13 +1,13 @@
-// How plants meet the ground. A trunk's base, a rock or a bush sits at the
+// Seats plants on the ground. A trunk's base, a rock or a bush sits at the
 // lowest ground under its footprint, so on a slope the downhill side touches
-// the soil and the uphill side is buried, never floating.
+// the soil and the uphill side is buried.
 
 import { type Lattice, heightAt } from "./lattice.ts";
 import { DRY, type Terrain } from "./world.ts";
 
-/** Plants stand only on ground gentler than this, degrees. */
+/** Maximum ground slope for a plant, in degrees. */
 export const PLANT_SLOPE = 24;
-/** And at least this far from any water, meters. */
+/** Minimum distance in meters from a plant to water (`isWet`). */
 const WATER_CLEARANCE = 4;
 
 /**
@@ -16,12 +16,12 @@ const WATER_CLEARANCE = 4;
  */
 export const PLANT_SINK = 0.12;
 
-/** How far either side the ground's slope under a plant is read, meters: about a bush's reach, so a hummock under it doesn't tip it. */
+/** Meters either side of a plant where `groundSlope` samples the ground. It is about a bush's radius, so a small hummock does not tilt the bush. */
 const SLOPE_REACH = 1;
 
 /**
- * The ground's slope at (x, z), dy/dx and dy/dz, read `SLOPE_REACH` either side: what a copy standing there takes,
- * its base following the ground while its stems stay upright (`InstanceSpot.slope` in @gaia/render).
+ * The ground's slope at (x, z) as dy/dx and dy/dz, sampled `SLOPE_REACH` either side. An instance there tilts its base
+ * to this slope and keeps its stems upright (`InstanceSpot.slope` in @gaia/render).
  */
 export function groundSlope(l: Lattice, x: number, z: number): [number, number] {
   const h = (px: number, pz: number): number => heightAt(l, px, pz);
@@ -33,7 +33,7 @@ export function groundedBase(l: Lattice, x: number, z: number, radius: number): 
   return lowestUnder(l, x, z, radius) - PLANT_SINK;
 }
 
-/** Points on the footprint: its center and three rings. */
+/** Sample points on a footprint: its center and three rings of 16. */
 function footprint(x: number, z: number, radius: number): [number, number][] {
   const out: [number, number][] = [[x, z]];
   for (const ring of [0.35, 0.7, 1]) {

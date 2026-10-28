@@ -1,13 +1,9 @@
-// Trails between a world's places, walked over one network of paths. A
-// trail's look is a `RouteSpec` Jev fills; its route is never chosen, it is
-// found over the baked ground: the cheapest way at a gentle grade, around
-// steep ground and deep water, across a stream where it is narrow, wandering
-// as freely as the spec's winding says. Each trail prefers the ways earlier
-// ones made and never runs beside one, so trails share trunk paths that
-// branch to each place at junctions. The network is cut into ways, stretches
-// of tread between two junctions or places, each knowing every trail that
-// walks it. Composition is held by the network's ground, which shared ways do
-// not add to. Everything here is pure and seeded.
+// Routes trails between a world's places as one network of paths over the
+// baked ground. Jev fills each trail's look (`RouteSpec`), and an A* search
+// finds its route, preferring gentle grades and earlier trails' ways, so
+// trails share trunk paths that branch at junctions. The network is cut into
+// ways, each a stretch of tread between two junctions or places that lists
+// every trail on it.
 
 import { type RouteSpec, seedOf } from "@gaia/schema";
 import { fbm } from "@gaia/primitives";
@@ -21,53 +17,53 @@ import { waterDepthAt } from "./walk.ts";
 export const TRAILS = {
   /** Meters per routing cell. */
   cell: 2,
-  /** Trails keep this far inside the walkable square's edge, meters. */
+  /** Meters inside the walkable square's edge where the routing grid stops. */
   margin: 22,
-  /** Steepest grade a trail climbs head-on; steeper ground is a detour. */
+  /** Reference grade for trail steps. Cost rises above 0.35 of it, and no step is steeper than 1.6 times it. */
   maxGrade: 0.32,
-  /** Cost added per routing cell of shallow water: a crossing is worth about this many meters of detour. */
+  /** Cost added per routing cell of shallow water, so a crossing is worth about this many meters of detour. */
   wade: 14,
-  /** Water deeper than this is never crossed, meters. */
+  /** Trails never cross water deeper than this, in meters. */
   deep: 0.7,
-  /** Walking a way the network already has costs this share, so trails share ways: a trail takes the network unless that is over twice as far. */
+  /** Cost multiplier for steps on an existing way, so trails share ways. A trail takes the network unless that is over twice as far. */
   join: 0.45,
-  /** Ground this many routing cells from a way, but off it, costs `beside` times as much, so no trail runs beside another. */
+  /** Ground within this many routing cells of a way, but off it, costs `beside` times as much, so no trail runs beside another. */
   besideCells: 2,
   beside: 2.5,
-  /** Wavelength of the wandering that `winding` scales, meters. */
+  /** Wavelength in meters of the cost noise that `RouteSpec.winding` scales. */
   wander: 46,
   /** Share of a region's ground the network's treads may cover. */
   share: 0.05,
-  /** Share of the whole land they may cover. */
+  /** Share of the whole land the treads may cover. */
   landShare: 0.02,
-  /** How far the ground eases back to the land beyond a trail's edge, meters. */
+  /** Meters beyond a trail's edge over which leveled ground blends back to the land. */
   blend: 2.6,
   /** Half the length of ground the tread's grade is averaged over, meters. */
   grade: 7,
   /** The most the flattening cuts or fills, meters. */
   maxCut: 0.55,
-  /** The trail field's reach past an edge, meters; farther reads as this. */
+  /** Meters past a way's edge that the trail field measures. Farther samples read this value. */
   reach: 6,
   /** A second way counts at a sample when its edge is within this many meters of the nearest one's, so where ways meet the more worn one shows. */
   meet: 1.2,
-  /** A junction's cairn keeps this far clear of every tread, at least this far from a place, and this far from another cairn, meters. */
+  /** In meters, a cairn's clearance from every tread, its minimum distance from a place, and from another cairn. */
   cairnClear: 0.9,
   cairnFromPlace: 14,
   cairnApart: 40,
-  /** No grass grows this near a cairn's middle, meters, so it stands clear beside its ways. */
+  /** Radius in meters around a cairn's center that has no grass. */
   cairnGround: 1,
-  /** Points a way's wear is known at, evenly along it, for the shaders to blend between. */
+  /** Number of evenly spaced points along a way where `wayWear` computes wear. The shaders blend between them. */
   stations: 4,
 } as const;
 
-/** One end of a trail: a place, such as a cottage's door or a landmark's foot. */
+/** One end of a trail, a place such as a cottage's door or a landmark's foot. */
 export interface TrailEnd {
   readonly id: string;
   readonly x: number;
   readonly z: number;
 }
 
-/** A trail Jev wants: two places, how it looks, and how much Jev wants it. */
+/** A requested trail: two places, its look, and Jev's `want` for it. */
 export interface TrailRequest {
   readonly id: string;
   readonly from: TrailEnd;
@@ -77,40 +73,40 @@ export interface TrailRequest {
   readonly want: number;
 }
 
-/** Where a way crosses a stream: the span from bank to bank, along the way. */
+/** A place where a way crosses a stream, spanning bank to bank along the way. */
 export interface Crossing {
   readonly x: number;
   readonly z: number;
   /** Rotation about y that turns local +x along the way, as Three's rotation does. */
   readonly yaw: number;
-  /** Bank to bank, meters. */
+  /** Length in meters from bank to bank. */
   readonly span: number;
-  /** The water's surface under the middle. */
+  /** The water surface height where the tread crosses the stream's course. */
   readonly level: number;
-  /** The higher bank's ground, where a deck would rest. */
+  /** Ground height of the higher bank, where a deck rests. */
   readonly bank: number;
 }
 
-/** The seed a way's `k`th crossing is built from, so what stands there and how a walk crosses it agree. */
+/** The seed for a way's `k`th crossing. The crossing's build and the walk over it share it, so they agree. */
 export const crossingSeed = (way: Way, k: number): number => seedOf(`${way.id}/crossing${k}`);
 
-/** A trail walking a way: which trail, and how far along it (0 at its first end, 1 at its second) the way's first and last points lie. */
+/** A trail on a way. `from` and `to` give where the way's first and last points lie along the trail, from 0 at its first end to 1 at its second. */
 export interface WayCarry {
   readonly trail: number;
   readonly from: number;
   readonly to: number;
 }
 
-/** A stretch of tread between two junctions or places, walked by one trail or many. */
+/** A stretch of tread between two junctions or places, on one or more trails. */
 export interface Way {
   readonly id: string;
   /** The places or junctions at its first and last points. */
   readonly from: string;
   readonly to: string;
   /**
-   * Its look: its most wanted trail's, as wide as its widest trail, with a
-   * footbridge where it carries much traffic, is wide, or a trail on it asks
-   * for one, and stepping stones otherwise.
+   * The look of its most wanted trail, as wide as its widest trail. It has a
+   * footbridge where three or more trails use it, where it is at least 1.8 m
+   * wide, or where a trail on it asks for one, and stepping stones otherwise.
    */
   readonly style: RouteSpec;
   /** The tread's center line, x and z pairs about a meter apart. */
@@ -119,11 +115,11 @@ export interface Way {
   readonly crossings: readonly Crossing[];
   /** Every region it passes through. */
   readonly regions: readonly number[];
-  /** Every trail walking it, most wanted first. */
+  /** Every trail on it, most wanted first. */
   readonly carries: readonly WayCarry[];
 }
 
-/** One dependency walked over the network: its two places, its look, and the ways it walks in order. */
+/** One dependency's trail over the network: its two places, its look, and its ways in order. */
 export interface Trail {
   readonly id: string;
   /** The ids of the places it joins: its first end and its second. */
@@ -131,20 +127,19 @@ export interface Trail {
   readonly to: string;
   readonly style: RouteSpec;
   readonly want: number;
-  /** The ways it walks from its first end to its second, each `reversed` when walked from its last point to its first. */
+  /** Its ways from its first end to its second. `reversed` marks a way the trail follows from the way's last point to its first. */
   readonly ways: readonly { readonly way: number; readonly reversed: boolean }[];
-  /** Meters walked. */
+  /** Length in meters. */
   readonly length: number;
 }
 
-/** Where three or more ways meet away from a place. */
+/** A point away from any place where three or more ways meet. */
 export interface Junction {
   readonly id: string;
   readonly x: number;
   readonly z: number;
-  /** The ways meeting here. */
   readonly ways: readonly number[];
-  /** A small cairn in the widest gap between its ways, or null where none suits: near a place, near another cairn, or with no dry, clear ground. */
+  /** A small cairn in the widest gap between its ways. Null near a place or another cairn, or where no dry, clear ground fits one. */
   readonly cairn: { readonly x: number; readonly z: number; readonly y: number } | null;
 }
 
@@ -217,7 +212,7 @@ const NEIGHBORS: readonly [number, number][] = [
   [1, 1], [1, -1], [-1, 1], [-1, -1],
   [2, 1], [1, 2], [-1, 2], [-2, 1], [-2, -1], [-1, -2], [1, -2], [2, -1],
 ];
-/** Each neighbor's opposite. */
+/** The index of each neighbor's opposite step. */
 const OPPOSITE = NEIGHBORS.map(([di, dj]) => NEIGHBORS.findIndex(([a, b]) => a === -di && b === -dj));
 /** The neighbor index of a step, by (di + 2) * 5 + (dj + 2). */
 const STEP = (() => {
@@ -234,15 +229,15 @@ interface Grid {
   readonly depth: Float32Array;
   readonly wander: Float32Array;
   readonly blocked: Uint8Array;
-  /** The network so far: a bit per neighbor for each step a trail takes from a cell. */
+  /** The network so far, as one bit per neighbor direction for each step a trail takes from a cell. */
   readonly edges: Uint16Array;
-  /** Routing cells from the nearest way, 0 on one, up to `TRAILS.besideCells + 1` for far. */
+  /** Chebyshev distance in routing cells to the nearest way, 0 on one and capped at `TRAILS.besideCells + 1`. */
   readonly near: Uint8Array;
-  /** Whether each block of `GRID_BLOCK` by `GRID_BLOCK` cells has read its ground yet: a block reads it when a search first reaches it. */
+  /** Whether each `GRID_BLOCK`-square block of cells has its ground filled. A block is filled when a search first reaches it. */
   readonly ready: Uint8Array;
   /** Fills a block's height, slope, depth and wander. */
   readonly fill: (block: number) => void;
-  // Scratch for each search, valid where `seen` holds the search's number; a cell is settled where `settled` does.
+  // Per-search scratch. A cell's `cost` and `came` are valid where `seen` holds the search's number, and it is settled where `settled` does.
   readonly cost: Float64Array;
   readonly came: Int32Array;
   readonly seen: Uint32Array;
@@ -250,7 +245,7 @@ interface Grid {
   searches: number;
 }
 
-/** Cells a side of the blocks the routing grid reads its ground in. */
+/** Side in cells of the blocks the routing grid fills its ground in. */
 const GRID_BLOCK = 32;
 
 function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
@@ -262,7 +257,7 @@ function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
   const depth = new Float32Array(n * n);
   const wander = new Float32Array(n * n);
   const blocks = Math.ceil(n / GRID_BLOCK);
-  // Only the ground a search reaches is read, block by block: a large world's routes cross a small part of it.
+  // Fill only the blocks a search reaches, since a large world's routes cross a small part of it.
   const fill = (block: number): void => {
     const bi = (block % blocks) * GRID_BLOCK;
     const bj = Math.floor(block / blocks) * GRID_BLOCK;
@@ -274,7 +269,7 @@ function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
         const h = heightAt(t.lattice, x, z);
         height[k] = h;
         slope[k] = slopeAt(t.lattice, x, z);
-        // The water's own depth: a bank keeps the level beside the water (`carveStream`) over ground that is dry.
+        // Use the water's depth (`waterDepthAt`), because `carveStream` also records a level over dry bank samples.
         depth[k] = waterDepthAt(t, x, z);
         wander[k] = 0.5 + 0.5 * fbm(seed, x / TRAILS.wander, z / TRAILS.wander, 2, 0.5);
       }
@@ -296,7 +291,7 @@ function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
   return { n, origin, height, slope, depth, wander, blocked, edges: new Uint16Array(n * n), near, ready: new Uint8Array(blocks * blocks), fill, cost: new Float64Array(n * n), came: new Int32Array(n * n), seen: new Uint32Array(n * n), settled: new Uint32Array(n * n), searches: 0 };
 }
 
-/** Cell k's ground, read now if its block has not been. */
+/** Fills cell k's block if it is not filled yet. */
 function readyCell(g: Grid, k: number): void {
   const blocks = Math.ceil(g.n / GRID_BLOCK);
   const block = Math.floor(Math.floor(k / g.n) / GRID_BLOCK) * blocks + Math.floor((k % g.n) / GRID_BLOCK);
@@ -313,16 +308,16 @@ const cellOf = (g: Grid, x: number, z: number): number => {
 const cellX = (g: Grid, k: number): number => g.origin + (k % g.n) * TRAILS.cell;
 const cellZ = (g: Grid, k: number): number => g.origin + Math.floor(k / g.n) * TRAILS.cell;
 
-/** The cheapest chain of cells between two cells, or null when none exists. Steps along the network's ways cost `TRAILS.join`; ground beside a way costs more. */
+/** The cheapest chain of cells between two cells by A* search, or null when none exists. Steps on existing ways cost `TRAILS.join` times as much, and ground beside a way costs more. */
 function search(g: Grid, start: number, goal: number, winding: number): number[] | null {
   const { n, cost, came, seen, settled } = g;
-  // This search's number marks the cells it reached and settled; every other cell reads as unreached.
+  // This search's number marks the cells it reached and settled. Every other cell reads as unreached.
   const id = ++g.searches;
   const costOf = (k: number): number => (seen[k] === id ? (cost[k] as number) : Infinity);
   readyCell(g, start);
   const gi = goal % n;
   const gj = Math.floor(goal / n);
-  // Below the cheapest step per meter, so the search still finds a long way round along the network.
+  // The heuristic stays below the cheapest step cost per meter, so the search still finds a long way round along the network.
   const guess = (k: number): number => Math.hypot((k % n) - gi, Math.floor(k / n) - gj) * TRAILS.cell * TRAILS.join * 0.95;
   const heap = new Heap();
   cost[start] = 0;
@@ -382,7 +377,7 @@ const stepOf = (g: Grid, a: number, b: number): number => STEP[((b % g.n) - (a %
 /** One key per undirected step: its lower cell and the direction from it. */
 const edgeKey = (g: Grid, a: number, b: number): number => (a < b ? a * 16 + stepOf(g, a, b) : b * 16 + stepOf(g, b, a));
 
-/** Adds a trail's cells to the network: its steps, and how near every cell around lies to a way. */
+/** Adds a trail's steps to the network and updates `near` around its cells. */
 function wear(g: Grid, cells: readonly number[]): void {
   const { n } = g;
   for (let s = 0; s + 1 < cells.length; s++) {
@@ -408,7 +403,7 @@ function wear(g: Grid, cells: readonly number[]): void {
   }
 }
 
-/** Chaikin corner cutting, then resampling every `spacing` meters: a trail curves instead of turning on a grid. */
+/** Four passes of Chaikin corner cutting, then resampling every `spacing` meters, so a trail curves instead of turning on the grid. */
 function smoothLine(points: [number, number][], spacing: number): Float32Array {
   let line = points;
   for (let pass = 0; pass < 4; pass++) {
@@ -440,10 +435,10 @@ function smoothLine(points: [number, number][], spacing: number): Float32Array {
   return new Float32Array(out);
 }
 
-/** Water shallower than this under a tread is stepped over, never bridged, meters. */
+/** Water under a tread shallower than this, in meters, gets no crossing. */
 const WADE_DEPTH = 0.05;
 
-/** Where two segments, a to b and c to d, meet: how far along a to b, 0 to 1, or null when they don't. */
+/** Where segments a to b and c to d intersect, as a fraction 0 to 1 along a to b, or null when they don't. */
 function meet(ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number): number | null {
   const den = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
   if (den === 0) return null;
@@ -453,17 +448,17 @@ function meet(ax: number, az: number, bx: number, bz: number, cx: number, cz: nu
 }
 
 /**
- * Where the tread `points` crosses a stream: once for each stretch of it under water that goes from one bank to the
- * other, across the stream's course, spanning it from the last dry point before to the first dry one after. A tread
- * that only runs along a bank, or wades in and out on one side, crosses nothing: the level a bank records beside
- * the water (`carveStream`) is not water to bridge.
+ * Where the tread `points` crosses a stream. There is one crossing for each stretch under water that goes from one bank
+ * to the other across the stream's course, spanning from the last dry point before it to the first dry point after. A
+ * tread that only runs along a bank, or wades in and out on one side, crosses nothing. The level `carveStream` records
+ * beside the water is not water to bridge.
  */
 function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
   const count = points.length / 2;
   const px = (k: number): number => points[k * 2] as number;
   const pz = (k: number): number => points[k * 2 + 1] as number;
   const wet = (k: number): boolean => waterDepthAt(t, px(k), pz(k)) > 0;
-  /** The point `f` points along the tread. */
+  /** The position `f` points along the tread, interpolated. */
   const along = (f: number): [number, number] => {
     const k = Math.min(count - 2, Math.floor(f));
     return [px(k) + (px(k + 1) - px(k)) * (f - k), pz(k) + (pz(k + 1) - pz(k)) * (f - k)];
@@ -501,7 +496,7 @@ function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
     while (a > 0 && wet(a)) a--;
     let b = Math.ceil(over[i] as number);
     while (b < count - 1 && wet(b)) b++;
-    // Every crossing of a course within the stretch is one way over: an even count comes back to the bank it left.
+    // Count the course crossings within the stretch. An even count returns to the bank it left, so it crosses nothing.
     const course = over[i] as number;
     let within = 0;
     while (i < over.length && (over[i] as number) <= b) {
@@ -509,7 +504,7 @@ function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
       i++;
     }
     if (within % 2 === 0) continue;
-    // A course crossed where its spring or seep has run dry, or a damp spot, is stepped over: nothing to bridge.
+    // Water under `WADE_DEPTH`, such as a damp spot or the thin end of a spring or seep, gets no crossing.
     let deepest = 0;
     for (let k = a; k <= b; k++) deepest = Math.max(deepest, waterDepthAt(t, px(k), pz(k)));
     if (deepest < WADE_DEPTH) continue;
@@ -524,7 +519,7 @@ function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
       z,
       yaw: -Math.atan2(bz - az, bx - ax),
       span: Math.hypot(bx - ax, bz - az) + 1.6,
-      // The water's surface where the tread crosses the stream's course, which lies under the deck whatever the chord.
+      // The water surface where the tread crosses the stream's course, which is under the deck whatever the chord.
       level: heightAt(t.lattice, ...along(course), t.waterLevel),
       bank: Math.max(heightAt(t.lattice, ax, az), heightAt(t.lattice, bx, bz)),
     });
@@ -539,7 +534,7 @@ function regionIndex(t: Terrain, x: number, z: number): number {
   return t.region[iz * l.n + ix] ?? 0;
 }
 
-/** Each region's walkable ground, square meters. */
+/** Each region's area inside the land, in square meters. */
 function regionAreas(t: Terrain): number[] {
   const l = t.lattice;
   const areas = t.spec.regions.map(() => 0);
@@ -555,7 +550,7 @@ function regionAreas(t: Terrain): number[] {
 
 const percent = (share: number): string => `${Math.round(share * 1000) / 10}%`;
 
-/** Each way's look from the trails walking it: the most wanted one's, as wide as the widest, bridged by width and traffic. */
+/** A way's look from its trails, most wanted first: the first trail's look with the largest width and wear, and a footbridge by width, traffic or request. */
 function wayStyle(carried: readonly TrailRequest[]): RouteSpec {
   const lead = carried[0] as TrailRequest;
   const width = Math.max(...carried.map((r) => r.style.width));
@@ -564,7 +559,7 @@ function wayStyle(carried: readonly TrailRequest[]): RouteSpec {
   return { ...lead.style, width, wear, crossing: bridged ? "footbridge" : "stepping-stones" };
 }
 
-/** Where a junction's cairn stands: in the widest gap between the ways leaving it, clear of every tread, on dry ground. */
+/** Places a junction's cairn in the widest gap between the ways leaving it, clear of every tread and on dry ground, or returns null. */
 function cairnOf(t: Terrain, x: number, z: number, leaving: readonly { readonly dx: number; readonly dz: number; readonly half: number }[], ways: readonly Way[]): { x: number; z: number; y: number } | null {
   const angles = leaving.map((l) => Math.atan2(l.dz, l.dx)).sort((a, b) => a - b);
   let gap = -1;
@@ -591,15 +586,15 @@ function cairnOf(t: Terrain, x: number, z: number, leaving: readonly { readonly 
 }
 
 /**
- * Routes the trails Jev wants, most wanted first, as one network of paths.
+ * Routes the requested trails as one network of paths, most wanted first.
  * Each trail takes the ways earlier ones made wherever that is not much
  * farther, and never runs beside one, so trails share trunk paths and
- * branch at junctions. A trail is kept while the ground it adds to the
- * network (shared ways add none) keeps every region it crosses within
- * `TRAILS.share` of its ground and the whole land within `TRAILS.landShare`;
- * one that would not, or that no gentle, dry way joins, is listed in
- * `dropped` with the reason. Ends sharing an id share the first one's spot.
- * `avoid` keeps trails out of footprints such as a house's walls.
+ * branch at junctions. A trail is kept while the ground it adds keeps every
+ * region it crosses within `TRAILS.share` of its ground and the whole land
+ * within `TRAILS.landShare`. Shared ways add no ground. A trail over those
+ * limits, or with no gentle, dry route between its places, goes in
+ * `dropped` with the reason. Ends that share an id use the first one's
+ * position. `avoid` keeps trails out of footprints such as a house's walls.
  */
 export function planTrails(t: Terrain, requests: readonly TrailRequest[], seed: number, avoid: readonly Occupied[] = []): TrailNetwork {
   const g = gridOf(t, seed, avoid);
@@ -662,7 +657,7 @@ export function planTrails(t: Terrain, requests: readonly TrailRequest[], seed: 
   return networkOf(t, g, routed, dropped);
 }
 
-/** Cuts the routed trails' cells into ways between places and junctions, and tells each way which trails walk it. */
+/** Cuts the routed trails' cells into ways between places and junctions, and records which trails use each way. */
 function networkOf(t: Terrain, g: Grid, routed: readonly { req: TrailRequest; cells: number[]; from: TrailEnd; to: TrailEnd }[], dropped: DroppedTrail[]): TrailNetwork {
   const ends = new Map<number, TrailEnd>();
   for (const r of routed) {
@@ -770,7 +765,7 @@ function networkOf(t: Terrain, g: Grid, routed: readonly { req: TrailRequest; ce
       carries: carried.map((i) => spans.get(`${w}/${i}`) as WayCarry),
     };
   });
-  // Junctions: where three or more ways meet away from a place; the busiest first take a cairn.
+  // A junction is where three or more ways meet away from a place. The busiest junctions get cairns first.
   const places = [...ends.values()];
   const meeting = new Map<string, number[]>();
   ways.forEach((w, i) => {
@@ -801,7 +796,7 @@ function networkOf(t: Terrain, g: Grid, routed: readonly { req: TrailRequest; ce
 
 // ---------- the ground under the ways ----------
 
-/** The lattice rectangle `nearPoints` visits for a way's points at `reach`: every sample within reach of a segment lies inside it. */
+/** The lattice rectangle `nearPoints` visits for a way's points at `reach`. Every sample within reach of a segment lies inside it. */
 function reachBox(l: Lattice, pts: Float32Array | readonly number[], reach: number): { i0: number; i1: number; j0: number; j1: number } {
   const oz = l.originZ ?? l.origin;
   let i0 = l.n - 1;
@@ -818,15 +813,15 @@ function reachBox(l: Lattice, pts: Float32Array | readonly number[], reach: numb
     j0 = Math.min(j0, Math.max(0, Math.floor((Math.min(az, bz) - reach - oz) / l.spacing)));
     j1 = Math.max(j1, Math.min(l.n - 1, Math.ceil((Math.max(az, bz) + reach - oz) / l.spacing)));
   }
-  // A way of one point, or one wholly outside the lattice, visits nothing: an empty box.
+  // A way of one point, or one wholly outside the lattice, gets an empty box.
   return i1 < i0 || j1 < j0 ? { i0: 0, i1: -1, j0: 0, j1: -1 } : { i0, i1, j0, j1 };
 }
 
 /**
  * Visits every sample of `l` within `reach` of each segment of `pts`, with
- * its distance and the nearest point's index along the way. `l` may be the
- * world's lattice or any window of it: a sample is visited with the same
- * distance and place along the way in either.
+ * its distance and the fractional point index of its nearest point on the
+ * way. `l` may be the world's lattice or any window of it, and a sample gets
+ * the same distance and position along the way in either.
  */
 function nearPoints(l: Lattice, pts: Float32Array, reach: number, visit: (index: number, distance: number, along: number) => void): void {
   const oz = l.originZ ?? l.origin;
@@ -855,15 +850,15 @@ function nearPoints(l: Lattice, pts: Float32Array, reach: number, visit: (index:
   }
 }
 
-/** Visits every lattice sample within `reach` of each segment of a way, with its distance and the nearest point's index along the way. */
+/** `nearPoints` over a way's points on the terrain's lattice. */
 const nearSegments = (t: Pick<Terrain, "lattice">, way: Way, reach: number, visit: (index: number, distance: number, along: number) => void): void => nearPoints(t.lattice, way.points, reach, visit);
 
 /**
- * Eases the baked ground under each way toward the tread's own smoothed
- * grade, blending back to the land over `TRAILS.blend` meters, as a cottage's
- * pad does. A trail on a hillside benches gently into it; bumps along the
- * tread soften. Water and the banks next to it are never touched, and no
- * sample moves more than `TRAILS.maxCut`. Returns each way's edit, in order.
+ * Eases the baked ground under each way toward the tread's smoothed height,
+ * blending back to the land over `TRAILS.blend` meters, as a cottage's pad
+ * does. A trail on a hillside cuts a gentle bench, and bumps along the tread
+ * soften. Water and the banks next to it never change, and no sample moves
+ * more than `TRAILS.maxCut`. Returns each way's edit, in order.
  */
 export function levelTrails(t: Terrain, ways: readonly Way[]): WayEdit[] {
   return ways.map((trail) => {
@@ -873,16 +868,16 @@ export function levelTrails(t: Terrain, ways: readonly Way[]): WayEdit[] {
   });
 }
 
-/** A way's tread leveled into the land, as data: what `levelTrails` did for it, so a tile of the land baked alone can do it again. */
+/** The data of one way's leveling by `levelTrails`, so a tile baked alone can apply it again. */
 export interface WayEdit {
   readonly points: Float32Array;
-  /** Half the tread's width, meters. */
+  /** Half the tread's width, in meters. */
   readonly half: number;
-  /** The tread's smoothed grade at each point, from the ground as it stood when the way was leveled. */
+  /** The tread's target height at each point, the ground height averaged over `TRAILS.grade` points either side before leveling. */
   readonly grade: Float32Array;
 }
 
-/** The edit that levels `trail` into the ground of `l` as it stands now. */
+/** The edit that levels `trail` into the current ground of `l`. */
 function wayEdit(l: Lattice, trail: Way): WayEdit {
   const pts = trail.points;
   const count = pts.length / 2;
@@ -903,17 +898,17 @@ function wayEdit(l: Lattice, trail: Way): WayEdit {
 
 /**
  * Levels one way's tread into `t`, which may be the world's land or any
- * window of it: each sample moves by what its own place, water and shore and
- * the way say, so a window gets the same bytes as the world holds there.
+ * window of it. Each sample's change depends only on its own position, water,
+ * shore and the way, so a window gets the same bytes the world has there.
  */
 export function applyWay(t: Pick<Terrain, "lattice" | "waterLevel" | "shore">, edit: WayEdit): void {
   const l = t.lattice;
   const { points: pts, half, grade } = edit;
   const count = pts.length / 2;
   const reach = half + TRAILS.blend;
-  // Only the samples within reach of the way can change, so the scratch
-  // covers the rectangle around it, not the whole land: the same samples
-  // move by the same amounts, at a fraction of the memory and the time.
+  // Only samples within reach of the way can change, so the scratch covers
+  // only the rectangle around it. The result matches a whole-land scratch at
+  // a fraction of the memory and time.
   const box = reachBox(l, pts, reach);
   const w0 = box.i1 - box.i0 + 1;
   const best = new Float32Array(Math.max(0, w0 * (box.j1 - box.j0 + 1))).fill(Infinity);
@@ -944,9 +939,10 @@ export function applyWay(t: Pick<Terrain, "lattice" | "waterLevel" | "shore">, e
 }
 
 /**
- * Signed distance from each lattice sample to the nearest way's edge,
- * meters: negative on the tread, capped at `TRAILS.reach`. The ground paints
- * worn earth from it and the grass parts along it; water reads as far.
+ * Signed distance in meters from each lattice sample to the nearest way's
+ * edge, negative on the tread and capped at `TRAILS.reach`. The ground draws
+ * worn earth from it and grass stays off the tread. Water samples read
+ * `TRAILS.reach`.
  */
 export function trailField(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[]): Float32Array {
   const l = t.lattice;
@@ -962,10 +958,10 @@ export function trailField(t: Pick<Terrain, "lattice" | "waterLevel">, ways: rea
   return field;
 }
 
-/** A way's place packed in one number: its index, plus how far along it (0 to 1) in the fraction. */
+/** Packs a way's index and a position along it, 0 to 1, into one number, with the position times 0.999 as the fraction. */
 const packPlace = (index: number, along: number): number => index + 0.999 * Math.max(0, Math.min(1, along));
 
-/** Unpacks `trailPlaces`' numbers: the way's index and how far along it, from its first point (0) to its last (1); null for none. */
+/** Unpacks a `trailPlaces` value into the way's index and position along it, 0 at its first point and 1 at its last. Returns null for a negative value. */
 export function unpackPlace(packed: number): { way: number; along: number } | null {
   if (packed < 0) return null;
   const way = Math.floor(packed);
@@ -973,13 +969,13 @@ export function unpackPlace(packed: number): { way: number; along: number } | nu
 }
 
 /**
- * Which ways each lattice sample lies on, two numbers per sample: the
- * nearest way within `TRAILS.reach` of its edge and, where another way's
- * edge is within `TRAILS.meet` meters of that one's (where ways meet at a
- * junction), that one too; -1 for none. Each packs the way's index in
- * `ways` and how far along it the sample lies, 0 at its first point and 1
- * at its last (see `unpackPlace`), so a shader can read the way's wear, which
- * follows the vitality of every trail walking it, live (`wayWear`).
+ * Which ways each lattice sample lies on, two numbers per sample. The first
+ * is the nearest way within `reach` of its edge. The second is another way
+ * whose edge is within `TRAILS.meet` meters of the first's, as where ways
+ * meet at a junction. Each is -1 for none. A value packs the way's index in
+ * `ways` and the sample's position along it, 0 at its first point and 1 at
+ * its last (`unpackPlace`), so a shader can look up the way's live wear
+ * (`wayWear`), which follows the vitality of every trail on it.
  */
 export function trailPlaces(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[], reach: number = TRAILS.reach): Float32Array {
   const every = Int32Array.from({ length: t.lattice.n }, (_, i) => i);
@@ -987,12 +983,12 @@ export function trailPlaces(t: Pick<Terrain, "lattice" | "waterLevel">, ways: re
 }
 
 /**
- * `trailPlaces` on a grid of the lattice's samples: columns `columns` of rows
- * `rows` (lattice indices, neither list ever decreasing, so a grid may repeat
- * the lattice's edge), row by row, with every way reaching `reach` meters past
- * its edge. Each sample comes out as `trailPlaces` gives it, wherever it lies
- * in a grid, so a window of the land around the person, or every 2^k-th
- * sample of it, is laid from the ways alone.
+ * `trailPlaces` on a grid of lattice samples, columns `columns` of rows
+ * `rows`, row-major, with every way reaching `reach` meters past its edge.
+ * Both lists hold lattice indices and never decrease, so a grid may repeat
+ * the lattice's edge. Each sample gets the value `trailPlaces` gives it, so a
+ * window of the land around the person, or every 2^k-th sample of it, is
+ * built from the ways alone.
  */
 export function trailPlacesOn(t: Pick<Terrain, "lattice" | "waterLevel">, ways: readonly Way[], columns: Int32Array, rows: Int32Array, reach: number = TRAILS.reach): Float32Array {
   const l = t.lattice;
@@ -1016,7 +1012,7 @@ export function trailPlacesOn(t: Pick<Terrain, "lattice" | "waterLevel">, ways: 
     return lo;
   };
   if (n === 0) return new Float32Array(0);
-  // The grid's bounds on the ground: a segment farther than its reach from them visits none of its samples.
+  // The grid's world bounds. A segment farther than its reach from them visits none of the grid's samples.
   const x0 = worldOf(l, columns[0] as number);
   const x1 = worldOf(l, columns[width - 1] as number);
   const oz = l.originZ ?? l.origin;
@@ -1090,33 +1086,33 @@ const smooth = (a: number, b: number, x: number): number => {
 };
 
 /**
- * The vitality a trail shows at a point `along` it (0 at its first end, 1 at
- * its second): each end's entity's vitality holds near its end and blends
- * across the middle.
+ * The vitality a trail shows at a point `along` it, 0 at its first end and 1
+ * at its second. Each end entity's vitality holds near its end, and the two
+ * blend across the middle.
  */
 export const trailVitalityAt = (fromVitality: number, toVitality: number, along: number): number =>
   fromVitality + (toVitality - fromVitality) * smooth(0.15, 0.85, along);
 
 /**
  * How worn a trail's tread is at a point `along` it, from its blueprint's
- * `wear` and the vitality of the entities at its ends: a thriving pair's
- * trail is worn bare, a failing one's grows over until only a faint trace is
- * left, so its route still reads. It grows over as far as the land around
- * it looks declined (`shownVitality`). The ground and grass shaders apply the same numbers live
- * (`TRAIL_GLSL` in the app's trails), so a vitality change never rebakes.
+ * `wear` and the vitality of the entities at its ends. At high vitality the
+ * trail has its full `wear`. As vitality falls the wear drops to a fifth of
+ * it, a faint trace, so the route still shows. It follows the same vitality
+ * curve as the land around it (`shownVitality`). The ground and grass shaders
+ * apply the same numbers live (`TRAIL_GLSL` in the app's trails), so a
+ * vitality change never rebakes.
  */
 export const trailWearAt = (wear: number, fromVitality: number, toVitality: number, along: number): number =>
   wear * (0.2 + 0.8 * smooth(0.05, 0.75, shownVitality(trailVitalityAt(fromVitality, toVitality, along))));
 
 /**
- * How worn a way is at each of its `TRAILS.stations`, evenly from its first
- * point to its last. Every trail walking it wears it (`trailWearAt`, from the
- * vitality of the two entities that trail joins), and their wear adds up as
- * chances do: a way bare to `a` by one trail and to `b` by another is bare to
- * 1 - (1 - a)(1 - b). So a shared way is never less worn than its most worn
- * trail, a trunk stays trodden while any trail on it thrives, and it grows
- * over only when every trail on it fails. The shaders blend between the
- * stations (`wayWearAt`); call it again whenever an entity's vitality changes.
+ * How worn a way is at each of its `TRAILS.stations`, evenly spaced from its
+ * first point to its last. Each trail on it contributes its `trailWearAt`,
+ * and the wears combine as independent probabilities: wear `a` from one
+ * trail and `b` from another give 1 - (1 - a)(1 - b). So a shared way is
+ * never less worn than its most worn trail, and it grows over only when every
+ * trail on it has low vitality. The shaders blend between the stations
+ * (`wayWearAt`). Call it again whenever an entity's vitality changes.
  */
 export function wayWear(network: TrailNetwork, way: number, vitalityOf: (place: string) => number): number[] {
   const w = network.ways[way];
@@ -1140,9 +1136,9 @@ export function wayWearAt(stations: readonly number[], along: number): number {
 }
 
 /**
- * The vitality a way shows at a point `along` it, for what is built on it (a
- * footbridge, edging stones): its liveliest trail's there, since a way is
- * kept in repair by whoever still walks it.
+ * The vitality a way shows at a point `along` it, for what is built on it,
+ * such as a footbridge or edging stones. It is the highest vitality of its
+ * trails at that point.
  */
 export function wayVitalityAt(network: TrailNetwork, way: number, along: number, vitalityOf: (place: string) => number): number {
   let best = 0;
@@ -1153,12 +1149,12 @@ export function wayVitalityAt(network: TrailNetwork, way: number, along: number,
   return best;
 }
 
-/** A junction's vitality, for its cairn: the liveliest of its ways' where they meet. */
+/** A junction's vitality, for its cairn: the highest of its ways' vitalities at the junction. */
 export function junctionVitality(network: TrailNetwork, junction: Junction, vitalityOf: (place: string) => number): number {
   return Math.max(0, ...junction.ways.map((i) => wayVitalityAt(network, i, network.ways[i]?.from === junction.id ? 0 : 1, vitalityOf)));
 }
 
-/** Discs along each way's tread and around each junction's cairn, so trees and the understory keep off them. */
+/** Footprints along each way's tread and around each junction's cairn, which trees and the understory avoid. */
 export function trailDiscs(network: TrailNetwork, margin: number): Occupied[] {
   const out: Occupied[] = [];
   for (const way of network.ways) {
@@ -1169,7 +1165,7 @@ export function trailDiscs(network: TrailNetwork, margin: number): Occupied[] {
   return out;
 }
 
-/** Small stones set along both edges of a way's tread, grounded; none in or beside water. */
+/** A small stone on an edge of a way's tread, set on the ground. `edgeStones` places none in or beside water. */
 export interface EdgeStone {
   readonly x: number;
   readonly y: number;
@@ -1191,7 +1187,7 @@ export function edgeStones(t: Terrain, trail: Way, seed: number): EdgeStone[] {
   };
   for (let k = 1; k + 1 < count; k++) {
     for (const side of [-1, 1]) {
-      // Stones are set at uneven gaps and now and then left out, as by hand.
+      // Skip 42% of spots and jitter the rest, so the gaps are uneven.
       if (next() < 0.42) continue;
       const ax = pts[(k - 1) * 2] as number;
       const az = pts[(k - 1) * 2 + 1] as number;

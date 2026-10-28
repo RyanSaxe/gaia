@@ -1,40 +1,37 @@
-// The ground's vitality. Every point of the land is someone's ground: a
-// file's patch, or an area's own ground (an entity's lot); past the land it
-// is the wild's, which always thrives. The ground takes the vitality of
-// whatever it belongs to, as the trees do, eased across each border over a
-// few meters so one patch's health drifts into its neighbor's instead of
-// changing along a line. The bake records, per sample of a grid over the
-// land, the few owners whose ground it is and their shares (`ownershipOf`);
-// each owner's vitality is applied afterward (`vitalityOver`), so a change in
-// vitality rewrites a small texture and never rebakes anything.
+// Computes the ground's vitality from the owner of each point: a file's
+// patch, an entity's lot, or the wild past the land, whose vitality is always
+// 1. The bake records each grid sample's few owners and their shares
+// (`ownershipOf`), blended over a few meters at each border, and
+// `vitalityOver` applies the owners' vitality afterward, so a vitality change
+// rewrites a small texture and never rebakes.
 
 import { shownVitality } from "@gaia/realize";
 import { type LandSite, nearestSite, warpPoint } from "./land.ts";
 import { type LandOutline, pastTheEdge } from "./edge.ts";
 
-/** A site of the land's division and the owner of its cell's ground, by index into the caller's list of owners. */
+/** A land site with the owner of its cell, as an index into the caller's list of owners. */
 export interface OwnedSite extends LandSite {
   readonly owner: number;
 }
 
 export const GROUND_VITALITY = {
-  /** Meters between the ownership grid's samples; a linearly filtered texture blends between them. */
+  /** Meters between the ownership grid's samples. A linearly filtered texture blends between them. */
   spacing: 4,
   /** Owners kept per sample, largest share first. */
   taps: 4,
   /**
-   * How softly a patch's ground gives way to its neighbor's, meters: a
-   * share falls by e for every `soft` meters a neighbor's site lies farther,
-   * which eases one patch into the next over about 7 m.
+   * Border softness in meters. A share falls by a factor of e for every
+   * `soft` meters a neighbor's site lies farther than the nearest, which
+   * blends one patch into the next over about 7 m.
    */
   soft: 3,
-  /** Owners whose share has fallen this many `soft`s below the nearest's count for nothing, so shares end without a step. */
+  /** An owner whose site is this many `soft`s farther than the nearest gets no share, and shares fall to 0 there without a step. */
   cut: 4,
-  /** Meters over which the land hands its ground over to the wild at its rounded edge. */
+  /** Meters over which ownership blends from the land to the wild at the land's rounded edge. */
   rim: 8,
 } as const;
 
-/** The wild's owner, past the land: always thriving. */
+/** The owner index of the wild past the land, whose vitality is always 1. */
 export const WILD_OWNER = -1;
 /** The wild's owner and an empty tap, as an ownership grid stores them. */
 const WILD_TAP = 0xffff;
@@ -46,9 +43,9 @@ export interface Share {
 }
 
 /**
- * Whose ground a grid over the land is: per sample, `GROUND_VITALITY.taps`
- * owners (0xffff for the wild) and their shares in 255ths, largest first,
- * summing to 255. Sample (i, k) lies at (origin + i * spacing, origin + k * spacing).
+ * The owners of each sample of a grid over the land: `GROUND_VITALITY.taps`
+ * owners per sample, 0xffff for the wild, with shares in 255ths, largest
+ * first, summing to 255. Sample (i, k) is at (origin + i * spacing, origin + k * spacing).
  */
 export interface Ownership {
   readonly n: number;
@@ -58,9 +55,9 @@ export interface Ownership {
   readonly shares: Uint8Array;
 }
 
-/** Side of a lookup bucket, meters. */
+/** Side in meters of a lookup bucket. */
 const BUCKET = 16;
-/** The most owners whose ground can meet at one point within a cut. */
+/** The most owners counted at one point within the cut. Extra owners are ignored. */
 const MOST = 32;
 
 interface Buckets {
@@ -109,7 +106,7 @@ function bucketsOf(sites: readonly OwnedSite[]): Buckets {
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
-/** Fills `owners` and `shares` with whose ground (x, z) is (see `groundOwners`), unsorted, and returns how many. */
+/** Fills `owners` and `shares` with the owners of (x, z) as `groundOwners` computes them, unsorted, and returns the count. */
 function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z: number, soft: number, owners: Int32Array, shares: Float64Array): number {
   const half = GROUND_VITALITY.rim / 2;
   const past = pastTheEdge(land, x, z);
@@ -123,10 +120,10 @@ function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z
   const nearest = sites[nearestSite(sites, wx, wz)] as OwnedSite;
   const dMin = Math.hypot(wx - nearest.x, wz - nearest.z) - (nearest.reach ?? 0);
   const cut = GROUND_VITALITY.cut * soft;
-  // Every site that could lie within `cut` of the nearest; each owner keeps its nearest site's distance.
+  // Visit every site that could lie within `cut` of the nearest. Each owner keeps its nearest site's distance.
   const b = bucketsOf(sites);
   const r = dMin + cut + b.reach;
-  // The nearest site's owner first, so it is never crowded out.
+  // Put the nearest site's owner first, so the `MOST` cap never drops it.
   owners[0] = nearest.owner;
   shares[0] = 0;
   let count = 1;
@@ -149,7 +146,7 @@ function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z
       }
     }
   }
-  // Each owner's share falls off by how much farther its nearest site lies, ending at the cut without a step.
+  // Each owner's share falls off with how much farther its nearest site lies, and reaches 0 at the cut without a step.
   const floor = Math.exp(-GROUND_VITALITY.cut);
   let total = 0;
   for (let k = 0; k < count; k++) {
@@ -165,12 +162,12 @@ function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z
 }
 
 /**
- * Whose ground (x, z) is, and how much of it: the owner of the cell that
- * holds it (`siteAt`'s rule) and, near a border, its neighbors', each
- * falling off by how much farther its nearest site lies from the warped
- * point, by e every `soft` meters. Owners meeting at a border share it
- * evenly. Within `GROUND_VITALITY.rim` of the land's edge the wild takes
- * over. Shares sum to 1, largest first.
+ * The owners of (x, z) and their shares. The owner of the cell that holds it
+ * (`siteAt`'s rule) leads, and near a border its neighbors share in, each
+ * falling by a factor of e for every `soft` meters its nearest site lies
+ * farther from the warped point. Owners meeting at a border share it evenly.
+ * Within `GROUND_VITALITY.rim` of the land's edge the wild takes over. Shares
+ * sum to 1, largest first.
  */
 export function groundOwners(sites: readonly OwnedSite[], land: LandOutline, x: number, z: number, soft: number = GROUND_VITALITY.soft): Share[] {
   const owners = new Int32Array(MOST + 1);
@@ -179,17 +176,17 @@ export function groundOwners(sites: readonly OwnedSite[], land: LandOutline, x: 
   return Array.from({ length: count }, (_, k) => ({ owner: owners[k] as number, share: shares[k] as number })).sort((p, q) => q.share - p.share || p.owner - q.owner);
 }
 
-/** The grid an ownership of a world `extent` meters across is sampled on, centered on the world. */
+/** The sample grid for the ownership of a world `extent` meters across, centered on the world. */
 export function ownershipGrid(extent: number, spacing: number = GROUND_VITALITY.spacing): { readonly n: number; readonly origin: number; readonly spacing: number } {
   const n = Math.round(extent / spacing) + 1;
   return { n, origin: (-(n - 1) * spacing) / 2, spacing };
 }
 
 /**
- * Whose ground rows [k0, k1) of an ownership grid are (`groundOwners`), kept
- * to the largest `GROUND_VITALITY.taps` shares in 255ths. Rows are
- * independent, so a bake may work them out in parts, on several threads,
- * and get the same bytes as all at once.
+ * The owners of rows [k0, k1) of an ownership grid (`groundOwners`), kept to
+ * the largest `GROUND_VITALITY.taps` shares in 255ths. Rows are independent,
+ * so a bake can compute them in parts on several threads and get the same
+ * bytes as all at once.
  */
 export function ownershipRows(sites: readonly OwnedSite[], land: LandOutline, grid: { readonly n: number; readonly origin: number; readonly spacing: number }, k0: number, k1: number, soft: number = GROUND_VITALITY.soft): { owners: Uint16Array; shares: Uint8Array } {
   const { n, origin, spacing } = grid;
@@ -202,7 +199,7 @@ export function ownershipRows(sites: readonly OwnedSite[], land: LandOutline, gr
   for (let k = k0; k < k1; k++) {
     for (let i = 0; i < n; i++) {
       const count = ownersInto(sites, land, origin + i * spacing, origin + k * spacing, soft, who, much);
-      // The largest shares first, ties to the lower owner.
+      // Select the largest shares first, with ties going to the lower owner.
       const kept = Math.min(taps, count);
       let total = 0;
       for (let t = 0; t < kept; t++) {
@@ -228,18 +225,18 @@ export function ownershipRows(sites: readonly OwnedSite[], land: LandOutline, gr
   return { owners, shares };
 }
 
-/** Whose ground every sample of a grid `extent` meters across, centered on the world, is: `ownershipRows` over every row. */
+/** The owners of every sample of a grid `extent` meters across, centered on the world: `ownershipRows` over every row. */
 export function ownershipOf(sites: readonly OwnedSite[], land: LandOutline, extent: number, soft: number = GROUND_VITALITY.soft, spacing: number = GROUND_VITALITY.spacing): Ownership {
   const grid = ownershipGrid(extent, spacing);
   return { ...grid, ...ownershipRows(sites, land, grid, 0, grid.n, soft) };
 }
 
 /**
- * The ground's vitality at every sample of an ownership grid, in 255ths:
- * each owner's vitality (`vitality[owner]`, 1 where it has none) weighed by
- * its share, and the wild's 1. Writes into `into` every `stride` values
- * from `offset`, so two tables of vitality can fill one texture's channels:
- * whole 255ths into bytes, or exactly into floats.
+ * The ground's vitality at every sample of an ownership grid, in 255ths. It
+ * is each owner's vitality (`vitality[owner]`, 1 where absent) weighted by
+ * its share, with the wild at 1. It writes into `into` every `stride` values
+ * from `offset`, so two vitality tables can fill one texture's channels. A
+ * byte array gets whole 255ths, and a float array gets exact values.
  */
 export function vitalityOver<T extends Uint8Array | Float32Array>(own: Ownership, vitality: ArrayLike<number>, into: T = new Uint8Array(own.n * own.n) as T, stride = 1, offset = 0): T {
   const whole = into instanceof Uint8Array;
@@ -274,31 +271,31 @@ export function vitalityAt(own: Ownership, values: ArrayLike<number>, x: number,
 
 /**
  * How ground of a given vitality looks, the rule the grass, ground and water
- * shaders follow: thriving ground keeps its full cover, and below about 0.85
+ * shaders follow. Above about 0.85 the ground keeps its full cover. Below it
  * the grass thins, shortens and yellows toward straw, the ground beneath
- * dries and bare earth opens in patches, and water clouds and stills.
+ * dries, bare earth opens in patches, and water clouds and stills.
  */
 export const GROUND_DECLINE = {
-  /** Vitality above which ground looks as it always did, and below which it has declined all it will. */
+  /** Vitality above which ground shows no decline (`from`), and below which it shows full decline (`to`). */
   from: 0.85,
   to: 0.02,
-  /** At full decline: the share of blades that still stand, and their height. */
+  /** At full decline, the share of blades that remain and their height as a share. */
   blades: 0.55,
   height: 0.75,
   /** The decline past which bare earth starts to open, and how much of the ground it opens at most. */
   bareFrom: 0.3,
   bare: 0.4,
-  /** How far the cover's own colors dry toward straw. */
+  /** How far the cover's colors shift toward straw at full decline. */
   dry: 0.85,
 } as const;
 
-/** How far ground of vitality `v` has declined: 0 thriving, 1 all it will. It declines as far as it looks (`shownVitality`), as plants do. */
+/** How far ground of vitality `v` has declined, from 0 to 1 at full decline. It reads `shownVitality`, as plants do. */
 export function groundDecline(v: number): number {
   const t = Math.min(1, Math.max(0, (shownVitality(v) - GROUND_DECLINE.to) / (GROUND_DECLINE.from - GROUND_DECLINE.to)));
   return 1 - smooth(t);
 }
 
-/** What ground of vitality `v` shows: the share of blades standing and their height, the share of blades gone to straw, the share of bare earth, and how far its cover has dried. */
+/** What ground of vitality `v` shows: the share of blades remaining and their height, the share gone to straw, the share of bare earth, and how far its cover has dried. */
 export function groundLook(v: number): { blades: number; height: number; straw: number; bare: number; dry: number } {
   const d = groundDecline(v);
   const g = GROUND_DECLINE;

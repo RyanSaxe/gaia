@@ -42,7 +42,7 @@ describe("the sun's shadow map", () => {
   }
 
   it("is a depth map that compares and uploads even before the sun's pass exists, so no draw that reads it fails", () => {
-    // Until a texture is marked for upload (its version above 0) three binds a color placeholder in its place.
+    // Until a texture is marked for upload, with its version above 0, three binds a color placeholder in its place.
     const map = createSceneLight().uShadowMap.value;
     expect(map).toBeInstanceOf(THREE.DepthTexture);
     expect((map as THREE.DepthTexture).compareFunction).not.toBeNull();
