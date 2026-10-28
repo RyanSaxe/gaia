@@ -1,14 +1,14 @@
-// Vitality pooled over the land. A thing's own vitality is Jev's quality from
-// the understanding pass (`layoutWorld`); a folder's, as the field map and the
-// minimap wash it, pools its files' by the ground each holds. A world's things
-// take a new vitality in place (`withVitality`), as when its code moves on
-// while it stands, and nothing else about them changes.
+// Pools vitality over the land. `layoutWorld` sets a thing's own vitality to
+// Jev's quality from the understanding pass. A folder's vitality, which the
+// field map and minimap shade with, pools its files' vitality weighted by size.
+// `withVitality` updates vitality when the code changes while a world is open,
+// and changes nothing else.
 
 import type { CodeWorld } from "./code-world.ts";
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
-/** A file as a part of the land: the directory it lies in, its vitality, and its size (its lines, or the ground its patch holds). */
+/** A file as input to pooling: its directory, its vitality, and its size in lines or in square meters of patch. */
 export interface VitalPart {
   readonly area: string;
   readonly vitality: number;
@@ -16,9 +16,9 @@ export interface VitalPart {
 }
 
 /**
- * The vitality of a whole made of parts: their vitality weighted by size, so
- * a large tired file weighs more than a small thriving one and the whole
- * reads as the share of it that thrives. A whole with nothing in it is 1.
+ * The size-weighted mean of the parts' vitality, each clamped to 0 to 1. A
+ * large file at vitality 0.3 outweighs a small one at 0.9. Parts with a total
+ * size of 0 give 1.
  */
 export function pooledVitality(parts: Iterable<Pick<VitalPart, "vitality" | "size">>): number {
   let sum = 0;
@@ -32,10 +32,9 @@ export function pooledVitality(parts: Iterable<Pick<VitalPart, "vitality" | "siz
 }
 
 /**
- * Every directory's vitality, by its path ("" for the whole world): its
- * files' and its subdirectories' files' vitality, pooled by size
- * (`pooledVitality`). A directory with no files of its own or below it is
- * absent.
+ * Each directory's vitality by path, with "" for the whole world. It pools
+ * every file at or below the directory by size, as `pooledVitality` does. A
+ * directory with no files at or below it is absent.
  */
 export function areaVitality(parts: readonly VitalPart[]): ReadonlyMap<string, number> {
   const sums = new Map<string, { sum: number; weight: number }>();
@@ -54,10 +53,9 @@ export function areaVitality(parts: readonly VitalPart[]): ReadonlyMap<string, n
 }
 
 /**
- * Every directory's own ground's vitality, by its path: the files directly
- * in it, pooled by size; a directory with no files of its own takes all of
- * its subdirectories' (`areaVitality`). What a map washes each area's own
- * ground with.
+ * The vitality of each directory's own ground by path, pooled from the files
+ * directly in it. A directory with no files of its own uses its
+ * `areaVitality`. Maps shade each area's own ground with this value.
  */
 export function groundVitality(parts: readonly VitalPart[]): ReadonlyMap<string, number> {
   const whole = areaVitality(parts);
@@ -67,10 +65,9 @@ export function groundVitality(parts: readonly VitalPart[]): ReadonlyMap<string,
 }
 
 /**
- * Every thing's own vitality in a world, by what it stands for: a file's path,
- * a definition's id (`<file>#<name>`) and an entity's root path. A file's
- * patch, its building or landmark and what it stands as share its vitality,
- * as a definition's do.
+ * Each thing's own vitality, keyed by a file's path, a definition's id
+ * `<file>#<name>` or an entity's root path. A file's patch, its building or
+ * landmark and its small form share one key, and so do a definition's.
  */
 export function vitalityOf(world: CodeWorld): Map<string, number> {
   return new Map([
@@ -82,10 +79,10 @@ export function vitalityOf(world: CodeWorld): Map<string, number> {
 }
 
 /**
- * The same world with each thing in `changes` at its new vitality, by what it
- * stands for (as `vitalityOf` names it), everywhere it shows: its patch, its
- * building or landmark, what it stands as and its definitions' own slots.
- * Nothing moves, and every form stays.
+ * Returns the world with the new vitality for each id in `changes`, keyed as
+ * in `vitalityOf`. It updates every place the id appears: the patch, the
+ * building or landmark, the small form and the definition's symbol. No
+ * position or form changes.
  */
 export function withVitality(world: CodeWorld, changes: ReadonlyMap<string, number>): CodeWorld {
   const changed = <T extends { readonly vitality: number }>(id: string, of: T): T => {
@@ -101,16 +98,15 @@ export function withVitality(world: CodeWorld, changes: ReadonlyMap<string, numb
   };
 }
 
-/** Where a definition's code lies in its file: its first line and how many it spans. */
+/** A definition's first line in its file and how many lines it spans. */
 export interface DefinitionLines {
   readonly line: number;
   readonly lines: number;
 }
 
 /**
- * The same world with each definition in `moved` on its new lines of its
- * file, by its id, so the journal reads its code where it now lies. Nothing
- * moves on the land.
+ * Returns the world with each definition in `moved` at its new lines, by id,
+ * so the journal shows the right code. Nothing moves on the land.
  */
 export function withLines(world: CodeWorld, moved: Readonly<Record<string, DefinitionLines>>): CodeWorld {
   return { ...world, symbols: world.symbols.map((s) => (moved[s.id] === undefined ? s : { ...s, ...moved[s.id] })) };

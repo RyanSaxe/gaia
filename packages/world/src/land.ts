@@ -1,45 +1,37 @@
-// Dividing a world's land among the code's tree. Each directory's land is
-// divided among its own ground (its files and the lot its entity stands on,
-// kept together at its heart) and its subdirectories, each given ground in
-// proportion to the code it holds; then each of those is divided the same
-// way, down to the files. Every division is a power diagram (a Voronoi
-// division whose sites carry weights) of a fine raster of the land, measured
-// from points moved by the land's warp (`warpPoint`), so borders curve and
-// wander, nest the way the tree nests, and fill the land with no gaps. Last, a
-// few sites drawn from each leaf's share redraw the whole division as plain
-// nearest-site cells: the very rule `siteAt` and the terrain's regions use, so
-// a leaf's ground here is its ground everywhere.
+// Divides a world's land among the code tree. A directory's cells split among
+// its subdirectories and its own ground, which holds its files and its
+// entity's lot, in proportion to their ground, and the split repeats down to
+// the files. Each split is a power diagram, a Voronoi diagram whose sites
+// carry weights, over a raster of land cells moved by `warpPoint`.
 //
-// The land holds still under edits. Each file's and folder's ground rounds up
-// to a rung of a fixed ladder (`rung`), so most edits change no share at all;
-// sites start at spots seeded by each node's id; and each division settles to
-// the one set of weights that gives its sites their shares. The same code
-// gives the same land, an edit that crosses no rung changes nothing, and one
-// that does re-divides the folder whose share it changed.
+// Final ownership must follow `nearestSite`, the rule `siteAt` and the terrain
+// regions use, so `divideLand` redraws the result from a few sites per leaf.
+// Ground rounds up to a `rung`, and sites start at points seeded by node id.
+// An edit that moves no node across a rung therefore leaves the land unchanged.
 
 import { rand, seedOf } from "@gaia/schema";
 import { type LandOutline, type LandSite, nearestSite, pastTheEdge, warpPoint } from "@gaia/terrain";
 
-/** A node of the tree whose land is divided: a directory, its own ground, or a leaf (a file or a lot). */
+/** A node of the divided tree: a directory, a directory's own ground, or a leaf, which is a file or a lot. */
 export interface LandNode {
   readonly id: string;
-  /** A leaf's ground, square meters; ignored for a node with children. */
+  /** A leaf's ground in square meters. `groundOf` ignores it on a node with children. */
   readonly ground: number;
   readonly children: readonly LandNode[];
-  /** Starts at its parent's middle: a directory's own ground is its heart. */
+  /** Its site starts at the centroid of the parent's cells and never moves to the centroid of its own. */
   readonly heart?: boolean;
 }
 
-/** One leaf's land: the sites that draw its ground, the ground it holds, and its heart. */
+/** A leaf's share of the land after the final nearest-site redraw. */
 export interface LeafLand {
   readonly id: string;
   readonly sites: readonly LandSite[];
-  /** Square meters its cell holds. */
+  /** Square meters. */
   readonly ground: number;
-  /** The middle of its ground, moved onto it if the middle falls outside. */
+  /** The leaf's cell nearest the centroid of its cells. The centroid itself can fall outside a curved leaf. */
   readonly x: number;
   readonly z: number;
-  /** Raster cells well inside its ground (every neighbor its too), as world points, for standing things on it. */
+  /** World points of the leaf's cells whose eight neighbors also belong to the leaf. Callers place things on these. */
   readonly inner: readonly (readonly [number, number])[];
 }
 
@@ -49,19 +41,18 @@ export interface Land {
   readonly leaves: readonly LeafLand[];
 }
 
-/** Whether (x, z) lies on the land: inside its rounded edge (`pastTheEdge`). */
 export const onLand = (land: LandOutline, x: number, z: number): boolean => pastTheEdge(land, x, z) <= 0;
 
 interface Raster {
   readonly step: number;
   readonly n: number;
   readonly half: number;
-  /** World and warped coordinates of every land cell, and the cell index of each. */
+  /** px and pz are each land cell's world center. wx and wz are that point moved by `warpPoint`. */
   readonly px: Float64Array;
   readonly pz: Float64Array;
   readonly wx: Float64Array;
   readonly wz: Float64Array;
-  /** Raster index (j * n + i) → land cell, or -1. */
+  /** The land cell at raster index j * n + i, or -1 off the land. */
   readonly at: Int32Array;
 }
 
@@ -92,42 +83,41 @@ function rasterOf(land: LandOutline, step: number): Raster {
 
 const groundOf = (node: LandNode): number => (node.children.length === 0 ? node.ground : node.children.reduce((n, c) => n + groundOf(c), 0));
 
-/** How far apart the rungs of ground are: a file or folder asks for the next rung up, so its share changes only when it crosses one. */
+/** Ratio between consecutive rungs. A node's share changes only when its ground crosses a rung. */
 const RUNG = 1.25;
 
-/** Ground rounded up to the ladder's next rung (`RUNG`). The land is divided by these, never by the exact ground. */
+/** Rounds ground up to the next power of `RUNG`. `divide` splits land by these values, never by exact ground. */
 export const rung = (ground: number): number => (ground > 0 ? RUNG ** Math.ceil(Math.log(ground) / Math.log(RUNG) - 1e-9) : 0);
 
-/** The rung nearest an amount, above or below it: a threshold on the ladder that sits, on average, where the amount does. */
+/** The rung nearest `amount` on a log scale, which may be below it. A threshold set this way matches `amount` on average. */
 export const nearestRung = (amount: number): number => rung(amount / Math.sqrt(RUNG));
 
-/** Passes in which each site but a heart moves to the middle of its ground, so the parts come out round. */
+/** Passes in which each site not `pinned` moves to the centroid of its cells. These passes make the parts round. */
 const MOVES = 6;
-/** The most passes a division takes; most settle in a handful. */
+/** Maximum passes in `settle`. Most divisions converge in a few. */
 const PASSES = 24;
 
 /**
- * Settles a power diagram of `cells` among sites: each cell goes to the site
- * whose squared distance from its warped point, less the site's weight, is
- * least. For the first `MOVES` passes each site but a heart (`pinned`) also
- * moves to the middle of its cells; then the sites hold still and the weights
- * are solved until every site holds its share to within a cell or half a
- * percent. Weights that give fixed sites their shares are one answer (up to a
- * constant), found by Newton's steps (`newtonStep`), so the same cells and
- * shares give the same division, and cells and shares a little different give
- * one a little different. `owner` receives each cell's site.
+ * Assigns `cells` to sites as a power diagram and writes each cell's site to
+ * `owner`. A cell goes to the site with the least squared distance from the
+ * cell's warped point minus the site's weight. For the first `MOVES` passes,
+ * each site not `pinned` also moves to the centroid of its cells. After that
+ * the sites stay fixed, and Newton steps (`newtonStep`) solve for weights
+ * until each site's count is within one cell or 0.5% of its target. The
+ * weights for fixed sites are unique up to a constant. Equal inputs therefore
+ * give equal divisions, and nearby inputs give nearby divisions.
  */
 function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64Array, sz: Float64Array, owner: Int32Array, pinned: readonly boolean[]): void {
   const k = targets.length;
   const cellArea = r.step * r.step;
-  // A site alone with weight w holds a disc of w * pi square meters.
+  // Each weight starts at target area / pi. The disc where dist^2 < w then has the target area.
   let weight = Float64Array.from(targets, (t) => (t * cellArea) / Math.PI);
   const count = new Float64Array(k);
   const mx = new Float64Array(k);
   const mz = new Float64Array(k);
-  // How many cells site i gains from site j for each square meter of weight i gains over j.
+  // trade[i * k + j] is the number of cells site i takes from site j per square meter of weight i gains over j.
   const trade = new Float64Array(k * k);
-  /** Gives each cell its site under weights `w`, counts each site's cells, their middle and trades, and returns how far the counts are from the shares. */
+  /** Assigns each cell to a site under weights `w` and sums each site's count, coordinates and `trade`. Returns the sum of squared count errors. */
   const assign = (w: Float64Array): number => {
     count.fill(0);
     mx.fill(0);
@@ -160,8 +150,8 @@ function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64
       mx[best] = (mx[best] as number) + x;
       mz[best] = (mz[best] as number) + z;
       if (next < 0 || next === best) continue;
-      // A cell within a step of the border between its two nearest sites. A change in weight moves that border by the
-      // change over twice their distance apart, so each such cell trades 1 / (4 * apart * step) cells per square meter.
+      // Count cells within one step of the border between their two nearest sites. A weight change dw moves that border
+      // by dw / (2 * apart), so each such cell adds 1 / (4 * apart * step) to the pair's trade.
       const apart2 = Math.max(cellArea, ((sx[best] as number) - (sx[next] as number)) ** 2 + ((sz[best] as number) - (sz[next] as number)) ** 2);
       if ((nd - bd) ** 2 < 4 * apart2 * cellArea) {
         const h = 1 / (4 * Math.sqrt(apart2) * r.step);
@@ -173,7 +163,8 @@ function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64
     for (let j = 0; j < k; j++) off += ((count[j] as number) - (targets[j] as number)) ** 2;
     return off;
   };
-  // A site with no cells yet grows as a disc does; every other a little too, so each step has one answer.
+  // A site with no cells gains cells at about the rate of a lone disc. Other sites get 5% of that rate so the Newton
+  // system has a unique solution.
   const grows = Math.PI / (2 * cellArea);
   let off = assign(weight);
   for (let pass = 0; ; pass++) {
@@ -190,8 +181,8 @@ function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64
     for (let j = 0; j < k && settled; j++) if (Math.abs((count[j] as number) - (targets[j] as number)) > Math.max(1, 0.005 * (targets[j] as number))) settled = false;
     if (settled || pass >= PASSES) return;
     const step = newtonStep(trade, Float64Array.from(targets, (t, j) => t - (count[j] as number)), Float64Array.from(count, (n) => (n === 0 ? grows : 0.05 * grows)));
-    // The whole step shrinks until no weight changes by more than would grow or shrink its site, alone, by half its
-    // share or its count; then it is halved until it brings the counts nearer their shares.
+    // Scale the step so no weight changes by more than a lone disc's weight for half of max(target, count) plus two
+    // cells. Then halve it until the counts move closer to their targets, and give up below 1/20 of that scale.
     let fits = 1;
     for (let j = 0; j < k; j++) fits = Math.min(fits, ((0.5 * Math.max(targets[j] as number, count[j] as number) + 2) * cellArea) / Math.PI / Math.max(1e-9, Math.abs(step[j] as number)));
     let better = false;
@@ -205,18 +196,18 @@ function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64
       }
     }
     if (better) continue;
-    // No step brings the counts nearer: the division is as settled as its cells allow.
+    // No scaled step reduced the error. Reassign under the kept weights, since the trials overwrote `owner`, and stop
+    // once the sites have finished moving.
     off = assign(weight);
     if (pass >= MOVES) return;
   }
 }
 
 /**
- * The change in weights that trades each site its `short` cells, by conjugate
- * gradients on the graph of neighbors: each site gains from a neighbor in
- * proportion to their `trade` and the difference of their changes. `alone`
- * adds a site's own growth for one with no neighbors yet, which grows as a
- * disc does.
+ * Solves by conjugate gradients for the weight changes that move each site's
+ * count by `short` cells. The matrix is the graph Laplacian of `trade` plus
+ * the diagonal `alone`. The diagonal makes the system nonsingular and gives a
+ * site with no neighbors a lone disc's growth rate.
  */
 function newtonStep(trade: Float64Array, short: Float64Array, alone: Float64Array): Float64Array {
   const k = short.length;
@@ -259,14 +250,15 @@ function newtonStep(trade: Float64Array, short: Float64Array, alone: Float64Arra
 const SPACING = 48;
 
 /**
- * Where each child's site stands among its siblings. Each child is a disc of
- * its share, in a unit disc stretched over the parent's ground by its spread
- * along each axis (its second moments), so a long part's children lie along
- * it. A child starts at a spot seeded by its id, its own ground at the heart;
- * then discs that overlap push each other apart, and any past the rim is drawn
- * back in, for a fixed number of passes. The spots depend on the parent's
- * ground only through its middle and spread, so a little more or less ground
- * moves them a little, and the discs keep the parts round rather than wedges.
+ * Sets each child's starting site within the parent's cells. Each child is a
+ * disc, with area proportional to its share, inside a unit disc. A child
+ * starts at an angle and radius seeded by its id, and a `heart` child starts
+ * at the center. For `SPACING` passes, overlapping discs push apart and a disc
+ * past the rim moves back inside. Spaced discs make round parts instead of
+ * wedges. The unit disc is then stretched over the parent's cells by their
+ * second moments, so the children of a long part lie along it. The sites
+ * depend on the cells only through their centroid and second moments, so a
+ * small change in ground moves them a little.
  */
 function spaceSites(r: Raster, cells: Int32Array, kids: readonly LandNode[], targets: Float64Array, sx: Float64Array, sz: Float64Array): void {
   const k = kids.length;
@@ -288,12 +280,12 @@ function spaceSites(r: Raster, cells: Int32Array, kids: readonly LandNode[], tar
     b += x * z;
     d += z * z;
   }
-  // Second moments, plus a cell's own, so a part one cell wide still has a width.
+  // Add one cell's own second moment, step^2 / 12, so a part one cell wide still has a width.
   const own = (r.step * r.step) / 12;
   a = a / Math.max(1, cells.length) + own;
   b /= Math.max(1, cells.length);
   d = d / Math.max(1, cells.length) + own;
-  // A disc of radius R has second moments R^2 / 4 along each axis: the stretch is twice their square root.
+  // A disc of radius R has second moment R^2 / 4 on each axis. The stretch is twice the matrix square root of the moments.
   const det = Math.sqrt(a * d - b * b);
   const tr = Math.sqrt(a + d + 2 * det);
   const lxx = (2 * (a + det)) / tr;
@@ -327,7 +319,7 @@ function spaceSites(r: Raster, cells: Int32Array, kids: readonly LandNode[], tar
           dz = Math.sin(i + j);
           gap = 1;
         }
-        // The smaller disc gives way more.
+        // Each disc moves in proportion to the other's area, so the smaller disc moves more.
         const ai = (radius[i] as number) ** 2;
         const aj = (radius[j] as number) ** 2;
         const push = (0.5 * overlap) / gap;
@@ -356,7 +348,7 @@ function spaceSites(r: Raster, cells: Int32Array, kids: readonly LandNode[], tar
   }
 }
 
-/** Divides `cells` among a node's children, then each child's share among its own, down to the leaves. */
+/** Splits `cells` among a node's children and recurses to the leaves. Writes each leaf's cells to `out`. */
 function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, Int32Array>): void {
   if (node.children.length === 0) {
     out.set(node.id, cells);
@@ -375,9 +367,10 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   spaceSites(r, cells, kids, targets, sx, sz);
   const owner = new Int32Array(cells.length);
   settle(r, cells, targets, sx, sz, owner, kids.map((kid) => kid.heart === true));
-  // A child still short of a cell for each of its leaves takes ground from siblings that keep a cell for each of
-  // theirs: the cells nearest its site, as many as its share if it has none. One with none starts on the far edge of
-  // the sibling with the most to spare, so children starved together spread out rather than crowd one spot.
+  // Every leaf needs at least one cell. A child with fewer cells than leaves gets the cells nearest its site,
+  // reassigned from siblings that keep at least one cell per leaf. A child with no cells first moves its site to the
+  // farthest cell of the sibling with the most spare cells, then gets max(leaves, target) cells. Several empty
+  // siblings therefore start apart.
   const leaves = kids.map((kid) => leavesOf(kid).length);
   const held = new Int32Array(kids.length);
   owner.forEach((o) => (held[o] = (held[o] as number) + 1));
@@ -419,22 +412,23 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   kids.forEach((kid, j) => divide(r, kid, Int32Array.from(parts[j] as number[]), out));
 }
 
-/** The leaves of a tree, in order. */
+/** Leaves in depth-first order. */
 function leavesOf(node: LandNode, out: LandNode[] = []): LandNode[] {
   if (node.children.length === 0) out.push(node);
   for (const c of node.children) leavesOf(c, out);
   return out;
 }
 
-/** Meters between the sites that draw a leaf's ground. */
+/** Meters between the sites `sitesOf` places in a leaf. */
 const SITE_SPACING = 16;
 
 /**
- * Sites that draw each leaf's ground: in every block of the raster a leaf
- * holds a fair part of, the leaf's cell nearest a spot seeded by the block,
- * and always at least the cell nearest its middle. Nearest-site division over
- * these, with no reach, redraws the nested division to within a few meters,
- * and no leaf can be swallowed.
+ * Places the sites for the final nearest-site redraw. In each raster block of
+ * about `SITE_SPACING` meters where a leaf owns at least a quarter of the
+ * cells, the leaf gets a site at its cell nearest a point seeded by the block.
+ * A leaf with no such block gets one site at its cell nearest its centroid.
+ * Nearest-site division over these sites matches the nested division to
+ * within a few meters, and every leaf with cells keeps at least one.
  */
 function sitesOf(r: Raster, leaves: readonly LandNode[], shares: ReadonlyMap<string, Int32Array>): { site: LandSite; leaf: number }[] {
   const m = Math.max(2, Math.round(SITE_SPACING / r.step));
@@ -496,7 +490,7 @@ function sitesOf(r: Raster, leaves: readonly LandNode[], shares: ReadonlyMap<str
   return out;
 }
 
-/** Divides a world of side `size` among a tree's leaves, by the ground each asks for. */
+/** Divides the land among the leaves of `root` in proportion to their ground, rounded up by `rung`. */
 export function divideLand(root: LandNode, land: LandOutline): Land {
   const size = land.size;
   const step = Math.max(2.5, Math.min(6, size / 230));
@@ -507,7 +501,7 @@ export function divideLand(root: LandNode, land: LandOutline): Land {
   const leaves = leavesOf(root);
   const drawn = sitesOf(r, leaves, shares);
   const sites = drawn.map((d) => d.site);
-  // The final shares, by the one rule every reader uses.
+  // Final ownership uses `nearestSite`, the same rule as `siteAt` and the terrain regions.
   const owner = new Int32Array(r.px.length);
   for (let q = 0; q < owner.length; q++) owner[q] = (drawn[nearestSite(sites, r.wx[q] as number, r.wz[q] as number)] as { leaf: number }).leaf;
   const cells: number[][] = leaves.map(() => []);
@@ -522,7 +516,7 @@ export function divideLand(root: LandNode, land: LandOutline): Land {
     }
     x /= Math.max(1, mine.length);
     z /= Math.max(1, mine.length);
-    // The middle moves onto the leaf's own ground when its shape bends around it.
+    // Use the leaf's cell nearest its centroid, since a curved leaf's centroid can lie outside it.
     let hx = x;
     let hz = z;
     let near = Infinity;
@@ -555,7 +549,7 @@ export function divideLand(root: LandNode, land: LandOutline): Land {
   return { step, leaves: out };
 }
 
-/** Ground within a leaf, held by one of a smaller tree's leaves: where the thing on it stands, and how much it holds. */
+/** One share of a leaf from `dividePlots`. x and z are its cell nearest the centroid of its cells. */
 export interface Plot {
   readonly x: number;
   readonly z: number;
@@ -564,17 +558,16 @@ export interface Plot {
 }
 
 /**
- * Divides one leaf's ground among a smaller tree exactly as the land is
- * divided, down to its own leaves: a file's patch among its definitions, and
- * a definition's plot among the definitions inside it. `cells` are the
- * leaf's raster cells (`LeafLand.inner`) and `cellStep` the raster's spacing;
- * a plot stands at its cells' middle, moved onto its own ground, and every
- * plot has ground of its own.
+ * Divides one leaf's cells among a smaller tree with `divide`, the same split
+ * `divideLand` uses. Callers use it to divide a file's patch among its
+ * definitions, and a definition's plot among the definitions inside it.
+ * `cells` are the leaf's `LeafLand.inner` points and `cellStep` is the raster
+ * spacing. Every plot gets at least one cell.
  */
 export function dividePlots(root: LandNode, cells: readonly (readonly [number, number])[], cellStep: number): ReadonlyMap<string, Plot> {
   const out = new Map<string, Plot>();
   if (cells.length === 0) return out;
-  // A leaf with fewer cells than plots is divided on a finer raster, each cell split in four, so every plot has one.
+  // With fewer cells than plots, split each cell in four until every plot can have one.
   let points = cells;
   let step = cellStep;
   for (const wanted = leavesOf(root).length; points.length < wanted; step /= 2) points = points.flatMap(([x, z]) => [-1, 1].flatMap((dz) => [-1, 1].map((dx) => [x + (dx * step) / 4, z + (dz * step) / 4] as const)));

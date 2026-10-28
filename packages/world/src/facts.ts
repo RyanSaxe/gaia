@@ -1,13 +1,12 @@
-// The facts the world is laid out from, derived from the engine's code
-// graph alone (`factsOf`): each file's size, language, definitions and
-// imports both ways, and each entity a manifest declares,
-// with its size, public surface and the entities it leans on. These are the
-// code's structure; tool signals, test coverage, history and file kinds
-// are not facts the world reads.
+// `factsOf` derives the facts the world is laid out from, using only the
+// engine's code graph. The facts are each file's size, language, definitions
+// and imports in both directions, and each manifest-declared entity's size,
+// exports and dependencies. The layout uses no tool signals, test coverage,
+// history or file kinds.
 
 import type { CodeGraph, CodeFacts, DefNode, DirNode, EntityFacts, FileFacts, FileNode, SymbolFact } from "@gaia/schema";
 
-/** A definition's role, as the kind of symbol the facts name. */
+/** Maps a definition's role to its symbol kind in the facts. */
 const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
   function: "function",
   method: "function",
@@ -55,7 +54,7 @@ function symbolsOf(defs: readonly DefNode[]): SymbolFact[] {
   return [...byName.values()].sort((a, b) => (a.line ?? 0) - (b.line ?? 0) || byText(a.name, b.name));
 }
 
-/** The facts the world reads, from the engine's code graph. The same graph always gives the same facts. */
+/** Derives the layout's facts from the engine's code graph. The same graph always gives the same facts. */
 export function factsOf(graph: CodeGraph): CodeFacts {
   const files = graph.nodes.filter((n): n is FileNode => n.kind === "file").sort((a, b) => byText(a.path, b.path));
   const pathOf = new Map(files.map((f) => [f.id, f.path]));
@@ -72,7 +71,7 @@ export function factsOf(graph: CodeGraph): CodeFacts {
   }
   const symbols = new Map(files.map((f) => [f.path, symbolsOf(defsIn.get(f.path) ?? [])]));
 
-  // Imports, both ways: from a file, or from a definition in it, to another file.
+  // Imports in both directions, from a file or a definition in it to another file.
   const imports = new Map<string, Set<string>>(files.map((f) => [f.path, new Set<string>()]));
   const importedBy = new Map<string, Set<string>>(files.map((f) => [f.path, new Set<string>()]));
   for (const e of graph.edges) {
@@ -93,8 +92,8 @@ export function factsOf(graph: CodeGraph): CodeFacts {
     importedBy: sorted(importedBy.get(f.path)),
   }));
 
-  // Entities, each owning the files under its root that no deeper entity holds, and leaning on the entities its
-  // files import from.
+  // Each entity owns the files under its root that no deeper entity owns. It depends on the entities its files
+  // import from.
   const entityDirs = graph.nodes.filter((n): n is DirNode & { entity: NonNullable<DirNode["entity"]> } => n.kind === "dir" && n.entity !== undefined).sort((a, b) => byText(a.path, b.path));
   const roots = entityDirs.map((d) => d.path);
   const owner = new Map(files.map((f) => [f.path, ownerOf(roots, f.path)]));
@@ -135,9 +134,8 @@ export function factsOf(graph: CodeGraph): CodeFacts {
 }
 
 /**
- * How many definitions an entity's entry offers: its own exports, and, for an
- * entry that defines nothing of its own (a barrel), the exports of the files
- * it gathers.
+ * Counts the exports of an entity's entry file. For a barrel entry with no
+ * exports of its own, counts the exports of the files it imports.
  */
 function surfaceOf(entry: string, imports: ReadonlyMap<string, ReadonlySet<string>>, exportedIn: (path: string) => number): number {
   const own = exportedIn(entry);

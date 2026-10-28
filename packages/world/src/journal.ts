@@ -1,44 +1,39 @@
-// The traveller's journal: a book with a page for every place and thing in
-// the world, in the order a file explorer lists the code. Each directory is a
-// chapter, its subdirectories chapters inside it, then its files; each file's
-// definitions follow it in the order they are written, and the definitions
-// inside one follow it. A container (a directory, or a file with definitions)
-// opens on its map facing what it holds, and the first thing it holds is
-// itself as a thing: a directory standing as a building or a landmark has
-// that entity's spread first, and a file has its own, its painting facing its
-// own code. A leaf (a definition, or a file with nothing standing in it) is
-// its picture facing its content. A folder's thing faces the folder's
-// README, or with none what the folder holds, with its trails by their way. The repository's own
-// entity comes first of all. Every entry opens on a spread: the left-hand page pictures it, and the
-// right-hand page names it and lists or shows what it holds, a long list
-// running on over the pages after. The book says only what each page is
-// about, what it lists and its pages; the journal draws the rest.
+// Builds the traveller's journal, a book with a page for every place and thing
+// in the world, in the order a file explorer lists the code. A directory's
+// chapter holds its subdirectories' chapters, then its files. A file's
+// definitions follow it in source order, each followed by the ones nested in it.
+//
+// Every entry opens on a spread. The left-hand page pictures it, and the
+// right-hand page names it and lists or shows what it holds, continuing onto
+// later pages when the list is long. A container lists its own thing first:
+// a directory's entity, or a file's own code. The repository's entity comes
+// first of all. This module records only each entry's subject, list and pages,
+// and the journal UI draws the rest.
 
 import type { CodeArea, CodePatch, CodeStanding, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
 
 export interface JournalEntry {
   /**
-   * A chapter is a directory, an entity is the thing a directory stands as, a
-   * file is a file, its own is a file with definitions as a thing of its own
-   * (its own code), and a definition one of its definitions.
+   * "chapter" is a directory and "entity" is the thing a directory appears as.
+   * "own" is the own code of a file with definitions, as a thing of its own.
    */
   readonly kind: "chapter" | "entity" | "file" | "own" | "definition";
-  /** What it is about: a directory's or a file's path, a definition's id (`<file>#<name>`), `entity:<path>` or `own:<path>`. */
+  /** Its subject: a directory or file path, a definition id `<file>#<name>`, `entity:<path>` or `own:<path>`. */
   readonly of: string;
   readonly name: string;
-  /** The entry it sits under; a top-level chapter, a file at the root and the repository's entity sit under none. */
+  /** The `of` of its parent entry. Top-level chapters, root files and the repository's entity have none. */
   readonly under?: string;
-  /** What its page lists, each an entry of its own: what it holds; an entity lists what its folder holds. */
+  /** The `of` of each entry its page lists. An entity without a README lists what its folder holds. */
   readonly lists: readonly string[];
-  /** The file whose text a thing's page shows instead of a list: a folder's README. */
+  /** The file whose text the page shows instead of a list. For an entity, it is the folder's README. */
   readonly text?: string;
-  /** Its first right-hand page, which names it; the left-hand page before it pictures it. */
+  /** Its first right-hand page, which names it. The left-hand page before it holds its picture. */
   readonly page: number;
-  /** How many pages its words take from `page` on: a list too long for one runs on overleaf. */
+  /** Pages its text takes from `page` on. A list too long for one page continues on the next. */
   readonly pages: number;
-  /** Rows its first page gives to a snippet of its most important part (a file's definition, a folder's file), before its list; absent when none. */
+  /** Rows on its first page, before the list, for a snippet of its most important definition or file. */
   readonly lead?: number;
-  /** An entity's trails by their way: the entities it imports from, and those that import from it. */
+  /** An entity's trails by direction. `uses` are the entities it imports from, and `usedBy` those that import from it. */
   readonly uses?: readonly string[];
   readonly usedBy?: readonly string[];
 }
@@ -46,38 +41,38 @@ export interface JournalEntry {
 export interface Journal {
   /** The repository's name, on the cover. */
   readonly name: string;
-  /** What the contents lists: the top-level chapters, then the files at the root. */
+  /** The contents page: the repository's entity, the top-level chapters, then the root files. */
   readonly contents: readonly string[];
   /** Every entry, in reading order. */
   readonly entries: readonly JournalEntry[];
-  /** The entry about a directory, an entity, a file or a definition, by its `of`. */
+  /** Looks up an entry by its `of`. */
   entry(of: string): JournalEntry | undefined;
 }
 
-/** How many of a list's rows a page holds: the first page, under its heading, and each page the list runs on to. */
+/** List rows per page: `first` on the first page under its heading, and `next` on each continuation page. */
 export interface PageRoom {
   readonly first: number;
   readonly next: number;
-  /** Rows a first page gives to a snippet of its most important part, a file's definition or a folder's file, when it holds two or more. */
+  /** Rows a first page gives to a snippet of its most important definition or file, when it holds two or more. */
   readonly lead?: number;
 }
 
-/** The parts of a world the journal reads: its places and things, what holds each, and the trails between things. */
+/** The world fields `journalOf` reads. */
 export interface JournalSource {
   readonly name: string;
   readonly areas: readonly Pick<CodeArea, "path" | "name" | "parent">[];
   readonly patches: readonly Pick<CodePatch, "path" | "name" | "area">[];
   readonly symbols: readonly Pick<CodeSymbol, "id" | "file" | "parent" | "name" | "line">[];
-  /** The buildings and landmarks; only an entity's has a spread of its own here, since a file's or a definition's is its own page. */
+  /** Buildings and landmarks. Only an entity's gets its own spread, since a file's or definition's is shown on that file's or definition's page. */
   readonly things?: readonly Pick<CodeThing, "path" | "name" | "of">[];
-  /** The files and entities standing as flowers, a stone, a bush or a tree. */
+  /** Files and entities that appear as flowers, a stone, a bush or a tree. */
   readonly standing?: readonly Pick<CodeStanding, "path" | "name" | "of">[];
   readonly trails?: readonly Pick<CodeTrail, "from" | "to">[];
 }
 
-/** The entry about the entity a directory stands as. */
+/** The `of` of the entry about the thing a directory appears as. */
 export const entityOf = (path: string): string => `entity:${path}`;
-/** The entry about a file with definitions as a thing of its own: its own code. */
+/** The `of` of the entry about a file's own code, for a file with definitions. */
 export const ownOf = (path: string): string => `own:${path}`;
 
 interface Item {
@@ -86,7 +81,7 @@ interface Item {
   readonly name: string;
 }
 
-/** As a file explorer sorts names: by letter, ignoring case, with numbers in numeric order. */
+/** Sorts names like a file explorer: by letter, ignoring case, with numbers in numeric order. */
 const byName = (a: Item, b: Item): number => a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" }) || (a.of < b.of ? -1 : a.of > b.of ? 1 : 0);
 
 const push = <K, V>(m: Map<K, V[]>, k: K, v: V): void => {
@@ -96,16 +91,16 @@ const push = <K, V>(m: Map<K, V[]>, k: K, v: V): void => {
 };
 
 export function journalOf(world: JournalSource, room: PageRoom = { first: Infinity, next: Infinity }): Journal {
-  // What each page lists, by what it is about: "" is the root, whose list is the contents.
+  // Child items by parent path. "" is the root, whose list is the contents.
   const chapters = new Map<string, Item[]>();
   const files = new Map<string, Item[]>();
   const definitions = new Map<string, { item: Item; line: number }[]>();
   for (const a of world.areas) if (a.parent !== null) push(chapters, a.parent, { kind: "chapter", of: a.path, name: a.name });
   for (const p of world.patches) push(files, p.area, { kind: "file", of: p.path, name: p.name });
   for (const s of world.symbols) push(definitions, s.parent ?? s.file, { item: { kind: "definition", of: s.id, name: s.name }, line: s.line });
-  // Every entity has its thing's spread, whatever it stands as.
+  // Every entity gets a spread for its thing, whatever form it has.
   const things = new Map([...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"), ...(world.standing ?? []).filter((t) => t.of === "entity")].map((t) => [t.path, t]));
-  // Each trail by its way: the entity it leaves imports from the one it reaches.
+  // A trail runs from the importing entity to the entity it imports from.
   const usesOf = new Map<string, Set<string>>();
   const usedByOf = new Map<string, Set<string>>();
   for (const t of world.trails ?? []) {
@@ -116,14 +111,14 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
     usedByOf.get(t.to)?.add(t.from);
   }
   const entityItem = (path: string): Item => ({ kind: "entity", of: entityOf(path), name: things.get(path)?.name ?? path });
-  /** Each folder's README, which its thing's page shows. */
+  /** Each folder's README, which its entity's page shows. */
   const readmes = new Map<string, string>();
   for (const p of world.patches) if (/^readme(\.(md|markdown|txt|rst))?$/i.test(p.name) && !readmes.has(p.area)) readmes.set(p.area, p.path);
   const listOf = (item: Item | { kind: "root"; of: string }): Item[] => {
-    // A container's first row is itself as a thing.
+    // A container lists its own thing first.
     if (item.kind === "chapter" || item.kind === "root") return [...(things.has(item.of) ? [entityItem(item.of)] : []), ...(chapters.get(item.of) ?? []).sort(byName), ...(files.get(item.of) ?? []).sort(byName)];
     if (item.kind === "entity") {
-      // An entity's page shows its folder's README; with none, it lists what its folder holds, so it always leads down.
+      // An entity's page shows its folder's README. Without one, it lists the folder's contents so the reader can go deeper.
       const folder = item.of.slice("entity:".length);
       return readmes.has(folder) ? [] : [...(chapters.get(folder) ?? []).sort(byName), ...(files.get(folder) ?? []).sort(byName)];
     }
@@ -131,11 +126,11 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
     const held = (definitions.get(item.of) ?? []).sort((a, b) => a.line - b.line || byName(a.item, b.item)).map((d) => d.item);
     return item.kind === "file" && held.length > 0 ? [{ kind: "own", of: ownOf(item.of), name: item.name }, ...held] : held;
   };
-  /** How many rows a page about `item` lists: a file lists every definition in it, nested ones included. */
+  /** Rows on the page about `item`. A file counts every definition in it, nested ones included. */
   const rowsOf = (item: Item, lists: readonly Item[]): number => {
     if (item.kind === "definition" || item.kind === "own") return 0;
     if (item.kind !== "file") return lists.length;
-    // A file lists itself, when it holds definitions, then every definition in it.
+    // A file with definitions has a row for its own code, then one per definition.
     let n = lists.length > 0 ? 1 : 0;
     const walk = (of: string): void => {
       for (const d of definitions.get(of) ?? []) {
@@ -154,8 +149,8 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
   let picture = 0;
   const add = (item: Item, under: string | undefined, lists: readonly Item[]): void => {
     const rows = rowsOf(item, lists);
-    // A file with two definitions or more, or a folder with two files or more, leads with a snippet of its most important,
-    // which takes rows of its first page.
+    // A file with two or more definitions, or a folder with two or more files, opens with a snippet of its most
+    // important one. The snippet takes rows of its first page.
     const parts = item.kind === "file" ? rows - 1 : item.kind === "chapter" ? (files.get(item.of)?.length ?? 0) : 0;
     const lead = parts >= 2 ? (room.lead ?? 0) : 0;
     const pages = pagesFor(rows + lead);
@@ -166,13 +161,13 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
     const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), ...(text === undefined ? {} : { text }), page: picture + 1, pages, ...(lead > 0 ? { lead } : {}), ...trails };
     entries.push(entry);
     index.set(entry.of, entry);
-    // The next picture is a left-hand page: an entry whose words end on a right-hand page leaves the page after it blank.
+    // The next picture needs a left-hand page. Text that ends on a left-hand page leaves the right-hand page after it blank.
     picture += pages % 2 === 1 ? pages + 1 : pages + 2;
   };
   const visit = (item: Item, under: string | undefined): void => {
     const lists = listOf(item);
     add(item, under, lists);
-    // An entity lists what its folder holds, which follows it in the folder's own chapter; its own lists nothing.
+    // Don't recurse into an entity's list, since those entries follow in the folder's own chapter. An own entry lists nothing.
     if (item.kind !== "entity" && item.kind !== "own") for (const l of lists) visit(l, item.of);
   };
   const contents = listOf({ kind: "root", of: "" });

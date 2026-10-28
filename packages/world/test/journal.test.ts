@@ -43,9 +43,9 @@ describe("the traveller's journal", () => {
       "package.json",
       "README.md",
     ]);
-    // Each page lists what it holds, and each spread's right-hand page is numbered after the last.
+    // Each page lists what it holds. With unlimited room, each entry's right-hand page is two after the previous one.
     expect(journal.entry("packages")?.lists).toEqual(["packages/app", "packages/core"]);
-    // A file with definitions is a container: its first row is itself, its own code; a file with none is a leaf.
+    // A file with definitions lists its own code first. A file without definitions lists nothing.
     expect(journal.entry(MATH)?.lists).toEqual([ownOf(MATH), `${MATH}#Opts`, `${MATH}#Calc`, `${MATH}#square`]);
     expect(journal.entry(ownOf(MATH))).toMatchObject({ kind: "own", under: MATH, lists: [] });
     expect(journal.entry("docs/guide.md")?.lists).toEqual([]);
@@ -61,21 +61,20 @@ describe("the traveller's journal", () => {
       { first: 2, next: 3 },
     );
     const order = journal.entries.map((e) => e.of);
-    // The repository's own spread comes before every chapter, and an entity's right after its directory's, as the first row of each.
+    // The repository's entity comes before every chapter. Each entity's entry follows its directory's, as that directory's first row.
     expect(order.slice(0, 3)).toEqual([entityOf(""), "docs", entityOf("docs")]);
     expect(journal.contents[0]).toBe(entityOf(""));
     expect(journal.entry("packages/core")?.lists[0]).toBe(entityOf("packages/core"));
     expect(order.indexOf(entityOf("packages/core"))).toBe(order.indexOf("packages/core") + 1);
-    // A thing faces its folder's README; with none, its page lists what its folder holds, so it always leads down to
-    // the code, and its trails by their way: what it imports from and what imports from it. A trail to something that
-    // isn't a thing joins nothing.
+    // An entity's page shows its folder's README. Without one, it lists the folder's contents. It also lists its trails
+    // by direction, and a trail to or from something that isn't a thing is dropped.
     expect(journal.entry(entityOf(""))).toMatchObject({ text: "README.md", lists: [], pages: 1 });
     expect(journal.entry(entityOf("packages/core"))).toMatchObject({ lists: ["packages/core/index.ts", MATH], uses: [], usedBy: [entityOf("docs")] });
     expect(journal.entry(entityOf("docs"))).toMatchObject({ lists: ["docs/guide.md"], uses: [entityOf("packages/core")], usedBy: [] });
     expect(journal.entry(entityOf("packages/core"))?.text).toBeUndefined();
     expect(journal.entry(entityOf("packages/core"))?.under).toBe("packages/core");
-    // math.ts lists itself and its five definitions: two on its first page, three on each after; ending on a right-hand
-    // page, the next entry opens on a spread of its own, its picture on the left.
+    // math.ts has six rows, its own code and five definitions. Two fit on its first page and three on each later page,
+    // so it takes 3 pages. Its text ends on a right-hand page, so the next entry's picture takes the next left-hand page.
     const math = journal.entry(MATH);
     expect(math?.pages).toBe(3);
     expect(journal.entry(ownOf(MATH))?.page).toBe((math?.page ?? 0) + 4);

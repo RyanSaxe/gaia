@@ -1,14 +1,13 @@
-// Composing a world: its sky, each region's land, each building or landmark
-// (of an entity, a file or a definition) and each trail are filled part by
-// part through the planner, their
-// structure first, then each stage's details, one request a wave, with what
-// was settled before in the next wave's state. Jev never names a preset:
-// every blueprint is the parts and settings it chose.
+// Composes blueprints for the sky, each region's land, each thing and each
+// trail through the planner. Each wave is one Jev request. The structure
+// comes first, then each stage's details, with earlier answers in the next
+// wave's state. A blueprint holds only the parts and settings Jev chose, never a
+// preset.
 
 import { type AnyKind, type Blueprint, type CodeGraph, type DefNode, type DirNode, type EntityFacts, type FileNode, type JevAnswer, type JevClient, type Library, stagesOf } from "@gaia/schema";
 import { type Target, type Wave, assemble, planDetails, planStructure, readStructure, validate } from "./planner.ts";
 
-/** What composes a world: the kind of each thing in it and the primitives that fill them. */
+/** The kind for each composed thing, and the primitive library that fills them. */
 export interface Composing {
   readonly building: AnyKind;
   readonly landmark: AnyKind;
@@ -18,40 +17,40 @@ export interface Composing {
   readonly biome: AnyKind;
   /** A trail between two entities. */
   readonly link: AnyKind;
-  /** A tree, a bush, a stone and a drift of flowers that stand for a thing. */
+  /** Small forms that represent an entity, file or definition. */
   readonly tree: AnyKind;
   readonly bush: AnyKind;
   readonly stone: AnyKind;
   readonly flowers: AnyKind;
-  /** A bush of the wild past the land, which stands for no code: a bush, asked in words of the wild around it. */
+  /** A bush in the wild past the land's edge. It represents no code, and its request describes the wild around it. */
   readonly wildBush: AnyKind;
   readonly lib: Library;
-  /** The parts a thing of some sizes is offered instead of all of `lib`'s: a bush is never offered a tree's frame. */
+  /** Per kind, a subset of `lib` to offer instead of all of it, so a bush is never offered a tree's frame. */
   readonly offered?: Partial<Readonly<Record<ComposedAs, Library>>>;
 }
 
-/** What a composed thing is: which of `Composing`'s kinds fills it. */
+/** Which of `Composing`'s kinds composes a thing. */
 export type ComposedAs = "building" | "landmark" | "world" | "biome" | "link" | "tree" | "bush" | "stone" | "flowers" | "wildBush";
 
 /**
- * One thing to compose: its id (an entity's path, a file's, a definition's `<file>#<name>`, or `world:`, `land:`,
- * `trail:` or `wild:` and what it is of), its kind, and what Jev may know about it.
+ * One thing to compose. `path` is an entity's path, a file's path, a definition's `<file>#<name>`, or an id that
+ * starts with `world:`, `land:`, `trail:` or `wild:`. `state` is what Jev sees about it.
  */
 export interface Composed {
   readonly path: string;
   readonly as: ComposedAs;
   readonly state: Readonly<Record<string, unknown>>;
-  /** What its place has that a part may need, such as running water; none when absent. */
+  /** Features its place provides that a part may need, such as running water. */
   readonly has?: readonly string[];
-  /** The options its place allows, per field path, such as its land's native families for "palette.family" (`DetailOptions.narrow`). */
+  /** Allowed options per field path, such as its land's native families for "palette.family" (`DetailOptions.narrow`). */
   readonly narrow?: Readonly<Record<string, readonly string[]>>;
-  /** Values its place already settles, per field path, such as its area's water for "relief.stream": filled in, not asked. */
+  /** Values already set per field path, such as its area's water for "relief.stream". These are filled in, not asked. */
   readonly fixed?: Readonly<Record<string, string | boolean>>;
-  /** The part already chosen for a slot, by slot, such as the frame its form is: filled in, not asked. */
+  /** The part already chosen for each slot, such as the frame its form sets. These are filled in, not asked. */
   readonly uses?: Readonly<Record<string, string>>;
 }
 
-/** Composes one thing: its structure, then each stage's details, and the blueprint they make. */
+/** Requests one thing's structure from Jev, then each stage's details, and returns the validated blueprint. */
 export async function composeThing(c: Composing, jev: JevClient, thing: Composed): Promise<Blueprint> {
   const k = c[thing.as];
   const lib = c.offered?.[thing.as] ?? c.lib;
@@ -61,10 +60,11 @@ export async function composeThing(c: Composing, jev: JevClient, thing: Composed
   const waves: Wave[] = [];
   const answers: Record<string, JevAnswer> = {};
   for (let stage = 0; stage < stagesOf(k).length; stage++) {
-    // Each stage sees the parts settled in the stages before it, so the openings suit the walls they are set in.
+    // Each stage's state includes the params settled in earlier stages, so openings can match the walls they are in.
     const earlier = waves.length === 0 ? undefined : settledParams(assemble(k, lib, structure, waves, answers));
     const wave = planDetails(k, lib, structure, target, { stage, ...(thing.narrow === undefined ? {} : { narrow: thing.narrow }), ...(thing.fixed === undefined ? {} : { fixed: thing.fixed }), ...(earlier === undefined ? {} : { earlier }) });
-    // A stage with nothing to ask or fill in leaves no wave; one whose values its place settles keeps them.
+    // Skip a stage with no questions and no fixed values. A stage with only fixed values still adds its wave, so
+    // `assemble` fills them in.
     if (Object.keys(wave.refs).length === 0) continue;
     Object.assign(answers, await answersOf(jev, wave));
     waves.push(wave);
@@ -75,7 +75,7 @@ export async function composeThing(c: Composing, jev: JevClient, thing: Composed
   return blueprint;
 }
 
-/** Composes every thing, `concurrency` at a time, each as one thing on its own. */
+/** Composes each thing independently, `concurrency` at a time, and returns the blueprints by path. */
 export async function composeThings(c: Composing, jev: JevClient, things: readonly Composed[], concurrency: number): Promise<Record<string, Blueprint>> {
   const out: Record<string, Blueprint> = {};
   let next = 0;
@@ -90,18 +90,19 @@ export async function composeThings(c: Composing, jev: JevClient, things: readon
   return out;
 }
 
-/** How many of an entity's definitions its request names, the most important first. */
+/** Most definitions `partOf` lists, most important first. */
 const DEFINITIONS = 8;
 
-/** A score as a request carries it, to the hundredth, so a request stays the same while Jev's judgment does. */
+/** Rounds a score to two decimals for a request, so tiny changes in Jev's judgment leave the request unchanged. */
 export const share = (v: number | null | undefined): number | undefined => (v === null || v === undefined ? undefined : Math.round(v * 100) / 100);
-/** A signature or a doc cut to `n` characters, as a request carries it. */
+/** Cuts a signature or doc to at most `n` characters for a request, ending in an ellipsis when cut. */
 export const trim = (text: string, n: number): string => (text.length <= n ? text : `${text.slice(0, n - 1)}…`);
 
 /**
- * What the engine established about a directory, file or repository: how much
- * it matters and each concept of its quality from the understanding pass, and its shape from the graph (files, lines,
- * languages, folders and history) and its most important definitions.
+ * What the engine graph records about a directory, file or repository. It
+ * includes the understanding pass's importance, quality and concept scores,
+ * the counts of files, lines, languages, folders and commits, and the most
+ * important definitions.
  */
 function partOf(graph: CodeGraph, path: string): Record<string, unknown> {
   const inside = (p: string): boolean => path === "" || p === path || p.startsWith(`${path}/`);
@@ -132,9 +133,8 @@ function partOf(graph: CodeGraph, path: string): Record<string, unknown> {
 const named = (path: string): string => (path === "" ? "(the repository's root)" : path);
 
 /**
- * What the new engine established about an entity, as its composing request carries it: what it is and what it
- * leans on and is leaned on by (its facts, which the world reads from the graph through `factsOf`), and what
- * `partOf` says of its directory.
+ * The state for composing an entity: its facts from `factsOf`, including what it depends on and how many entities
+ * depend on it, plus `partOf` for its directory.
  */
 export function composingState(graph: CodeGraph | undefined, entity: Pick<EntityFacts, "path" | "name"> & Partial<EntityFacts>): Record<string, unknown> {
   const path = entity.path;
@@ -149,15 +149,14 @@ export function composingState(graph: CodeGraph | undefined, entity: Pick<Entity
   return graph === undefined ? { entity: about } : { entity: { ...about, ...partOf(graph, path) } };
 }
 
-/** What a file's building or landmark is composed from: the file, as `partOf` says of it. */
+/** The state for composing a file's form, which is the file's `partOf`. */
 export function fileState(graph: CodeGraph | undefined, path: string): Record<string, unknown> {
   return { file: { path, ...(graph === undefined ? {} : partOf(graph, path)) } };
 }
 
 /**
- * What a definition's building or landmark is composed from: what it is (its role, signature and doc), where it is
- * declared, how many lines it spans, and how much it matters and each concept of its quality from the understanding
- * pass.
+ * The state for composing a definition's form: its role, signature, doc, file and line count, and the
+ * understanding pass's importance, quality and concept scores.
  */
 export function definitionState(graph: CodeGraph | undefined, id: string): Record<string, unknown> {
   const file = id.slice(0, id.indexOf("#"));
@@ -181,19 +180,19 @@ export function definitionState(graph: CodeGraph | undefined, id: string): Recor
   };
 }
 
-/** What the whole world's composing request carries: the repository, as `partOf` says of its root. */
+/** The state for composing the world's light, sky and wind, which is the repository root's `partOf`. */
 export function repositoryState(graph: CodeGraph | undefined, name: string): Record<string, unknown> {
   return { repository: { name, ...(graph === undefined ? {} : partOf(graph, "")) } };
 }
 
-/** What a region's land is composed from: the directory, as `partOf` says of it, and the water Jev judged its land holds. */
+/** The state for composing a region's land: the directory's `partOf` and the water Jev chose for it. */
 export function areaState(graph: CodeGraph | undefined, path: string, water: string | undefined): Record<string, unknown> {
   return { directory: { path: named(path), ...(graph === undefined ? {} : partOf(graph, path)), ...(water === undefined ? {} : { water }) } };
 }
 
 /**
- * What a trail is composed from: the two entities it joins, each as much as matters to walking between them, and
- * how many of the first's files import the second's, from the graph's import edges.
+ * The state for composing a trail: each entity's name, path, importance and quality, and how many files in `from`
+ * import files in `to`, counted from the graph's import edges.
  */
 export function trailState(graph: CodeGraph | undefined, from: Pick<EntityFacts, "path" | "name">, to: Pick<EntityFacts, "path" | "name">): Record<string, unknown> {
   const end = (e: Pick<EntityFacts, "path" | "name">): Record<string, unknown> => {
@@ -207,10 +206,9 @@ export function trailState(graph: CodeGraph | undefined, from: Pick<EntityFacts,
 }
 
 /**
- * What a bush of the wild is composed from, which stands for no code: the wild's ground it grows in (`ground`, the
- * ground cover's settings in their own words), and the world around it as Jev composed it, its light, sky and wind,
- * and each of its lands but their landforms, since the wild rolls on in its own past the land's edge. Lands
- * composed alike are named once.
+ * The state for composing a wild bush, which represents no code. It holds the wild ground's cover settings in
+ * words, the composed sky, and each composed land without its relief, since the terrain past the land's edge has
+ * its own landform. Lands with the same settled params appear once.
  */
 export function wildState(ground: Readonly<Record<string, string>>, sky: Blueprint, lands: readonly Blueprint[], land: AnyKind): Record<string, unknown> {
   const around = new Map<string, Record<string, unknown>>();
@@ -226,7 +224,7 @@ async function answersOf(jev: JevClient, wave: Wave): Promise<Readonly<Record<st
   return (await jev.ask(wave.request)).answers;
 }
 
-/** What earlier stages settled, part by part, as the next stage's state shows it. */
+/** A blueprint's non-empty params by slot, as a later stage's state shows them. */
 function settledParams(bp: Blueprint): Record<string, Readonly<Record<string, unknown>>> {
   return Object.fromEntries(Object.entries(bp.slots).flatMap(([slot, filled]) => (Object.keys(filled.params).length === 0 ? [] : [[slot, filled.params]])));
 }

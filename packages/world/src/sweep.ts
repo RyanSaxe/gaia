@@ -1,73 +1,73 @@
-// A sweep of a kind's parts: blueprints in which every part that can fill
-// each slot, every option of every part's settings and every listed pairing
-// of parts stands at least once, chosen in order with no seed, so the same
-// kind and library always give the same sweep. The proving ground stands
-// its sweeps so a person can walk up to every part, and tests realize them
-// so every part is built.
+// Builds a sweep of a kind's parts: blueprints in which every part for each
+// slot, every option of every part's params and every listed pairing of parts
+// appears at least once. Choices follow a fixed order with no seed, so the
+// same kind and library always give the same sweep. The proving ground places
+// its sweeps so a person can walk up to every part, and tests realize them so
+// every part gets built.
 
 import { type AnyKind, type AnyPrimitive, type Blueprint, type Field, type FilledSlot, type Library, blueprintOf, isStoredValue, slotOrder } from "@gaia/schema";
 import { validate } from "./planner.ts";
 
-/** Where one blueprint of a sweep stands, and what that place settles. */
+/** The place for one blueprint of a sweep, and the parts and values that place fixes. */
 export interface SweepPlace {
-  /** What the place has that a part may need, such as running water: a part needing more is never stood there. */
+  /** Features the place provides, such as running water. A part that needs more is never placed there. */
   readonly has?: readonly string[];
-  /** The part the place settles for a slot, by slot: a brook's land is a valley (`{ relief: "valley@1" }`). */
+  /** The part the place fixes for each slot. A brook's land, for example, is a valley: `{ relief: "valley@1" }`. */
   readonly uses?: Readonly<Record<string, string>>;
-  /** Values the place settles, per field path (`relief.stream`), as `DetailOptions.fixed` takes them. */
+  /** Values the place fixes per field path, such as `relief.stream`, as `DetailOptions.fixed` takes them. */
   readonly fixed?: Readonly<Record<string, string | boolean>>;
-  /** A group the place belongs to, such as a health: every part stands under every label the places name. */
+  /** A group the place belongs to, such as a health. The sweep covers every part under every label the places name. */
   readonly label?: string;
 }
 
 export interface SweepOptions {
-  /** Slot pairs whose every pairing of parts stands at least once, such as `[["form", "crown"]]`. */
+  /** Slot pairs, such as `[["form", "crown"]]`, whose every pairing of parts must appear at least once. */
   readonly pairs?: readonly (readonly [string, string])[];
-  /** One blueprint per place, in order. Without places the sweep stands blueprints until nothing is left uncovered. */
+  /** One blueprint per place, in order. Without places, the sweep adds blueprints until nothing is left uncovered. */
   readonly places?: readonly SweepPlace[];
 }
 
 export interface Sweep {
   readonly blueprints: readonly Blueprint[];
-  /** What no blueprint stands, in words: empty when the sweep covers the kind. */
+  /** What no blueprint covers, in words. Empty when the sweep covers the kind. */
   readonly missing: readonly string[];
 }
 
-/** The most blueprints a sweep without places stands before it gives up: every kind today needs under 30. */
+/** Most blueprints a sweep without places adds before it throws. Every current kind needs fewer than 30. */
 const MOST_ROWS = 256;
 
 type Value = string | boolean | string[];
 
-/** A field's values in the sweep's order: a scale's levels from low to high, a choice's keys and a flag's false then true. */
 function valuesOf(field: Exclude<Field, { type: "set" }>): (string | boolean)[] {
   if (field.type === "choice") return Object.keys(field.options);
   if (field.type === "scale") return field.levels.map((l) => l.words);
   return [false, true];
 }
 
-/** What one value of a field covers: the value itself, or each member a set includes. */
+/** The coverage keys of one field value: the value itself, or each member a set includes. */
 const keysOf = (value: Value | readonly string[]): readonly string[] => (Array.isArray(value) ? value : [String(value)]);
 
-/** Every key a field's values cover: each option, level, flag or member. */
+/** Every coverage key of a field: each option, level, flag value or member. */
 const allKeys = (field: Field): string[] => (field.type === "set" ? Object.keys(field.members) : valuesOf(field).map(String));
 
-/** A blueprint that stands somewhere, with the label of the place it stands in, if it has one. */
+/** A placed blueprint, with its place's label if it has one. */
 export interface Stood {
   readonly blueprint: Blueprint;
   readonly label?: string;
 }
 
 export interface Coverage {
-  /** Slot pairs whose every pairing of parts must stand, as `SweepOptions.pairs`. */
+  /** Slot pairs whose every pairing of parts must appear, as in `SweepOptions.pairs`. */
   readonly pairs?: readonly (readonly [string, string])[];
-  /** The labels every part must stand under; without any, every part must stand once. */
+  /** Labels every part must appear under. Without labels, every part must appear once. */
   readonly labels?: readonly string[];
 }
 
 /**
- * What a kind's blueprints leave unstood, in words: each part of each slot (under each label, given labels), each
- * option of each part's settings, each optional slot left out, and each listed pairing. A sweep's `missing` is this
- * of its blueprints; a world's blueprints, labelled by where they stand, can be checked the same way.
+ * Lists in words what a kind's blueprints leave uncovered: each part of each slot, under each label when labels are
+ * given, each option of each part's params, each optional slot no blueprint leaves out, and each listed pairing. A
+ * sweep's `missing` is this list for its blueprints. A world's blueprints, labelled by their places, can be checked
+ * the same way.
  */
 export function missingFrom(k: AnyKind, lib: Library, stood: readonly Stood[], coverage: Coverage = {}): string[] {
   const labels = coverage.labels ?? [];
@@ -112,12 +112,13 @@ export function missingFrom(k: AnyKind, lib: Library, stood: readonly Stood[], c
 }
 
 /**
- * Sweeps a kind's parts from a library. Each blueprint takes, slot by slot, the part with the most left to cover:
- * first a part that needs something of its place where the place has it, then one that completes a listed pairing,
- * then one not yet stood under the place's label, then the one with the most options left. Each setting takes its
- * first option not yet stood, and once all have, the option its part's count of uses comes round to; a set takes
- * every other member, alternating. An optional slot is left out once it has nothing left to cover. Every blueprint
- * is valid for the kind.
+ * Sweeps a kind's parts from a library. For each slot of each blueprint, it picks the part with the most left to
+ * cover. The ranking prefers, in order, a part that needs something its place provides, a part that completes a
+ * listed pairing with a part already chosen, a part not yet placed under the place's label, a part with pairings
+ * left for later slots, the part with the most options left, and the least used part. Each param gets its first
+ * value not yet covered. Once all are covered, it gets the value at the part's use count, modulo the number of
+ * values. A set gets every other member, alternating between uses. An optional slot is left out once no part has
+ * anything left to cover. Every blueprint is valid for the kind.
  */
 export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Sweep {
   const places = options.places;
@@ -127,7 +128,7 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
   const order = slotOrder(k);
   const partsOf = (name: string): AnyPrimitive[] => lib.forRole((k.slots[name] as AnyKind["slots"][string]).role);
 
-  /** Each part's labels it has stood under, by `slot=id`; an unlabelled sweep's parts stand under "". */
+  /** The labels each part has appeared under, by `slot=id`. An unlabelled sweep uses the label "". */
   const stood = new Map<string, Set<string>>();
   const seen = new Set<string>();
   const used = new Map<string, number>();
@@ -142,7 +143,7 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
     return label !== undefined && !(under?.has(label) ?? false);
   };
   const optionsLeft = (name: string, p: AnyPrimitive): number => Object.entries(p.params).reduce((n, [param, f]) => n + allKeys(f).filter((key) => !seen.has(option(name, p, param, key))).length, 0);
-  /** The listed pairings with `p` in `name` left to stand: with a partner already chosen in this blueprint, or with any partner still to come. */
+  /** Uncovered listed pairings for `p` in slot `name`. `now` counts pairings with a partner already in this blueprint, and `later` counts those with partners in slots not yet filled. */
   const pairsLeft = (name: string, p: AnyPrimitive, slots: Readonly<Record<string, FilledSlot>>): { now: number; later: number } => {
     let now = 0;
     let later = 0;
@@ -176,7 +177,7 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
         if (s.optional) continue;
         throw new Error(`No ${s.role} part fits the place of ${k.id}'s ${name}.`);
       }
-      // What each part has left to cover here, most pressing first, then the least used; the library's order breaks ties.
+      // Rank parts by what they have left to cover, most pressing first, then by least use. The library's order breaks ties.
       const ranked = fitting.map((p) => {
         const pending = pairsLeft(name, p, slots);
         const fresh = unstood(name, p, label);
