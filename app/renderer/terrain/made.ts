@@ -1,7 +1,7 @@
 // Builds made ahead. The trees, landmarks and bushes every world opens with
-// take most of a second to realize, so they are made on worker threads that
-// start with the page (make-worker.ts) while the page's own thread draws the
-// wait, and the page only takes them. A build asked for before it is made, or
+// take most of a second to realize, so they are made on worker threads
+// (make-worker.ts) while the page's own thread draws the wait, and the page
+// only takes them. A build asked for before it is made, or
 // never made ahead, is realized in place: realize is pure, so the build is
 // the same either way.
 

@@ -9,7 +9,7 @@ const CODE_WORDS = /\b(functions?|class(es)?|modules?|files?|imports?|tests?)\b/
 const optionsOf = (f: Field): string[] => (f.type === "choice" ? Object.values(f.options) : f.type === "set" ? Object.values(f.members) : f.type === "flag" ? [f.yes, f.no] : f.levels.map((l) => l.words));
 
 describe("the words Jev composes small things from", () => {
-  const sizes = ["tree", "bush", "stone", "flowers"] as const;
+  const sizes = ["tree", "bush", "stone", "flowers", "wildBush"] as const;
   const parts = new Map<string, AnyPrimitive>();
   for (const as of sizes) {
     const lib = COMPOSING.offered?.[as] ?? COMPOSING.lib;

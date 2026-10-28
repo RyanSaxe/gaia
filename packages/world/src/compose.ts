@@ -23,17 +23,19 @@ export interface Composing {
   readonly bush: AnyKind;
   readonly stone: AnyKind;
   readonly flowers: AnyKind;
+  /** A bush of the wild past the land, which stands for no code: a bush, asked in words of the wild around it. */
+  readonly wildBush: AnyKind;
   readonly lib: Library;
   /** The parts a thing of some sizes is offered instead of all of `lib`'s: a bush is never offered a tree's frame. */
   readonly offered?: Partial<Readonly<Record<ComposedAs, Library>>>;
 }
 
 /** What a composed thing is: which of `Composing`'s kinds fills it. */
-export type ComposedAs = "building" | "landmark" | "world" | "biome" | "link" | "tree" | "bush" | "stone" | "flowers";
+export type ComposedAs = "building" | "landmark" | "world" | "biome" | "link" | "tree" | "bush" | "stone" | "flowers" | "wildBush";
 
 /**
- * One thing to compose: its id (an entity's path, a file's, a definition's `<file>#<name>`, or `world:`, `land:` or
- * `trail:` and what it is of), its kind, and what Jev may know about it.
+ * One thing to compose: its id (an entity's path, a file's, a definition's `<file>#<name>`, or `world:`, `land:`,
+ * `trail:` or `wild:` and what it is of), its kind, and what Jev may know about it.
  */
 export interface Composed {
   readonly path: string;
@@ -202,6 +204,21 @@ export function trailState(graph: CodeGraph | undefined, from: Pick<EntityFacts,
   const fileOf = (id: string): string => (id.startsWith("file:") ? id.slice(5) : (id.slice(4).split("#")[0] ?? ""));
   const importing = graph === undefined ? undefined : new Set(graph.edges.filter((e) => e.kind === "imports" && within(from.path, fileOf(e.from)) && within(to.path, fileOf(e.to)) && !within(to.path, fileOf(e.from))).map((e) => fileOf(e.from))).size;
   return { trail: { from: end(from), to: end(to), ...(importing === undefined ? {} : { filesImporting: importing }) } };
+}
+
+/**
+ * What a bush of the wild is composed from, which stands for no code: the wild's ground it grows in (`ground`, the
+ * ground cover's settings in their own words), and the world around it as Jev composed it, its light, sky and wind,
+ * and each of its lands but their landforms, since the wild rolls on in its own past the land's edge. Lands
+ * composed alike are named once.
+ */
+export function wildState(ground: Readonly<Record<string, string>>, sky: Blueprint, lands: readonly Blueprint[], land: AnyKind): Record<string, unknown> {
+  const around = new Map<string, Record<string, unknown>>();
+  for (const bp of lands) {
+    const settled = Object.fromEntries(Object.entries(settledParams(bp)).filter(([slot]) => land.slots[slot]?.role !== "Relief"));
+    around.set(JSON.stringify(settled), settled);
+  }
+  return { wild: { ground }, sky: settledParams(sky), lands: [...around.values()] };
 }
 
 async function answersOf(jev: JevClient, wave: Wave): Promise<Readonly<Record<string, JevAnswer>>> {

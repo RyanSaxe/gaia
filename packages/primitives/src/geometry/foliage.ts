@@ -549,7 +549,14 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   // Leaves keep near their own size on a great tree: its sprays grow only with the root of its scale,
   // so each covers s times the area and its clumps need 1/s as many twigs per square meter.
   const lookOf = (share: number): ClumpLook => ({ twigs: 15 / Math.max(1, s), sprays: 8 * share, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0, low: !oneTrunk(skel) });
-  const fillOf = (n: number): number => Math.round(Math.max(1, n) * Math.max(0, p.fullness - 0.35) * 0.9);
+  const shapeScale = p.shape === "plates" ? 1.2 : p.shape === "tufts" ? 0.62 : 1;
+  // Tufts are smaller than round clumps, so a tufted crown grows more of them along its limbs, as many as cover what
+  // round clumps would: at a fullness it hides as much of its frame, in more and smaller tufts.
+  const fillOf = (n: number): number => {
+    const tips = Math.max(1, n);
+    const fill = tips * Math.max(0, p.fullness - 0.35) * 0.9;
+    return Math.round(shapeScale < 1 ? (tips + fill) / (shapeScale * shapeScale) - tips : fill);
+  };
   const roomFor = (most: number): number => guard ?? crownRoom(skel, most);
   const mostClumps = (look: ClumpLook, budget: number): number => Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
   // A frame of more tips than the crown can give clumps (a fir's whorls) grows fewer, larger clumps spread over
@@ -562,7 +569,6 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const kept = crownTips(skel.tips, mostClumps(look, budget), fillOf);
   const grow = Math.sqrt(skel.tips.length / Math.max(1, kept.length));
   const tipCount = Math.max(1, kept.length);
-  const shapeScale = p.shape === "plates" ? 1.2 : p.shape === "tufts" ? 0.62 : 1;
   // Clumps scale with how far apart the tips are, so neighbors just overlap at "medium".
   const spacing = meanNearest(skel.tips.map((t) => t.position));
   const base = Math.min(0.3 * s + 0.6 * spacing, 0.24 * crown.radius[0]) * p.size * shapeScale * (0.72 + 0.38 * p.fullness);
@@ -855,11 +861,14 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   // with the root of its scale, so it hangs more of them, each as narrow as a
   // willow's, rather than a few wide ones that read as slabs from afar.
   const g = s <= 1 ? s : Math.sqrt(s);
-  // Strands hang from the tips and from the undersides of the outer limbs.
+  // Strands hang from the tips and from the undersides of the outer limbs. A
+  // shrub's stems are short, so strands hang from them too, twice as close,
+  // and its curtain is as full as a tree's.
+  const shrub = !oneTrunk(skel);
   const hangs: { at: V3; out: V3; limb: number }[] = skel.tips.map((t) => ({ at: [...t.position] as V3, out: [...t.normal] as V3, limb: boughs.limbNear(t.position) }));
-  const spacing = (0.3 * g) / (0.5 + p.fullness);
+  const spacing = (0.3 * g) / (0.5 + p.fullness) / (shrub ? 2 : 1);
   skel.limbs.forEach((limb, i) => {
-    if (limb.depth < 1) return;
+    if (limb.depth < 1 && !shrub) return;
     const span = length(sub(limb.end, limb.start));
     const steps = Math.floor(span / spacing);
     const d = normalize(sub(limb.end, limb.start));
@@ -990,6 +999,7 @@ const FROND = { branchlets: 1.25, lowerTier: 0.7, drape: { reach: 0.6, drop: 0.9
 export const NEEDLE_TRIANGLE_BUDGET = 26_000;
 
 export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
+  if (!whorled(skel)) return buildPine(p, ctx, skel);
   let density = 1;
   let built = growNeedles(p, ctx, skel, density);
   for (let pass = 0; pass < 4; pass++) {
@@ -1000,6 +1010,77 @@ export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContex
   }
   const parts = [built.out.part()];
   return { parts, anchors: hungFrom(skel, parts, built.anchors) };
+}
+
+/**
+ * Whether limbs leave a frame's trunk at several heights, as a spire's whorls
+ * climb its leader, rather than all at the one fork where a broadleaf's
+ * trunk divides.
+ */
+function whorled(skel: Skeleton): boolean {
+  const heights = new Set(skel.limbs.flatMap((l) => (l.depth === 1 && skel.limbs[l.parent]?.depth === 0 ? [Math.round(l.start[1] * 10)] : [])));
+  return heights.size >= 3;
+}
+
+/**
+ * How a pine's tufts are built: their radius as a share of the gap between
+ * neighbouring limb tips, between the least and the most (meters, at medium
+ * needles); twigs per square meter of tuft, needle sprays along each twig,
+ * and a spray's half width at medium needles; and how many tufts a full
+ * crown grows along its outer limbs for each tuft's width of limb.
+ */
+const PINE = { spacing: 0.55, least: 0.5, most: 1.1, twigs: 32, sprays: 9, half: 0.17, along: 0.8 } as const;
+
+/**
+ * A pine's needles. On a frame that forks into long rising limbs, a fir's
+ * fronds stand as thin fringes along bare limbs, so here the needles grow as
+ * a pine's do: in tufts of needle sprays on twigs round each limb tip, and
+ * for a fuller crown along the outer limbs, so the crown is a mass of
+ * overlapping tufts with the limbs showing between them. Longer needles grow
+ * larger tufts and fuller needles more twigs and tufts. Each twig bends with
+ * its limb; as vitality falls the needles brown and drop in place.
+ */
+function buildPine(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
+  const r = ctx.rand.fork("pine");
+  const s = leafScale(ctx.facts.scale ?? 1, skel);
+  const crown = crownOf(skel.tips.map((t) => t.position));
+  const boughs = new Boughs(skel);
+  const longer = Math.sqrt(p.length / 0.9);
+  const spacing = meanNearest(skel.tips.map((t) => t.position));
+  const base = clamp(PINE.spacing * spacing, PINE.least * s, PINE.most * s) * longer * (0.8 + 0.3 * p.fullness);
+  const look: ClumpLook = { twigs: (PINE.twigs * (0.6 + 0.5 * p.fullness)) / Math.max(1, s), sprays: PINE.sprays, half: PINE.half * longer * (s <= 1 ? s : Math.sqrt(s)), cut: CUT.needles, shape: "tufts", ground: 0 };
+  const budget = crownRoom(skel, NEEDLE_TRIANGLE_BUDGET);
+  const outer = skel.limbs.flatMap((l, i) => (l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l) ? [i] : []));
+  const reach = outer.reduce((n, i) => n + length(sub((skel.limbs[i] as Limb).end, (skel.limbs[i] as Limb).start)), 0);
+  const fill = Math.round((reach / (2 * base)) * PINE.along * Math.max(0, p.fullness - 0.3));
+  const kept = crownTips(skel.tips, Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look))), () => fill);
+  const grow = Math.sqrt(skel.tips.length / Math.max(1, kept.length));
+  // Tufts stay clear of the lower trunk, as a leaf crown's clumps do (`buildLeafClumps`).
+  const trunkTop = skel.limbs.reduce((m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m), 0);
+  const fork = skel.limbs.reduce((m, l) => (l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m), trunkTop);
+  const floor = Math.max(fork * 0.85, 1.2 * s);
+  const clumps: Clump[] = kept.map((i) => {
+    const tip = skel.tips[i] as Anchor;
+    const cr = r.fork(`tip${i}`);
+    const radius = base * (0.75 + 0.3 * tip.size) * cr.range(0.85, 1.15) * grow;
+    const center = addScaled(tip.position, tip.normal, radius * 0.3);
+    center[1] = Math.max(center[1], floor + radius * 0.5);
+    return { center, radius, limb: liftedFrom(boughs, center, tip.position, radius, boughs.limbNear(tip.position)), r: cr };
+  });
+  for (let i = 0; i < fill && outer.length > 0; i++) {
+    const fr = r.fork(`fill${i}`);
+    const k = outer[Math.floor(fr.next() * outer.length)] as number;
+    const limb = skel.limbs[k] as Limb;
+    const at = lerp(limb.start, limb.end, fr.range(0.4, 1));
+    const radius = base * fr.range(0.75, 1) * grow;
+    const center = addScaled(at, crownPlace(crown, at).out, radius * 0.25);
+    center[1] = Math.max(center[1], floor + radius * 0.5);
+    clumps.push({ center, radius, limb: liftedFrom(boughs, center, at, radius, k), r: fr });
+  }
+  // A crown over its room thins every tuft's twigs evenly.
+  const wanted = clumps.reduce((n, c) => n + twigsOf(look, c.radius, 1) * twigTriangles(look), 0);
+  const grown = emitClumps(clumps, () => crown, boughs, look, Math.min(1, budget / Math.max(1, wanted)));
+  return { parts: grown.parts, anchors: hungFrom(skel, grown.parts, grown.anchors) };
 }
 
 function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton, density: number): { out: PartBuilder; anchors: Anchor[] } {

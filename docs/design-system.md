@@ -64,7 +64,10 @@ calculates geometry and positions.
 
 Build full canopies from overlapping sprays and layered leaves on branches.
 Never hide a dark ball or body inside a crown, bush or fir frond. Gaps should
-reveal twigs, deeper foliage and sky.
+reveal twigs, deeper foliage and sky. A crown is as full on a large frame as
+on a small one: a leaf mound on a tree's frame grows as many clusters for its
+size as a bush's, and needles hang as a fir's fronds along whorled limbs but
+gather in a pine's tufts at the tips of a broadleaf's forking limbs.
 
 Leaf cuts, bark and canopy lighting are shared across components. Leaves read
 as individual shapes close up and coherent masses farther away. Bark faces
@@ -150,7 +153,12 @@ Walking follows the ground, intact bridge decks and the walkable steps and
 floors of landmarks, such as a rotunda's. Solids stop or deflect a
 walk; water permits wading and swimming. A broken bridge can stop a walk and
 force a trip to ford beside it. Grass and understory clear the footprints of
-structures, landmarks, rocks and paths. Round a drift of mushrooms, which stand
+structures, landmarks, rocks and paths. Under every bush, on the land or in
+the wild, the grass gives way over about half the bush's outline at the
+ground (`SHRUB_CLEARS` in
+[`understory.ts`](../app/renderer/terrain/understory.ts)), as grass grows
+thin under a real shrub's canopy. The grass round the bush's edge stays tall.
+Round a drift of mushrooms, which stand
 at their natural size, the grass grows only as short turf with a ragged edge,
 so they show.
 
@@ -234,8 +242,12 @@ watercolor. Survey capitals identify places; handwritten notes identify the
 traveller's marks. Vermilion marks the traveller and travel route. Paper warms
 and dims under lantern light at night.
 
-The maps use real terrain heights and river courses. Building and landmark
-symbols come from their composed blueprints, with the same wear as the world.
+The maps use real terrain heights and river courses. Building, landmark, tree,
+bush, stone and flower symbols come from their composed blueprints, with the
+same wear as the world: a fir draws as tiers up its trunk and a failing one as
+bare whorls. Trees keep a legible size on the whole sheet; stones, bushes and
+flowers stand at their size on the land, so they come in as the map comes
+close.
 Color means health. Outside the code's land, unwashed paper and survey ink
 represent the wild, which has no code health to score.
 
@@ -246,7 +258,9 @@ It never paints fabricated progress or provisional judgments as final health.
 
 [`map-styles.ts`](../app/renderer/immersive/map-styles.ts) defines shared paper
 and map styles. [`marks.ts`](../app/renderer/immersive/marks.ts) draws composed
-symbols; [`map-names.ts`](../app/renderer/immersive/map-names.ts) places names;
+buildings and landmarks and
+[`plant-marks.ts`](../app/renderer/immersive/plant-marks.ts) composed plants and
+stones; [`map-names.ts`](../app/renderer/immersive/map-names.ts) places names;
 [`wait/map-wait.ts`](../app/renderer/wait/map-wait.ts) draws progress.
 
 ## Start page and Gaia's mark

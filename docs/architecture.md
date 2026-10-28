@@ -127,6 +127,16 @@ copy passes through the same band as when a person walks away from it
 cards draw in one batch per set, from texture arrays holding the forms
 exactly as they were baked.
 
+The wild past the land stands for no code, and Jev composes its bushes too:
+one for each of the wild's two grounds (`WILD_GROUNDS` in
+[`looks.ts`](../app/renderer/terrain/looks.ts)), from a bush's parts asked in
+words of the wild land (`wildBush` in [`bush.ts`](../packages/kinds/src/bush.ts)).
+Each request reads its ground, the world's sky and its lands as Jev composed
+them, and nothing of the code (`wildState` in
+[`compose.ts`](../packages/world/src/compose.ts)); its colors are among the
+lands' native families. Each thicket in the wild is the bush of the ground it
+grows in.
+
 A primitive writes channels for health and motion as it builds. Shared shaders
 apply vitality and time to those channels, so a change in health can alter
 foliage or ruin without rebuilding geometry. The

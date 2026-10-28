@@ -37,7 +37,7 @@ import { LAND_ASPECT, type LandSite, landArea } from "@gaia/terrain";
 import { type StandingDef, definitionsOf } from "./definitions.ts";
 import { type LandNode, divideLand, dividePlots, nearestRung, rung } from "./land.ts";
 import { MODEL, planStructure } from "./planner.ts";
-import { type Composed, type Composing, areaState, composeThing, composeThings, composingState, definitionState, fileState, repositoryState, share, trailState, trim } from "./compose.ts";
+import { type Composed, type Composing, areaState, composeThing, composeThings, composingState, definitionState, fileState, repositoryState, share, trailState, trim, wildState } from "./compose.ts";
 
 /** What a thing stands as: a building or a landmark, which stand on their own lots, or a tree, a bush, a stone or flowers. */
 export type StandsAs = "building" | "landmark" | "tree" | "bush" | "stone" | "flowers";
@@ -72,6 +72,9 @@ export interface Look {
 
 export type LookSet = Readonly<Record<string, Look>>;
 
+/** One of the wild's grounds past the land: the ground cover's settings it grows, in their own words. */
+export type WildGround = Readonly<Record<string, string>>;
+
 /** The options for every judgment, by key. */
 export interface Looks {
   /** What composes the world part by part (its sky, lands, buildings, landmarks and trails): Jev chooses their parts, never a preset. */
@@ -85,6 +88,11 @@ export interface Looks {
   readonly form: LookSet;
   /** Whether an area's land holds water, and why: each option's words are the reason recorded with the choice. */
   readonly water: LookSet;
+  /**
+   * The wild past the land, which stands for no code: its grounds, and Jev composes a bush for each from the world
+   * around it (`composeWorld`).
+   */
+  readonly wild: readonly WildGround[];
 }
 
 /** One Jev request about one thing. */
@@ -103,6 +111,8 @@ export interface Judgments {
   readonly sky?: Blueprint;
   /** Directory → the land Jev composed for it, for the directories that are regions (`composeWorld`). */
   readonly lands: Readonly<Record<string, Blueprint>>;
+  /** The bush of each of the wild's grounds (`Looks.wild`), in their order, as Jev composed it (`composeWorld`); none until then. */
+  readonly wild?: readonly Blueprint[];
   /**
    * What every entity, file and definition stands as, by its id (an entity's root directory, a file's path or a
    * definition's `<file>#<name>`): the form Jev chose for it among those its importance is offered, asked once the
@@ -252,6 +262,8 @@ export interface CodeWorld extends WorldPlaces {
   readonly size: number;
   /** The repository's art direction, its light, sky and wind, as Jev composed them. */
   readonly sky?: Blueprint;
+  /** The bush of each of the wild's grounds past the land, which stands for no code, as Jev composed it from the world around it. */
+  readonly wild?: readonly Blueprint[];
   readonly areas: readonly CodeArea[];
   readonly patches: readonly CodePatch[];
   /** Every cell of the land, each part of one file's patch or one entity's lot, naming its area and its file (null for a lot). */
@@ -803,9 +815,9 @@ export interface ComposingEstimate {
 
 /**
  * What composing a world's things asks of Jev once it has chosen their forms, for pricing before anything is asked:
- * about two requests a thing (its parts, then their settings), each about the size of the one that composes the first
- * of them as a tree. Its lands, sky, buildings, landmarks and trails are few beside them. None for a world with no
- * thing to stand, or no tree form to price by.
+ * about two requests a thing and a wild bush (its parts, then their settings), each about the size of the one that
+ * composes the first thing as a tree. Its lands, sky, buildings, landmarks and trails are few beside them. None for a
+ * world with no thing to stand, or no tree form to price by.
  */
 export function composingEstimate(facts: CodeFacts, looks: Looks, graph?: CodeGraph): ComposingEstimate | null {
   const things = standingThings(facts, graph);
@@ -816,7 +828,7 @@ export function composingEstimate(facts: CodeFacts, looks: Looks, graph?: CodeGr
   const state = first.of === "entity" ? composingState(graph, { path: first.id, name: baseName(first.id) || facts.repository.name }) : first.of === "file" ? fileState(graph, first.id) : definitionState(graph, first.id);
   const uses = look.first === undefined ? {} : { [look.first.slot]: look.first.use };
   const wave = planStructure(looks.compose.tree, looks.compose.offered?.tree ?? looks.compose.lib, { id: first.id, state: { ...state, standsAs: { form: name, words: look.doc } }, uses });
-  return { requests: things.length * 2, sample: wave.request };
+  return { requests: (things.length + looks.wild.length) * 2, sample: wave.request };
 }
 
 export interface ComposeOptions {
@@ -830,7 +842,9 @@ export interface ComposeOptions {
  * each trail Jev would walk. A building or a landmark waits for its land and chooses its colors among the land's
  * native families. Each composing request carries what `graph` holds about its part of the code
  * (`repositoryState`, `areaState`, `composingState`, `fileState`, `definitionState`, `trailState`), so it is asked
- * once and stays as it is while the code does. Jev never names a preset.
+ * once and stays as it is while the code does. The wild's bushes stand for no code: each waits for the sky and the
+ * lands, reads them and its own ground (`wildState`), and chooses its colors among every land's native families.
+ * Jev never names a preset.
  */
 export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClient, judged: Judgments, options: ComposeOptions = {}): Promise<Judgments> {
   const graph = options.graph;
@@ -867,12 +881,16 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
   };
   const trailId = (t: CodeTrail): string => `trail:${t.from}->${t.to}`;
   // The sky and the trails do not wait on the lands, nor on what things stand as: they are composed meanwhile.
-  const skyAndTrails = composeThings(
-    looks.compose,
-    jev,
-    [{ path: "world:", as: "world", state: repositoryState(graph, facts.repository.name) }, ...judged.trails.map((t): Composed => ({ path: trailId(t), as: "link", state: trailState(graph, entity(t.from), entity(t.to)) }))],
-    concurrency,
-  );
+  const sky = composeThing(looks.compose, jev, { path: "world:", as: "world", state: repositoryState(graph, facts.repository.name) });
+  const trails = composeThings(looks.compose, jev, judged.trails.map((t): Composed => ({ path: trailId(t), as: "link", state: trailState(graph, entity(t.from), entity(t.to)) })), concurrency);
+  // The wild's bushes grow from the world around them, so they wait for its sky and every land.
+  const wildId = (i: number): string => `wild:${i}`;
+  const wild = Promise.all([sky, lands]).then(([s, l]) => {
+    const around = regions.map((path) => l[`land:${path}`] as Blueprint);
+    const families = [...new Set(around.flatMap(nativesOf))].sort();
+    const place = { has: [], narrow: { [NATIVE_COLORS.thing]: families } };
+    return composeThings(looks.compose, jev, looks.wild.map((ground, i): Composed => ({ path: wildId(i), as: "wildBush", state: wildState(ground, s, around, looks.compose.biome), ...place })), concurrency);
+  });
   // What every entity, file and definition stands as, unless the judgments already say; each thing Jev raises to a building or a landmark is composed as soon as its answer is in and its land is composed.
   const things: Record<string, { as: StandsAs; blueprint?: Blueprint }> = { ...judged.things };
   const rising: Promise<unknown>[] = [];
@@ -901,14 +919,15 @@ export async function composeWorld(facts: CodeFacts, looks: Looks, jev: JevClien
     // In the order things are planned, so the same answers give the same judgments.
     stands = Object.fromEntries(standingThings(facts, graph).flatMap((t) => (out[t.id] === undefined ? [] : [[t.id, out[t.id] as string] as const])));
   } else for (const [id, form] of Object.entries(stands ?? {})) raise(id, form);
-  const [composedLands, composedSkyAndTrails] = await Promise.all([lands, skyAndTrails, Promise.all(rising)]);
-  const blueprints = { ...composedLands, ...composedSkyAndTrails };
+  const [composedLands, composedSky, composedTrails, composedWild] = await Promise.all([lands, sky, trails, wild, Promise.all(rising)]);
+  const blueprints = { ...composedLands, ...composedTrails, ...composedWild };
   const of = (id: string): Blueprint => blueprints[id] ?? (things[id]?.blueprint as Blueprint);
   return {
     ...judged,
     ...(stands === undefined ? {} : { stands }),
-    sky: of("world:"),
+    sky: composedSky,
     lands: Object.fromEntries(regions.map((path) => [path, of(`land:${path}`)])),
+    wild: looks.wild.map((_, i) => of(wildId(i))),
     things: Object.fromEntries(Object.keys(things).sort().map((id) => [id, { as: (things[id] as { as: StandsAs }).as, blueprint: of(id) }])),
     trails: judged.trails.map((t) => ({ ...t, route: of(trailId(t)) })),
   };
@@ -1272,6 +1291,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       size,
       aspect,
       ...(judged.sky === undefined ? {} : { sky: judged.sky }),
+      ...(judged.wild === undefined ? {} : { wild: judged.wild }),
       areas,
       patches,
       cells,

@@ -1,23 +1,30 @@
 // What grows on the wild land past the codebase's land: the wild's own two
 // ground covers (tall green grass and tall dry grass, which the ground and the
-// grass draw) and scattered wild bushes and scrub, drawn as instanced copies like the
-// understory. It stands for nothing, so nothing here has a sign, a card or a
-// vitality from code: it is always healthy.
+// grass draw) and scattered thickets of the bush Jev composed for each cover
+// from the world around it (`composeWorld`), drawn as instanced copies like
+// the understory. It stands for nothing, so nothing here has a sign, a card
+// or a vitality from code: it is always healthy.
 //
 // Bushes stand in seeded thickets on a fixed world grid, so a bush never
-// moves. Only those near enough to be seen stand: around an anchor that
-// follows the person in jumps, out to just past where land has fully
-// dissolved into the sky (1.4 km). The copies that come and go when it jumps
-// lie past that distance, so nothing ever appears or vanishes in view.
+// moves, and each thicket is the bush of the cover it grows in. Only those
+// near enough to be seen stand: around an anchor that follows the person in
+// jumps, out to just past where land has fully dissolved into the sky
+// (1.4 km). The copies that come and go when it jumps lie past that distance,
+// so nothing ever appears or vanishes in view. A wild bush keeps the grass off
+// its feet as a shrub on the land does (`SHRUB_CLEARS`): the clearings ask for
+// the standing bushes near the grass as they draw their window.
 
 import type * as THREE from "three";
-import { type GroundSpec, type Library, blueprintOf, seedOf } from "@gaia/schema";
+import { type Blueprint, type GroundSpec, type Library, blueprintOf, seedOf } from "@gaia/schema";
 import { biome } from "@gaia/kinds";
 import { type Realized, realizeRegion } from "@gaia/realize";
 import type { InstanceSpot, SceneLight } from "@gaia/render";
-import { type Terrain, WILD_THICKETS, wildHeightAt, wildThicket } from "@gaia/terrain";
-import { type BuildAsk, made, makeLater } from "./made.ts";
+import { type Terrain, WILD_THICKETS, wildHeightAt, wildPatch, wildThicket } from "@gaia/terrain";
+import type { Clearing, Clearings } from "./clearings.ts";
+import { WILD_GROUNDS } from "./looks.ts";
+import { type BuildAsk, made, makeLater, plantAsk } from "./made.ts";
 import type { RegionCovers } from "./regions.ts";
+import { SHRUB_CLEARS, outlineOf } from "./understory.ts";
 import { type Copies, FAR, type FarForms, type FarOf, createCopies } from "./woods.ts";
 
 export const WILD_GROWTH = {
@@ -36,41 +43,16 @@ export const WILD_GROWTH = {
   density: 0.9,
 } as const;
 
-/**
- * The wild's covers, in the ground cover's own words: tall unkempt green
- * grass, and dry golden grass in patches through it.
- */
-const WILD_COVERS = [
-  { cover: "lush grass", length: "tall and unkempt", wildflowers: "a scattering" },
-  { cover: "golden steppe", length: "tall and unkempt", wildflowers: "none" },
-] as const;
-
-/** Wild bushes in the bush kind's words: grey-green scrub in tufts and a rounded bush, standing for no code. */
-const WILD_BUSHES = [
-  ["Wild scrub", blueprintOf("bush", {
-    form: { use: "thicket@1", params: { habit: "scrub", stems: "a few stems", stature: "waist-high" } },
-    bark: { use: "bark@1", params: { roughness: "smooth" } },
-    crown: { use: "leaf-mound@1", params: { leaves: "rounded", fullness: "in tufts at its tips" } },
-    motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "gentle" } },
-    palette: { use: "palette@1", params: { family: "desert-sage", contrast: "balanced" } },
-  })],
-  ["Wild bush", blueprintOf("bush", {
-    form: { use: "thicket@1", params: { habit: "mound", stems: "a few stems", stature: "head-high" } },
-    bark: { use: "bark@1", params: { roughness: "smooth" } },
-    crown: { use: "leaf-mound@1", params: { leaves: "rounded", fullness: "full" } },
-    motion: { use: "sway@1", params: { stiffness: "stiff", rhythm: "gentle" } },
-    palette: { use: "palette@1", params: { family: "deep-forest", contrast: "balanced" } },
-  })],
-] as const;
-
-/** Each wild bush's build, for making ahead. */
-export const wildBushBuilds = (): BuildAsk[] => WILD_BUSHES.map(([, blueprint], i) => ({ kind: "bush", blueprint, seed: seedOf(`wilds/bush-${i}`), facts: { scale: 1, age: 120 } }));
-
 export interface WildGrowth {
   /** Every instanced blueprint, for culling each pass, warming and the sun's shadow. */
   readonly all: () => readonly Copies[];
-  /** Each bush by name, with its build and far form: what the swap test stands alone. */
-  readonly farPresets: readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[];
+  /** Each bush's blueprint, build and far form: what the swap test stands alone. */
+  readonly farBuilds: () => readonly { readonly blueprint: Blueprint; readonly plant: () => Realized; readonly far: FarOf }[];
+  /**
+   * Makes the build of the bush Jev composed for each of the wild's grounds (`CodeWorld.wild`, in `WILD_GROUNDS`'
+   * order), its far form and its instances, once, when the world opens and before anything stands.
+   */
+  build(blueprints: readonly Blueprint[]): void;
   /** Takes on a new bake: stands the bushes again around the anchor. */
   update(t: Terrain): void;
   /** Called every frame the person walks: the anchor jumps to them once they are far from it. */
@@ -79,8 +61,8 @@ export interface WildGrowth {
   show(on: boolean): void;
 }
 
-/** One world cell's thicket (`wildThicket`), if it holds one: which blueprint, and its bushes standing on the ground. */
-function thicketIn(t: Terrain, ci: number, cj: number, variants: number): { variant: number; spots: InstanceSpot[] } | null {
+/** One world cell's thicket (`wildThicket`), if it holds one: the bush of the ground it grows in, and its bushes standing on the ground. */
+function thicketIn(t: Terrain, ci: number, cj: number, grounds: number): { ground: number; spots: InstanceSpot[] } | null {
   const thicket = wildThicket(t, ci, cj);
   if (thicket === null) return null;
   const spots = thicket.bushes.map((b): InstanceSpot => {
@@ -97,30 +79,44 @@ function thicketIn(t: Terrain, ci: number, cj: number, variants: number): { vari
       seed: b.seed,
     };
   });
-  return { variant: Math.floor(thicket.pick * variants), spots };
+  // The ground at the cell's middle, as the covers mingle: the first is the green grass, the last the golden steppe.
+  const { cell } = WILD_THICKETS;
+  return { ground: Math.min(grounds - 1, Math.floor(wildPatch((ci + 0.5) * cell, (cj + 0.5) * cell) * grounds)), spots };
 }
 
+/** Each cell's thicket, once seeded, by "ci,cj". */
+type Thickets = Map<string, ReturnType<typeof thicketIn>>;
+
+/** Cell (ci, cj)'s thicket, seeded once and kept in `cache`. */
+function thicketOf(t: Terrain, ci: number, cj: number, grounds: number, cache: Thickets): ReturnType<typeof thicketIn> {
+  const key = `${ci},${cj}`;
+  let thicket = cache.get(key);
+  if (thicket === undefined) {
+    thicket = thicketIn(t, ci, cj, grounds);
+    cache.set(key, thicket);
+  }
+  return thicket;
+}
+
+/** Whether cell (ci, cj)'s thicket stands around an anchor at (ax, az): its cell's middle within `WILD_GROWTH.reach`. */
+const standsAround = (ci: number, cj: number, ax: number, az: number): boolean => Math.hypot((ci + 0.5) * WILD_THICKETS.cell - ax, (cj + 0.5) * WILD_THICKETS.cell - az) <= WILD_GROWTH.reach;
+
 /**
- * Each bush blueprint's copies within `WILD_GROWTH.reach` of (ax, az).
+ * Each ground's bush's copies within `WILD_GROWTH.reach` of (ax, az).
  * `cache` keeps each cell's thicket from one call to the next, so a jump of
  * the anchor seeds only the cells it newly reaches.
  */
-function wildSpots(t: Terrain, ax: number, az: number, variants: number, cache: Map<string, ReturnType<typeof thicketIn>>): InstanceSpot[][] {
+function wildSpots(t: Terrain, ax: number, az: number, grounds: number, cache: Thickets): InstanceSpot[][] {
   const { reach } = WILD_GROWTH;
   const { cell } = WILD_THICKETS;
-  const out: InstanceSpot[][] = Array.from({ length: variants }, () => []);
+  const out: InstanceSpot[][] = Array.from({ length: grounds }, () => []);
   const lo = (v: number): number => Math.floor((v - reach) / cell);
   const hi = (v: number): number => Math.ceil((v + reach) / cell);
   for (let cj = lo(az); cj <= hi(az); cj++) {
     for (let ci = lo(ax); ci <= hi(ax); ci++) {
-      if (Math.hypot((ci + 0.5) * cell - ax, (cj + 0.5) * cell - az) > reach) continue;
-      const key = `${ci},${cj}`;
-      let thicket = cache.get(key);
-      if (thicket === undefined) {
-        thicket = thicketIn(t, ci, cj, variants);
-        cache.set(key, thicket);
-      }
-      if (thicket !== null) out[thicket.variant]?.push(...thicket.spots);
+      if (!standsAround(ci, cj, ax, az)) continue;
+      const thicket = thicketOf(t, ci, cj, grounds, cache);
+      if (thicket !== null) out[thicket.ground]?.push(...thicket.spots);
     }
   }
   // Forget cells long out of reach, so a long walk keeps a bounded cache.
@@ -128,9 +124,33 @@ function wildSpots(t: Terrain, ax: number, az: number, variants: number, cache: 
   return out;
 }
 
+/**
+ * The ground kept clear of grass under every bush standing around (ax, az)
+ * (`wildSpots`) that could reach from (x0, z0) to (x1, z1). `clears` holds
+ * each ground's bush's cleared outline at scale 1.
+ */
+function wildClearings(t: Terrain, ax: number, az: number, x0: number, z0: number, x1: number, z1: number, clears: readonly Float32Array[], cache: Thickets): Clearing[] {
+  const { cell, spread, scale } = WILD_THICKETS;
+  let farthest = 0;
+  for (const outline of clears) for (const r of outline) farthest = Math.max(farthest, r);
+  // A bush stands within `spread` of its thicket's middle, which lies in the thicket's cell.
+  const margin = spread + farthest * scale[1];
+  const out: Clearing[] = [];
+  for (let cj = Math.floor((z0 - margin) / cell); cj <= Math.floor((z1 + margin) / cell); cj++) {
+    for (let ci = Math.floor((x0 - margin) / cell); ci <= Math.floor((x1 + margin) / cell); ci++) {
+      if (!standsAround(ci, cj, ax, az)) continue;
+      const thicket = thicketOf(t, ci, cj, clears.length, cache);
+      const outline = thicket === null ? undefined : clears[thicket.ground];
+      if (thicket === null || outline === undefined) continue;
+      for (const s of thicket.spots) out.push({ x: s.x, z: s.z, yaw: s.yaw, scale: s.scale, outline });
+    }
+  }
+  return out;
+}
+
 /** The wild's covers, realized as a region's cover is. */
 function wildGround(lib: Library): [GroundSpec, GroundSpec] {
-  const [a, b] = WILD_COVERS.map((params, i) => {
+  const [a, b] = WILD_GROUNDS.map((params, i) => {
     const blueprint = blueprintOf("biome", {
       relief: { use: "meadow@1", params: { undulation: "softly undulating", tilt: "level", facing: "north" } },
       cover: { use: "ground-cover@1", params: { ...params } },
@@ -144,31 +164,27 @@ function wildGround(lib: Library): [GroundSpec, GroundSpec] {
 
 /**
  * The wild's growth: hands the wild's covers to the ground and the grass,
- * and stands its bushes. `biomeLib` holds the biome primitives, `floraLib`
- * the flora ones. `farForms` takes each bush's far form; without it, none
- * turns far.
+ * and stands its bushes once a world gives them (`build`), each keeping the
+ * grass off its feet in `clearings`. `biomeLib` holds the biome primitives,
+ * `floraLib` the flora ones. `farForms` takes each bush's far form; without
+ * it, none turns far.
  */
-export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: RegionCovers, biomeLib: Library, floraLib: Library, farForms?: FarForms): WildGrowth {
+export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: RegionCovers, biomeLib: Library, floraLib: Library, clearings: Clearings, farForms?: FarForms): WildGrowth {
   covers.wild(wildGround(biomeLib));
-  const asks = wildBushBuilds();
-  const plants: Realized[] = asks.map((ask) => made(ask, floraLib));
-  const fars = plants.map((p, i) => farForms?.add(p, () => makeLater(asks[i] as BuildAsk, floraLib), FAR.bush));
-  const views = plants.map((p, i) => {
-    const view = createCopies(p, light, [], fars[i]);
-    scene.add(view.object);
-    return view;
-  });
-  // A bush's build goes once its instances are made and its far form baked; the swap test realizes it again.
-  const farPresets = asks.flatMap((ask, i) => {
-    const far = fars[i];
-    return far === undefined ? [] : [{ name: (WILD_BUSHES[i] as (typeof WILD_BUSHES)[number])[0], plant: () => made(ask, floraLib), far }];
-  });
+  let views: Copies[] = [];
+  let builds: { readonly blueprint: Blueprint; readonly plant: () => Realized; readonly far: FarOf }[] = [];
+  /** Each ground's bush's outline at the ground that keeps the grass off, at scale 1. */
+  let clears: Float32Array[] = [];
+  let shown = true;
   let terrain: Terrain | null = null;
-  const cache = new Map<string, ReturnType<typeof thicketIn>>();
+  const cache: Thickets = new Map();
   const anchor = { x: 0, z: 0 };
+  // Until the bushes are built there are none, and no thicket is seeded: a thicket's bush is one of the grounds' built bushes.
+  clearings.setNear((x0, z0, x1, z1) => (terrain === null || clears.length === 0 ? [] : wildClearings(terrain, anchor.x, anchor.z, x0, z0, x1, z1, clears, cache)));
   /** Respots still to make, one blueprint a frame, so a jump never costs one frame much. */
   let queue: { view: Copies; spots: InstanceSpot[] }[] = [];
   const stand = (t: Terrain, now: boolean): void => {
+    if (views.length === 0) return;
     const spots = wildSpots(t, anchor.x, anchor.z, views.length, cache);
     queue = views.map((view, i) => ({ view, spots: spots[i] ?? [] }));
     if (now) {
@@ -178,8 +194,29 @@ export function createWildGrowth(scene: THREE.Scene, light: SceneLight, covers: 
   };
   return {
     all: () => views,
-    farPresets,
+    farBuilds: () => builds,
+    build(blueprints) {
+      if (views.length > 0) throw new Error("The wild builds a world's bushes once, when it opens.");
+      if (blueprints.length !== WILD_GROUNDS.length) throw new Error(`The wild has ${WILD_GROUNDS.length} grounds, each with its own bush; the world gives ${blueprints.length}.`);
+      const asks = blueprints.map(plantAsk);
+      const plants = asks.map((ask) => made(ask, floraLib));
+      clears = plants.map((p) => outlineOf(p).map((r) => r * SHRUB_CLEARS));
+      const fars = plants.map((p, i) => farForms?.add(p, () => makeLater(asks[i] as BuildAsk, floraLib), FAR.bush));
+      views = plants.map((p, i) => {
+        const view = createCopies(p, light, [], fars[i]);
+        view.object.visible = shown;
+        scene.add(view.object);
+        return view;
+      });
+      // A bush's build goes once its instances are made and its far form baked; the swap test realizes it again.
+      builds = asks.flatMap((ask, i) => {
+        const far = fars[i];
+        return far === undefined ? [] : [{ blueprint: ask.blueprint, plant: () => made(ask, floraLib), far }];
+      });
+      if (terrain !== null) stand(terrain, true);
+    },
     show(on) {
+      shown = on;
       for (const v of views) v.object.visible = on;
     },
     update(t) {
