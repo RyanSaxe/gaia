@@ -614,10 +614,10 @@ const fixtures = resolve(args.out ?? resolve(repo, "app/renderer/terrain/fixture
 mkdirSync(fixtures, { recursive: true });
 writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(facts)}\n`);
 writeFileSync(resolve(fixtures, "proving-judged.json"), fixtureJson(judged));
-const band = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" : v >= 0.35 ? "tired" : v >= 0.12 ? "failing" : "ruin");
-const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} ${k}`).join(", ");
+const band = (v: number): string => (v >= 0.85 ? "0.85 to 1" : v >= 0.6 ? "0.6 to 0.85" : v >= 0.35 ? "0.35 to 0.6" : v >= 0.12 ? "0.12 to 0.35" : "below 0.12");
+const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} at vitality ${k}`).join(", ");
 console.log(`proving: ${facts.files.length} files, ${facts.repository.lines.toLocaleString("en-US")} lines, ${entities.length} entities; a ${world.size} m world of ${world.regions.length} lands and ${world.areas.length} areas`);
 console.log(`  files: ${count(world.patches.map((p) => p.vitality))}`);
 console.log(`  lands: ${count(world.regions.map((r) => landHealth(r.area)))}; ${lands.length} swept lands, ${skies.length} skies`);
 console.log(`  entities: ${count(world.things.filter((t) => (t.of ?? "entity") === "entity").map((t) => t.vitality))}`);
-console.log(`  raised: ${world.things.filter((t) => t.of === "file").length} files and ${world.things.filter((t) => t.of === "definition").length} definitions as buildings or landmarks; ${world.naturalThings.length} files standing as plants, stones or flowers`);
+console.log(`  forms: ${world.things.filter((t) => t.of === "file").length} files and ${world.things.filter((t) => t.of === "definition").length} definitions as buildings or landmarks; ${world.naturalThings.length} files and entities as trees, bushes, stones or flowers`);
