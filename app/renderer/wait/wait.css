@@ -1,11 +1,12 @@
-/* The wait while a world is read, judged and baked (app/renderer/wait/). Everything that moves is an opacity or
-   transform animation, or a pen's dash, so it runs on the compositor while the page stands the world. */
-/* Night is a number the wait eases to, so a wait that shows before the world's hour is known darkens gently. */
+/* The wait screen shown while a world is read, judged and baked (app/renderer/wait/). Every animation is an opacity
+   or transform transition, or a pen line's dash, so it runs on the compositor while the main thread builds the
+   world. */
+/* `--night` is a registered number so it can transition, and a wait shown before the world's hour is known darkens gradually. */
 @property --night { syntax: "<number>"; inherits: true; initial-value: 0; }
 .veil[data-wait] { display: block; overflow: hidden; background: none; transition: opacity 1.1s cubic-bezier(0.3, 0, 0.2, 1), visibility 0s linear 1.1s, --night 1.2s ease; }
 
-/* ---------- the map paints itself ---------- */
-/* Under the sheet, the map's own paper, creased where it folds, as a jump's cover is; it dissolves into the world. */
+/* ---------- the map sheet ---------- */
+/* The paper under the sheet, creased at its folds like a jump's cover. It fades out into the world. */
 .wait-paper {
   position: absolute; inset: 0;
   background:
@@ -14,8 +15,8 @@
     radial-gradient(ellipse 80% 70% at 50% 46%, #f1e7cd, #e4d5b2);
   filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.45));
 }
-/* After dark the lantern lights the paper from low on the right, warm, while its edges fall into blue. It holds
-   still: nothing on the wait moves but what arrives on the sheet. */
+/* After dark a warm lantern glow lights the paper from low on the right, and its edges darken to blue. The glow does
+   not move, so only new drawing on the sheet moves. */
 .wait-lantern {
   position: absolute; inset: 0; pointer-events: none; opacity: var(--night, 0);
   background:
@@ -23,13 +24,12 @@
     radial-gradient(ellipse 85% 80% at 54% 54%, rgba(18, 22, 52, 0) 46%, rgba(18, 22, 52, 0.62) 100%);
 }
 
-/* The sheet: the field map's own (lab.css `.field-map`), the same size, paper, torn edge, creases and lantern's pool,
-   with no fringe, title or turned-down corner. It folds away as the field map does. Its shadow is a still box under
-   it rather than a drop-shadow filter, which would blur the whole sheet again on every frame anything on it moves.
-   It opens in the shape its land will have (`--aspect`, width over depth), so it never changes shape as it fills: as
-   wide as ever and as deep as the land, and everything on it is laid on the square the land's width makes, which the
-   sheet shows the middle of. A land of another shape than the one expected reshapes it once divided, its paper folding
-   in from above and below. */
+/* The sheet matches the field map (lab.css `.field-map`): the same size, paper, torn edge, creases and lantern glow,
+   without the fringe, title or turned-down corner. It folds away as the field map does. Its shadow is a fixed box
+   under it, because a drop-shadow filter would blur the whole sheet again on every frame something on it moves. It
+   opens in its land's aspect (`--aspect`, width over depth), so it keeps its shape as it fills. Everything on it is
+   laid on a square as wide as the land, and the sheet shows the middle of that square. A land with a different aspect
+   than expected reshapes the sheet once divided, folding the paper in from above and below. */
 .wait-sheet {
   --side: min(94vw, 90vh, 980px);
   position: absolute; left: 50%; top: 50%; width: var(--side); height: calc(var(--side) / var(--aspect, 1));
@@ -38,7 +38,7 @@
   transition: opacity 0.5s ease, transform 0.6s ease-in, height 0.6s cubic-bezier(0.3, 0.1, 0.3, 1);
 }
 .wait-square { position: absolute; left: 0; top: 50%; width: 100%; aspect-ratio: 1; transform: translateY(-50%); }
-/* The sheet's shadow, and a turning card's, which narrows as the card stands on its edge (`turnOver`). */
+/* The sheet's shadow, and a turning card's, which narrows as the card turns edge-on (`turnOver`). */
 .wait-sheet::before, .wait-turn-shadow { content: ""; position: absolute; inset: 0.6% 0.6% 0.4%; box-shadow: 0 16px 26px rgba(25, 18, 8, 0.36); }
 .wait-sheet.folding { opacity: 0; transform: translate(-50%, -50%) perspective(1600px) rotateX(10deg) scale(0.95, 0.82); }
 .wait-body, .wait-body::after { position: absolute; inset: 0; }
@@ -52,19 +52,19 @@
     linear-gradient(90deg, rgba(110, 84, 50, 0.05), transparent 12%, transparent 46%, rgba(110, 84, 50, 0.05) 50%, transparent 54%, transparent 88%, rgba(110, 84, 50, 0.05));
 }
 .wait-ground, .wait-hedges, .wait-ink { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* Each change of health comes in over what was there, paper and all; then the relief, over each area's own ground. */
+/* Layers that fade in over the sheet: each vitality change with its paper, then the relief over each area's own ground. */
 .wait-layers { position: absolute; inset: 0; }
-/* A card chosen on the start: its painting lies on the sheet until the land is divided. */
+/* A card chosen on the start page. Its painting covers the sheet until the land is divided. */
 .wait-chosen { position: absolute; left: 0; width: 100%; pointer-events: none; }
-/* Then the card turns over in its place, as the journal turns a leaf (`.jb-strip` in journal.css), onto its back: the
-   sheet's own paper, which the map is drawn on. Each side has the sheet's torn edge. */
+/* The card then flips in place, as the journal turns a page (`.jb-strip` in journal.css), to show the sheet's bare
+   paper that the map is drawn on. Both sides have the sheet's torn edge. */
 .wait-turn { position: absolute; perspective: 2400px; perspective-origin: 50% 50%; pointer-events: none; filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
 .wait-turn-card { position: absolute; inset: 0; transform-origin: 0 50%; transform-style: preserve-3d; }
 .wait-turn-page { position: absolute; left: 0; top: 0; -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
 .wait-turn-leaf { position: absolute; width: 0; height: 0; visibility: hidden; }
 .wait-layer { position: absolute; opacity: 0; transition: var(--wash-in); }
 .wait-layer.shown { opacity: 1; }
-/* The pen draws each border; the hedgerow's soft band under it comes in as the pen goes. */
+/* Each border is an animated pen line. The hedgerow's soft band under it fades in as the lines draw. */
 .wait-hedges { opacity: 0; transition: opacity 2.4s ease 0.5s; }
 .wait-hedges.shown { opacity: 1; }
 .wait-ink { overflow: visible; }
@@ -73,16 +73,16 @@
   stroke-dasharray: 1 1; stroke-dashoffset: 1; transition-property: stroke-dashoffset; transition-timing-function: cubic-bezier(0.45, 0.05, 0.4, 1);
 }
 .wait-sheet.shown .wait-ink path { stroke-dashoffset: 0; }
-/* Once the world stands, the pen draws each river from its source and each trail along its way, over the relief as it
-   washes in, at the pace each line's length sets. */
+/* Once the world is built, pen lines draw each river from its source and each trail along its course, over the
+   relief as it fades in, timed by each line's length. */
 .wait-pens { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .wait-pens .pen {
   fill: none; stroke-linejoin: round; stroke-linecap: round;
   stroke-dasharray: 1 1; stroke-dashoffset: 1; transition-property: stroke-dashoffset; transition-timing-function: cubic-bezier(0.35, 0.05, 0.45, 1);
 }
 .wait-pens.shown .pen { stroke-dashoffset: 0; }
-/* Names and marks: each its own small canvas, written in by a window opening over it, the canvas held still as the
-   window moves: a name along the way it runs, a mark from its foot up. */
+/* Names and marks are small canvases revealed by a sliding window. The window and the canvas translate in opposite
+   directions, so the canvas stays still as the window opens along a name's direction or up from a mark's base. */
 .wait-names, .wait-marks { position: absolute; inset: 0; pointer-events: none; }
 .wait-name, .wait-mark { position: absolute; overflow: hidden; }
 .wait-reveal, .wait-reveal > canvas { display: block; }
@@ -94,7 +94,7 @@
 .wait-mark .wait-reveal > canvas { transform: translateY(-100%); }
 .wait-name.shown .wait-reveal, .wait-name.shown .wait-reveal > canvas, .wait-mark.shown .wait-reveal, .wait-mark.shown .wait-reveal > canvas { transform: none; }
 
-/* ---------- the one question: spending past the limit ---------- */
+/* ---------- the slip: consent over the limit, or a failure ---------- */
 .wait-slip {
   position: absolute; z-index: 5; left: 50%; bottom: max(28px, 8vh); width: min(330px, calc(100% - 32px)); margin-left: max(-165px, calc(-50% + 16px));
   padding: 14px 18px 15px; border-radius: 6px; text-align: center; background: #f7f1e3; color: #3a3226;

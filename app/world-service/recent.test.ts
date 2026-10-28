@@ -3,9 +3,9 @@ import type { EngineClient } from "@gaia/schema";
 import { PAINTING_MAX, RECENT_KEY, keepPainting, keepRecent, keepStood, offeredWorlds, recentWorlds, stoodIn } from "./recent.ts";
 
 /**
- * An engine whose store is a map in memory, holding `recent` as the app's recent worlds, whose folders have checked out
- * the commits in `checkedOut` (any other is read from disk), and whose histories count `since[from]` commits from a
- * commit to the one checked out (any other commit is not in the history).
+ * A fake engine whose in-memory store holds `recent` as the recent worlds. `checkedOut` gives each folder's current
+ * commit, and any other folder is read from disk. `since[from]` gives the number of commits from `from` to the current
+ * commit, and any other commit is not in the history.
  */
 function storeEngine(recent?: unknown, checkedOut: Record<string, string> = {}, since: Record<string, number> = {}): EngineClient {
   const settings = new Map<string, unknown>(recent === undefined ? [] : [[RECENT_KEY, recent]]);
@@ -27,7 +27,7 @@ describe("the recent worlds", () => {
   it("offers a world kept before paintings were by its name, with none of what it kept then", async () => {
     const engine = storeEngine([
       { root: "/code/gaia", name: "gaia", at: 5, postcard: { areas: [], things: [] } },
-      // A picture of its map, as Gaia kept before it painted where the person stood.
+      // A map picture, which Gaia stored before it painted the person's view.
       { root: "/code/other", name: "other", at: 4, picture: painting("M"), commit: "c1" },
     ]);
     expect(await recentWorlds(engine)).toEqual([

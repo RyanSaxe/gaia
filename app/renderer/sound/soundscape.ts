@@ -1,13 +1,13 @@
-// The world's sound as Web Audio plays it: each bed looping through its own
-// tone, side and level while it can be heard, and the one-shot sounds (a
-// footfall, the journal's paper) laid in at their moment. It runs on any
-// audio context, so the page plays it live and a recorded walk renders it
+// Builds the Web Audio graph for the world's sound. Each bed loops through
+// its own low-pass, pan and gain while it is audible, and one-shot sounds such
+// as footfalls and the journal's paper are scheduled at their time. It runs on
+// any audio context, so the page plays it live and a recorded walk renders it
 // offline on the same graph.
 
 import { BEDS, type Bed, HUSH, type Mix } from "./hearing.ts";
 import type { Shelf } from "./shelf.ts";
 
-/** A recording of many short sounds laid end to end, such as footfalls: where each starts and how long it lasts, seconds. */
+/** A recording of many short sounds end to end, such as footfalls, with each one's start and length in seconds. */
 export interface Sprite {
   readonly buffer: AudioBuffer;
   readonly cuts: readonly { readonly at: number; readonly length: number }[];
@@ -16,7 +16,7 @@ export interface Sprite {
 export type Ground = "grass" | "dry" | "wood";
 export type Paper = "open" | "shut" | "turn" | "riffle";
 
-/** Every recording the world plays, the beds decoded while they may be heard, with each one's own loudness, LUFS. */
+/** Every recording the world plays, with the beds decoded while they may be heard, and each recording's loudness in LUFS. */
 export interface Bank {
   readonly beds: Shelf<Bed>;
   readonly steps: Readonly<Record<Ground, Sprite>>;
@@ -25,38 +25,38 @@ export interface Bank {
 }
 
 export interface Soundscape {
-  /** Eases every bed toward its level, side and tone in `mix` from moment `t`, seconds on the context's clock. */
+  /** Eases every bed toward its gain, pan and low-pass in `mix` from time `t`, in seconds on the context's clock. */
   at(t: number, mix: Mix): void;
-  /** A footfall at `t` on `ground`, on the `side` it falls (-1 left, 1 right). */
+  /** Plays a footfall at `t` on `ground`, on `side` from -1 left to 1 right. */
   step(t: number, ground: Ground, side: number): void;
-  /** The journal's paper at `t`, which `stop` cuts short with a tenth of a second's fade, as a riffle stops with its leaves. */
+  /** Plays a journal paper sound at `t`. `stop` cuts it short with a 0.1 s fade, as a riffle stops when its pages do. */
   paper(t: number, what: Paper): { stop(t: number): void };
-  /** Where the world's sounds and the music play: each a level that silences it at 0, as a recording of one alone does. */
+  /** The world sound and music buses. A gain of 0 silences one, as when recording the other alone. */
   readonly world: GainNode;
   readonly music: GainNode;
 }
 
 const db = (v: number): number => 10 ** (v / 20);
-/** How quickly a bed follows a change in what is heard: its time constant, seconds. */
+/** Time constants in seconds for a bed to follow a change in gain, pan and low-pass. */
 const EASE = { gain: 0.35, pan: 0.3, tone: 0.4 } as const;
-/** How long the whole world fades in at first, seconds. */
+/** Seconds for the whole world to fade in at first. */
 const FADE_IN = 3;
-/** A bed quieter than this, against its Hush level (about -50 dB), is not heard: it starts once it rises past it. */
+/** The gain relative to its Hush level, about -50 dB, below which a bed is inaudible. The bed starts once it rises past it. */
 const HEARD = 0.003;
-/** A bed unheard this long stops and lets its recording go, seconds. */
+/** Seconds after which an inaudible bed stops and releases its recording. */
 const RELEASE = 60;
 const PAPER_LEVEL: Readonly<Record<Paper, number>> = { open: -4, shut: -6, turn: -5, riffle: -6 };
-/** The page-turn recording holds two turns: only the first plays, seconds. */
+/** The page-turn recording holds two turns, and only the first, this many seconds long, plays. */
 const ONE_TURN = 0.9;
 
-/** One of the world's sounds alone: a bed, the footfalls or the journal's paper. */
+/** A single world sound to play alone: a bed, the footfalls or the journal's paper. */
 export type Solo = Bed | "steps" | "paper";
 
 /**
- * Builds the graph on `ctx` into `out`, every bed starting silent at `start`
- * a different way into its loop, and the world fading in from there. `random`
- * picks which footfall plays and where each bed starts. With `solo`, only
- * that sound plays, as a recording of it alone.
+ * Builds the graph on `ctx` into `out`. Every bed starts silent at `start`, at
+ * a random point in its loop, and the world fades in from there. `random`
+ * picks which footfall plays and where each bed starts. With `solo`, only that
+ * sound plays.
  */
 export function createSoundscape(ctx: BaseAudioContext, bank: Bank, out: AudioNode, start: number, random: () => number, solo: Solo | null = null): Soundscape {
   const plays = (sound: Solo): boolean => solo === null || solo === sound;
@@ -69,7 +69,7 @@ export function createSoundscape(ctx: BaseAudioContext, bank: Bank, out: AudioNo
   const music = ctx.createGain();
   music.connect(master);
 
-  // Each bed's tone, side and level stand ready; its recording plays only while it can be heard.
+  // Each bed's filter, panner and gain exist from the start, and its recording plays only while it is audible.
   const beds = BEDS.map((name) => {
     const tone = ctx.createBiquadFilter();
     tone.type = "lowpass";
@@ -90,7 +90,7 @@ export function createSoundscape(ctx: BaseAudioContext, bank: Bank, out: AudioNo
         if (heard && b.source === null) {
           const buffer = bank.beds.take(b.name);
           if (buffer !== null) {
-            // A different way into the loop each time it starts, rising from silence.
+            // Each start begins at a random point in the loop and rises from silence.
             b.source = ctx.createBufferSource();
             b.source.buffer = buffer;
             b.source.loop = true;
@@ -120,7 +120,7 @@ export function createSoundscape(ctx: BaseAudioContext, bank: Bank, out: AudioNo
       const cut = sprite.cuts[k] as Sprite["cuts"][number];
       const source = ctx.createBufferSource();
       source.buffer = sprite.buffer;
-      // No two footfalls alike: a little higher or lower, and a decibel or so either way.
+      // Each footfall varies slightly in pitch, and by about a decibel either way, so no two sound alike.
       source.detune.value = (random() - 0.5) * 80;
       const pan = ctx.createStereoPanner();
       pan.pan.value = side * 0.08;

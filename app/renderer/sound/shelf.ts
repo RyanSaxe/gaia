@@ -1,16 +1,17 @@
-// Recordings decoded only while they may be heard. A decoded minute of stereo
-// is 23 MB at 48 kHz, so the page decodes a recording when the soundscape
-// first asks for it and frees it once it has been silent a while; a recorded
-// walk, rendered offline in one pass, decodes everything first and keeps it.
+// Keeps recordings decoded only while they may be heard. A decoded minute of
+// stereo is 23 MB at 48 kHz, so the page decodes a recording when the
+// soundscape first asks for it and frees it after it has been silent a while.
+// An offline render of a recorded walk runs in one pass, so it decodes
+// everything first and keeps it.
 
 export interface Shelf<K extends string> {
-  /** The recording, decoded, or null while it decodes; asking starts decoding it. */
+  /** Returns the decoded recording, or null while it decodes. The first call starts decoding. */
   take(name: K): AudioBuffer | null;
-  /** Lets the recording go, so its samples can be freed until it is asked for again. */
+  /** Releases the recording, so its samples can be freed until it is asked for again. */
   put(name: K): void;
   /** Resolves once every recording named is decoded. */
   ready(names: readonly K[]): Promise<void>;
-  /** How much decoded sound the shelf holds now, bytes. */
+  /** Decoded audio held now, in bytes. */
   held(): number;
 }
 
@@ -18,8 +19,8 @@ export interface Shelf<K extends string> {
 export const sizeOf = (b: AudioBuffer): number => b.length * b.numberOfChannels * 4;
 
 /**
- * A shelf of recordings, each decoded by `decode` when asked for. With `keep`
- * nothing is ever let go, as an offline rendering needs.
+ * Creates a shelf of recordings, each decoded by `decode` when first asked
+ * for. With `keep`, nothing is ever released, as an offline render needs.
  */
 export function createShelf<K extends string>(decode: (name: K) => Promise<AudioBuffer>, keep: boolean): Shelf<K> {
   const decoded = new Map<K, AudioBuffer>();
@@ -29,7 +30,7 @@ export function createShelf<K extends string>(decode: (name: K) => Promise<Audio
     if (pending !== undefined) return pending;
     const loading = decode(name).then(
       (buffer) => {
-        // Let go while it decoded: it is not kept.
+        // A recording released while it decoded is not kept.
         if (decoding.get(name) === loading) decoded.set(name, buffer);
         decoding.delete(name);
       },

@@ -1,5 +1,5 @@
-/* The start (app/renderer/start/): laid over the wait inside its veil, so it reads the same --night. Once a place is
-   chosen the table stays behind the wait. No boxes: lettering on paper in the map's ink and serif. */
+/* The start page (app/renderer/start/). It lies over the wait inside its veil, so it shares `--night`. Once a place is
+   chosen, the table stays behind the wait. It uses no boxes, only lettering on paper in the map's ink and serif. */
 .start {
   --ink: #4a3c2c; --ink-soft: #7a6c56; --vermilion: #b8452c; --moss: #5d7a45;
   position: absolute; inset: 0; z-index: 4; overflow: hidden;
@@ -11,11 +11,12 @@
 :where(.start) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 :where(.start) input { font: inherit; color: inherit; background: none; border: 0; outline: none; padding: 0; }
 
-/* ---------- the traveller's map table, in 3D (table.ts) ---------- */
-/* The canvas fills the page; over it lie only clear hit areas for the cards, the line and the folder's words. While the
-   table is in front, the wait's sheet lies unseen beneath it. Once the chosen card has risen to the sheet's place, drawn
-   as the page draws the sheet, the table goes behind the wait, held still and out of focus, and the sheet shows in the
-   card's place in the same frame, with no fade, until it folds into the world and the table goes with the veil. */
+/* ---------- the 3D map table (table.ts) ---------- */
+/* The canvas fills the page, and only clear hit areas for the cards, the line and the folder text lie over it. While
+   the table is in front, the wait's sheet is hidden beneath it. Once the chosen card has risen to the sheet's place,
+   drawn as the page draws the sheet, the table moves behind the wait, still and out of focus, and the sheet replaces
+   the card in the same frame without a fade. The table stays there until the sheet folds into the world and the veil
+   is removed. */
 .table-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .veil[data-table="front"] .wait-sheet { visibility: hidden; }
 .veil[data-table="behind"] .start-table { z-index: 0; }
@@ -23,6 +24,6 @@
 .table-hits { position: absolute; inset: 0; }
 .table-card, .table-line, .table-folder { position: absolute; left: 0; top: 0; margin: 0; opacity: 0; }
 .start-table.choosing .table-hits { pointer-events: none; }
-/* The address is typed into a field no one sees; the ink on the line shows it. */
+/* The address is typed into an invisible field, and the ink on the line shows it. */
 .table-line input { display: block; width: 100%; height: 100%; font-size: 16px; color: transparent; caret-color: transparent; }
 .table-unseen { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

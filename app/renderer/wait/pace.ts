@@ -1,13 +1,10 @@
-// The wait's pace. Answers arrive in bursts, a slice of Jev's at a time and
-// seconds apart, but the sheet is drawn as a hand draws: one stroke after
-// another, never all at once and never stopping while work is still coming.
-// Each kind of stroke keeps its own queue and is drawn at its own calm pace,
-// faster only so that a burst is drawn by about when the next one is due,
-// judged by how far apart they have come so far. Nothing is drawn before it
-// has happened; the pen follows the work by at most one burst. Once the world
-// is ready, whatever is left is drawn quickly, so the pace never holds it back.
+// Paces the wait's strokes. Answers arrive in bursts seconds apart, so each
+// kind of stroke has a queue that draws one item at a time at a steady pace,
+// and speeds up only to finish a burst by about when the next is expected.
+// Nothing is drawn before it happens, so the sheet trails the work by at most
+// one burst, and `flush` draws the rest quickly once the world is ready.
 
-/** One kind of stroke's pace: the time between two strokes when nothing presses, and the most it may lag, ms. */
+/** One kind of stroke's pace. `everyMs` is the gap between strokes when the queue has time to spare, and the longest gap. */
 export interface Pace {
   readonly everyMs: number;
   /** The least and the most time a burst is spread over, ms. */
@@ -15,33 +12,33 @@ export interface Pace {
 }
 
 /**
- * How much longer than the gap since the last burst a burst is spread over: the work's bursts come unevenly, so a
- * burst spread over just that gap would often be drawn before the next arrives, and the sheet would stop.
+ * How much longer than the expected gap a burst is spread over. Bursts arrive unevenly, so a burst spread over exactly
+ * the gap would often finish before the next arrives, and the sheet would stop changing.
  */
 const AHEAD = 1.6;
-/** How fast whatever is still queued is drawn once the world is ready: all of it within this long, ms. */
+/** Once the world is ready, everything still queued is drawn within this many milliseconds. */
 export const FLUSH_MS = 1500;
 
 export interface Pacer<T> {
-  /** Items that have just happened, to draw one after another. */
+  /** Queues items that just happened, to draw one after another. */
   add(items: readonly T[], now: number): void;
-  /** The items due by `now`, in the order they came, taken from the queue. */
+  /** Removes and returns the items due by `now`, in arrival order. */
   due(now: number): T[];
   /** When the next item is due, or null when the queue is empty. */
   next(): number | null;
-  /** Draw what is left within `FLUSH_MS` from `now`. */
+  /** Draws everything left within `FLUSH_MS` of `now`. */
   flush(now: number): void;
   readonly size: number;
 }
 
 /**
- * A queue drawn at `pace`: an item at least `everyMs` after the one before, unless the queue would then take longer
- * than the gap the next burst is expected after (the larger of the last gap and the average of those before it, a
- * little longer, within `spreadMs`), when it is drawn faster to finish by then.
+ * A queue drawn at `pace`. Items are drawn `everyMs` apart, or faster when the queue would otherwise finish after the
+ * next burst is expected. The expected gap is the larger of the last gap and its average with the previous expected
+ * gap, times `AHEAD`, clamped to `spreadMs`.
  */
 export function pacer<T>(pace: Pace): Pacer<T> {
   const queue: T[] = [];
-  /** When the next item may be drawn, and when the queue is to be done by. */
+  /** When the next item may be drawn, and when the queue should be empty. */
   let at: number | null = null;
   let by = 0;
   let last: number | null = null;

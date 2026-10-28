@@ -1,15 +1,8 @@
-// The start: what Gaia shows when it opens with no world named. A person
-// picks a world they walked before, a folder on this computer, or writes the
-// address of a place on GitHub. It is part of the world, not a screen in
-// front of it: no boxes, no jargon, and an address that leads nowhere is
-// answered in the world's own words. It is the traveller's map table in 3D
-// (`table.ts`): a folded sheet on an oak table, lit by the world's own light
-// at the hour, the worlds walked before laid on it as paintings of where the
-// person last stood, and a line at its foot to write an address on in ink.
-// The start lies over the wait, inside its veil, so it reads the same
-// `--night`. Once a place is chosen, the table stays behind the wait, its
-// card risen into the wait's sheet, until the world shows; a world opened
-// with no start rises from the same table.
+// Shows the start page when Gaia opens with no world named: a 3D map table
+// (`table.ts`) where a person picks a recent world, a local folder or a GitHub
+// address. It lies over the wait inside the same veil, so it shares `--night`,
+// and `withStart` holds back the wait's painting while a chosen card rises
+// into the wait's sheet.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 import { localHour } from "../clock.ts";
@@ -18,31 +11,31 @@ import type { StartPage } from "./choice.ts";
 import { createTable } from "./table.ts";
 import "./start.css";
 
-/** How long a map chosen on the table takes to rise into the wait's sheet, ms. */
+/** How long a card chosen on the table takes to rise into the wait's sheet, in milliseconds. */
 export { CHOSEN_MS } from "./table.ts";
 
-/** The wait with the start, which the page shows when no world is named. */
+/** The wait with the start page added, which the page uses when no world is named. */
 export interface WaitWithStart extends Wait {
-  /** Offers the start in the wait's veil; resolves with the place chosen. The next `opening` sends it behind the wait. */
+  /** Shows the start page in the wait's veil and resolves with the chosen place. The next `opening` call moves the table behind the wait. */
   choose(offer: StartOffer): Promise<StartChoice>;
-  /** The hour the world shows, each frame: the start is lit by it. */
+  /** Passes the world's hour each frame, which lights the start page. */
   hour(h: number): void;
 }
 
-/** How long after a place is on its way the wait paints on even if no card has risen into it, ms: a card takes under 3 s. */
+/** Milliseconds after a place is chosen when the wait resumes painting even if no card has risen into it. A card takes under 3 s. */
 const UNCOVERED_BY_MS = 6000;
 
-/** The wait, with the start laid over it in its veil when no world is named. */
+/** Adds the start page to `wait`, laid over it in its veil. */
 export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
-  /** The start, from when it is offered (or a world opens with no start, on the table) until the world shows. */
+  /** The start page, from when it is offered, or a world opens on the table without it, until the world shows. */
   let page: StartPage | null = null;
-  /** Whether the place is on its way, so the page takes no more choices. */
+  /** Whether a place has been chosen, so the page takes no more choices. */
   let left = false;
-  // Until the first frame says otherwise, the hour the clock shows: the person's own, or `?hour=`.
+  // The clock's hour, local or from `?hour=`, until the first frame passes the world's hour.
   const asked = Number(new URLSearchParams(location.search).get("hour") ?? Number.NaN);
   let hour = Number.isFinite(asked) ? asked : localHour(new Date());
-  // While the table's card is on its way, the wait paints nothing new on its sheet, so the sheet is still what the card
-  // shows when it takes the card's place; then everything held is painted in the order it came.
+  // While the table's card rises, the wait holds back new painting, so the sheet still matches the card when it takes
+  // the card's place. The held painting then runs in arrival order.
   let covered: Promise<void> = Promise.resolve();
   let uncover = (): void => undefined;
   const cover = (): void => {
@@ -56,7 +49,7 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
   return {
     ...wait,
     opening(o) {
-      // A world opened with no start, as on a reload, rises from the same table a chosen one does.
+      // A world opened without the start page, as on a reload, rises from the same table as a chosen one.
       if (page === null && o.stage === "reading") page = table();
       if (!left) {
         page?.leave();
@@ -75,7 +68,7 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
       held(() => wait.stood(world));
     },
     choose(offer) {
-      // Offered again after a place was on its way, the start begins afresh.
+      // An offer that comes after a place was chosen starts the page over.
       if (left) {
         page?.close();
         page = null;

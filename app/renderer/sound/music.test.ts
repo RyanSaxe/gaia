@@ -10,7 +10,7 @@ interface Started {
   readonly duration: number;
 }
 
-/** A buffer source that only notes what it was asked to play, and from when. */
+/** A fake buffer source that records what it was asked to play, and from when. */
 class Source {
   buffer: { readonly name: string; readonly duration: number } | null = null;
   loop = false;
@@ -26,7 +26,7 @@ class Source {
   stop(): void {}
 }
 
-/** An audio context that only keeps each gain's latest target, and what each source played from when: enough to read what the music plays. */
+/** A fake audio context that keeps each gain's latest target and when each source played, which is enough to read what the music plays. */
 function listeningContext(): { ctx: BaseAudioContext; gains: { target: number }[]; started: Started[] } {
   const gains: { target: number }[] = [];
   const started: Started[] = [];
@@ -91,14 +91,14 @@ describe("the music in phrases", () => {
     const { ctx, started } = listeningContext();
     const music = createMusic(ctx, BANK, {} as AudioNode, "phrases", 0, () => 0);
     for (let t = 0; t < 200; t += 0.5) music.at(t, NOON);
-    // A phrase at 6 s, 30 s long, then 45 s alone: the next at 81 s, the one after at 156 s.
+    // A 30 s phrase at 6 s and 45 s of rest put the next phrase at 81 s and the one after at 156 s.
     expect(started).toHaveLength(3);
     expect(started.every((s) => s.name.startsWith("day"))).toBe(true);
   });
 });
 
 describe("the piece, streamed a chunk at a time", () => {
-  /** What the bed played over `seconds` of noon, following the music every tenth of a second. */
+  /** What the bed played over `seconds` of noon, updating the music every tenth of a second. */
   function bedOver(seconds: number, joinAt = 0): Started[] {
     const { ctx, started } = listeningContext();
     const music = createMusic(ctx, BANK, {} as AudioNode, "loop", 0, () => 0);
@@ -117,7 +117,7 @@ describe("the piece, streamed a chunk at a time", () => {
   });
 
   it("asks for a chunk only a few seconds before it plays", () => {
-    // At 20 s the bed is in its second chunk; only the third is due within the next few seconds.
+    // At 20 s the bed is in its second chunk, and only the third is due within the next few seconds.
     expect(bedOver(20).map((s) => s.name)).toEqual(["bed:0", "bed:1"]);
     expect(bedOver(23).map((s) => s.name)).toEqual(["bed:0", "bed:1", "bed:2"]);
   });

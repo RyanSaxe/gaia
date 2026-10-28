@@ -1,7 +1,8 @@
-// End to end: the real engine binary judges a small codebase through a local
-// stand-in for OpenRouter's Decisions API. Nothing here reaches OpenRouter:
-// the engine refuses any endpoint override that is not a loopback address,
-// and sends a local endpoint a placeholder key, never the configured key.
+// Runs the real engine binary against a local stand-in for OpenRouter's
+// Decisions API to judge small codebases end to end. Nothing reaches
+// OpenRouter. The engine refuses any endpoint override that is not a loopback
+// address, and sends a local endpoint a placeholder key instead of the
+// configured one.
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -54,9 +55,9 @@ function codebase(name: string): string {
 }
 
 /**
- * A codebase whose imports only Jev can settle: two modules called `helpers`, which `main.py` imports by that name
- * alone, so the rules leave the import to Jev, and what each file imports and is imported by changes once Jev's links
- * are in.
+ * A codebase with imports only Jev can resolve. Two modules are named `helpers`, and `main.py` imports them by that
+ * name alone, so the rules leave the import to Jev. Each file's imports and importers change once Jev resolves the
+ * links.
  */
 function linkedCodebase(name: string): string {
   const root = join(scratch, name);
@@ -95,11 +96,11 @@ async function open(root: string, data: string, approve: boolean) {
   const sent = standIn.received.slice(before);
   const about = sent.map(({ body }) => {
     const s = body.state as Record<string, { path?: string; name?: string } | string>;
-    // Understanding's requests name their file or directory by its path at the top of the state.
+    // An understanding request names its file or directory with `path` at the top level of its state.
     if (typeof s.path === "string") return `understand:${s.path}`;
     const { file, entity, directory, repository, trail } = s as Record<string, { path?: string; name?: string } | undefined>;
-    // Composing the sky, a land, a building, a landmark or a trail asks its parts, then each stage's details: one
-    // request a wave, each its own.
+    // Composing the sky, a land, a building, a landmark or a trail asks for its parts first, then for each stage's
+    // details, with one request per wave.
     const ids = Object.keys(body.questions as object);
     if (s.decided !== undefined || ids.some((id) => /^[a-z]+\.(use|present)$/.test(id))) {
       const of = repository !== undefined ? "world" : trail !== undefined ? "trail" : (entity ?? directory)?.path;
@@ -129,26 +130,27 @@ describe("judging a codebase with Jev", () => {
     const data = join(scratch, "data-live");
 
     const first = await open(root, data, false);
-    // Judging costs less than the default limit, so Gaia asks Jev with no question at all.
+    // Judging costs less than the default limit, so Gaia sends requests to Jev without asking the person.
     expect(first.asked).toHaveLength(0);
     expect(first.sent.length).toBeGreaterThan(0);
-    // The land's outlines, every file's patch and every lot come before any judging, exactly as the finished world has them.
+    // The land message arrives before any judging, with outlines, file patches and lots that match the finished world.
     const land = first.shown.findIndex((o) => o.stage === "land");
     expect(land).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "reading"));
     expect(land).toBeLessThan(first.shown.findIndex((o) => o.stage === "asking"));
     const patches = first.document.world.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius }));
-    // Every entity's lot, whether Jev made it a building or a landmark or anything else, which stands at its lot's middle.
+    // Every entity's lot, whatever form Jev chose for the entity. The entity is placed at its lot's center.
     const byPlace = (a: { x: number; z: number }, b: { x: number; z: number }): number => a.x - b.x || a.z - b.z;
     const lots = [...first.document.world.things.filter((t) => t.of === undefined), ...first.document.world.standing.filter((s) => s.of === "entity")].map(({ x, z }) => ({ x, z })).sort(byPlace);
     const shownLand = first.shown[land];
     if (shownLand?.stage !== "land") throw new Error("The land was never shown.");
     expect({ ...shownLand, lots: [...shownLand.lots].sort(byPlace) }).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, aspect: first.document.world.aspect, areas: outlinesOf(first.document.world).areas, patches, lots });
-    // Each file's health is named once, as the finished world has it, once the understanding pass has judged it.
+    // Each file's vitality arrives once, after asking starts, and matches the finished world.
     expect(first.shown.findIndex((o) => o.stage === "health")).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "asking"));
     const health = first.shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));
     expect(health.map(([path]) => path).sort()).toEqual(patches.map((p) => p.path).sort());
     expect(Object.fromEntries(health)).toEqual(Object.fromEntries(first.document.world.patches.map((p) => [p.path, p.vitality])));
-    // Each area is named once everything on its land is judged, and stays named; by the end, every area is.
+    // An area joins `settled` once everything on its land is answered, and never leaves it. By the end, every area is
+    // settled.
     let named: readonly string[] = [];
     for (const o of first.shown) {
       if (o.stage !== "asking") continue;
@@ -156,22 +158,22 @@ describe("judging a codebase with Jev", () => {
       named = o.settled;
     }
     expect([...named].sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
-    // Every request went out once, with the placeholder key and nothing but the model, its state and questions. Judging
-    // Design requests read facts; understanding requests read source.
+    // Every request carries the placeholder key and only the model, state and questions. Design requests read facts,
+    // and only understanding requests read source.
     for (const [i, { authorization, body }] of first.sent.entries()) {
       expect(authorization).toBe("Bearer local-stand-in");
       expect(Object.keys(body).sort()).toEqual(["model", "questions", "state"]);
       if (!first.about[i]?.startsWith("understand:")) expect(JSON.stringify(body)).not.toContain("secretSourceLine");
     }
-    // Each request goes out once. A look may be asked twice, before and after Jev's links change the facts it reads,
-    // but never the same request twice.
+    // No design request goes out twice. A look may be asked twice, before and after Jev's links change the facts it
+    // reads, but the two requests differ.
     const judging = first.sent.filter((_, i) => !first.about[i]?.startsWith("understand:")).map(({ body }) => JSON.stringify(body));
     expect(new Set(judging).size).toBe(judging.length);
     expect(first.about).toEqual(expect.arrayContaining(["area:(the repository's root)", "file:src/shape.ts", "understand:src/shape.ts"]));
-    // Every file is asked what it stands as, one that defines nothing too.
+    // Every file gets a form request, including one that defines nothing.
     expect(first.about).toContain("file:README.md");
-    // The understanding pass asked every folder and file, and every definition stands by Jev's importance; the
-    // document carries what it judged, every score from 0 to 1.
+    // The understanding pass asked about folders and files, and every definition has Jev's importance. The document
+    // carries the pass's judgments, with every score from 0 to 1.
     const states = first.sent.map(({ body }) => body.state as Record<string, unknown>);
     expect(states.some((s) => s["folder-axes"] !== undefined)).toBe(true);
     expect(states.some((s) => s["file-axes"] !== undefined && s.path === "src/shape.ts")).toBe(true);
@@ -183,15 +185,15 @@ describe("judging a codebase with Jev", () => {
     // Jev judged everything.
     expect(first.document.summary).toContain("judged by Jev");
     const asking = first.shown.filter((o) => o.stage === "asking");
-    // Every building, landmark, tree, bush, stone and drift of flowers was composed, and each answer, what a thing
-    // stands as and composing included, is counted as it comes.
+    // Composing requests went out, and the last `asking` message counts every request sent, form and composing
+    // requests included.
     const composed = first.about.filter((a) => a.startsWith("compose:")).length;
     expect(composed).toBeGreaterThan(0);
     expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, asking: [] });
-    // While a question is out, its area is named as being worked on, for the wait to show.
+    // While a request is in flight, its area appears in `asking`, for the wait to show.
     expect(asking.some((o) => o.asking.length > 0)).toBe(true);
-    // After the understanding pass, the wait is told each file whose things Jev chose what they stand as, and each
-    // file and area whose building, landmark, land or sky it composed, each once, so its pencil keeps moving.
+    // After the understanding pass, `standing` messages list each file whose forms Jev chose, and each file and area
+    // whose building, landmark, land or sky it composed, each once, so the wait's pencil keeps moving.
     const after = first.shown.map((o) => o.stage).lastIndexOf("understood");
     const standing = first.shown.flatMap((o, i) => (o.stage === "standing" ? [{ i, o }] : []));
     expect(standing.length).toBeGreaterThan(0);
@@ -201,15 +203,16 @@ describe("judging a codebase with Jev", () => {
     expect(new Set(chosen).size).toBe(chosen.length);
     expect(standing.flatMap(({ o }) => o.composed.areas)).toContain("");
 
-    // Reopening on a new engine asks nothing it has answered, and never asks the person again.
+    // Reopening on a new engine sends no request already answered and does not ask the person.
     const second = await open(root, data, true);
     expect(second.asked).toHaveLength(0);
     expect(second.about).toEqual([]);
     expect(second.document.world).toEqual(first.document.world);
 
-    // A file that changed is asked about again, with what its facts touch, and less goes out than the first time. What
-    // a thing stands as is asked again where its offer or its importance changed: one more definition moves every rank
-    // a little, which in a world of a few things carries most of them across a range.
+    // A changed file is asked about again, with the requests its facts touch, and fewer requests go out than the first
+    // time. A form request goes out again where the offered forms or the importance changed. One more definition
+    // shifts every importance rank a little, and in a world this small that moves most things into another form's
+    // range.
     appendFileSync(join(root, "src/shape.ts"), `\n/** The area of a circle. */\nexport const circle = (r: number): number => Math.PI * r * r;\n`);
     const third = await open(root, data, true);
     expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts"]));
@@ -222,7 +225,7 @@ describe("judging a codebase with Jev", () => {
     const first = await open(root, data, true);
     expect(first.sent.length).toBeGreaterThan(0);
     const second = await open(root, data, true);
-    // Jev settled the import the rules could not, so the facts the world reads changed during the first opening.
+    // Jev resolved the import the rules could not, so the world's facts changed during the first opening.
     expect(second.document.facts.files.find((f) => f.path === "src/app/main.py")?.imports.length).toBeGreaterThan(0);
     expect(second.about).toEqual([]);
     expect(second.document.facts).toEqual(first.document.facts);
@@ -246,16 +249,16 @@ describe("judging a codebase with Jev", () => {
     const before = standIn.received.length;
     const asked: ConsentPlan[] = [];
     const declined = openWorld({ engine: engineAt(data), root, consent: async (plan) => (asked.push(plan), false), progress: () => {} });
-    // Past the limit the person is asked once, shown exactly what would go out and what they allow.
+    // Above the limit, the person is asked once and shown the plan and their limit.
     await expect(declined).rejects.toThrow(/you chose not to go ahead/);
     expect(asked).toHaveLength(1);
     expect(asked[0]).toMatchObject({ name: "declined", limitUsd: 0, endpoint: standIn.endpoint });
     expect(asked[0]?.estimatedUsd).toBeGreaterThan(0);
     expect(asked[0]?.estimatedTokens).toBeGreaterThan(0);
     expect(standIn.received.length).toBe(before);
-    // Declining isn't remembered: the next opening asks again, and going ahead sends about as many requests as it
-    // showed: every one it planned, at most one more round of the understanding pass's where Jev asked for more, and
-    // composing every thing, which it counts at about two requests a thing.
+    // Gaia does not store a decline, so the next opening asks again. Going ahead sends about as many requests as
+    // the plan showed: every planned request, at most one more round of understanding requests where Jev asked for
+    // more, and the composing requests, estimated at about two per thing.
     const third = await open(root, data, true);
     expect(third.asked).toHaveLength(1);
     const shown = third.asked[0]?.requests ?? 0;

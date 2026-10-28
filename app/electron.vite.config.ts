@@ -1,5 +1,5 @@
-// Builds the four parts of the app: the main process and the world service
-// (both Node), the preload script, and the renderer (the lab).
+// Builds the app's four bundles: the main process and the world service, which
+// run in Node, the preload script, and the renderer.
 
 import { resolve } from "node:path";
 import { defineConfig } from "electron-vite";
@@ -10,7 +10,8 @@ const here = import.meta.dirname;
 export default defineConfig({
   main: {
     build: {
-      // The world service runs the world package itself, so Gaia's own packages are bundled, not required at run time.
+      // The world service runs the world package, so the build bundles Gaia's own packages instead of requiring them at
+      // run time.
       externalizeDeps: { exclude: ["@gaia/schema", "@gaia/world", "@gaia/kinds", "@gaia/primitives", "@gaia/realize", "@gaia/render", "@gaia/terrain"] },
       rollupOptions: {
         input: {
@@ -31,7 +32,7 @@ export default defineConfig({
   },
   renderer: {
     root: resolve(here, "renderer"),
-    // The proving ground, made from its plan as the renderer builds (`virtual:proving-ground`).
+    // Builds the proving ground from its plan as the `virtual:proving-ground` module.
     plugins: [provingGroundVite()],
     build: {
       rollupOptions: { input: { index: resolve(here, "renderer/index.html") } },

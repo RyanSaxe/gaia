@@ -1,31 +1,27 @@
-// The worlds a person opened before, for the start page: kept with the app's
-// own settings in the store (the `app` project's `settings` table), newest
-// first, each with the commit the person last opened it at, where they stood
-// when they last left it, which its next open lands them at, and a painting of
-// where they last stood still, which the start lays on its table as its card.
-// Six paintings of about 60 KB keep the app's store under a megabyte, and it is
-// read whole only when the start is offered or a world is kept. Once the code
-// has moved on, the start is also told how many commits have touched the
-// folder since, which the card tallies.
+// Stores the worlds a person opened before, newest first, in the `APP_STORE`
+// `settings` table. Each has the commit last opened, the person's last position
+// and a painting for the start page's card. `RECENT_KEPT` paintings of about
+// 60 KB keep the app store under a megabyte, and the service reads the store
+// whole only to offer the start page or to write a world.
 
 import type { EngineClient } from "@gaia/schema";
 import type { StoodSpot } from "@gaia/terrain";
 import { APP_STORE } from "./open-world.ts";
 import type { RecentWorld } from "./protocol.ts";
 
-/** Where the recent worlds are kept, in the app's `settings` table. */
+/** The key of the recent worlds in the `APP_STORE` `settings` table. */
 export const RECENT_KEY = "recent-worlds";
 
 /** How many recent worlds the start page offers. */
 export const RECENT_KEPT = 6;
 
-/** The longest painting kept, characters of its data URL: about 190 KB of WebP, three times what a page paints. */
+/** The longest painting data URL stored, in characters. That is about 190 KB of WebP, three times a page's usual painting. */
 export const PAINTING_MAX = 256_000;
 
 const isPainting = (painting: unknown): painting is string => typeof painting === "string" && painting.startsWith("data:image/webp;base64,") && painting.length <= PAINTING_MAX;
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-/** Whether a value is a spot as a page keeps it (`StoodSpot`). */
+/** Whether a value is a valid `StoodSpot`. */
 const isStood = (s: unknown): s is StoodSpot => {
   if (typeof s !== "object" || s === null) return false;
   const { x, z, yaw, layout, by } = s as Partial<Record<keyof StoodSpot, unknown>>;
@@ -34,9 +30,9 @@ const isStood = (s: unknown): s is StoodSpot => {
 };
 
 /**
- * The recent worlds as they are kept. Only what the start reads is passed on,
- * so a world kept before paintings were, with the postcard of its areas or
- * the picture of its map it kept then, has no painting.
+ * Reads the stored recent worlds and drops fields the start page does not
+ * read. A record stored before paintings existed, with its old postcard or map
+ * picture, therefore has no painting.
  */
 export async function recentWorlds(engine: EngineClient): Promise<RecentWorld[]> {
   const kept = (await engine.call("store.get", { project: APP_STORE, table: "settings", key: RECENT_KEY }))?.value;
@@ -58,8 +54,8 @@ export async function recentWorlds(engine: EngineClient): Promise<RecentWorld[]>
 }
 
 /**
- * The recent worlds as the start offers them, each with its painting; and once the folder's code has moved on from the
- * commit the person last opened, how many commits have touched it since.
+ * Returns the recent worlds for the start page. A world whose folder has moved on from its stored `commit` also gets
+ * `commitsSince`.
  */
 export async function offeredWorlds(engine: EngineClient): Promise<RecentWorld[]> {
   return Promise.all(
@@ -78,8 +74,8 @@ async function keep(engine: EngineClient, worlds: readonly RecentWorld[]): Promi
 }
 
 /**
- * Puts `world`, opened at `commit`, first among the recent worlds, replacing an earlier visit to the same folder but
- * keeping where the person stood and its painting until they stand, or stand still, somewhere else.
+ * Puts `world` first among the recent worlds and replaces any earlier record of the same folder. The earlier record's
+ * `stood` and `painting` carry over until the page sends new ones.
  */
 export async function keepRecent(engine: EngineClient, world: Omit<RecentWorld, "painting" | "stood" | "commitsSince">): Promise<void> {
   const kept = await recentWorlds(engine);
@@ -88,12 +84,12 @@ export async function keepRecent(engine: EngineClient, world: Omit<RecentWorld, 
   await keep(engine, [{ ...world, ...stays }, ...kept.filter((r) => r.root !== world.root)]);
 }
 
-/** Where the person stood when they last left the world of `root`, if it is kept and they stood anywhere in it. */
+/** Returns where the person was when they last left the world of `root`, if stored. */
 export async function stoodIn(engine: EngineClient, root: string): Promise<StoodSpot | undefined> {
   return (await recentWorlds(engine)).find((r) => r.root === root)?.stood;
 }
 
-/** Keeps `stood` with the recent world of `root`; one that is malformed, or of a world no longer kept, is dropped. */
+/** Stores `stood` with the recent world of `root`. Drops it when it is malformed or `root` is no longer a recent world. */
 export async function keepStood(engine: EngineClient, root: string, stood: unknown): Promise<void> {
   if (!isStood(stood)) return;
   const kept = await recentWorlds(engine);
@@ -104,7 +100,7 @@ export async function keepStood(engine: EngineClient, root: string, stood: unkno
   );
 }
 
-/** Keeps `painting` with the recent world of `root`; one that is not a WebP data URL, or too long, or of a world no longer kept, is dropped. */
+/** Stores `painting` with the recent world of `root`. Drops it when it is not a WebP data URL, is longer than `PAINTING_MAX`, or `root` is no longer a recent world. */
 export async function keepPainting(engine: EngineClient, root: string, painting: string): Promise<void> {
   if (!isPainting(painting)) return;
   const kept = await recentWorlds(engine);

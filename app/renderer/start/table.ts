@@ -1,20 +1,10 @@
-// The traveller's map table, in 3D (`table-scene.ts`): the worlds walked
-// before lie on the sheet as paintings of where the person last stood still in
-// each, the view its next open lands them in, and a line at the sheet's foot
-// waits for an address, written in ink from a text field no one sees.
-// Touching a card chooses its world: the card lifts, rises toward the person
-// and becomes the wait's sheet, while the table falls out of focus behind it.
-// A world with no painting, left before the person stood still in it, lies as
-// a card of the wait's bare sheet. When its code has moved on since the person
-// last opened it, a card has a tally in pencil of the commits since (`tally.ts`). A folder or an address gets a fresh card of plain paper, laid
-// on the sheet and risen the same way, and so does a world opened with no
-// start. The table stays behind the wait until the world shows. Over the
-// canvas lie only clear hit areas for the cards, the line and the folder's
-// words, so a pointer, a finger and the keyboard all reach them.
-//
-// The table draws a frame only when something changes: the hour, the
-// writing, a card moving. Once the wait lifts it lets go of its renderer,
-// textures and geometry.
+// On the start page's 3D map table (`table-scene.ts`), recent worlds lie on the
+// sheet as cards, an address typed in a hidden field is drawn in ink on a line,
+// and a chosen card rises into the wait's sheet while the table blurs behind it.
+// Only clear hit areas lie over the canvas, so pointer, touch and keyboard reach
+// the cards, the line and the folder text. The table renders a frame only when
+// something changes, and releases its renderer, textures and geometry once the
+// wait lifts.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 import { RECENT_KEPT } from "../../world-service/recent.ts";
@@ -26,14 +16,14 @@ import { tableLayout } from "./table-layout.ts";
 import { drawTally } from "./tally.ts";
 import { LAY_S, LIFT_S, RISE_S, type Rect, type Sheet, type TableScene, createTableScene } from "./table-scene.ts";
 
-/** How long the darker stroke takes to run along the line, and an answer to be written in, seconds. */
+/** Seconds for the darker stroke to run along the line, and for an answer to be written in. */
 const READING_S = 1.2;
 const ANSWER_S = 0.7;
-/** A view narrower than this, over its height, is a phone's: the sheet stands upright. */
+/** A view whose width over height is below this is a phone's, and the sheet is laid out portrait. */
 const UPRIGHT = 0.8;
-/** How long a chosen map takes to lift and rise into the wait's sheet, ms. */
+/** How long a chosen card takes to lift and rise into the wait's sheet, in milliseconds. */
 export const CHOSEN_MS = (LIFT_S + RISE_S) * 1000;
-/** How long the table takes to come in when shown, ms (start.css, `.start`). */
+/** How long the table takes to fade in when shown, in milliseconds (start.css, `.start`). */
 const SHOWN_MS = 900;
 
 const decoded = async (src: string): Promise<HTMLImageElement> => {
@@ -46,13 +36,13 @@ const decoded = async (src: string): Promise<HTMLImageElement> => {
 export interface TableOptions {
   /** The hour the world shows now. */
   readonly hour: number;
-  /** Where the wait's sheet lies on the page: a chosen card ends there. */
+  /** The wait's sheet position on the page, where a chosen card ends. */
   readonly sheet: () => DOMRect;
-  /** A card with a painting or a tally is chosen: its face, whose shape (width over depth) the wait's sheet takes as its own. */
+  /** Called with the face of a chosen card that has a painting or a tally. The wait's sheet takes the face's aspect. */
   readonly chosen?: (face: HTMLImageElement | HTMLCanvasElement) => void;
-  /** The wait's sheet as it is painted now, in its shape: a fresh card's face, so it rises into the sheet as the sheet. */
+  /** Returns the wait's sheet as currently painted, in its aspect, for a fresh card's face, so the card rises into the sheet looking like it. */
   readonly face?: () => HTMLCanvasElement;
-  /** The chosen card has become the wait's sheet: the sheet shows in its place, and the wait may paint on. */
+  /** Called when the chosen card has become the wait's sheet. The sheet shows in its place, and the wait may resume painting. */
   readonly landed?: () => void;
 }
 
@@ -85,7 +75,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   let readingFrom: number | null = null;
   let answerFrom: number | null = null;
   let chosen: { readonly index: number; readonly at: number } | null = null;
-  /** Whether the chosen card has been drawn at its end, in the wait's sheet's place, and whether it has become that sheet. */
+  /** Whether the chosen card has been drawn at its end over the wait's sheet, and whether the sheet has replaced it. */
   let arrived = false;
   let landed = false;
   let leaving = false;
@@ -123,12 +113,12 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       scene.choose(chosen.index, Math.min(t, CHOSEN_MS / 1000), toSheet());
       if (t * 1000 < CHOSEN_MS) moving = true;
       else if (!arrived) {
-        // Drawn once exactly at its end, so the frame before the sheet takes its place is the sheet's own.
+        // Draws one frame exactly at the card's end, so the frame before the sheet replaces it already matches the sheet.
         arrived = true;
         moving = true;
       } else if (!landed) {
-        // The card lies where the wait's sheet is, drawn as the page draws it: in this one frame the sheet shows in its
-        // place and the card goes, the table behind them.
+        // The card now lies where the wait's sheet is, drawn as the page draws the sheet. In this one frame the sheet shows
+        // in its place, the card is withdrawn, and the table moves behind.
         landed = true;
         veil.dataset.table = "behind";
         scene.withdraw(0);
@@ -138,7 +128,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     scene.render();
     if (moving) draw();
   }
-  /** The wait's sheet on the canvas, and how dark the veil has it. */
+  /** The wait's sheet rectangle relative to the canvas, and the veil's `--night`. */
   const toSheet = (): Sheet => {
     const s = options.sheet();
     const r = root.getBoundingClientRect();
@@ -197,10 +187,10 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     const w = Math.max(1, root.clientWidth);
     const h = Math.max(1, root.clientHeight);
     phone = w / h < UPRIGHT;
-    // A world with no painting to show, as one left before the person stood still in it, lies as a card of the wait's own
-    // bare sheet, in the sheet's shape, so it rises into the sheet as the sheet does for a fresh card.
+    // A world with no painting, such as one left before the person stopped anywhere in it, gets a card showing the wait's
+    // bare sheet in the sheet's aspect, so it rises into the sheet as a fresh card does.
     const bare = paintings.includes(null) ? (options.face?.() ?? null) : null;
-    // One whose code has moved on since the person last opened it has the commits since tallied on it.
+    // A world whose code has moved on since the person last opened it gets a tally of the commits since.
     const tallies = recent.map((r) => (r.commitsSince === undefined ? null : tallyOf(r.commitsSince, r.root)));
     const faces = recent.map((_, i) => {
       const painting = paintings[i] ?? null;
@@ -228,8 +218,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         b.setAttribute("aria-label", r.name);
         b.addEventListener("click", () => {
           if (settle === null || chosen !== null) return;
-          // A card with anything on its face, a painting or a tally, becomes the wait's sheet face up, and turns over
-          // onto the sheet's bare paper for the map; a bare card is the sheet already.
+          // A card with a painting or a tally becomes the wait's sheet face up, then flips to the sheet's bare paper for the
+          // map. A bare card already shows the sheet.
           const face = faces[i];
           if (face !== null && face !== undefined && face !== bare) options.chosen?.(face);
           lift(i, performance.now());
@@ -241,10 +231,10 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     placeHits();
   }
 
-  /** The tally of `commits` drawn on a card's face, the same strokes for the same world; on a painting, with the paper's tone round it. */
+  /** Draws the tally of `commits` on a card's face, with the same strokes for the same world. On a painting, a paper-toned halo goes under it. */
   type Pencilled = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, onPaint?: boolean) => void;
   const tallyOf = (commits: number | null, root: string): Pencilled => (c, x, y, w, h, onPaint = false) => drawTally(c, x, y, w, h, commits, root, onPaint);
-  /** `face` with `pencilled` drawn on a copy of it, `onPaint` when the face is a painting, or `face` itself with nothing to draw. */
+  /** Returns a copy of `face` with `pencilled` drawn on it, or `face` itself when there is nothing to draw. `onPaint` is true when the face is a painting. */
   function tallied<F extends HTMLCanvasElement | HTMLImageElement>(face: F, pencilled: Pencilled | null, onPaint: boolean): F | HTMLCanvasElement {
     if (pencilled === null) return face;
     const copy = document.createElement("canvas");
@@ -256,22 +246,22 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     return copy;
   }
 
-  /** Card `index` lifts from `at` and rises into the wait's sheet. */
+  /** Starts card `index` lifting at time `at` and rising into the wait's sheet. */
   function lift(index: number, at: number): void {
     chosen = { index, at };
     root.classList.add("choosing");
     draw();
   }
   /**
-   * A world with no card of its own gets a fresh one, in the shape the wait's sheet has and with that sheet's face,
-   * laid on the sheet `after` ms from now and risen.
+   * Gives a world with no card a fresh one, in the wait's sheet's aspect and with that sheet's face. The card is laid on
+   * the table's sheet `after` ms from now and then rises.
    */
   function liftFresh(after = 0): void {
     if (scene === null || chosen !== null) return;
     const s = options.sheet();
     lift(scene.fresh(s.width / Math.max(1, s.height), options.face?.() ?? null), performance.now() + after + LAY_S * 1000);
   }
-  /** Shows the table once its first frame is drawn, so it comes in whole, in front of the wait. */
+  /** Shows the table once its first frame is drawn, so it fades in complete, in front of the wait. */
   function show(): void {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => {
@@ -281,7 +271,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     );
   }
 
-  // A phone turned on its side, or a window made narrow, lays the table out again.
+  // Rotating a phone or resizing a window across `UPRIGHT` rebuilds the table's layout.
   const resized = new ResizeObserver(() => {
     if (scene === null || gone) return;
     const w = root.clientWidth;
@@ -307,7 +297,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       landed = false;
       readingFrom = null;
       root.classList.remove("choosing");
-      // Offered again on the same table, as when a place is refused, a card that had risen is back and in front.
+      // On a new offer to the same table, such as after a refused address, a card that had risen returns and the table
+      // moves in front.
       scene?.withdraw(1);
       if (veil.dataset.table === "behind") veil.dataset.table = "front";
       if (offer.refused !== undefined) {
@@ -328,7 +319,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     },
     hour(h) {
       hour = h;
-      // The page passes the hour every frame; the table draws again only when its light has changed.
+      // The page passes the hour every frame, and the table redraws only when its light has changed.
       if (scene?.hour(h) === true) draw();
     },
     leave() {
@@ -337,8 +328,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
       leaving = true;
       input.blur();
       root.classList.add("choosing");
-      // A chosen card is already on its way. A folder, an address, or a world opened with no start gets a fresh card,
-      // on the table as it is or, opened with no start, on an empty one built for it.
+      // A chosen card is already rising. A folder, an address, or a world opened without the start page gets a fresh card,
+      // on the current table or, without the start page, on an empty table built for it.
       if (scene !== null) liftFresh();
       else
         void build([]).then(() => {
@@ -347,7 +338,7 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
           write(writing);
           draw();
           show();
-          // Once the empty table has come in (start.css), so the card is laid on a table already there.
+          // Waits for the empty table to fade in (start.css), so the card is laid on a visible table.
           liftFresh(SHOWN_MS);
         });
     },

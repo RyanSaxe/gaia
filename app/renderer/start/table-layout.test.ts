@@ -3,7 +3,7 @@ import { RECENT_KEPT } from "../../world-service/recent.ts";
 import { LOGO_ASPECT } from "../brand/logo.ts";
 import { NAME_ROOM, crosses, tableLayout } from "./table-layout.ts";
 
-/** A card with the room its name takes beneath it: left, top, right, bottom. */
+/** A card's box, including the room for its name beneath it: left, top, right, bottom. */
 const footprint = (c: { x: number; y: number; side: number }, name: number): [number, number, number, number] => [c.x - c.side / 2, c.y - c.side / 2, c.x + c.side / 2, c.y + c.side / 2 + name * NAME_ROOM];
 const apart = (a: readonly number[], b: readonly number[]): boolean => (a[2] as number) <= (b[0] as number) || (b[2] as number) <= (a[0] as number) || (a[3] as number) <= (b[1] as number) || (b[3] as number) <= (a[1] as number);
 
@@ -14,7 +14,8 @@ describe("the map table's layout", () => {
         const l = tableLayout(phone, n);
         expect(l.cards).toHaveLength(n);
         const logo = [l.logo.x, l.logo.y, l.logo.x + l.logo.w, l.say.y];
-        // The question above the line, the line, and the folder's words beneath a refusal: two lines of it on a phone.
+        // The box for the prompt above the line, the line, and the folder text below a refusal, which wraps to two lines on
+        // a phone.
         const words = [l.line.x0, l.line.y - l.line.size * 3.1, l.line.x1, l.line.y + l.line.size * (phone ? 6.3 : 5)];
         expect(words[3]).toBeLessThan(l.sheet.h - 0.02);
         const boxes = l.cards.map((c) => footprint(c, l.name));

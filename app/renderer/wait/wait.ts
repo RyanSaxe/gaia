@@ -1,92 +1,75 @@
-// The wait while a world is read, judged and baked: the first thing anyone
-// sees whenever a project opens. It shows no words, counts or percentages;
-// the progress a person sees is the world itself coming to be: the field
-// map paints itself (`map-wait.ts`). Paper, then each area's border drawn
-// with a pen as soon as the land is divided, a pencil going over each file
-// and area as Jev reads it, each file's health washed in as it settles and
-// each area's name lettered as its last answer comes in, the buildings and
-// landmarks drawn while the world bakes, its hills, water and trees once it
-// stands, and the paper folding away into the world as soon as it is ready
-// to show, whatever is left of the drawing going with it. Every stroke is of
-// something that has happened, drawn at a hand's pace, so the sheet keeps
-// moving all the time Jev works.
-// Everything that moves is a CSS transition of opacity or transform, or a
-// pen line's dash, so it keeps moving on the compositor while the page's
-// thread is busy standing the world, and the wait never competes with the bake.
-// The one question the wait may ask, when judging would cost more than the
-// person's limit, is a small paper slip: go ahead, or not now, which leaves
-// the world unopened. When a world cannot be judged (Jev is off, or a request
-// it could not answer), the same slip says what failed and why, and the wait
-// stays: a world is always Jev's, never quietly guessed.
+// The wait screen shown while a world is read, judged and baked. It shows
+// progress without words or numbers, as a field map that draws each step as
+// it happens (`map-wait.ts`). Every animation is a CSS opacity or transform
+// transition, or a pen line's dash, so it keeps running on the compositor
+// while the main thread builds the world.
 
 import type { ConsentPlan, Opening } from "../../world-service/protocol.ts";
 import type { StoodWorld } from "../terrain/world.ts";
 import { createMapWait } from "./map-wait.ts";
 import "./wait.css";
 
-/** A wait that shows how opening a world is going. */
+/** The wait screen's progress methods. */
 export interface WaitView {
-  /** How opening the world is going: the land and its patches, each file's health as it settles, and the areas judged so far. */
+  /** Shows one `Opening` message: the land and its patches, each file's vitality as it settles, and the areas settled so far. */
   opening(o: Opening): void;
-  /** Everything is judged and laid out, and `health` is every file's vitality by path: every area is settled, and the world bakes now. */
+  /** Called once everything is judged and laid out, as the world starts to bake. `health` is every file's vitality by path. */
   baking(health: Readonly<Record<string, number>>): void;
-  /** The buildings and landmarks at their laid-out places, each with what its mark on the map is drawn from: the pen draws them while the world bakes. */
+  /** Draws a mark for each building and landmark at its laid-out place while the world bakes. */
   marks(things: Pick<StoodWorld, "buildings" | "landmarks">): void;
-  /** The world stands: its hill shade, contours, water and trees come in on the sheet. */
+  /** Called when the world is built. Its hill shade, contours, water and trees fade in on the sheet. */
   stood(world: StoodWorld): void;
-  /** How dark it is, 0 by day to 1 at night: the wait follows the clock. */
+  /** Sets the darkness, from 0 by day to 1 at night, so the wait follows the clock. */
   night(n: number): void;
-  /** The world is ready to show: the paper folds away into it at once, with whatever of the drawing is still to come, and resolves once the world shows. */
+  /** Called when the world is ready to show. The paper folds away at once with any unfinished drawing, and the promise resolves once the world shows. */
   lift(): Promise<void>;
-  /** Where the sheet lies on the page: a card chosen on the start ends there. */
+  /** The sheet's position on the page, where a card chosen on the start page lands. */
   sheet(): DOMRect;
   /**
-   * The face of a card chosen on the start, a painting of where the person last stood still or a tally of the commits
-   * since they last opened the world: the sheet takes its
-   * shape (width over depth) and the face lies on it at once, under the start's table until the card has risen into its
-   * place. As soon as the land is divided the card turns over in its place onto its back, the sheet's bare paper, as
-   * the journal turns a leaf, and the map is drawn there, as any world's is.
+   * Shows the face of a card chosen on the start page: a painting of the person's last view, or a tally of commits since
+   * they last opened the world. The sheet takes the face's aspect and shows the face at once, under the start page's
+   * table until the card rises into place. Once the land is divided, the card flips over to the sheet's bare paper, as
+   * the journal turns a page, and the map is drawn there as for any world.
    */
   chosen(face: HTMLImageElement | HTMLCanvasElement): void;
-  /** The sheet's paper as it is painted now, in its shape: the face of a fresh card that rises into the sheet. */
+  /** Returns the sheet's paper as currently painted, in its aspect, for the face of a new card that rises into the sheet. */
   face(): HTMLCanvasElement;
 }
 
 export interface Wait extends WaitView {
-  /** Asks whether to spend past the limit, on a small slip of paper; resolves true to go ahead. */
+  /** Asks on a paper slip whether to spend over the limit. Resolves true to go ahead. */
   ask(plan: ConsentPlan): Promise<boolean>;
-  /** The world could not be opened: says why on the same slip, with a way to try again, and the wait stays. */
+  /** Says on the same slip why the world could not be opened, with a button to try again. The wait stays, so no world opens without Jev's judgments. */
   failed(message: string): void;
 }
 
 const dollars = (usd: number): string => `$${usd < 0.01 ? usd.toFixed(3) : usd.toFixed(2)}`;
 
-/** A wait made before the world's page is built (`startWaitEarly`), waiting to be taken. */
+/** The wait `startWaitEarly` made before the world's page was built, until `takeWait` takes it. */
 let early: { veil: HTMLElement; wait: Wait } | null = null;
 
 /**
- * Lays the wait over `host` before anything else of the world's page is
- * built, so the first frame a person sees is the wait's sheet, not an empty
- * page while the world's page builds behind it, already `night` dark and in
- * the shape its land will have (`aspect`, width over depth). With
- * `underTable`, the start's map table is coming (`start.css`): the sheet
- * stays unseen beneath it from the first frame, and only the paper shows
- * until the table does. The world takes it when it makes its own
- * (`takeWait`).
+ * Lays the wait over `host` before the rest of the world's page is built, so
+ * the first frame a person sees is the wait's sheet, already at darkness
+ * `night` and in the land's aspect `aspect` (width over depth). With
+ * `underTable`, the start page's map table will cover it (`start.css`), so
+ * the sheet stays hidden under the table from the first frame and only the
+ * paper shows until the table appears. The world claims this wait with
+ * `takeWait`.
  */
 export function startWaitEarly(host: HTMLElement, night: number, aspect: number, underTable = false): void {
   const veil = document.createElement("div");
   veil.className = "veil";
   veil.dataset.ref = "veil";
   veil.setAttribute("aria-label", "The world is being made");
-  // As dark as the world's first frame will make it, so the paper does not darken once that frame comes.
+  // Matches the darkness of the world's first frame, so the paper does not darken when that frame arrives.
   veil.style.setProperty("--night", night.toFixed(2));
   if (underTable) veil.dataset.table = "front";
   host.append(veil);
   early = { veil, wait: createWait(veil, aspect) };
 }
 
-/** The wait laid early, standing in `slot`'s place, or a new wait in `slot` in the shape `aspect`. */
+/** Returns the early wait, swapped in for `slot`, or a new wait in `slot` with aspect `aspect`. */
 export function takeWait(slot: HTMLElement, aspect: number): { veil: HTMLElement; wait: Wait } {
   if (early === null) return { veil: slot, wait: createWait(slot, aspect) };
   const taken = early;
@@ -96,8 +79,8 @@ export function takeWait(slot: HTMLElement, aspect: number): { veil: HTMLElement
 }
 
 /**
- * A small slip of warm paper at the foot of the wait, with its words and one or two answers: the one way the wait
- * speaks. `answered` gets the chosen answer's value once the slip has gone.
+ * A small paper slip at the bottom of the wait, with text and one or two answer buttons. It is the only place the wait
+ * shows words. `answered` receives the chosen value on the click, as the slip starts to leave.
  */
 function slipIn(veil: HTMLElement): (words: HTMLElement, answers: readonly (readonly [string, boolean | string])[], answered: (value: string) => void) => void {
   return (words, answers, answered) => {
@@ -127,7 +110,7 @@ function slipIn(veil: HTMLElement): (words: HTMLElement, answers: readonly (read
   };
 }
 
-/** The wait in `veil`, a layer over the stage that lifts once the world stands, its sheet in the land's shape `aspect`. */
+/** Creates the wait in `veil`, a layer over the stage that lifts once the world is built, with its sheet in the land's aspect `aspect`. */
 export function createWait(veil: HTMLElement, aspect: number): Wait {
   veil.dataset.wait = "";
   const view = createMapWait(veil, aspect);
@@ -145,7 +128,7 @@ export function createWait(veil: HTMLElement, aspect: number): Wait {
     failed(message) {
       const words = document.createElement("p");
       words.textContent = message;
-      // Trying again opens the same world afresh: the page reopens what main named it after.
+      // Reloading opens the same world again, because main gives the new page the same folder.
       slip(words, [["Try again", true]], () => window.location.reload());
     },
   };

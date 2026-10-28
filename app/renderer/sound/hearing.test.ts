@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Earshot } from "../terrain/world.ts";
 import { BEDS, cadence, footing, hear } from "./hearing.ts";
 
-/** Standing still in an open meadow at noon, in a light breeze, on thriving land, far from water. */
+/** Standing still in an open meadow at noon, in a light breeze, with no decline, far from water. */
 const MEADOW: Earshot = { speed: 0, travelling: false, underfoot: "ground", depth: 0, night: 0, gust: 0.3, decline: 0, canopy: 0, stream: null, mill: null };
 const dB = (gain: number): number => 20 * Math.log10(gain);
 
