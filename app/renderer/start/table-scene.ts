@@ -1,23 +1,9 @@
-// The map table in 3D: an oak table with a folded sheet on it, the worlds
-// walked before as cards laid on the sheet, a quill, an inkwell and a brass
-// lantern, lit by the world's own sun, sky, moon and lantern at the hour
-// (`@gaia/render`'s light, with the light of "Meadow morning", since no
-// world is open yet), and seen from a little above, the table past the sheet
-// out of focus. The table top reaches past every edge of the view, growing
-// for a very wide or tall window, so nothing beyond it ever shows.
-//
-// It draws a frame only when asked (`render`): the page asks when something
-// changes. The sun's shadow map is drawn again only when the light changes
-// or a card moves.
-//
-// Choosing a card lifts it 4 cm and straightens it over half a second, then
-// it rises toward the person over 1.3 s and turns to face them while the eye
-// follows it, so the table falls out of focus; it ends at the wait's sheet's
-// size and place, as the picture the wait shows. A world with no card of its
-// own (a folder, an address, or one opened straight) gets a fresh card of
-// plain paper, laid on the sheet first (`fresh`). The table stays behind the
-// wait, still: once the wait's sheet lies over the risen card, the card gives
-// way to it (`withdraw`).
+// The start page's map table in 3D: an oak table with a folded sheet, recent
+// worlds as cards on the sheet, a quill, an inkwell and a brass lantern, lit at
+// the hour by `@gaia/render`'s light under `START_SKY`. It renders a frame only
+// when `render` is called, and redraws the sun's shadow map only when the light
+// changes or a card moves. A chosen card lifts, then rises to the wait's
+// sheet's size and position while the table blurs behind it (`choose`).
 
 import * as THREE from "three";
 import { type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
@@ -31,26 +17,26 @@ import { type SheetBox, type Writing, paintFeather, paintSheetInk, paintWriting,
 import type { CardPlace, TableLayout } from "./table-layout.ts";
 import { FEATHER_FRAGMENT, FLAME_FRAGMENT, GLASS_FRAGMENT, MAX_CASTERS, PAPER_FRAGMENT, POST_FRAGMENT, POST_VERTEX, SOLID_FRAGMENT, VERTEX, WOOD_FRAGMENT } from "./table-shaders.ts";
 
-/** The table top's height, metres. */
+/** The table top's height, in metres. */
 const TOP = 0.76;
 const TABLE_THICK = 0.045;
-/** The lantern's and the inkwell's reach round their middle and their height, metres, and how near the view's edge they may come (its share of the half-width). */
+/** The lantern's and the inkwell's radius and height in metres. `THINGS_EDGE` is how near the view's edge they may come, as a share of the half-width. */
 const LANTERN_BOX = { r: 0.06, h: 0.235 } as const;
 const INKWELL_BOX = { r: 0.04, h: 0.056 } as const;
 const THINGS_EDGE = 0.99;
-/** How far past what the view sees the table top reaches when it grows to fill a wide or tall window, metres. */
+/** How far in metres the table top extends past the view when it grows to fill a wide or tall window. */
 const TABLE_SPARE = 0.1;
-/** Choosing a card: lifting and straightening it, then its rise to the wait's sheet, seconds. */
+/** Seconds to lift and straighten a chosen card, then to raise it to the wait's sheet. */
 export const LIFT_S = 0.5;
 export const RISE_S = 1.3;
-/** A fresh card coming down onto the sheet before it is lifted, seconds: it is chosen this long before its lift begins. */
+/** Seconds for a fresh card to come down onto the sheet before its lift. It is chosen this long before its lift begins. */
 export const LAY_S = 0.45;
-/** The share of a card the picture leaves to its paper on every side. */
+/** The share of a card left as bare paper around its picture on every side. */
 const INSET = 0.035;
-/** Where the sun stands over the table at every hour (its bearing, radians): behind it on the left, so its light rakes across the paper toward the person. */
+/** The sun's bearing over the table at every hour, in radians. It is behind the table on the left, so its light rakes across the paper toward the person. */
 const SUN_FROM = Math.atan2(-0.57, -0.82);
 
-/** A rectangle on the page, CSS pixels. */
+/** A rectangle on the page, in CSS pixels. */
 export interface Rect {
   readonly x: number;
   readonly y: number;
@@ -58,33 +44,32 @@ export interface Rect {
   readonly h: number;
 }
 
-/** The wait's sheet a chosen card rises into: where it lies on the canvas, and how dark the veil has it (its --night). */
+/** The wait's sheet that a chosen card rises into: its rectangle on the canvas and the veil's `--night`. */
 export interface Sheet extends Rect {
   readonly night: number;
 }
 
 export interface TableScene {
   readonly canvas: HTMLCanvasElement;
-  /** Lights the table as the world is lit at hour `h`; whether the light changed, so a frame is worth drawing. */
+  /** Lights the table as the world is lit at hour `h`. Returns whether the light changed, so a new frame is needed. */
   hour(h: number): boolean;
-  /** Writes on the line. */
+  /** Updates the writing on the line. */
   write(w: Writing): void;
   /**
-   * Card `index`, `t` seconds after its lift began, ending at the wait's sheet `to` (CSS pixels on the canvas); before
-   * 0, a fresh card is still coming down onto the sheet. Null puts every card back.
+   * Poses card `index` `t` seconds after its lift began, ending at the wait's sheet `to` in canvas CSS pixels. A
+   * negative `t` means a fresh card is still coming down onto the sheet. A null index puts every card back.
    */
   choose(index: number | null, t: number, to?: Sheet): void;
   /**
-   * A fresh card in the land's shape `aspect` (width over depth) whose face is `face`, the wait's sheet as it is painted
-   * now, so it rises into that sheet as the sheet itself; its index, to choose.
+   * Adds a fresh card with aspect `aspect` (width over depth) and face `face`, the wait's sheet as currently painted, so
+   * it rises into that sheet looking like the sheet. Returns its index for `choose`.
    */
   fresh(aspect: number, face: HTMLCanvasElement | null): number;
-  /** How much of the risen card still shows, 1 to 0: the wait's sheet lies over it and it gives way. */
+  /** Sets how much of the risen card still shows, from 1 to 0, as the wait's sheet replaces it. */
   withdraw(shown: number): void;
   resize(w: number, h: number, dpr: number): void;
-  /** Draws one frame. */
   render(): void;
-  /** Where to touch, on the canvas: each card, the line and the folder's words. */
+  /** The hit rectangles on the canvas: each card, the line and the folder text. */
   hits(): { readonly cards: readonly Rect[]; readonly line: Rect; readonly folder: Rect };
   /** Compiles every material before the first frame, off the page's thread where the browser can. */
   compile(): Promise<void>;
@@ -93,13 +78,13 @@ export interface TableScene {
 
 export interface TableWorld {
   readonly world: StartOffer["recent"][number];
-  /** Its picture, decoded, or for a world with none to show, the wait's bare sheet as a fresh card has it; null for neither. */
+  /** The decoded picture, or the wait's bare sheet for a world without one, as a fresh card has it. Null when neither exists. */
   readonly picture: HTMLImageElement | HTMLCanvasElement | null;
 }
 
 interface Card {
   readonly caster: number;
-  /** How far it is turned at rest, radians. */
+  /** Its rotation at rest, in radians. */
   readonly restTurnAngle: number;
   readonly group: THREE.Group;
   readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
@@ -108,7 +93,7 @@ interface Card {
   readonly restAt: THREE.Vector3;
   readonly restTurn: THREE.Quaternion;
   readonly side: number;
-  /** How deep it is: its picture's shape, the land's, as wide as `side`; square with no picture. */
+  /** Its depth: `side` divided by its picture's aspect, which is the land's, or `side` with no picture. */
   readonly deep: number;
 }
 
@@ -118,9 +103,8 @@ const ease = (x: number): number => {
 };
 
 /**
- * The start's own light, sky and wind: a fair spring morning. The start is the room before any world is chosen, so its
- * light stands in for no world's; a world's wait takes its first night from it, since every light Jev can compose is as
- * dark as any other at a given hour.
+ * The start page's light, sky and wind: a fair spring morning. No world is chosen yet, so this light represents none. A
+ * world's wait takes its first darkness from it, because every light Jev can compose is equally dark at a given hour.
  */
 export const START_SKY: Blueprint = blueprintOf("world", {
   light: { use: "daylight@1", params: { path: "middling", warmth: "neutral", brush: "painterly", moon: "silver moon", stars: "many" } },
@@ -144,13 +128,13 @@ const meadow = (() => {
 })();
 
 /**
- * The table for `worlds`, with Gaia's `logo` on its sheet. `deckle` is the wait's sheet's torn edge (`DECKLE_MASK`), which
- * a chosen card takes as its own as it becomes that sheet.
+ * Creates the table for `worlds`, with Gaia's `logo` on its sheet. `deckle` is the wait's sheet's torn edge mask
+ * (`DECKLE_MASK`), which a chosen card takes as it becomes that sheet.
  */
 export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], logo: HTMLImageElement, deckle: HTMLImageElement, size: { w: number; h: number; dpr: number }): TableScene {
   const canvas = document.createElement("canvas");
-  // Opaque: the table is always whole behind the wait, and the focus pass writes every pixel. Targets still clear to
-  // nothing, so the lifted card's own layer is clear around it.
+  // The canvas is opaque because the table always fills the view behind the wait and the focus pass writes every
+  // pixel. Render targets still clear to transparent, so the lifted card's own layer is clear around it.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setClearColor(0x000000, 0);
@@ -166,11 +150,11 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   const casterBox = Array.from({ length: MAX_CASTERS }, () => new THREE.Vector4());
   const casterSoft = Array.from({ length: MAX_CASTERS }, () => new THREE.Vector4());
   const casterCount = { value: 0 };
-  /** The shadow of a card being lifted: its box on the table, and its turn, strength, softness and the height above which nothing takes it. */
+  /** The lifted card's shadow: its box on the table, then its rotation, strength, softness and the height above which nothing receives it. */
   const heldBox = new THREE.Vector4();
   const heldShade = new THREE.Vector4();
   const surface = { uCasterBox: { value: casterBox }, uCasterSoft: { value: casterSoft }, uCasterCount: casterCount, uHeldBox: { value: heldBox }, uHeldShade: { value: heldShade } };
-  /** A caster: its middle on the table, half size, turn, how dark its shade, how far it spreads, and the surface it belongs to. */
+  /** Adds a caster: its center on the table, half size, rotation, shade darkness, spread, and the surface it belongs to. Returns its index. */
   const addCaster = (x: number, z: number, hx: number, hz: number, turn: number, dark: number, soft: number, self: number): number => {
     const i = Math.min(MAX_CASTERS - 1, casterCount.value++);
     casterBox[i]?.set(x, z, hx, hz);
@@ -202,7 +186,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
 
   // ---------- the sheet, folded in four ----------
   const { w: sw, h: sh, turn: sheetTurn } = l.sheet;
-  /** How far the sheet lifts off the table at a point of it: settling into its folds, two corners curling, a slight wave. */
+  /** How far the sheet rises off the table at a point: dips at its folds, two curled corners and a slight wave. */
   const sheetLift = (sx: number, sy: number): number => {
     const u = sx / sw;
     const v = sy / sh;
@@ -211,7 +195,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   };
   const cosT = Math.cos(sheetTurn);
   const sinT = Math.sin(sheetTurn);
-  /** A point of the sheet (metres from its far left corner) in the world, `above` its surface. */
+  /** Converts a sheet point, in metres from its far left corner, to a world point `above` the sheet's surface. */
   const onSheet = (sx: number, sy: number, above = 0): THREE.Vector3 => {
     const lx = sx - sw / 2;
     const lz = sy - sh / 2;
@@ -224,7 +208,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   let restFocus = 1.4;
   let restFar = 1.6;
   place();
-  // The ink at about the screen's own resolution: the sheet's width on the screen, with some to spare.
+  // Paints the ink at about screen resolution: the sheet's on-screen width in device pixels, with some to spare.
   const across = (() => {
     const a = onSheet(0, sh / 2).project(camera);
     const b = onSheet(sw, sh / 2).project(camera);
@@ -279,10 +263,10 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   const middle = onSheet(sw / 2, sh / 2);
   addCaster(middle.x, middle.z, sw / 2 - 0.004, sh / 2 - 0.004, sheetTurn, 0.45, 0.005, 0);
 
-  // ---------- the cards: each world's map on its own torn card, laid a little askew, bowed, one corner lifted ----------
+  // ---------- the cards: each world's map on a torn card, slightly rotated and bowed, with one corner curled ----------
   const pictures: THREE.Texture[] = [];
   const cards: Card[] = [];
-  /** Card `i` at `c` on the sheet, with its picture, as deep as `deep`. */
+  /** Builds card `i` at `c` on the sheet, with its picture and depth `deep`. */
   const makeCard = (i: number, c: CardPlace, picture: HTMLImageElement | HTMLCanvasElement | null, deep: number): Card => {
     const r = seeded(500 + i * 13);
     const turn = (r() - 0.5) * 0.09;
@@ -334,14 +318,14 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   for (const [i, w] of worlds.entries()) {
     const c = l.cards[i];
     if (c === undefined) break;
-    // The card takes its picture's shape, the shape of its world's land (or the wait's sheet), as wide as its place on the sheet.
+    // The card takes its picture's aspect, which is its land's or the wait's sheet's, at the width of its place on the
+    // sheet. A picture taller than wide gives a square card.
     const [pw, ph] = w.picture instanceof HTMLImageElement ? [w.picture.naturalWidth, w.picture.naturalHeight] : [w.picture?.width ?? 1, w.picture?.height ?? 1];
     cards.push(makeCard(i, c, w.picture, c.side * Math.min(1, ph / Math.max(1, pw))));
   }
   /**
-   * A fresh card's place. On an empty sheet, the middle of the room between the words and the line. Among the offered
-   * cards, on the line where an address is written and the folder's words lie, where the person just asked for it,
-   * small enough to clear the names above it.
+   * A fresh card's place. On an empty sheet, it is centered between the heading and the line. Among offered cards, it
+   * lies on the address line and folder text, where the person just asked for it, small enough to clear the names above.
    */
   const freshPlace = (): CardPlace => {
     if (l.cards.length === 0) {
@@ -453,7 +437,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const at = onSheet(sw / 2, sh * (l.phone ? 0.5 : 0.52));
     const back = new THREE.Vector3(0, Math.sin(pitch), Math.cos(pitch));
     const corners = [onSheet(0, 0), onSheet(sw, 0), onSheet(0, sh), onSheet(sw, sh)];
-    // The lantern and the inkwell stay whole in the view too, nearer its edge than the sheet may go: the box round each.
+    // The lantern and the inkwell must also fit in the view, though nearer its edge than the sheet may be. These are the
+    // corners of each one's box.
     const things = ([[l.lantern, LANTERN_BOX], [l.inkwell, INKWELL_BOX]] as const).flatMap(([[x, z], { r, h }]) =>
       [-r, r].flatMap((dx) => [-r, r].flatMap((dz) => [0, h].map((dy) => new THREE.Vector3(x + dx, TOP + dy, z + dz)))),
     );
@@ -475,8 +460,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const reach = corners.map((c) => camera.position.distanceTo(c));
     restFocus = Math.min(...reach) * 0.97;
     restFar = Math.max(...reach) * 1.03;
-    // The table top reaches past every corner of the view, so a very wide or tall window never sees past it: where it
-    // already does, it keeps its own size.
+    // The table top grows to reach past every corner of the view, so a very wide or tall window never shows its edge.
+    // Where it already reaches, it keeps its own size.
     const seen = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([x, y]) => {
       const ray = new THREE.Vector3(x, y, 0.5).unproject(camera).sub(camera.position).normalize();
       return camera.position.clone().addScaledVector(ray, (TOP - camera.position.y) / Math.min(-1e-3, ray.y));
@@ -516,7 +501,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   let lifted: Card | null = null;
   /** How much of the risen card still shows over the table (`withdraw`). */
   let liftShown = 1;
-  /** Whether the chosen card is a fresh one not yet coming down onto the sheet, so nowhere to be seen. */
+  /** Whether the chosen card is a fresh one that has not started coming down onto the sheet, so it is hidden. */
   let unlaid = false;
   /** How much of the wait's sheet's shadow the risen card casts, as it becomes that sheet. */
   let shadowShown = 0;
@@ -554,8 +539,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const down = 1 - ease((t + LAY_S) / LAY_S);
     const raised = c.restAt.clone().add(new THREE.Vector3(0, 0.04 * a + 0.22 * down, 0.3 * down));
     const straight = c.restTurn.clone().slerp(new THREE.Quaternion(), a);
-    // The wait's sheet: the card square to the view, as large on the screen and where the wait's sheet is, which takes
-    // the card's shape when it is chosen.
+    // The end pose faces the view, at the wait's sheet's size and position on screen. The sheet took the card's aspect
+    // when the card was chosen.
     const end = to ?? { x: size.w * 0.05, y: (size.h - size.w * 0.9 * (c.deep / c.side)) / 2, w: size.w * 0.9, h: size.w * 0.9 * (c.deep / c.side) };
     const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const depth = (c.deep * size.h) / (2 * end.h * tan);
@@ -569,8 +554,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     c.group.position.copy(raised).lerp(finalAt, b);
     c.group.position.y += Math.sin(b * Math.PI) * 0.05;
     c.group.quaternion.copy(straight).slerp(finalTurn, b);
-    // As it rises it leaves the table's light and becomes the wait's sheet, drawn as the page draws that sheet: its size
-    // and the veil's night, and the sheet's own shadow under it on the table, over the box it covers on the canvas.
+    // As it rises, the card leaves the table's lighting and is drawn as the page draws the wait's sheet, with the sheet's
+    // size, the veil's night, and the sheet's own shadow under it over the box it covers on the canvas.
     const u = c.mesh.material.uniforms;
     const flat = ease((t - 0.6) / 1.0);
     (u.uFlat as THREE.IUniform).value = flat;
@@ -584,15 +569,15 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     shadowShown = flat;
     (u.uLifted as THREE.IUniform).value = b > 0 ? 1 : 0;
     (casterSoft[c.caster] as THREE.Vector4).y = 0.38 * (1 - a) * (1 - down);
-    // Its shadow is a soft box where the sun's shadow map would draw it, so it softens, slides away from the light
-    // and fades as the card rises, and never pops off the table.
+    // Its shadow is a soft box placed where the sun's shadow map would draw it, so it softens, slides away from the light
+    // and fades as the card rises, without popping off the table.
     const height = c.group.position.y - c.restAt.y;
     const from = light.uSunIntensity.value > 0.05 ? light.uSunDirection.value : light.uMoonDirection.value;
     const away = height / Math.max(0.35, from.y);
     heldBox.set(c.restAt.x - from.x * away, c.restAt.z - from.z * away, c.side / 2 - 0.004, c.deep / 2 - 0.004);
-    // Soft as paper's shadow is under an open sky: its edge spreads over a few centimetres as the card rises.
+    // Like a paper shadow under an open sky, its edge spreads over a few centimetres as the card rises.
     heldShade.set(c.restTurnAngle * (1 - a), 0.75 * THREE.MathUtils.smoothstep(height, 0, 0.01) * (1 - THREE.MathUtils.smoothstep(height, 0.03, 0.3)), 0.004 + height * 0.3, c.group.position.y - 0.003);
-    // The eye follows the card up, so the table falls out of focus as it goes.
+    // The focus follows the card up, so the table blurs as it rises.
     const toCard = camera.position.distanceTo(c.group.position);
     setU("uFocus", THREE.MathUtils.lerp(restFocus, toCard * 0.97, b));
     setU("uFocusFar", THREE.MathUtils.lerp(restFar, toCard * 1.03, b));
@@ -612,10 +597,11 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     }
     light.uEye.value.copy(camera.position);
     const rising = lifted !== null && (lifted.mesh.material.uniforms.uLifted as THREE.IUniform).value > 0;
-    // Once it has given way to the wait's sheet, the risen card is drawn no more.
+    // The risen card is no longer drawn once the wait's sheet has replaced it.
     const showing = rising && liftShown > 0;
     if (shadowDirty || lifted !== null) {
-      // Once lit, the lantern's own light washes out the long shadow the moon would give it.
+      // Once the lantern is lit, it is left out of the shadow pass, because its own light would wash out the long shadow
+      // the moon gives it.
       scene.overrideMaterial = depthOnly;
       // A chosen card shades the table with its own soft box instead (`choose`).
       shadow.render(renderer, scene, [], [ground.mesh, glass, flame, ...(light.uLanternIntensity.value > 0.3 ? [lantern] : []), ...(lifted === null ? [] : [lifted.group])]);
@@ -645,7 +631,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     renderer.render(postQuad, postCamera);
   }
 
-  /** Where a box on the sheet lies on the canvas. */
+  /** Returns the canvas rectangle of a box on the sheet. */
   const onScreen = (box: SheetBox): Rect => {
     const points = [onSheet(box[0], box[1]), onSheet(box[2], box[1]), onSheet(box[0], box[3]), onSheet(box[2], box[3])].map((p) => p.project(camera));
     const xs = points.map((p) => ((p.x + 1) / 2) * size.w);
@@ -698,7 +684,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       };
     },
     async compile() {
-      // The table's materials, the shadow pass's and the focus pass's, so the first frame waits on none of them.
+      // Compiles the table's materials, the shadow pass and the focus pass, so the first frame waits on none of them.
       await renderer.compileAsync(scene, camera);
       scene.overrideMaterial = depthOnly;
       await renderer.compileAsync(scene, camera);
@@ -726,7 +712,7 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   return api;
 }
 
-/** The triangles of a grid `nx` by `ny` cells. */
+/** Returns the triangle indices of an `nx` by `ny` cell grid. */
 function indices(nx: number, ny: number): number[] {
   const out: number[] = [];
   for (let iy = 0; iy < ny; iy++)
@@ -737,7 +723,7 @@ function indices(nx: number, ny: number): number[] {
   return out;
 }
 
-/** A grid over the sheet, `nx` by `ny` cells, each point placed in the world by `at`. */
+/** Builds an `nx` by `ny` cell grid over the sheet, placing each point in the world with `at`. */
 function grid(w: number, h: number, nx: number, ny: number, at: (sx: number, sy: number) => THREE.Vector3): THREE.BufferGeometry {
   const position = new Float32Array((nx + 1) * (ny + 1) * 3);
   const uv = new Float32Array((nx + 1) * (ny + 1) * 2);
@@ -756,7 +742,7 @@ function grid(w: number, h: number, nx: number, ny: number, at: (sx: number, sy:
   return geometry;
 }
 
-/** A quill from its nib to the tip of its vane: a tapering shaft that bows and rises off the paper, and a vane resting tilted on one edge. */
+/** Builds a quill from its nib to the tip of its vane: a tapering shaft that bows up off the paper, and a vane tilted on one edge. */
 function buildQuill(nib: THREE.Vector3, tip: THREE.Vector3, shaft: THREE.Material, vane: THREE.Material): THREE.Group {
   const group = new THREE.Group();
   const dir = tip.clone().sub(nib);

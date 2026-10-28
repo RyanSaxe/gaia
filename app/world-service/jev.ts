@@ -1,8 +1,8 @@
-// Jev through the engine: the world service's JevClient. Requests asked
-// together go to the engine as one `jev.batch`. The engine reads
-// OPENROUTER_API_KEY; the key never crosses the protocol. A request that
-// fails on its own fails only its own `ask`; the engine refuses the batch unless it
-// runs with GAIA_JEV=live. `openWorld` decides whether Jev is asked at all.
+// The world service's `JevClient`, which sends the requests made in one tick
+// to the engine as one `jev.batch`. The engine reads OPENROUTER_API_KEY
+// itself, so the key never crosses the protocol. A failed request rejects only
+// its own `ask`, and the engine refuses a whole batch unless it runs with
+// GAIA_JEV=live.
 
 import type { EngineClient, JevClient, JevRequest, JevResponse } from "@gaia/schema";
 

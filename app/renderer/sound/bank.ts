@@ -1,7 +1,7 @@
-// The world's recordings (`assets/`, CC0 field recordings cut into loops and
-// single sounds; `assets/CREDITS.md` says whose and from where) and the
-// score's (`assets/music/`), decoded for an audio context, with each one's
-// own loudness from its manifest.
+// Loads and decodes the world's recordings and the score for an audio
+// context, with each recording's loudness from its manifest. The world's
+// recordings in `assets/` are CC0 field recordings cut into loops and single
+// sounds, credited in `assets/CREDITS.md`, and the score is in `assets/music/`.
 
 import wind from "./assets/wind.ogg";
 import gusts from "./assets/gusts.ogg";
@@ -42,7 +42,7 @@ interface Entry {
 }
 const entries: Readonly<Record<string, { readonly loudness_lufs: number; readonly steps?: Entry["steps"] }>> = manifest.files;
 
-/** A recording's loudness and, for footfalls, where each one lies, from the manifest. */
+/** A recording's loudness and, for footfalls, each footfall's position, from the manifest. */
 function entry(file: string): Entry {
   const e = entries[file.replace(/\.ogg$/, "")];
   if (e === undefined) throw new Error(`The sound manifest has no ${file}.`);
@@ -74,9 +74,9 @@ const PAPER: Readonly<Record<Paper, readonly [string, string]>> = {
 const STEM_URLS: Readonly<Record<Stem, string>> = { bed, melody, shimmer, minor };
 const PHRASE_URLS: Readonly<Record<Phrase, string>> = { "day-1": day1, "day-2": day2, "day-3": day3, "day-4": day4, "night-1": night1, "night-2": night2, "ruin-1": ruin1 };
 /**
- * The beds are field recordings of air, water, birds and insects, which hold
- * little above 16 kHz: decoded at 32 kHz they take two thirds of the memory,
- * and the context plays them at its own rate.
+ * The beds are field recordings of air, water, birds and insects, with little
+ * content above 16 kHz. Decoded at 32 kHz they take two thirds of the memory
+ * they would at 48 kHz, and the context resamples them to its own rate.
  */
 const BED_RATE = 32000;
 
@@ -86,7 +86,7 @@ async function decode(ctx: BaseAudioContext, url: string): Promise<AudioBuffer> 
   return ctx.decodeAudioData(await response.arrayBuffer());
 }
 
-/** The world's recordings for `ctx`: the beds on a shelf, decoded while they may be heard (kept once decoded with `keep`), the short sounds decoded now. */
+/** Loads the world's recordings for `ctx`. The beds go on a shelf and decode while they may be heard, or stay once decoded with `keep`. The short sounds decode now. */
 export async function loadBank(ctx: BaseAudioContext, keep = false): Promise<Bank> {
   const bedDecoder = new OfflineAudioContext(2, 1, BED_RATE);
   const all = async <K extends string>(table: Readonly<Record<K, readonly [string, string]>>): Promise<Record<K, AudioBuffer>> =>
@@ -108,13 +108,14 @@ export async function loadBank(ctx: BaseAudioContext, keep = false): Promise<Ban
   return { beds: createShelf((name: Bed) => decode(bedDecoder, BEDS[name]), keep), steps, paper, lufs };
 }
 
-/** Each part's chunks: their file, laid end to end, and where each chunk lies in it, bytes. */
+/** Each part's chunks, laid end to end in one file, with each chunk's byte offset and length. */
 const CHUNKS = score.piece.chunks as Readonly<Record<Stem, readonly { readonly at: number; readonly bytes: number }[]>>;
 
 /**
- * The score for `ctx`: the piece's parts a chunk at a time and the phrases
- * whole, each decoded while it may be heard (kept once decoded with `keep`).
- * A part's file is fetched once; a chunk is decoded from its own bytes.
+ * Loads the score for `ctx`: the piece's parts a chunk at a time and the
+ * phrases whole, each decoded while it may be heard, or kept once decoded with
+ * `keep`. A part's file is fetched once, and each chunk is decoded from its own
+ * bytes.
  */
 export function loadMusic(ctx: BaseAudioContext, keep = false): MusicBank {
   const files = new Map<Stem, Promise<ArrayBuffer>>();
@@ -133,7 +134,7 @@ export function loadMusic(ctx: BaseAudioContext, keep = false): MusicBank {
     const [stem, k] = name.split(":") as [Stem, string];
     const span = CHUNKS[stem][Number(k)];
     if (span === undefined) throw new Error(`The music has no chunk ${name}.`);
-    // decodeAudioData takes its buffer over, so each chunk is decoded from a copy of its bytes.
+    // decodeAudioData takes ownership of its buffer, so each chunk is decoded from a copy of its bytes.
     return ctx.decodeAudioData((await file(stem)).slice(span.at, span.at + span.bytes));
   };
   const { frames, margin, rate } = score.piece.chunk;

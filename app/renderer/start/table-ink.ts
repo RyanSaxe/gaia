@@ -1,8 +1,7 @@
-// What is drawn on the map table's paper rather than made in its shader:
-// Gaia's logo and the words in ink on the sheet, the line an address is
-// written on, and a quill's vane. Each is a canvas painted once, at the size
-// the screen shows it; only the line's small strip is painted again as the
-// address is written.
+// Paints the map table's canvas textures that the shaders do not generate:
+// Gaia's logo and the ink text on the sheet, the address line, and a quill's
+// vane. Each canvas is painted once at its on-screen size. Only the line's
+// small strip is repainted as the address is typed.
 
 import type { StartOffer } from "../../world-service/protocol.ts";
 import type { TableLayout } from "./table-layout.ts";
@@ -10,23 +9,23 @@ import type { TableLayout } from "./table-layout.ts";
 const SERIF = '"Iowan Old Style", Georgia, "Times New Roman", serif';
 const INK = "rgba(46,34,22,0.92)";
 const INK_SOFT = "rgba(104,86,62,0.95)";
-/** The red-brown of an answer that an address leads nowhere. */
+/** The red-brown ink for the answer to an address that failed. */
 const INK_ANSWER = "rgba(120,60,36,0.92)";
 
-/** What is written on the line: the address, how far the darker stroke has run while it is asked after, and why it led nowhere. */
+/** The line's content: the typed address, how far the darker stroke has run while the address is checked, and why it failed. */
 export interface Writing {
   readonly typed: string;
-  /** 0 to 1: the darker stroke of ink along the line while the address is asked after. */
+  /** Progress from 0 to 1 of the darker ink stroke along the line while the address is checked. */
   readonly reading: number;
   readonly answer: string;
-  /** 0 to 1: the answer being written in. */
+  /** Progress from 0 to 1 of the answer being written in. */
   readonly answered: number;
 }
 
 /** A box on the sheet, metres: left, top, right, bottom. */
 export type SheetBox = readonly [number, number, number, number];
 
-/** A repeatable 0..1 from a seed: mulberry32. */
+/** Returns a repeatable 0..1 generator for a seed, using mulberry32. */
 export function seeded(seed: number): () => number {
   let s = seed >>> 0 || 1;
   return () => {
@@ -58,7 +57,7 @@ const canvasOf = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingCont
   return [c, c.getContext("2d") as CanvasRenderingContext2D];
 };
 
-/** Lettering in the map's serif, with the faint spread ink has on rough paper. */
+/** Draws text in the map's serif, with the faint spread of ink on rough paper. */
 function letter(g: CanvasRenderingContext2D, text: string, x: number, y: number, font: string, color: string, align: CanvasTextAlign = "center", spacing = 0): void {
   g.save();
   g.font = font;
@@ -73,7 +72,7 @@ function letter(g: CanvasRenderingContext2D, text: string, x: number, y: number,
   g.restore();
 }
 
-/** A line drawn with a quill: it pools where the nib first touched and thins as the ink runs low, `upTo` of the way along. */
+/** Draws a quill line up to `upTo` of its length. The ink is heavier where the nib first touched and thins as it runs low. */
 function inkLine(g: CanvasRenderingContext2D, x0: number, x1: number, y: number, mm: number, seed: number, ink: string, upTo = 1): void {
   const wobble = noise1(seed);
   const steps = 220;
@@ -99,15 +98,15 @@ function inkLine(g: CanvasRenderingContext2D, x0: number, x1: number, y: number,
 }
 
 const baseName = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
-/** Where a world lies, in italic over its name: who keeps it on GitHub, or the folder it sits in. */
+/** A world's location, shown in italic with its name: its GitHub owner, or its parent folder. */
 export const whereOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? (r.github.split("/")[0] ?? "") : r.root.includes("/") ? baseName(r.root.slice(0, r.root.lastIndexOf("/"))) : "");
 export const nameOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? (r.github.split("/")[1] ?? r.name) : r.name);
 
 /**
- * The sheet's ink, `pxPerM` pixels a metre: Gaia's logo at its head, what
- * the table offers, each world's name and where it lies beneath its card,
- * and the question over the line. Where there is no ink the canvas is clear,
- * so the paper shows through.
+ * Paints the sheet's ink at `pxPerM` pixels per metre: Gaia's logo at the top,
+ * the heading, each world's name and location beneath its card, and the
+ * prompt above the line. The canvas is clear wherever there is no ink, so the
+ * paper shows through.
  */
 export function paintSheetInk(l: TableLayout, recent: readonly StartOffer["recent"][number][], logo: HTMLImageElement, pxPerM: number): HTMLCanvasElement {
   const P = (m: number): number => m * pxPerM;
@@ -130,7 +129,7 @@ export function paintSheetInk(l: TableLayout, recent: readonly StartOffer["recen
   return c;
 }
 
-/** The largest size up to `size` at which `text` fits `width` in `font` (with "{}" for the size), its letters spaced by `spacing` ems; no smaller than `least` of it. */
+/** The largest size up to `size` at which `text` fits `width` in `font`, where "{}" in `font` is the size and letters are spaced by `spacing` ems. The result is at least `least` times `size`. */
 function fitted(g: CanvasRenderingContext2D, text: string, font: string, size: number, width: number, spacing: number, least = 0.55): number {
   g.save();
   g.font = font.replace("{}", String(size));
@@ -141,10 +140,10 @@ function fitted(g: CanvasRenderingContext2D, text: string, font: string, size: n
 }
 
 /**
- * A world's name in the map's spaced capitals, fitted to `width`: on one
- * line, a little smaller if need be, or broken onto two at the mark nearest
- * its middle (a hyphen, a dot, a slash) when that keeps it larger, and its
- * end left off only when even two lines at half its size will not hold it.
+ * Fits a world's name, in the map's spaced capitals, to `width`. It uses one
+ * line, shrunk a little if needed, or two lines split at the hyphen, dot or
+ * slash nearest the middle when that keeps the text larger. The end is cut
+ * off only when even two lines at half size do not fit.
  */
 function nameLines(g: CanvasRenderingContext2D, name: string, size: number, width: number): { lines: string[]; size: number } {
   const font = `600 {}px ${SERIF}`;
@@ -155,12 +154,12 @@ function nameLines(g: CanvasRenderingContext2D, name: string, size: number, widt
   const lines = [name.slice(0, at).trim(), name.slice(at).trim()];
   const two = Math.min(...lines.map((t) => fitted(g, t, font, size, width, 0.17, 0)));
   if (two <= one) return { lines: [name], size: Math.max(one, size * 0.5) };
-  // A hair under the exact fit, so measuring again never finds it a hair too wide.
+  // Slightly under the exact fit, so measuring again never finds it a little too wide.
   const shown = Math.max(two * 0.98, size * 0.5);
   return { lines: lines.map((t) => clipped(g, t, font.replace("{}", String(shown)), width, shown * 0.17)), size: shown };
 }
 
-/** `text` with its end left off, so it fits `width` in `font`. */
+/** Cuts the end of `text`, adding an ellipsis, so it fits `width` in `font`. */
 function clipped(g: CanvasRenderingContext2D, text: string, font: string, width: number, spacing: number): string {
   g.save();
   g.font = font;
@@ -171,7 +170,7 @@ function clipped(g: CanvasRenderingContext2D, text: string, font: string, width:
   return shown;
 }
 
-/** The strip of the sheet the line's writing takes: the line, the address on it, an answer beneath and the folder's words. */
+/** The strip of the sheet used by the line's writing: the line, the address on it, an answer below and the folder text. */
 export function writingBox(l: TableLayout): SheetBox {
   const mid = (l.line.x0 + l.line.x1) / 2;
   const half = (l.line.x1 - l.line.x0) / 2 + 0.11;
@@ -179,12 +178,12 @@ export function writingBox(l: TableLayout): SheetBox {
 }
 
 /**
- * Paints the line's strip onto `g` (`writingBox`, `pxPerM` pixels a metre):
- * the ink line, the address written on it or a pale "github.com/…" while it
- * is empty, a darker stroke running along it while the address is asked
- * after, an answer beneath in red-brown ink, and "or open a folder on this
- * computer" with a pencilled underline, moved down to make room for an
- * answer. Returns where the folder's words lie on the sheet.
+ * Paints the line's strip (`writingBox`) onto `g` at `pxPerM` pixels per
+ * metre: the ink line, the address on it or a pale "github.com/…" while it is
+ * empty, a darker stroke along it while the address is checked, an answer
+ * below in red-brown ink, and "or open a folder on this computer" with a
+ * pencilled underline, moved down to make room for an answer. Returns the
+ * folder text's box on the sheet.
  */
 export function paintWriting(g: CanvasRenderingContext2D, l: TableLayout, w: Writing, pxPerM: number): SheetBox {
   const [bx, by, wx1] = writingBox(l);
@@ -223,7 +222,7 @@ export function paintWriting(g: CanvasRenderingContext2D, l: TableLayout, w: Wri
   return [mid - half, folderY - ln.size * 1.1, mid + half, folderY + ln.size * 0.6];
 }
 
-/** `text` as written on the line: its end, if it runs past the line. */
+/** Returns `text` as written on the line, keeping only its end, after an ellipsis, when it runs past the line. */
 function fit(g: CanvasRenderingContext2D, text: string, font: string, width: number): string {
   g.save();
   g.font = font;
@@ -233,7 +232,7 @@ function fit(g: CanvasRenderingContext2D, text: string, font: string, width: num
   return shown === text ? text : `…${shown.slice(1)}`;
 }
 
-/** `text` broken into lines no wider than `width` in `font`. */
+/** Breaks `text` into lines no wider than `width` in `font`. */
 function wrap(g: CanvasRenderingContext2D, text: string, font: string, width: number): string[] {
   g.save();
   g.font = font;
@@ -251,24 +250,24 @@ function wrap(g: CanvasRenderingContext2D, text: string, font: string, width: nu
   return lines;
 }
 
-/** A canvas for the line's strip at `pxPerM` pixels a metre. */
+/** Creates a canvas for the line's strip at `pxPerM` pixels per metre. */
 export function writingCanvas(l: TableLayout, pxPerM: number): HTMLCanvasElement {
   const [x0, y0, x1, y1] = writingBox(l);
   return canvasOf((x1 - x0) * pxPerM, (y1 - y0) * pxPerM)[0];
 }
 
 /**
- * A quill's vane unrolled: x along the shaft from its cut end, y across it,
- * the shaft at the middle. Barbs angle back from the shaft, pale with a
- * grey-brown band, split here and there as a used feather's are, with soft
- * down where the vane begins.
+ * Paints a quill's vane as a flat texture: x runs along the shaft from its cut
+ * end, and y across it with the shaft in the middle. Barbs angle back from the
+ * shaft, pale with a grey-brown band and split in places like a used
+ * feather's, with soft down where the vane begins.
  */
 export function paintFeather(w: number, h: number, seed: number): HTMLCanvasElement {
   const [c, g] = canvasOf(w, h);
   const r = seeded(seed);
   const n = noise1(seed + 4);
   const mid = h / 2;
-  // Narrow where the vane begins, widest two thirds along, rounding to the tip; one side narrower than the other.
+  // The vane is narrow at its base, widest two thirds along and rounded at the tip, with one side narrower than the other.
   const half = (t: number, side: number): number => {
     const body = Math.sin(Math.min(1, t / 0.92) * Math.PI * 0.62) * (1 - Math.pow(Math.max(0, t - 0.7) / 0.3, 2.2) * 0.85);
     return Math.max(0, body) * (h / 2 - 2) * (side > 0 ? 1 : 0.72);

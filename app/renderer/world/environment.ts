@@ -1,7 +1,7 @@
-// The sky over every world, driven entirely by a WorldLook: a dome with its
-// gradient, hour glow, sun, moon, stars and one parametric cloud shader. Also
-// the flat painted ground the start's map table stands on, and the sward's
-// paint that the walked world's ground shares with it.
+// Renders the sky over every world from a `WorldLook`: a dome with its
+// gradient, hour glow, sun, moon, stars and one parametric cloud shader. It
+// also renders the flat painted ground under the start page's map table, and
+// defines the sward paint that the walked world's ground shares with it.
 
 import * as THREE from "three";
 import type { Rgb } from "@gaia/schema";
@@ -33,11 +33,11 @@ float tuftMask(vec2 xz) {
 
 /**
  * The ground under grass, painted in the cover's own colors with short
- * brushed strokes, so where far blades thin out the ground still reads as the
- * same cover. Close by, looking down, the paint is the shaded base of the
- * sward between the blades; farther, where only blade tops show, it takes
- * their colors. `lift` moves the paint from the low color toward the high one.
- * Uses the includer's \`noise(vec2)\` and \`cameraPosition\`.
+ * brushed strokes, so it still looks like the same cover where distant blades
+ * thin out. Up close, looking down, the paint is the shaded base of the sward
+ * between the blades. Farther away, where only blade tops show, it takes their
+ * colors. `lift` moves the paint from the low color toward the high one. Uses
+ * the including shader's \`noise(vec2)\` and \`cameraPosition\`.
  */
 export const SWARD_GLSL = /* glsl */ `
 float swardDab(vec2 p, mat2 turn) {
@@ -238,7 +238,7 @@ void main() {
 
 export interface Sky {
   readonly mesh: THREE.Mesh;
-  /** The hour's sky, clouds, moon and stars, and the air every distance dissolves into. */
+  /** Applies the hour's sky, clouds, moon and stars, and the fog that distant land fades into. */
   apply(look: Pick<WorldLook, "light" | "sky" | "fog">): void;
 }
 
@@ -312,7 +312,7 @@ void main() {
 }
 `;
 
-/** Ground light: a gentle wrap so a low sun still reads as light, not dusk; at night, the moon and the lantern. */
+/** Ground lighting with a gentle wrap, so a low sun still looks like daylight, not dusk. At night the moon and the lantern light it. */
 const GROUND_LIGHT_GLSL = /* glsl */ `
 vec3 groundLit(vec3 albedo, vec3 world) {
   float nDotL = clamp(uSunDirection.y * 1.1 + 0.22, 0.0, 1.0);
@@ -358,7 +358,7 @@ export interface Ground {
   apply(look: WorldLook): void;
 }
 
-/** The ground reads the mean vitality of what grows on it. */
+/** The ground's uniforms. `uVitality` is the mean vitality of what grows on it. */
 export interface GroundUniforms {
   readonly uVitality: { value: number };
 }
@@ -377,7 +377,7 @@ export function createGround(light: SceneLight, shared: GroundUniforms): Ground 
     fragmentShader: GROUND_FRAG,
     uniforms: { ...light, ...u, uVitality: shared.uVitality },
   });
-  // Out past the distance where land dissolves into the sky, so no edge can show.
+  // Extends 150 m past `AIR.dissolveEnd`, where land fades into the sky, so no edge can show.
   const geometry = new THREE.CircleGeometry(AIR.dissolveEnd + 150, 96);
   geometry.rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(geometry, material);

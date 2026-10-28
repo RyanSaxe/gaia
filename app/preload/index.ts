@@ -1,6 +1,6 @@
-// The preload script: marks the page as running inside the app, passes the
-// world service's MessagePort from main into the page, and lets the start
-// page ask main for a folder.
+// Marks the page as running inside the app, passes the world service's
+// MessagePort from main to the page, and lets the start page ask main for a
+// folder.
 
 import { contextBridge, ipcRenderer } from "electron";
 
@@ -10,6 +10,6 @@ contextBridge.exposeInMainWorld("gaiaShell", {
 });
 
 ipcRenderer.on("gaia:world-port", (event) => {
-  // Ports cannot cross the context bridge; window.postMessage can carry them.
+  // The context bridge cannot pass ports, so the script forwards them with `window.postMessage`.
   window.postMessage("gaia:world-port", "*", event.ports);
 });

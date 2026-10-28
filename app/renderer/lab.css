@@ -1,7 +1,7 @@
-/* The page: the world, full screen, and the paper laid over it. */
+/* The page's styles: the full-screen world and the paper UI over it. */
 :root {
   color-scheme: light dark;
-  /* How anything painted washes in: the wait's layers and the minimap's land. */
+  /* The fade-in for painted layers: the wait's layers and the minimap's land. */
   --wash-in: opacity 1.4s ease-out;
   --bg: #f3f0e8;
   --panel: #fbfaf6;
@@ -32,17 +32,17 @@ body { font: 12.5px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overfl
 [hidden] { display: none !important; }
 
 /* ---------- the world, full screen ---------- */
-/* A phone's browser bars cover part of 100vh; 100dvh is the height left visible. */
+/* A phone's browser bars cover part of 100vh. 100dvh is the visible height. */
 #shell { position: relative; height: 100vh; height: 100dvh; }
 .world, .stage { position: absolute; inset: 0; }
 .stage { overflow: hidden; }
-/* While a world first opens, the wait (app/renderer/wait/wait.css) covers the stage; it lifts once the world stands. */
+/* While a world first opens, the wait (app/renderer/wait/wait.css) covers the stage. It lifts once the world is built. */
 .veil { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; background: linear-gradient(#b9cfe0, #dfe6df 62%, #c9d3b8); color: #46524a; font-size: 13px; letter-spacing: 0.02em; transition: opacity 0.9s ease, visibility 0s linear 0.9s; }
 .veil.lifted { opacity: 0; visibility: hidden; pointer-events: none; }
 .view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .view:active { cursor: grabbing; }
 button { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 6px 10px; cursor: pointer; }
-/* Only a real hover: a tap would leave the accent stuck on a touch screen. */
+/* Only for a real hover, because a tap would leave the accent stuck on a touch screen. */
 @media (hover: hover) { button:hover { border-color: var(--accent); } }
 /* Touch targets of at least 44 px on a narrow screen. */
 @media (max-width: 699px) { button { min-height: 44px; } }
@@ -56,13 +56,13 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 :root.touch .touch-only { display: revert; }
 :root.touch .mouse-only { display: none; }
 
-/* ---------- the immersive world: only the world, and one quiet way of knowing where you are ---------- */
-/* Everything here belongs to the world's look: warm paper, ink, a serif, and slow, soft motion. */
+/* ---------- the immersive layer: the world and its wayfinding paper ---------- */
+/* Everything here follows the world's look: warm paper, ink, a serif font and slow, soft motion. */
 @keyframes veil-breathe { from { transform: translateY(0); } to { transform: translateY(-3px); } }
-/* While the veil is down (the first bake, or a question asked later), nothing of the world's paper sits over it. */
+/* While the veil is down, during the first bake or a later question, the wayfinding paper is hidden. */
 .world:has(.veil:not(.lifted)) .wayfinding { opacity: 0; }
 .world:has(.veil:not(.lifted)) .wayfinding button { pointer-events: none !important; }
-/* Paper coming and going: the wait's slip (wait/wait.css) uses these. */
+/* Animations for paper entering and leaving, also used by the wait's slip (wait/wait.css). */
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes page-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px); } }
 
@@ -71,18 +71,18 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
   position: absolute; inset: 0; z-index: 3; pointer-events: none;
   font-family: "Iowan Old Style", Georgia, "Times New Roman", serif;
 }
-/* Weightless, so a button that sets its own type, such as the journal's folds and references, keeps it. */
+/* `:where` gives this rule no specificity, so a button that sets its own font, such as the journal's folds and references, keeps it. */
 :where(.wayfinding) button { pointer-events: auto; font-family: inherit; }
-/* Until the first world stands, the veil speaks alone; then the layer comes in as the veil lifts. */
+/* The wayfinding layer stays hidden until the first world is built, then fades in as the veil lifts. */
 .wayfinding { opacity: 0; transition: opacity 0.9s ease 0.2s; }
 .wayfinding.standing { opacity: 1; }
 .wayfinding:not(.standing) button { pointer-events: none !important; }
 
-/* Where you are: the minimap, a torn scrap of the field map, its land turned so the way the
-   person faces is always up. The paint thins out into bare paper at its torn edge, and it lies close on the view
-   under a light shadow. The area's name is lettered across its land as the map letters areas; the old name fades as
-   the new one is written. A tap on its land unfolds the map out of it; a tap on its edge tucks it below the screen's
-   foot, leaving its top 50 px, and a tap there brings it back, slowly. */
+/* The minimap, a torn scrap of the field map, rotated so the person's facing direction is always up. Its paint thins
+   into bare paper at the torn edge, and it sits on the view under a light shadow. The current area's name is lettered
+   across its land in the field map's style, and the old name fades as the new one appears. A tap on its land opens the
+   field map. A tap on its edge slides it below the bottom of the screen, leaving its top 50 px visible, and a tap there
+   slowly brings it back. */
 .minimap {
   --side: 156px; --foot: max(18px, env(safe-area-inset-bottom));
   position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: var(--foot); width: var(--side); height: var(--side);
@@ -90,9 +90,9 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 }
 .minimap.on { opacity: 1; }
 .minimap.tucked { translate: 0 calc(var(--side) + var(--foot) - 50px); }
-/* The paper and its shadow are still, so they are drawn once: only the land turns, and no blur lies over it, which
-   would be drawn again every frame it turns. After dark the lantern reads the paper and the land alike, and a still
-   veil warms its middle and lets its edges fall into blue. */
+/* The paper and its shadow do not move, so they are drawn once. Only the land rotates, and nothing blurs over it,
+   because a blur would be redrawn on every frame of rotation. After dark the lantern tint covers the paper and the land
+   alike, and a fixed overlay warms the middle and darkens the edges to blue. */
 .minimap-paper {
   position: absolute; inset: 0; pointer-events: none;
   filter: drop-shadow(0 0.5px 0.8px rgba(30, 22, 10, 0.24)) drop-shadow(0 3px 6px rgba(30, 22, 10, 0.15)) sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.22));
@@ -116,9 +116,9 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .minimap-land.painted { opacity: 1; }
 .minimap-here { position: absolute; left: 50%; top: 60%; width: 0; height: 0; }
 .minimap-here .field-map-traveller { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; overflow: visible; }
-/* Walking up to a thing: a vermilion pencil ring drawn round it, its name over it in the traveller's hand. The name
-   breaks where map-names.ts lets it (`nameBreaks`) onto at most two lines of about one length, 136 px wide at most,
-   ending in an ellipsis past that, and minimap.ts sets where it stands on the paper. */
+/* The thing the person walks up to: a vermilion pencil ring around it, with its name above in handwriting. The name
+   breaks where `nameBreaks` in map-names.ts allows, onto at most two lines of similar length, at most 136 px wide,
+   with an ellipsis past that. minimap.ts sets its position on the paper. */
 .minimap-mark { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; transition: opacity 0.4s ease; }
 .minimap-mark.on { opacity: 1; }
 .minimap-mark svg { position: absolute; left: 50%; top: 50%; translate: -50% -50%; overflow: visible; }
@@ -131,8 +131,8 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
   font: 600 12.5px/1.05 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive;
   text-shadow: 0 0 3px rgba(246, 238, 219, 0.95), 0 0 6px rgba(246, 238, 219, 0.8);
 }
-/* The area's name, lettered across the land as the field map letters areas: upright, widely spaced capitals with a
-   narrow edge of paper round the letters, and a name that repeats carries just enough of its path above it. */
+/* The area's name across the land, in the field map's lettering: upright, widely spaced capitals with a narrow paper
+   halo. A name that repeats shows just enough of its path above it to tell the areas apart. */
 .minimap-names { position: absolute; left: 14px; right: 14px; top: 11px; transition: opacity 0.4s ease; }
 .minimap-name {
   position: absolute; left: 0; right: 0; top: 0; display: grid; justify-items: center; color: #3a2f22; opacity: 0;
@@ -147,18 +147,18 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
   font-weight: 600; line-height: 1.3; text-transform: uppercase; letter-spacing: 0.17em; margin-right: -0.17em; -webkit-text-stroke-width: 4.5px;
   max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* Taps land a little past the torn edge too: the outer 16 px and the 6 px beyond tuck the minimap away. */
+/* The tap target extends 6 px past the torn edge. A tap on the outer 16 px or the 6 px beyond slides the minimap away. */
 .minimap-touch { position: absolute; inset: -6px; z-index: 2; pointer-events: auto; cursor: pointer; }
 .minimap:not(.on) .minimap-touch { pointer-events: none; }
 .wayfinding:has(.field-map.open) .minimap { opacity: 0; transition-duration: 0.25s; }
 .wayfinding:has(.field-map.open) .minimap-touch { pointer-events: none; }
 .wayfinding:has(.jump-cover.on) .minimap-names { opacity: 0; }
 
-/* A thing's page: a page of the traveller's sketchbook at the lower left, risen from the bottom edge while the
-   person stops at a thing and sunk below it when they walk away. The pen draws the sketch as it rises, and the
-   notes and their pencil leaders come in after. The rest is folded up behind the face along the crease at its
-   foot: a tap swings it down as the page lifts to show it, and another folds it up. Only transforms, opacity and
-   the pen's dash move it, and no filter lies on anything that moves, so a page at rest costs nothing a frame. */
+/* A thing's page: a sketchbook page at the lower left that rises from the bottom edge while the person stops at a
+   thing, and sinks when they walk away. The sketch draws in as it rises, and the notes and their pencil leaders fade
+   in after. The rest of the page is folded up behind the face along the crease at its bottom. A tap unfolds it as the
+   page lifts to show it, and another tap folds it up. Only transforms, opacity and the pen's dash animate, and nothing
+   that moves has a filter, so a page at rest costs nothing per frame. */
 .thing-page {
   position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: 0; width: min(300px, calc(100vw - 36px));
   pointer-events: none; transition: opacity 0.4s ease;
@@ -169,17 +169,17 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 }
 .thing-page.on .thing-page-lift { transform: translateY(-18px) rotate(-0.6deg); transition: transform 1.1s cubic-bezier(0.2, 0.75, 0.25, 1); pointer-events: auto; cursor: pointer; }
 .thing-page.on.unfolded .thing-page-lift { transform: translateY(calc(-18px - var(--rest-h, 0px))) rotate(-0.6deg); transition-duration: 1s; }
-/* Each sheet's shadow falls from its torn edge, and after dark it is read by the lantern, warmer and dimmer: the
-   sheet is drawn once with its shadow and carried by the page's transforms. */
+/* Each sheet's shadow follows its torn edge, and after dark the lantern tint makes it warmer and dimmer. The sheet is
+   drawn once with its shadow, and the page's transforms move it. */
 .thing-page-sheet { filter: drop-shadow(0 1px 1.5px rgba(30, 22, 10, 0.18)) drop-shadow(0 9px 15px rgba(30, 22, 10, 0.3)) sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.2)); }
-/* The lantern's pool, as on the minimap: warm at the sheet's middle, falling into blue at its edges. */
+/* The lantern glow, as on the minimap: warm at the sheet's middle and blue at its edges. */
 .thing-page-face, .thing-page-rest {
   --lantern: radial-gradient(ellipse 90% 80% at 62% 70%, rgba(255, 214, 160, calc(var(--night, 0) * 0.1)), rgba(36, 34, 70, calc(var(--night, 0) * 0.3)));
   color: #3f3324; background: var(--lantern), radial-gradient(130% 120% at 30% 20%, #f8f1df, #eee2c4);
   -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
 }
 .thing-page-face { position: relative; padding: 14px 18px 17px; }
-/* The crease along the face's foot, where the rest is folded up behind it. */
+/* The crease along the bottom of the face, where the rest of the page folds up behind it. */
 .thing-page-crease {
   position: absolute; left: 0; right: 0; bottom: 0; height: 12px; pointer-events: none; transition: opacity 0.6s ease;
   background: linear-gradient(rgba(80, 60, 30, 0), rgba(80, 60, 30, 0.1)); border-bottom: 1px solid rgba(90, 68, 40, 0.28);
@@ -215,7 +215,7 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .thing-page-note.under { right: 0; bottom: 0; text-align: right; }
 .thing-page-where { margin-top: 6px; font-size: 8.5px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-soft); overflow-wrap: anywhere; }
 .thing-page-drawing + .thing-page-title { margin-top: 6px; }
-/* Its name lettered as the map letters names, and its vitality beside it as a reading in the traveller's hand. */
+/* The thing's name in the map's lettering, with its vitality beside it in handwriting. */
 .thing-page-title { display: flex; align-items: baseline; gap: 12px; }
 .thing-page-name { flex: 1; min-width: 0; font-size: 24px; font-style: italic; font-weight: 600; line-height: 1.1; overflow-wrap: anywhere; }
 .thing-page-vitality { font: 18px/1 "Bradley Hand", "Segoe Print", "Iowan Old Style", Georgia, cursive; color: #5a3e26; white-space: nowrap; }
@@ -226,19 +226,20 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .thing-page-facts dd { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
 .wayfinding:has(.field-map.open) .thing-page { opacity: 0; }
 
-/* The quiet buttons: small rounds of paper at the corners. */
+/* The corner buttons: small paper circles. */
 .way-button {
   position: absolute; width: 44px; height: 44px; padding: 9px; border-radius: 50%;
-  /* No backdrop blur: blurring the world behind would cost the compositor every frame. */
+  /* No backdrop blur, because blurring the world behind would cost the compositor every frame. */
   background: rgba(247, 241, 227, 0.76); color: var(--ink); border: 1px solid rgba(74, 60, 44, 0.16);
   box-shadow: 0 2px 10px rgba(30, 22, 10, 0.14);
   transition: opacity 0.4s ease, background 0.2s ease;
 }
 .way-button svg { width: 100%; height: 100%; display: block; }
 @media (hover: hover) { .way-button:hover { background: rgba(247, 241, 227, 0.9); border-color: rgba(74, 60, 44, 0.3); } }
-/* The compass, where the menu's rose was: a round of the map's paper whose ring of ticks stays put, its top tick the
-   way you face, and a needle that alone turns to point north (compass.ts). A tap on it opens the slip. The face is
-   still and casts the shadow; the needle turns on its own layer. After dark the lantern reads it as the minimap. */
+/* The compass, in the menu button's place: a circle of map paper with a fixed ring of ticks whose top tick is the
+   facing direction, and a needle that rotates to point north (compass.ts). A tap on it opens the slip. The face does
+   not move and casts the shadow, and the needle rotates on its own layer. After dark it gets the minimap's lantern
+   tint. */
 .menu-button { top: max(14px, env(safe-area-inset-top)); right: 14px; padding: 0; border: 0; background: none; box-shadow: none; }
 @media (hover: hover) { .menu-button:hover { background: none; } }
 .menu-button svg { position: absolute; inset: 0; overflow: visible; }
@@ -246,16 +247,16 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .compass-needle { will-change: transform; filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.22)); }
 .wayfinding:has(.field-map.open) .menu-button { opacity: 0; pointer-events: none !important; }
 
-/* While paper opened from the corner is read, the world waits under a faint wash; a tap there folds the paper. */
+/* While paper opened from a corner is open, a faint wash dims the world, and a tap on the world folds the paper. */
 .reading { position: absolute; inset: 0; background: rgba(40, 30, 16, 0); transition: background 0.3s ease; }
 .wayfinding:has(.way-slip.open) .reading { pointer-events: auto; background: rgba(40, 30, 16, 0.07); }
 .wayfinding:has(.field-map.open) .reading { pointer-events: auto; background: rgba(40, 30, 16, 0.26); }
-/* While a trip goes under the open journal, the world running past at the book's sides waits under a deeper wash. */
+/* During travel with the journal open, a deeper wash dims the world moving past at the book's sides. */
 .wayfinding.travelling:has(.journal.open) .reading { background: rgba(40, 30, 16, 0.5); transition-duration: 0.6s; }
 
-/* A jump from the map: the view clouds over in the map's own paper, creased where it folds, while the map folds
-   away over it; the person is placed under it and the world dissolves back in, slower than it clouded. After dark
-   the paper is read by the lantern, warmer and dimmer. */
+/* A jump from the map: the map's creased paper fades over the view while the map folds away. The person is moved
+   under the cover, and the world fades back in more slowly than it faded out. After dark the lantern tint makes the
+   paper warmer and dimmer. */
 .jump-cover {
   position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1.1s cubic-bezier(0.3, 0, 0.2, 1);
   background:
@@ -265,8 +266,8 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
   filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.45));
 }
 .jump-cover.on { opacity: 1; pointer-events: auto; transition: opacity 0.42s ease-in; }
-/* The map of where a jump lands, on the paper that covers it, coming slowly closer to the place while the land there is
-   made ready, so the view never sits still; it keeps drifting as the paper lifts into the world. */
+/* A map of the jump's destination on the cover paper. It zooms slowly toward the place while the land there loads, so
+   the view never stops moving, and keeps drifting as the paper fades into the world. */
 .jump-map {
   position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: 50% 50%;
   animation: jump-closer 90s cubic-bezier(0.2, 0.35, 0.45, 1) forwards, jump-drift 23s ease-in-out infinite alternate;
@@ -274,15 +275,15 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 @keyframes jump-closer { from { scale: 1; } to { scale: 1.6; } }
 @keyframes jump-drift { from { translate: -6px -4px; } to { translate: 6px 4px; } }
 
-/* The slip: Gaia's mark and how to wander. */
+/* The slip: Gaia's logo and the movement instructions. */
 .way-slip {
   position: absolute; top: calc(max(14px, env(safe-area-inset-top)) + 52px); right: 14px; width: min(276px, calc(100% - 28px));
   padding: 12px 10px 12px; border-radius: 10px; background: var(--paper); color: #3a3226;
   box-shadow: 0 14px 36px rgba(30, 22, 10, 0.28); opacity: 0; transform: translateY(-6px); transition: opacity 0.2s ease, transform 0.2s ease;
 }
 .way-slip.open { opacity: 1; transform: none; pointer-events: auto; }
-/* Gaia's logo, printed on the slip: multiplied into the paper, so its pale stone takes the paper's tone and the
-   lantern's at night, rather than sitting on it like a cut-out. */
+/* Gaia's logo uses `multiply` blending on the slip, so its pale stone takes the paper's tone, and the lantern's at
+   night, instead of looking pasted on. */
 .slip-mark { display: block; width: 104px; height: auto; margin: 2px auto 0; mix-blend-mode: multiply; }
 .slip-world { text-align: center; font-size: 13px; color: var(--ink-soft); margin: 2px 0 12px; }
 .slip-world i { color: var(--ink); font-size: 14.5px; font-weight: 600; }
@@ -290,7 +291,7 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .slip-wander { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 6px 12px; font-size: 13px; }
 .slip-wander dt { font-style: italic; font-weight: 600; color: var(--ink); white-space: nowrap; }
 .slip-wander dd { margin: 0; color: var(--ink-soft); }
-/* The music's and the world's levels: a thin inked line on the paper, inked as far as the level, and a round of paper to move along it. */
+/* The music and world volume sliders: a thin ink line filled up to the level, with a paper circle as the thumb. */
 .slip-sound { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; align-items: center; margin: 0 6px 4px; font-size: 13px; }
 .slip-level { display: contents; }
 .slip-level span { font-style: italic; font-weight: 600; color: var(--ink); }
@@ -303,25 +304,25 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 .slip-level input::-moz-range-thumb { width: 11px; height: 11px; border-radius: 50%; background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 0 1px 2px rgba(30, 22, 10, 0.25); }
 .slip-level input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(122, 111, 92, 0.22); }
 
-/* The field map: a sheet of paper unfolded over the world. It opens out from its folds, tilting up flat as it
-   comes, and folds away quicker than it opened. */
+/* The field map: a paper sheet unfolded over the world. It unfolds while tilting flat, and folds away faster than it
+   opened. */
 .field-map {
   --side: min(94vw, 90vh, 980px);
-  /* In the land's shape (`--aspect`, width over depth, from field-map.ts): as wide as ever, as deep as the land. */
+  /* In the land's aspect (`--aspect`, width over depth, from field-map.ts): full width, and as deep as the land. */
   --depth: calc(var(--side) / var(--aspect, 1));
   position: absolute; left: calc(50% - var(--side) / 2); top: calc(50% - var(--depth) / 2); width: var(--side); height: var(--depth);
   overflow: hidden; pointer-events: none; transform-origin: 50% 50%;
   opacity: 0; transition: opacity calc(var(--unfold, 360ms) * 0.8) ease-in calc(var(--unfold, 360ms) * 0.2), transform var(--unfold, 360ms) cubic-bezier(0.5, 0, 0.75, 0.4);
 }
 .field-map.open { opacity: 1; pointer-events: auto; transition: opacity calc(var(--unfold, 640ms) * 0.3) ease-out, transform var(--unfold, 640ms) cubic-bezier(0.2, 0.7, 0.2, 1); }
-/* The land on the sheet draws back from the minimap's close view to the whole as the sheet unfolds. */
+/* The land on the sheet zooms out from the minimap's close view to the whole land as the sheet unfolds. */
 .field-map-view { transition: transform var(--unfold, 640ms) cubic-bezier(0.25, 0.7, 0.2, 1); }
-/* The sheet's edge is torn, deckled as handmade paper is; the canvas and its creases share the one torn shape, and
-   its shadow falls from that shape. A tap off the sheet, Esc or M folds it. */
+/* The sheet has a deckled edge like handmade paper. The canvas and its creases share one torn mask, and the shadow
+   follows that shape. A tap off the sheet, Esc or M folds it. */
 .field-map-view, .field-map::after {
   -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
 }
-/* The sheet's folds stay faintly creased, and after dark the lantern's pool lights it from low on the right while its edges fall into blue. */
+/* Faint creases at the sheet's folds. After dark a lantern glow lights it from low on the right and its edges darken to blue. */
 .field-map::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply;
   box-shadow: inset 0 0 44px rgba(120, 90, 50, 0.2);
@@ -331,12 +332,12 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
     linear-gradient(0deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.11) 50%, transparent calc(50% + 1.5px)),
     linear-gradient(90deg, rgba(110, 84, 50, 0.05), transparent 12%, transparent 46%, rgba(110, 84, 50, 0.05) 50%, transparent 54%, transparent 88%, rgba(110, 84, 50, 0.05));
 }
-/* At night the sheet is read by the lantern's warm light. */
+/* At night the slip and the field map take the lantern's warm tint. */
 .way-slip { filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
 .field-map { filter: drop-shadow(0 16px 26px rgba(25, 18, 8, 0.38)) sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
 .field-map-view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
 .field-map-view:active { cursor: grabbing; }
-/* Where you are: a small traveller standing on the sheet, the file underfoot lettered beside them in ink. */
+/* The person's position: a small traveller figure on the sheet, with the file underfoot lettered beside it in ink. */
 .field-map-here { position: absolute; left: 0; top: 0; width: 0; height: 0; pointer-events: none; will-change: transform; }
 .field-map-traveller { position: absolute; left: -40px; top: -40px; width: 80px; height: 80px; overflow: visible; }
 .traveller-steps { fill: rgba(70, 48, 28, 1); }
@@ -347,7 +348,7 @@ button { font: inherit; color: var(--ink); background: var(--panel); border: 1px
 }
 
 @media (max-width: 699px) {
-  /* A phone's map fills the screen and opens close around the person, so the land's shape would only shrink it. */
+  /* On a phone the map fills the screen and opens zoomed in around the person, so the land's aspect would only shrink it. */
   .field-map { left: 8px; top: 8px; width: calc(100% - 16px); height: calc(100% - 16px); }
   .field-map { --fold: 44px; }
   .way-button { min-height: 44px; }

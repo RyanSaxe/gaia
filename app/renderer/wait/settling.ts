@@ -1,18 +1,14 @@
-// Health on the waiting sheet as it settles. The field map's land is one
-// wash of health: at each point the files around it, each weighed by its
-// size and how near its ground is, and a little of the health of the area
-// the point lies in (`healthField`). While a world opens, each file's health
-// arrives once nothing still to be judged can change it, so the wait knows
-// at every cell how much of the health it will show is settled, and what
-// that settled part says. A cell is painted only as nearly all of its health
-// is settled, in what the settled part says, so the wait never paints a color
-// it later has to change; once every file is settled, every cell is the
-// field map's health.
+// Tracks how much of each cell's vitality on the wait's sheet is settled. The
+// field map colors each point by the vitality of nearby files, weighted by size
+// and distance, plus a little of its area's own (`healthField`). A cell is
+// painted only once most of its weight is settled, so the wait never paints a
+// color it later changes, and once every file is settled every cell matches
+// the field map.
 
 import { groundVitality } from "@gaia/world";
 import { healthPrior, healthWeight } from "../immersive/map-styles.ts";
 
-/** A file on the land: its path, its area's, where it stands, how far its ground reaches and how much code it holds. */
+/** A file on the land: its path, its area's path, its position, the radius of its ground and its size. */
 export interface SettlingFile {
   readonly path: string;
   readonly area: string;
@@ -22,7 +18,7 @@ export interface SettlingFile {
   readonly size: number;
 }
 
-/** The land as cells: `n` a side, each `cell` meters, from (-reach, -reach); and each cell's nearest area, by its index in `areas` (their paths). */
+/** The land as an `n` by `n` grid of `cell`-meter cells from (-reach, -reach), with each cell's nearest area as an index into `areas`. */
 export interface SettlingLand {
   readonly n: number;
   readonly cell: number;
@@ -31,22 +27,22 @@ export interface SettlingLand {
   readonly areas: readonly string[];
 }
 
-/** Cells from `i0`, `j0` to `i1`, `j1`, all included. */
+/** An inclusive cell box from `i0`, `j0` to `i1`, `j1`. */
 export type CellBox = readonly [number, number, number, number];
 
 /**
- * How much of a cell's health must be settled before it is painted at all, and by when it is painted in full: a
- * cell painted in part already has most of its health in what it shows, so what is still to come barely moves it.
+ * The settled share of a cell's weight at which painting starts, and the share at which the cell is fully painted. A
+ * partly painted cell already shows most of its final vitality, so the rest barely changes it.
  */
 export const SHOWN: readonly [number, number] = [0.55, 0.95];
 
 export interface SettlingHealth {
-  /** Files' health settled, by path: what changed, the cells and the areas whose own ground's health is now known. */
+  /** Settles files' vitality by path. Returns the changed cell box and the areas whose own ground's vitality is now known. */
   settle(vitality: Readonly<Record<string, number>>): { readonly cells: CellBox | null; readonly grounds: readonly string[] };
-  /** How much of a cell's health is settled, 0 to 1, and its vitality as far as it is settled. */
+  /** The settled share of a cell's weight, 0 to 1, and the cell's vitality from its settled part. */
   settled(c: number): number;
   vitality(c: number): number;
-  /** How much of a cell to paint, 0 to 1: none until most of its health is settled, all once nearly all is (`SHOWN`). */
+  /** How much of a cell to paint, 0 to 1, rising smoothly between the two `SHOWN` shares. */
   paint(c: number): number;
   /** An area's own ground's vitality, once every file it pools is settled. */
   ground(path: string): number | undefined;
@@ -58,8 +54,8 @@ const smooth = (a: number, b: number, v: number): number => {
 };
 
 /**
- * Builds the settling health of `land` from its files, a step at a time so a driver can spread the work over idle
- * time: every cell's whole weight is summed first, which is what tells how much of it a settled file is.
+ * Builds the settling vitality of `land` from its files, yielding between steps so a caller can spread the work over
+ * idle time. It sums every cell's total weight first, which gives the share each settled file contributes.
  */
 export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile[], spread: number): Generator<void, SettlingHealth> {
   const { n, cell, reach, nearest, areas } = land;
@@ -69,7 +65,7 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
   const prior = healthPrior(files);
   whole.fill(prior);
   const center = (i: number): number => -reach + (i + 0.5) * cell;
-  /** The cells a file's health reaches, and its weight on each. */
+  /** Calls `each` with every cell a file's vitality reaches and its weight there, and returns their box. */
   const reachOf = (f: SettlingFile, each: (c: number, w: number) => void): CellBox | null => {
     const r = f.reach + spread * 4;
     const i0 = Math.max(0, Math.floor((f.x - r + reach) / cell));
@@ -90,7 +86,7 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
     if (k % 24 === 23) yield;
   }
 
-  // Each area's own ground pools its own files, or all of its subdirectories' where it holds none (`groundVitality`).
+  // Each area's own ground pools its own files, or its subdirectories' files when it has none (`groundVitality`).
   const byPath = new Map(files.map((f) => [f.path, f]));
   const pools = new Map<string, SettlingFile[]>();
   for (const path of areas) {
@@ -112,7 +108,7 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
 
   const grow = (box: CellBox | null, more: CellBox | null): CellBox | null =>
     box === null ? more : more === null ? box : [Math.min(box[0], more[0]), Math.min(box[1], more[1]), Math.max(box[2], more[2]), Math.max(box[3], more[3])];
-  /** An area's ground's health is known: the cells it is nearest take the little weight it has everywhere. */
+  /** Settles an area's ground vitality and adds it, at the prior weight, to every cell nearest the area. */
   const settleGround = (k: number, path: string): CellBox | null => {
     const pool = pools.get(path) ?? [];
     const v = pool.length === 0 ? 1 : (groundVitality(pool.map((f) => ({ area: f.area, vitality: health.get(f.path) ?? 1, size: f.size }))).get(path) ?? 1);
@@ -127,7 +123,7 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
     }
     return box;
   };
-  // An area with no files at all has its ground's health from the start.
+  // An area with no files has its ground vitality from the start.
   let first: CellBox | null = null;
   for (const [k, path] of areas.entries()) if ((waiting.get(path)?.size ?? 0) === 0) first = grow(first, settleGround(k, path));
   void first;

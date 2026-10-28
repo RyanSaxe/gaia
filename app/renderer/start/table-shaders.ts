@@ -1,11 +1,11 @@
-// The map table's materials: paper, oak, glaze and brass, a quill's vane,
-// the lantern's glass and flame, and the pass that blurs what lies out of
-// focus. Every one is lit by the world's own light (`LIGHT_GLSL`): the same
-// sun, sky, moon and lantern, and the same shadow map, as the land.
+// GLSL for the map table's materials: paper, oak, glaze and brass, a quill's
+// vane, the lantern's glass and flame, and the depth-of-field pass. Every
+// material uses the world's light (`LIGHT_GLSL`), with the same sun, sky,
+// moon, lantern and shadow map as the land.
 
 import { LIGHT_GLSL } from "@gaia/render";
 
-/** The most things that shade the table and the sheet where they touch them. */
+/** The most contact-shadow casters on the table and the sheet. */
 export const MAX_CASTERS = 12;
 
 const NOISE = /* glsl */ `
@@ -22,14 +22,15 @@ float fbm4(vec2 p) {
 `;
 
 /**
- * Light on the table's things. `contact` is the soft shade where something
- * touches the table or the sheet: each caster is a rounded box (its middle,
- * half size and turn) with how hard it presses down. `held` is the shadow
- * of a card being lifted from the table, a soft box where the sun's shadow
- * map would draw it, so it can soften and fade as the card rises. `softShadow` is the sun's
- * shadow map read more softly than the land reads it, since paper lies a few
- * millimetres from what shades it. `matte` lights a surface as the land's
- * materials are lit, with the lantern's warm pool falling off over the table.
+ * Lighting for the table's objects. `contact` is the soft shade where
+ * something touches the table or the sheet. Each caster is a rounded box,
+ * given by its center, half size and rotation, with how hard it presses down.
+ * `held` is the shadow of a card being lifted, a soft box where the sun's
+ * shadow map would draw it, so it can soften and fade as the card rises.
+ * `softShadow` samples the sun's shadow map more softly than the land does,
+ * because paper lies a few millimetres from what shades it. `matte` lights a
+ * surface as the land's materials are lit, with the lantern's warm glow
+ * falling off across the table.
  */
 const SURFACE = /* glsl */ `
 uniform vec4 uCasterBox[${MAX_CASTERS}];
@@ -136,17 +137,18 @@ void main() {
 `;
 
 /**
- * Paper, made here rather than painted, so nothing is painted before the
- * first frame: a warm cream with broad mottling, darker toward its rim with
- * handling; short fibres lighter and darker than the sheet, about one to
- * 55 mm²; a few foxing spots; the creases of a sheet folded in four; and a
- * fine tooth the low sun rakes across. Its edge is torn, wandering in by a
- * few millimetres at three scales with loose fibres in the tear, paler and
- * lit through, and the sheet's thickness catches the light where the edge
- * faces the sun. On it lie the ink (Gaia's logo, the words and the names),
- * the line being written on, and on a card its world's picture.
+ * Paper, generated in the shader instead of from a painted texture, so nothing
+ * has to be painted before the first frame. It is a warm cream with broad
+ * mottling, darker toward the rim from handling, with short fibres lighter and
+ * darker than the sheet at about one per 55 mm², a few foxing spots, the
+ * creases of a sheet folded in four, and a fine tooth that a low sun rakes
+ * across. The edge is torn, varying by a few millimetres at three scales, with
+ * loose fibres in the tear that are paler and lit through, and the sheet's
+ * thickness catches the light where the edge faces the sun. On top lie the ink
+ * (Gaia's logo, the text and the names), the address line, and on a card its
+ * world's picture.
  */
-/** A Gaussian blur of a box, as CSS draws a box-shadow's (its standard deviation half the blur radius). */
+/** A Gaussian-blurred box, as CSS draws a box-shadow, with a standard deviation of half the blur radius. */
 const BOX_BLUR = /* glsl */ `
 float erf_(float x) {
   float t = 1.0 / (1.0 + 0.3275911 * abs(x));
@@ -405,7 +407,7 @@ void main() {
 }
 `;
 
-/** Glaze, brass, wax and quill: a color with a sheen, metal tinting its own highlights, and the sky in what shines. */
+/** Glaze, brass, wax and quill: a color with a sheen, metal that tints its own highlights, and sky reflections on shiny surfaces. */
 export const SOLID_FRAGMENT = /* glsl */ `
 ${LIGHT_GLSL}
 ${NOISE}
@@ -435,7 +437,7 @@ void main() {
 }
 `;
 
-/** A quill's vane: its barbs drawn on a strip, scattering the light through. */
+/** A quill's vane: its barbs drawn on a strip that lets light scatter through. */
 export const FEATHER_FRAGMENT = /* glsl */ `
 ${LIGHT_GLSL}
 ${NOISE}
@@ -457,7 +459,7 @@ void main() {
 }
 `;
 
-/** The lantern's glass: the sky in it, the sun's glint, and the candle's glow once it is lit. */
+/** The lantern's glass: the sky reflected in it, the sun's glint, and the candle's glow once lit. */
 export const GLASS_FRAGMENT = /* glsl */ `
 ${LIGHT_GLSL}
 uniform float uGlow;
@@ -474,7 +476,7 @@ void main() {
 }
 `;
 
-/** The candle's flame: still, since a flicker would ask for a frame every frame. */
+/** The candle's flame. It does not flicker, because a flicker would need a new frame every frame. */
 export const FLAME_FRAGMENT = /* glsl */ `
 uniform float uGlow;
 varying vec2 vUv;
@@ -487,12 +489,12 @@ void main() {
 `;
 
 /**
- * The pass to the screen. Everything between `uFocus` and `uFocusFar` is
- * sharp, so the whole sheet reads, and the blur grows outside that band, as
- * through a camera focused on the sheet. A chosen card, drawn on its own and
- * in focus, lies over the table as much as `uLifting` says: whole while it
- * rises, then giving way to the wait's sheet laid over it. The lifted card's
- * layer is premultiplied, and the table under it is opaque.
+ * The final pass to the screen. Everything between `uFocus` and `uFocusFar` is
+ * sharp, so the whole sheet is readable, and the blur grows outside that band,
+ * as with a camera focused on the sheet. A chosen card, rendered separately and
+  * in focus, is blended over the table by `uLifting`, fully while it rises and
+  * then fading as the wait's sheet covers it. The lifted card's layer is
+  * premultiplied, and the table under it is opaque.
  */
 export const POST_VERTEX = /* glsl */ `
 void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }

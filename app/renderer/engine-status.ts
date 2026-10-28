@@ -1,5 +1,6 @@
-// The engine's state in words, for `__lab.status`. Inside the app the world
-// service reports it; a standalone page (the offline HTML) has no engine at all.
+// Reports the engine's status text for `__lab.status`. Inside the app the
+// world service sends it. A standalone page, such as the offline HTML, has no
+// engine.
 
 import { statusText } from "../world-service/protocol.ts";
 import { worldService } from "./service.ts";

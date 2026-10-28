@@ -1,25 +1,24 @@
-// The tally on the card of a world whose code has moved on since the person
-// last opened it: a stroke of the wait's graphite pencil for each commit,
-// gated in fives, with how many in words under it, drawn on the card's face,
-// bare paper or a painting, where it is read on the start's table. The card
-// turns over onto bare paper for the map, so the sheet never has it.
+// Draws a commit tally on the start page card of a world whose code has moved
+// on since the person last opened it: one graphite stroke per commit, grouped
+// in fives, with the count in words below. The card flips to bare paper before
+// the map is drawn, so the wait's sheet never shows the tally.
 
 import { rand, seedOf } from "@gaia/schema";
 import { SERIF } from "../immersive/map-names.ts";
 import { PENCIL } from "../wait/map-wait.ts";
 
-/** The most commits the tally counts in strokes, six gates of five: past it a stroke a commit no longer reads, so the card only writes the number. */
+/** The most commits the tally draws as strokes, six groups of five. Past it, one stroke per commit is no longer readable, so the card shows only the number. */
 export const TALLY_MOST = 30;
 
 const ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
 const TENS = ["", "", "twenty", "thirty"];
-/** A count up to the tally's most in words. */
+/** Spells a count below 40 in words. */
 const inWords = (n: number): string => (n < 20 ? (ONES[n] as string) : `${TENS[Math.floor(n / 10)] as string}${n % 10 === 0 ? "" : `-${ONES[n % 10] as string}`}`);
 
 /**
- * What the card says, in two lines: how many commits since the person last opened the world, in words while the tally
- * counts them and in figures past it; or, when the commit they opened is no longer in the history, only that the code
- * has changed since.
+ * The card's two lines of text: the number of commits since the person last opened the world, in words up to
+ * `TALLY_MOST` and in figures past it. When the commit they opened is no longer in the history, the text says only
+ * that the code has changed.
  */
 export function tallyWords(commits: number | null): readonly [string, string] {
   const since = "since you last opened it";
@@ -29,19 +28,19 @@ export function tallyWords(commits: number | null): readonly [string, string] {
 }
 
 /**
- * The tally's proportions, as shares of the card's height: a stroke's height and width, the room between strokes,
- * gates and lines, and the words' size, smaller only so their longer line keeps this share of the card's width. Six
- * worlds on the table make a card a few centimeters wide, and the words still read.
+ * The tally's proportions as shares of the card's height: stroke height and width, the spacing between strokes, groups
+ * and lines, and the text size. The text shrinks only to keep its longer line within the `wide` share of the card's
+ * width. With six worlds on the table a card is a few centimeters wide, and the text is still readable.
  */
 const TALLY = { stroke: 0.3, width: 0.016, apart: 0.05, gate: 0.09, gap: 0.08, line: 0.16, leading: 1.25, wide: 0.86 } as const;
 
-/** The paper's tone laid round the tally on a painting, so its strokes and words read over the paint. */
+/** A paper-toned halo drawn under the tally on a painting, so the strokes and text stand out from the paint. */
 const PAPER_ROUND = { color: "rgba(241, 231, 207, 0.78)", widen: 3.2, blur: 0.012 } as const;
 
 /**
- * Draws the tally for `commits` on the card face `w` by `h` at (`x`, `y`) of `c`, the same strokes for the same
- * `seed`, with the words under it, in the middle of the card. Past `TALLY_MOST` commits, or with `commits` null, there
- * are only the words. `onPaint`, it lies on a painting, so the paper's tone is laid round it first.
+ * Draws the tally for `commits`, centered on the `w` by `h` card face at (`x`, `y`) in `c`, with the text below it.
+ * The same `seed` gives the same strokes. Past `TALLY_MOST` commits, or when `commits` is null, only the text is drawn.
+ * With `onPaint`, the face is a painting, so the paper-toned halo is drawn first.
  */
 export function drawTally(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, commits: number | null, seed: string, onPaint = false): void {
   const [first, second] = tallyWords(commits);
@@ -53,19 +52,19 @@ export function drawTally(c: CanvasRenderingContext2D, x: number, y: number, w: 
   const head = counted > 0 ? (TALLY.stroke + TALLY.gap) * h : 0;
   const top = y + (h - head - line * (1 + TALLY.leading)) / 2;
   c.lineCap = c.lineJoin = "round";
-  /** The whole tally in `ink`, every line `widen` times as wide, each pass as dark as it is times `dark`. */
+  /** Draws the whole tally in `color`, with every line `widen` times as wide and each pass's alpha scaled by `dark`. */
   const ink = (color: string, widen: number, dark: number): void => {
     const r = rand(seedOf(`tally:${seed}`));
     c.strokeStyle = c.fillStyle = color;
     if (counted > 0) {
-      // Four strokes down, then the fifth across them, a gate at a time.
+      // Each group of five is four vertical strokes with the fifth across them.
       const gates = Math.ceil(counted / 5);
       const span = gates * 3 * TALLY.apart * h + (gates - 1) * TALLY.gate * h;
       let left = x + (w - span) / 2;
       for (let g = 0; g < gates; g++) {
         const n = Math.min(5, counted - g * 5);
         const pass = (x0: number, y0: number, x1: number, y1: number): void => {
-          // Each stroke two light passes of the pencil, a little apart, as a hand goes over a line.
+          // Each stroke is two light, slightly offset passes, as when a hand goes over a line twice.
           for (let k = 0; k < 2; k++) {
             c.globalAlpha = r.range(0.62, 0.85) * dark;
             c.lineWidth = TALLY.width * h * r.range(0.8, 1.15) * widen;

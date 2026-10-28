@@ -1,6 +1,6 @@
-// The messages the app's processes exchange. The main process only relays:
-// engine lines go to the world service, and the world service talks to the
-// renderer over its own MessagePort.
+// Defines the messages between the main process, the world service and the
+// renderer. Main only relays engine lines to and from the world service. The
+// world service talks to the renderer over its own MessagePort.
 
 import type { CodeFacts, PatchPlace, Span, Unreachable } from "@gaia/schema";
 import type { Outline, StoodSpot } from "@gaia/terrain";
@@ -10,56 +10,57 @@ import type { CodeWorld, DefinitionLines, LotPlace } from "@gaia/world";
 export type FromMain =
   /** One line the engine wrote to its stdout. */
   | { readonly type: "engine.line"; readonly line: string }
-  /** The engine process started; any earlier one is gone. */
+  /** The engine process started. Any earlier engine process has exited. */
   | { readonly type: "engine.up" }
-  /** The engine process exited; main restarts it after a short backoff. */
+  /** The engine process exited. Main restarts it after a backoff. */
   | { readonly type: "engine.down"; readonly reason: string }
-  /** A new renderer page loaded; the message carries its MessagePort, and the folder its world is of, or null when none is named yet and the page offers the start. */
+  /** A renderer page loaded. The message carries the page's MessagePort and the folder to open, or null for the start page. */
   | { readonly type: "renderer.port"; readonly root: string | null };
 
 /** World service → main process. */
 export type ToMain =
   | { readonly type: "engine.send"; readonly line: string }
-  /** A world chosen on the start page opened: main names the window after it and reopens it when the page reloads. */
+  /** The world chosen on the start page opened. Main titles the window with its name and reopens it when the page reloads. */
   | { readonly type: "world.opened"; readonly root: string; readonly name: string };
 
-/** A world opened before, newest first on the start page. */
+/** A world opened before. The start page lists them newest first. */
 export interface RecentWorld {
-  /** The folder it is the world of; for a place on GitHub, Gaia's own copy. */
+  /** The world's folder. For a GitHub repository, this is Gaia's own clone. */
   readonly root: string;
   readonly name: string;
-  /** "owner/repo" for a place on GitHub, reopened through its address so it is brought up to date. */
+  /** "owner/repo" for a GitHub repository. The start page reopens it by this address, which updates the clone first. */
   readonly github?: string;
   /** When it was last opened, ms since the epoch. */
   readonly at: number;
   /**
-   * The view where the person last stood still in it, painted as the journal paints (`world.painting`), in the land's
-   * shape: a WebP data URL about 1,040 pixels wide, which the start lays on its table as the world's card. A world
-   * kept before paintings were, or left before the person stood still in it, has none.
+   * A painting of the view where the person last stopped in this world, made the way the journal paints and sent with
+   * `world.painting`. It is a WebP data URL 1,040 pixels wide, with a height set by the land's aspect. The start page
+   * shows it on the table as the world's card. It is absent for records stored before paintings existed and for worlds
+   * the person left before stopping anywhere.
    */
   readonly painting?: string;
-  /** The commit the world was read from when the person last opened it, absent when it was read from disk. */
+  /** The commit the world was built from when the person last opened it. Absent when the folder was read from disk. */
   readonly commit?: string;
   /**
-   * Where the person stood when they last left this world (`world.stood`), so the next open lands them there. It is
-   * kept here, with the app's settings, rather than in the project's own store, because every write rewrites a
-   * store whole and a project's holds all of Jev's answers.
+   * Where the person was when they last left this world, from `world.stood`. The next open starts them there. It is
+   * stored with the app settings, not in the project's store, because each write rewrites a whole store and a
+   * project's store holds all of Jev's answers.
    */
   readonly stood?: StoodSpot;
   /**
-   * Offered only: how many commits have touched the folder since the person last opened it, when its code has moved
-   * on from `commit`, or null when that commit is no longer in its history, as after a rebase.
+   * Set only in the start page's offer, when the folder's code has moved on from `commit`. It counts the commits that
+   * touched the folder since then, or is null when `commit` is no longer in its history, such as after a rebase.
    */
   readonly commitsSince?: number | null;
 }
 
-/** What the start page offers: the worlds opened before, and why the last address written led nowhere, if it did. */
+/** The start page's content: the worlds opened before, and why the last typed address failed, if it did. */
 export interface StartOffer {
   readonly recent: readonly RecentWorld[];
   readonly refused?: { readonly address: string; readonly why: Unreachable };
 }
 
-/** A place chosen on the start page: a folder on this computer, or an address on GitHub. */
+/** A choice on the start page: a local folder or a GitHub address. */
 export type StartChoice = { readonly folder: string } | { readonly address: string };
 
 export type EngineStatus =
@@ -67,94 +68,93 @@ export type EngineStatus =
   | { readonly state: "connected"; readonly version: string }
   | { readonly state: "restarting" };
 
-/** What the understanding pass judged about a folder, file or definition: every score from 0 to 1. */
+/** The understanding pass's judgment of a folder, file or definition. Every score is from 0 to 1. */
 export interface JudgedThing {
   readonly quality: number | null;
   readonly importance: number | null;
-  /** Each concept Jev answered; null where the answer doesn't count, such as robustness's "nothing here can fail". */
+  /** Jev's score for each concept. Null where the answer does not count, such as robustness's "nothing here can fail". */
   readonly concepts: Readonly<Record<string, number | null>>;
-  /** The blocks Jev picked inside a definition, by their lines; absent where it chose none. */
+  /** The line spans of the blocks Jev picked inside a definition. A pick is absent when Jev chose none. */
   readonly picks: { readonly key?: Span; readonly weak?: Span };
 }
 
-/** A codebase's world as the renderer receives it: the code, the world laid out from it, and how the judging went. */
+/** A codebase's world as the renderer receives it: the code's facts, the laid-out world and a judging summary. */
 export interface WorldDocument {
-  /** The folder it is the world of. */
+  /** The world's folder. */
   readonly root: string;
-  /** The commit it was built from, whose files the journal reads; absent when the folder was read from disk. */
+  /** The commit the world was built from, whose files the journal reads. Absent when the folder was read from disk. */
   readonly commit?: string;
   readonly facts: CodeFacts;
   readonly world: CodeWorld;
-  /** How the judging went, in words for the status line, such as "248 judged by Jev". */
+  /** A judging summary for the status line, such as "248 things judged by Jev". */
   readonly summary: string;
   /**
-   * What the understanding pass judged, by path for folders and files ("app/world-service") and by path and
-   * qualified name for definitions ("app/world-service/open-world.ts#openWorld.ask"), as the journal names them.
+   * The understanding pass's judgments, keyed as the journal names things: by path for folders and files, such as
+   * "app/world-service", and by path and qualified name for definitions, such as
+   * "app/world-service/open-world.ts#openWorld.ask".
    */
   readonly judged: Readonly<Record<string, JudgedThing>>;
 }
 
-/** What a live run would send and cost, shown to the person only when it costs more than their spend limit. */
+/** What a live run would send and cost. The person sees it only when the cost exceeds their spend limit. */
 export interface ConsentPlan {
   /** The repository's name. */
   readonly name: string;
-  /** Things Jev has not judged yet: one request each. */
+  /** Requests to send to Jev, including the understanding pass's and the composing requests. */
   readonly requests: number;
   readonly estimatedTokens: number;
   readonly estimatedUsd: number;
-  /** What judging one project may spend without asking, US dollars. */
+  /** The spend limit, in US dollars, for judging one project without asking. */
   readonly limitUsd: number;
   readonly endpoint: string;
 }
 
-/** A file's patch of ground: where it lies on the land and how far its ground reaches, without its vitality. */
+/** A file's patch: its position and radius on the land, without vitality. */
 export type FilePatch = Omit<PatchPlace, "vitality">;
 
-/** How opening a world is going. */
+/** Progress messages while a world opens. */
 export type Opening =
   | { readonly stage: "reading"; readonly root: string }
   /**
-   * The land is divided, before anything is judged: every area's outline,
-   * exactly as the finished world's map draws it (`outlinesOf`), every
-   * file's patch and every entity's lot, where its building or landmark will
-   * stand, as the finished world lays them out, since the division depends on
-   * the code alone. Every lot is the same ground whatever stands on it, so
-   * its place is all a sheet needs to keep names off the mark to come. Sent
-   * once, before any judging.
+   * The divided land, sent once before any judging. It has every area's
+   * outline as the finished map draws it (`outlinesOf`), every file's patch
+   * and every entity's lot. These match the finished world because the
+   * division depends only on the code. A lot has the same size whatever Jev
+   * places on it, so its position is enough for the wait's sheet to keep
+   * names clear of the building or landmark to come.
    */
   | { readonly stage: "land"; readonly name: string; readonly size: number; readonly aspect?: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
   /**
-   * Asking Jev about the things it has not judged; `answered` counts those settled, and `total` every request to be
-   * asked: under a spend limit the understanding pass's are planned and counted from the start, and with none they
-   * are counted as the pass goes. `settled` names every area (a directory's path, "" for the root) whose things are
-   * all judged, its region's own request included. Its land is composed later, once the code is understood, so no
-   * land is named here. `asking` names the areas with a question to Jev in flight now. A request Jev cannot answer
-   * fails the opening (`world.failed`), so none is counted as failed here.
+   * Jev is answering requests. `answered` counts the requests Jev has answered in this opening, and `total` counts
+   * every request to send. With a spend limit, `total` includes the planned understanding requests from the start.
+   * Without one, it grows as the pass finds requests. `settled` lists every area whose requests are all answered,
+   * including its region's own request. An area is a directory's path, or "" for the root. Land is composed after the
+    * understanding pass, so `settled` does not cover land. `asking` lists the areas with a request to Jev in
+   * flight. A request Jev cannot answer fails the opening with `world.failed`, so this message has no failure count.
    */
   | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly settled: readonly string[]; readonly asking: readonly string[] }
   /**
-   * Files whose health has settled since the last `health`, by path: each one's vitality, exactly as the finished
-   * world has it, so nothing judged later changes it. A file whose vitality reads nothing Jev judges is settled with
-   * the land; any other once the answer it reads is in, whoever gave it. Every file is named once, all of them
-   * before the world's document, whether or not Jev is asked.
+   * The final vitality of each file settled since the last `health` message, by path. Each value matches the finished
+   * world. Files are sent as the understanding pass judges them, and files it did not cover are sent just before
+   * `world.document`. Every file appears exactly once, whether or not Jev is asked.
    */
   | { readonly stage: "health"; readonly vitality: Readonly<Record<string, number>> }
   /**
-   * What a slice of the understanding pass has just read: the files and the areas (a directory's path, "" for the
-   * root) whose requests in one of its passes are all answered now. A file comes once for its links and again for
-   * itself; an area once, as the pass goes down the folders. The wait shows this as the pencil going over that code.
+   * The files and areas whose requests in one stage of the understanding pass are now all answered. A file appears
+   * once for its links and again for itself. An area appears once, as the pass works down the folders. The wait draws
+   * a pencil stroke over that code.
    */
   | { readonly stage: "understood"; readonly files: readonly string[]; readonly areas: readonly string[] }
   /**
-   * What Jev has just settled after the understanding pass: the files and areas whose things Jev chose what they
-   * stand as (`chosen`: a file's own request, or an entity's, by its area), and those whose building, landmark,
-   * land or sky it composed (`composed`: a file's or a definition's by its file; an entity's, a land's or, as "",
-   * the sky's by its area). Each comes once. The wait shows this as one more pencil stroke over that code, so the
-   * sheet keeps moving until the world stands.
+   * Requests Jev settled after the understanding pass (`settledByState`). `chosen` lists the files and areas whose
+   * forms Jev chose, with an entity's listed by its area. `composed` lists those whose building, landmark, land or sky
+   * Jev composed: a file's or definition's by its file, and an entity's, land's or the sky's by its area, with "" for
+   * the sky. Each appears once. The wait draws one more pencil stroke over that code, so the sheet keeps changing until
+   * the world is laid out.
    */
   | { readonly stage: "standing"; readonly chosen: Settled; readonly composed: Settled };
 
-/** Files and areas (a directory's path, "" for the root) that something settled. */
+/** Files and areas that a request settled. An area is a directory's path, or "" for the root. */
 export interface Settled {
   readonly files: readonly string[];
   readonly areas: readonly string[];
@@ -164,27 +164,27 @@ export interface Settled {
 export type ToRenderer =
   | { readonly type: "engine.status"; readonly status: EngineStatus }
   | { readonly type: "world.progress"; readonly opening: Opening }
-  /** Asks the person whether to send `plan` to Jev, only when it costs more than their spend limit; the renderer answers with `world.consent`. */
+  /** Asks the person whether to send `plan` to Jev, only when its cost exceeds the spend limit. The renderer answers with `world.consent`. */
   | { readonly type: "world.consent"; readonly plan: ConsentPlan }
-  /** No folder is named: the page offers the start, and answers with `world.choose`. Sent again, with `refused`, when a written address leads nowhere. */
+  /** No folder is named, so the page shows the start page and answers with `world.choose`. Sent again with `refused` when a typed address fails. */
   | { readonly type: "world.start"; readonly offer: StartOffer }
-  /** The world laid out, and where the person stood when they last left it, if they were here before (`RecentWorld.stood`). */
+  /** The laid-out world, and where the person was when they last left it, if they opened it before (`RecentWorld.stood`). */
   | { readonly type: "world.document"; readonly document: WorldDocument; readonly stood?: StoodSpot }
   | { readonly type: "world.failed"; readonly root: string; readonly message: string }
-  /** A file's text, answering `world.source`: its lines, or null when it can't be read or lies outside the folder. */
+  /** The answer to `world.source`: the file's lines, or null when it cannot be read or is outside the folder. */
   | { readonly type: "world.source"; readonly path: string; readonly lines: readonly string[] | null }
   /**
-   * The folder of the world this page shows has a new commit, and the world was judged again from it while it stood
-   * (`healWorld`): `vitality` is each thing's new vitality where it changed, by what it stands for (a file's path, a
-   * definition's `<file>#<name>`, an entity's root path), for the things the page's world holds. Only vitality changes
-   * live: nothing moves or changes shape, and the forms Jev picked stay until the next open. When the new code lays
-   * the land out as before, as most commits do (a file's or folder's ground moves the land only when it crosses a
-   * rung), `judged` holds what the understanding pass judged anew where it changed, by the journal's names
-   * (`WorldDocument.judged`), `symbols` each definition whose code now lies on other lines of its file, by its id
-   * (`withLines`), and `commit` is the commit the journal reads files from now (`world.source`). When it would move
-   * anything (a file added, removed or renamed, a definition added or removed, ground across a rung), all three are
-   * absent: things that still stand under the same name take their new vitality, and the rest waits for the next
-   * open.
+   * The shown world's folder has a new commit, and `healWorld` judged the world again from it. `vitality` gives the
+   * new vitality of each thing in the shown world whose vitality changed, by id: a file's path, a definition's
+   * `<file>#<name>` or an entity's root path. Only vitality changes live. Nothing moves or changes shape, and Jev's
+   * forms stay until the next open.
+   *
+   * When the new code divides the land as before, three more fields are set. `judged` holds the understanding pass's
+   * changed judgments, keyed as in `WorldDocument.judged`. `symbols` holds each definition whose code moved to other
+   * lines, by id (`withLines`). `commit` is the commit the journal now reads files from (`world.source`). Most commits
+   * keep the land, because a file's or folder's area changes it only when it crosses a rung. When a file is added,
+   * removed or renamed, a definition is added or removed, or an area crosses a rung, all three fields are absent.
+   * Things that keep their id take their new vitality, and the rest waits for the next open.
    */
   | {
       readonly type: "world.vitality";
@@ -194,25 +194,25 @@ export type ToRenderer =
       readonly commit?: string;
     };
 
-/** A world healed onto a new commit, as the world service sends it to the page. */
+/** The `world.vitality` message that `healWorld` returns for a new commit. */
 export type Heal = Extract<ToRenderer, { readonly type: "world.vitality" }>;
 
 /** Renderer → world service. */
 export type FromRenderer =
-  /** Opens the world of the folder main named for this page. */
+  /** Opens the folder that main named for this page. */
   | { readonly type: "world.open" }
   /** The person's answer to `world.consent`. */
   | { readonly type: "world.consent"; readonly approve: boolean }
   /** The place chosen on the start page. */
   | { readonly type: "world.choose"; readonly place: StartChoice }
-  /** A painting of where the person stands still in the world this page opened (`RecentWorld.painting`): kept with it among the recent worlds. */
+  /** A painting of the view where the person stopped in this page's world. The world service stores it as `RecentWorld.painting`. */
   | { readonly type: "world.painting"; readonly painting: string }
-  /** Asks for a file of the world this page opened, by its project-relative path, for the journal's code pages: read at the commit the world was built from, or the one it healed onto (`world.vitality`). */
+  /** Asks for a file's text by project-relative path, for the journal's code pages. The service reads it at the world's commit, or the commit it healed onto (`world.vitality`). */
   | { readonly type: "world.source"; readonly path: string }
-  /** Where the person stands in the world this page opened, sent now and then as they walk and when the page goes: kept with it among the recent worlds. */
+  /** Where the person is in this page's world, sent periodically as they walk and when the page unloads. The world service stores it as `RecentWorld.stood`. */
   | { readonly type: "world.stood"; readonly stood: StoodSpot };
 
-/** The status bar's words for each state. */
+/** Returns the status bar text for an engine state. */
 export function statusText(status: EngineStatus | "standalone"): string {
   if (status === "standalone") return "No engine (standalone)";
   switch (status.state) {

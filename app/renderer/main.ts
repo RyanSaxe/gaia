@@ -1,7 +1,7 @@
-// The page: the world, full screen at eye height, behind the wait until it
-// stands. The world (`terrain/world.ts`) has the immersive layer over it
-// (`immersive/view.ts`), both drawn by one loop at the clock's hour, and
-// `window.__lab` holds the hooks scripted checks drive it through.
+// The renderer's entry point. It shows the wait first, then builds the world
+// (`terrain/world.ts`) with the immersive layer over it (`immersive/view.ts`)
+// and draws both in one loop at the clock's hour. `window.__lab` holds the
+// hooks that scripted checks call.
 
 import "./lab.css";
 import * as THREE from "three";
@@ -33,7 +33,7 @@ window.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "touch") document.documentElement.classList.add("touch");
 });
 
-/** The engine's state in words, as the world service last reported it. */
+/** The last engine status text from the world service. */
 let status = "";
 watchEngine((text) => {
   status = text;
@@ -49,7 +49,7 @@ const stats = createStats();
 let world: World | null = null;
 let immersive: Immersive | null = null;
 let sound: Sound | null = null;
-/** The world's hooks, `__lab.terrain`, once it is made. */
+/** The world's hooks for `__lab.terrain`, set once the world is created. */
 let hooks: Readonly<Record<string, unknown>> | null = null;
 
 let last = performance.now();
@@ -67,17 +67,18 @@ function loop(now: number): void {
   requestAnimationFrame(loop);
 }
 
-// The wait's sheet shows first, so no one ever sees the world's bare frame, and the world's page is built once the
+// The wait's sheet shows first, so the world's empty first frame is never visible. The world is built after the
 // sheet has been drawn.
-// The start's night at the clock's hour, to the twentieth the world's first frame sets it to.
+// The start sky's darkness at the clock's hour, rounded to the nearest 0.05 as the world's first frame rounds it.
 const sky = realizeSky({ blueprint: START_SKY, kind: worldKind }, new Library(WORLD_PRIMITIVES), seedOf("terrain-lab/sky"), clock.hour());
-// In the app every world opens from the start's map table, chosen there or opened straight, so the sheet waits under it.
+// In the app every world opens from the start page's map table, whether chosen there or opened directly, so the sheet
+// starts under the table.
 startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT, window.gaiaShell !== undefined);
 const drawn = new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
-/** Settles once the world's page is built: scripted checks look at the world only after it, as a person sees it. */
+/** Resolves once the world is built. Scripted checks wait for it, so they see the world as a person does. */
 const opened: Promise<World> = drawn.then(() => {
   const made = createWorld(root);
-  // The immersive layer joins the world before its first bake lands, so the markers stand on it.
+  // The immersive layer must exist before the world's first bake finishes, so its markers are placed on that bake.
   immersive = createImmersive(root, made.handle);
   made.setActive(true);
   immersive.setActive(true);
@@ -89,13 +90,13 @@ const opened: Promise<World> = drawn.then(() => {
   return made;
 });
 
-// Served to a device by `pnpm lab:serve`, the page says how far it got opening
-// a world, and any error on the way, so a device that fails says where.
+// When `pnpm lab:serve` serves the page to a device, the page reports each
+// opening stage and any error, so a failing device shows where it stopped.
 reportStage("page");
 window.addEventListener("error", (e) => reportStage("error", { message: String(e.message).slice(0, 300) }));
 window.addEventListener("unhandledrejection", (e) => reportStage("error", { message: String((e.reason as Error | undefined)?.message ?? e.reason).slice(0, 300) }));
 
-// Served to a device by `pnpm lab:serve`, the page reports how smooth it runs there.
+// When `pnpm lab:serve` serves the page to a device, the page reports its frame smoothness.
 if (
   startTelemetry(() => ({
     userAgent: navigator.userAgent,
@@ -125,7 +126,7 @@ declare global {
   }
 }
 window.__lab = {
-  /** Waits until the world has something to show, its first world standing. The page shows only the world, "immersive". */
+  /** Resolves once the first world is ready and three frames have drawn. The only view is "immersive". */
   open: async (view = "immersive") => {
     if (view !== "immersive") throw new Error(`No view named ${view}: the page shows only the world, "immersive".`);
     const made = await opened;
@@ -139,15 +140,15 @@ window.__lab = {
   },
   /** The engine's state in words. */
   status: () => status,
-  /** The latest frame time, draw calls and the last ten seconds' smoothness; counting starts with the first call. */
+  /** The latest frame time, draw calls and the last ten seconds' smoothness. Counting starts with the first call. */
   stats: () => stats.read(),
   /** The smoothness probe's last ten seconds. */
   smoothness: () => stats.smoothness(),
   frames,
   /** The world's hooks (`terrain/hooks.ts`). */
   terrain: new Proxy({}, { get: (_, key: string) => hooks?.[key] }),
-  /** The immersive world's hooks: the map, a jump, the slip in the corner, and what each way of knowing where you are shows. */
+  /** The immersive layer's hooks, such as the map, a jump, the corner slip and the state of each wayfinding aid. */
   immersive: new Proxy({}, { get: (_, key: string) => immersive?.hook[key] }),
-  /** The world's sound (`sound/index.ts`): with `?sound=record`, what the person hears kept and rendered offline. */
+  /** The world's sound hooks (`sound/index.ts`). With `?sound=record`, they record what the person hears and render it offline. */
   sound: new Proxy({}, { get: (_, key: string) => sound?.hook[key] }),
 };
