@@ -1,13 +1,13 @@
-// The engine protocol's client side: newline-delimited JSON-RPC over any line
+// The client side of the engine's newline-delimited JSON-RPC, over any line
 // transport. The world service sends lines through the main process, which
 // writes them to the engine's stdin and relays its stdout back.
 
 import type { EngineClient, EngineMethods } from "@gaia/schema";
 
 export interface LineClient extends EngineClient {
-  /** Feeds one line the engine wrote: a response. */
+  /** Handles one response line from the engine. */
   receive(line: string): void;
-  /** Fails every call in flight; the engine that would have answered is gone. */
+  /** Rejects every call in flight, because the engine that would answer them exited. */
   disconnect(reason: string): void;
 }
 

@@ -1,9 +1,9 @@
-// The world's sound on the page: what the person hears where they stand
-// (`hearing.ts`), played on one graph (`soundscape.ts`) from each frame
-// (`listener.ts`), under the score (`music.ts`), each at the level the
-// person set on the slip (`levels.ts`). With `?sound=record` the page plays nothing aloud and
-// keeps a log of what the person hears instead, which `render` plays through
-// the same graph offline: a recording of a walk made in a hidden window.
+// Plays the world's sound. `hearing.ts` decides what the person hears where
+// they are, and `listener.ts` feeds it each frame to one audio graph
+// (`soundscape.ts`) under the score (`music.ts`), at the slip's volume levels
+// (`levels.ts`). With `?sound=record` the page plays nothing and logs what the
+// person hears, and `render` plays the log through the same graph offline, so
+// a walk in a hidden window can be recorded.
 
 import type { WorldHandle } from "../terrain/world.ts";
 import { type Solo, createSoundscape } from "./soundscape.ts";
@@ -14,12 +14,12 @@ import { type Chunk, type MusicPlan, PHRASES, STEMS, createMusic } from "./music
 import { BEDS } from "./hearing.ts";
 import { gainOf, soundLevels } from "./levels.ts";
 
-/** How the music plays: its parts coming and going with the hour and the land. */
+/** The music plan, whose parts come and go with the hour and the land. */
 const PLAN: MusicPlan = "layers";
-/** How quickly a slider's change is heard: its time constant, seconds, quick but never a click. */
+/** The time constant in seconds for a volume slider change, fast but without a click. */
 const LEVEL_EASE = 0.05;
 
-/** How a walk renders: with which way of playing the music (none without), and with the world's sounds, none, or one alone. */
+/** Options for rendering a walk: the music plan, or no music when absent, whether the world's sounds play, and one sound to solo. */
 export interface Rendering {
   readonly music?: MusicPlan | null;
   readonly world?: boolean;
@@ -27,7 +27,7 @@ export interface Rendering {
 }
 
 export interface Sound {
-  /** Hears the world as it stands this frame. */
+  /** Feeds this frame's earshot to the sound graph. */
   frame(): void;
   readonly hook: Readonly<Record<string, unknown>>;
 }
@@ -52,7 +52,7 @@ async function renderWalk(moments: readonly Moment[], how: Rendering, rate = 480
   const seconds = last.t - first.t + 0.5;
   const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: Math.ceil(seconds * rate), sampleRate: rate });
   const random = seeded(17);
-  // Rendered in one pass, the walk needs every recording decoded before it starts.
+  // An offline render runs in one pass, so every recording must be decoded before it starts.
   const bank = await loadBank(ctx, true);
   await bank.beds.ready(BEDS);
   const scape = createSoundscape(ctx, bank, ctx.destination, 0, random, how.solo ?? null);
@@ -68,7 +68,7 @@ async function renderWalk(moments: readonly Moment[], how: Rendering, rate = 480
   return ctx.startRendering();
 }
 
-/** A rendered clip as 16-bit stereo WAV, base64, small enough to hand to a script. */
+/** Encodes a rendered clip as base64 16-bit stereo WAV, small enough to return to a script. */
 function wavBase64(b: AudioBuffer): string {
   const n = b.length;
   const view = new DataView(new ArrayBuffer(44 + n * 4));
@@ -108,19 +108,19 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
         if (keeping) moments.push({ t: performance.now() / 1000, ear: world.earshot(), book: book() });
       },
       hook: {
-        /** Starts keeping what the person hears each frame, from nothing, or stops. */
+        /** Starts logging what the person hears each frame, clearing the log first, or stops. */
         record: (on: boolean) => {
           if (on) moments.length = 0;
           keeping = on;
           return moments.length;
         },
-        /** What was heard so far: how many frames, over how many seconds. */
+        /** The log's size so far, in frames and seconds. */
         kept: () => ({ frames: moments.length, seconds: moments.length < 2 ? 0 : (moments.at(-1) as Moment).t - (moments[0] as Moment).t }),
-        /** The walk kept so far, rendered as the page would have played it, as base64 WAV. */
+        /** Renders the logged walk as the page would have played it, as base64 WAV. */
         render: async (how: Rendering = {}) => wavBase64(await renderWalk(moments, how)),
         /** The log itself, for checking what was heard. */
         moments: () => moments,
-        /** Takes back a log `moments` returned, so a walk renders again without walking it. */
+        /** Loads a log that `moments` returned, so a walk can be rendered again without walking it. */
         replay: (kept: readonly Moment[]) => {
           keeping = false;
           moments.splice(0, moments.length, ...kept);
@@ -131,16 +131,16 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
   }
 
   const ctx = new AudioContext({ latencyHint: "playback" });
-  // Everything passes a meter on its way out, so a muted window can still tell that sound plays and how loud.
+  // All output passes through a meter, so a muted window can still measure whether sound plays and how loud.
   const meter = ctx.createAnalyser();
   meter.fftSize = 4096;
   meter.connect(ctx.destination);
   let listener: ReturnType<typeof createListener> | null = null;
   const score = loadMusic(ctx);
   let held = (): number => score.chunks.held() + score.phrases.held();
-  // The first chunk of the parts that always play is decoded while the world bakes; the rest as they come due.
+  // The first chunk of each always-playing part decodes while the world bakes. The rest decode as they come due.
   const loaded = Promise.all([loadBank(ctx), score.chunks.ready(["bed:0", "melody:0"])]);
-  // The world is heard once it stands and the wait has lifted, fading in from there.
+  // Sound starts once the world is built and the wait has lifted, and fades in from there.
   world.onLifted(() => {
     void loaded.then(([bank]) => {
       const short = [...Object.values(bank.paper), ...Object.values(bank.steps).map((s) => s.buffer)].reduce((sum, b) => sum + sizeOf(b), 0);
@@ -154,7 +154,7 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
       listener = createListener(scape, createMusic(ctx, score, scape.music, PLAN, start, Math.random));
     });
   });
-  // A page may only start sound once the person has touched it; and a page no one can see makes none.
+  // Browsers allow sound only after the person interacts with the page, and a hidden page plays none.
   const wake = (): void => {
     if (!document.hidden && ctx.state === "suspended") void ctx.resume();
   };
@@ -167,13 +167,13 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
       if (listener !== null && ctx.state === "running") listener.hear({ t: ctx.currentTime, ear: world.earshot(), book: book() });
     },
     hook: {
-      /** Whether the page's sound runs: running, suspended until a touch, or closed. */
+      /** The audio context's state: running, suspended until a touch, or closed. */
       state: () => ctx.state,
-      /** How much decoded sound the page holds now, MB. */
+      /** Decoded audio held now, in MB. */
       decoded: () => Math.round(held() / 1e5) / 10,
-      /** What the person hears where they stand now. */
+      /** What the person hears where they are now. */
       earshot: () => world.earshot(),
-      /** How loud the sound leaving the page is now, dBFS over the last tenth of a second; -Infinity in silence. */
+      /** The output level in dBFS over the last tenth of a second, or -Infinity in silence. */
       level: () => {
         meter.getFloatTimeDomainData(samples);
         let sum = 0;

@@ -1,8 +1,8 @@
-// The engine's Jev runner, end to end: the real engine binary plans and asks
-// the link pass and the understanding pass about small codebases through a
-// local stand-in for OpenRouter's Decisions API. Nothing here reaches
-// OpenRouter: the engine refuses any endpoint override that is not a
-// loopback address.
+// Tests the engine's Jev runner end to end. The real engine binary plans and
+// sends the link pass and the understanding pass for small codebases to a
+// local stand-in for OpenRouter's Decisions API. Nothing reaches OpenRouter,
+// because the engine refuses any endpoint override that is not a loopback
+// address.
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -35,7 +35,7 @@ afterAll(async () => {
   if (scratch !== "") rmSync(scratch, { recursive: true, force: true });
 });
 
-/** A fresh engine process, live against the stand-in, keeping its store in `data`. */
+/** Starts a new engine process, live against the stand-in, with its store in `data`. */
 function engineAt(data: string) {
   const child = spawn(ENGINE, ["rpc"], {
     env: { ...process.env, GAIA_JEV: "live", GAIA_JEV_ENDPOINT: standIn.endpoint, GAIA_DATA_DIR: data },
@@ -60,7 +60,7 @@ const pending = (plan: UnderstandPlan): number => plan.pending.reduce((n, p) => 
 
 type Sent = { state: Record<string, unknown>; questions: Record<string, { criteria: unknown }> }[];
 
-/** Asks until nothing is left; returns the requests the stand-in received meanwhile. */
+/** Runs `understanding.next` until nothing is left, and returns the requests the stand-in received meanwhile. */
 async function understand(engine: ReturnType<typeof engineAt>, root: string): Promise<Sent> {
   const before = standIn.received.length;
   for (;;) {
@@ -72,9 +72,9 @@ async function understand(engine: ReturnType<typeof engineAt>, root: string): Pr
 
 const fn = (name: string, body: string): string => `export function ${name}(x: number): number {\n  ${body}\n}\n`;
 
-/** Requests about files, whose state holds the file's part of the understanding pass. */
+/** Understanding requests about files, whose state has `file-axes`. */
 const aboutFiles = (sent: Sent): Sent => sent.filter((r) => r.state["file-axes"] !== undefined);
-/** Requests of the link pass, whose state holds neither part of the understanding pass. */
+/** Link pass requests, whose state has neither `file-axes` nor `folder-axes`. */
 const ofLinks = (sent: Sent): Sent => sent.filter((r) => r.state["file-axes"] === undefined && r.state["folder-axes"] === undefined);
 const calleeQuestions = (sent: Sent) => sent.flatMap((r) => Object.entries(r.questions).filter(([id]) => id.startsWith("callee:")));
 
@@ -98,7 +98,7 @@ describe("the Jev runner", () => {
     const edited = await understand(engineAt(data), root);
     expect([...new Set(edited.map((r) => r.state.path))]).toEqual(["src/a.ts"]);
     renameSync(join(root, "src/b.ts"), join(root, "src/renamed.ts"));
-    // Before anything is asked again, the renamed file shows the answers held for its lineage.
+    // Before any new request, the renamed file already has the stored answers for its lineage.
     const graph: CodeGraph = await engineAt(data).call("project.graph", { root, judged: true });
     const file = graph.nodes.find((n) => n.id === "file:src/renamed.ts");
     expect(file?.judged?.value?.quality).toBeTypeOf("number");
@@ -117,7 +117,7 @@ describe("the Jev runner", () => {
   }, 120_000);
 
   it("cuts a file with more link questions than fit into pieces with their own source, asking each question once", async () => {
-    // Two files beside it define `helper`, so every call to it waits for Jev to choose.
+    // Two other files define `helper`, so Jev must choose the target of every call to it.
     const many = Array.from({ length: 300 }, (_, i) => `export const g${i} = (x: number): number => helper(x) + ${i};`).join("\n");
     const root = codebase("many", { "src/many.ts": many, "src/one.ts": fn("helper", "return x;"), "src/two.ts": fn("helper", "return -x;") });
     const requests = ofLinks(await understand(engineAt(join(scratch, "many-data")), root)).filter((r) => r.state.path === "src/many.ts");
@@ -166,7 +166,8 @@ describe("the Jev runner", () => {
     const { projectId } = await engine.call("project.graph", { root });
     const { records } = await engine.call("store.read", { project: projectId, table: "held" });
     const [key, value] = Object.entries(records).find(([k]) => k.startsWith("link|")) as [string, { answer: unknown; call: string; candidates: string[] }];
-    // A held answer from before link answers kept their candidates, and one from an earlier version of its call.
+    // Two stale held answers: one stored before link answers recorded their candidates, and one from an earlier
+    // version of its call.
     for (const stale of [{ answer: value.answer, call: value.call }, { ...value, call: "callee@00000000-1" }]) {
       await engine.call("store.put", { project: projectId, writes: [{ table: "held", key, value: stale }] });
       expect(await jevCalls()).toBe(0);
@@ -189,13 +190,14 @@ describe("the understanding pass", () => {
     const sent = await understand(engine, root);
     const folderAt = (path: string): number => sent.findIndex((r) => r.state["folder-axes"] !== undefined && r.state.path === path);
     const fileAt = (path: string): number => sent.findIndex((r) => r.state["file-axes"] !== undefined && r.state.path === path);
-    // Top-down: the root, then each folder, and each file only after its folder.
+    // Requests go top-down: the root, then each folder, and each file only after its folder.
     expect(folderAt("(the repository's root)")).toBe(0);
     expect(folderAt("a")).toBeGreaterThan(folderAt("(the repository's root)"));
     expect(folderAt("a/b")).toBeGreaterThan(folderAt("a"));
     expect(fileAt("a/top.ts")).toBeGreaterThan(folderAt("a"));
     expect(fileAt("a/b/mid.ts")).toBeGreaterThan(folderAt("a/b"));
-    // A file's request carries the project's own words and what was found above it, as typed answers.
+    // A file's request carries the project's own description and the judgments of the folders above it, as typed
+    // values.
     const mid = sent[fileAt("a/b/mid.ts")] as (typeof sent)[number];
     const part = mid.state["file-axes"] as { project: string; above: { path: string; importance: number | null; cohesion: number | null }[]; importance: number | null };
     expect(part.project).toContain("measures shapes");
@@ -203,11 +205,13 @@ describe("the understanding pass", () => {
     expect(part.above.slice(1).every((a) => typeof a.importance === "number")).toBe(true);
     expect(part.above.every((a) => typeof a.cohesion === "number")).toBe(true);
     expect(part.importance).toBeTypeOf("number");
-    // It picks among the file's definitions; a definition with two or more blocks has its blocks picked among.
+    // The request asks Jev to pick among the file's definitions, and among the blocks of any definition with two or
+    // more.
     expect(Object.keys(mid.questions)).toEqual(expect.arrayContaining(["pick-weak:mid", "importance:mid", "readability:mid", "robustness:mid", "own:cohesion"]));
     expect(Object.keys(mid.questions).filter((q) => q.endsWith(":file"))).toEqual([]);
     expect(Object.keys(mid.questions)).not.toContain("pick-key:other");
-    // The engine gathers it: every item's importance and quality from 0 to 1, the root's importance 1.
+    // The engine aggregates the answers into each item's importance and quality, from 0 to 1, with the root's
+    // importance at 1.
     const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
     const value = (id: string) => graph.nodes.find((n) => n.id === id)?.judged?.value;
     expect(value("dir:")?.importance).toBe(1);
@@ -216,7 +220,7 @@ describe("the understanding pass", () => {
       expect(value(id)?.quality, id).toBeGreaterThanOrEqual(0);
       expect(value(id)?.quality, id).toBeLessThanOrEqual(1);
     }
-    // Where Jev asked for more, the same questions went again once, with the readings it chose and no "more" question.
+    // Where Jev asked for more, the same questions went once more, with the readings Jev chose and no "more" question.
     const byFile = new Map<string, (typeof sent)[number][]>();
     for (const r of sent) if (r.state["file-axes"] !== undefined) byFile.set(r.state.path as string, [...(byFile.get(r.state.path as string) ?? []), r]);
     for (const [path, rs] of byFile) {

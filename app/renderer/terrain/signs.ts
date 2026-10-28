@@ -1,12 +1,8 @@
-// Signs in the world that say what things are: a wooden signboard on a post
-// at the end of each building's walk, and a small plaque on a stake at the
-// foot of each tree, each with its name painted on, always fitting its board
-// (`lettering.ts`): a long name breaks onto two lines and its board widens
-// within a limit before the letters shrink. They are always there,
-// so nothing appears as a person walks up; the name simply becomes readable
-// as they come near, the way a real sign does, and the lantern lights it at
-// night. All of them draw as one instanced mesh, their names from one atlas.
-// A sign answers to the vitality of what it names: its paint fades and
+// Draws the signs that name things: a wooden signboard on a post at the end
+// of each building's walk or at a landmark's foot, and a small plaque on a
+// stake at a tree's foot. Signs are always present, so nothing appears as a
+// person walks up, and all of them draw as one instanced mesh with names from
+// one atlas. As the vitality of what a sign names drops, its paint fades and
 // flakes, its wood greys, and it leans on its post.
 
 import * as THREE from "three";
@@ -18,9 +14,9 @@ export interface Sign {
   readonly x: number;
   readonly y: number;
   readonly z: number;
-  /** The way the painted face looks, about y. */
+  /** The painted face's rotation about y. */
   readonly yaw: number;
-  /** 1 is a building's signboard; smaller is a tree's plaque. */
+  /** 1 for a building's signboard, and smaller for a tree's plaque. */
   readonly scale: number;
   readonly name: string;
   /** A smaller second line, such as what the thing is. */
@@ -115,7 +111,7 @@ void main() {
 }
 `;
 
-/** One box's faces into the arrays; `face` marks the painted front, with its atlas coordinates. */
+/** Appends one box's faces to the arrays. `face` marks the painted front, which gets atlas coordinates. */
 function addBox(out: { pos: number[]; nrm: number[]; face: number[]; uv: number[]; idx: number[] }, c: readonly number[], half: readonly number[], painted: boolean): void {
   const axes: readonly (readonly [number, number, number])[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
   for (let i = 0; i < 3; i++) {
@@ -146,7 +142,7 @@ function addBox(out: { pos: number[]; nrm: number[]; face: number[]; uv: number[
 function signGeometry(): THREE.BufferGeometry {
   const out = { pos: [] as number[], nrm: [] as number[], face: [] as number[], uv: [] as number[], idx: [] as number[] };
   const b = BOARD;
-  // The post, sunk a little; the cross-arm the board hangs from; the board.
+  // The post, sunk a little, then the cross-arm the board hangs from, then the board.
   addBox(out, [0, b.top / 2 - 0.1, -0.06], [b.post / 2, b.top / 2 + 0.1, b.post / 2], false);
   addBox(out, [0, b.bottom + b.h + 0.12, -0.06], [b.w / 2 + 0.08, 0.04, 0.05], false);
   addBox(out, [0, b.bottom + b.h / 2, 0], [b.w / 2, b.h / 2, b.d / 2], true);
@@ -160,12 +156,12 @@ function signGeometry(): THREE.BufferGeometry {
 }
 
 const SERIF = `Georgia, "Iowan Old Style", "Times New Roman", serif`;
-/** A name's board, in the atlas slot's pixels: one line, or two, and the board widens up to half again before the letters shrink further. */
+/** A name's board in atlas slot pixels. A long name breaks onto two lines, and the board widens up to 1.45 times before the letters shrink further. */
 const NAME_BOARD: Board = { width: SLOT.w - 56, height: SLOT.h, size: 92, least: 50, twoLines: true, widen: 1.45 };
-/** Under a name, its note takes the bottom of the board. */
+/** A note sits under its name, at the bottom of the board. */
 const NOTE = { share: 0.7, at: 0.84, size: 30 };
 
-/** Paints each name and note into its slot of the atlas, fitted to its board (`lettering.ts`); returns how much wider each board stands. */
+/** Paints each name and note into its atlas slot, fitted to its board (`lettering.ts`). Returns how much each board widened. */
 function paintNames(canvas: HTMLCanvasElement, signs: readonly Sign[]): number[] {
   const ctx = canvas.getContext("2d");
   if (ctx === null) return signs.map(() => 1);

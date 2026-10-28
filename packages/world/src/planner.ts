@@ -1,6 +1,6 @@
-// Turns a kind into Jev questions and Jev answers into a blueprint.
-// One request per nesting level: structure first, then the details of
-// whatever the structure chose, so the details can agree with it.
+// Turns a kind into Jev questions and Jev's answers into a blueprint. The
+// structure request picks each slot's primitive first. Detail requests then
+// cover the chosen primitives' params, so the details match the structure.
 
 import {
   type AnyPrimitive,
@@ -22,16 +22,16 @@ import {
 
 export const MODEL = "typesafe/jev-1.13";
 
-/** Who the blueprint is for and what Jev may know while deciding. */
+/** The thing a blueprint is for, and the state Jev sees while answering. */
 export interface Target {
   /** Stable ID that seeds option order, such as a region path. */
   readonly id: string;
   readonly state: Readonly<Record<string, unknown>>;
-  /** What the thing's place has that a primitive may need, such as running water; none when absent. */
+  /** Features the thing's place provides that a primitive may need, such as running water. */
   readonly has?: readonly string[];
-  /** The thing's rank by importance among the world's own things, 0 to 1, for a primitive that needs a range of it. */
+  /** The thing's importance rank among the world's things, 0 to 1, for primitives whose needs include a rank range. */
   readonly rank?: number;
-  /** The part already chosen for a slot, by slot, such as the frame a thing's form is: offered alone, so never asked. */
+  /** The part already chosen for each slot, such as the frame a thing's form sets. It is the only candidate, so Jev is never asked. */
   readonly uses?: Readonly<Record<string, string>>;
 }
 
@@ -45,7 +45,7 @@ type Ref =
 export interface Wave {
   readonly request: JevRequest;
   readonly refs: Readonly<Record<string, Ref>>;
-  /** For a structure wave: the primitives each slot was offered, by id. A slot offered none is left out. */
+  /** For a structure wave, the primitive ids offered for each slot. A slot with none is left out. */
   readonly offered?: Readonly<Record<string, readonly string[]>>;
 }
 
@@ -53,8 +53,8 @@ export interface Wave {
 export type Structure = Readonly<Record<string, string>>;
 
 /**
- * Jev leans toward the first option of a choice. Shuffling in an order seeded
- * by the target spreads that lean evenly across the world.
+ * Jev picks the first option of a choice more often. A shuffle seeded by the
+ * target spreads that bias evenly across the world.
  */
 function shuffled<T>(items: readonly T[], label: string, target: Target): T[] {
   const r = rand(seedOf(target.id)).fork(label);
@@ -91,7 +91,7 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   const refs: Record<string, Ref> = {};
   const offered: Record<string, readonly string[]> = {};
   for (const [name, s] of Object.entries(k.slots)) {
-    // Only the primitives whose needs the place meets, or the one part already chosen; a part none can fill is not asked about.
+    // Offer only primitives whose needs the place meets, or the part already chosen. An optional slot nothing fits is skipped.
     const settled = target.uses?.[name];
     const fitting = settled !== undefined ? [lib.get(settled)] : lib.forRole(s.role, { has: target.has ?? [], ...(target.rank === undefined ? {} : { rank: target.rank }) });
     if (fitting.length === 0) {
@@ -99,7 +99,7 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
       throw new Error(`No ${s.role} primitive fits ${target.id || "the repository's root"}'s place.`);
     }
     offered[name] = fitting.map((p) => p.id);
-    // A part with its own instruction is asked about in it: what the part says about the code.
+    // A slot's own `ask` text, which says what the part means about the code, goes into its questions.
     const context = s.ask === undefined ? `${k.doc} This is about its ${name}.` : `${k.doc} Its ${name}: ${s.ask}`;
     if (s.optional) {
       questions[`${name}.present`] = {
@@ -130,7 +130,7 @@ export function readStructure(k: AnyKind, lib: Library, wave: Wave, answers: Rea
     const candidates = offered[name] ?? [];
     if (candidates.length === 0) continue;
     if (s.optional && !yes(answers[`${name}.present`])) continue;
-    // A slot fed by an absent slot has nothing to grow on, whatever Jev said.
+    // Skip a slot whose `on` slot is absent, whatever Jev answered.
     if (s.on !== undefined && !(s.on in out)) continue;
     const chosen = candidates.length === 1 ? candidates[0] : pick(answers[`${name}.use`]);
     if (chosen === undefined || !candidates.includes(chosen)) {
@@ -142,16 +142,16 @@ export function readStructure(k: AnyKind, lib: Library, wave: Wave, answers: Rea
 }
 
 export interface DetailOptions {
-  /** Which of the kind's stages to ask; 0 when the kind has one stage. */
+  /** Which of the kind's stages to ask. 0 when the kind has one stage. */
   readonly stage?: number;
   /**
    * Allowed keys per field path, such as a region's native families for "palette.family". A choice left with one
    * key is filled with it, not asked.
    */
   readonly narrow?: Readonly<Record<string, readonly string[]>>;
-  /** Values the thing's place already settles, per field path (`relief.stream`): filled in, not asked. */
+  /** Values already set per field path, such as `relief.stream`. These are filled in, not asked. */
   readonly fixed?: Readonly<Record<string, string | boolean>>;
-  /** Values settled in earlier stages, which this stage's questions see in the state. */
+  /** Values settled in earlier stages. They go into this stage's request state. */
   readonly earlier?: Readonly<Record<string, unknown>>;
 }
 
@@ -192,14 +192,14 @@ export function planDetails(k: AnyKind, lib: Library, structure: Structure, targ
   return { request: { model: MODEL, state, questions }, refs };
 }
 
-/** The one key a choice is left with by the allowed keys, if they leave it one. */
+/** The single allowed key of a choice, if `allowed` leaves exactly one. */
 function onlyKey(field: Field, allowed: readonly string[] | undefined): string | undefined {
   if (field.type !== "choice" || allowed === undefined) return undefined;
   const keys = Object.keys(field.options).filter((key) => allowed.includes(key));
   return keys.length === 1 ? keys[0] : undefined;
 }
 
-/** A choice or set limited to the allowed keys; an empty or missing list leaves it whole. */
+/** A choice or set limited to the allowed keys. An empty or missing list, or a choice left with under two keys, keeps the field whole. */
 function narrowed(field: Field, allowed: readonly string[] | undefined): Field {
   if (allowed === undefined || allowed.length === 0) return field;
   const keep = <V>(entries: Readonly<Record<string, V>>): Record<string, V> =>
@@ -241,7 +241,7 @@ export function assemble(
   return blueprintOf(k.id, slots);
 }
 
-/** Every problem with a blueprint, so a bad answer never reaches the document. */
+/** Lists every problem with a blueprint, so a bad answer never reaches the world document. */
 export function validate(bp: Blueprint, k: AnyKind, lib: Library): string[] {
   const problems: string[] = [];
   for (const [name, s] of Object.entries(k.slots)) {

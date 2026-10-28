@@ -1,7 +1,7 @@
-// A footbridge breaks as it fails, as a house does: its planks go missing
-// and its rails hang from their posts and fall, and its deck keeps its line,
-// since the walk crosses on it until a gap wider than a stride opens.
-// Nothing passes through the deck.
+// Checks how a footbridge declines: its planks go missing and its rails hang
+// from their posts and fall, while its deck keeps its line, because a person
+// crosses on it until a gap wider than a stride opens. Nothing passes through
+// the deck.
 
 import { describe, expect, it } from "vitest";
 import type { Part } from "@gaia/schema";
@@ -14,7 +14,7 @@ const bridges = Array.from({ length: 12 }, (_, seed) => buildFootbridge(SPAN, WI
 const deckOf = (parts: readonly Part[]): Part => parts.find((p) => p.collision === "walkable") as Part;
 const frameOf = (parts: readonly Part[]): Part => parts.find((p) => p.collision === "solid" && p.swatch === "timber") as Part;
 
-/** Each rail's vertices: the frame's pieces that fall, grouped by how they fall. */
+/** Each rail's vertices: the frame's falling pieces, grouped by their fall. */
 function rails(frame: Part): number[][] {
   const fall = frame.channels.fall;
   if (fall === undefined) return [];
@@ -49,7 +49,7 @@ describe("a footbridge", () => {
   });
 
   it("stops a walk just where a gap in its planks opens wider than a stride, and almost never above 0.6", () => {
-    /** The widest run of planks not wholly there at vitality `v`, going or gone, meters. */
+    /** The widest run, in meters, of planks going or gone at vitality `v`. */
     const widestGap = (deck: Part, v: number): number => {
       const extent = (p: Float32Array, k: number): number => {
         const xs = Array.from({ length: 24 }, (_, i) => p[(k * 24 + i) * 3] as number);

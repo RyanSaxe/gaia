@@ -1,32 +1,31 @@
-// The definitions that stand in the world. Every definition stands, nested
-// ones included: a function, a method, a class or a type. A variable or a
-// constant that holds a plain value does not, and neither does a stylesheet
-// rule, a document's section or a data file's key. Engine's graph says what
-// is defined where, inside what, and how much each matters (Jev's importance,
-// from 0 to 1); without a graph, the facts' top-level symbols stand,
-// with no importance of their own.
+// Lists the definitions placed in the world. Every function, method, class
+// and type is placed, nested ones included. Variables and constants that hold
+// plain values are not, and neither are stylesheet rules, document sections
+// or data file keys. The engine graph gives each definition's file, parent
+// and Jev's importance from 0 to 1. Without a graph, the facts' top-level
+// symbols are placed with no importance.
 
 import type { CodeGraph, CodeFacts, DefNode, SymbolFact } from "@gaia/schema";
 
-/** A definition that stands on its file's patch. */
-export interface StandingDef {
-  /** `<file>#<name>`, qualified by what encloses it: `app/x.ts#World.open`. */
+/** A definition placed on its file's patch. */
+export interface PlacedDef {
+  /** `<file>#<name>`, with the name qualified by its enclosing definitions, such as `app/x.ts#World.open`. */
   readonly id: string;
   readonly file: string;
-  /** The definition it sits inside, by id. */
+  /** The id of the enclosing definition. */
   readonly parent?: string;
   readonly name: string;
   readonly kind: SymbolFact["kind"];
   readonly exported: boolean;
-  /** Where it is declared and how many lines it spans, its nested definitions included. */
+  /** Its declaration line, and how many lines it spans including nested definitions. */
   readonly line: number;
   readonly lines: number;
   readonly doc?: string;
-  /** How much it matters, 0 to 1: Jev's importance from the understanding pass; absent until Jev has judged it. */
+  /** Jev's importance from the understanding pass, 0 to 1. Absent until Jev has judged it. */
   readonly importance?: number;
 }
 
-/** Roles whose definitions hold no code that stands: a plain value, a stylesheet rule, a section, a key, markup. */
+/** Roles that are not placed in the world: plain values, stylesheet rules, sections, keys and markup. */
 const NOT_STANDING = new Set(["rule", "section", "key", "element", "property", "field", "variable", "constant"]);
 
 const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
@@ -47,16 +46,16 @@ const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
 
 
 /**
- * Each file's standing definitions, by path, in the order they are written,
- * every definition before the ones inside it. With a graph, every definition
- * it holds stands; without one, the facts' top-level symbols.
+ * Each file's placed definitions by path, in source order, with each
+ * definition before the ones inside it. With a graph, every definition in it
+ * is placed. Without one, the facts' top-level symbols are.
  */
-export function definitionsOf(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<string, readonly StandingDef[]> {
+export function definitionsOf(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<string, readonly PlacedDef[]> {
   const files = new Map(facts.files.map((f) => [f.path, f]));
-  const out = new Map<string, StandingDef[]>();
+  const out = new Map<string, PlacedDef[]>();
   if (graph === undefined) {
     for (const f of files.values()) {
-      const defs = f.symbols.map((s): StandingDef => ({ id: `${f.path}#${s.name}`, file: f.path, name: s.name, kind: s.kind, exported: s.exported, line: s.line ?? 0, lines: s.lines ?? 1 }));
+      const defs = f.symbols.map((s): PlacedDef => ({ id: `${f.path}#${s.name}`, file: f.path, name: s.name, kind: s.kind, exported: s.exported, line: s.line ?? 0, lines: s.lines ?? 1 }));
       if (defs.length > 0) out.set(f.path, defs.sort((a, b) => a.line - b.line || (a.id < b.id ? -1 : 1)));
     }
     return out;
@@ -69,11 +68,11 @@ export function definitionsOf(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<
   const byId = new Map(nodes.map((n) => [n.id, n]));
   for (const n of nodes.sort((a, b) => a.span.start - b.span.start || (a.id < b.id ? -1 : 1))) {
     const path = pathOf.get(n.file) as string;
-    // A definition inside one that does not stand (a constant's arrow, say) hangs from the nearest that does.
+    // A definition inside an unplaced one, such as an arrow function assigned to a constant, takes the nearest placed ancestor as parent.
     let parent = n.parent;
     while (parent !== undefined && !kept.has(parent)) parent = every.get(parent)?.parent;
     const importance = n.judged?.value?.importance ?? undefined;
-    const def: StandingDef = {
+    const def: PlacedDef = {
       id: idOf(n),
       file: path,
       ...(parent === undefined ? {} : { parent: idOf(byId.get(parent) as DefNode) }),

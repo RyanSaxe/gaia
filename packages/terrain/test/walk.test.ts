@@ -53,9 +53,9 @@ const hold = (solids: Solids, from: Walker, dx: number, dz: number, steps: numbe
   for (let i = 0; i < steps; i++) path.push(walkStep(t, solids, path[path.length - 1]!, { dx, dz, speed }, dt));
   return path;
 };
-/** Steps a tapped walk until it ends, at most two minutes of it: each step makes for the point a little ahead along its way, at its pace. */
+/** Steps a tapped walk until it ends, for at most two minutes. Each step aims for the point a little ahead along the way, at its pace. */
 const tapWalk = (solids: Solids, from: Walker, to: Walker) => {
-  // One walker moved in place, as the lab moves it, so a way must not lean on the walker it was planned from.
+  // Move one walker in place, as the lab does, so a way must not depend on the walker it was planned from.
   const at = { x: from.x, z: from.z };
   let walk = planWalk(t, solids, at, to);
   const path: Walker[] = [{ ...at }];
@@ -82,14 +82,14 @@ describe("wading and swimming", () => {
   });
 
   it("reads the depth of the water as the land is now, when its arrays change in place as the page's land window moves", () => {
-    // The page holds one terrain for its life and writes each new window of land into its arrays.
+    // The page keeps one terrain and writes each new window of land into its arrays.
     const land = structuredClone(t);
     expect(waterDepthAt(land, pond.x, pond.z)).toBeGreaterThan(SWIM.to);
-    // The window moves on to land with no water: the pond is gone from under the person.
+    // The window moves to land with no water, so the pond is gone from under the person.
     land.waterLevel.fill(DRY);
     expect(waterDepthAt(land, pond.x, pond.z)).toBe(0);
     expect(stanceAt(land, pond.x, pond.z).depth).toBe(0);
-    // And on again to where the water stands a meter deep everywhere.
+    // Then it moves to where the water is a meter deep everywhere.
     land.lattice.heights.forEach((h, i) => (land.waterLevel[i] = h + 1));
     expect(waterDepthAt(land, dry.x, dry.z)).toBeCloseTo(1, 4);
   });
@@ -108,7 +108,7 @@ describe("wading and swimming", () => {
         expect(Math.hypot(next.x - at.x, next.z - at.z)).toBeCloseTo(4 * 0.1 * wadeSpeed(waterDepthAt(t, at.x, at.z)), 6);
       }
     }
-    // Held keys carry the walker across the deep middle and out the far side.
+    // Held keys move the walker across the deep center and out the far side.
     const path = hold(NO_SOLIDS, dry, 1, 0, 60 * 90);
     const far = path.findIndex((p) => p.x > pond.x + pond.reach * 1.2);
     expect(far).toBeGreaterThan(0);
@@ -137,12 +137,12 @@ describe("wading and swimming", () => {
         if (i === 0) continue;
         const q = walk[i - 1]!;
         const moved = Math.hypot(p.x - q.x, p.z - q.z);
-        // Never a jump: the eyes rise and fall no faster than the steepest bank the relief budget allows.
+        // The eyes never jump. They rise and fall no faster than the steepest bank the relief budget allows.
         expect(Math.abs(s.eye - stanceAt(t, q.x, q.z).eye)).toBeLessThanOrEqual(moved * 0.9 + 1e-6);
       }
     }
     expect(swam).toBe(1);
-    // In the pond's deep middle the eyes float just above the surface.
+    // In the pond's deep center the eyes are just above the surface.
     const deep = stanceAt(t, pond.x, pond.z);
     expect(deep.eye - heightAt(t.lattice, pond.x, pond.z) - deep.depth).toBeCloseTo(SWIM.eye, 6);
   });
@@ -168,7 +168,7 @@ describe("solids", () => {
       for (let a = 0; a < 32; a++) {
         const ang = (a / 32) * Math.PI * 2;
         const start = { x: c.x + Math.cos(ang) * 6, z: c.z + Math.sin(ang) * 6 };
-        // Straight at the middle, and glancing 25 degrees off it.
+        // Straight at the center, and glancing 25 degrees off it.
         for (const off of [0, 0.44]) {
           const dx = -Math.cos(ang + off);
           const dz = -Math.sin(ang + off);
@@ -177,12 +177,12 @@ describe("solids", () => {
             const p = path[i]!;
             const q = path[i - 1]!;
             expect(outside(p)).toBe(true);
-            // Never a step backward against the push: no jitter.
+            // No step goes backward against the push, so there is no jitter.
             expect((p.x - q.x) * dx + (p.z - q.z) * dz).toBeGreaterThanOrEqual(-1e-9);
           }
           const end = path[path.length - 1]!;
           if (off === 0 && c === centers[0]) {
-            // Straight at a round trunk: stopped at its bark.
+            // Pushing straight at a round trunk stops at its bark.
             expect(clearanceAt(solids, end.x, end.z)).toBeCloseTo(BODY_RADIUS, 2);
           }
           if (off > 0 && c !== centers[2]) {
@@ -201,7 +201,7 @@ describe("solids", () => {
         { x: dry.x - 10, z: dry.z - r - gap / 2, radius: r },
         { x: dry.x - 10, z: dry.z + r + gap / 2, radius: r },
       ]);
-      // A little off the gap's middle, so the walk must slide into it.
+      // A little off the gap's center, so the walk must slide into it.
       const path = hold(pair, { x: dry.x - 4, z: dry.z + 0.12 }, -1, 0, 300);
       for (const p of path) expect(clearanceAt(pair, p.x, p.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
       const end = path[path.length - 1]!;
@@ -262,11 +262,11 @@ describe("solid pieces of a built thing", () => {
     expect(open.length).toBeGreaterThanOrEqual(9);
     const solids = solidsOf(open);
     expect(clearanceAt(solids, at.x, at.z)).toBeGreaterThan(BODY_RADIUS);
-    // A tap from outside the ring walks between the stones to its middle.
+    // A tap from outside the ring walks between the stones to its center.
     const walk = tapWalk(solids, { x: at.x + 16, z: at.z + 3 }, { x: at.x, z: at.z });
     for (const p of walk.path) expect(clearanceAt(solids, p.x, p.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
     expect(walk.state).toBe("arrived");
-    // A king stone at the middle blocks it.
+    // A king stone at the center blocks it.
     expect(clearanceAt(solidsOf(piecesShapes(ring(true, "a tall king stone").parts, at)), at.x, at.z)).toBeLessThan(0);
   });
 
@@ -275,13 +275,13 @@ describe("solid pieces of a built thing", () => {
       const answers = { form, thickness: 1.35, stone: 1 } as const;
       const arch = rockArch.build(answers, { rand: rand(5), facts: {} }, null);
       const solids = solidsOf(piecesShapes(arch.parts, at));
-      // The way runs along the arch's own z, which the world turns toward its trail: (sin yaw, cos yaw) in the world.
+      // The way runs along the arch's own z, which the world turns toward its trail, (sin yaw, cos yaw) in world space.
       const [wx, wz] = [Math.sin(at.yaw), Math.cos(at.yaw)];
       const walk = tapWalk(solids, { x: at.x - wx * 16, z: at.z - wz * 16 }, { x: at.x + wx * 16, z: at.z + wz * 16 });
       expect(walk.state, form).toBe("arrived");
-      // Straight through under the span, never round a foot.
+      // The walk goes straight through under the span, never around a foot.
       for (const q of walk.path) expect(Math.abs((q.x - at.x) * wz - (q.z - at.z) * wx), form).toBeLessThan(1);
-      // Each foot, across the way at the opening's sides, stops a walker.
+      // Each foot, on either side of the opening, stops a walker.
       const foot = landmarkShape(ROCK_ARCH_SHAPE, answers, { rand: rand(5), facts: {} }).half + ROCK_ARCH_FORMS[form].ring * 1.35 * 0.6;
       for (const side of [-1, 1]) expect(clearanceAt(solids, at.x + side * wz * foot, at.z - side * wx * foot), form).toBeLessThan(0);
     }
@@ -290,7 +290,7 @@ describe("solid pieces of a built thing", () => {
   it("carries a walker up a rotunda's steps to stand among its columns, which stop it", () => {
     const answers = { columns: "eight", roof: "a high dome", steps: 5 } as const;
     const temple = rotunda.build(answers, { rand: rand(5), facts: {} }, null);
-    // Where its seed set its ring and how far its top step reaches past it.
+    // The ring radius its seed set, and how far its top step reaches past it.
     const { ring, margin } = landmarkShape(ROTUNDA_SHAPE, answers, { rand: rand(5), facts: {} });
     const floor = floorOf(temple.parts, at);
     if (floor === null) throw new Error("A rotunda has a floor.");
@@ -300,7 +300,7 @@ describe("solid pieces of a built thing", () => {
     const walk = tapWalk(solids, { x: at.x + wx * 16, z: at.z + wz * 16 }, { x: at.x, z: at.z });
     expect(walk.state).toBe("arrived");
     for (const q of walk.path) expect(clearanceAt(solids, q.x, q.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
-    // It stands on the floor inside, five steps up, and climbs no more than a step at a time on the way.
+    // The walk ends on the floor inside, five steps up, and climbs no more than a step at a time on the way.
     const middle = footingAt(t, [floor], at.x, at.z);
     expect(middle.deck).toBe(true);
     expect(middle.ground).toBeCloseTo(at.y + 5 * 0.34, 2);
@@ -312,7 +312,7 @@ describe("solid pieces of a built thing", () => {
     }
     // Inside the top step, the paving's joints never drop a walk to the ground below it.
     for (let d = ring + margin - 0.3; d >= 0; d -= 0.05) expect(footingAt(t, [floor], at.x + wx * d, at.z + wz * d).deck, `${d.toFixed(2)} m in`).toBe(true);
-    // A column stands in the ring, and stops a walker.
+    // A column in the ring stops a walker.
     const a = Math.PI / 2 + Math.PI / 8;
     const [lx, lz] = [Math.cos(a) * ring, Math.sin(a) * ring];
     expect(clearanceAt(solids, at.x + lx * Math.cos(at.yaw) + lz * wx, at.z - lx * Math.sin(at.yaw) + lz * wz)).toBeLessThan(0);
@@ -334,7 +334,7 @@ describe("a building's walls", () => {
     const plan = buildSlots(house, structure, new Library(PRIMITIVES), { seed: 1, facts: { size: 1, floors: 1, reach: 0 } }).get("footprint")?.output as BuildingPlan;
     const site = { x: dry.x - 40, z: dry.z, yaw: 0.3, level: 0 };
     const solids = solidsOf(wallsShape(plan, site));
-    // Every mass is solid at its middle.
+    // Every mass is solid at its center.
     for (const m of plan.masses) {
       const [x, z] = siteToWorld(site, m.x, m.z);
       expect(clearanceAt(solids, x, z)).toBeLessThan(0);
@@ -407,7 +407,7 @@ describe("walking off the land", () => {
 });
 
 describe("a walker's stride", () => {
-  /** Walks `seconds` from `from` toward (dx, dz) at `speed`, then stands for `rest` seconds: each frame's body, and whether it was asked to move. */
+  /** Walks `seconds` from `from` toward (dx, dz) at `speed`, then rests for `rest` seconds. Returns each frame's body and whether it was asked to move. */
   const walkThen = (decks: readonly Deck[], from: Walker, dx: number, dz: number, seconds: number, rest: number, speed = WALK_TO.pace) => {
     let body = standAt(t, decks, from.x, from.z);
     const frames: { body: Stride; moving: boolean }[] = [];
@@ -420,8 +420,8 @@ describe("a walker's stride", () => {
   };
   const speedOf = (b: Stride): number => Math.hypot(b.vx, b.vz);
   /**
-   * Dry ground near `dry` whose grade westward holds steady over the first 2 m, so the pace the grade allows stays
-   * put while a walker heading west gets going: overshoot is then judged on the gait alone, whatever the land.
+   * Dry ground near `dry` whose westward grade is steady over the first 2 m, so the pace the grade allows stays
+   * constant while a walker heading west speeds up. Any overshoot then comes from the gait alone.
    */
   const evenGround = (): Walker => {
     for (let r = 0; r <= 200; r += 4) {
@@ -441,20 +441,20 @@ describe("a walker's stride", () => {
     const frames = walkThen([], evenGround(), -1, 0, 6, 3);
     const striding = frames.slice(120, 360);
     const pace = striding.reduce((m, f) => Math.max(m, speedOf(f.body)), 0);
-    // Under way within a fraction of a second, as the keys walk in games, and never overshooting: while it gets going
-    // on a steady grade, its speed only rises.
+    // Up to speed within a fraction of a second, as in games, with no overshoot. While it speeds up on a steady grade,
+    // its speed only rises.
     expect(speedOf(frames[Math.round(0.15 * 60)]!.body)).toBeGreaterThan(pace * 0.9);
     const going = frames.slice(0, Math.round(0.3 * 60));
     for (let i = 1; i < going.length; i++) expect(speedOf(going[i]!.body)).toBeGreaterThanOrEqual(speedOf(going[i - 1]!.body) - 1e-3);
-    // It goes the way it was asked, never swinging: every step of its velocity points along -x.
+    // It moves in the requested direction without swinging. Every frame's velocity points along -x.
     for (const f of frames.filter((f) => speedOf(f.body) > 1e-3)) expect(Math.abs(f.body.vz) / speedOf(f.body)).toBeLessThan(1e-6);
-    // Let go, it stops within a fraction of a second, slowing along the way it went and never stepping back.
+    // After release it stops within a fraction of a second, slowing along its direction and never stepping back.
     const stopped = frames.findIndex((f) => !f.moving);
     expect(speedOf(frames[stopped + Math.round(0.15 * 60)]!.body)).toBeLessThan(pace * 0.05);
     for (const f of frames.slice(stopped)) expect(f.body.vx).toBeLessThanOrEqual(1e-9);
-    // The eyes ride 1.6 m over the ground they cross, never lagging or floating by more than a few centimeters.
+    // The eyes stay 1.6 m over the ground, never lagging or floating by more than a few centimeters.
     for (const f of striding) expect(Math.abs(f.body.eye - footingAt(t, [], f.body.x, f.body.z).eye)).toBeLessThan(0.08);
-    // Nothing but the ground moves them: their vertical acceleration, through a Hann window, has almost nothing above 4 Hz.
+    // Only the ground moves them. Their vertical acceleration, through a Hann window, has almost nothing above 4 Hz.
     const acc = striding.slice(1, -1).map((f, i, all) => ((striding[i + 2]!.body.eye - 2 * f.body.eye + striding[i]!.body.eye) / (dt * dt)) * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (all.length - 1))));
     let total = 0;
     let high = 0;
@@ -469,7 +469,7 @@ describe("a walker's stride", () => {
       if (k / (acc.length * dt) > 4) high += re * re + im * im;
     }
     expect(high / Math.max(total, 1e-12)).toBeLessThan(0.02);
-    // Stopped, it holds perfectly still.
+    // Once stopped, it does not move.
     const settled = frames.slice(Math.round(7.5 * 60));
     for (const f of settled) {
       expect(speedOf(f.body)).toBeLessThan(0.01);
@@ -484,9 +484,9 @@ describe("a walker's stride", () => {
       body = carry(t, [], body, x, dry.z, dt);
       expect(body.x).toBe(x);
       expect(body.vx).toBeCloseTo(-TRAVEL.pace, 6);
-      // At five times a walk the ride reads the ground its own lag ahead, so at the brow of a descent the eyes
-      // lead the ground down by more than a walk's few centimeters: by 0.34 m where this line goes over the brow of a
-      // valley wall falling at a grade of 0.45, about as steep as any valley wall gets.
+      // At five times walking pace the ride reads the ground its own lag ahead, so at the brow of a descent the eyes
+      // lead the ground down by more than a walk's few centimeters. Where this line goes over the brow of a valley
+      // wall falling at a grade of 0.45, about as steep as any valley wall gets, they lead by 0.34 m.
       if (i > 30) expect(Math.abs(body.eye - footingAt(t, [], body.x, body.z).eye)).toBeLessThan(0.4);
     }
   });
@@ -497,7 +497,7 @@ describe("a walker's stride", () => {
     expect(gradePace(-GAIT.peak)).toBeGreaterThan(1);
     for (let s = -0.6; s < 0.6; s += 0.01) expect(gradePace(s)).toBeLessThanOrEqual(GAIT.ceiling);
     for (let s = -GAIT.peak; s < 0.6; s += 0.01) expect(gradePace(s + 0.01)).toBeLessThanOrEqual(gradePace(s));
-    // On real ground: the steepest dry 20 m line near the pond that climbs all along is walked up more slowly than down.
+    // On real ground, the steepest dry 20 m line near the pond that climbs all along is walked up more slowly than down.
     let line = { from: dry, dx: 1, dz: 0, rise: 0 };
     for (let a = 0; a < 32; a++) {
       const dx = Math.cos((a / 32) * Math.PI * 2);
@@ -517,14 +517,14 @@ describe("a walker's stride", () => {
     const down = steady(walkThen([], top, -line.dx, -line.dz, 3, 0));
     expect(up).toBeLessThan(WALK_TO.pace * 0.95);
     expect(up).toBeLessThan(down);
-    // A deck across the pond, 0.3 m over the water: walked across, the eyes stay 1.6 m above its planks, dry, and never sink toward the water.
+    // A deck across the pond, 0.3 m over the water. Walking across, the eyes stay 1.6 m above its planks, dry, and never sink toward the water.
     const water = heightAt(t.lattice, pond.x, pond.z) + waterDepthAt(t, pond.x, pond.z);
     const deck: Deck = { x: pond.x, z: pond.z, cos: 1, sin: 0, half: pond.reach * 1.5, halfWidth: 0.8, base: water, topAt: () => 0.3, way: 0, crossing: { x: pond.x, z: pond.z, yaw: 0, span: pond.reach * 3, level: water, bank: water }, holds: 0 };
     expect(footingAt(t, [deck], pond.x, pond.z)).toMatchObject({ deck: true, depth: 0, eye: water + 0.3 + EYE_HEIGHT });
     const crossing = walkThen([deck], { x: pond.x - pond.reach, z: pond.z }, 1, 0, 4, 1);
     for (const f of crossing.slice(60)) expect(f.body.eye).toBeGreaterThan(water + 0.3 + EYE_HEIGHT - 0.05);
-    // Once the deck no longer holds, a way across it fords the water beside it: never through the deck, easing out to the
-    // ford over the bank, and as it was everywhere else.
+    // Once the deck no longer holds, a way across it fords the water beside it. It never passes through the deck, it
+    // eases out to the ford over the bank, and it is unchanged everywhere else.
     const way = Array.from({ length: Math.round(pond.reach * 8) + 1 }, (_, i) => ({ x: pond.x - pond.reach * 4 + i * 1, z: pond.z }));
     const ford = fordBeside(t, way, [deck]);
     for (const p of ford) expect(Math.abs(p.x - deck.x) <= deck.half && Math.abs(p.z - deck.z) <= deck.halfWidth + 0.15).toBe(false);

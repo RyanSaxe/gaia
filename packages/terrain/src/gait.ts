@@ -1,10 +1,8 @@
-// How a person's body carries their eyes while they walk, one pure step at a
-// time. The body gets going at once and stops at once, over a fraction of a
-// second and never overshooting, slows climbing and quickens a little on a
-// gentle descent, stands on a footbridge's deck, and its eyes ride over the
-// ground on a critically damped spring that follows the land's shape and
-// smooths away its facets. Nothing else moves the eyes: no bob, no sway, no
-// roll, so the view moves only as the person moves it.
+// Steps a walking person's body and eye height one pure frame at a time. The
+// body speeds up and stops within a fraction of a second without overshoot,
+// slows on climbs, and stands on decks and built floors. The eyes follow the
+// ground on a critically damped spring and nothing else moves them, so the
+// view never bobs, sways or rolls.
 
 import type { Part } from "@gaia/schema";
 import { footbridgeDeck, footbridgeHolds } from "@gaia/primitives";
@@ -15,49 +13,50 @@ import { type Intent, type Stance, WALK_TO, moveBy, stanceAt, wadeSpeed } from "
 import { groundHeightAt } from "./wilds.ts";
 import type { Terrain } from "./world.ts";
 
-/** Gait constants; design rationale is in docs/design-system.md#terrain-walking-and-travel. */
+/** Gait constants. The design rationale is in docs/design-system.md#terrain-walking-and-travel. */
 export const GAIT = {
-  /** Seconds to reach 95% of a new pace speeding up, and slowing down: at once, as in games, but never in one jump. */
+  /** Seconds to reach 95% of a new pace when speeding up (`start`) and slowing down (`stop`). Fast as in games, but never a one-frame jump. */
   start: 0.15,
   stop: 0.12,
   /** Shift's pace, as a multiple of walking pace. */
   hurry: 2.4,
   /**
-   * Pace by grade, Tobler's hiking function made gentler: the pace is
+   * Pace by grade, a gentler form of Tobler's hiking function. The pace is
    * multiplied by exp(-grade * (|S + peak| - peak)) for a rise S, so climbing
-   * slows, a gentle descent of `peak` is quickest, and a steep one is careful;
-   * never below `floor` nor above `ceiling`. The grade is measured over `reach` meters either side.
+   * slows, a descent of `peak` is fastest, and a steep descent slows. The
+   * factor stays between `floor` and `ceiling`. The grade is measured over
+   * `reach` meters either side.
    */
   grade: 2,
   peak: 0.08,
   floor: 0.35,
   ceiling: 1.1,
   reach: 1,
-  /** The ground the eyes ride on is the mean under the feet, sampled this far round the body, meters. */
+  /** Radius in meters around the body over which the eyes' target height is averaged. */
   footprint: 0.5,
   /**
-   * The ride's natural frequency, radians a second: critically damped, so it
-   * never overshoots or floats. Before it, the footing eases at `level`
-   * radians a second, so a deck's edge rises as a ramp and the ride's
+   * The ride's natural frequency in radians per second, critically damped so
+   * it never overshoots. Before the spring, the footing eases at `level`
+   * radians per second, so a deck's edge rises as a ramp and the ride's
    * acceleration never jumps. The footing is read ahead of the body by the
-   * ride's own lag, so the eyes keep their height on a slope and lift as a
-   * foot reaches a step.
+   * ride's lag, so the eyes keep their height on a slope and lift as a foot
+   * reaches a step.
    */
   ride: 11,
   level: 16,
-  /** A tap's walk slows to arrive as if braking at this rate, meters a second squared, ending within `WALK_TO.reach`. */
+  /** Deceleration in meters per second squared for a tap's walk as it arrives within `WALK_TO.reach`. */
   arrive: 2.5,
 } as const;
 
-/** Where the feet are: the ground or deck underfoot, how the person stands there, and whether on a deck. */
+/** The height underfoot from the ground or a deck, the stance there, and whether it is a deck. */
 export interface Footing extends Stance {
   readonly ground: number;
   readonly deck: boolean;
 }
 
 /**
- * A footbridge's deck as a walk stands on it: its middle, its axis, its half span and width, and its top above
- * `base`; the way and crossing it is, and the vitality below which a gap too wide to step across has opened in it
+ * A footbridge's deck for walking: its center, its axis, its half span and half width, and its top above `base`. It
+ * also has its way and crossing, and `holds`, the vitality below which a gap too wide to step across opens in it
  * (`footbridgeHolds`), so it can no longer be walked.
  */
 export interface Deck {
@@ -74,7 +73,7 @@ export interface Deck {
   readonly holds: number;
 }
 
-/** The decks of every footbridge on the ways, where a walk stands above the water while each holds. */
+/** The decks of every footbridge on the ways. A person can walk on a deck above the water while it holds. */
 export function decksOf(ways: readonly Way[]): Deck[] {
   const out: Deck[] = [];
   ways.forEach((way, i) => {
@@ -87,18 +86,18 @@ export function decksOf(ways: readonly Way[]): Deck[] {
   return out;
 }
 
-/** Where a deck that no longer holds stands, as a solid a walk goes round: its span from bank to bank and its width with its rails. */
+/** A deck that no longer holds as a solid a walk goes around, covering its span from bank to bank and its width with rails. */
 export function deckShape(d: Deck): SolidShape {
   const w = d.halfWidth + 0.15;
   return { points: [[-d.half, -w], [d.half, -w], [d.half, w], [-d.half, w]].flatMap(([u, v]) => [d.x + (u as number) * d.cos + (v as number) * d.sin, d.z - (u as number) * d.sin + (v as number) * d.cos]) };
 }
 
-/** Meters a side of a floor's cells. */
+/** Side in meters of a floor's cells. */
 export const FLOOR_CELL = 0.25;
 
 /**
- * A built floor a walk stands on, such as a landmark's steps and the floor inside: the top of its upward faces on a
- * grid of `FLOOR_CELL` cells over the land from (x0, z0), -Infinity where it has none.
+ * A built floor to walk on, such as a landmark's steps and the floor inside. `tops` holds the height of its upward
+ * faces on a grid of `FLOOR_CELL` cells from (x0, z0), and -Infinity where there is none.
  */
 export interface Floor {
   readonly x0: number;
@@ -108,13 +107,13 @@ export interface Floor {
   readonly tops: Float32Array;
 }
 
-/** What a walk stands on above the ground: a footbridge's deck or a built floor. */
+/** A surface above the ground to walk on: a footbridge's deck or a built floor. */
 export type Footbed = Deck | Floor;
 
 /**
- * The floor a built thing's walkable parts make, standing at (x, y, z) turned by `yaw` as Three turns it: the tops of
- * their upward faces, which a walk climbs as it climbs the ground, and which stop no walk (`piecesShapes` reads only
- * solid parts). Null when it has none.
+ * The floor that a built thing's walkable parts make, placed at (x, y, z) and turned by `yaw` as Three turns it. It
+ * holds the tops of their upward faces, which a walk climbs as it climbs the ground. They block no walk, since
+ * `piecesShapes` reads only solid parts. Null when there are none.
  */
 export function floorOf(parts: readonly Part[], at: { readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }): Floor | null {
   const c = Math.cos(at.yaw);
@@ -145,7 +144,7 @@ export function floorOf(parts: readonly Part[], at: { readonly x: number; readon
   const cols = Math.ceil((x1 - x0) / FLOOR_CELL) + 1;
   const rows = Math.ceil((z1 - z0) / FLOOR_CELL) + 1;
   const tops = new Float32Array(cols * rows).fill(-Infinity);
-  // Each upward face's height at the middle of every cell it covers; the highest face over a cell is its top.
+  // Sample each upward face's height at the center of every cell it covers. The highest face over a cell is its top.
   for (let k = 0; k < tris.length; k += 9) {
     const [ax, ay, az, bx, by, bz, qx, qy, qz] = tris.slice(k, k + 9) as [number, number, number, number, number, number, number, number, number];
     const area = (bx - ax) * (qz - az) - (qx - ax) * (bz - az);
@@ -167,8 +166,8 @@ export function floorOf(parts: readonly Part[], at: { readonly x: number; readon
       }
     }
   }
-  // A joint between paving stones is narrower than a cell: a cell that misses every face but has floor either side
-  // of it takes the lower side, so a walk never drops into a joint.
+  // A joint between paving stones can be narrower than a cell. A cell that misses every face but has floor on both
+  // sides takes the lower side's height, so a walk never drops into a joint.
   const filled = tops.slice();
   for (let j = 1; j < rows - 1; j++) {
     for (let i = 1; i < cols - 1; i++) {
@@ -203,7 +202,7 @@ export function deckAt(decks: readonly Footbed[], x: number, z: number): number 
   return top;
 }
 
-/** How a person stands at a point: on a deck or floor where one stands above the ground or the water there, dry; otherwise on the ground, wading or swimming. */
+/** A person's footing at a point: dry on a deck or floor above the ground or water there, else on the ground, wading or swimming. */
 export function footingAt(t: Terrain, decks: readonly Footbed[], x: number, z: number): Footing {
   const stance = stanceAt(t, x, z);
   const ground = groundHeightAt(t, x, z);
@@ -216,17 +215,17 @@ export function footingAt(t: Terrain, decks: readonly Footbed[], x: number, z: n
 export interface Stride {
   readonly x: number;
   readonly z: number;
-  /** Velocity over the ground, meters a second, and how fast it is changing. */
+  /** Velocity over the ground in meters per second (`vx`, `vz`), and its rate of change (`ax`, `az`). */
   readonly vx: number;
   readonly vz: number;
   readonly ax: number;
   readonly az: number;
-  /** The eyes' height riding over the ground, and how fast it is changing. */
+  /** The eyes' height (`eye`) and its rate of change (`climb`). */
   readonly eye: number;
   readonly climb: number;
-  /** The eased footing the ride follows: the eyes' height there. */
+  /** The eased eye height that the ride's spring follows. */
   readonly level: number;
-  /** Whether solids held this step to less than a fiftieth of what it meant to move. */
+  /** Whether solids held this step to less than `WALK_TO.stall` of its intended move. */
   readonly blocked: boolean;
 }
 
@@ -241,10 +240,10 @@ function settle(x: number, v: number, target: number, w: number, dt: number): re
   return [target + (e + k * dt) * decay, (v - w * k * dt) * decay];
 }
 
-/** Seconds to come within 5% of a step in a critically damped spring of natural frequency w is 4.74 / w. */
+/** A critically damped spring of natural frequency w comes within 5% of a step in 4.744 / w seconds. */
 const RATE = 4.744;
 
-/** The share of the pace kept on a rise of `slope` (meters up per meter along; negative going down). */
+/** The share of the pace kept on a rise of `slope`, in meters up per meter along, negative going down. */
 export function gradePace(slope: number): number {
   return Math.max(GAIT.floor, Math.min(GAIT.ceiling, Math.exp(-GAIT.grade * (Math.abs(slope + GAIT.peak) - GAIT.peak))));
 }
@@ -256,10 +255,10 @@ const FOOTPRINT: readonly (readonly [number, number, number])[] = [
   ...Array.from({ length: 12 }, (_, k) => [Math.cos(((k + 0.5) * Math.PI) / 6), Math.sin(((k + 0.5) * Math.PI) / 6), 1] as const),
 ];
 const FOOTPRINT_WEIGHT = FOOTPRINT.reduce((sum, [, , w]) => sum + w, 0);
-/** Seconds the ride trails the footing it follows: a critically damped spring's lag on a ramp, and the easing before it. */
+/** Seconds the ride lags the footing: a critically damped spring's lag on a ramp plus the easing before it. */
 const RIDE_LAG = 2 / GAIT.ride + 1 / GAIT.level;
 
-/** The eyes' height above the mean footing round a point, weighted toward its middle: the ground's shape without its facets. */
+/** The mean eye height over the footprint around a point, weighted toward its center, which smooths the ground's facets. */
 function rideTarget(t: Terrain, decks: readonly Footbed[], x: number, z: number): number {
   const r = GAIT.footprint;
   let sum = 0;
@@ -274,10 +273,10 @@ export function standAt(t: Terrain, decks: readonly Footbed[], x: number, z: num
 }
 
 /**
- * One frame of walking. The body's velocity eases toward what the person
- * wants (a direction of length up to 1 and a speed), slowed by water and by
- * the grade along the way it would go; solids turn it aside as they turn any
- * step. The eyes ride the footing.
+ * One frame of walking. The body's velocity eases toward `want`, a direction
+ * of length up to 1 and a speed, slowed by water and by the grade in the
+ * direction of travel. Solids slide the move as they slide any step. The eyes
+ * follow the footing.
  */
 export function stride(t: Terrain, solids: Solids, decks: readonly Footbed[], from: Stride, want: Intent, dt: number): Stride {
   if (dt <= 0) return from;
@@ -302,7 +301,7 @@ export function stride(t: Terrain, solids: Solids, decks: readonly Footbed[], fr
   const meant = Math.hypot(mx, mz);
   const moved = meant > 1e-9 ? moveBy(solids, from, mx, mz) : from;
   const went = Math.hypot(moved.x - from.x, moved.z - from.z);
-  // A solid in the way takes the body's speed with it, but only the part running into it.
+  // A solid in the way removes the part of the body's velocity that runs into it.
   if (meant > 1e-9 && meant - went > 1e-6) {
     vx = (moved.x - from.x) / dt;
     vz = (moved.z - from.z) / dt;
@@ -312,7 +311,7 @@ export function stride(t: Terrain, solids: Solids, decks: readonly Footbed[], fr
   return { ...ride(t, decks, from, moved.x, moved.z, vx, vz, dt), ax, az, blocked: meant > 1e-4 && went < meant * WALK_TO.stall };
 }
 
-/** The eyes riding the footing as the body comes to (x, z) going (vx, vz). */
+/** Moves the eyes along the footing as the body arrives at (x, z) with velocity (vx, vz). */
 function ride(t: Terrain, decks: readonly Footbed[], from: Stride, x: number, z: number, vx: number, vz: number, dt: number): Stride {
   const ahead = rideTarget(t, decks, x + vx * RIDE_LAG, z + vz * RIDE_LAG);
   const level = ahead + (from.level - ahead) * Math.exp(-GAIT.level * dt);
@@ -320,7 +319,7 @@ function ride(t: Terrain, decks: readonly Footbed[], from: Stride, x: number, z:
   return { x, z, vx, vz, ax: (vx - from.vx) / dt, az: (vz - from.vz) / dt, eye, climb, level, blocked: false };
 }
 
-/** One frame of being carried to (x, z), as travel along the trails carries the body: the eyes ride the footing as a walk's do. */
+/** One frame of moving the body to (x, z), as travel along the trails does. The eyes follow the footing as in a walk. */
 export function carry(t: Terrain, decks: readonly Footbed[], from: Stride, x: number, z: number, dt: number): Stride {
   if (dt <= 0) return from;
   return ride(t, decks, from, x, z, (x - from.x) / dt, (z - from.z) / dt, dt);

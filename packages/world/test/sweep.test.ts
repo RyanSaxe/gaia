@@ -12,8 +12,8 @@ const KINDS: readonly (readonly [AnyKind, Library, SweepOptions])[] = [
   ...[rock, wildflowers, structure, landmark, world, biome, link].map((k) => [k, all, {}] as const),
 ];
 
-/** Every part, option and absence the blueprints stand, read from the blueprints alone. */
-function standing(k: AnyKind, lib: Library, blueprints: readonly Blueprint[]): string[] {
+/** Every part, option and absence that appears in the blueprints, read from the blueprints alone. */
+function covered(k: AnyKind, lib: Library, blueprints: readonly Blueprint[]): string[] {
   const out = new Set<string>();
   for (const bp of blueprints) {
     for (const name of Object.keys(k.slots)) {
@@ -29,7 +29,7 @@ function standing(k: AnyKind, lib: Library, blueprints: readonly Blueprint[]): s
   return [...out];
 }
 
-/** Every part, option and absence a kind's blueprints could stand, read from the kind and the library. */
+/** Every part, option and absence a kind's blueprints could contain, read from the kind and the library. */
 function possible(k: AnyKind, lib: Library): string[] {
   return Object.entries(k.slots).flatMap(([name, s]) => [
     ...(s.optional ? [`${name} left out`] : []),
@@ -48,8 +48,8 @@ describe("a sweep of a kind's parts", () => {
       const { blueprints, missing } = sweep(k, lib, options);
       expect(missing).toEqual([]);
       for (const bp of blueprints) expect(validate(bp, k, lib)).toEqual([]);
-      const stood = new Set(standing(k, lib, blueprints));
-      expect(possible(k, lib).filter((x) => !stood.has(x))).toEqual([]);
+      const coveredKeys = new Set(covered(k, lib, blueprints));
+      expect(possible(k, lib).filter((x) => !coveredKeys.has(x))).toEqual([]);
     });
   }
 
@@ -78,7 +78,7 @@ describe("a sweep of a kind's parts", () => {
     const wheels = blueprints.flatMap((b, i) => (b.slots.feature?.use === "waterwheel@1" ? [i] : []));
     expect(wheels.length).toBeGreaterThan(0);
     for (const i of wheels) expect(places[i]?.has, `place ${i}`).toEqual(["running water"]);
-    // Each place by running water stands the wheel until the wheel has nothing left to show.
+    // Each place with running water gets the waterwheel until all of the wheel's options are covered.
     expect(wheels.slice(0, 3)).toEqual([2, 8, 14]);
     const dry = sweep(structure, all, { places: places.map(() => water(false)) });
     expect(dry.blueprints.some((b) => b.slots.feature?.use === "waterwheel@1")).toBe(false);
@@ -99,12 +99,12 @@ describe("a sweep of a kind's parts", () => {
       if (relief?.use === "valley@1") expect(relief.params.stream).toBe(place.fixed["relief.stream"]);
       if (relief?.use === "basin@1") expect(relief.params.pond).toBe(place.fixed["relief.pond"]);
     });
-    // Every landform stands under both labels.
+    // Every landform appears under both labels.
     for (const label of ["thriving", "ruin"]) {
       const under = new Set(blueprints.flatMap((b, i) => (places[i]?.label === label ? [b.slots.relief?.use] : [])));
       expect(under.size).toBe(all.forRole("Relief").length);
     }
-    // A brook and a dry bed were settled, never a trickle.
+    // The places fixed only a brook or a dry bed, so a trickle is reported missing.
     expect(missing).toEqual(['relief: valley@1 stream "trickle"']);
   });
 });

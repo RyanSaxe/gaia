@@ -1,8 +1,8 @@
 // Turns the world's and a region's blueprints into the numbers every material
-// reads at one hour. The slots are chosen independently; this is where they
-// meet: the hour tints the sky and night deepens it, the region's air pulls
-// the horizon and fog toward its own color, and the sun or moon colors the
-// clouds.
+// reads at one hour. Jev chooses the slots independently, and this module
+// combines them. The hour tints the sky and night deepens it, the region's air
+// pulls the horizon and fog toward its own color, and the sun or moon colors
+// the clouds.
 
 import type {
   AccentSpec,
@@ -49,14 +49,14 @@ export interface SkyLook {
   readonly wind: WindSpec;
 }
 
-/** What one region grows and breathes. */
+/** One region's ground, air, drifting accents and native palette families. */
 export interface RegionLook {
   readonly ground: GroundSpec;
-  /** The ground's decline color: shared by every world, like component decline. */
+  /** The ground's decline color, the same in every world, like component decline. */
   readonly groundDecline: Rgb;
   readonly air: AtmosphereSpec;
   readonly drift: AccentSpec | null;
-  /** Palette families native to the region; empty means every family. */
+  /** Palette families native to the region. Empty means every family. */
   readonly natives: readonly string[];
 }
 
@@ -75,7 +75,7 @@ export interface WorldLook {
 /** Dry, grey-brown grass: what the ground declines toward in every world. */
 export const GROUND_DECLINE: Rgb = hex(0xb1a17a);
 
-/** The air of a region whose biome chose none: clear, with no tint. */
+/** The air of a region whose biome sets none: clear, with no tint. */
 export const CLEAR_AIR: AtmosphereSpec = { tint: hex(0xc8dcec), tintAmount: 0, density: 0.0035, mist: 0, specks: 0 };
 
 const DEEP_ZENITH: Rgb = hex(0x2c3a78);
@@ -112,7 +112,7 @@ export const OVERCAST_DAY = {
   under: hex(0x7f8794),
 } as const;
 
-/** The light at an hour under a sky `o` overcast (0 to 1), as `OVERCAST_DAY` says; exactly the hour's light when `o` is 0. */
+/** The light at an hour under a sky that is `o` overcast, 0 to 1, as `OVERCAST_DAY` sets. It is exactly the hour's light when `o` is 0. */
 export function overcastLight(light: LightSpec, o: number): LightSpec {
   if (!(o > 0)) return light;
   const k = OVERCAST_DAY;
@@ -145,7 +145,7 @@ export function realizeSky(world: Filled, lib: Library, seed: number, hour: numb
   // Night keeps a trace of the world's own sky, so a lavender world has a lavender night.
   const zenith = mixLab(dayZenith, NIGHT_ZENITH, night * 0.94);
   const horizon = mixLab(dayHorizon, mixLab(NIGHT_HORIZON, light.moonColor, 0.12), night * 0.92);
-  // By night, clouds are silvered by the moon instead of whitened by the sun.
+  // By night, the moon lights the clouds silver instead of the sun lighting them white.
   const fairLit = mixLab(CLOUD_WHITE, light.sunColor, 0.12 + light.glow * 0.45);
   // An overcast sky's clouds are grey-white, their undersides a soft slate.
   const dayLit = overcast > 0 ? mixLab(fairLit, OVERCAST_DAY.body, 0.5 * overcast) : fairLit;
@@ -153,7 +153,7 @@ export function realizeSky(world: Filled, lib: Library, seed: number, hour: numb
   const cloudLit = mixLab(dayLit, nightLit, night);
   const fairShade = mixLab(mixLab(cloudLit, light.shadowColor, 0.6), zenith, 0.2 + night * 0.3);
   const cloudShade = overcast > 0 ? mixLab(fairShade, OVERCAST_DAY.under, 0.35 * overcast * (1 - night)) : fairShade;
-  // The sun's own light and the hour's glow, deepened, as clouds catch it when the sun is low.
+  // The sun's own light and the hour's glow, deepened, as clouds show it when the sun is low.
   const cloudGlow = shiftColor(mixLab(light.sunColor, light.horizonGlow, 0.4), CLOUD_GLOW);
   return {
     light,
@@ -181,10 +181,10 @@ export function regionAir(region: Filled, lib: Library, seed: number): Atmospher
 }
 
 /**
- * The air where several regions meet, each region's weighed by `weights` (one
- * per region, at any scale): its density, mist and specks by weight, and its
- * tint by how strongly each one tints, so a clear region's tint, which pulls
- * nothing, colors nothing.
+ * The air where several regions meet, with each region's air weighted by
+ * `weights`, one per region at any scale. Density, mist and specks mix by
+ * weight, and tint mixes by how strongly each region tints, so a clear
+ * region's tint, with zero `tintAmount`, adds no color.
  */
 export function mixAir(airs: readonly AtmosphereSpec[], weights: ArrayLike<number>): AtmosphereSpec {
   let total = 0;
@@ -208,15 +208,16 @@ export function mixAir(airs: readonly AtmosphereSpec[], weights: ArrayLike<numbe
 }
 
 /**
- * What the air over failing ground turns toward. Murk gathers once the ground around has declined past `from`, so
- * tired ground keeps its air and failing ground clouds it, and at full decline the haze is `thicken` times as dense,
- * low mist gathers by `mist`, and the tint greys toward `tint`, pulling the horizon and fog by at least `pull`.
+ * How the air changes over declining ground. Murk starts once the surrounding ground's decline passes `from`, so
+ * slightly declined ground keeps its air. At full decline the haze is `thicken` times as dense, low mist rises by
+ * `mist`, and the tint greys toward `tint`, pulling the horizon and fog by at least `pull`.
  */
 export const MURK = { from: 0.3, tint: hex(0x7f7b6e), pull: 0.75, thicken: 3.5, mist: 0.3 } as const;
 
 /**
- * The air over ground that has declined by `decline` (0 thriving, 1 all it will: `groundDecline` of the ground
- * around the eye), thickening and greying as it fails. Thriving ground leaves the air exactly as it was.
+ * The air over ground whose decline is `decline`, from 0 for none to 1 for full, which is `groundDecline` of the
+ * ground around the eye. The air thickens and greys as decline rises. Decline at or below `MURK.from` leaves the air
+ * exactly as it was.
  */
 export function murkyAir(air: AtmosphereSpec, decline: number): AtmosphereSpec {
   const t = Math.min(1, Math.max(0, (decline - MURK.from) / (1 - MURK.from)));
@@ -232,9 +233,9 @@ export function murkyAir(air: AtmosphereSpec, decline: number): AtmosphereSpec {
 }
 
 /**
- * The air as an eye `height` meters above the land looks through it: the same at eye level, and from
- * `AIR.thinFrom` up its haze and low mist thin as `AIR.thinScale / (AIR.thinScale + meters above that)`, so a view
- * from high over the land sees all of it, softened by distance.
+ * The air seen from `height` meters above the land. It is unchanged at eye level. From `AIR.thinFrom` up, its haze
+ * and low mist thin as `AIR.thinScale / (AIR.thinScale + meters above that)`, so a view from high over the land shows
+ * all of it, softened by distance.
  */
 export function airFromHeight(air: AtmosphereSpec, height: number): AtmosphereSpec {
   const above = height - AIR.thinFrom;
@@ -245,10 +246,10 @@ export function airFromHeight(air: AtmosphereSpec, height: number): AtmosphereSp
 
 /** The shared sky seen through `air`: its horizon pulled toward the air's tint, and the fog the air lays over distance. */
 export function throughAir(sky: SkyLook, air: AtmosphereSpec): Pick<WorldLook, "sky" | "fog"> {
-  // The air sits in front of the sunset; at night its color fades into the dark.
+  // The air is in front of the sunset. At night its color fades into the dark.
   const tint = mixLab(air.tint, sky.sky.horizon, sky.light.nightness * 0.75);
   const horizon = mixLab(sky.sky.horizon, tint, air.tintAmount * 0.5);
-  // Night air is only moonlit: distance dims the land a little rather than washing it pale.
+  // Night air is only moonlit, so distance dims the land a little rather than washing it pale.
   const fog = mixLab(mixLab(horizon, tint, air.tintAmount * 0.5), sky.sky.zenith, sky.light.nightness * 0.3);
   return {
     sky: { ...sky.sky, horizon, mid: mixLab(sky.sky.zenith, horizon, 0.5) },

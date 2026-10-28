@@ -1,13 +1,13 @@
 """Encode the music to Ogg Opus (96 kb/s stereo, 48 kHz), decode it back, check it, and write manifest.json.
 
-This is the last stage and stands alone: it reads only the mixed WAVs and mix-report.json, and writes only the Ogg
-files and manifest.json. The phrases ship as these files; the four stems are measured here and then shipped as
+This is the last stage and runs on its own. It reads only the mixed WAVs and mix-report.json, and writes only the Ogg
+files and manifest.json. The phrases ship as these files, and the four stems are measured here and then shipped as
 chunks (chunks.py), which replace their whole-file encodes.
 
 Checks on the decoded files: the four stems are exactly one loop long (the same number of samples), the wrap from
 each stem's last sample to its first is no bigger a step than the music makes elsewhere, the level either side of
-the wrap matches the source, and every file's true peak is at most -3 dBFS. Loudness is measured on the decoded audio:
-the piece's figure is bed + melody summed.
+the wrap matches the source, and every file's true peak is at most -3 dBFS. Loudness is measured on the decoded audio,
+and the piece's figure is bed + melody summed.
 
 Usage: python -m music.encode WAV_DIR ASSETS_DIR   (from tools/sound)
 """

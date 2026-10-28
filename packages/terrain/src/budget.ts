@@ -1,14 +1,14 @@
-// The relief budget: how much the land may rise and fall. Low relief keeps
-// sight lines short, so nothing far away ever needs drawing in detail.
+// The relief budget limits how much the land may rise and fall. Low relief
+// keeps sight lines short, so distant ground never needs full detail.
 
 import type { Lattice } from "./lattice.ts";
 
 export const RELIEF_BUDGET = {
   /** Highest ground minus lowest ground anywhere, in meters. */
   range: 24,
-  /** Steepest ground anywhere, in degrees: terrace risers and stream banks. */
+  /** Steepest ground anywhere, in degrees. It allows for terrace risers and stream banks. */
   maxSlope: 40,
-  /** A person walks up anything this gentle without thinking, in degrees. */
+  /** Steepest ground in degrees that counts as walkable. */
   walkSlope: 30,
   /** The share of ground that must be walkable. */
   walkShare: 0.95,
@@ -57,7 +57,7 @@ export function measureRelief(l: Lattice, heights: Float32Array = l.heights, inc
       cells++;
     }
   }
-  // Unbroken climbs along rows and columns: consecutive rises steeper than walkable.
+  // The tallest run of consecutive same-direction steps steeper than `walkSlope`, along rows and columns.
   let maxStep = 0;
   const run = (start: number, stride: number, count: number, line: number, alongRows: boolean): void => {
     let climb = 0;

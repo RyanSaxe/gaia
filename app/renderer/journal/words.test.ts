@@ -36,12 +36,12 @@ describe("what a journal page says", () => {
     expect(contentsWords(src).body).toEqual({ kind: "rows", rows: [{ of: "core", name: "core", depth: 0, vitality: 0.6, page: j.entry("core")?.page }, { of: "README.md", name: "README.md", depth: 0, vitality: 1, page: j.entry("README.md")?.page }] });
     const file = wordsOf(src, j.entry(MATH)!);
     expect(file).toMatchObject({ path: ["core"], name: "math.ts", vitality: 0.5 });
-    // A file with definitions lists itself first, as a thing of its own.
+    // A file with definitions lists its own page first.
     expect(file.body.kind === "rows" && file.body.rows.map((r) => [r.of, r.depth, r.vitality])).toEqual([[ownOf(MATH), 0, 0.5], [`${MATH}#Calc`, 0, 0.3], [`${MATH}#Calc.add`, 1, 0.9]]);
     const calc = wordsOf(src, j.entry(`${MATH}#Calc`)!);
     expect(calc).toMatchObject({ path: ["core", "math.ts"], name: "Calc", vitality: 0.3, signature: "export class Calc {", body: { kind: "code", first: 3, opensAt: 3 } });
     expect(calc.body.kind === "code" && calc.body.lines).toEqual(TEXT.slice(2, 6));
-    // Until the file's text arrives, a definition says where it is and what it is called, and holds no code.
+    // Until the file's text arrives, a definition's page has its path and name but no code.
     expect(wordsOf(source(undefined), j.entry(`${MATH}#Calc`)!)).toMatchObject({ name: "Calc", body: { kind: "code", lines: [] } });
   });
 
@@ -49,10 +49,10 @@ describe("what a journal page says", () => {
     const src = source(TEXT);
     const own = wordsOf(src, src.journal.entry(ownOf(MATH))!);
     expect(own).toMatchObject({ path: ["core"], name: "math.ts", vitality: 0.5, body: { kind: "code", first: 1, lines: TEXT, opensAt: 1 } });
-    // Calc is its line, then its body folded; add, inside it, is folded with it.
+    // Calc keeps its first line and folds its body, which includes the nested add.
     expect(own.body.kind === "code" && own.body.folded).toEqual([{ from: 3, to: 6, of: `${MATH}#Calc`, page: src.journal.entry(`${MATH}#Calc`)?.page }]);
     expect(wordsOf(src, src.journal.entry("README.md")!)).toMatchObject({ path: [], name: "README.md", body: { kind: "code", first: 1, lines: ["# Demo", "", "Adds numbers."], prose: true } });
-    // A file that isn't text, such as an image, shows none.
+    // A binary file, such as an image, shows no lines.
     const image = { ...src, lines: () => ["\u0089PNG", "\u0000\u0000"] };
     expect(wordsOf(image, src.journal.entry("README.md")!).body).toMatchObject({ lines: [] });
   });
@@ -85,11 +85,11 @@ describe("what a journal page says", () => {
       [`${OPS}#mid`]: { quality: 0.8, importance: 0.6, concepts: {}, picks: { key: { start: 46, end: 47 } } },
     };
     const src: WordsSource = { journal: journalOf(ops, { first: 18, next: 21, lead: 6 }), world: ops, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of] };
-    // The one that matters most is big, by Jev's importance alone, however its quality reads.
+    // big is the most important by Jev's importance alone, whatever its quality.
     expect(mostImportant(src, [`${OPS}#big`, `${OPS}#tiny`, `${OPS}#mid`])).toBe(`${OPS}#big`);
     const file = wordsOf(src, src.journal.entry(OPS)!);
     expect(file.importance).toBe(0.7);
-    // The lead is big's first line and its key block, the rest folded; it shows big's code, and no row is marked.
+    // The lead is big's signature and key block with the rest folded, and no row is marked.
     expect(file.body.kind === "rows" && file.body.lead).toEqual({
       of: `${OPS}#big`,
       name: "big",
@@ -102,10 +102,10 @@ describe("what a journal page says", () => {
       after: 18,
     });
     expect(file.body.kind === "rows" && file.body.rows.some((r) => "mark" in r)).toBe(false);
-    // A long definition's page opens at its key block, its code plain.
+    // A long definition's page opens at its key block, without marks.
     const big = wordsOf(src, src.journal.entry(`${OPS}#big`)!);
     expect(big.body).toMatchObject({ kind: "code", opensAt: 20, marks: [] });
-    // Its appendix is the code with Jev's marks: the block most in need first, then the key one.
+    // Its appendix has Jev's marks: the weak block first, then the key block.
     const full = appendixWords(src, src.journal.entry(`${OPS}#big`)!);
     expect(full.body.kind === "full" && full.body.marks.map((m) => [m.kind, m.from, m.to])).toEqual([["improve", 10, 12], ["understand", 20, 22]]);
   });
@@ -129,7 +129,7 @@ describe("what a journal page says", () => {
     const things: Record<string, JudgedThing> = { core: t(0.6, 0.8), [A]: t(0.9, 0.7), [B]: t(0.4, 0.8), [`${A}#good`]: t(0.95, 0.6), [`${A}#fine`]: t(0.7, 0.3), [`${B}#bad`]: t(0.2, 0.9), [`${B}#ok`]: t(0.8, 0.2) };
     const src: WordsSource = { journal: journalOf(two, { first: 18, next: 21, lead: 6 }), world: two, vitality: (of) => things[of]?.quality ?? 1, lines: () => text, thing: (of) => things[of] };
     const core = wordsOf(src, src.journal.entry("core")!);
-    // b.ts matters most of the folder's files, and bad most of b.ts's definitions.
+    // b.ts is the folder's most important file, and bad is b.ts's most important definition.
     expect(core.body.kind === "rows" && core.body.lead).toMatchObject({ of: B, name: "b.ts", shows: `${B}#bad`, signature: { text: "line 1" } });
   });
 

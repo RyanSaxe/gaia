@@ -6,10 +6,10 @@ import type { FarStore } from "./far-store.ts";
 import { FAR_TURN, createFarStream } from "./far-stream.ts";
 import { FAR, createFarForms } from "./woods.ts";
 
-// A form read while the world shows uploads an atlas a frame.
+// Runs animation frames on timers, since a stored form read after the world opens uploads one atlas layer a frame.
 vi.stubGlobal("requestAnimationFrame", (step: FrameRequestCallback) => setTimeout(() => step(performance.now()), 0));
 
-/** A stored form one texel a view: what the stream reads instead of baking. */
+/** A stored far form with one texel per view, which the stream reads instead of baking. */
 const stored: FarFormData = {
   version: FAR_BAKE_VERSION,
   bounds: { center: [0, 3, 0], radius: 4, height: 8 },
@@ -22,13 +22,13 @@ const stored: FarFormData = {
   layers: [0, 1, 2, 3].map(() => new Uint8Array(FAR_VIEWS.azimuths * FAR_VIEWS.elevations.length * 4)),
 };
 const store: FarStore = { get: () => Promise.resolve(stored), put: () => Promise.resolve() };
-/** The renderer's part in bringing a form: uploads and copies, which only a GPU sees. */
+/** Stubs the renderer calls that loading a form makes. Only a GPU would see their effect. */
 const renderer = { initTexture: () => undefined, initRenderTarget: () => undefined, copyTextureToTexture: () => undefined } as unknown as THREE.WebGLRenderer;
 const plant = { parts: [], motion: { sway: 0.2, frequency: 1 }, palette: { swatches: {} } } as unknown as Realized;
 const PACE = { opening: { views: 24, ms: 6 }, walking: { views: 24, ms: 2 } } as const;
 const eye = new THREE.Vector3();
 
-/** Four forms in two slots, each weighing what `weights` says, and a stream over them. */
+/** Four forms sharing two slots, weighted by `weights`, and a stream over them. */
 function streamOf(weights: number[]) {
   const forms = createFarForms(createSceneLight(), 2);
   for (const k of weights.keys()) {
@@ -37,7 +37,7 @@ function streamOf(weights: number[]) {
   }
   return { forms, stream: createFarStream(renderer, forms, Promise.resolve(store), PACE) };
 }
-/** `seconds` of frames, a frame a twentieth of a second, letting what is being brought arrive between them. */
+/** Runs `seconds` of frames at 20 frames a second, letting loads finish between them. */
 async function frames(stream: ReturnType<typeof streamOf>["stream"], seconds: number): Promise<void> {
   for (let t = 0; t < seconds; t += 0.05) {
     stream.follow(eye, 1000, 0.05);
@@ -58,12 +58,12 @@ describe("the far forms the slots hold", () => {
     const weights = [5, 3, 1, 0];
     const { forms, stream } = streamOf(weights);
     await stream.open(eye, 1000);
-    // A little heavier than a form holding a slot is not enough.
+    // A form slightly heavier than one with a slot doesn't take the slot.
     weights[2] = 6;
     await frames(stream, 1);
     expect(forms.swapPx(1)).toBe(FAR.swapPx);
     expect(forms.slotOf(2)).toBe(-1);
-    // Many times heavier, it takes the lighter one's slot: that turns out over the frames, never at once.
+    // A form many times heavier takes the lighter form's slot, which fades out over many frames.
     weights[2] = 30;
     await frames(stream, FAR_TURN.seconds / 2);
     expect(forms.swapPx(1)).toBeGreaterThan(0);
@@ -72,7 +72,7 @@ describe("the far forms the slots hold", () => {
     await frames(stream, FAR_TURN.seconds / 2 + 1);
     expect(forms.slotOf(1)).toBe(-1);
     await vi.waitFor(() => expect(forms.slotOf(2)).toBeGreaterThanOrEqual(0));
-    // Then it turns in, its copies turning far at a size growing to its own.
+    // Then the heavier form fades in, its `swapPx` growing to its own.
     await frames(stream, FAR_TURN.seconds / 2);
     expect(forms.swapPx(2)).toBeGreaterThan(0);
     expect(forms.swapPx(2)).toBeLessThan(FAR.swapPx);
@@ -88,7 +88,7 @@ describe("the far forms the slots hold", () => {
     weights[1] = 0;
     await frames(stream, FAR_TURN.seconds + 1);
     expect(forms.swapPx(1)).toBe(FAR.swapPx);
-    // One that does wait takes it, once it has turned out.
+    // A form that waits for a slot takes it once the old form fades out.
     weights[3] = 2;
     await frames(stream, FAR_TURN.seconds + 1);
     await vi.waitFor(() => expect(forms.slotOf(3)).toBeGreaterThanOrEqual(0));

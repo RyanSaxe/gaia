@@ -15,7 +15,7 @@ describe("a crown's form by its size on screen", () => {
     expect(farness(top)).toBe(0);
     expect(farness(FAR.swapPx)).toBe(1);
     expect(farness(FAR.swapPx / 4)).toBe(1);
-    // Across the band the far form comes in steadily as the crown shrinks, with no jump anywhere.
+    // Across the band the far form's share rises steadily as the crown shrinks, with no jump.
     let last = 0;
     for (let px = top; px >= FAR.swapPx; px -= 0.25) {
       const f = farness(px);
@@ -64,19 +64,19 @@ describe("a crown too small to see", () => {
 
 describe("a copy turning far", () => {
   const treeLib = new Library(TREE_PRIMITIVES);
-  // The first tree of a sweep of a tree's parts.
+  // The first tree blueprint from a sweep over a tree's parts.
   const firstTree = sweep(tree, treeLib).blueprints[0]!;
   const plant = realize(firstTree, tree, treeLib, { seed: seedOf("woods-test/tree"), facts: { scale: 1, age: 120 } });
   const light = createSceneLight();
   const again = (): Promise<Realized> => Promise.resolve(plant);
   const forms = createFarForms(light, 1);
   const far = forms.add(plant, again);
-  // Its form holds a slot, turned all the way in; the woods need nothing baked in it to choose.
+  // Its form has a slot at its full swap size. The woods need nothing baked in the slot to choose.
   forms.set(far.form, 0, FAR.swapPx);
   const copies = createCopies(plant, light, [{ x: 0, y: 0, z: 0, yaw: 0, scale: 1 }], far);
   const crown = copies.crown;
   const focal = 800;
-  /** One pass with the copy's crown spanning `px` device pixels: whether its full form draws. */
+  /** Whether the full form draws in one pass with the copy's crown spanning `px` device pixels. */
   const fullAt = (camera: THREE.Camera, size: PassSize): boolean => {
     camera.updateMatrixWorld();
     light.uEye.value.copy(camera.position);
@@ -110,7 +110,7 @@ describe("a copy turning far", () => {
       return one.drawn().copies > 0;
     };
     expect(fullAt(20)).toBe(true);
-    // Halfway turned in, it turns far at a smaller size: a copy past that has its card alone, one short of it its full form.
+    // Halfway faded in, the form switches at a smaller span. A copy below that span has its card alone, and one above it its full form.
     own.set(turning.form, 0, 40);
     expect(fullAt(20)).toBe(false);
     expect(fullAt(60)).toBe(true);
@@ -152,7 +152,7 @@ describe("a copy turning far", () => {
       later.set(own.form, 0, FAR.swapPx);
       one.warm();
       if (!before) set();
-      // Once the change has eased in.
+      // Let the vitality change ease in fully.
       settleVitality();
       const mesh = later.cards.object.children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
       return mesh.geometry.getAttribute("aMore").array[1] as number;
@@ -165,7 +165,7 @@ describe("a copy turning far", () => {
   it("draws nothing once its crown is too small to see, even with no far form", () => {
     const alone = createCopies(plant, light, [{ x: 0, y: 0, z: 0, yaw: 0, scale: 1 }]);
     const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100000);
-    // A short focal length keeps the copy well within where the air dissolves everything.
+    // A short focal length keeps the copy well inside `AIR.dissolveEnd`.
     const short = 80;
     const at = (px: number): boolean => {
       camera.position.set(crown.center.x, crown.center.y, crown.center.z + (2 * crown.radius * short) / px);
@@ -175,7 +175,7 @@ describe("a copy turning far", () => {
       alone.cull(camera, { smaller: 1, focal: short, ortho: false });
       return alone.drawn().copies > 0;
     };
-    // Across the dissolve it still draws (its shader dissolves it); once gone, its cell draws nothing.
+    // Across the dissolve the copy still draws, and its shader dissolves it. Once gone, its cell draws nothing.
     expect(at(GONE.start + 1)).toBe(true);
     expect(at((GONE.start + GONE.end) / 2)).toBe(true);
     expect(at(GONE.end * 0.9)).toBe(false);

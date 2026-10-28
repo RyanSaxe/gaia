@@ -1,27 +1,26 @@
-// The journal's silk ribbon, drawn as a
-// band of satin along a soft curve in the book's own pixels. Its width is
-// shaded in lanes, darker at the edges and catching the light along one side,
-// and the light changes along its length as it drapes; where it twists it
-// narrows and shows its duller back; its end is cut in a swallowtail; and it
-// casts a soft shadow on what it lies on. The part that hangs free can sway.
+// Draws the journal's ribbon bookmark as an SVG band along a smooth curve in
+// the book's pixels. Lanes across its width shade it darker at the edges with
+// a highlight on one side, it narrows and darkens where it twists, and its end
+// is cut in a swallowtail. The part past `free` is a separate group that can
+// sway.
 
 type Point = readonly [number, number];
 
-/** Where the ribbon lies, in the book's own pixels: its curve, its width, where it twists, and from where it hangs free. */
+/** The ribbon's shape in the book's pixels: its curve's points, its width, where it twists, and where it starts to hang free. */
 export interface RibbonLie {
   readonly points: readonly Point[];
   readonly width: number;
   /** How far along the curve it twists, 0 to 1. */
   readonly twist: number;
-  /** How far along the curve it hangs free and sways, 0 to 1; 1 holds it still. */
+  /** How far along the curve, 0 to 1, the free part that can sway begins. At 1 none of it sways. */
   readonly free: number;
 }
 
-/** The silk's crimson, and how bright each lane across its width is, edge to edge. */
+/** The ribbon's base crimson, and the brightness of each lane across its width, edge to edge. */
 const BASE = [148, 34, 30] as const;
 const LANES = [0.58, 0.86, 1.22, 1.04, 0.9, 0.64] as const;
 
-/** The gutter's shadow, as the page's own (journal.css, .jb-right .jp::after): darkest in the fold, over the page's height. */
+/** The gutter shadow drawn over the ribbon, matching the page's (journal.css, .jb-right .jp::after): darkest in the fold, over the page's height. */
 const GUTTER = `<linearGradient id="jb-silk-gutter" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="62" y2="0"><stop offset="0" stop-color="rgb(52,32,12)" stop-opacity="0.58"/><stop offset="0.1" stop-color="rgb(52,32,12)" stop-opacity="0.34"/><stop offset="0.33" stop-color="rgb(52,32,12)" stop-opacity="0.16"/><stop offset="0.66" stop-color="rgb(52,32,12)" stop-opacity="0.05"/><stop offset="1" stop-color="rgb(52,32,12)" stop-opacity="0"/></linearGradient><rect x="-4" y="-330" width="70" height="660" fill="url(#jb-silk-gutter)"/>`;
 
 /** A smooth curve through the points (Catmull-Rom), `n` samples. */
@@ -45,7 +44,7 @@ const shadeOf = (silk: readonly number[], k: number, white = 0): string => {
   return `rgb(${ch.join(",")})`;
 };
 
-/** The ribbon as an SVG in the book's own pixels, and where its box lies. */
+/** Returns the ribbon as an SVG in the book's pixels, with its bounding box. */
 export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { readonly left: number; readonly top: number; readonly width: number; readonly height: number; readonly svg: string } {
   const N = 90;
   const c = curve(lie.points, N);
@@ -56,12 +55,12 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
     const l = Math.hypot(dx, dy) || 1;
     return [-dy / l, dx / l] as Point;
   });
-  // Where it twists it narrows, and its back, duller, shows.
+  // It narrows where it twists, and `light` dims there to show its duller back.
   const turn = (t: number): number => Math.exp(-(((t - lie.twist) / 0.045) ** 2));
   const half = (t: number): number => (lie.width / 2) * (1 - 0.72 * turn(t));
-  // The light along its length, as the silk drapes: broad swells, brightest where it falls toward you.
+  // Brightness along its length in broad swells, as of draped silk.
   const light = (t: number): number => (0.9 + 0.16 * Math.sin(t * 9.5 + 0.6) + 0.07 * Math.sin(t * 23 + 1.3)) * (1 - 0.32 * turn(t));
-  // The swallowtail: the last stretch's middle is cut back by most of the width.
+  // The swallowtail notch reaches back 0.75 of the width from the tip.
   const notch = lie.width * 0.75;
   const len = c.reduce((s, p, i) => (i === 0 ? 0 : s + Math.hypot(p[0] - (c[i - 1] as Point)[0], p[1] - (c[i - 1] as Point)[1])), 0);
   const cutFrom = 1 - notch / len;
@@ -71,7 +70,7 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
     const p = c[i] as Point;
     const nn = normals[i] as Point;
     const h = half(t);
-    // Past where the cut begins, each lane ends as far short of the tip as the V reaches across it.
+    // The swallowtail is cut by the `jb-silk-cut` clip path below, not here.
     return [p[0] + nn[0] * u * h, p[1] + nn[1] * u * h];
   };
   const quads: { readonly path: string; readonly fill: string; readonly free: boolean }[] = [];
@@ -85,7 +84,7 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
       const d = side(i + 1, u1);
       const e = side(i + 1, u0);
       const k = (LANES[l] as number) * light(t);
-      // The lane that catches the light shines toward white where the drape faces you.
+      // Lane 2 mixes toward white where `light` exceeds 0.98.
       const white = l === 2 ? Math.max(0, light(t) - 0.98) * 1.6 : 0;
       quads.push({ path: `M${a[0].toFixed(1)} ${a[1].toFixed(1)}L${b[0].toFixed(1)} ${b[1].toFixed(1)}L${d[0].toFixed(1)} ${d[1].toFixed(1)}L${e[0].toFixed(1)} ${e[1].toFixed(1)}Z`, fill: shadeOf(silk, k, white), free: t >= lie.free });
     }
@@ -98,7 +97,7 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
   const width = Math.ceil(Math.max(...xs) + pad) - left;
   const height = Math.ceil(Math.max(...ys) + pad) - top;
   const hang = c[Math.round(lie.free * (N - 1))] as Point;
-  // The swallowtail: its outline, down one edge, in to the cut's point, and back up the other.
+  // The clip outline: down one edge, in to the notch's point, and back up the other edge.
   const cut = c[Math.round(cutFrom * (N - 1))] as Point;
   const outline = [...c.map((_, i) => side(i, -1)), cut, ...c.map((_, i) => side(N - 1 - i, 1))];
   const clip = `<clipPath id="jb-silk-cut" clipPathUnits="userSpaceOnUse"><path d="M${outline.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("L")}Z"/></clipPath>`;
@@ -110,15 +109,15 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
 }
 
 /**
- * Where the ribbon lies on the page it marks, in the book's own pixels: fixed at the spine's head, down the gutter in
- * the fold's shadow, well clear of the writing, and out of the foot to lie along the book's lower edge. It is the one
- * lie: elsewhere in the book it is turned about the spine (`RIBBON_POSES`), and only its head and tail show.
+ * The ribbon's shape on the page it marks, in the book's pixels: from the top of the spine down the gutter, clear of
+ * the text, and out of the bottom along the book's lower edge. It is the only shape. Elsewhere in the book it is
+ * rotated about the spine (`RIBBON_POSES`), and only its head and tail show.
  */
 export const RIBBON_LIE: RibbonLie = { points: [[7, -346], [7.5, -200], [8.5, 0], [8, 200], [9, 320], [12, 346], [28, 362], [56, 368], [84, 366]], width: 14, twist: 0.9, free: 0.85 };
 
 /**
- * How the ribbon is laid in the book, as CSS sets it about the spine: raised `z` of the book's pixels, turned `deg`
- * about the spine, and then `off` from the leaf it lies on, along that leaf.
+ * The ribbon's CSS pose about the spine: raised `z` book pixels, rotated `deg` about the spine, then offset `off` from
+ * the leaf it lies on.
  */
 export interface RibbonPose {
   readonly z: number;
@@ -127,10 +126,11 @@ export interface RibbonPose {
 }
 
 /**
- * Where the ribbon rests, by where its page is from the open spread: on it, above the paper and under a leaf that
- * turns; among the right-hand leaves, under the open page and over the leaves' edges; and among the left-hand leaves,
- * on the cover that carries them, shut under the cover and open over the left-hand page, which hides all but its
- * head and tail; when the cover's edge lifts under the pointer, lifted with it (`.jb-cover.open.lift`).
+ * The ribbon's rest poses by where its page is from the open spread. `here` is on the open page, above the paper and
+ * under a turning leaf. `after` is among the right-hand leaves, under the open page and over the page edges. The
+ * `before-*` poses are among the left-hand leaves on the cover: under the shut cover, over the left-hand page when
+ * open, which hides all but its head and tail, and lifted with the cover's edge under the pointer
+ * (`.jb-cover.open.lift`).
  */
 export const RIBBON_POSES = {
   here: { z: 1, deg: 0, off: 0 },

@@ -1,15 +1,9 @@
-// Where a person first stands in a world laid out from code, chosen by what
-// they would see from there. A good first view is among the code, on dry
-// ground on a stream's bank, looking downstream along water that runs on at
-// least `OPENING.ahead` (or along a shorter stream whole), over ground that
-// never rises in front of the eye to fill the view, with as much that stands
-// for code in sight as the world offers. Every stretch of every stream among
-// the code near the repository's own area is weighed so, from either bank,
-// and the best view wins, the nearest that area's heart among equals. A world
-// with no such stretch looks out the same way from dry ground around the
-// heart. Every place weighed stands a few meters clear of whatever stands
-// for code, so turning round never fills the view with a tree or a wall. A person who was here before comes back to where they stood instead
-// (`returnTo`), or beside the thing they stood by once an edit has moved it.
+// Chooses where a person first stands in a world laid out from code, by what
+// they would see. It weighs spots on stream banks among the code near the
+// repository's area, looking downstream over open ground at as much code as
+// possible, and falls back to dry ground around the area's center. A returning
+// person goes back to where they stood (`returnTo`), or beside the thing they
+// stood by once an edit has moved it.
 
 import type { WorldPlaces } from "@gaia/schema";
 import { heightAt } from "./lattice.ts";
@@ -24,71 +18,71 @@ export const OPENING = {
   bank: 2.5,
   /** The deepest water that counts as dry ground, meters. */
   dry: 0.02,
-  /** How far downstream the person looks along, and so how much water must run on past where they stand, meters. */
+  /** Meters downstream the person looks, which is how much stream must continue past where they stand. */
   ahead: 30,
-  /** Every this many of a stream's stations is a place to stand (they lie 2 to 3 m apart). */
+  /** Every this-many-th station of a stream is a candidate spot. Stations are 2 to 3 m apart. */
   every: 3,
-  /** Near the repository's own area: a bank at most this much farther from its heart than the nearest bank, meters. */
+  /** A bank counts as near the repository's area when it is at most this many meters farther from the area's center than the nearest bank. */
   nearer: 200,
-  /** The view's half width, degrees, and how far into it what stands for code is counted, meters. */
+  /** The view's half width in degrees (`halfView`), and the distance in meters within which code in view is counted (`sees`). */
   halfView: 35,
   sees: 100,
   /** A building or a landmark counts as this many of a tree, a bush, a stone or flowers. */
   tall: 4,
-  /** The ground ahead may rise at most this many degrees above the eye, from `near` to `far` meters out: steeper fills the view. */
+  /** The most degrees the ground ahead may rise above the eye, from `near` to `far` meters out. Steeper ground fills the view. */
   rise: 4,
   near: 8,
   far: 120,
   /**
-   * The spot stands clear of everything that stands for code by this much, meters: past a tree's crown, a bush or
-   * a stone, and this far past a building's or landmark's lot, so turning round never fills the view with one.
+   * Meters the spot keeps from everything that represents code: `clear` from each shown definition, file or entity,
+   * and `pastLot` past a building's or landmark's lot, so turning around never fills the view with one.
    */
   clear: 6,
   pastLot: 3,
-  /** With no stream among the code: rings around the repository's heart this far apart, out to `around`, each faced `ways` ways. */
+  /** Without a stream among the code, spots lie on rings `ring` meters apart around the repository area's center, out to `around`, each tried in `ways` directions. */
   ring: 15,
   around: 120,
   ways: 12,
 } as const;
 
-/** Where a person first stands, and the way they face (the yaw a walk takes: 0 looks along -z). */
+/** Where a person first stands and their yaw, as a walk takes it, where 0 looks along -z. */
 export interface OpeningSpot {
   readonly x: number;
   readonly z: number;
   readonly yaw: number;
 }
 
-/** What stands for code on a world's land, where its layout put it: buildings and landmarks, and the definitions standing on their files' patches. */
-export interface StandsForCode {
-  /** Buildings and landmarks, each with how far its lot reaches from its middle (none for the sample world's). */
+/** The positions of everything that represents code on a world's land: buildings and landmarks, definitions on their files' patches, and files and entities shown as flowers, stones, bushes or trees. */
+export interface CodePositions {
+  /** Buildings and landmarks, each with its lot's radius. The sample world's have none. */
   readonly things: readonly { readonly x: number; readonly z: number; readonly lot?: number }[];
-  /** A definition with no form (`""`) stands as nothing. */
+  /** Definitions. One with no form (`""`) is not shown. */
   readonly symbols: readonly { readonly x: number; readonly z: number; readonly form: string }[];
-  /** Files and entities standing as flowers, a stone, a bush or a tree. */
-  readonly standing?: readonly { readonly x: number; readonly z: number }[];
+  /** Files and entities shown as flowers, a stone, a bush or a tree. */
+  readonly naturalThings?: readonly { readonly x: number; readonly z: number }[];
 }
 
-/** Whether (x, z) stands clear of everything that stands for code (`OPENING.clear`). */
-export function clearOfCode(code: StandsForCode, x: number, z: number): boolean {
+/** Whether (x, z) is clear of everything that represents code (`OPENING.clear`). */
+export function clearOfCode(code: CodePositions, x: number, z: number): boolean {
   for (const t of code.things) if (Math.hypot(t.x - x, t.z - z) < (t.lot ?? 0) + OPENING.pastLot) return false;
   for (const s of code.symbols) if (s.form !== "" && Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
-  for (const s of code.standing ?? []) if (Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
+  for (const s of code.naturalThings ?? []) if (Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
   return true;
 }
 
-/** What a person sees from where they stand, facing a way. */
+/** What a person sees from a spot, facing one direction. */
 export interface OpeningView {
-  /** The steepest the ground ahead rises above their eye, from `OPENING.near` to `OPENING.far` out, degrees: negative where it falls away. */
+  /** The steepest angle in degrees at which the ground ahead rises above the eye, from `OPENING.near` to `OPENING.far` out. Negative where it falls away. */
   readonly rise: number;
-  /** What stands for code within `OPENING.sees` and the view's width, a building or landmark counting `OPENING.tall`. */
+  /** A count of the things and definitions within `OPENING.sees` and the view's width, with a building or landmark counting `OPENING.tall`. */
   readonly seen: number;
 }
 
-/** Whether a point lies among the code: on a file's patch or an area's own ground, never in the wild past them. */
+/** Whether a point lies on a file's patch or an area's own ground, not in the wild past them. */
 export const amongCode = (places: WorldPlaces, x: number, z: number): boolean => placeAt(places, x, z).area.depth >= 0;
 
 /** What a person standing at (x, z) and facing `yaw` sees. */
-export function openingView(t: Terrain, code: StandsForCode, x: number, z: number, yaw: number): OpeningView {
+export function openingView(t: Terrain, code: CodePositions, x: number, z: number, yaw: number): OpeningView {
   const fx = -Math.sin(yaw);
   const fz = -Math.cos(yaw);
   const eye = heightAt(t.lattice, x, z) + EYE_HEIGHT;
@@ -107,7 +101,7 @@ export function openingView(t: Terrain, code: StandsForCode, x: number, z: numbe
 
 type Weighed = OpeningSpot & OpeningView & { readonly far: number };
 
-/** Whether view `a` is better than `b`: open ground ahead first, then more that stands for code in sight, then nearer the repository's heart. */
+/** Whether view `a` beats `b`: open ground ahead first, then more code in view, then nearer the repository area's center. */
 function better(a: Weighed, b: Weighed): boolean {
   const openA = a.rise <= OPENING.rise;
   const openB = b.rise <= OPENING.rise;
@@ -116,9 +110,9 @@ function better(a: Weighed, b: Weighed): boolean {
   return a.far < b.far;
 }
 
-export function openingSpot(t: Terrain, world: WorldPlaces & StandsForCode): OpeningSpot {
+export function openingSpot(t: Terrain, world: WorldPlaces & CodePositions): OpeningSpot {
   const root = world.areas.find((a) => a.path === "") ?? { x: 0, z: 0 };
-  // Dry ground among the code, clear of everything that stands there.
+  // Dry ground among the code, clear of everything that represents code.
   const dryAmong = (x: number, z: number): boolean => amongCode(world, x, z) && waterDepthAt(t, x, z) <= OPENING.dry && clearOfCode(world, x, z);
   let best: Weighed | null = null;
   const weigh = (x: number, z: number, yaw: number): void => {
@@ -135,14 +129,14 @@ export function openingSpot(t: Terrain, world: WorldPlaces & StandsForCode): Ope
     const run = Math.min(OPENING.ahead, Math.hypot(end.x - start.x, end.z - start.z));
     for (let k = 0; k < st.length; k += OPENING.every) {
       const here = st[k] as (typeof st)[number];
-      // Only where the water runs on downstream far enough to look along it: past a stream's end there is no water to see.
+      // Skip stations without `run` meters of stream left downstream to look along.
       if (run === 0 || !amongCode(world, here.x, here.z) || Math.hypot(end.x - here.x, end.z - here.z) < run) continue;
       let ahead = k;
       while (Math.hypot((st[ahead] as typeof here).x - here.x, (st[ahead] as typeof here).z - here.z) < run) ahead++;
       const there = st[ahead] as typeof here;
       const along = Math.atan2(-(there.x - here.x), -(there.z - here.z));
       const out = surfaceHalfWidth(here) + OPENING.bank;
-      // On either bank, facing the water downstream, so a stream that bends away still runs into the view.
+      // Try both banks, each facing the point `run` downstream, so a stream that bends away still runs into the view.
       for (const side of [1, -1]) {
         const x = here.x + Math.cos(along) * out * side;
         const z = here.z - Math.sin(along) * out * side;
@@ -167,21 +161,21 @@ export function openingSpot(t: Terrain, world: WorldPlaces & StandsForCode): Ope
   return chosen === null ? { x: root.x, z: root.z, yaw: 0 } : { x: chosen.x, z: chosen.z, yaw: chosen.yaw };
 }
 
-/** What stands for code on a world's land by its identity, and the layout that placed it, for coming back to it. */
+/** Everything that represents code on a world's land, by identity, and the layout that placed it, for returning to a spot. */
 export interface CodeMarks {
   readonly size: number;
   readonly things: readonly { readonly path: string; readonly x: number; readonly z: number }[];
   readonly symbols: readonly { readonly id: string; readonly x: number; readonly z: number; readonly form: string }[];
-  /** The land laid out under them: the same code lays out the same regions. */
+  /** The land's regions under them. The same code lays out the same regions. */
   readonly regions: readonly unknown[];
 }
 
 /**
- * Where a person stood in a world when they last left it: their spot and the way they faced, the layout of the
- * world they stood in (`layoutKey`), and the nearest thing that stood for code, by its identity (an entity's or a
- * file's path, or a definition's `<file>#<name>`), with where it stood then.
+ * Where a person stood in a world when they last left it: their spot and yaw, the world's layout (`layoutKey`), and
+ * the nearest thing that represents code with its position then. That thing's `path` is an entity's or file's path,
+ * or a definition's `<file>#<name>`.
  */
-export interface StoodSpot {
+export interface LastSpot {
   readonly x: number;
   readonly z: number;
   readonly yaw: number;
@@ -189,7 +183,7 @@ export interface StoodSpot {
   readonly by: { readonly path: string; readonly x: number; readonly z: number } | null;
 }
 
-/** Where a person comes back to: `exact` when the code is laid out as it was, so they stand where they stood. */
+/** Where a returning person stands. `exact` is true when the code's layout is unchanged, so they stand where they stood. */
 export interface Return {
   readonly x: number;
   readonly z: number;
@@ -197,9 +191,9 @@ export interface Return {
   readonly exact: boolean;
 }
 
-/** A key for a world's layout: the same code, laid out the same, gives the same key, and any edit that moves what stands or reshapes the land another. */
+/** A key for a world's layout. The same layout gives the same key, and an edit that moves anything or reshapes the land gives a different one. */
 export function layoutKey(world: CodeMarks): string {
-  // FNV-1a over the layout written out, to the centimeter.
+  // FNV-1a over the layout as text, with positions to the centimeter.
   let h = 0x811c9dc5;
   const add = (s: string): void => {
     for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
@@ -212,9 +206,9 @@ export function layoutKey(world: CodeMarks): string {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
-/** What a person standing at (x, z) and facing `yaw` keeps of where they stood: see `StoodSpot`. */
-export function stoodBy(world: CodeMarks, x: number, z: number, yaw: number): StoodSpot {
-  let by: StoodSpot["by"] = null;
+/** The `LastSpot` to save for a person at (x, z) facing `yaw`. */
+export function lastSpotAt(world: CodeMarks, x: number, z: number, yaw: number): LastSpot {
+  let by: LastSpot["by"] = null;
   let nearest = Infinity;
   const consider = (path: string, px: number, pz: number): void => {
     const d = Math.hypot(px - x, pz - z);
@@ -226,11 +220,11 @@ export function stoodBy(world: CodeMarks, x: number, z: number, yaw: number): St
 }
 
 /**
- * Where a person who stood at `stood` comes back to in `world`: exactly there while the code is laid out as it was;
- * once an edit has moved things, beside the thing they stood by wherever it stands now, at the same offset and
- * facing the same way, for the caller to check the ground there; null on a first visit, or when that thing is gone.
+ * Where a person who stood at `stood` returns to in `world`. While the code's layout is unchanged it is exactly there.
+ * Once an edit has moved things, it is beside the thing they stood by at its new position, at the same offset and
+ * facing the same way, and the caller checks the ground there. Returns null on a first visit or when that thing is gone.
  */
-export function returnTo(world: CodeMarks, stood: StoodSpot | undefined): Return | null {
+export function returnTo(world: CodeMarks, stood: LastSpot | undefined): Return | null {
   if (stood === undefined) return null;
   if (stood.layout === layoutKey(world)) return { x: stood.x, z: stood.z, yaw: stood.yaw, exact: true };
   if (stood.by === null) return null;

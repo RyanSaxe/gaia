@@ -1,16 +1,14 @@
-//! The app-data store: what Gaia keeps per project between runs, such as
-//! Jev's answers and the person's consent to a live run. Each project has one
-//! JSON file of tables, each table a map from key to value, under
-//! `<data>/projects/<project id>/store.json`. A write replaces the whole file
-//! through a rename, so a crash never leaves it half-written. `<data>` is
-//! `GAIA_DATA_DIR` (the app passes its user-data folder) or the platform's
-//! normal per-user data folder.
+//! Stores Gaia's per-project data between runs, such as Jev's answers and the
+//! person's consent to a live run. A project's tables, each a map from key to
+//! value, are stored in one JSON file at `<data>/projects/<project id>/store.json`.
+//! `<data>` is `GAIA_DATA_DIR`, which the app sets to its user-data folder, or
+//! else the platform's per-user data folder.
 
 use serde_json::{Map, Value};
 use std::fs;
 use std::path::PathBuf;
 
-/// The tables a project's store holds. `EngineMethods`' `StoreTable` names the same.
+/// The tables in a project's store. `StoreTable` in `packages/schema/src/engine.ts` lists the same names.
 pub const TABLES: &[&str] = &["answers", "calls", "held", "lineage", "settings"];
 
 pub(crate) fn data_dir() -> Result<PathBuf, String> {
@@ -50,7 +48,8 @@ pub(crate) fn data_dir() -> Result<PathBuf, String> {
 }
 
 /// The store file of one project. A project ID is a commit hash or a content
-/// hash, so anything else (a path, a dot) is refused.
+/// hash, so it rejects any ID that is not 1 to 128 ASCII letters, digits, `-`
+/// or `_`. A path or a dot can't pass.
 fn file_of(project: &str) -> Result<PathBuf, String> {
     let valid = !project.is_empty()
         && project.len() <= 128
@@ -98,7 +97,9 @@ pub fn read(project: &str, table: &str) -> Result<Value, String> {
         .unwrap_or_else(|| Value::Object(Map::new())))
 }
 
-/// Writes records, each `{ table, key, value }`, all at once or not at all.
+/// Writes records, each `{ table, key, value }`, and writes none if any record
+/// is invalid. It replaces the whole file through a rename, so a crash never
+/// leaves it half-written.
 pub fn put(project: &str, writes: &[Value]) -> Result<(), String> {
     let mut store = load(project)?;
     for w in writes {

@@ -1,5 +1,5 @@
-// The hour every world shows. It follows the person's own clock unless
-// `?hour=` or a script pins it. Only the renderer reads the clock: the
+// Supplies the hour every world shows. It follows the local clock unless
+// `?hour=` or a script pins it. Only the renderer reads the clock, because the
 // packages are pure and receive the hour as a number.
 
 /** The local hour of `d`, 0 to 24, with minutes and seconds as a fraction. */

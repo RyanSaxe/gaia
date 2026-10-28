@@ -1,3 +1,3 @@
-// Where a person's eyes are: this high above the ground they stand on, meters.
+// Height in meters of a person's eyes above the ground.
 
 export const EYE_HEIGHT = 1.6;

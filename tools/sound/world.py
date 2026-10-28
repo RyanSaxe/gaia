@@ -2,10 +2,10 @@
 as Ogg Opus.
 
 Beds are loops cut from each recording's calmest, most even stretch (the reasons are beside each entry), closed with
-an equal-power crossfade so the wrap is inaudible. One-shots are single events; footsteps are sprites of single steps
-laid end to end. Only gentle cleanup is applied (a high-pass for rumble); the game applies its own filters and levels.
+an equal-power crossfade so the wrap is inaudible. One-shots are single events, and footsteps are sprites of single
+steps laid end to end. The only cleanup is a high-pass for rumble, because the game applies its own filters and levels.
 
-Every bed is levelled to BED_LUFS; every one-shot to ONE_SHOT_PEAK, or lower where that would make it louder than
+Every bed is levelled to BED_LUFS, and every one-shot to ONE_SHOT_PEAK, or lower where that would make it louder than
 MAX_LUFS, so the game's gains start from one reference and nothing at unity gain is louder than a bed. The manifest
 records what each file came from and measures each decoded Opus file.
 
@@ -26,10 +26,10 @@ import cache
 from cache import RECORDINGS, SOURCES
 
 SR = 48000
-FRAME = 960            # one 20 ms Opus frame; loop lengths are whole frames
+FRAME = 960            # one 20 ms Opus frame. Loop lengths are whole frames
 XFADE = 2.0            # the loop seam's equal-power crossfade, seconds
 BED_LUFS = -24.0
-ONE_SHOT_PEAK = -3.0   # dBFS before encoding; Opus overshoots peaks by a fraction of a dB
+ONE_SHOT_PEAK = -3.0   # dBFS before encoding, since Opus overshoots peaks by a fraction of a dB
 PEAK_CAP = -3.0
 MAX_LUFS = -24.0       # no file is louder than the beds, so nothing played at unity gain stands out
 meter = pyln.Meter(SR)
@@ -63,7 +63,7 @@ def envelope(x, hop=240):
 
 
 def lufs(x):
-    """Integrated loudness; None for a sound shorter than one 400 ms gating block."""
+    """Integrated loudness, or None for a sound shorter than one 400 ms gating block."""
     return meter.integrated_loudness(x) if len(x) >= int(0.4 * SR) else None
 
 
@@ -145,7 +145,7 @@ def make_bed(b):
     fin, fout = np.sin(t * np.pi / 2), np.cos(t * np.pi / 2)
     if x.ndim == 2:
         fin, fout = fin[:, None], fout[:, None]
-    # y[i] = x[xf + i]; its last xf samples fade out while x[0:xf] fades in, so y wraps onto x[xf] exactly.
+    # y[i] = x[xf + i]. Its last xf samples fade out while x[0:xf] fades in, so y wraps onto x[xf] exactly.
     y = x[xf:xf + n].copy()
     y[n - xf:] = x[n:n + xf] * fout + x[:xf] * fin
     gain = BED_LUFS - lufs(y)
@@ -288,7 +288,7 @@ def decode(path):
 
 
 def seam_check(d):
-    """The wrap as the game hears it: the last and first 100 ms levels, and the jump across the seam against the
+    """The wrap as the game plays it: the last and first 100 ms levels, and the jump across the seam against the
     file's own sample-to-sample jumps."""
     m = d.mean(axis=1)
     k = int(0.1 * SR)

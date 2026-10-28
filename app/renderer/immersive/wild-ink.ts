@@ -1,26 +1,18 @@
-// The wild past the land, as the field sheet draws it (docs/design-system.md,
-// "The field sheet"): an old survey in ink on unwashed paper. Color on the
-// sheet means health, and the wild stands for no code, so past the land's
-// paint the paper stays bare and ink draws what is there: contours and
-// hachures from the wild's heights, its thickets where they stand, tufts where
-// its golden steppe runs and stipple where it runs to scrub, all from the
-// functions the world grows the wild from (`@gaia/terrain`), so the map and
-// the world never disagree.
+// Inks the wild past the land on bare paper (docs/design-system.md, "The field
+// sheet"). Color on the sheet shows vitality and the wild represents no code,
+// so the wild gets only ink, drawn from the same `@gaia/terrain` functions the
+// world grows it from, so the map and the world agree.
 //
-// The wild has no end, so it cannot be painted onto one sheet. It is inked in
-// square tiles anchored to the world, each at one of a ladder of scales,
-// painted a few milliseconds at a time in the page's idle time ahead of where
-// a view will look, and kept. A view only lays the tiles it shows, at the
-// scales nearest its own, crossfading between two as the map zooms, so nothing
-// is drawn afresh as the person walks. The paper under the ink is one
-// handmade paper anchored to the world too, the same under the land's paint
-// and past it, so no seam shows where the land's sheet ends.
+// The wild has no edge, so it is inked in world-anchored tiles at a ladder of
+// scales, a step at a time in idle time ahead of the views, and cached. A view
+// draws only the tiles it shows, crossfading between two scales as it zooms,
+// so walking draws nothing new.
 
 import { heightAt, pastTheEdge, type Terrain, WILD_THICKETS, wildHash, wildPatch, wildRollAt, WILDS, wildScrub, wildShare, wildThicket } from "@gaia/terrain";
 import { chained, isoline } from "./isolines.ts";
 import type { MapStyle } from "./map-styles.ts";
 
-/** A view of the land: its middle in meters, and css pixels a meter. */
+/** A view of the land: its center in meters, and its zoom in CSS pixels per meter. */
 export interface LandView {
   readonly x: number;
   readonly z: number;
@@ -28,11 +20,12 @@ export interface LandView {
 }
 
 /**
- * Near its rounded rim the land rises to a crest, and past it the ground
- * settles over `WILDS.settle` meters into the wild's roll. The sheet eases its
- * relief over the rim's last `inner` meters to the height `held` meters in, and
- * from the rim out toward the wild's roll, so neither the hill shade nor any
- * contour draws a ring where the land ends.
+ * Near its rounded rim the land rises to a crest, and past the rim the ground
+ * settles over `WILDS.settle` meters into the wild's roll. Over the last
+ * `inner` meters inside the rim, the sheet blends the relief toward the height
+ * `held` meters in, and outside the rim it blends from that height to the
+ * wild's roll. Neither the hill shade nor any contour then draws a ring where
+ * the land ends.
  */
 export const RIM = { inner: 110, held: 60 } as const;
 
@@ -41,11 +34,11 @@ const smooth = (v: number): number => {
   return u * u * (3 - 2 * u);
 };
 
-/** The ground's height as the sheet draws it: the land's own, eased at its rim (`RIM`), and the wild's roll past it. */
+/** The height the sheet draws: the land's own, blended at its rim (`RIM`), and the wild's roll past it. */
 export function reliefAt(t: Terrain, x: number, z: number): number {
   const toRim = -pastTheEdge(t.spec, x, z);
   if (toRim >= RIM.inner) return heightAt(t.lattice, x, z);
-  // Drawn in along its ray from the middle to where the edge is held.
+  // Bisects along the ray from the center for the point `RIM.held` meters inside the edge.
   let pull = 1;
   if (toRim < RIM.held) {
     let lo = 0;
@@ -63,9 +56,9 @@ export function reliefAt(t: Terrain, x: number, z: number): number {
 
 // ---------- the paper ----------
 
-/** The paper's ground: one square of handmade paper, meters a side and pixels a meter, that repeats without a seam. */
+/** The paper texture tile: its side in meters and its pixels per meter. It repeats without a seam. */
 const GROUND = { meters: 512, density: 2 };
-/** How much the paper is mottled in two sizes of blotch (meters across, strength), and its fibres and specks a square kilometer. */
+/** The paper's mottling as [blotch size in meters, strength] pairs, and its fibres and specks per square kilometer. */
 const MOTTLE: readonly (readonly [number, number])[] = [[85, 0.09], [20, 0.05]];
 const FIBRES: readonly (readonly [string, number, number])[] = [["rgba(118,92,56,0.075)", 1430, 11], ["rgba(255,251,238,0.16)", 880, 23]];
 const SPECKS: readonly (readonly [string, number])[] = [["rgba(120,96,60,0.06)", 0], ["rgba(255,250,235,0.1)", 1]];
@@ -79,9 +72,9 @@ const hash = (x: number, z: number): number => {
 const grounds = new WeakMap<MapStyle, HTMLCanvasElement>();
 
 /**
- * The paper's ground as one tile that repeats without a seam: mottled as
- * handmade paper is, with fibres and a faint grain, as dense a meter as the
- * field map's paper. Painted once for each look of the sheet.
+ * Paints the paper texture as one seamless tile with mottling, fibres and
+ * specks, at the same pixels per meter as the field map's paper. It is cached
+ * per style.
  */
 function groundOf(style: MapStyle): HTMLCanvasElement {
   const known = grounds.get(style);
@@ -92,8 +85,8 @@ function groundOf(style: MapStyle): HTMLCanvasElement {
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
   ctx.fillStyle = style.paper;
   ctx.fillRect(0, 0, side, side);
-  // Blotches, each layer a small grid of soft cells drawn large; the grid carries two cells of the far side around
-  // it, so its smoothing wraps and the tile meets its neighbors without a seam.
+  // Each blotch layer is a small grid of cells drawn scaled up. The grid is padded with two cells wrapped from the
+  // opposite side, so smoothing wraps and the tile meets its neighbors without a seam.
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   for (const [across, strength] of MOTTLE) {
@@ -115,7 +108,7 @@ function groundOf(style: MapStyle): HTMLCanvasElement {
     ctx.drawImage(grid, pad, pad, cells, cells, 0, 0, side, side);
   }
   ctx.globalAlpha = 1;
-  // Fibres and specks, each drawn again a tile away wherever it crosses the tile's edge.
+  // Draws a fibre or speck that crosses the tile's edge again one tile away, so it wraps.
   const area = (GROUND.meters / 1000) ** 2;
   const d = GROUND.density;
   const wrapped = (x: number, y: number, reach: number, draw: (x: number, y: number) => void): void => {
@@ -160,10 +153,10 @@ function groundOf(style: MapStyle): HTMLCanvasElement {
 const patterns = new WeakMap<CanvasRenderingContext2D, { readonly style: MapStyle; readonly pattern: CanvasPattern }>();
 
 /**
- * Lays the paper's ground over `w` by `h` of `ctx`'s own units, anchored to the
- * world: `ox`, `oy` is where the world's middle falls and `density` how many of
- * those units a meter takes. The field map's painted paper lays it under its
- * land, and every view lays it past the land, so the paper runs on unbroken.
+ * Fills `w` by `h` of `ctx`'s units with the paper texture, anchored to the
+ * world. `ox`, `oy` is where the world's center falls, and `density` is units
+ * per meter. The field map's paper uses it under the land and every view uses
+ * it past the land, so no seam shows where the land's sheet ends.
  */
 export function layGround(ctx: CanvasRenderingContext2D, style: MapStyle, ox: number, oy: number, density: number, w: number, h: number): void {
   let laid = patterns.get(ctx);
@@ -186,34 +179,34 @@ export function layGround(ctx: CanvasRenderingContext2D, style: MapStyle, ox: nu
 // ---------- the ink ----------
 
 export const INK = {
-  /** Level 0's scale, css pixels a meter (about the minimap's); each coarser level is half the last. */
+  /** Level 0's scale in CSS pixels per meter, about the minimap's. Each coarser level halves it. */
   scale: 1.28,
   finest: -2,
   coarsest: 6,
-  /** A tile's side, css pixels. */
+  /** A tile's side in CSS pixels. */
   tile: 256,
   /**
-   * At level 0, meters: heights sampled (close enough that a contour round the flat top of a rise stays round),
-   * hachures, and tufts and stipple; each coarser level doubles them.
+   * Spacings in meters at level 0 for height samples, hachures, and tufts and stipple. Each coarser level doubles
+   * them. `sample` is fine enough that a contour around the flat top of a rise stays round.
    */
   sample: 2.5,
   hachure: 6.5,
   tuft: 10,
-  /** Thickets are drawn up to this level, and their lead bushes only, thinned, at the last. */
+  /** The coarsest level that draws thickets. At this level it draws only some thickets' first bush. */
   thickets: 2,
   /**
-   * Tiles kept at most, about 1 MB each: enough for the field map zoomed between two levels (about 70 tiles on the
-   * widest sheet) with the minimap's around the person.
+   * The most tiles cached, about 1 MB each. That covers the field map between two levels, about 70 tiles on the
+   * widest sheet, plus the minimap's tiles around the person.
    */
   keep: 96,
-  /** How far round the person the minimap's tiles are painted ahead, meters. */
+  /** How far in meters around the person the minimap's tiles are inked ahead. */
   ahead: 300,
 } as const;
 
-/** The level whose scale is nearest a view's, as a fraction: 0 at `INK.scale`, 1 at half of it. */
+/** A view's level as a fraction: 0 at `INK.scale`, 1 at half of it, clamped to the ladder. */
 const levelOf = (zoom: number): number => Math.max(INK.finest, Math.min(INK.coarsest, Math.log2(INK.scale / Math.max(1e-6, zoom))));
 
-/** The one or two levels a view at `zoom` lays, and how strongly: a crossfade between two levels midway, so zooming never jumps. */
+/** The one or two levels a view at `zoom` draws, with their weights. Two levels crossfade over the middle of each step, so zooming never jumps. */
 export function levelsFor(zoom: number): { readonly k: number; readonly weight: number }[] {
   const f = levelOf(zoom);
   const k = Math.floor(f);
@@ -225,29 +218,29 @@ export function levelsFor(zoom: number): { readonly k: number; readonly weight: 
   ].filter((l) => l.weight > 0);
 }
 
-/** A tile's side at level `k`, meters. */
+/** A tile's side in meters at level `k`. */
 const tileMeters = (k: number): number => (INK.tile / INK.scale) * 2 ** k;
 
-/** What a tile is painted from: the baked land, the sheet's look and how its paint gives way at its edge. */
+/** A tile's inputs: the baked terrain, the sheet's style and the land's paint mask. */
 interface Sheet {
   readonly terrain: Terrain;
   readonly style: MapStyle;
-  /** The land's painted square's half side, meters, and how much paint it holds over that square (alpha). */
+  /** The land's painted square's half side in meters, and its paint as an alpha mask over that square. */
   readonly reach: number;
   readonly paint: HTMLCanvasElement;
-  /** How far in from the square's edge any of it is bare, meters. */
+  /** How far in meters from the square's edge the paper can be bare. */
   readonly bare: number;
   readonly dpr: number;
 }
 
 const SEEDS = { hachure: 201, tuft: 211, stipple: 221, thicket: 231 };
-/** The wild's contours on bare paper, as strong as the land's over its paint: a little lighter. */
+/** The wild's contour opacity relative to the land's. Lighter lines on bare paper read as strong as the land's over paint. */
 const WILD_LINE = 0.8;
 
 /**
- * A line (x and y pairs) drawn as a curve through the middles of its steps, bending at its points, so a contour
- * traced cell by cell reads as an easy line. A point's curve depends only on its neighbors, so the same line traced
- * in two tiles is drawn the same in both.
+ * Adds a polyline of x and y pairs to `path` as a quadratic curve through the midpoints of its steps, with its points
+ * as control points. Each piece depends only on neighboring points, so a line traced in two tiles is drawn the same
+ * in both.
  */
 function curve(path: Path2D, line: readonly number[]): void {
   const count = line.length / 2;
@@ -265,10 +258,10 @@ function curve(path: Path2D, line: readonly number[]): void {
 }
 
 /**
- * Inks one tile, `k` its level and `i`, `j` its place on that level's grid, in
- * steps: its heights, its slopes and grass, then its contours and thickets.
- * Everything is placed on grids anchored to the world, so a mark that crosses
- * a tile's edge is drawn the same in both tiles and they meet without a seam.
+ * Inks the tile at level `k` and grid position `i`, `j`, yielding between
+ * steps: heights, contours, hachures and grass, then thickets. Every mark is
+ * placed on a world-anchored grid, so a mark that crosses a tile's edge is
+ * drawn the same in both tiles.
  */
 function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void, HTMLCanvasElement> {
   const { terrain: t, style, reach, dpr } = sheet;
@@ -280,15 +273,15 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = px;
   const g = canvas.getContext("2d") as CanvasRenderingContext2D;
-  // Drawn in meters: a css pixel is `1 / res` meters.
+  // Draws in meters. A CSS pixel is `1 / res` meters.
   const unit = 1 / res;
   g.setTransform(px / side, 0, 0, px / side, -x0 * (px / side), -z0 * (px / side));
   g.lineCap = g.lineJoin = "round";
-  /** Whether the paper is bare anywhere near a point: past the land's square, or in its unpainted edge. */
+  /** Whether the paper may be bare within `pad` of a point: past the land's square or in its unpainted edge. */
   const inked = (x: number, z: number, pad: number): boolean => Math.max(Math.abs(x), Math.abs(z)) > reach - sheet.bare - pad;
 
-  // Heights on a grid anchored to the world, reaching four samples past the tile on each side: as far as the slope
-  // of a hachure that reaches into the tile is read.
+  // Samples heights on a world-anchored grid that extends four samples past the tile on each side, far enough to read
+  // the slope at any hachure that reaches into the tile.
   const step = INK.sample * 2 ** k;
   const gi = Math.floor(x0 / step) - 4;
   const gj = Math.floor(z0 / step) - 4;
@@ -303,7 +296,7 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
     if (b === n >> 1) yield;
   }
   yield;
-  /** The height between the samples, and its slope, by the samples around a point. */
+  /** The bilinear height at a point from the samples around it. */
   const at = (a: number, b: number): number => heights[Math.max(0, Math.min(n - 1, b)) * n + Math.max(0, Math.min(n - 1, a))] as number;
   const heightOf = (x: number, z: number): number => {
     const u = x / step - gi;
@@ -317,8 +310,8 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
   const ink = style.ink;
   const inkRgb = [parseInt(ink.slice(1, 3), 16), parseInt(ink.slice(3, 5), 16), parseInt(ink.slice(5, 7), 16)].join(",");
 
-  // Contours from the same heights as the land's, in the same sepia and widths, a little lighter on bare paper, and
-  // wider apart on coarse levels. Each is joined into lines drawn as easy curves through their cells' crossings.
+  // Contours in the land's sepia, a little lighter (`WILD_LINE`), and wider apart on coarse levels. Segments are
+  // joined into lines and drawn as curves (`curve`).
   const c = style.contour;
   const interval = c.interval * 2 ** Math.max(0, k - 1);
   let lo = Infinity;
@@ -341,7 +334,7 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
   g.globalAlpha = 1;
   yield;
 
-  // Slopes: hachures along the fall line, heavier and closer on the slopes turned from the light in the northwest.
+  // Hachures along the fall line, heavier and denser on slopes facing away from the northwest light.
   const scale = 2 ** k;
   const hachures = [new Path2D(), new Path2D(), new Path2D()];
   const hs = INK.hachure * scale;
@@ -350,7 +343,7 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
     for (let a = Math.floor((x0 - long) / hs); a <= Math.floor((x0 + side + long) / hs); a++) {
       const x = (a + wildHash(a, b, SEEDS.hachure)) * hs;
       const z = (b + wildHash(a, b, SEEDS.hachure + 1)) * hs;
-      // Only a hachure long enough to reach into the tile, whose slope the grid holds.
+      // Skips a hachure that cannot reach into the tile or lies on painted land.
       if (x < x0 - long || x > x0 + side + long || z < z0 - long || z > z0 + side + long || !inked(x, z, hs)) continue;
       const gx = (heightOf(x + 2 * step, z) - heightOf(x - 2 * step, z)) / (4 * step);
       const gz = (heightOf(x, z + 2 * step) - heightOf(x, z - 2 * step)) / (4 * step);
@@ -371,8 +364,8 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
     g.stroke(path);
   });
 
-  // Grass: tufts where the golden steppe runs and a few on the green grass; stipple where the wild runs to scrub.
-  // Near the land its own grass runs on, and the wild's marks thin away as its covers do.
+  // Tufts, many on golden steppe and a few on green grass, and stipple on scrub. Near the land the marks thin out
+  // with the wild's share (`wildShare`).
   const ts = INK.tuft * scale;
   const tufts = [new Path2D(), new Path2D()];
   const stipple = new Path2D();
@@ -417,9 +410,9 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
   g.fill(stipple);
   yield;
 
-  // Thickets: each bush where the world stands it, a crown scalloped in ink over the paper, its side away from the
-  // light hatched and its shadow hatched to the southeast; never smaller than legible. Coarse levels draw only some
-  // thickets' lead bushes.
+  // Thickets: each bush where the world places it, as a scalloped crown with its shaded side and its shadow to the
+  // southeast hatched. A crown's radius is at least 3 CSS pixels so it stays legible. At `INK.thickets`, only some
+  // thickets' first bush is drawn.
   if (k <= INK.thickets) {
     const cell = WILD_THICKETS.cell;
     const pad = WILD_THICKETS.spread + 6 * scale;
@@ -482,7 +475,7 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
     }
   }
 
-  // The land's paint takes what it covers: the ink shows only where the paper is bare.
+  // Erases the ink under the land's paint, so it shows only on bare paper.
   if (x0 < reach && x0 + side > -reach && z0 < reach && z0 + side > -reach) {
     g.globalCompositeOperation = "destination-out";
     g.imageSmoothingEnabled = true;
@@ -494,28 +487,28 @@ function* inkTile(sheet: Sheet, k: number, i: number, j: number): Generator<void
 }
 
 export interface WildInk {
-  /** Lays the paper's ground under a view `w` by `h` css pixels, anchored to the world. */
+  /** Fills a view `w` by `h` CSS pixels with the world-anchored paper texture. */
   ground(ctx: CanvasRenderingContext2D, w: number, h: number, view: LandView): void;
   /**
-   * Lays the wild's ink over a view `w` by `h` css pixels, at the one or two
-   * levels nearest its zoom. A tile not yet inked is inked at once if `now`;
-   * otherwise it is left out and inked in the page's idle time, and
-   * `onLanded`'s listeners hear when it is ready.
+   * Draws the wild's ink over a view `w` by `h` CSS pixels at the one or two
+   * levels nearest its zoom. With `now`, it inks a missing tile at once.
+   * Otherwise it skips the tile, queues it first, and calls the `onLanded`
+   * listeners once it is inked.
    */
   draw(ctx: CanvasRenderingContext2D, w: number, h: number, view: LandView, now: boolean): void;
-  /** Asks, nearest first, for the tiles views would lay: each its box in meters and its zoom. The earlier asks go first. */
+  /** Queues the tiles the given views would draw, nearest each view's center first and earlier views first. Each view is a box in meters and a zoom. */
   want(views: readonly { readonly box: readonly [number, number, number, number]; readonly zoom: number }[]): void;
-  /** Inks one step of a tile asked for; false when none is waiting. */
+  /** Runs one step of inking a queued tile. Returns false when none is waiting. */
   step(): boolean;
   /** Whether any tile is waiting to be inked. */
   readonly waiting: boolean;
-  /** Calls `listener` when a tile a view went without has been inked. */
+  /** Calls `listener` when a tile that a view skipped has been inked. */
   onLanded(listener: () => void): void;
-  /** Tiles kept, inked and waiting, the longest step, and tiles inked at once because a view could not wait. */
+  /** Counts of tiles cached, inked and waiting, the longest step in ms, and the tiles inked at once because a view could not wait. */
   stats(): { readonly tiles: number; readonly inked: number; readonly waiting: number; readonly longestStepMs: number; readonly atOnce: number; readonly atOnceMs: number };
 }
 
-/** The wild's ink for one painted sheet: `reach` is the land's painted square's half side and `paint` its paint (alpha). */
+/** Creates the wild's ink for one painted sheet. `reach` is the land's painted square's half side, and `paint` its alpha mask. */
 export function createWildInk(terrain: Terrain, style: MapStyle, reach: number, paint: HTMLCanvasElement): WildInk {
   const sheet: Sheet = {
     terrain,
@@ -526,16 +519,16 @@ export function createWildInk(terrain: Terrain, style: MapStyle, reach: number, 
     dpr: Math.min(2, window.devicePixelRatio || 1),
   };
   const kept = new Map<string, { readonly canvas: HTMLCanvasElement; used: number }>();
-  /** Tiles asked for, nearest first, and the one being inked. */
+  /** Queued tiles, nearest first, and the tile being inked. */
   let queue: { k: number; i: number; j: number; key: string }[] = [];
   let inking: { key: string; steps: Generator<void, HTMLCanvasElement> } | null = null;
-  /** Tiles a view went without, to tell `onLanded` when one lands. */
+  /** Tiles a view skipped, so `onLanded` listeners hear when one is inked. */
   const missed = new Set<string>();
   const landed: (() => void)[] = [];
   let clock = 0;
   const timing = { inked: 0, longestStepMs: 0, atOnce: 0, atOnceMs: 0 };
   const keyOf = (k: number, i: number, j: number): string => `${k}:${i}:${j}`;
-  /** Whether a tile has any bare paper to ink: tiles deep inside the land's paint are never inked. */
+  /** Whether a tile may have bare paper to ink. Tiles deep inside the land's paint are never inked. */
   const bare = (k: number, i: number, j: number): boolean => {
     const side = tileMeters(k);
     const inner = reach - sheet.bare - INK.sample * 2 ** k * 2;
@@ -550,7 +543,7 @@ export function createWildInk(terrain: Terrain, style: MapStyle, reach: number, 
     }
     return out;
   };
-  /** The clock when the last view was laid: the tiles it laid are never forgotten, however many it took. */
+  /** The clock value of the last `draw`. `forget` never evicts the tiles that draw used, however many there are. */
   let laid = 0;
   const forget = (): void => {
     if (kept.size <= INK.keep) return;
@@ -621,7 +614,7 @@ export function createWildInk(terrain: Terrain, style: MapStyle, reach: number, 
           }
         }
       }
-      // A tile a view is waiting for keeps its place at the front.
+      // Tiles a view skipped stay queued ahead of the new requests, unless these views request them too.
       queue = [...queue.filter((q) => missed.has(q.key) && !seen.has(q.key)), ...asked];
     },
     step() {

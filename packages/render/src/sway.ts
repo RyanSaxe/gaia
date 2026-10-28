@@ -1,7 +1,7 @@
-// How a plant answers the wind field, in GLSL: each level's lean, the turn
+// GLSL for how a plant moves in the wind field: each level's lean, the turn
 // about a joint, a leaf's turn on its stalk and the whole plant's bend from
 // its base. The numbers are WIND in @gaia/realize, whose `swayAt` is the CPU
-// reference; the gusts it answers are `WIND_FIELD_GLSL`.
+// reference, and the gusts come from `WIND_FIELD_GLSL`.
 
 import { STIFF, WIND, type WindLevel } from "@gaia/realize";
 import { WIND_FIELD_GLSL } from "./wind-field.ts";
@@ -9,7 +9,7 @@ import { WIND_FIELD_GLSL } from "./wind-field.ts";
 const f = (x: number): string => x.toFixed(5);
 const level = (l: WindLevel): string => `vec4(${f(l.lean)}, ${f(l.swing)}, ${f(l.rate)}, ${f(l.most)})`;
 
-/** The plant's bend, on `WIND_FIELD_GLSL`'s gusts: `jointPhase`, `trunkGive`, `windLean`, `windBendAt`, `windFlutter`, `windStiff`, `bendUp` and each level's numbers. */
+/** The plant's bend from `WIND_FIELD_GLSL`'s gusts: `jointPhase`, `trunkGive`, `windLean`, `windBendAt`, `windFlutter`, `windStiff`, `bendUp` and each level's numbers. */
 export const SWAY_GLSL = /* glsl */ `
 const vec4 WIND_TRUNK = ${level(WIND.trunk)};
 const vec4 WIND_BOUGH = ${level(WIND.bough)};

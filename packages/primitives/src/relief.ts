@@ -1,8 +1,7 @@
-// Landform primitives: the ground shape of one region. Their declared
-// parameters are what Jev fills; each build returns a height field and the
-// water beds it holds, in the region's frame. Levels stay gentle on purpose:
-// the world's relief budget keeps sight lines short, so no landform is a
-// mountain.
+// Landform primitives: the ground shape of one region. Each build returns a
+// height field and its water beds in the region's frame. Heights stay within
+// the terrain package's `RELIEF_BUDGET`, which keeps sight lines short, so no
+// landform is a mountain.
 
 import { type BuildContext, type HeightField, type Landform, type StreamBed, primitive, t } from "@gaia/schema";
 import { bedOffset } from "./geometry/field.ts";
@@ -61,7 +60,7 @@ const GRAIN = { round: 0, "north-south": Math.PI / 2, "east-west": 0, diagonal: 
 export const rollingHills = primitive({
   id: "rolling-hills@1",
   role: "Relief",
-  doc: "Rounded grassy hills that roll on in every direction, for code that feels lively and sociable, one friendly rise after another.",
+  doc: "Rounded grassy hills that roll on in every direction, for code that feels lively and sociable.",
   params: rollingHillsParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -99,10 +98,10 @@ const RUN = {
   "northwest-southeast": Math.PI / 4,
 } as const;
 
-/** The flat floor, as a share of the half width each side: a straight valley's, a winding one's (a third of its width), and the widest. */
+/** The flat floor's share of the valley's half width on each side: at `meander` 0, at `meander` 20 (a third of the valley's width), and the cap. */
 const FLOOR = { straight: 0.14, winding: 1 / 3, widest: 0.38 } as const;
 
-/** How far along a valley one bend lies from the next, in the valley's own widths. */
+/** The distance from one bend of a valley to the next, in valley widths. */
 const VALLEY_BEND_WIDTHS = 250 / 64;
 
 const STREAM = { "dry bed": null, trickle: { width: 2.4, depth: 0.45 }, brook: { width: 3.8, depth: 0.7 } } as const;
@@ -110,7 +109,7 @@ const STREAM = { "dry bed": null, trickle: { width: 2.4, depth: 0.45 }, brook: {
 export const valley = primitive({
   id: "valley@1",
   role: "Relief",
-  doc: "A long valley between two gentle shoulders, with a stream bed along its floor, for code that feels like a long journey, everything passing through on its way somewhere else.",
+  doc: "A long valley between two gentle shoulders, with a stream bed along its floor, for code that feels like a long journey, with everything passing through on its way somewhere else.",
   params: valleyParams,
   build: (p, ctx): Landform => {
     const extent = extentOf(ctx);
@@ -120,28 +119,28 @@ export const valley = primitive({
       seed: seedOf(ctx, "axis"),
       angle,
       halfWidth: p.width / 2,
-      // The more a valley winds, the wider its flat floor, so its stream has room to loop as lowland brooks do.
+      // The floor widens with `meander`, so the stream has room to loop like a lowland brook.
       floor: Math.min(FLOOR.widest, FLOOR.straight + ((FLOOR.winding - FLOOR.straight) * p.meander) / 20),
       meander: p.meander,
-      // A valley bends once every few of its own widths, as real valleys do: an open one every 250 m.
+      // A valley bends once every few of its widths, as real valleys do. An open valley, 64 m wide, bends every 250 m.
       meanderWavelength: VALLEY_BEND_WIDTHS * p.width,
     } as const;
     const height = sum(
       constant(-p.depth * 0.6),
       scale(p.depth, trough),
       { op: "plane", angle, grade: p.fall, reach: extent * 0.6 },
-      // Shoulders roll; the floor stays smooth for the stream.
+      // Multiplying the noise by `trough` roughens the shoulders and leaves the floor smooth for the stream.
       { op: "product", of: [trough, scale(p.depth * 0.32, noise(seedOf(ctx, "shoulders"), 42, 3, 0.45))] },
     );
     const water: StreamBed[] = [];
     const bed = STREAM[p.stream];
     if (bed !== null) {
-      // From the high end (+u, where the plane rises) to the low end.
+      // The bed runs from the high end (+u, where the plane rises) to the low end.
       const reach = extent * 0.6;
       const points: number[] = [];
       const c = Math.cos(angle);
       const s = Math.sin(angle);
-      // A point every 2 m along the bed itself, however it bends, so a bend is never cut short by a straight chord.
+      // Points are 2 m apart along the bed's own length rather than along u, so no straight chord cuts across a bend.
       const at = (u: number): [number, number] => {
         const off = bedOffset(trough, u, bed.width);
         return [u * c - off * s, u * s + off * c];
@@ -182,13 +181,13 @@ export const terracesParams = {
   edge: t.scale("How each step meets the next", { "soft and grassy": 0.7, crisp: 0.4 }),
 };
 
-/** Risers never get steeper than this, whatever the edge: steps stay climbable. */
+/** The steepest riser grade for any `edge`, so the steps stay climbable. */
 const RISER_GRADE = 0.7;
 
 export const terraces = primitive({
   id: "terraces@1",
   role: "Relief",
-  doc: "Low earthen steps climbing a slope, like old rice terraces, for code that feels orderly, strict and careful, climbing step by deliberate step.",
+  doc: "Low earthen steps climbing a slope, like old rice terraces, for code that feels orderly, strict and careful, built up one step at a time.",
   params: terracesParams,
   build: (p, ctx): Landform => {
     const extent = extentOf(ctx);
@@ -230,7 +229,7 @@ export const basinParams = {
 export const basin = primitive({
   id: "basin@1",
   role: "Relief",
-  doc: "A round hollow in the land that may hold a pond, for code that feels settled and deep, the place everything else comes to rest in.",
+  doc: "A round hollow in the land that may hold a pond, for code that feels settled and deep, where everything else ends up.",
   params: basinParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -262,7 +261,7 @@ const WIND = { "from the west": COMPASS.east, "from the north": COMPASS.south, "
 export const dunes = primitive({
   id: "dunes@1",
   role: "Relief",
-  doc: "Long, gentle wind-shaped ridges, like grassy dunes, for code that feels restless and changeable, reshaped by every wind.",
+  doc: "Long, gentle wind-shaped ridges, like grassy dunes, for code that feels restless and changeable.",
   params: dunesParams,
   build: (p, ctx): Landform => ({
     height: sum(
@@ -294,7 +293,7 @@ export const meadowParams = {
 export const meadow = primitive({
   id: "meadow@1",
   role: "Relief",
-  doc: "Open, nearly flat ground with a soft undulation, for code that feels quiet, open and at rest, nothing hurrying across it.",
+  doc: "Open, nearly flat ground with a soft undulation, for code that feels quiet, open and calm.",
   params: meadowParams,
   build: (p, ctx): Landform => ({
     height: sum(scale(p.undulation, noise(seedOf(ctx, "meadow"), 55, 3, 0.4)), {

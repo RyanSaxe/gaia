@@ -9,7 +9,7 @@
   the loudness of each note's first 0.8 s is kept in pitchcal.json as a correction (dB, towards the patch's median)
   that compose.py applies.
 
-Usage: python -m music.calibrate pitches   (from tools/sound, after the music's setup; rewrites pitchcal.json)
+Usage: python -m music.calibrate pitches   (from tools/sound, after the music's setup. It rewrites pitchcal.json.)
 """
 import json
 import subprocess

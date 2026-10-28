@@ -1,37 +1,34 @@
-// Lettering for every name painted in the world, on a building's signboard,
-// a tree's plaque, a fingerpost's arm or a boundary stone: the name always
-// fits its board. It is set on one line as large as the board allows; a name
-// too long for that breaks onto two lines where a person would break it
-// (after a slash, a dash, a dot or an underscore, between words, or where a
-// camel-cased word turns); a board that can grow widens, within its limit;
-// and only past all of those do the letters shrink further. No name is ever
-// cut off.
+// Fits every name painted in the world to its board: a building's signboard,
+// a tree's plaque, a fingerpost's arm or a boundary stone. A name goes on one
+// line as large as the board allows, then breaks onto two lines where a
+// person would break it, then widens a board that can grow, and only then
+// shrinks its letters further, so no name is ever cut off.
 
 /** The lettered part of a board, in the atlas's pixels. */
 export interface Board {
   readonly width: number;
   readonly height: number;
-  /** The largest letters the board takes, and the smallest before a name breaks or the board widens, px. */
+  /** The largest letter size the board takes (`size`), and the smallest before a name breaks or the board widens (`least`), in px. */
   readonly size: number;
   readonly least: number;
   /** Whether a name may break onto a second line. */
   readonly twoLines: boolean;
-  /** How much wider the board may grow, as a factor; 1 for a board that cannot. */
+  /** How much wider the board may grow, as a factor. 1 for a board that cannot. */
   readonly widen: number;
 }
 
 export interface Lettered {
   readonly lines: readonly string[];
-  /** The letters' size, px. */
+  /** The letter size in px. */
   readonly size: number;
-  /** How much wider the board stands than its own width: 1, up to its `widen`. */
+  /** How much wider the board is than its own width, from 1 up to its `widen`. */
   readonly widen: number;
 }
 
 /** Two lines of letters take this share of the board's height each. */
 const TWO_LINE_SHARE = 0.42;
 
-/** Every way to break `text` onto two lines: after a separator (a space is dropped), or where a camel-cased word turns. */
+/** Every way to break `text` onto two lines: after a separator, dropping a space, or at a camel-case boundary. */
 function breaksOf(text: string): [string, string][] {
   const out: [string, string][] = [];
   for (let i = 1; i < text.length; i++) {
@@ -45,9 +42,9 @@ function breaksOf(text: string): [string, string][] {
 }
 
 /**
- * Lays `text` out on `board`. `measure(text, size)` is its width at `size`
- * px; the result's every line measures no wider than the board's width times
- * its `widen`.
+ * Lays `text` out on `board`. `measure(text, size)` returns its width at
+ * `size` px. Every line of the result is no wider than the board's width
+ * times its `widen`.
  */
 export function letter(text: string, board: Board, measure: (text: string, size: number) => number): Lettered {
   const ref = board.size;
@@ -59,7 +56,7 @@ export function letter(text: string, board: Board, measure: (text: string, size:
     for (const [a, b] of breaksOf(text)) layouts.push({ lines: [a, b], per: Math.max(per(a), per(b)), cap });
   }
   const sizeAt = (l: (typeof layouts)[number], widen: number): number => Math.min(l.cap, (board.width * widen) / l.per);
-  // One line if it reaches the least size; else the best break; else the board widens as little as it must.
+  // Use one line if it fits at the least size, else the best break, else widen the board as little as needed.
   const one = layouts[0] as (typeof layouts)[number];
   let chosen = one;
   let widen = 1;

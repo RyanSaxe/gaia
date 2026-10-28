@@ -1,22 +1,10 @@
-// Far forms: a tree far enough away to cover few pixels draws as one card
-// instead of its thousands of triangles. `startFarBake` renders the plant
-// with its own shaders from many directions into atlases of what its
-// fragments are made of: color healthy and withered, normal, depth, glow,
-// foliage, and how much of each texel it covers at four vitalities. A card
-// (`createFarCards`) faces the eye, blends the four nearest views, cuts and
-// colors them at its copy's vitality and lights them with the scene's own
-// light, so a far tree keeps its shape, health, sway and night. Its boughs sag
-// as the full form's do: the views are baked as the plant stands healthy, and
-// a field of where each point moves as the boughs sag (`droopField`) moves
-// what the card reads by its copy's vitality. A set's cards
-// hold a fixed number of forms, each copied whole, every mip level a card reads,
-// into a slot of texture arrays, and every plant's copies stand in one batch
-// of buffers written when they are placed (`FarCopies`), so a set draws all
-// its cards in one draw per pass and kind of card. Every pass the card's
-// vertex shader measures each copy's crown on that pass's screen and draws it
-// far, fading over its full form, or not at all, by the same rule the woods
-// choose the full form by (`farChoice`, and its twin `FAR_CHOICE_GLSL`), at
-// the size its form's slot turns far at. After the World session's proof.
+// Draws a distant tree as one card facing the eye instead of its thousands of
+// triangles. `startFarBake` renders the plant with its own shaders from many
+// directions into atlases of color, normal, depth, glow, foliage and coverage
+// at four vitalities, and a card (`createFarCards`) blends the four nearest
+// views at its copy's vitality and lights them with the scene's light. Each
+// pass, the card's vertex shader chooses far form, full form or neither by
+// the same rule as the woods (`farChoice` and its twin `FAR_CHOICE_GLSL`).
 
 import * as THREE from "three";
 import type { Part } from "@gaia/schema";
@@ -28,27 +16,27 @@ import { FOLIAGE, PLANT_FRAG, PLANT_VERT, geometryOf, sprayColors } from "./plan
 import { WIND_GLSL } from "./sway.ts";
 import { closeEachFrame, followVitality } from "./lag.ts";
 
-/** Where the views look from: azimuths all the way round, at these elevations in degrees, crowded where a walker sees far trees. */
+/** The bake's view directions: `azimuths` evenly around, at each of `elevations` in degrees, which cluster where a walker sees far trees. */
 export const FAR_VIEWS = { azimuths: 16, elevations: [-8, 0, 8, 18, 34, 60] } as const;
 /**
- * The vitalities whose coverage is baked, and coverage between them is interpolated. Color comes from 1 and 0. The
- * last is 0, where a copy of the poorest code stands, so its card holds only what its tree has kept.
+ * The vitalities whose coverage is baked. Coverage between them is interpolated, and color comes from 1 and 0. The
+ * last is 0, the vitality of the poorest code, so a card there shows only what its tree keeps at 0.
  */
 const SLICES = [1, 0.6, 0.3, 0] as const;
-/** Samples per texel along each side while baking, on top of 4x multisampling: one keeps the bake's GPU work small. */
+/** Samples per texel along each side while baking, on top of 4x multisampling. A value of 1 keeps the bake's GPU work small. */
 const SUPERSAMPLE = 1;
-/** The world's field of view, degrees: where a tree turns far depends on how many pixels a radian covers. */
+/** The world camera's field of view in degrees. The distance where a tree turns far depends on how many pixels a radian covers. */
 const FOV = 58;
 
 /** Cells along each side of a far form's droop field (`droopField`). */
 export const DROOP_CELLS = 12;
 
 /**
- * Where each point of a plant moves as its boughs sag all the way, at
- * vitality 0: `DROOP_CELLS` cubed cells over the cube its views frame, four
- * bytes a cell, x, y and z each from -1 to 1 times `scale` meters. At a
- * higher vitality a point moves that much times how far its boughs have
- * sagged. `reach` is the farthest any vertex moves, meters.
+ * How far each point of a plant moves when its boughs sag fully, at vitality
+ * 0. It holds `DROOP_CELLS` cubed cells over the cube its views frame, four
+ * bytes a cell, with x, y and z each from -1 to 1 times `scale` meters. At a
+ * higher vitality a point moves that offset times how far its boughs have
+ * sagged. `reach` is the farthest any vertex moves, in meters.
  */
 export interface DroopField {
   readonly cells: Uint8Array;
@@ -59,10 +47,10 @@ export interface DroopField {
 /**
  * The droop field of `parts` over the cube of half-side `radius` about
  * `center`. Droop bends each bough about its joint (`applyDroop` in
- * plant.ts), so a cell holds the mean movement of the vertices in it; a cell
- * with none takes its neighbors', so a point anywhere near the plant reads
- * the movement of the boughs beside it. Twelve cells a side hold a tree's
- * droop to about a texel at the swap.
+ * plant.ts), so a cell holds the mean movement of the vertices in it. An
+ * empty cell takes its neighbors' mean, so a point anywhere near the plant
+ * reads the movement of the boughs beside it. Twelve cells a side hold a
+ * tree's droop to about a texel at the swap.
  */
 export function droopField(parts: readonly Part[], center: THREE.Vector3, radius: number): DroopField {
   const n = DROOP_CELLS;
@@ -138,13 +126,13 @@ export function droopField(parts: readonly Part[], center: THREE.Vector3, radius
 
 /** One tree build, baked. */
 export interface FarForm {
-  /** The plant's bounds where it stands, unscaled and unturned: the woods size a copy on screen from these. */
+  /** The plant's bounds at its origin, unscaled and unturned. The woods size a copy on screen from these. */
   readonly bounds: { readonly center: THREE.Vector3; readonly radius: number; readonly height: number };
-  /** GPU memory its atlases take, bytes, mipmaps included. */
+  /** GPU memory in bytes that its atlases take, mipmaps included. */
   readonly bytes: number;
   /** How long the bake took, milliseconds. */
   readonly ms: number;
-  /** @internal The card's textures, droop and motion, and the targets the bake drew them into (none for a form read from storage). */
+  /** @internal The card's textures, droop and motion, and the targets the bake drew them into. A form read from storage has no targets. */
   readonly atlas: { readonly layers: readonly THREE.Texture[]; readonly droop: DroopField; readonly frame: number; readonly sway: number; readonly frequency: number; readonly targets?: readonly THREE.WebGLRenderTarget[] };
   dispose(): void;
 }
@@ -172,7 +160,7 @@ const OUTPUT = {
 } as const;
 type Output = keyof typeof OUTPUT;
 
-/** The plant's vertex shader with its color's vitality apart from its shape's, and droop left out so every slice nests inside the healthy outline. */
+/** The plant's vertex shader with color vitality separate from shape vitality, and droop removed so every slice nests inside the vitality-1 outline. */
 function bakeVert(): string {
   let s = swap(PLANT_VERT, "void main() {", "uniform float uColorVitality;\nvec3 bakeKeep(vec3 p, vec3 joint) { return p; }\nvoid main() {");
   s = swap(s, "vWither = aWither * (1.0 - vitalityMid());", "vWither = aWither * (1.0 - uColorVitality);");
@@ -183,7 +171,7 @@ function bakeVert(): string {
 /** The plant's fragment shader, writing one layer instead of lit color, with leaves merging as they would on screen at the swap. */
 function bakeFrag(output: Output): string {
   let s = swap(PLANT_FRAG, "void main() {", "uniform vec3 uBakeCenter;\nuniform vec3 uBakeDir;\nuniform float uBakeRadius;\nvoid main() {");
-  // A bake texel is a fraction of a screen pixel at the swap: leaves merge as they would on screen there.
+  // A bake texel is 1 / `SUPERSAMPLE` of a screen pixel at the swap, so scaling the footprint merges leaves as the screen would there.
   s = swap(s, "float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0), 1e-4);", `float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0) * ${SUPERSAMPLE}.0, 1e-4);`);
   s = swap(s, "gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);", OUTPUT[output]);
   return s;
@@ -214,11 +202,11 @@ interface Pass {
 }
 
 /**
- * Four RGBA layers, every value premultiplied by the share of the texel the
- * healthy plant covers (or, for the withered color, the share at the last
- * slice): 0 healthy color and coverage at 1; 1 withered color (at the last
- * slice's shape) and glow; 2 normal and depth; 3 coverage at 0.6, 0.3 and
- * 0, and foliage.
+ * Four RGBA layers, each value premultiplied by the share of the texel the
+ * plant covers at vitality 1, or for the withered color, the share at the
+ * last slice. Layer 0 is color and coverage at vitality 1. Layer 1 is the
+ * withered color, at the last slice's shape, and glow. Layer 2 is normal and
+ * depth. Layer 3 is coverage at 0.6, 0.3 and 0, and foliage.
  */
 const PASSES: readonly Pass[] = [
   { output: "cover", vitality: 1, colorVitality: 1, layer: 0, to: [3, -1, -1, -1] },
@@ -246,10 +234,10 @@ export interface FarBake {
   /** Resolves once every shader the bake uses has compiled, in parallel where the browser can. */
   readonly ready: Promise<void>;
   /**
-   * Bakes up to `views` views (of 960: 96 directions in ten passes), fewer
-   * if `budgetMs` passes first; the form when the last is done, else null.
-   * The GPU work a view queues is not counted in the budget, so `views`
-   * bounds what a frame takes on the GPU.
+   * Bakes up to `views` of the 960 views, 96 directions in ten passes, or
+   * fewer if `budgetMs` runs out first. Returns the form when the last view
+   * is done, else null. The budget does not count the GPU work a view
+   * queues, so `views` bounds a frame's GPU time.
    */
   step(budgetMs: number, views?: number): FarForm | null;
   /** Stops and frees everything, if it has not finished. */
@@ -258,16 +246,17 @@ export interface FarBake {
 
 /**
  * Starts baking `plant` into its far form, each view `framePx` texels
- * across: the crown span on screen, in device pixels, at which the woods
- * turn it far, so one texel covers about one pixel there. The views see the
- * plant as the near form looks from that distance: still air, full detail
- * thinned as the eye would thin it, leaves merged to that pixel size.
+ * across. `framePx` is the crown span on screen in device pixels at which
+ * the woods turn the plant far, so one texel covers about one pixel there.
+ * The views show the plant as the near form looks from that distance: still
+ * air, detail thinned as it is at that distance, and leaves merged to that
+ * pixel size.
  */
 export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarBake {
   let spent = 0;
   const parts = mergeParts(plant.parts).filter((p: Part) => p.indices.length > 0);
-  // Framed by what stands above the soil, as its copies are bounded (`createPlantInstances`): a bramble's canes root
-  // under it, where no one sees them.
+  // Frame only what is above the soil, as `createPlantInstances` bounds its copies. A bramble's canes root below
+  // ground, where no one sees them.
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
   for (const part of parts) {
@@ -285,10 +274,10 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   const rows = FAR_VIEWS.elevations.length;
   const px = framePx * SUPERSAMPLE;
 
-  // Where the eye stands when this plant turns far, so detail thins as it would there.
+  // The eye distance at which this plant turns far, so detail thins as it would there.
   const pxPerRad = renderer.getDrawingBufferSize(new THREE.Vector2()).y / ((FOV * Math.PI) / 180);
   const eyeAt = (2 * radius * pxPerRad) / framePx;
-  // Still air, and a shadow map of its own: an unset sampler would read whatever the bake last bound, even the target it draws into.
+  // Still air, and a shadow map of its own. An unset sampler would read whatever the bake last bound, even the target it draws into.
   const unlit = noShadowMap();
   const light = { uTime: { value: 0 }, uWind: { value: 0 }, uWindDir: { value: new THREE.Vector2(1, 0) }, uNightness: { value: 0 }, uEye: { value: new THREE.Vector3() }, uShadowMap: { value: unlit } };
   const bake = { uBakeCenter: { value: sphere.center.clone() }, uBakeDir: { value: new THREE.Vector3() }, uBakeRadius: { value: radius } };
@@ -360,9 +349,9 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   camera.lookAt(sphere.center);
 
   const nextFrame = (): Promise<void> => new Promise((resolve) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => resolve()) : setTimeout(resolve, 0)));
-  // Compiling ahead is not enough: each output's first draw into the
-  // multisampled target sets up state the GPU builds then, so each is drawn
-  // once, one pixel across, a frame apart, before the bake steps.
+  // Compiling ahead is not enough. Each output's first draw into the
+  // multisampled target sets up GPU state, so each output is drawn once, one
+  // pixel across, a frame apart, before the bake steps.
   const ready = (async (): Promise<void> => {
     for (const output of Object.keys(OUTPUT) as Output[]) {
       for (const m of meshes) m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
@@ -396,7 +385,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   let next = -1;
   let done: FarForm | null = null;
   const steps = rows * PASSES.length * cols;
-  /** Renders view k (row, pass and azimuth, in that order of nesting), resolving the row into its atlas after its last view; or clears the atlases when k is -1. */
+  /** Renders view k, indexed by row, then pass, then azimuth, and resolves the row into its atlas after its last view. Clears the atlases when k is -1. */
   const view = (k: number): void => {
     if (k < 0) {
       for (const layer of layers) {
@@ -440,7 +429,7 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
     target.viewport.set(0, 0, cols * framePx, rows * framePx);
   };
   const finish = (): FarForm => {
-    // Every chunk is in: make each atlas's mipmaps once.
+    // Every chunk is in, so make each atlas's mipmaps once.
     const empty = new THREE.Scene();
     for (const layer of layers) {
       layer.texture.generateMipmaps = true;
@@ -492,8 +481,8 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
 }
 
 /**
- * The bake's version: a far form stored by an earlier version must be baked
- * again. Bump it whenever what a bake writes, or how a card reads it, changes.
+ * The bake's version. A far form stored by an earlier version is baked again.
+ * Bump it whenever what a bake writes, or how a card reads it, changes.
  */
 export const FAR_BAKE_VERSION = 8;
 
@@ -512,8 +501,8 @@ export interface FarFormData {
 }
 
 /**
- * Reads a baked form back to store it, once, without stalling: each atlas's
- * full-size level only, since its mipmaps are made again on load.
+ * Reads a baked form back for storage, once, without stalling. It reads only
+ * each atlas's full-size level, since mipmaps are rebuilt on load.
  */
 export async function farFormData(renderer: THREE.WebGLRenderer, form: FarForm): Promise<FarFormData> {
   const targets = form.atlas.targets;
@@ -532,10 +521,10 @@ export async function farFormData(renderer: THREE.WebGLRenderer, form: FarForm):
   return { version: FAR_BAKE_VERSION, bounds: { center: [c.x, c.y, c.z], radius: form.bounds.radius, height: form.bounds.height }, frame: form.atlas.frame, sway: form.atlas.sway, frequency: form.atlas.frequency, droop: form.atlas.droop, width, height, layers };
 }
 
-/** A far form rebuilt from stored data, its atlases filtered and mipmapped as a bake's are; null when the data is from another version of the bake. */
+/** Rebuilds a far form from stored data, with atlases filtered and mipmapped as a bake's are. Returns null when the data is from another bake version. */
 export function farFormFrom(data: FarFormData): FarForm | null {
   if (data.version !== FAR_BAKE_VERSION) return null;
-  // The closures below read only these, so the stored record, its pixels included, is not kept with them.
+  // The closures below read only these, so they do not keep the stored record and its pixels alive.
   const { width, height } = data;
   const layers = data.layers.map((pixels) => {
     const t = new THREE.DataTexture(pixels, width, height, THREE.RGBAFormat, THREE.UnsignedByteType);
@@ -544,9 +533,9 @@ export function farFormFrom(data: FarFormData): FarForm | null {
     t.generateMipmaps = true;
     t.flipY = false;
     t.needsUpdate = true;
-    // Once the GPU holds the atlas, the page lets its own copy go: the form
-    // stays in the far store, so nothing is lost but memory, and a copy of
-    // every atlas would hold some 300 MB.
+    // Once the GPU has the atlas, drop the page's copy. The form stays in the
+    // far store, so dropping it loses nothing, and a copy of every atlas would
+    // take some 300 MB.
     t.onUpdate = () => {
       t.image = { data: null as unknown as Uint8Array, width, height };
       t.onUpdate = null;
@@ -566,12 +555,12 @@ export function farFormFrom(data: FarFormData): FarForm | null {
 }
 
 /**
- * When copies turn far, in every pass: across `band` times the size a copy
- * turns far at, its card comes in over its full form; past the band, in a
- * perspective pass, its full form still dissolves under its whole card until
- * its crown has shrunk `leave` times more. Whatever its form, a copy whose
- * crown spans fewer device pixels than `gone.start` dissolves, and by
- * `gone.end` is gone.
+ * When copies turn far, in every pass. Across `band` times the size a copy
+ * turns far at, its card fades in over its full form. Past the band, in a
+ * perspective pass, its full form keeps dissolving under the opaque card
+ * until its crown has shrunk `leave` times more. Whatever its form, a copy
+ * whose crown spans fewer than `gone.start` device pixels dissolves, and by
+ * `gone.end` it is gone.
  */
 export interface FarTurn {
   readonly band: number;
@@ -579,22 +568,22 @@ export interface FarTurn {
   readonly gone: { readonly start: number; readonly end: number };
 }
 
-/** How far a crown spanning `px` device pixels has dissolved for being too small to see: 0 whole, 1 gone. */
+/** How far a crown spanning `px` device pixels has dissolved for being too small to see, from 0 whole to 1 gone. */
 export function goneness(px: number, gone: FarTurn["gone"]): number {
   return Math.min(1, Math.max(0, (gone.start - px) / (gone.start - gone.end)));
 }
 
 /**
- * A card's fade over a full form still dissolving under it: whole to the eye,
- * short of 1 only so the card still draws over the full form, as it does
- * inside the band.
+ * A card's fade over a full form that is still dissolving under it. It looks
+ * opaque, and is short of 1 only so the card still draws over the full form,
+ * as it does inside the band.
  */
 const OVER = 1 - 1 / 1024;
 
 /**
  * How far toward its far form a crown spanning `px` device pixels is, where
- * it turns far at `swapPx`: 0 draws the full form alone, 1 the far form alone,
- * and in between the far form over the full one, that far into the band.
+ * it turns far at `swapPx`. 0 draws the full form alone, 1 the far form
+ * alone, and values between draw the far form over the full one.
  */
 export function farness(px: number, swapPx: number, band: number): number {
   const top = swapPx * band;
@@ -605,13 +594,13 @@ export function farness(px: number, swapPx: number, band: number): number {
 
 /**
  * How a copy whose crown spans `px` device pixels on a pass's screen draws,
- * where it turns far at `swapPx`: whether its full form draws, and its card's
- * fade, 0 for no card, below 1 over the full form, and 1 alone. A flat pass
- * (`ortho`, the sun's shadow) keeps the full form only to the band's end; a
- * perspective one keeps it, dissolving, until it spans `swapPx / turn.leave`.
- * A copy spanning `turn.gone.end` pixels or fewer draws in neither form.
- * The woods choose each copy's full form by it, and the card's shader
- * (`FAR_CHOICE_GLSL`) its card, so the two always agree.
+ * where it turns far at `swapPx`. It returns whether the full form draws, and
+ * the card's fade: 0 for no card, below 1 over the full form, and 1 alone. A
+ * flat pass (`ortho`, the sun's shadow) keeps the full form only to the
+ * band's end. A perspective pass keeps it, dissolving, until it spans
+ * `swapPx / turn.leave`. A copy spanning `turn.gone.end` pixels or fewer
+ * draws in neither form. The woods choose each copy's full form with this,
+ * and the card's shader (`FAR_CHOICE_GLSL`) its card, so the two agree.
  */
 export function farChoice(px: number, swapPx: number, turn: FarTurn, ortho: boolean): { full: boolean; card: number } {
   if (px <= turn.gone.end) return { full: false, card: 0 };
@@ -623,11 +612,12 @@ export function farChoice(px: number, swapPx: number, turn: FarTurn, ortho: bool
 
 /**
  * GLSL twin of `farChoice` and `goneness`, measuring the crown as the woods
- * do: its card's fade for the pass (`uFarPass`: its focal length in device
- * pixels, 0 to draw no card, and 1 for a flat pass), where the form turns far
- * at `swapPx` pixels (0 for never), and in `gone` how far it has dissolved for
- * being too small to see. A crown whose nearest point lies past where the air
- * has dissolved everything into the sky draws no card.
+ * do. It returns the card's fade for the pass where the form turns far at
+ * `swapPx` pixels, and writes to `gone` how far the copy has dissolved for
+ * being too small to see. `uFarPass.x` is the pass's focal length in device
+ * pixels, 0 to draw no card, and `uFarPass.y` is 1 for a flat pass. A crown
+ * whose nearest point is past where the air fades everything into the sky
+ * draws no card.
  */
 export const FAR_CHOICE_GLSL = /* glsl */ `
 uniform vec2 uFarPass;
@@ -653,10 +643,10 @@ float farCard(vec4 crown, float swapPx, out float gone) {
 `;
 
 /**
- * Each copy's crown: the center and radius of the plant's built bounds
- * `sphere` (at scale 1, unturned), where the copy stands at its scale, four
- * numbers per copy. A copy's size on screen is measured by it, the same for
- * its full form and its card.
+ * Each copy's crown, four numbers per copy: the center and radius of the
+ * plant's built bounds `sphere`, given at scale 1 and unturned, placed and
+ * scaled as the copy is. The copy's size on screen is measured from it, the
+ * same for its full form and its card.
  */
 export function crownsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere): Float32Array {
   const crowns = new Float32Array(spots.length * 4);
@@ -668,10 +658,10 @@ export function crownsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere): 
 const MEMBER_ROW = 256;
 
 /**
- * How a card reads its bake: near the size its form turns far at, the coverage remapped from this range to 0 to 1,
- * for a healthy copy and for a bare one at vitality 0 (smaller, the range widens to 0 to 1 over the first mip level);
- * how far toward the sun, in radii, it reads its shadow; and how far toward the eye, in radii, a card drawn over its
- * full form stands.
+ * How a card reads its bake. Near the size its form turns far at, it remaps coverage from `coverEdge` to 0 to 1 for a
+ * copy at vitality 1, and from `bareEdge` for a bare copy at vitality 0. Smaller, the range widens to 0 to 1 over the
+ * first mip level. `shadowLift` is how far toward the sun, in radii, it reads its shadow, and `overFull` how far toward
+ * the eye, in radii, a card drawn over its full form sits.
  */
 export const CARD = { coverEdge: [0.25, 0.75], bareEdge: [0.15, 0.65], shadowLift: 0.2, overFull: 0.15 } as const;
 
@@ -1026,27 +1016,27 @@ void main() {
 }
 `;
 
-/** One plant's copies among a set's cards: in buffers written when the copies are placed, read by every pass. */
+/** One plant's copies among a set's cards, in buffers written when the copies are placed and read by every pass. */
 export interface FarCopies {
   /**
-   * Stands the copies, `PLACE_STRIDE` numbers each in `places`: where (x, y, z), yaw,
-   * scale, vitality, seed and the ground's slope (`placesOf`), and four in `crowns` (`crownsOf`).
-   * The set keeps both arrays and stands the copies from them again whenever it packs its copies anew.
+   * Places the copies from `PLACE_STRIDE` numbers each in `places`: position (x, y, z), yaw,
+   * scale, vitality, seed and the ground's slope (`placesOf`), and four each in `crowns` (`crownsOf`).
+   * The set keeps both arrays and places the copies from them again whenever it repacks its copies.
    */
   place(places: Float32Array, crowns: Float32Array): void;
   /** Sets copy `index`'s vitality, which its card shows. */
   setVitalityAt(index: number, v: number): void;
-  /** Swaps to the depth material for the sun's shadow: a card standing alone casts, one inside the band does not. */
+  /** Swaps to the depth material for the sun's shadow. An opaque card past the band casts a shadow, and one inside the band does not. */
   useDepth(on: boolean): void;
-  /** The slot whose form the copies' cards show, or -1 while their form holds none: then they draw no card. */
+  /** The slot whose form the copies' cards show, or -1 while their form has no slot, when they draw no card. */
   slot: number;
   dispose(): void;
 }
 
-/** How many numbers each copy takes in `placesOf`; its shown vitality is the sixth. */
+/** How many numbers each copy takes in `placesOf`. Its shown vitality is the sixth. */
 export const PLACE_STRIDE = 9;
 
-/** Each copy as its card draws it: where it stands (x, y, z), its yaw, scale, vitality and seed, and the ground's slope under it. */
+/** Each copy as its card draws it: position (x, y, z), yaw, scale, vitality, seed, and the ground's slope under it. */
 export function placesOf(spots: readonly InstanceSpot[]): Float32Array {
   const places = new Float32Array(spots.length * PLACE_STRIDE);
   spots.forEach((s, k) => places.set([s.x, s.y, s.z, s.yaw, s.scale, shownVitality(s.vitality ?? 1), copySeed(s), s.slope?.[0] ?? 0, s.slope?.[1] ?? 0], k * PLACE_STRIDE));
@@ -1054,35 +1044,36 @@ export function placesOf(spots: readonly InstanceSpot[]): Float32Array {
 }
 
 /**
- * A set's far cards: a fixed number of slots, each holding one far form's
- * atlases (every level, exactly as baked) in a texture array, and every
- * plant's copies in one batch that draws them all, one draw for the solid
- * cards and one for those fading in, whatever forms they show.
+ * A set's far cards. It has a fixed number of slots, each holding one far
+ * form's atlases, every level exactly as baked, in a texture array. Every
+ * plant's copies share one batch, with one draw for the opaque cards and one
+ * for those fading in, whatever forms they show.
  */
 export interface FarCards {
   /** The batch's meshes, to add to the scene once. */
   readonly object: THREE.Group;
   /** How many forms it holds at once: as many as it was made with, or fewer once `fit`. */
   readonly slots: number;
-  /** GPU memory the slots take, bytes, once a form has filled one; 0 before. */
+  /** GPU memory in bytes that the slots take once a form has filled one, and 0 before. */
   readonly bytes: number;
-  /** Holds room for no more than `count` forms, never more than it was made with: a world standing fewer takes no memory for the rest. Only before the first `fill`. */
+  /** Limits the slots to `count` forms, never more than it was made with, so a world with fewer forms takes no memory for the rest. Call it only before the first `fill`. */
   fit(count: number): void;
   /**
    * Copies `form`'s atlases, every mip level, into `slot`: all four, or only
    * atlas `layer`, so a form read from storage can upload one atlas a frame.
-   * The form's own textures are the caller's to dispose of after.
+   * The caller disposes of the form's own textures afterward.
    */
   fill(renderer: THREE.WebGLRenderer, slot: number, form: FarForm, layer?: number): void;
-  /** The crown span, in device pixels, at which copies shown from `slot` turn far: 0 draws none of their cards. */
+  /** The crown span, in device pixels, at which copies shown from `slot` turn far. 0 draws none of their cards. */
   turnAt(slot: number, swapPx: number): void;
   /** One plant's copies, whose cards show while `anchor` and every object above it are visible. */
   copies(anchor: THREE.Object3D): FarCopies;
   /**
-   * For the pass about to render: its focal length in device pixels, the
-   * crown span in pixels of a meter one meter away (or of a meter, for a
-   * flat pass), 0 to draw no card; and whether it is flat, as the sun's
-   * shadow is. Each plant's copies show in it as their anchor is visible.
+   * Sets up the pass about to render. `focal` is its focal length in device
+   * pixels, the crown span in pixels of a meter one meter away, or of a meter
+   * for a flat pass, and 0 draws no card. `ortho` is whether it is flat, as
+   * the sun's shadow is. Each plant's copies show in it when their anchor is
+   * visible.
    */
   pass(focal: number, ortho: boolean): void;
   /** Shows or hides every card, for seeing what they draw. */
@@ -1110,7 +1101,7 @@ interface Member {
   readonly easing: Map<number, { shown: number; lag: number; target: number }>;
 }
 
-/** Whether `o` draws: it and every object above it visible. */
+/** Whether `o` draws, meaning it and every object above it are visible. */
 const visibleUp = (o: THREE.Object3D): boolean => {
   for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) if (!a.visible) return false;
   return true;
@@ -1118,7 +1109,7 @@ const visibleUp = (o: THREE.Object3D): boolean => {
 
 /**
  * How many mip levels of each atlas a set's slots hold, for views `frame`
- * texels across: a copy draws no card once its crown spans `gone` device
+ * texels across. A copy draws no card once its crown spans `gone` device
  * pixels, and a card that small reads its atlas `log2(frame / gone)` levels
  * down (\`minified\` in its shader), so no card reads the levels past that.
  */
@@ -1132,11 +1123,11 @@ export function farSlotBytes(frame: number, gone: number, slots: number): number
 }
 
 /**
- * A set's cards, holding `slots` forms at once, each turning far by `turn`.
- * Near the swap they sharpen a bare copy's coverage by `bareEdge` and a
- * healthy one's by `CARD.coverEdge`: trees take `CARD.bareEdge`, since a bare
- * tree is mostly twigs finer than a texel; by default a bare copy sharpens as
- * a healthy one does.
+ * A set's cards, holding up to `most` forms at once, each turning far by
+ * `turn`. Near the swap they sharpen a bare copy's coverage by `bareEdge` and
+ * a vitality-1 copy's by `CARD.coverEdge`. Trees pass `CARD.bareEdge`, since
+ * a bare tree is mostly twigs finer than a texel. By default a bare copy
+ * sharpens as a vitality-1 copy does.
  */
 export function createFarCards(light: SceneLight, turn: FarTurn, most: number, bareEdge: readonly [number, number] = CARD.coverEdge): FarCards {
   if (!(most >= 1)) throw new Error(`A set of far cards holds at least one form; it was given ${most} slots.`);
@@ -1148,7 +1139,7 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
   let slotData = new Float32Array(slots * 3 * 4);
   let slotTable = new THREE.DataTexture(slotData, slots, 3, THREE.RGBAFormat, THREE.FloatType);
   slotTable.needsUpdate = true;
-  // Each member's slot and whether it shows; member 0 is nobody's, for room no copy stands in.
+  // Each member's slot and whether it shows. Member 0 belongs to no plant and marks unused room.
   let memberRows = 1;
   let memberData = new Float32Array(MEMBER_ROW * memberRows * 4).fill(0);
   memberData[0] = -1;
@@ -1177,7 +1168,7 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
   const fadingMaterial = new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, uniforms, defines: { FADING: "" }, side: THREE.DoubleSide, transparent: true, depthWrite: false });
   const depthMaterial = new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_DEPTH_FRAG, uniforms, side: THREE.DoubleSide });
 
-  // Both meshes read the same copies; three fixes how many an instanced geometry may draw when it is first bound, so
+  // Both meshes read the same copies. Three fixes how many instances a geometry can draw when it is first bound, so
   // outgrowing it takes a new geometry, never new attributes.
   const geometryFor = (room: number): THREE.InstancedBufferGeometry => {
     const g = new THREE.InstancedBufferGeometry();
@@ -1196,7 +1187,7 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
   const fading = new THREE.Mesh(geometry, fadingMaterial);
   const object = new THREE.Group();
   for (const mesh of [solid, fading]) {
-    // The vertex shader places every card, and collapses those it does not draw: the mesh's bounds mean nothing.
+    // The vertex shader places every card, and collapses those it does not draw. The mesh's bounds mean nothing.
     mesh.frustumCulled = false;
     object.add(mesh);
   }
@@ -1227,7 +1218,7 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
     memberData[at + 1] = m.shown ? 1 : 0;
     memberTable.needsUpdate = true;
   };
-  /** Writes member `m`'s copies into its stretch of the buffers, the rest of its room standing for nobody. */
+  /** Writes member `m`'s copies into its stretch of the buffers and marks the rest of its room unused. */
   const writeCopies = (m: Member): void => {
     const spot = attribute("aSpot");
     const more = attribute("aMore");
@@ -1311,8 +1302,8 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
           array.minFilter = THREE.LinearMipmapLinearFilter;
           array.magFilter = THREE.LinearFilter;
           array.generateMipmaps = false;
-          // Storage for the levels a card reads, each copied from a form's own, never made from level 0: three gives an
-          // array as many levels as its mipmaps, and with no data ready it only makes room for them.
+          // Allocate the levels a card reads. Each is copied from a form's own level, never generated from level 0.
+          // Three gives an array as many levels as its mipmaps, and with no data ready it only allocates them.
           array.mipmaps = Array.from({ length: levels }, (_, level) => ({ data: new Uint8Array(0), width: Math.max(1, width >> level), height: Math.max(1, height >> level) }));
           array.source.dataReady = false;
           array.needsUpdate = true;
@@ -1361,8 +1352,8 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
       const m: Member = { index: takeIndex(), anchor, places: new Float32Array(0), crowns: new Float32Array(0), count: 0, offset: 0, room: 0, slot: -1, depth: false, shown: false, easing: new Map() };
       members.push(m);
       writeRecord(m);
-      // A copy whose vitality changes eases in as its near form does (`followVitality`), its card showing the middle
-      // of what the near form averages over: where it shows now, how far that lags, and where it is going.
+      // A copy whose vitality changes eases toward it as its near form does (`followVitality`). Its card shows
+      // `shown + 0.5 * lag`, the middle of the range the near form averages over.
       const close = (keep: number): boolean => {
         const more = attribute("aMore");
         for (const [k, e] of m.easing) {
@@ -1378,7 +1369,7 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
           m.places = places;
           m.crowns = crowns;
           m.count = places.length / PLACE_STRIDE;
-          // Copies stood anew show their vitality at rest.
+          // Newly placed copies show their vitality without easing.
           m.easing.clear();
           if (m.count > m.room) {
             m.room = Math.ceil(m.count * 1.25);

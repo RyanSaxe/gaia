@@ -1,33 +1,34 @@
-# The understanding pass: importance and quality at every level. Folders
-# are asked top-down, each in its parent's light; each file after its
-# folder. A request is about one container, and its questions are about the
-# container's parts: each part's importance, each definition's quality
-# concepts, which parts stand out, and the container's own quality. The
-# concepts, their levels, the picks and how the engine weighs them are all
-# here, so reshaping them changes no engine code.
+# The words of the understanding pass, which judges importance and quality
+# at every level. The engine asks about folders from the top down, each with
+# its parent's answers, and about each file after its folder. One request
+# covers one folder or file. Its questions cover each part's importance,
+# each definition's quality concepts, the key and weak parts, and the
+# folder's or file's own quality. The concepts, their levels, the picks and
+# their weights are all here, so changing them changes no engine code.
 
-# Definitions with these roles are data or markup rather than code (a CSS
-# rule, a Markdown section, a JSON key), so they are never asked about.
+# Definitions with these roles are data or markup rather than code, such as
+# a CSS rule, a Markdown section or a JSON key, so Jev is never asked about
+# them.
 [parts]
 skip_roles = ["rule", "section", "key", "element", "property", "field", "variable", "constant"]
 
-# Importance, asked of every part in its container's request, in the light
-# of the project and of everything above it.
+# Importance, asked of every part in its folder's or file's request. The
+# state holds the project's description and the answers above the part.
 [importance]
-instructions = "How much does {what}, matter to what this project exists to do, given what holds it?"
+instructions = "How much does {what}, matter to what this project exists to do, given what contains it?"
 levels = [
   "Incidental: tooling, glue or scaffolding the project could do without.",
   "Supporting: it helps the work along, and the project would get by without it.",
   "Part of the work: it does some of what the project is for.",
   "Core: it does a large part of what the project is for, and much would fail without it.",
-  "The heart: the project is, above all, this.",
+  "Central: the project is, above all, this.",
 ]
 
-# Quality, one question per concept.
-# Jev scores every one; `weight` is how much each counts in the engine's
-# arithmetic. A concept missing at a level simply isn't asked there. A
-# concept asked as a choice has `values`, and an option left out of them,
-# such as robustness's "nothing can fail", doesn't count at all.
+# Quality, one question per concept. Jev scores every concept, and `weight`
+# sets how much each counts in the engine's arithmetic. A concept missing at
+# a level isn't asked there. A concept asked as a choice has `values`, and an
+# option left out of them, such as robustness's "nothing can fail", doesn't
+# count at all.
 
 [definition.correctness]
 weight = 1.0
@@ -55,7 +56,7 @@ instructions = "Does `{name}`, on lines {start} to {end}, use only as much compl
 levels = [
   "Overbuilt: machinery, indirection or special cases far beyond what the problem needs.",
   "Heavier than needed: some needless layers, flags or special cases.",
-  "Simple: little that could be taken away; a special case or layer here and there.",
+  "Simple: little could be taken away, with a special case or layer here and there.",
   "As simple as it can be: nothing could be removed without losing what it does.",
 ]
 
@@ -150,7 +151,7 @@ instructions = "Does this file use only as much complexity as its problem requir
 levels = [
   "Overbuilt: machinery, indirection or special cases far beyond what the problem needs.",
   "Heavier than needed: some needless layers, flags or special cases.",
-  "Simple: little that could be taken away; a special case or layer here and there.",
+  "Simple: little could be taken away, with a special case or layer here and there.",
   "As simple as it can be: nothing could be removed without losing what it does.",
 ]
 
@@ -224,9 +225,9 @@ levels = [
   "Seamless: names, patterns and conventions all match what a reader expects here.",
 ]
 
-# Select key and weak blocks independently; `none` is always an option.
-# A separate "finest" question is omitted because it tended to select the
-# same block as "most needs work" rather than distinguish useful examples.
+# The key and weak picks are asked separately, and `none` is always an
+# option. There is no "finest" pick, because Jev tended to choose the same
+# block for it as for "most needs work".
 [picks.key]
 instructions = "Which of these is the key to understanding {what}?"
 none = "None stands out: no single one is the key."
@@ -235,16 +236,16 @@ none = "None stands out: no single one is the key."
 instructions = "Which of these most needs work in {what}: the one a careful reviewer would fix first?"
 none = "None needs work more than the others."
 
-# How the engine gathers quality upward: a container's quality is its
-# parts' quality, weighted by their lines, blended with its own.
+# How the engine combines quality upward. A folder's or file's quality is
+# its parts' quality, weighted by their lines, blended with its own.
 [gather]
 parts = 0.75
 own = 0.25
 
-# Asking for more: every request ends with a choice of what would help Jev
-# judge it better. Every reading above `threshold` (when "nothing" isn't the
-# answer) is added to the state and the same questions are asked again, up
-# to `rounds` more times.
+# Every request ends with a choice of what would help Jev judge it better.
+# Unless Jev picks "nothing", every reading with a probability above
+# `threshold` goes into the state, and the same questions are asked again,
+# up to `rounds` more times.
 [more]
 threshold = 0.3
 rounds = 1

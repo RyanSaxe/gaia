@@ -1,24 +1,24 @@
-// What the start's page is: the page the table draws, the words for an
-// address that leads nowhere, and how a recent world or a folder is chosen.
+// The start page's interface, the text for each refused address, and the
+// helpers that turn a recent world or a folder into a `StartChoice`.
 
 import type { StartChoice, StartOffer } from "../../world-service/protocol.ts";
 
-/** The start's page: it shows an offer and settles once a place is chosen. */
+/** The start page. It shows an offer and resolves once a place is chosen. */
 export interface StartPage {
-  /** Shows the offer (again, with why an address led nowhere); resolves with the place chosen. */
+  /** Shows the offer, or shows it again with why an address failed, and resolves with the chosen place. */
   offer(offer: StartOffer): Promise<StartChoice>;
-  /** The hour the world shows: the table is lit by it. */
+  /** Sets the world's hour, which lights the table. */
   hour(h: number): void;
   /**
-   * The place is on its way, or a world opens with no start: the page stops taking choices. The table stays behind the
-   * wait, its card risen into the wait's sheet.
+   * Called once a place is chosen, or when a world opens without the start page. The page stops taking choices, and the
+   * table stays behind the wait with its card risen into the wait's sheet.
    */
   leave(): void;
-  /** The wait has lifted and the world shows: the page lets go of everything. */
+  /** Called when the wait has lifted and the world shows. The page releases all its resources. */
   close(): void;
 }
 
-/** The words for an address that leads nowhere, in the world's own voice. */
+/** The text shown for each reason an address failed, written in the world's voice. */
 export const REFUSALS: Readonly<Record<NonNullable<StartOffer["refused"]>["why"], string>> = {
   address: "The map can't follow that. An address looks like github.com/someone/something.",
   missing: "Nothing open lies at that address. It may be private, or spelled a little differently.",
@@ -27,10 +27,10 @@ export const REFUSALS: Readonly<Record<NonNullable<StartOffer["refused"]>["why"]
   slow: "That place is too far to reach today. Try again in a little while.",
 };
 
-/** The place a recent world reopens: a place on GitHub through its address, so it is brought up to date. */
+/** The choice that reopens a recent world. A GitHub world reopens through its address, so its clone is updated first. */
 export const placeOf = (r: StartOffer["recent"][number]): StartChoice => (r.github === undefined ? { folder: r.root } : { address: `github.com/${r.github}` });
 
-/** A folder on this computer, asked of the app; null when the person thinks better of it, or outside the app. */
+/** Asks the app for a local folder. Returns null when the person cancels, or outside the app. */
 export async function askFolder(): Promise<string | null> {
   return (await window.gaiaShell?.chooseFolder()) ?? null;
 }

@@ -1,5 +1,6 @@
-// Turns a stored blueprint into geometry: resolve scale words to numbers,
-// build each slot in dependency order, feed every slot its `on` slot's output.
+// Turns a stored blueprint into geometry. It resolves scale words to numbers
+// and builds each slot in dependency order, feeding every slot its `on` slot's
+// output.
 
 import {
   type Anchor,
@@ -39,7 +40,7 @@ const STILL: MotionSpec = { sway: 0, frequency: 0 };
 /** The erased build signature. Stored values are checked against `params` before the call. */
 type ErasedBuild = (params: unknown, ctx: BuildContext, input: unknown) => unknown;
 
-/** Turns stored words into what `build` receives; each scale gets its own seeded unit. */
+/** Turns stored words into what `build` receives. Each scale gets its own seeded unit. */
 export function resolveParams(p: AnyPrimitive, stored: Blueprint["slots"][string]["params"], r: ReturnType<typeof rand>, where: string): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, field] of Object.entries(p.params)) {
@@ -67,7 +68,7 @@ export interface BuiltSlot {
 
 /**
  * Builds every filled slot of a blueprint in dependency order, feeding each
- * slot its `on` slot's output. Kinds then gather the outputs they need.
+ * slot its `on` slot's output. Kinds then collect the outputs they need.
  */
 export function buildSlots(bp: Blueprint, k: AnyKind, lib: Library, opts: RealizeOptions): Map<string, BuiltSlot> {
   if (bp.kind !== k.id) throw new Error(`Blueprint ${bp.id} is a ${bp.kind}, not a ${k.id}.`);
@@ -142,7 +143,7 @@ export function mergeParts(parts: readonly Part[]): Part[] {
       base += p.shade.length;
     }
     const first = list[0] as Part;
-    /** An optional channel joins only if some part has it; parts without it read zeros. */
+    /** An optional channel joins only if some part has it. Parts without it contribute zeros. */
     const optional = (name: "fall" | "grow" | "rot" | "spin" | "grain", size: number): Partial<Part["channels"]> =>
       list.some((p) => p.channels[name] !== undefined) ? { [name]: join((p) => p.channels[name] ?? new Float32Array(p.shade.length * size)) } : {};
     return {
@@ -154,7 +155,7 @@ export function mergeParts(parts: readonly Part[]): Part[] {
       shade: join((p) => p.shade),
       tint: join((p) => p.tint),
       cutout: join((p) => p.cutout),
-      // Each joined part's pieces are numbered on from the last one's.
+      // Each joined part's piece numbers continue from the previous part's.
       piece: (() => {
         const out = join((p) => p.piece);
         let at = 0;

@@ -1,10 +1,9 @@
-// Distance thins a component's detail. Each piece of a part (`Part.piece`)
-// leaves whole at its own seeded distance, smaller pieces first. Until it
-// leaves, a piece past its start grows with distance, so it keeps covering
-// about a pixel and a drift keeps its color while its pieces thin. `detailAt`
-// is the CPU reference: the far detail it returns is the full build with whole
-// pieces left out and every kept vertex bit-identical, so a renderer can draw
-// it instead once every piece it leaves out has already left on screen.
+// Thins a component's detail with distance. Each piece of a part (`Part.piece`)
+// disappears whole at its own seeded distance, smaller pieces first, and grows
+// with distance before then, so it keeps covering about a pixel and a drift
+// keeps its color while its pieces thin. `detailAt` is the CPU reference, and
+// its far detail keeps every remaining vertex bit-identical, so a renderer can
+// draw it instead once every left-out piece has already disappeared on screen.
 
 import type { Part } from "@gaia/schema";
 
@@ -21,8 +20,8 @@ export const DETAIL = {
 } as const;
 
 /**
- * A piece's seed from its number: an evenly spread sequence in (0, 1), so the
- * pieces of one size thin evenly. It draws from no random stream, so detail
+ * A piece's seed from its number, from an evenly spread sequence in (0, 1), so
+ * the pieces of one size thin evenly. It uses no random stream, so detail
  * never shifts anything a primitive builds.
  */
 export function pieceSeed(index: number): number {
@@ -32,15 +31,15 @@ export function pieceSeed(index: number): number {
 export interface PieceReach {
   /** Where the piece starts to grow and thin, in meters from the eye. */
   readonly start: number;
-  /** Where it has left: past this distance it draws nothing. */
+  /** The distance past which it draws nothing. */
   readonly leave: number;
 }
 
 /**
- * Where a piece starts to thin and where it has left, as 32-bit floats, the
- * numbers the shader reads. Of the pieces of one size, the share still there
- * at distance d past the start is (start / d)², and each has grown by
- * d / start, so together they cover what the full detail would.
+ * Where a piece starts to thin and where it disappears, as the 32-bit floats
+ * the shader reads. Of the pieces of one size, the share still shown at
+ * distance d past the start is (start / d)², and each has grown by d / start,
+ * so together they cover what the full detail would.
  */
 export function pieceReach(size: number, index: number): PieceReach {
   const start = DETAIL.reach * size;
@@ -54,7 +53,7 @@ export interface PieceFrames {
   readonly reach: Float32Array;
 }
 
-/** Each vertex's piece center (the middle of the piece's bounds) and its reach. */
+/** Each vertex's piece center, the middle of the piece's bounds, and its reach. */
 export function pieceFrames(part: Part): PieceFrames {
   const n = part.shade.length;
   const lo = new Map<number, [number, number, number]>();
@@ -89,9 +88,9 @@ export function pieceFrames(part: Part): PieceFrames {
 }
 
 /**
- * The part as drawn from `distance` meters away and farther: every piece that
- * has left by then is left out whole, and every kept vertex is bit-identical
- * to the full build, in the same order.
+ * The part as drawn from `distance` meters away and farther. It leaves out
+ * whole every piece that has disappeared by then, and every kept vertex is
+ * bit-identical to the full build, in the same order.
  */
 export function detailAt(part: Part, distance: number): Part {
   const n = part.shade.length;

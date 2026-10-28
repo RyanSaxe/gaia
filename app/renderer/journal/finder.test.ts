@@ -34,19 +34,19 @@ describe("the finder", () => {
     expect(items.map((f) => f.at).sort()).toEqual(
       ["app", "app/world-service", "packages", "packages/world", "entity:packages/world", FILE, "app/world-service/index.ts", "packages/world/journal.ts", `${FILE}#openWorld`, `${FILE}#OpenWorldOptions`, `${FILE}#OpenWorldOptions.root`, "packages/world/journal.ts#journalOf"].sort(),
     );
-    // A definition inside another goes by the name that says where it is.
+    // A nested definition is named with its enclosing definition.
     expect(items.find((f) => f.at === `${FILE}#OpenWorldOptions.root`)).toMatchObject({ name: "OpenWorldOptions.root", where: FILE });
   });
 
   it("ranks letters in the name, at the start of words and run together, before letters strewn through a path", () => {
-    // The letters at the start of each word of openWorld, before the longer name and the file.
+    // Word-start letters of openWorld rank it before the longer name and the file.
     expect(names("ow")[0]).toBe("openWorld");
     expect(names("opwo")[0]).toBe("openWorld");
     expect(names("opwo").slice(1, 3).sort()).toEqual(["OpenWorldOptions", "open-world.ts"]);
-    // The whole name wins outright: the folder world, then the names with world as a word of their own.
+    // An exact name ranks first: the folder world, then names with world as a separate word.
     expect(names("world")[0]).toBe("world");
     expect(names("world").slice(1, 3).sort()).toEqual(["@gaia/world", "world-service"]);
-    // Every word must match, the name or the path: index.ts is found by its folder.
+    // Every word must match the name or the path, so index.ts is found by its folder.
     expect(names("service index")).toEqual(["index.ts"]);
     expect(names("zzz")).toEqual([]);
     expect(names("  ")).toEqual([]);

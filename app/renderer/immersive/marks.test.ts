@@ -7,7 +7,7 @@ import { sweep } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
 import { type BuildingComposition, type Composition, INKS, MARK_REACH, type MarkBox, drawBuilding, drawLandmark } from "./marks.ts";
 
-/** The roles whose primitives stand in the world as buildings and landmarks, so the map must ink them. */
+/** The roles whose primitives appear in the world as buildings and landmarks, so the map must ink them. */
 const DRAWN: ReadonlySet<Role> = new Set(["Footprint", "Walls", "Roof", "Openings", "Dressing", "Feature", "Landmark"]);
 
 describe("the marks' table", () => {
@@ -22,7 +22,7 @@ describe("the marks' table", () => {
   });
 });
 
-/** Every point a drawing places, from a canvas that only records: a path's points count once it is filled or stroked. */
+/** A canvas that only records the points a drawing places. A path's points count once it is filled or stroked. */
 function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][] } {
   const points: [number, number][] = [];
   const pathInto = (into: [number, number][]) => {
@@ -36,7 +36,7 @@ function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][]
       quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => (near(cx, cy), near(x, y)),
       bezierCurveTo: (ax: number, ay: number, bx: number, by: number, x: number, y: number) => (near(ax, ay), near(bx, by), near(x, y)),
       arc: (x: number, y: number, r: number) => near(x, y, r),
-      // An ellipse's box, turned by its rotation.
+      // An ellipse's bounding box, accounting for its rotation.
       ellipse: (x: number, y: number, rx: number, ry: number, turn = 0) => {
         const [hx, hy] = [Math.hypot(rx * Math.cos(turn), ry * Math.sin(turn)), Math.hypot(rx * Math.sin(turn), ry * Math.cos(turn))];
         into.push([x - hx, y - hy], [x + hx, y + hy]);
@@ -70,24 +70,24 @@ function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][]
 }
 
 const lib = new Library(PRIMITIVES);
-/** Every part of a building and of a landmark, swept, as the proving ground stands them. */
+/** Buildings covering every structure part, from a sweep, realized as the proving ground realizes them. */
 const buildings: [string, BuildingComposition][] = sweep(structure, lib).blueprints.map((blueprint, i) => {
   const built = realize(blueprint, structure, lib, { seed: seedOf(`building ${i}`), facts: {} });
   return [`building ${i}`, { blueprint, palette: built.palette, plan: built.slots.get("footprint")?.output as BuildingPlan }];
 });
-// A landmark's mark reads only its words and colors, so an empty palette draws it in its own defaults.
+// A landmark's mark reads only its words and colors, so an empty palette draws it in its default colors.
 const landmarks: [string, Composition][] = sweep(landmark, lib).blueprints.map((blueprint, i) => [`landmark ${i}`, { blueprint, palette: { swatches: {} } }]);
 
 describe("a mark composed from a blueprint", () => {
   const SCALE = 2;
-  // Strokes and the brush's offset reach a little past the points a mark places.
+  // Strokes and the wash offset extend a little past the points a mark places.
   const SLACK = 3 * SCALE;
   const inside = (box: MarkBox, [x, y]: [number, number], slack = SLACK): boolean => x >= box[0] - slack && x <= box[2] + slack && y >= box[1] - slack && y <= box[3] + slack;
-  // The ground the sheets keep names off round a mark's foot, before they know what will stand there.
+  // The area around a mark's base that the sheets keep names out of before they know what will stand there.
   const reach: MarkBox = [200 - MARK_REACH.left * SCALE, 200 - MARK_REACH.up * SCALE, 200 + MARK_REACH.right * SCALE, 200 + MARK_REACH.down * SCALE];
 
-  // Buildings and landmarks drawn from everything Jev can compose, so no shape the proving ground never takes strays.
-  // A mark reads only a building's plan and palette, so only those two slots are built.
+  // Random buildings and landmarks from everything Jev can compose, so shapes the proving ground never uses are
+  // covered too. A mark reads only a building's plan and palette, so only those two slots are built.
   const drawn = Array.from({ length: 300 }, (_, i) => {
     const draws = rand(seedOf(`marks drawn ${i}`));
     const blueprint = blueprintOf(structure.id, randomSlots(structure, lib, () => draws.next()));

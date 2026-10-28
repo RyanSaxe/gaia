@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type Board, letter } from "./lettering.ts";
 
-// A serif's letters are about half as wide as they are tall; capitals and wide letters more.
+// Approximates a serif face: a letter is half as wide as the size, and a capital, `m`, `w` or `@` is 0.72 of it.
 const measure = (text: string, size: number): number => [...text].reduce((w, c) => w + (/[A-Z@mw]/.test(c) ? 0.72 : 0.5), 0) * size;
 const SIGNBOARD: Board = { width: 456, height: 150, size: 92, least: 52, twoLines: true, widen: 1.45 };
 const STONE: Board = { width: 442, height: 140, size: 74, least: 40, twoLines: false, widen: 1 };

@@ -1,5 +1,6 @@
 // Writes or judges the synthetic showcase and its repaired variant. Source,
-// graphs and saved answers are bundled for offline use; see docs/showcase.md.
+// graphs and saved answers are bundled for offline use, as docs/showcase.md
+// describes.
 // Keep variants in separate stores so held judgments do not cross between them.
 // Usage: pnpm showcase --code DIR [--v1 fixed]
 //        GAIA_DATA_DIR=dir pnpm showcase --judge jev|local [--v1 fixed] [--spend-up-to 0.4]
@@ -10,7 +11,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 import type { CodeGraph, JevResponse } from "@gaia/schema";
-import { composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planStanding, planWorldRequests, requestKey } from "@gaia/world";
+import { composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planForms, planWorldRequests, requestKey } from "@gaia/world";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
 import { showcaseFiles } from "../app/renderer/terrain/showcase-code.ts";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
@@ -56,8 +57,8 @@ const judge = args.judge;
 if (judge !== "jev" && judge !== "local") throw new Error("Write the showcase's source (--code DIR) or judge its world (--judge jev|local).");
 const data = process.env.GAIA_DATA_DIR;
 if (data === undefined) throw new Error("Set GAIA_DATA_DIR to the store that keeps Jev's answers about the showcase, so a later run asks only what changed.");
-// The showcase is read from the same folder on every run, so the store finds its answers under the same project. The
-// folder names the codebase, as a checkout's folder does, so its world and the journal's title page carry its name.
+// The showcase uses the same folder on every run, so the store keeps its answers under the same project. The folder's
+// name is the codebase's name, as a checkout's folder is, so its world and the journal's title page show that name.
 const root = resolve(data, "gaia");
 writeCode(root);
 
@@ -98,18 +99,18 @@ try {
   if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
   const first = await client.call("project.graph", { root, judged: true });
   const project = first.projectId;
-  // The answers kept before go into the store, so only what changed is asked.
+  // The answers kept before go into the store, so only what changed is sent to Jev.
   if (Object.keys(kept.answers).length > 0) await client.call("store.put", { project, writes: Object.entries(kept.answers).map(([key, value]) => ({ table: "answers" as const, key, value })) });
   const before = await billed(project);
 
-  // What the run would send: the understanding pass, then the looks and what every thing stands as on the graph as it
-  // stands, and composing, which follows from those answers and is priced at about two requests a thing.
+  // What the run would send: the understanding pass, then the look and form requests on the current graph, and
+  // composing, which depends on those answers and is priced at about two requests per thing.
   const understanding = await client.call("understanding.plan", { root });
   const graph0 = judgedGraph(first);
   const facts0 = factsOf(graph0);
-  const looks = [...planWorldRequests(facts0, LOOKS), ...planStanding(facts0, LOOKS, { graph: graph0 }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
+  const looks = [...planWorldRequests(facts0, LOOKS), ...planForms(facts0, LOOKS, { graph: graph0 }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
   const judging = await client.call("jev.estimate", { requests: looks.map((p) => p.request) });
-  // Composing follows from those answers: about two requests a thing, priced at one that composes a tree.
+  // Composing depends on those answers. It takes about two requests per thing, each priced as one that composes a tree.
   const composing = looks.length > 0 ? composingEstimate(facts0, LOOKS, graph0) : null;
   const each = composing === null ? 0 : (await client.call("jev.estimate", { requests: [composing.sample] })).estimatedUsd;
   const estimate = understanding.estimate.estimatedUsd + judging.estimatedUsd + each * (composing?.requests ?? 0);
@@ -121,7 +122,8 @@ try {
   const document = await openWorld({ engine: client, root, consent: () => Promise.resolve(judge === "local"), progress: () => undefined });
   console.error(`showcase: ${document.summary}`);
 
-  // The page's copy: the graph as judged, and every answer its world is laid out from, asked again with nothing to ask.
+  // The page's copy: the judged graph, and every answer its world is laid out from, requested again with every answer
+  // already kept.
   const read = await client.call("project.graph", { root, judged: true });
   const snapshot: CodeGraph = { ...judgedGraph(read), projectId: "showcase" };
   const { records } = await client.call("store.read", { project, table: "answers" });
@@ -132,7 +134,7 @@ try {
   const world = layoutWorld(facts, await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev), { graph: snapshot }), snapshot);
   writeFileSync(resolve(fixtures, `${variant}-graph.json`), `${JSON.stringify(snapshot)}\n`);
   writeFileSync(resolve(fixtures, `${variant}-judged.json`), `${JSON.stringify(judgedThings(read))}\n`);
-  // The two variants must lay out the same land, to the cell: only how well v1 is written, and so each patch's
+  // The two variants must lay out the same land, cell for cell. Only how well v1 is written, and so each patch's
   // vitality, may differ.
   const other = resolve(fixtures, `${fixedV1 ? "showcase" : "showcase-fixed"}-graph.json`);
   if (existsSync(other)) {

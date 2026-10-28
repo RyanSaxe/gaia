@@ -1,22 +1,23 @@
-// The world's one height truth: a square lattice of baked heights. The
-// renderer's mesh, the grass, the trees and every measurement read these
-// same samples with the same triangle interpolation, so they cannot disagree.
+// A square lattice of baked heights. The renderer's mesh, the grass, the
+// trees and every measurement read these samples with the same triangle
+// interpolation (`heightAt`), so they agree on the ground's height.
 
 export interface Lattice {
   /** Samples per side. */
   readonly n: number;
   /** Meters between samples. */
   readonly spacing: number;
-  /** World x and z of sample 0; the world's lattice is centered on the world origin. */
+  /** World x and z of sample 0. The world's lattice is centered on the world origin. */
   readonly origin: number;
-  /** World z of sample 0 when it differs from x's, as for a tile of the land; `origin` when absent. */
+  /** World z of sample 0 when it differs from `origin`, as for a tile. Defaults to `origin`. */
   readonly originZ?: number;
   /** Row-major: index = iz * n + ix. */
   readonly heights: Float32Array;
   /**
-   * For a window of the land: reads `values` (its heights or another of its
-   * arrays) past the window's edge, from wherever the land there is held.
-   * Absent, a read past the edge takes the edge's samples.
+   * For a window of the land, reads `values` past the window's edge from
+   * wherever that land is stored. `values` is the window's heights or another
+   * of its per-sample arrays. When absent, a read past the edge clamps to the
+   * edge samples.
    */
   readonly beyond?: (x: number, z: number, values: Float32Array) => number;
 }
@@ -26,17 +27,17 @@ export function createLattice(extent: number, spacing: number): Lattice {
   return { n, spacing, origin: (-(n - 1) * spacing) / 2, heights: new Float32Array(n * n) };
 }
 
-/** Where a lattice's samples lie, without the samples. */
+/** A lattice's position and size, without its samples. */
 export type LatticeFrame = Pick<Lattice, "n" | "spacing" | "origin" | "originZ">;
 
-/** World x of column `i`, and world z of row `i` on a lattice whose rows start where its columns do. */
+/** World x of column `i`. It is also world z of row `i` on a lattice without `originZ`. */
 export const worldOf = (l: Pick<Lattice, "origin" | "spacing">, i: number): number => l.origin + i * l.spacing;
 /** World z of row `i`. */
 export const worldOfZ = (l: Pick<Lattice, "origin" | "originZ" | "spacing">, i: number): number => (l.originZ ?? l.origin) + i * l.spacing;
 
 /**
- * Height at any point, interpolated exactly as the mesh draws it: each cell
- * splits along the diagonal from (ix+1, iz) to (ix, iz+1).
+ * Height at any point, interpolated as the mesh draws it. Each cell splits
+ * into two triangles along the diagonal from (ix+1, iz) to (ix, iz+1).
  */
 export function heightAt(l: Lattice, x: number, z: number, values: Float32Array = l.heights): number {
   const ux = (x - l.origin) / l.spacing;
@@ -57,7 +58,7 @@ export function heightAt(l: Lattice, x: number, z: number, values: Float32Array 
   return h11 + (1 - fx) * (h01 - h11) + (1 - fz) * (h10 - h11);
 }
 
-/** Slope in degrees at a point, from the cell's gradient. */
+/** Slope in degrees at a point, from central differences one `spacing` either side. */
 export function slopeAt(l: Lattice, x: number, z: number): number {
   const e = l.spacing;
   const gx = (heightAt(l, x + e, z) - heightAt(l, x - e, z)) / (2 * e);

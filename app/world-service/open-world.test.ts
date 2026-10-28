@@ -4,10 +4,10 @@ import { composeWorld, factsOf, judgeWorld, keptJev, landOf, requestKey } from "
 import { fakeJevClient } from "@gaia/world/testing";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { facts as provingFacts } from "virtual:proving-ground";
-import { LIMIT_KEY, healWorld, judgedGraph, openWorld } from "./open-world.ts";
+import { LIMIT_KEY, refreshWorld, judgedGraph, openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
-/** The proving ground as the engine's graph gives it, read from a commit: its directories and entities, files, definitions and imports. */
+/** Builds the engine's graph of the proving ground at commit "c0ffee": its directories, entities, files, definitions and imports. */
 function graphOf(m: CodeFacts): CodeGraph {
   const dirs = new Set<string>([""]);
   for (const f of m.files) for (let d = f.path; d.includes("/"); ) dirs.add((d = d.slice(0, d.lastIndexOf("/"))));
@@ -28,7 +28,7 @@ function graphOf(m: CodeFacts): CodeGraph {
 const graph = graphOf(provingFacts);
 const facts = factsOf(graph);
 
-/** An engine with Jev live and nothing kept, whose every batch of answers waits until `release` lets it go. */
+/** A fake engine with Jev live and no stored answers. Each `jev.batch` waits until the test calls its function in `held`. */
 function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
   const fake = fakeJevClient();
   const held: (() => void)[] = [];
@@ -58,9 +58,9 @@ function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
 }
 
 /**
- * An engine with nothing kept that answers at once: Jev live with a key unless `status` says otherwise, each batch
- * answered by `answer` (Jev's answers, as the test plays them), and the person's spend limit `limitUsd` against an
- * estimate of `estimateUsd`. `batches` counts what went to Jev.
+  * A fake engine that answers at once, with no stored answers unless `kept` gives some. Jev is live with a key unless
+  * `status` sets otherwise. `answer` can replace the fake Jev's answer to a request. `limitUsd` sets the spend limit
+  * and `estimateUsd` the estimate. `batches` records every batch sent to Jev.
  */
 function engineWith(o: { status?: { live: boolean; key: boolean }; answer?: (r: JevRequest) => unknown; limitUsd?: number; estimateUsd?: number; kept?: Record<string, unknown>; understandingLeft?: number } = {}): { engine: EngineClient; batches: JevRequest[][] } {
   const jev = fakeJevClient();
@@ -87,7 +87,7 @@ function engineWith(o: { status?: { live: boolean; key: boolean }; answer?: (r: 
   return { engine, batches };
 }
 
-/** Every file named by the `health` messages shown, with its vitality, in order. */
+/** Every file in the `health` messages, with its vitality, in order. */
 const named = (shown: readonly Opening[]): [string, number][] => shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));
 
 describe("the graph a world is laid out from", () => {
@@ -106,7 +106,8 @@ describe("the graph a world is laid out from", () => {
 });
 
 describe("opening a world", () => {
-  // The proving ground is laid out twice (its land, then the finished world): about a second on a busy machine.
+  // The test lays out the proving ground twice, once for the land and once for the finished world, which takes about a
+  // second on a busy machine.
   it("names each file's health once, as the finished world has it, only once its judging is done", { timeout: 20_000 }, async () => {
     const shown: Opening[] = [];
     const { engine, held } = heldEngine();
@@ -115,8 +116,8 @@ describe("opening a world", () => {
     const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
     while (held.length === 0) await tick();
 
-    // Before any answer: the land, every file's patch as the finished world lays it out, and no health yet, since a
-    // file's vitality is Jev's quality.
+    // Before any answer, the land has arrived with every file's patch as the finished world lays it out. No `health`
+    // message has arrived, because a file's vitality is Jev's quality.
     const land = shown.find((o) => o.stage === "land");
     expect(land?.stage === "land" && land.patches.map((p) => p.path)).toEqual(landOf(facts).patches.map((p) => p.path));
     expect(named(shown)).toEqual([]);
@@ -126,14 +127,14 @@ describe("opening a world", () => {
       await tick();
     }
     const document = await opened;
-    // Every file is named once, with the vitality the finished world gives it, before the document.
+    // Every file appears once, with its vitality in the finished world, before the document.
     const all = named(shown);
     expect(all.map(([path]) => path).sort()).toEqual(document.world.patches.map((p) => p.path).sort());
     expect(Object.fromEntries(all)).toEqual(Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])));
   });
 
   it("fails the opening, naming the request and why, when Jev cannot answer one once the client has retried it, and guesses nothing", async () => {
-    // Jev refuses one area's request, as OpenRouter might refuse a bad one.
+    // The fake Jev refuses the `fords` area's request, as OpenRouter might refuse a bad one.
     const { engine } = engineWith({ answer: (r) => ((r.state as { directory?: { path?: string } }).directory?.path === "fords" ? { error: "OpenRouter answered 400: Invalid request parameters" } : undefined) });
     await expect(openWorld({ engine, root: "proving", consent: async () => true, progress: () => {} })).rejects.toThrow(/Gaia could not finish judging the area fords: OpenRouter answered 400/);
   });
@@ -145,7 +146,7 @@ describe("opening a world", () => {
   });
 
   it("with Jev off and every look kept, still fails the opening while the understanding pass has requests left, and opens once nothing is left", { timeout: 20_000 }, async () => {
-    // Every look answered and kept, as an earlier opening with Jev would have left it.
+    // Stores an answer for every look and composing request, as an earlier opening with Jev would.
     const keptAnswers: Record<string, unknown> = {};
     const judging = keptJev(fakeJevClient(), { stored: new Map(), keep: (key, r) => (keptAnswers[key] = r) });
     await composeWorld(facts, LOOKS, judging, await judgeWorld(facts, LOOKS, judging), { graph });
@@ -162,7 +163,7 @@ describe("opening a world", () => {
     const asked: number[] = [];
     const { engine, batches } = engineWith({ limitUsd: 0.001, estimateUsd: 0.05 });
     await expect(openWorld({ engine, root: "proving", consent: async (plan) => (asked.push(plan.estimatedUsd), false), progress: () => {} })).rejects.toThrow(/you chose not to go ahead/);
-    // The figure counts judging's requests and composing's too: about two a thing, each priced as one that composes a tree.
+    // The estimate includes the composing requests, about two per thing, each priced as a tree's composing request.
     expect(asked).toHaveLength(1);
     expect(asked[0]).toBeGreaterThan(0.05 * 2);
     expect(batches).toEqual([]);
@@ -170,15 +171,15 @@ describe("opening a world", () => {
 });
 
 /**
- * The proving ground's graph read from `commit`, as the engine gives it once the understanding pass has judged it:
- * every folder, file and definition at quality 0.6, or as `quality` names it by its id.
+ * The proving ground's graph at `commit` after the understanding pass. Every folder, file and definition has quality
+ * 0.6 unless `quality` gives another value for its id.
  */
 function judgedAt(commit: string, quality: Readonly<Record<string, number>> = {}, from: CodeGraph = graph): CodeGraph {
   const judged = (id: string) => ({ value: { importance: 0.5, quality: quality[id] ?? 0.6, concepts: { readability: quality[id] ?? 0.6 } } });
   return { ...from, commit, nodes: from.nodes.map((n): GraphNode => (n.kind === "block" ? n : { ...n, judged: judged(n.id) })) };
 }
 
-/** An engine that keeps what is written to its store, as the real one does, reads the folder as `at.graph` says, and notes the key of every request sent to Jev. */
+/** A fake engine that stores writes as the real one does, returns `at.graph` as the folder's graph, and records the key of every request sent to Jev in `asked`. */
 function keepingEngine(at: { graph: CodeGraph }): { engine: EngineClient; asked: string[] } {
   const jev = fakeJevClient();
   const kept: Record<string, unknown> = {};
@@ -207,7 +208,7 @@ function keepingEngine(at: { graph: CodeGraph }): { engine: EngineClient; asked:
   return { engine, asked };
 }
 
-describe("healing an open world", () => {
+describe("refreshing an open world", () => {
   const wheel = "crossings/mill/wheel.ts";
   const open = (engine: EngineClient) => openWorld({ engine, root: "proving", consent: async () => true, progress: () => {} });
 
@@ -217,61 +218,62 @@ describe("healing an open world", () => {
     const { engine, asked } = keepingEngine(at);
     const shown = await open(engine);
     const before = new Set(asked);
-    // The commit rewrites the mill's wheel well, and the understanding pass judges it so, and the mill with it.
+    // The new commit improves the mill's wheel, so the understanding pass raises its quality to 0.9 and the mill's to 0.8.
     at.graph = judgedAt("beef", { [`file:${wheel}`]: 0.9, "dir:crossings/mill": 0.8 });
     asked.length = 0;
-    const healed = await healWorld(engine, shown);
+    const refreshed = await refreshWorld(engine, shown);
 
-    // Everything an opening of the new commit asks, less what the first opening asked: no more, no less.
+    // The refresh asks exactly what a fresh opening of the new commit asks, minus what the first opening asked.
     const fresh = keepingEngine({ graph: at.graph });
     await open(fresh.engine);
     const changed = [...new Set(fresh.asked)].filter((key) => !before.has(key));
     expect(changed.length).toBeGreaterThan(0);
     expect([...new Set(asked)].sort()).toEqual(changed.sort());
 
-    // Only the wheel's and the mill's vitality changed (the wheel's definitions keep their own), so only theirs is
-    // sent, with what the pass judged anew and the commit the journal reads from now.
-    expect(healed.heal).toEqual({
+    // Only the wheel's and the mill's vitality changed, because the wheel's definitions keep their own quality. The
+    // refresh sends only those, with the new judgments and the commit the journal now reads.
+    expect(refreshed.update).toEqual({
       type: "world.vitality",
       vitality: { [wheel]: 0.9, "crossings/mill": 0.8 },
       judged: { [wheel]: expect.objectContaining({ quality: 0.9 }), "crossings/mill": expect.objectContaining({ quality: 0.8 }) },
       commit: "beef",
     });
-    // The page's world takes it where the wheel shows, and nothing moves.
-    expect(healed.shown.world.patches.find((p) => p.path === wheel)?.vitality).toBe(0.9);
-    expect(healed.shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius])).toEqual(shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius]));
+    // The shown world takes the wheel's new vitality, and no patch moves.
+    expect(refreshed.shown.world.patches.find((p) => p.path === wheel)?.vitality).toBe(0.9);
+    expect(refreshed.shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius])).toEqual(shown.world.patches.map(({ path, x, z, radius }) => [path, x, z, radius]));
   });
 
-  it("when the commit only shifts code within its files, heals in place, and the journal reads each definition on its new lines", { timeout: 40_000 }, async () => {
+  it("when the commit only shifts code within its files, refreshes in place, and the journal reads each definition on its new lines", { timeout: 40_000 }, async () => {
     const at = { graph: judgedAt("c0ffee") };
     const { engine } = keepingEngine(at);
     const shown = await open(engine);
-    // The commit adds a line at the top of the wheel: its file is a line longer, and every definition in it a line lower.
+    // The commit adds a line at the top of the wheel, so its file is a line longer and every definition in it starts a
+    // line lower.
     const lower = (n: GraphNode): GraphNode =>
       n.kind === "file" && n.path === wheel ? { ...n, measures: { ...n.measures, lines: n.measures.lines + 1 } } : n.kind === "def" && n.file === `file:${wheel}` ? { ...n, span: { start: n.span.start + 1, end: n.span.end + 1 } } : n;
     at.graph = judgedAt("beef", {}, { ...graph, nodes: graph.nodes.map(lower) });
-    const healed = await healWorld(engine, shown);
+    const refreshed = await refreshWorld(engine, shown);
 
     const was = shown.world.symbols.filter((d) => d.file === wheel);
     expect(was.length).toBeGreaterThan(0);
-    expect(healed.heal).toEqual({ type: "world.vitality", vitality: {}, judged: expect.any(Object), symbols: Object.fromEntries(was.map((d) => [d.id, { line: d.line + 1, lines: d.lines }])), commit: "beef" });
-    expect(healed.shown.commit).toBe("beef");
-    expect(healed.shown.world.symbols.filter((d) => d.file === wheel).map((d) => [d.id, d.line, d.x, d.z])).toEqual(was.map((d) => [d.id, d.line + 1, d.x, d.z]));
+    expect(refreshed.update).toEqual({ type: "world.vitality", vitality: {}, judged: expect.any(Object), symbols: Object.fromEntries(was.map((d) => [d.id, { line: d.line + 1, lines: d.lines }])), commit: "beef" });
+    expect(refreshed.shown.commit).toBe("beef");
+    expect(refreshed.shown.world.symbols.filter((d) => d.file === wheel).map((d) => [d.id, d.line, d.x, d.z])).toEqual(was.map((d) => [d.id, d.line + 1, d.x, d.z]));
   });
 
-  it("when the commit would move the land, sends the new vitality of what still stands under the same name, and leaves the rest to the next open", { timeout: 40_000 }, async () => {
+  it("when the commit would move the land, sends the new vitality of what still exists under the same name, and leaves the rest to the next open", { timeout: 40_000 }, async () => {
     const at = { graph: judgedAt("c0ffee") };
     const { engine } = keepingEngine(at);
     const shown = await open(engine);
-    // The commit adds a file beside the wheel, which divides the land anew, and rewrites the wheel well.
+    // The commit adds a file beside the wheel, which changes the land's division, and improves the wheel.
     const sluice = "crossings/mill/sluice.ts";
     const added: GraphNode = { kind: "file", id: `file:${sluice}`, lineage: sluice, path: sluice, language: "typescript", bytes: 1, hash: "", binary: false, unparsed: 0, conventions: [], measures: { lines: 300 } };
     at.graph = judgedAt("beef", { [`file:${wheel}`]: 0.9, [`file:${sluice}`]: 0.2 }, { ...graph, nodes: [...graph.nodes, added] });
-    const healed = await healWorld(engine, shown);
+    const refreshed = await refreshWorld(engine, shown);
 
-    // No new commit for the journal and no new judgments: its code still lies where the page's land has it.
-    expect(healed.heal).toEqual({ type: "world.vitality", vitality: { [wheel]: 0.9 } });
-    expect(healed.shown.commit).toBe("c0ffee");
-    expect(healed.shown.world.patches.map((p) => p.path)).toEqual(shown.world.patches.map((p) => p.path));
+    // The refresh sends no commit and no judgments, so the journal keeps reading the code that matches the page's land.
+    expect(refreshed.update).toEqual({ type: "world.vitality", vitality: { [wheel]: 0.9 } });
+    expect(refreshed.shown.commit).toBe("c0ffee");
+    expect(refreshed.shown.world.patches.map((p) => p.path)).toEqual(shown.world.patches.map((p) => p.path));
   });
 });

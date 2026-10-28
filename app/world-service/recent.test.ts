@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { EngineClient } from "@gaia/schema";
-import { PAINTING_MAX, RECENT_KEY, keepPainting, keepRecent, keepStood, offeredWorlds, recentWorlds, stoodIn } from "./recent.ts";
+import { PAINTING_MAX, RECENT_KEY, keepPainting, keepRecent, keepLastSpot, offeredWorlds, recentWorlds, lastSpotIn } from "./recent.ts";
 
 /**
- * An engine whose store is a map in memory, holding `recent` as the app's recent worlds, whose folders have checked out
- * the commits in `checkedOut` (any other is read from disk), and whose histories count `since[from]` commits from a
- * commit to the one checked out (any other commit is not in the history).
+ * A fake engine whose in-memory store holds `recent` as the recent worlds. `checkedOut` gives each folder's current
+ * commit, and any other folder is read from disk. `since[from]` gives the number of commits from `from` to the current
+ * commit, and any other commit is not in the history.
  */
 function storeEngine(recent?: unknown, checkedOut: Record<string, string> = {}, since: Record<string, number> = {}): EngineClient {
   const settings = new Map<string, unknown>(recent === undefined ? [] : [[RECENT_KEY, recent]]);
@@ -27,7 +27,7 @@ describe("the recent worlds", () => {
   it("offers a world kept before paintings were by its name, with none of what it kept then", async () => {
     const engine = storeEngine([
       { root: "/code/gaia", name: "gaia", at: 5, postcard: { areas: [], things: [] } },
-      // A picture of its map, as Gaia kept before it painted where the person stood.
+      // A map picture, which Gaia stored before it painted the person's view.
       { root: "/code/other", name: "other", at: 4, picture: painting("M"), commit: "c1" },
     ]);
     expect(await recentWorlds(engine)).toEqual([
@@ -77,19 +77,19 @@ describe("the recent worlds", () => {
     const engine = storeEngine();
     const stood = { x: 12.5, z: -40, yaw: 1.2, layout: "0badcafe", by: { path: "packages/world", x: 10, z: -38 } };
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1 });
-    expect(await stoodIn(engine, "/code/gaia")).toBeUndefined();
-    await keepStood(engine, "/code/gaia", stood);
+    expect(await lastSpotIn(engine, "/code/gaia")).toBeUndefined();
+    await keepLastSpot(engine, "/code/gaia", stood);
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 2 });
-    expect(await stoodIn(engine, "/code/gaia")).toEqual(stood);
+    expect(await lastSpotIn(engine, "/code/gaia")).toEqual(stood);
     expect(await offeredWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 2 }]);
   });
 
   it("drops a spot that is malformed or of a world no longer kept", async () => {
     const engine = storeEngine();
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1 });
-    await keepStood(engine, "/code/gaia", { x: Number.NaN, z: 0, yaw: 0, layout: "k", by: null });
-    await keepStood(engine, "/code/gaia", { x: 1, z: 0, yaw: 0, layout: "k", by: { path: 7 } });
-    await keepStood(engine, "/code/gone", { x: 1, z: 0, yaw: 0, layout: "k", by: null });
+    await keepLastSpot(engine, "/code/gaia", { x: Number.NaN, z: 0, yaw: 0, layout: "k", by: null });
+    await keepLastSpot(engine, "/code/gaia", { x: 1, z: 0, yaw: 0, layout: "k", by: { path: 7 } });
+    await keepLastSpot(engine, "/code/gone", { x: 1, z: 0, yaw: 0, layout: "k", by: null });
     expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 1 }]);
   });
 

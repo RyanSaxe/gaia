@@ -1,15 +1,9 @@
-// Wood lying still in the grass: a fallen log and an old stump. Their bark
-// is the trees' own (`barkAt`) and a stump flares into the trees' root lobes
-// (`flareOf`), so both read as come down from a tree of this world. A sawn
-// face shows its rings around a lighter heartwood; a broken one, splinters.
-//
-// Each body is two halves split down its middle that meet exactly while
-// healthy. As vitality falls each half sags (`droop`) about a line on the
-// ground beyond the other half, so the two lean apart and settle into the
-// turf. A log's bark is laid in plates that drop away (`loss`) to the grey
-// wood under it, and its stubs break off; a stump's top crumbles from its
-// heart into a dark hollow. These are the channels every renderer draws,
-// instanced copies included.
+// Builds a fallen log and a stump with the trees' bark (`barkAt`) and root
+// flare (`flareOf`), so both look like they came from a tree in this world.
+// Each body is two halves split down the middle, which meet exactly at full
+// vitality and sag apart (`droop`) into the turf as vitality falls. A log's
+// bark plates also drop away (`loss`) to grey wood and its stubs break off,
+// and a stump's top crumbles into a dark hollow.
 
 import type { Anchor, BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { fallenLogParams, stumpParams } from "../rock.ts";
@@ -17,7 +11,7 @@ import { barkAt, flareOf, lobesOf } from "./foliage.ts";
 import { type Channels, PartBuilder, type V3, add, addScaled, clamp, cross, fbm3, normalize, scale, sub } from "./kit.ts";
 
 const UP: V3 = [0, 1, 0];
-/** Where the bark ends and the wood begins, in the stem's radii: just inside its deepest furrow, so rough bark lies thick and smooth bark thin. */
+/** Where the bark ends and the wood begins, as a share of the stem's radius. It is just inside the deepest furrow, so rough bark is thick and smooth bark thin. */
 const woodOf = (roughness: number): number => 0.97 - 0.13 * roughness;
 
 /** One ring of a stem: its center, axis and frame (`v` is `d × u`), its smooth radius, and how far a cut or broken end stands past it. */
@@ -28,13 +22,13 @@ interface Station {
   readonly v: V3;
   readonly along: number;
   readonly radius: (theta: number) => number;
-  /** Along `d`, at `theta` and share `s` of the radius; zero except at an end. */
+  /** Along `d`, at `theta` and share `s` of the radius. Zero except at an end. */
   readonly end: (theta: number, s: number) => number;
-  /** Where a sawn face's pith sits off the center; its rings close on it. */
+  /** The sawn face's pith offset from the center. Its rings close on it. */
   readonly pith?: V3;
   /** Where its bark ends and its wood begins, as a share of its radius (`woodOf`). */
   readonly wood: number;
-  /** How much of a knot's dark eye lies at `theta`, 0 to 1; none when absent. */
+  /** How much of a knot's dark eye lies at `theta`, 0 to 1. None when absent. */
   readonly knot?: (theta: number) => number;
 }
 
@@ -45,7 +39,7 @@ interface Stem {
   readonly furrows: number;
   /** Segments around each half. */
   readonly half: number;
-  /** One half spans `split` to `split + π` around the axis; the other, the rest. */
+  /** One half spans `split` to `split + π` around the axis, and the other half the rest. */
   readonly split: number;
 }
 
@@ -91,7 +85,7 @@ interface Look {
   readonly tint?: number;
 }
 
-/** What carries each vertex of a grid, by row and column, as it declines. */
+/** The decline channels for each vertex of a grid, by row and column. */
 type Carry = (row: number, col: number) => Channels;
 
 /** A grid of rows of points, its front facing (along a row) × (down the rows). */
@@ -102,7 +96,7 @@ function emitGrid(out: PartBuilder, rows: readonly (readonly V3[])[], look: (i: 
     const l = look(i, j);
     out.vertex(p, normals[i]?.[j] ?? UP, l.shade, { ...carry(i, j), tint: l.tint ?? 0 });
   }));
-  // A row that closes to one point, a face's heart or a hollow's floor, takes one triangle per segment, not two.
+  // A row that closes to one point, a face's center or a hollow's floor, takes one triangle per segment, not two.
   const same = (a: V3 | undefined, b: V3 | undefined): boolean => a !== undefined && b !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
   for (let i = 0; i + 1 < rows.length; i++) {
     for (let j = 0; j + 1 < cols; j++) {
@@ -115,12 +109,12 @@ function emitGrid(out: PartBuilder, rows: readonly (readonly V3[])[], look: (i: 
 
 /**
  * Cuts a grid into plates that meet edge to edge: columns at `colCuts`, and
- * each column's rows at its own cuts, so the plates break joint. Each drops
- * away to its own middle below the vitality `lossOf` gives it, from its row
- * band and the way its middle faces, each of its vertices a little before
- * or after the rest (`ragged`), so it goes with a soft, uneven edge. A plate with a `backing` has a dark
- * inner face there, drawn into the backing's builder, so once its neighbors
- * have gone no one sees through its inside, which is drawn front-faced only.
+ * each column's rows at its own cuts, so the plates break joint. Each plate
+ * collapses to its own center below the vitality `lossOf` gives from its row
+ * band and facing. `ragged` shifts each vertex's threshold a little, so the
+ * plate goes with a soft, uneven edge. A plate with a `backing` gets a dark
+ * inner face in the backing's builder, so once its neighbors have gone nobody
+ * sees through its inside, which is front-faced only.
  */
 function emitPlates(
   out: PartBuilder, rows: readonly (readonly V3[])[], normals: readonly (readonly V3[])[], look: (i: number, j: number) => Look, carry: Carry,
@@ -165,10 +159,10 @@ function sawnRings(radius: number, wood: number): { s: number; shade: number; ti
   return out;
 }
 
-/** A broken face's rings, from the wood's edge to the heart. */
+/** A broken face's rings, from the wood's edge to the center. */
 const brokenRings = (wood: number): number[] => [wood, 0.62, 0.38, 0.17, 0];
 
-/** How a broken end splinters past its ring: a tongue of long splinters on one side, ragged everywhere, closing to one point at the heart. */
+/** How a broken end splinters past its ring: a tongue of long splinters on one side, ragged everywhere, closing to one point at the center. */
 function brokenEnd(radius: number, seed: number, hinge: number, reach: number): (theta: number, s: number) => number {
   return (theta, s) => {
     const tongue = Math.pow(Math.max(0, Math.cos(theta - hinge)), 3);
@@ -184,17 +178,17 @@ const halfAngles = (stem: Stem, h: number, reversed = false): number[] => {
   return reversed ? out.reverse() : out;
 };
 
-/** A capped station: which way its face looks along the stem, sawn or broken, and, for a face that crumbles, when each of its plates goes, by band from the rim (0) to the heart (2). */
+/** A capped station: which way its face looks along the stem, sawn or broken, and for a crumbling face, when each plate goes, by band from the rim (0) to the center (2). */
 interface Cap {
   readonly i: number;
   readonly facing: 1 | -1;
   readonly look: End;
   readonly crumble?: (band: number, col: number) => number;
-  /** The rotten hollow under a face that crumbles, at `theta` and share `s` of the radius: the split's face follows it. */
+  /** The rotten hollow under a face that crumbles, at `theta` and share `s` of the radius. The split's face follows it. */
   readonly hollow?: (theta: number, s: number) => V3;
 }
 
-/** How one half's bark sheds: plates so many segments around, each column's cuts along the stem, and when a plate facing so drops away. */
+/** How one half's bark sheds: plate width in segments, each column's cuts along the stem, and the vitality at which a plate with a given facing drops away. */
 interface Shed {
   readonly cols: number;
   readonly rowsOf: (col: number) => readonly number[];
@@ -206,7 +200,7 @@ interface Shed {
 
 /**
  * One half of a stem: its bark, the grey wood under bark that sheds, the
- * face of its split, and its end faces. `hollow` says where the split's face
+ * face of its split, and its end faces. `hollow` gives where the split's face
  * crosses a rotten hollow, by station and share of the radius.
  */
 function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, carry: Carry, shed: Shed | null, ends: readonly Cap[], hollow = (_i: number, _s: number): boolean => false): void {
@@ -219,17 +213,17 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
     thetas.map((theta) => normalize(cross(sub(smooth(i, theta + step), smooth(i, theta - step)), sub(smooth(i + 1, theta), smooth(i - 1, theta))))),
   );
   const points = rows.map((row) => row.map((b) => b.q));
-  // Old bark is mottled where lichen and damp have been at it.
+  // Noise mottles old bark, like lichen and damp.
   const mottle = (i: number, j: number): number => fbm3((st[i] as Station).along * 1.1, Math.cos(thetas[j] as number) * 1.4, Math.sin(thetas[j] as number) * 1.4, stem.seed + 41, 2);
   const barkLook = (i: number, j: number): Look => ({ shade: (rows[i]?.[j]?.shade ?? 0.5) + 0.08 * mottle(i, j), tint: 0.015 * mottle(i, j) });
   if (shed === null) emitGrid(bark, points, barkLook, carry, normals);
   else {
-    // The inner face lies just under the outer, so a plate seen from inside reads as dark inner bark however it is seen.
-    // It is drawn as wood, so moss grows only on bark's outer face.
+    // The inner face lies just under the outer, so a plate seen from inside looks like dark inner bark from any angle.
+    // It is drawn in the wood part, so moss grows only on the bark's outer face.
     const inner = points.map((row, i) => row.map((q, j) => addScaled(q, around(st[i] as Station, thetas[j] as number), -0.02 * (st[i] as Station).radius(thetas[j] as number))));
     emitPlates(bark, points, normals, barkLook, carry, shed.rowsOf, cutsOf(stem.half, shed.cols), (_band, facing) => shed.loss(facing), { out: wood, rows: inner }, shed.ragged);
     // The wood under the bark, weathered and checked along its grain, on twice the bark's segments so a check is a
-    // crease rather than a band. A check's floor sags a little further than the wood beside it, so it opens as the log fails.
+    // crease rather than a band. A check's floor sags a little more than the wood beside it, so it opens as vitality falls.
     const fine = Array.from({ length: stem.half * 2 + 1 }, (_, j) => stem.split + h * Math.PI + (j * Math.PI) / (stem.half * 2));
     emitGrid(wood, st.map((s, i) => fine.map((theta, j) => ringPoint(s, theta, s.wood * (1 - 0.05 * shed.check(i, j))))), (i, j) => ({
       shade: 0.42 + 0.14 * fbm3((st[i] as Station).along * 0.9, (fine[j] as number) * 3.1, 0, stem.seed + 11, 2) - 0.4 * shed.check(i, j), tint: -0.01,
@@ -244,7 +238,7 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
     const at = st[e.i] as Station;
     const angles = halfAngles(stem, h, e.facing < 0);
     const rings = e.look === "sawn" ? sawnRings(at.radius(0), at.wood) : brokenRings(at.wood).map((s) => ({ s, shade: 0, tint: -0.005 }));
-    // A band of bark from its ragged edge to the wood, then the face ring by ring to the heart.
+    // A band of bark from its ragged edge to the wood, then the face ring by ring to the center.
     const rim = angles.map((theta) => barkPoint(stem, e.i, theta).q);
     const jitter = (theta: number, s: number, k: number): number =>
       e.look === "sawn" && s < at.wood && s > 0 ? s * (1 + 0.03 * fbm3(Math.cos(theta) * 1.5, Math.sin(theta) * 1.5, k * 0.7, stem.seed + 5, 2)) : s;
@@ -262,7 +256,7 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
     const cut = (): Channels => ({ ...held(), wither: 0.85 });
     if (e.crumble === undefined) emitGrid(wood, face, look, cut);
     else {
-      // Bands from the rim to the heart, six pieces around the half, their edges staggered a ring or two and each
+      // Bands from the rim to the center, six pieces around the half, their edges staggered a ring or two and each
       // piece going a little unevenly, so the face crumbles in soft-edged pieces.
       const bandOf = [0.6, 0.3].map((s) => rings.findIndex((ring) => ring.s < s));
       const stagger = rings.length > 8 ? 2 : 0;
@@ -273,9 +267,9 @@ function emitHalf(bark: PartBuilder, wood: PartBuilder, stem: Stem, h: number, c
     }
   }
 
-  // The split's face, across the stem from one edge of the half to the other; it shows only once the halves part.
+  // The split's face, across the stem from one edge of the half to the other. It shows only once the halves part.
   // A broken end's face is ragged, so the split's face meets it at every one of its rings. Where bark sheds, the
-  // face stops at the wood, so no edge of it stands up like a fin once the bark has gone.
+  // face stops at the wood, so no edge of it sticks up like a fin once the bark has gone.
   const share = (st[0] as Station).wood;
   const columns = ends.some((e) => e.look === "broken") ? brokenRings(share) : [share, 0.5, 0];
   const edge = shed === null ? [1] : [];
@@ -305,16 +299,16 @@ function frame(d: V3, toward: V3): { u: V3; v: V3 } {
 const sizeOf = (ctx: BuildContext): number => 0.75 + 0.25 * (ctx.facts.scale ?? 1);
 
 /**
- * A half that sags as it fails about a line on the ground beyond the other
- * half, `reach` across from its own side `n` under `at`: it settles into the
- * turf, and its top leans out from the split.
+ * Channels for a half that sags as vitality falls, about a line on the ground
+ * beyond the other half, `reach` across from its own side `n` under `at`. It
+ * settles into the turf, and its top leans out from the split.
  */
 const sagging = (at: V3, n: V3, reach: number, droop: number, wither: number): Channels => {
   const bough: V3 = [at[0] - n[0] * reach, at[1], at[2] - n[2] * reach];
   return { loss: 0, droop, wither, glow: 0, pivot: bough, bough };
 };
 
-/** How far each half sags at vitality 0: one further than the other, so they part unevenly. */
+/** How far each half sags at vitality 0, one farther than the other, so they part unevenly. */
 const SAG = { log: [0.18, 0.11], stump: [0.12, 0.08] } as const;
 
 // ---------- fallen log ----------
@@ -328,8 +322,8 @@ export function buildFallenLog(p: Resolved<typeof fallenLogParams>, ctx: BuildCo
   const girth = p.girth * k;
   const seed = Math.floor(r.next() * 1e6);
   const count = clamp(Math.round(length / (girth * 0.7)) + 1, 8, 24);
-  // A fallen trunk: it tapers from a foot that still flares into the stubs of its root lobes, wanders a little
-  // as it grew, and sags into the turf along its middle.
+  // A fallen trunk that tapers from a foot flaring into the stubs of its root lobes, bends a little along its
+  // length, and sags into the turf along its middle.
   const flare = flareOf(girth, lobesOf(r.fork("lobes")), 0.45, 0.7);
   const flared = (along: number, theta: number): number => 1 + 0.35 * (flare.at(along, theta) - 1);
   const flaredMean = (along: number): number => Array.from({ length: 8 }, (_, a) => flared(along, (a / 8) * Math.PI * 2)).reduce((x, y) => x + y, 0) / 8;
@@ -363,7 +357,7 @@ export function buildFallenLog(p: Resolved<typeof fallenLogParams>, ctx: BuildCo
     const d = normalize(sub(centerAt(Math.min(1, t + 0.02)), centerAt(Math.max(0, t - 0.02))));
     const { u, v } = frame(d, cross(UP, d));
     const rad = radiusAt(t);
-    // A lying log settles a little flatter than round, with burls and knots along it.
+    // A lying log is a little flatter than round, with burls and knots along it.
     const radius = (theta: number): number =>
       rad * flared(along, theta) * (1 + 0.04 * Math.cos(2 * theta) + 0.05 * fbm3(along * 1.3, Math.cos(theta) * 1.2, Math.sin(theta) * 1.2, seed + 21, 2) + 0.12 * knotAt(along, theta));
     const look = i === 0 ? butt : i === count - 1 ? crown : undefined;
@@ -384,7 +378,7 @@ export function buildFallenLog(p: Resolved<typeof fallenLogParams>, ctx: BuildCo
   });
   const ends = [{ i: 0, facing: -1 as const, look: butt }, { i: count - 1, facing: 1 as const, look: crown }];
   carries.forEach((carry, h) => {
-    // Bark weathers off the top first and holds on low down where it lies damp; the lowest never goes.
+    // Bark weathers off the top first and stays longer low down, where it lies damp. The lowest bark never goes.
     const strips = r.fork(`bark${h}`);
     const loss = (facing: V3): number => (facing[1] < -0.35 ? 0 : clamp(0.08 + 0.55 * ((facing[1] + 0.35) / 1.35) + 0.24 * (strips.next() - 0.5), 0.04, 0.85));
     // It peels in strips along the grain, one segment wide and of uneven lengths, their ends staggered.
@@ -394,7 +388,7 @@ export function buildFallenLog(p: Resolved<typeof fallenLogParams>, ctx: BuildCo
       return [...cuts, count - 1];
     };
     const ragged = (q: V3): number => 0.07 * fbm3(q[0] * 3.1, q[1] * 3.1, q[2] * 3.1, seed + 51 + h, 2);
-    // Two or three long checks down each half, wandering a column now and then, shallow toward the ends.
+    // Two or three long checks down each half, shifting a column now and then, shallow toward the ends.
     const checks = Array.from({ length: 2 + (strips.next() < 0.5 ? 1 : 0) }, () => ({ col: 3 + Math.floor(strips.next() * (half * 2 - 6)), phase: strips.next() * 6 }));
     const check = (i: number, j: number): number => {
       const fade = clamp(Math.min(i, count - 1 - i) / 2, 0.3, 1);
@@ -407,7 +401,7 @@ export function buildFallenLog(p: Resolved<typeof fallenLogParams>, ctx: BuildCo
     emitHalf(bark, wood, stem, h, carry, { cols: 1, rowsOf, loss, ragged, check }, ends);
   });
 
-  // Stubs of boughs toward the crown end, breaking off one by one.
+  // Stubs of boughs toward the crown end, which break off one by one as vitality falls.
   for (let s = 0; s < Math.round(p.boughs); s++) emitStub(bark, wood, stem, r.fork(`stub${s}`), carries);
   const anchors: Anchor[] = [];
   stations.forEach((st, i) => {
@@ -477,7 +471,7 @@ export function buildStump(p: Resolved<typeof stumpParams>, ctx: BuildContext): 
   const stem: Stem = { stations, roughness: p.bark, seed, furrows: 7, half: 12, split: 0 };
   const last = stations.length - 1;
   const crown = stations[last] as Station;
-  // The hollow under the top: a soft bowl of dark rotten wood hanging from the wood's edge, as deep as `hollow` at its heart.
+  // The hollow under the top: a soft bowl of dark rotten wood hanging from the wood's edge, as deep as `hollow` at its center.
   const share = woodOf(p.bark);
   const bowl = (theta: number, s: number): V3 => addScaled(capPoint(crown, theta, s), d, -hollow * Math.pow(Math.max(0, 1 - (s / share) ** 2), 0.6));
   const inHollow = (i: number, s: number): boolean => i === last && s < share;
@@ -485,7 +479,7 @@ export function buildStump(p: Resolved<typeof stumpParams>, ctx: BuildContext): 
   const halves = [v, scale(v, -1)].map((n, h) => sagging([0, -girth * 0.05, 0], n, girth * 1.2, SAG.stump[h] as number, 0.6));
   halves.forEach((held, h) => {
     const carry: Carry = () => held;
-    // The top crumbles from its heart outward; a little of its rim never goes.
+    // The top crumbles from its center outward, and a little of its rim never goes.
     const crumbs = r.fork(`top${h}`);
     // Each ring goes around the half in a slow wave, so neighboring pieces go close together and the edge stays soft.
     const wave = (col: number, band: number): number => 0.1 * Math.sin(col * 0.7 + band * 1.9 + h * 3 + seed) + 0.03 * (crumbs.next() - 0.5);
@@ -500,14 +494,14 @@ export function buildStump(p: Resolved<typeof stumpParams>, ctx: BuildContext): 
   });
   for (const lobe of lobes) emitRoot(bark, stem, lobe, girth, girth * Math.max(0.3, (p.roots - 0.2) * 1.5), halves[Math.sin(lobe.angle - stem.split) >= 0 ? 0 : 1] as Channels);
   const anchors: Anchor[] = [{ position: capPoint(crown, 0, 0), normal: d, size: clamp(girth * 2, 0, 1) }];
-  // The hollow is bark, so it darkens as bark does, but it is no surface to stand on or for moss to grow on.
+  // The hollow uses the bark swatch, so it darkens as bark does. It has no collision, so nobody stands on it and moss skips it.
   return { parts: [bark.part(), wood.part(), rotten.part()], anchors };
 }
 
 /**
- * A root from one of the stump's lobes: it leaves the trunk inside its flare,
- * knuckles out `reach` past it half buried, thinning as it goes, and dives
- * away into the soil while it is still thin; a smaller root forks from it.
+ * A root from one of the stump's lobes. It leaves the trunk inside its flare,
+ * runs out `reach` past it half buried, thinning as it goes, and dives into
+ * the soil over its last 40%. A smaller root forks from it.
  */
 function emitRoot(bark: PartBuilder, stem: Stem, lobe: { readonly angle: number; readonly strength: number }, girth: number, reach: number, ch: Channels, fork = true): void {
   const base = stem.stations[0] as Station;
@@ -520,7 +514,7 @@ function emitRoot(bark: PartBuilder, stem: Stem, lobe: { readonly angle: number;
   const r0 = girth * 0.48 * lobe.strength;
   const path = Array.from({ length: 11 }, (_, k) => k / 10).map((t): { c: V3; r: number } => {
     const r = r0 * Math.pow(1 - 0.8 * t, 1.2) * (1 + 0.18 * n(t, 1));
-    // It never dips under and rises again: knuckles only lift it, and it dives once, while still thick.
+    // It never dips under and rises again. Knuckles only lift it, and it dives once, from 60% of its length.
     const y = rise * Math.pow(1 - t, 1.4) + 0.2 * r + 0.15 * r * Math.abs(n(t, 2)) - girth * 0.9 * Math.pow(clamp((t - 0.6) / 0.4, 0, 1), 1.3);
     return { c: addScaled(addScaled([base.c[0], y, base.c[2]], out, girth * 0.5 + span * t), side, 0.22 * span * n(t, 3) * t), r };
   });

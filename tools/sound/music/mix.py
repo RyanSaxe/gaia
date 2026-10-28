@@ -7,12 +7,12 @@ applied in the frequency domain:
 - the piece: each part's render is folded onto one loop length (everything after bar 32, every release and the
   harp's ring, is added back onto bar 1, and the pre-roll's lead-ins onto bar 32), so each part is exactly periodic,
   and the filters and reverb act on that periodic signal (circular convolution), which is the steady state of the
-  loop playing forever: the last bar's reverb sounds over the first, with no seam;
+  loop playing forever. The last bar's reverb sounds over the first, with no seam.
 - the phrases: zero-padded by the reverb's length, so the same code gives an ordinary linear mix with its tail.
 
 Levels: one gain for all four stems brings bed + melody to -21 LUFS, so the stems keep their musical balance. Each
-phrase is brought to -21 LUFS; a phrase whose true peak would pass -3.3 dBTP goes through a look-ahead limiter.
-No bus compression: the dynamics are the notes' velocities and CC swells.
+phrase is brought to -21 LUFS. A phrase whose true peak would pass -3.3 dBTP goes through a look-ahead limiter.
+There is no bus compression. The dynamics come from the notes' velocities and CC swells.
 
 Usage: mix.py WORK_DIR OUT_DIR   (reads WORK_DIR/midi/<song>/ and WORK_DIR/parts/<song>/; writes OUT_DIR/<stem>.wav,
 OUT_DIR/<phrase>.wav and OUT_DIR/mix-report.json)
@@ -35,7 +35,7 @@ METER = pyln.Meter(SR)
 
 
 def calibration(names):
-    """Each patch's reference loudness; a patch not yet measured is measured once and kept in calibration.json."""
+    """Each patch's reference loudness. A patch not yet measured is measured once and kept in calibration.json."""
     cal = json.loads(CAL.read_text())
     missing = [n for n in names if Path(n).name not in cal]
     if missing:

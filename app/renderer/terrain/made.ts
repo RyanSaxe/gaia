@@ -1,9 +1,8 @@
-// Builds made ahead. The trees, landmarks and bushes every world opens with
-// take most of a second to realize, so they are made on worker threads
-// (make-worker.ts) while the page's own thread draws the wait, and the page
-// only takes them. A build asked for before it is made, or
-// never made ahead, is realized in place: realize is pure, so the build is
-// the same either way.
+// Makes builds ahead on worker threads. The trees, landmarks and bushes every
+// world opens with take most of a second to realize, so workers make them
+// (make-worker.ts) while the main thread draws the wait screen. A build
+// requested before it is ready, or never made ahead, is realized in place,
+// and since realize is pure the build is the same either way.
 
 import { type Blueprint, type Library, seedOf } from "@gaia/schema";
 import { bush, landmark, rock, structure, tree, wildflowers } from "@gaia/kinds";
@@ -16,15 +15,15 @@ const KINDS = { tree, bush, landmark, rock, structure, wildflowers } as const;
 export type BuildKind = keyof typeof KINDS;
 
 /**
- * The one build of a tree's, a bush's, a stone's or flowers' blueprint, which every thing answered alike copies:
- * seeded by the blueprint's content alone, so the same blueprint builds the same in every world.
+ * The single build request for a tree, bush, stone or flowers blueprint, which every thing with that blueprint copies.
+ * Its seed comes from the blueprint's content alone, so the same blueprint builds the same in every world.
  */
 export function plantAsk(blueprint: Blueprint): BuildAsk {
   if (!(blueprint.kind in KINDS)) throw new Error(`No build is made for a ${blueprint.kind} blueprint.`);
   return { kind: blueprint.kind as BuildKind, blueprint, seed: seedOf(`build/${blueprint.id}`), facts: { scale: 1, age: 120 } };
 }
 
-/** One build as plain data a worker can take: what realize is given. */
+/** One build request as plain data a worker accepts: the inputs to realize. */
 export interface BuildAsk {
   readonly kind: BuildKind;
   readonly blueprint: Blueprint;
@@ -34,14 +33,14 @@ export interface BuildAsk {
 
 /** Builds made ahead and not yet taken. */
 const ready = new Map<string, Realized>();
-/** Builds being made ahead that have not come yet. One asked for meanwhile is realized in place, and dropped when it comes. */
+/** Builds being made ahead that have not arrived. One requested meanwhile is realized in place, and the worker's copy is dropped on arrival. */
 const making = new Set<string>();
 const keyOf = (ask: BuildAsk): string => JSON.stringify([ask.kind, ask.seed, ask.facts, ask.blueprint]);
 
 /**
  * Makes `asks` on worker threads, each taking the next build as it finishes
- * one; resolves once all are made. A thread that fails ends early, and what
- * it did not make is realized in place when asked for.
+ * one, and resolves once all are made. A thread that fails ends early, and the
+ * builds it did not make are realized in place when requested.
  */
 export function makeAhead(asks: readonly BuildAsk[], threads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2))): Promise<void> {
   const left = asks.filter((ask) => !ready.has(keyOf(ask)) && !making.has(keyOf(ask)));
@@ -71,7 +70,7 @@ export function makeAhead(asks: readonly BuildAsk[], threads = Math.max(1, Math.
   return Promise.all(Array.from({ length: Math.min(threads, left.length) }, work)).then(() => undefined);
 }
 
-/** The build `ask` names: the one made ahead, taken once, or else realized now from `lib`. */
+/** Returns the build `ask` names: the one made ahead, which can be taken once, or else one realized now from `lib`. */
 export function made(ask: BuildAsk, lib: Library): Realized {
   const key = keyOf(ask);
   const built = ready.get(key);
@@ -80,7 +79,7 @@ export function made(ask: BuildAsk, lib: Library): Realized {
   return built ?? realize(ask.blueprint, KINDS[ask.kind], lib, { seed: ask.seed, facts: ask.facts });
 }
 
-/** The build `ask` names, made on a worker thread now, so a build let go of earlier comes back without holding the page. */
+/** Makes the build `ask` names on a worker thread now, so a build dropped earlier returns without blocking the page. */
 export async function makeLater(ask: BuildAsk, lib: Library): Promise<Realized> {
   await makeAhead([ask], 1);
   return made(ask, lib);

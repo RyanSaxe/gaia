@@ -1,5 +1,5 @@
-// Runs the engine binary and keeps it running: whenever it exits, it starts
-// again after a short backoff that grows while it keeps failing.
+// Runs the engine binary and restarts it whenever it exits. The restart delay
+// doubles with each quick exit, from `BACKOFF.first` up to `BACKOFF.max`.
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -14,23 +14,23 @@ export interface EngineEvents {
 }
 
 export interface Engine {
-  /** Writes one line to the engine's stdin; false when no engine is running. */
+  /** Writes one line to the engine's stdin. Returns false when no engine is running. */
   send(line: string): boolean;
-  /** Stops the engine for good. */
+  /** Stops the engine and cancels any restart. */
   stop(): void;
 }
 
 const BACKOFF = {
-  /** Wait before the first restart, milliseconds. */
+  /** Delay before the first restart, in milliseconds. */
   first: 250,
   max: 4000,
-  /** A run this long resets the backoff. */
+  /** A run of at least this many milliseconds resets the backoff. */
   stable: 10_000,
 };
 
 export function superviseEngine(command: string, args: readonly string[], on: EngineEvents): Engine {
   let child: ChildProcess | null = null;
-  /** Exits in a row that came soon after a start. */
+  /** Consecutive exits. A run that lasted `BACKOFF.stable` resets the count to 1. */
   let failures = 0;
   let stopped = false;
   let timer: NodeJS.Timeout | undefined;
@@ -39,7 +39,7 @@ export function superviseEngine(command: string, args: readonly string[], on: En
     const startedAt = Date.now();
     const proc = spawn(command, args, { stdio: ["pipe", "pipe", "inherit"] });
     child = proc;
-    // Writing to an engine that just died must not crash the main process.
+    // A write to an engine that just exited must not crash the main process.
     proc.stdin?.on("error", () => {});
     if (proc.stdout !== null) createInterface({ input: proc.stdout }).on("line", on.line);
     proc.once("spawn", on.up);

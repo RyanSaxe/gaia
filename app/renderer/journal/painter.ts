@@ -1,10 +1,8 @@
-// The journal's painter: an impressionist painting of the world's own view of
-// a thing, made of bristle-brush strokes that follow the shapes of what is
-// seen, laid coarse to fine, the thing itself painted last and finest, with
-// the paper's tooth showing faintly through the paint. A painting runs to the
-// page's edges. It runs on a worker (`painter-worker.ts`) using an
-// OffscreenCanvas and blurs with its own hand rather than a canvas filter,
-// which not every browser has there.
+// Turns the world's view of a thing into an impressionist painting of bristle
+// strokes that follow the shapes in the view, laid coarse to fine with the
+// thing itself last and finest. It runs on a worker (`painter-worker.ts`) with
+// an OffscreenCanvas and blurs in code rather than with a canvas filter, which
+// not every browser supports there.
 
 import type { Pixels } from "../terrain/capture.ts";
 
@@ -13,7 +11,7 @@ export interface PaintJob {
   readonly color: Pixels;
   /** White where the thing itself shows in `color`, black elsewhere, the same size. */
   readonly mask: Pixels;
-  /** The painting's size, device pixels; its strokes are sized for a page about 1,040 wide. */
+  /** The painting's size in device pixels. Stroke sizes assume a width of about 1,040. */
   readonly w: number;
   readonly h: number;
   /** The same seed paints the same painting. */
@@ -21,7 +19,7 @@ export interface PaintJob {
 }
 
 type RGB = [number, number, number];
-/** An image the painter reads from: RGBA rows, `w` by `h`, `s` of the painting's pixels to each of its own. */
+/** An RGBA image the painter samples, `w` by `h`, with `s` painting pixels per image pixel. */
 interface Img {
   readonly data: Uint8ClampedArray;
   readonly w: number;
@@ -31,19 +29,19 @@ interface Img {
 type Point = [number, number];
 type Ctx = OffscreenCanvasRenderingContext2D;
 
-/** The most bristles a stroke is drawn with: a wide stroke's bristles show only at its edges, under the finer strokes laid over it. */
+/** The most bristles in a stroke. A wide stroke's bristles show only at its edges, under the finer strokes over it. */
 const BRISTLES = 8;
-/** The narrowest brush, pixels, whose stroke catches the light along one side. */
+/** The smallest brush radius in pixels that gets a highlight along one side. */
 const SHEEN = 9;
-/** The color the strokes are laid on, where none reach. */
+/** The background color, which shows where no stroke reaches. */
 const GROUND = "#d9cfae";
 
 /**
- * The layers of strokes, coarse to fine: each brush's radius, how blurred the
- * view it copies is, how many steps a stroke takes along the shapes, whether
- * it paints only the thing, how far the painting so far must stray from the
- * view before it paints there, and how far apart its strokes start, in
- * brush widths.
+ * The stroke layers, coarse to fine: brush radius (`r`), blur of the view it
+ * samples (`blur`), steps a stroke takes along the shapes (`steps`), whether
+ * it paints only the thing (`thing`), how far the painting must differ from
+ * the view before a stroke goes there (`stray`), and stroke spacing in brush
+ * radii (`spacing`).
  */
 const LAYERS = [
   { r: 46, blur: 26, steps: 4, thing: false, stray: -1, spacing: 0.7 },
@@ -80,7 +78,7 @@ function boxPass(src: Float32Array, out: Float32Array, w: number, h: number, rad
   }
 }
 
-/** Three box blurs of radius about `sigma`, close to a Gaussian of that spread, of an RGBA image's color. */
+/** Blurs an RGBA image's color with three box blurs of radius about `sigma`, which approximates a Gaussian. */
 function blurred(src: Uint8ClampedArray, w: number, h: number, sigma: number): Uint8ClampedArray {
   const rad = Math.round(sigma);
   if (rad < 1) return src;
@@ -136,9 +134,9 @@ export function paint(job: PaintJob): OffscreenCanvas {
   const color = source(job.color);
   const mask = source(job.mask);
   /**
-   * An image scaled to `cw` by `ch` and blurred by about `blur` of those
-   * pixels. A heavily blurred image holds no fine detail, so it is made and
-   * kept smaller, `s` of its pixels to one of the painting's.
+   * Scales an image to `cw` by `ch` and blurs it by about `blur` pixels. A
+   * heavily blurred image has no fine detail, so it is stored smaller, with
+   * `s` painting pixels per image pixel.
    */
   const grab = (im: OffscreenCanvas, blur: number, cw = w, ch = h): Img => {
     const s = Math.max(1, Math.min(4, Math.floor(blur / 3)));
@@ -156,8 +154,8 @@ export function paint(job: PaintJob): OffscreenCanvas {
   const thingMask = grab(mask, 2);
   const isThing = (x: number, y: number): boolean => at(thingMask, x, y)[0] > 120;
 
-  // The direction field: strokes run along shapes (the structure tensor's minor direction), and where nothing has a
-  // direction, they lean in one gentle diagonal with slow drift, as a painter's hand does.
+  // The direction field. Strokes run along shapes (the structure tensor's minor direction). Where there is no clear
+  // direction, they follow one gentle diagonal with slow drift.
   const q = 4;
   const fw = Math.ceil(w / q);
   const fh = Math.ceil(h / q);
@@ -204,7 +202,7 @@ export function paint(job: PaintJob): OffscreenCanvas {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  /** A bristle brush: several thin lines across the stroke's width, each its own shade, converging at both ends. */
+  /** Draws a bristle stroke: several thin lines across its width, each a slightly different shade, converging at both ends. */
   function stroke(pts: Point[], rad: number, col: RGB, alpha: number): void {
     const n = Math.min(BRISTLES, Math.max(4, Math.round(rad / 2.2)));
     const last = pts.length - 1;
@@ -252,7 +250,7 @@ export function paint(job: PaintJob): OffscreenCanvas {
         to,
       );
     }
-    // Thick paint catches the light along one side, where a stroke is wide enough to show it.
+    // A highlight along one side, only on strokes with radius at least `SHEEN`.
     if (rad < SHEEN) {
       ctx.globalAlpha = 1;
       return;
@@ -274,7 +272,7 @@ export function paint(job: PaintJob): OffscreenCanvas {
     const cur: Img = { data: ctx.getImageData(0, 0, w, h).data, w, h, s: 1 };
     const rad = layer.r;
     const spots: Point[] = [];
-    // Each cell of a grid the brush's size paints where the painting so far strays most from the view.
+    // In each grid cell, a stroke goes at the sampled point where the painting differs most from the view, if the cell's mean difference exceeds `stray`.
     const step = rad * layer.spacing;
     for (let gy = 0; gy < h; gy += step) {
       for (let gx = 0; gx < w; gx += step) {
@@ -302,9 +300,9 @@ export function paint(job: PaintJob): OffscreenCanvas {
     for (const [x0, y0] of spots) {
       const seen = at(ref, x0, y0);
       const around = at(coarse, x0, y0);
-      // Away from the thing, specks (petals, glints) are damped toward the area's own color.
+      // Off the thing, mixes the color 40% toward the coarse view, which damps specks such as petals and glints.
       const c0: RGB = layer.thing ? seen : [seen[0] * 0.6 + around[0] * 0.4, seen[1] * 0.6 + around[1] * 0.4, seen[2] * 0.6 + around[2] * 0.4];
-      // Broken color: a touch warmer or cooler, lighter or deeper; painters push color a little past what they see.
+      // Raises saturation by 18% and adds a random brightness shift, so neighboring strokes differ a little.
       const m = (c0[0] + c0[1] + c0[2]) / 3;
       const jit = (r() - 0.5) * 16;
       const col = c0.map((v) => Math.max(0, Math.min(255, m + (v - m) * 1.18 + jit))) as RGB;
@@ -331,7 +329,7 @@ export function paint(job: PaintJob): OffscreenCanvas {
     }
   }
 
-  // The paper's tooth shows faintly through the paint.
+  // Darkens each pixel by up to 5% at random, for the paper's texture.
   const g = ctx.getImageData(0, 0, w, h);
   const d = g.data;
   for (let i = 0; i < d.length; i += 4) {

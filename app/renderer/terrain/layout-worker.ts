@@ -1,6 +1,6 @@
-// The thread a page lays a bundled snapshot out on (`laySnapshot`), the
-// showcase's, so the page keeps drawing the wait meanwhile. It runs the same
-// pure layout the page would, so the world is the same.
+// A worker that lays out the bundled showcase snapshot (`laySnapshot`), so
+// the page keeps drawing the wait screen meanwhile. It runs the same pure
+// layout as the page, so the world is the same.
 
 import type { CodeWorld } from "@gaia/world";
 import { laySnapshot } from "./snapshot.ts";

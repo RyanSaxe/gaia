@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FLUSH_MS, pacer } from "./pace.ts";
 
-/** Every item's time, drawing `p` frame by frame from `from` until it is empty or `until`. */
+/** Draws `p` every 16 ms from `from` until it is empty or `until`, and returns each item with its draw time. */
 function drawn<T>(p: ReturnType<typeof pacer<T>>, from: number, until: number): [number, T][] {
   const out: [number, T][] = [];
   for (let t = from; t <= until && p.size > 0; t += 16) for (const item of p.due(t)) out.push([t, item]);
@@ -21,8 +21,8 @@ describe("the wait's pace", () => {
     const p = pacer<number>({ everyMs: 500, spreadMs: [1000, 20000] });
     p.add([0], 0);
     p.due(0);
-    // Bursts have come 6 s apart: 120 strokes are spread over a little more than that, not 60 s at the calm pace, and
-    // not just 6 s, which an uneven next burst would often leave still.
+    // Bursts came 6 s apart, so 120 strokes spread over a little more than 6 s. At `everyMs` they would take 60 s, and
+    // over exactly 6 s an uneven next burst would often leave the sheet still.
     p.add(Array.from({ length: 120 }, (_, i) => i), 6000);
     const times = drawn(p, 6000, 80000).map(([t]) => t);
     expect(times).toHaveLength(120);

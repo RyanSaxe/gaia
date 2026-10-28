@@ -1,45 +1,48 @@
-# The engine's only knowledge of languages. Each entry names the extensions
-# it reads, where its grammar comes from, and its conventions. A grammar
-# compiled into the engine names its crate; `engine/queries/<language>.scm`
-# holds our query file for it, run after the grammar's own tags query when
-# it ships one.
+# The engine's language table, its only source of facts about languages. Each
+# entry names the extensions it reads, where its grammar comes from, and its
+# conventions. A grammar compiled into the engine names its crate, and
+# `engine/queries/<language>.scm` is Gaia's query file for it, which runs after
+# the grammar's own tags query when the grammar ships one.
 #
-# Any other grammar names the WebAssembly file its own release publishes,
-# with that file's SHA-256, and its tags query from the same release when
-# the grammar has one. The engine downloads each the first time a project
-# needs it, checks the hash and keeps it in the app's data folder. Without
-# our query file, such a language falls back: its tags query finds
-# definitions and calls, and node kinds such as `if_statement` give blocks.
+# Any other grammar names the WebAssembly file its release publishes, with that
+# file's SHA-256, and its tags query from the same release when it has one. The
+# engine downloads each file the first time a project needs it, checks the hash
+# and keeps it in the app's data folder. Without a Gaia query file, the tags
+# query finds definitions and calls, and node kinds such as `if_statement` give
+# blocks.
 #
-# A convention is a path pattern a language's community follows. A file
-# whose path matches one is tagged with it, and the tag goes into Jev's
-# state as evidence. It never decides anything on its own.
+# A convention is a path pattern that a language's community follows. The
+# engine tags a file whose path matches one, and the tag goes into Jev's state
+# only as evidence.
 #
-# The import rule reads `relative`: the prefixes that make an import start
-# from the importing file's directory ("here"), the one above it ("parent"),
-# each directory above it in turn ("ancestors"), or, for Python's leading
-# dots, here for one dot and one more directory up for each dot after it
-# ("dots"). `in_module = "file"` marks a prefix that, inside a module
-# definition such as Rust's `mod tests { }`, names the file holding it,
-# since that module is the file's child. A call resolves only to a
-# definition in its own language's `family`, which is the language itself
-# unless named. `data = true` marks a format that holds configuration rather
-# than code, which the import rule searches for package names. `builtins`
-# lists the modules a language's runtime or standard library provides, as an
-# import spells them; a family shares its members' lists, so Node's, under
-# `javascript`, hold for TypeScript too, with `node` and `bun` for their
-# `node:` and `bun:` imports. An import that names one, or a module inside
-# one, and that no rule resolves lies outside the repository, as one naming a
-# package a manifest installs does: neither is ever offered a folder.
-# `implicit_self = true` marks a language whose methods call their own
-# class's methods without naming `self` or `this`. `functions_as_values =
-# true` marks one where a call on a value, such as `store.inc()`, can reach
-# a function that belongs to no class: an object's own functions, or a
-# Kotlin extension. Elsewhere a call on a value the rule cannot place
-# reaches only methods.
-# `marks_exports = true` marks a language whose files say which definitions
-# they export (`export`, `pub`): a re-export passes on only those. Elsewhere
-# it passes on any definition of the name.
+# Fields the resolution rules read:
+# - `relative` lists the prefixes that start an import from the importing
+#   file's directory ("here"), the one above it ("parent"), each directory
+#   above it in turn ("ancestors"), or, for Python's leading dots, here for one
+#   dot and one more directory up for each further dot ("dots").
+#   `in_module = "file"` marks a prefix that, inside a module definition such
+#   as Rust's `mod tests { }`, names the file containing it, since that module
+#   is the file's child.
+# - `family` limits a call to definitions in the same family. It is the
+#   language itself unless set.
+# - `data = true` marks a configuration format rather than code. The import
+#   rule searches these files for package names.
+# - `builtins` lists the modules a language's runtime or standard library
+#   provides, as an import spells them. A family shares its members' lists, so
+#   Node's, under `javascript`, apply to TypeScript too, with `node` and `bun`
+#   for their `node:` and `bun:` imports. An import of one, or of a module
+#   inside one, that no rule resolves points outside the repository, as an
+#   import of a package a manifest installs does. Neither is ever offered a
+#   folder.
+# - `implicit_self = true` marks a language whose methods call their own
+#   class's methods without naming `self` or `this`.
+# - `functions_as_values = true` marks a language where a call on a value,
+#   such as `store.inc()`, can resolve to a function that belongs to no class,
+#   such as an object's own function or a Kotlin extension. Elsewhere a call on
+#   a value the rule cannot place resolves only to methods.
+# - `marks_exports = true` marks a language whose files declare which
+#   definitions they export, with `export` or `pub`. A re-export passes on only
+#   those. Elsewhere it passes on any definition of the name.
 
 [typescript]
 functions_as_values = true

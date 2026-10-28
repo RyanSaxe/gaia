@@ -1,18 +1,18 @@
-// What a Relief primitive produces: a region's ground shape as plain data.
-// A height field is a small expression tree that one evaluator samples, so a
+// The output of a Relief primitive, a region's ground shape as plain data. A
+// height field is a small expression tree that one evaluator samples, so a
 // landform crosses worker boundaries and hashes like any other output.
-// Coordinates are meters in the region's own frame: origin at its center,
-// +x east, +z south. Heights are meters above the region's base.
+// Coordinates are meters in the region's own frame, with the origin at its
+// center, +x east and +z south, and heights are meters above the region's base.
 
 export type HeightField =
   | { readonly op: "constant"; readonly value: number }
-  /** Fractal noise. "smooth" spans about -1..1; "ridged" spans 0..1 with sharp crests. */
+  /** Fractal noise. "smooth" spans about -1..1, and "ridged" spans 0..1 with sharp crests. */
   | {
       readonly op: "noise";
       readonly seed: number;
       readonly wavelength: number;
       readonly octaves: number;
-      /** Amplitude kept per octave, 0 to 1: higher is rougher. */
+      /** Amplitude kept per octave, 0 to 1. Higher is rougher. */
       readonly gain: number;
       /** Direction of the long axis, radians from +x toward +z. */
       readonly angle: number;
@@ -20,7 +20,7 @@ export type HeightField =
       readonly stretch: number;
       readonly style: "smooth" | "ridged";
     }
-  /** Wind ridges, 0..1: a gentle windward face and a steeper lee, crests running across `angle`. */
+  /** Wind ridges, 0..1, with a gentle windward face, a steeper lee, and crests running across `angle`. */
   | { readonly op: "dunes"; readonly seed: number; readonly wavelength: number; readonly angle: number; readonly wander: number }
   /** A valley's cross-section, 0 on the floor line to 1 on the shoulders, along a meandering axis at `angle`. */
   | {
@@ -40,15 +40,15 @@ export type HeightField =
   | { readonly op: "dome"; readonly radius: number }
   /** A soft circular bump of height 1 centered on `radius`. */
   | { readonly op: "ring"; readonly radius: number; readonly width: number }
-  /** Quantizes a field into flat treads of `step` meters; `riser` is the share of each step spent climbing. */
+  /** Quantizes a field into flat treads of `step` meters. `riser` is the share of each step spent climbing. */
   | { readonly op: "terrace"; readonly step: number; readonly riser: number; readonly of: HeightField }
   | { readonly op: "sum"; readonly of: readonly HeightField[] }
   | { readonly op: "product"; readonly of: readonly HeightField[] }
   | { readonly op: "scale"; readonly by: number; readonly of: HeightField };
 
 /**
- * A river's valley along its course, as a surface the land is cut down to: its floor, rising up each wall to that
- * side's shoulder, then on at a gentle grade until it meets the land.
+ * A river's valley along its course, as a surface the land is cut down to. It is the valley floor, rising up each
+ * wall to that side's shoulder, then continuing at a gentle grade until it meets the land.
  */
 export interface ValleyCourse {
   /** World x, z pairs from source to mouth, a few meters apart. */
@@ -58,18 +58,19 @@ export interface ValleyCourse {
   readonly floors: Float32Array;
   readonly depths: Float32Array;
   /**
-   * At each point, six numbers: on its left, where the flat floor ends and where the wall rising from it reaches its
-   * shoulder, meters out from the course, and how much of a terrace the wall keeps, 0 to 1; then the same on its right.
+   * At each point, six numbers. For the left side: where the flat floor ends and where the wall reaches its shoulder,
+   * in meters out from the course, and how much of a terrace the wall keeps, 0 to 1. Then the same for the right side.
    */
   readonly walls: Float32Array;
   /**
-   * At each point, how far out from the course the valley cuts the land at all, meters: past its shoulders, as far as
-   * its sides go on rising before they meet the land, so a valley cut deep through a rim ends in a slope.
+   * At each point, how far out from the course the valley cuts the land at all, in meters. It extends past the
+   * shoulders, as far as the sides keep rising before they meet the land, so a valley cut deep through a rim ends in a
+   * slope.
    */
   readonly reaches: Float32Array;
 }
 
-/** Every river valley of a world, in world meters, with its segments by square cells `cell` meters a side from (`x0`, `z0`), so a point finds the few near it. */
+/** Every river valley of a world, in world meters. It indexes the segments by square cells `cell` meters a side from (`x0`, `z0`), so a lookup for a point checks only the few segments near it. */
 export interface ValleyNet {
   readonly courses: readonly ValleyCourse[];
   readonly cell: number;
@@ -81,7 +82,7 @@ export interface ValleyNet {
   readonly cells: readonly (readonly number[])[];
 }
 
-/** A stream bed from source to mouth. The world solves its waterline so the water always sits in the ground. */
+/** A stream bed from source to mouth. The world computes its waterline so the water always stays within the ground. */
 export interface StreamBed {
   readonly kind: "stream";
   /** Local x, z pairs along the bed. */
@@ -98,7 +99,7 @@ export interface StreamBed {
   readonly floors?: Float32Array;
 }
 
-/** A hollow that holds still water; the world fills it to just below its lowest rim point. */
+/** A hollow that holds still water. The world fills it to just below its lowest rim point. */
 export interface PondBed {
   readonly kind: "pond";
   readonly x: number;
@@ -112,6 +113,6 @@ export type WaterBed = StreamBed | PondBed;
 export interface Landform {
   readonly height: HeightField;
   readonly water: readonly WaterBed[];
-  /** The world's river valleys, the same for every region of a world once its rivers are routed: the land is cut down to them. */
+  /** The world's river valleys, the same for every region of a world once its rivers are routed. The land is cut down to them. */
   readonly valleys?: ValleyNet;
 }

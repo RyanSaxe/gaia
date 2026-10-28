@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AnyPrimitive, Field } from "@gaia/schema";
 import { COMPOSING, FORMS } from "./looks.ts";
 
-/** Words that name a kind of code: Jev reads a feel, never what code a form or a part is for. */
+/** Words that name a kind of code. Jev's options describe a feel, never what code a form or a part is for. */
 const CODE_WORDS = /\b(functions?|class(es)?|modules?|files?|imports?|tests?)\b/i;
 
 /** Every option a field offers, in the words Jev reads. */
@@ -23,7 +23,7 @@ describe("the words Jev composes small things from", () => {
       ...[...parts.values()].flatMap((p) => [[p.id, p.doc] as const, ...Object.entries(p.params).flatMap(([name, f]) => [[`${p.id} ${name}`, f.ask] as const, ...optionsOf(f).map((o) => [`${p.id} ${name}`, o] as const)])]),
     ];
     expect(words.filter(([, w]) => CODE_WORDS.test(w))).toEqual([]);
-    // Every slot of a small thing says what it shows of the code.
+    // Every slot of a small thing has an `ask`, which says what it shows of the code.
     expect(words.filter(([what, w]) => what.includes("'s ") && w === "")).toEqual([]);
   });
 

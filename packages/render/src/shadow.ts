@@ -1,6 +1,6 @@
-// A hand-rolled sun shadow map, as in v1/v2: a depth-only orthographic pass
-// over the plants, sampled manually by every material through SceneLight.
-// At night it is cast by the moon.
+// A hand-rolled sun shadow map, as in v1 and v2: a depth-only orthographic
+// pass over the plants that every material samples through SceneLight. At
+// night the moon casts it.
 
 import * as THREE from "three";
 import type { SceneLight } from "./light.ts";
@@ -13,7 +13,7 @@ export interface SunShadow {
   dispose(): void;
 }
 
-/** How far below the horizon (as a direction's height) the sun lends no light; `lightAt` in @gaia/realize ends it there. */
+/** How far below the horizon, as a direction's height, the sun gives no light. `lightAt` in @gaia/realize ends it there. */
 const SUN_GONE = 0.04;
 const smooth01 = (x: number): number => {
   const t = Math.min(1, Math.max(0, x));
@@ -38,8 +38,8 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
 
   const update = (): void => {
     // Once the sun is down the map follows the moon, and moon shadows fade in
-    // with the night. They rise from nothing as the sun sinks past the point
-    // where its light ends, so the map's change of caster never shows.
+    // with the night. They start from 0 as the sun sinks past where its light
+    // ends, so the map's change of caster never shows.
     const fromMoon = light.uSunIntensity.value <= 0.001;
     const sun = fromMoon ? light.uMoonDirection.value : light.uSunDirection.value;
     const night = smooth01((light.uNightness.value - 0.45) / 0.35);

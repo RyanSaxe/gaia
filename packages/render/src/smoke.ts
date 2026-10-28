@@ -1,8 +1,8 @@
-// Chimney smoke: a few soft puffs that rise, drift with the wind, swell and
-// fade, looping forever. A primitive writes each puff as a quad around its
-// chimney's mouth (`pivot`), with its phase in `shade` and the vitality
-// below which it stops in `loss`; this shader does the rest, so smoke costs
-// one draw call and never rebuilds.
+// Draws chimney smoke as a few soft puffs that rise, drift with the wind,
+// swell and fade in a loop. A primitive writes each puff as a quad around its
+// chimney's mouth (`pivot`), with its phase in `shade` and the vitality below
+// which it stops in `loss`. This shader animates the rest, so smoke costs one
+// draw call and never rebuilds.
 
 import * as THREE from "three";
 import { CHANNEL_MATH } from "@gaia/realize";

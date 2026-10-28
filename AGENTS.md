@@ -1,8 +1,8 @@
 # Working on Gaia
 
 Gaia turns a codebase into a world you can walk through. The Rust engine
-analyzes code; Jev answers typed questions; pure packages turn the answers into
-terrain and geometry; Electron renders the result.
+analyzes code, and Jev answers typed questions. Pure packages turn the answers
+into terrain and geometry, and Electron renders the result.
 
 Read [architecture](docs/architecture.md) before changing boundaries or data
 flow, and [design](docs/design-system.md) before changing visuals or interaction.
@@ -14,11 +14,11 @@ flow, and [design](docs/design-system.md) before changing visuals or interaction
   newline-delimited JSON-RPC protocol.
 - `app/world-service/protocol.ts` defines messages between the app, world
   service and renderer. Update its documentation with a protocol change.
-- A package's `src/index.ts` is its public surface. Use package entry points,
+- A package's `src/index.ts` is its public interface. Use package entry points,
   including in tests. `eslint.config.js` enforces imports and purity.
-- Kinds declare roles; primitives implement roles. Jev chooses from closed,
-  instructed fields. Numeric scales use word levels; code supplies free
-  numbers, coordinates and measurements.
+- Kinds declare roles, and primitives implement them. Jev chooses from closed,
+  instructed fields. Numeric scales use word levels, and code supplies
+  free numbers, coordinates and measurements.
 - Primitives, kinds, world, realize and terrain are pure: no unseeded
   randomness, clock, DOM, filesystem or Three.js. Pass time and seeds as data.
 - Primitives write all vitality channels and choose palette swatches. Shared
@@ -44,7 +44,7 @@ flow, and [design](docs/design-system.md) before changing visuals or interaction
 - Obtain explicit user approval before sending requests to OpenRouter. Verify
   the live connector against the local stand-in in the development guide.
 - Extend shared contract tests when adding a primitive or kind. Tests should
-  exercise public behavior; do not use snapshot assertions.
+  exercise public behavior. Do not use snapshot assertions.
 - Bake expensive fixtures once per test file and clone them for mutations.
   Give slow cases explicit timeouts with a reason.
 - Run `pnpm check`, `cargo test` and `cargo clippy --all-targets -- -D warnings`

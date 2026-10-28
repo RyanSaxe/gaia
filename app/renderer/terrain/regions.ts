@@ -1,11 +1,9 @@
 // Each region's ground cover, as uniforms the ground and grass shaders share.
-// The shaders weigh regions by the baked cover shares (`Terrain.coverRegions`
-// and `coverShares`: each lattice sample's largest few), interpolated between
-// samples as the lattice is, so the cover drifts across the same wide band
-// where the land changes, in the same patches the bake measured. The shares
-// ride in the land's clipmap (`CLIP` in ground.ts), baked with the land's
-// chunks (`land-chunks.ts`). The last two slots hold the wild's own two
-// covers, which grow past the land.
+// The shaders weight regions by the baked cover shares (`Terrain.coverRegions`
+// and `coverShares`, each sample's largest few), interpolated like the
+// lattice, so the cover changes across the same band and patches as the land.
+// The shares are in the land's clipmap (`CLIP` in ground.ts), and the last two
+// slots are the wild's two covers past the land.
 
 import * as THREE from "three";
 import type { GroundSpec } from "@gaia/schema";
@@ -20,7 +18,7 @@ const vectors = <T>(make: () => T): { value: T[] } => ({ value: Array.from({ len
 export function createRegionCovers() {
   const uniforms = {
     uRegionCount: { value: 0 },
-    /** Past this radius (the wild land) covers continue outward from the land's edge. */
+    /** Past this radius, in the wild land, covers continue outward from the land's edge. */
     uCoverReach: { value: 0 },
     /** Blade lean, roundness and bend. */
     uCoverForm: vectors(() => new THREE.Vector3()),
@@ -59,7 +57,7 @@ export function createRegionCovers() {
         setSlot(i, c);
       });
     },
-    /** The wild's two covers: what grows past the land, mingled in patches. */
+    /** Sets the wild's two covers, which grow past the land, mingled in patches. */
     wild(covers: readonly [GroundSpec, GroundSpec]): void {
       setSlot(WILD_SLOTS[0], covers[0]);
       setSlot(WILD_SLOTS[1], covers[1]);
@@ -69,7 +67,7 @@ export function createRegionCovers() {
 
 export type RegionCovers = ReturnType<typeof createRegionCovers>;
 
-/** GLSL: the covers, read from the land's clipmap. Needs the ground texture's uniforms (GROUND_SAMPLE_GLSL) declared first. */
+/** GLSL that reads the covers from the land's clipmap. Declare the ground texture's uniforms (`GROUND_SAMPLE_GLSL`) first. */
 export const REGIONS_GLSL = /* glsl */ `
 #define MAX_REGIONS ${MAX_REGIONS}
 uniform int uRegionCount;
@@ -180,7 +178,7 @@ GroundCover coverOf(int i) { return GroundCover(uCoverLow[i], uCoverHigh[i], uCo
 GroundCover wildCover(float share) { return mixCover(coverOf(WILD_A), coverOf(WILD_B), share); }
 `;
 
-/** Where tufts grow when a cover is clumped; the same mask places soil on the ground and blades above it. */
+/** Where tufts grow when a cover is clumped. The same mask places soil on the ground and blades above it. */
 export const TUFT_GLSL = /* glsl */ `
 float tuftHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float tuftNoise(vec2 p) {

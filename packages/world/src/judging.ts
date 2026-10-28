@@ -1,34 +1,32 @@
-// Judging a world with Jev's answers kept. Every request is keyed by the
-// hash of exactly what Jev is sent, so reopening a world asks again only
-// about things whose facts changed (the continuity agreement). A request Jev
-// has answered before is answered from the store; one it has not goes to
-// Jev, and its answer is kept. One Jev cannot answer, once the engine's
-// client has retried it, or answers outside the options it was given, fails
-// the world, saying which request and why: nothing guesses an answer in its
-// place.
+// Judges a world with Jev's answers kept. Each request's key is the hash of
+// exactly what Jev is sent, so reopening a world sends requests only for
+// things whose facts changed. A stored answer is reused, and a new answer is
+// kept. If Jev cannot answer after the engine's client retries, or answers
+// outside the offered options, the world fails with the request and the
+// reason. Nothing substitutes a guessed answer.
 
 import { type JevAnswer, type JevClient, type JevRequest, type JevResponse, contentHash } from "@gaia/schema";
 import type { WorldRequest } from "./code-world.ts";
 
-/** A request's key in the store: the hash of the whole request, so changed facts make a new key. */
+/** A request's store key, which is the hash of the whole request. Changed facts give a new key. */
 export const requestKey = (request: JevRequest): string => contentHash(request);
 
-/** The area (a directory's path, "" for the repository's root) whose land a planned request's thing stands on: a file's directory, an area or entity itself, the root for the world. */
+/** The directory path whose land a planned request's thing is on: a file's directory, the area or entity itself, or "" for the world. */
 export const areaOfRequest = (r: Pick<WorldRequest, "about" | "target">): string =>
   r.about === "file" ? (r.target.includes("/") ? r.target.slice(0, r.target.lastIndexOf("/")) : "") : r.about === "world" ? "" : r.target;
 
 export interface Keeping {
   /** Jev's earlier answers, by request key. */
   readonly stored: ReadonlyMap<string, JevResponse>;
-  /** Jev has just answered a request: keep its answer. */
+  /** Called with each new answer from Jev, to store it. */
   readonly keep: (key: string, response: JevResponse) => void;
-  /** A request is settled from the store or by Jev: its key. */
+  /** Called with a request's key once the store or Jev answers it. */
   readonly settled?: (key: string) => void;
-  /** Why Jev is not to be asked, when it is not: the reason a request with no kept answer fails. */
+  /** Why Jev must not be asked, if so. A request with no stored answer fails with this reason. */
   readonly unasked?: string;
 }
 
-/** What a request is about, in words, from its state: what a failure names. */
+/** Describes in words what a request is about, from its state, for failure messages. */
 export function requestSubject(request: JevRequest): string {
   const s = (request.state ?? {}) as Record<string, { path?: string; name?: string; file?: string; from?: { path?: string }; to?: { path?: string } } | undefined>;
   const at = (path: string | undefined): string => (path === undefined || path === "" ? "(the repository's root)" : path);
@@ -43,7 +41,7 @@ export function requestSubject(request: JevRequest): string {
   return `a request (${requestKey(request).slice(0, 12)})`;
 }
 
-/** A request Jev could not answer: which one, and why. A world with one fails. */
+/** A request Jev could not answer, with its subject and the reason. Any one fails the world. */
 export class RequestFailed extends Error {
   constructor(
     readonly subject: string,
@@ -54,7 +52,7 @@ export class RequestFailed extends Error {
   }
 }
 
-/** Whether a response answers every question with one of the options it offered. */
+/** Whether a response answers every question within the options the request offered. */
 export function answersFit(request: JevRequest, response: JevResponse): boolean {
   return Object.entries(request.questions).every(([id, q]) => {
     const a: JevAnswer | undefined = response.answers?.[id];
@@ -66,11 +64,12 @@ export function answersFit(request: JevRequest, response: JevResponse): boolean 
 }
 
 /**
- * Jev with its answers kept. A stored answer that still fits is used without
- * asking. Otherwise the request goes to `jev` (null when Jev is not to be
- * asked, with `keeping.unasked` saying why), and an answer that fits is kept.
- * Anything else rejects with `RequestFailed`, naming the request and why:
- * the engine's client has already retried it, and nothing guesses instead.
+ * Wraps Jev so its answers are kept. A stored answer that still fits is
+ * returned without a request. Otherwise the request goes to `jev`, and an
+ * answer that fits is kept. `jev` is null when Jev must not be asked, and
+ * `keeping.unasked` gives the reason. Any other outcome rejects with
+ * `RequestFailed`, naming the request and the reason. The engine's client has
+ * already retried by then, and nothing substitutes a guess.
  */
 export function keptJev(jev: JevClient | null, keeping: Keeping): JevClient {
   return {

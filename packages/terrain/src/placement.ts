@@ -1,14 +1,14 @@
-// What stands on the land for code, as plain data: where each stone, bush or
-// drift of flowers stands, and what anything new keeps clear of.
+// Plain data for the stones, bushes and drifts of flowers placed on the land
+// for code, and for the footprints new placements avoid.
 
-/** Something already standing that new placements keep clear of, such as a tree. */
+/** A footprint that new placements avoid, such as a tree's. */
 export interface Occupied {
   readonly x: number;
   readonly z: number;
   readonly radius: number;
 }
 
-/** A stone, a bush or a drift of flowers standing for code: its blueprint by rule and variant, and where and how it stands. */
+/** A stone, bush or drift of flowers that represents code. `rule` and `variant` select its blueprint. */
 export interface Placement {
   readonly rule: string;
   readonly variant: number;
@@ -17,10 +17,10 @@ export interface Placement {
   readonly z: number;
   readonly yaw: number;
   readonly scale: number;
-  /** The footprint's radius at this scale, meters. */
+  /** The footprint's radius at this scale, in meters. */
   readonly radius: number;
-  /** The vitality the copy shows: that of what it stands for. Absent, full health. */
+  /** The vitality of the code it represents. Absent means 1. */
   readonly vitality?: number;
-  /** The ground's slope under it, dy/dx and dy/dz, which its copy takes: its base follows the ground, its stems stay upright. */
+  /** The ground's slope under it as dy/dx and dy/dz. The instance's base follows the slope and its stems stay upright. */
   readonly slope?: readonly [number, number];
 }

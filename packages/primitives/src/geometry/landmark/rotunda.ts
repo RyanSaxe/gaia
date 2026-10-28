@@ -1,18 +1,10 @@
-// A rotunda: a ring of columns on a stepped base, carrying a ring of stone
-// and a dome, calm, ordered and a little grand. A gap between two columns
-// faces +z, where the world turns a landmark to meet its trail; the steps and
-// the paved floor are walkable, so a walk climbs them and stands among the
-// columns. Decline follows what carries what: the dome falls in first, course
-// by course from its crown, each block sinking into the one below it and its
-// stone heaped on the floor inside; then the ring over each pair of columns
-// goes, and the columns topple one by one, each to its own side of straight
-// out, breaking into drums that roll on and come to rest in the grass or
-// against the lowest step, leaving the stepped base, the columns' feet and
-// here and there a drum or two still standing. Each rotunda's seed picks its
-// proportions within its words (`ROTUNDA_SHAPE`): the span of its ring, its
-// columns' height, girth and spacing, its dome's rise, its steps' depth, and
-// the side its weather comes from, where the columns topple first, the dome
-// falls in first and the stone greys most.
+// Builds a rotunda: a ring of columns on a stepped base carrying a ring of
+// stone and a dome, with a gap between two columns facing +z, which the world
+// turns toward the trail. As vitality falls the dome falls in course by course
+// from its crown, then the stone ring goes and the columns topple one by one
+// into drums, leaving the walkable stepped base and the columns' feet. Each
+// rotunda's seed picks its proportions and weather bearing within the bands of
+// its answers (`ROTUNDA_SHAPE`).
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { rotundaParams } from "../../landmark.ts";
@@ -24,7 +16,7 @@ import { restAngle } from "./stones.ts";
 type RotundaParams = Resolved<typeof rotundaParams>;
 
 const COLUMNS = { six: 6, eight: 8, twelve: 12 } as const;
-/** How many steps lift it, by the words Jev reads: each its own count, never a neighbour's. */
+/** The step count for each `steps` answer. No two answers share a count. */
 export const ROTUNDA_STEPS = { "a low plinth of two steps": 2, "three broad steps": 3, "a high podium of five steps": 5 } as const;
 /** Meters at scale 1: the circle the columns stand on, and a column's height and radius at its foot. */
 const RING = 7.5;
@@ -38,26 +30,26 @@ const SHELL = 0.38;
 const EAVE = 0.5;
 /** How high a high dome's lantern roof rises over its foot's radius. */
 const LANTERN_RISE = 0.65;
-/** A column's faces, which read as flutes. */
+/** Faces per column, which look like flutes. */
 const FLUTES = 16;
-/** How much vitality apart each course of the dome goes, so each is gone before the one it rests on starts. */
+/** The vitality step between dome courses, so each course has gone before the one it rests on starts. */
 const COURSE_STEP = 0.06;
-/** How much sooner a piece goes than what it sinks onto the face of, which must stand whole until it is all but gone. */
+/** How much sooner a piece goes than the piece it sinks onto, which must stay whole until the first has almost gone. */
 const ONTO = 0.06;
-/** The gap between dressed blocks, meters: a joint the light falls into. */
+/** The gap between dressed blocks in meters, which shows as a dark joint. */
 const JOINT = 0.022;
 /** How long a column's drums are, meters. */
 const DRUM = 1.6;
 
-/** The rotunda's measures at scale 1 in the middle of what its words allow, which the map's mark draws from. */
+/** The rotunda's middle measures at scale 1, which the map's mark uses. */
 export const ROTUNDA_MEASURES = { ring: RING, column: COLUMN, step: STEP, entablature: ENTABLATURE, eave: EAVE } as const;
 
 /**
- * What a rotunda's seed picks within its words, in meters at scale 1 unless said: the ring the columns stand on, a
- * column's height, the clear space between two columns in column widths (from which a column's girth follows), the
- * dome's rise over its foot's radius, a high dome's drum, a step's tread, how far the top step reaches past the
- * columns, the ring of stone over them, and the bearing its weather comes from. Six columns stand wide apart, eight
- * evenly and twelve close, and a shallow dome stays low beside a high one, whatever the seed.
+ * The bands a rotunda's seed picks from, in meters at scale 1 unless noted: the column circle's radius, a column's
+ * height, the clear space between two columns in column widths (which sets a column's girth), the dome's rise over
+ * its foot's radius, a high dome's drum, a step's tread, how far the top step reaches past the columns, the stone ring
+ * over them, and the bearing the weather comes from. Six columns are wide apart, eight even and twelve close, and a
+ * shallow dome stays lower than a high one, whatever the seed.
  */
 export const ROTUNDA_SHAPE = {
   ring: about(RING, 0.05),
@@ -71,7 +63,7 @@ export const ROTUNDA_SHAPE = {
   weather: [0, Math.PI * 2],
 } as const satisfies Bands;
 
-/** A point at angle `a` and radius `rad` around the rotunda's middle, `y` up. */
+/** A point at angle `a` and radius `rad` round the rotunda's center, `y` up. */
 const around = (a: number, rad: number, y: number): V3 => [Math.cos(a) * rad, y, Math.sin(a) * rad];
 
 /**
@@ -87,7 +79,7 @@ function sector(b: PartBuilder, a0: number, a1: number, r0: number, r1: number, 
     const um = (u0 + u1) / 2;
     const out: V3 = [Math.cos(um), 0, Math.sin(um)];
     quad(b, [around(u0, r1, y0), around(u1, r1, y0), around(u1, r1, y1), around(u0, r1, y1)], out, [shade - 0.04, shade - 0.04, shade + 0.03, shade + 0.03], ch);
-    // A sector from the middle is a wedge, with no inner face: a triangle of no area would hide what rests on it from `unsupportedAt`.
+    // A sector from the middle is a wedge, with no inner face. A triangle of no area would hide what rests on it from `unsupportedAt`.
     if (r0 > 0) {
       quad(b, [around(u0, r0, y0), around(u1, r0, y0), around(u1, r0, y1), around(u0, r0, y1)], [-out[0], 0, -out[2]], shade - 0.16, ch);
       quad(b, [around(u0, r0, y1), around(u1, r0, y1), around(u1, r1, y1), around(u0, r1, y1)], UP, shade + 0.07, ch);
@@ -102,7 +94,7 @@ function sector(b: PartBuilder, a0: number, a1: number, r0: number, r1: number, 
   }
 }
 
-/** A round drum of `FLUTES` faces from y0 to y1, its radius going from r0 to r1, about (x, z); with `cap`, a top. */
+/** A round drum of `FLUTES` faces from y0 to y1, its radius going from r0 to r1, about (x, z). With `cap`, it gets a top. */
 function drum(b: PartBuilder, x: number, z: number, y0: number, y1: number, r0: number, r1: number, shade: number, ch: Channels, cap = false): void {
   const rows = Math.max(1, Math.round((y1 - y0) / 1.6));
   const slope = (r0 - r1) / (y1 - y0);
@@ -130,7 +122,7 @@ function drum(b: PartBuilder, x: number, z: number, y0: number, y1: number, r0: 
   }
 }
 
-/** A column's foot at angle `a` on the floor: a plinth and a round base, which stay where it stood. */
+/** A column's foot at angle `a` on the floor: a plinth and a round base, which stay when the column falls. */
 function columnFoot(b: PartBuilder, a: number, ring: number, floor: number, radius: number, ch: Channels): void {
   const [x, , z] = around(a, ring, 0);
   const axes = [[Math.cos(a), 0, Math.sin(a)], UP, [-Math.sin(a), 0, Math.cos(a)]] as const;
@@ -152,8 +144,8 @@ function shaftOf(floor: number, height: number, radius: number): { foot: number;
 
 /**
  * A column's shaft over its foot, in drums with a joint between each, swelling a little toward its middle, and its
- * flared capital and square abacus. The lowest `stay` drums stand on the foot whatever comes; the rest, with the
- * capital, is one piece that topples about its outer edge.
+ * flared capital and square abacus. The lowest `stay` drums never go. The rest, with the capital, is one piece that
+ * topples about its outer edge.
  */
 function columnShaft(b: PartBuilder, a: number, ring: number, floor: number, height: number, radius: number, stay: number, stub: Channels, ch: Channels, r: Rand): void {
   const [x, , z] = around(a, ring, 0);
@@ -180,9 +172,9 @@ interface Lying {
 }
 
 /**
- * Where a column broke as it fell: each drum that went, and its capital, lying in the grass about where it struck,
- * rolled on a little and turned, growing in as the shaft goes. One that struck the steps rolled down them and lies
- * against the lowest, along it. None lies in another or in the steps; one with nowhere to lie is left out.
+ * The pieces of a fallen column: each drum that went, and its capital, lying in the grass near where it struck,
+ * rolled on a little and turned, growing in as the shaft goes. A piece that struck the steps lies along the lowest
+ * step. No piece overlaps another or the steps, and a piece with no free place is left out.
  */
 function fallenDrums(b: PartBuilder, centre: V3, away: number, edge: number, pieces: readonly number[], radius: number, grow: number, lying: Lying[], r: Rand): void {
   const dir: V3 = [Math.cos(away), 0, Math.sin(away)];
@@ -228,30 +220,29 @@ function fallenDrums(b: PartBuilder, centre: V3, away: number, edge: number, pie
 }
 
 /**
- * A rotunda on a stepped base, crumbling as described above. See
- * `rotundaParams`.
+ * Builds a rotunda on a stepped base. See `rotundaParams`.
  */
 export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
   const r = ctx.rand.fork("rotunda");
   const s = ctx.facts.scale ?? 1;
   const shape = landmarkShape(ROTUNDA_SHAPE, p, ctx);
   const stone = new PartBuilder("masonry", "solid");
-  // The steps and the floor inside carry a walk up among the columns instead of stopping it.
+  // The steps and the floor are walkable, so a person can climb up among the columns.
   const steps = new PartBuilder("masonry", "walkable");
   const roof = new PartBuilder("roof", "solid");
   const n = COLUMNS[p.columns];
   const ring = shape.ring * s;
   const height = shape.column * s;
-  // The columns' girth leaves the space between them its words ask, in column widths.
+  // The column radius that leaves the chosen gap between columns, measured in column widths.
   const radius = ((Math.PI * shape.ring) / (n * (1 + shape.gap))) * s;
-  // The seeded value lies in its level's band; the steps are that level's own count, the level nearest it.
+  // `p.steps` is a value within its level's band. The step count is the nearest level's count.
   const count = Object.values(ROTUNDA_STEPS).reduce((best, n) => (Math.abs(n - p.steps) < Math.abs(best - p.steps) ? n : best));
   const floor = count * STEP.rise;
   const top = ring + shape.margin;
   const edge = top + (count - 1) * shape.tread;
 
   // The stepped base: each step a ring of dressed blocks standing on the ground, set with joints between them, and
-  // the top one a floor of paving in rings round a middle stone. Every block is a shade and a hue of its own.
+  // the top one a floor of paving in rings round a center stone. Every block has its own shade and hue.
   const lay = (inner: number, outer: number, y1: number, length: number): void => {
     const blocks = Math.max(inner === 0 ? 5 : 8, Math.round((Math.PI * 2 * outer) / length));
     const turn = r.next();
@@ -271,11 +262,11 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
   const angles = Array.from({ length: n }, (_, k) => Math.PI / 2 + ((k + 0.5) / n) * Math.PI * 2);
   const order = angles.map((a, k) => ({ k, u: 0.5 * r.next() + 0.5 * (1 - facing(a, shape.weather)) })).sort((a, b) => a.u - b.u).map((o) => o.k);
   const falls = new Array<number>(n).fill(0);
-  // A column starts to topple at its own vitality; halfway down it breaks, the shaft going as its drums come to lie
-  // in the grass, so every column lies broken before vitality reaches nothing.
+  // Each column starts to topple at its own vitality. Halfway down it breaks, and the shaft goes as its drums appear
+  // in the grass, so every column lies broken before vitality reaches 0.
   order.forEach((k, m) => (falls[k] = 0.29 - (0.12 * m) / Math.max(1, n - 1) + r.range(-0.006, 0.006)));
-  // Each falls to its own side of straight out, within a spread its neighbours leave room for; a few keep a drum or
-  // two standing on their foot, broken off above them.
+  // Each falls to its own side of straight out, within a spread that leaves room for its neighbours. A few keep a drum
+  // or two standing on their foot.
   const spread = Math.min(0.9, 5.4 / n);
   const lying: Lying[] = [];
   const shaft = shaftOf(floor, height, radius);
@@ -303,8 +294,8 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     fallenDrums(stone, centre, away, edge, pieces, radius, fall - 0.15, lying, r.fork(`drums${k}`));
   });
 
-  // The ring over the columns, in a span from each column to the next; each goes before either column under it
-  // falls, sinking into the capital of the one that stands longer.
+  // The ring over the columns, in one span from each column to the next. Each span goes before either column under
+  // it falls, sinking into the capital of the column that falls later.
   const beam = floor + height;
   const spans = angles.map((a, k) => {
     const b = angles[(k + 1) % n] as number;
@@ -388,7 +379,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     }
   }
 
-  // What fell in lies heaped on the floor inside, growing in as the dome goes; it stops no walker.
+  // The fallen dome lies heaped on the floor inside, growing in as the dome goes. A person walks over it.
   const heap = r.fork("heap");
   const lumps = Math.min(28, fallenInside.length);
   for (let k = 0; k < lumps; k++) {
@@ -410,7 +401,7 @@ interface Dome {
 /** A dome over a foot of radius `foot` at height `spring`, rising `share` of that radius: a high one over its drum. */
 function domeOf(high: boolean, foot: number, spring: number, share: number): Dome {
   const rise = foot * share;
-  // A shallow dome is a cap of a sphere; a high one, a quarter ellipse.
+  // A shallow dome is a cap of a sphere, and a high one a quarter ellipse.
   const sphere = (foot * foot + rise * rise) / (2 * rise);
   const start = Math.asin((sphere - rise) / sphere);
   const meridian = (t: number): { rad: number; y: number; nr: number; ny: number } => {
@@ -453,7 +444,7 @@ function domeBlock(stone: PartBuilder, roof: PartBuilder, d: Dome, a0: number, a
       const v1 = t0 + ((t1 - t0) * (j + 1)) / rows;
       const n = d.normal((u0 + u1) / 2, (v0 + v1) / 2);
       const lift = 0.1 * ((v0 + v1) / 2);
-      // At a closed crown the row's top meets in one point: a triangle there, never one of no area.
+      // At a closed crown the row's top meets in one point, so it gets a triangle there, never a quad of no area.
       if (v1 >= 1) {
         tri(roof, [d.at(u0, v0, 0), d.at(u1, v0, 0), d.at(u0, v1, 0)], n, shade + lift, ch);
         tri(stone, [d.at(u0, v0, depth), d.at(u1, v0, depth), d.at(u0, v1, depth)], [-n[0], -n[1], -n[2]], shade - 0.12, ch);

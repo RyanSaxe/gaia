@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { EntityFacts, ThingFacts } from "@gaia/schema";
 import { landmark, link, structure } from "@gaia/kinds";
 
-/** A package as the engine would describe it: the world package of this repository. */
+/** This repository's world package, as the engine would describe it. */
 const WORLD: EntityFacts = {
   path: "packages/world",
   name: "@gaia/world",
@@ -21,7 +21,7 @@ describe("entities", () => {
     const bind = (e: ThingFacts) => Object.fromEntries(Object.entries(structure.facts).map(([k, f]) => [k, f(e)]));
     const small = bind(WORLD);
     const large = bind({ ...WORLD, lines: 40_000, exports: 120, dependents: ["a", "b", "c", "d", "e", "f", "g", "h", "i"] });
-    // A building and a landmark stand for any thing: an entity, a file or a definition, each read by the same numbers.
+    // A building or landmark can represent an entity, file or definition, and uses the same facts for each.
     expect(structure.subject).toBe("thing");
     const definition = bind({ path: "packages/world/src/code-world.ts#layoutWorld", name: "layoutWorld", lines: 127, exports: 1, dependents: ["a", "b"] });
     expect(definition.size).toBeGreaterThan(0);

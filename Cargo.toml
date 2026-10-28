@@ -2,10 +2,10 @@
 members = ["engine"]
 resolver = "3"
 
-# A debug engine is what the app and the tests run, so it is built lightly
-# optimized, dependencies (tree-sitter's C parsers above all) and the engine
-# alike. On Gaia a judged graph takes about 1 s instead of 6 to 9, for a
-# clean build of 28 s instead of 19 and an edit's rebuild of about 2 s
-# instead of 1. Optimizing the dependencies fully gained nothing more.
+# The app and the tests run a debug engine, so the debug profile lightly
+# optimizes the engine and its dependencies, above all tree-sitter's C parsers.
+# On Gaia a judged graph takes about 1 s instead of 6 to 9, at the cost of a
+# clean build of 28 s instead of 19 and an edit's rebuild of about 2 s instead
+# of 1. Fully optimizing the dependencies gained nothing more.
 [profile.dev]
 opt-level = 1

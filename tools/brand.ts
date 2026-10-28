@@ -1,9 +1,10 @@
 // Paints Gaia's mark (app/renderer/brand/paint.ts) into the pictures the app shows, at the sizes it shows them on a
-// 2x screen: the name the start's sheet and the slip print into their paper, the page's icon, and the macOS app icon
-// at every size its icon set holds, the 32 pixels and under with a lighter shade at the G's edge. The painting runs in
-// a hidden Electron window (the app's own Chromium), from the mark's own view and faces, so painting again changes
-// nothing you can see.
-// Usage: pnpm brand [--readme out.png]   (--readme also paints the icon and the name on their own torn sheet, 1600 wide)
+// 2x screen: the name printed on the start screen's sheet and the slip, the page's icon, and the macOS app icon at
+// every size in its icon set, with a lighter shade at the G's edge at 32 pixels and under. The painting runs in a
+// hidden Electron window (the app's own Chromium) from the mark's own view and fonts, so painting again changes
+// nothing visible.
+// Usage: pnpm brand [--readme out.png]
+// --readme also paints the icon and the name on their own torn sheet, 1600 pixels wide.
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -19,13 +20,13 @@ const buildDir = resolve(repo, "app/build");
 const readmeAt = process.argv.indexOf("--readme");
 const readme = readmeAt === -1 ? null : resolve(process.argv[readmeAt + 1] ?? "readme-header.png");
 
-/** The macOS icon set: each file and the pixels a side it holds. */
+/** The macOS icon set: each file and its side length in pixels. */
 const ICONSET = [16, 32, 64, 128, 256, 512, 1024].flatMap((px) => [
   ...(px <= 512 ? [{ file: `icon_${px}x${px}.png`, px }] : []),
   ...(px >= 32 ? [{ file: `icon_${px / 2}x${px / 2}@2x.png`, px }] : []),
 ]);
 
-// The page: paints each picture and hands it back as a data URL.
+// The page paints each picture and returns it as a data URL.
 const page = `
 import { DECKLE_MASK } from "../immersive/map-styles.ts";
 import { brandReady, paintIcon, paintLockup, paintName } from "./paint.ts";
@@ -115,7 +116,7 @@ rmSync(scratch, { recursive: true, force: true });
 
 const sizeOf = (file: string): string => {
   const head = readFileSync(file);
-  // A PNG's width and height follow its IHDR tag; a lossy WebP's follow its VP8 frame's start code.
+  // A PNG's width and height follow its IHDR tag. A lossy WebP's follow its VP8 frame's start code.
   if (file.endsWith(".png")) return `${head.readUInt32BE(16)}x${head.readUInt32BE(20)}`;
   const at = head.indexOf(Buffer.from([0x9d, 0x01, 0x2a]));
   return at < 0 ? "" : `${head.readUInt16LE(at + 3) & 0x3fff}x${head.readUInt16LE(at + 5) & 0x3fff}`;

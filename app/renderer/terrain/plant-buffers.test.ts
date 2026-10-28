@@ -8,11 +8,11 @@ import { mergeParts, realize } from "@gaia/realize";
 import { createPlant, createPlantInstances, createSceneLight, geometryOf } from "@gaia/render";
 
 const treeLib = new Library(TREE_PRIMITIVES);
-/** The first tree of a sweep of a tree's parts. */
+/** The first tree blueprint from a sweep over a tree's parts. */
 const firstTree = sweep(tree, treeLib).blueprints[0]!;
 const plant = realize(firstTree, tree, treeLib, { seed: seedOf("plant-buffers"), facts: { scale: 1, age: 120 } });
 
-/** Every buffer under `object` as the renderer leaves it once uploaded: its upload callback run. */
+/** Every buffer under `object` as the renderer leaves it after upload, with its upload callback run. */
 function uploaded(object: THREE.Object3D): THREE.BufferAttribute[] {
   const all: THREE.BufferAttribute[] = [];
   object.traverse((o) => {
@@ -37,7 +37,7 @@ describe("a plant's buffers once the GPU holds them", () => {
 
   it("keep no copy of an instanced plant's buffers on the page", () => {
     const copies = createPlantInstances(plant, createSceneLight(), [{ x: 0, y: 0, z: 0, yaw: 0, scale: 1 }]);
-    // The copies' instance matrices change as they are drawn, so they stay; everything built from the plant goes.
+    // The copies' instance matrices change as they draw, so they stay. Everything built from the plant is released.
     const built = uploaded(copies.object).filter((a) => !(a instanceof THREE.InstancedBufferAttribute));
     expect(built.length).toBeGreaterThan(0);
     expect(built.every((a) => (a.array as unknown) === null)).toBe(true);
@@ -56,14 +56,14 @@ describe("a plant's geometry as the GPU holds it", () => {
         const a = g.getAttribute(name) as THREE.BufferAttribute;
         return columns.flatMap((column, k) => Array.from(column, (wrote, i) => a.getComponent(i, k) - wrote));
       };
-      // Four 16-bit values a vertex, where floats took 12 or 16 bytes.
+      // Four 16-bit values per vertex, where floats took 12 or 16 bytes.
       for (const name of ["normal", "aLook"]) expect((g.getAttribute(name) as THREE.BufferAttribute).array.byteLength).toBe(n * 8);
       const normals = [0, 1, 2].map((k) => part.normals.filter((_, i) => i % 3 === k));
       for (const d of [...read("normal", normals), ...read("aLook", [part.shade, part.tint, c.wither, c.glow])]) worst = Math.max(worst, Math.abs(d));
       // A loss threshold off by the least step moves a leaf's edge across the samples it covers.
       moved += read("aLife", [c.loss, c.droop, c.close]).filter((d) => d !== 0).length;
     }
-    // Rounded to the nearest of 16 bits' steps of 1/32767.
+    // Rounded to the nearest step of 1/32767.
     expect(worst).toBeLessThanOrEqual(0.5 / 32767 + 1e-9);
     expect(moved).toBe(0);
   });

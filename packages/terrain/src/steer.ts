@@ -1,28 +1,29 @@
-// Keyboard steering. A tap nudges the view; holding a side key continues
-// at the same angular speed. Backward walking preserves the facing. Keeping
-// turns at a constant rate limits unexpected camera acceleration.
+// Steers the person from the keyboard. A tap of a side key turns the view a
+// small step, and holding the key keeps turning at the same rate. Walking
+// backward keeps the facing. A constant turn rate limits unexpected camera
+// acceleration.
 
-/** The keys steering reads: the four ways, and Shift. */
+/** The four direction keys and Shift. */
 export type WalkKey = "ahead" | "left" | "right" | "back" | "shift";
 
 const DEG = Math.PI / 180;
-/** Steering constants; design rationale is in docs/design-system.md#terrain-walking-and-travel. */
+/** Steering constants. The design rationale is in docs/design-system.md#terrain-walking-and-travel. */
 export const STEER = {
-  /** The one rate the keys turn the view at, radians a second: a nudge's and a held key's alike, never easing. */
+  /** Turn rate in radians per second for both nudges and held keys, with no easing. */
   rate: 60 * DEG,
-  /** A tap of ← or → turns the person this far, radians, at `rate`. */
+  /** Radians a tap of ← or → turns the view, at `rate`. */
   nudge: 8 * DEG,
   /** ↓ walks backward at this share of walking pace. */
   back: 0.65,
 } as const;
 
-/** The keys' hold on a person: each key down with when it was pressed, and the nudges still to turn, radians. */
+/** Steering state: each held key with its press time, and the nudge angle still to turn (`owed`) in radians. */
 export interface Steering {
   readonly down: ReadonlyMap<WalkKey, number>;
   readonly owed: number;
 }
 
-/** One step: the keys' hold after it, the facing, the walk as a share of the pace ahead (negative backing), and whether hurrying. */
+/** One step's result: the new steering state, the facing, the walk as a share of forward pace (negative when backing), and whether Shift hurries it. */
 export interface Steered {
   readonly steering: Steering;
   readonly yaw: number;
@@ -31,27 +32,27 @@ export interface Steered {
 }
 
 const isSide = (key: WalkKey): key is "left" | "right" => key === "left" || key === "right";
-/** Left of where the person looks is +yaw. */
+/** Turning left increases yaw. */
 const sign = (key: "left" | "right"): number => (key === "left" ? 1 : -1);
 
 export function steering(): Steering {
   return { down: new Map(), owed: 0 };
 }
 
-/** A key is pressed at `t`: ← or → nudges. */
+/** Records a key press at time `t`. ← or → adds a nudge. */
 export function steerPress(s: Steering, key: WalkKey, t: number): Steering {
   if (s.down.has(key)) return s;
   return { down: new Map(s.down).set(key, t), owed: isSide(key) ? s.owed + sign(key) * STEER.nudge : s.owed };
 }
 
-/** A key is let go; with no key, every key, as when the page loses focus. */
+/** Records a key release. With no key, it releases every key, as when the page loses focus. */
 export function steerRelease(s: Steering, key?: WalkKey): Steering {
   if (key === undefined) return { ...s, down: new Map() };
   if (!s.down.has(key)) return s;
   return { ...s, down: new Map([...s.down].filter(([k]) => k !== key)) };
 }
 
-/** The person is set facing elsewhere, as a jump sets them: the nudges still owed are dropped. */
+/** Drops the nudges still owed, for when something else sets the facing, such as a jump. */
 export function steerAlong(s: Steering): Steering {
   return { ...s, owed: 0 };
 }
@@ -60,8 +61,8 @@ export function steerAlong(s: Steering): Steering {
 export function steerStep(s: Steering, t: number, yaw: number, dt: number): Steered {
   let y = yaw;
   let owed = s.owed;
-  // The nudges owed turn at the steady rate; a held key turns on only in what they leave of the step, so the two
-  // never add up, however a press falls between frames.
+  // Owed nudges turn at `STEER.rate`. A held key turns only in the time the nudges leave in the step, and only after
+  // its own nudge's duration, so the two never add up however a press falls between frames.
   const pay = Math.sign(owed) * Math.min(Math.abs(owed), STEER.rate * dt);
   y += pay;
   owed -= pay;
@@ -72,7 +73,7 @@ export function steerStep(s: Steering, t: number, yaw: number, dt: number): Stee
     y += sign(key) * STEER.rate * Math.max(0, t + dt - from);
   }
   const forward = s.down.has("ahead");
-  // ↓ walks back, still facing ahead; ↑ and ↓ together stand. Shift hurries only the walk ahead.
+  // ↓ walks backward and keeps the facing. ↑ and ↓ together stop. Shift hurries only forward walking.
   const ahead = s.down.has("back") ? (forward ? 0 : -STEER.back) : forward ? 1 : 0;
   return { steering: { ...s, owed }, yaw: y, ahead, hurry: ahead > 0 && s.down.has("shift") };
 }

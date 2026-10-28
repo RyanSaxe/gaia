@@ -1,20 +1,22 @@
-//! Answers that hold. Jev's answers move a little when asked again, and a
-//! renamed file's request is new because its path changed, so a fresh
-//! answer replaces the one held only when it clearly differs:
-//! - a choice, when the fresh top option beats the held option's fresh
-//!   probability by 0.2;
-//! - a score, when it moves at least half a level.
+//! Decides when a fresh answer from Jev replaces the held answer to a question.
+//! Jev's answers vary a little between requests, and a renamed file's request
+//! is new because its path changed, so a fresh answer replaces the held one
+//! only when it clearly differs:
+//! - a choice, when the fresh top probability exceeds the held option's fresh
+//!   probability by at least `CHOICE`, 0.2
+//! - a score, when it moves at least `SCORE`, half a level
 //!
-//! Each fresh answer is compared with the held one, never with the previous
-//! fresh one, so small changes add up and show once they pass the margin.
+//! `replaces` compares each fresh answer with the held one, never with the
+//! previous fresh one, so small changes add up until they pass the margin.
 
 use serde_json::{Map, Value, json};
 
 const CHOICE: f64 = 0.2;
 const SCORE: f64 = 0.5;
 
-/// Jev's answer to one question, in one shape: `{ choice, p }` or
-/// `{ score, levels }`, the two types the calls ask.
+/// Converts Jev's answer to one question to `{ choice, p }` or
+/// `{ score, levels }`, the two answer types the calls use. Returns None for
+/// any other type.
 pub fn normalize(question: &Value, answer: &Value) -> Option<Value> {
     match answer["type"].as_str()? {
         "choice" => Some(
@@ -28,8 +30,10 @@ pub fn normalize(question: &Value, answer: &Value) -> Option<Value> {
     }
 }
 
-/// Answers to one question from several requests, such as a long file's
-/// chunks, as one, each weighted by how much of the file its request read.
+/// Combines the answers to one question from several requests, such as a long
+/// file's chunks. Each answer's weight is how much of the file its request
+/// read. Choices average their probabilities and take the most probable
+/// option, and scores average.
 pub fn combine(answers: &[(f64, Value)]) -> Option<Value> {
     let total: f64 = answers.iter().map(|(w, _)| w).sum();
     let (_, first) = answers.first()?;

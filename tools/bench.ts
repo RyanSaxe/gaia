@@ -1,16 +1,16 @@
-// pnpm bench: the engine's code graph of every repository on the bench
-// (tools/bench/repos.json), each at a pinned commit, and what the parse
-// found and how long it took. Remote repositories are cloned with the
-// engine's own project.clone into node_modules/.cache/gaia-bench, so the
-// app's data is never touched. Each graph is built by a fresh engine, so the
-// time is a cold start's.
+// `pnpm bench` builds the engine's code graph of every repository on the
+// bench (tools/bench/repos.json), each at a pinned commit, and reports what
+// the parse found and how long it took. It clones remote repositories with
+// the engine's own `project.clone` into node_modules/.cache/gaia-bench, so the
+// app's data is never touched. A fresh engine builds each graph, so the time
+// is a cold start's.
 // Usage: pnpm bench [name …] [--out results.json]
 //        pnpm bench --replay name FROM TO [--monthly]
 //
 // A replay opens the repository at each commit from FROM to TO along its
-// first parents (one a month with --monthly), carrying lineage from one to
-// the next in a store of its own, and reports how many of FROM's
-// definitions keep their identity at TO: by id alone, and by lineage.
+// first parents, one a month with --monthly, carrying lineage from one to the
+// next in its own store. It reports how many of FROM's definitions keep their
+// identity at TO, by id alone and by lineage.
 
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";

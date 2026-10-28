@@ -69,8 +69,8 @@ describe("land baked in tiles", () => {
       water += whole.streams.length + whole.ponds.length;
       for (const [x0, z0] of tilesOf(whole)) sameAsWhole(plan, whole, x0, z0);
     }
-    // The worlds checked hold water, so tiles are held to cutting it too.
+    // The worlds checked have water, so the tiles must cut it too.
     expect(water).toBeGreaterThan(2);
-    // Composes a few dozen small tiles with their margins: a couple of seconds when other work shares the machine.
+    // Composes a few dozen small tiles with their margins. It takes a couple of seconds when other work shares the machine.
   }, 20_000);
 });

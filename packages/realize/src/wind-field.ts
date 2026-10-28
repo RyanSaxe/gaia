@@ -1,32 +1,33 @@
-// The one wind field: where and when the air moves over the land. Mostly a
-// light, steady breeze that swells and eases over tens of seconds, its
-// direction wandering a few degrees. Gusts come irregularly, most of them
-// mild and now and then a strong one, each a soft front that travels
-// downwind across the land, bowed by a slow meander and stronger in some
-// places along it than others, so a gust that bows the grass reaches the
-// trees standing in it. Everything that moves in the wind reads it here; how
-// a plant answers it is `sway.ts`. The shaders run the same formula
-// (`WIND_FIELD_GLSL` in @gaia/render), and `gustAt` and `windDirAt` are the
-// CPU reference.
+// The world's single wind field: where and when the air moves over the land.
+// Everything that moves in the wind reads it, and `sway.ts` computes how plants
+// respond. The shaders run the same formula (`WIND_FIELD_GLSL` in
+// @gaia/render), and `gustAt` and `windDirAt` are the CPU reference.
 
 const TAU = 6.283185307179586;
 
-/** A unit direction over the ground (x, z): where the wind blows toward on average. */
+/** The average direction the wind blows toward, a unit vector over the ground (x, z). */
 const DIR: readonly [number, number] = (() => {
   const l = Math.hypot(0.94, 0.34);
   return [0.94 / l, 0.34 / l];
 })();
 
+/**
+ * The wind is mostly a light, steady breeze that swells and eases over tens of
+ * seconds, with its direction varying a few degrees. Gusts come irregularly,
+ * most mild and some strong. Each is a soft front that travels downwind across
+ * the land, bowed by a slow meander and stronger in some places along it than
+ * others, so a gust that bends the grass also reaches the trees in its path.
+ */
 export const WIND_FIELD = {
   dir: DIR,
-  /** The direction wanders about `dir` in two slow swings: radians each, and radians per second. */
+  /** The direction varies about `dir` in two slow swings, with amplitudes in radians and rates in radians per second. */
   wander: { swing: [0.08, 0.05], rate: [0.071, 0.029] },
   /** The breeze between gusts, 0 to 1: its level, and two slow swells that travel downwind with it. */
   breeze: { level: 0.25, swell: [0.06, 0.04] },
   /**
    * Gusts travel downwind at `speed` meters per second, about `spacing`
    * meters apart, though many are too mild to notice. `most` sharpens
-   * their strengths, so most are mild and a few strong; `patch` is how much
+   * their strengths, so most are mild and a few strong. `patch` is how much
    * a front's strength varies along its length.
    */
   gust: { speed: 6, spacing: 54, most: 1.4, patch: 0.35 },
@@ -37,7 +38,7 @@ const smoothstep = (e0: number, e1: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-/** Where the wind blows toward at time t: `dir`, turned a few degrees by its slow wander. */
+/** The direction the wind blows toward at time t: `dir`, turned a few degrees by its slow variation (`wander`). */
 export function windDirAt(t: number): [number, number] {
   const w = WIND_FIELD.wander;
   const a = w.swing[0] * Math.sin(t * w.rate[0] + 0.6) + w.swing[1] * Math.sin(t * w.rate[1] + 2.1);
@@ -64,7 +65,7 @@ export function gustAt(x: number, z: number, t: number): number {
   const c = (u + 0.5 * Math.sin(u * 0.37 + 0.9)) / TAU;
   const n = Math.floor(c);
   const s = c - n;
-  // A spot meets the high end of a cycle first: a quick rise at the front, a slower easing behind.
+  // A point reaches the high end of a cycle first, with a quick rise at the front and a slower easing behind.
   const pulse = smoothstep(0.25, 0.68, s) * (1 - smoothstep(0.68, 0.9, s));
   // Each gust's strength, spread evenly over 0 to 1 from gust to gust, in no order a person could follow.
   const v = n * 0.618034 + 0.35 * Math.sin(n * 1.7 + 1.1);

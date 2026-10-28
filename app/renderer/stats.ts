@@ -1,15 +1,13 @@
-// How the page runs, for scripted checks (`__lab.stats`, `__lab.smoothness`)
-// and telemetry: how smooth the last ten seconds were (frame-interval median,
-// 99th percentile and worst, stutters and long tasks), the JavaScript time a
-// frame takes, and the draw calls and triangles of every pass the world
-// renders. The smoothness probe always runs; passes are counted once a
-// report or a script asks for them.
+// Measures frame smoothness over the last ten seconds, JavaScript time per
+// frame, and draw calls and triangles across every render pass, for
+// `__lab.stats`, `__lab.smoothness` and telemetry. The smoothness probe always
+// runs. Passes are counted only after `read` or `count(true)` asks for them.
 
 import type { WebGLRenderer } from "three";
 
-/** The probe's window, milliseconds. */
+/** The probe's sliding window, in milliseconds. */
 const WINDOW = 10_000;
-/** A frame interval this many times the window's median shows as a stutter. */
+/** A frame interval longer than this multiple of the window's median counts as a stutter. */
 const STUTTER = 1.5;
 
 /** How smooth the last ten seconds were. */
@@ -17,13 +15,13 @@ export interface Smoothness {
   /** Seconds the window covers and the frames in it. */
   readonly seconds: number;
   readonly frames: number;
-  /** Frame intervals, milliseconds. */
+  /** Frame interval statistics, in milliseconds. */
   readonly medianMs: number;
   readonly p99Ms: number;
   readonly maxMs: number;
-  /** Intervals longer than 1.5 times the median. */
+  /** Intervals longer than `STUTTER` times the median. */
   readonly stutters: number;
-  /** Main-thread tasks over 50 ms, and the longest, milliseconds; null where the browser cannot tell (Safari). */
+  /** The count of main-thread tasks over 50 ms, and the longest one in milliseconds. Null where the browser has no long-task timing, such as Safari. */
   readonly longTasks: number | null;
   readonly longestTaskMs: number | null;
 }
@@ -42,21 +40,21 @@ export interface FrameStats {
 export interface Stats {
   /** Call before the world draws a frame. */
   begin(renderer: WebGLRenderer | undefined): void;
-  /** Call after it; `dt` is seconds since the last frame. */
+  /** Call after the world draws a frame. `dt` is the seconds since the last frame. */
   end(renderer: WebGLRenderer | undefined, dt: number): void;
-  /** The latest readings; every pass of each frame is counted from the first call on. */
+  /** Returns the latest readings. From the first call on, every pass of each frame is counted. */
   read(): FrameStats;
   /** The probe's last ten seconds. */
   smoothness(): Smoothness;
-  /** The last frame's draw calls and triangles, counted once `read` or `count(true)` asks for them. */
+  /** The last frame's draw calls and triangles, or null until `read` or `count(true)` turns counting on. */
   passes(): { calls: number; triangles: number } | null;
-  /** Counts every pass of each frame, for reports. */
+  /** Turns counting of every pass on or off, for reports. */
   count(on: boolean): void;
 }
 
 /** Frame intervals and long tasks over a sliding window. */
 function createProbe() {
-  // Times and intervals as parallel rings, so a frame never allocates.
+  // Times and intervals live in parallel ring buffers, so a frame never allocates.
   const size = 4096;
   const at = new Float64Array(size);
   const interval = new Float32Array(size);
@@ -70,7 +68,7 @@ function createProbe() {
     }).observe({ type: "longtask", buffered: false });
     watchesLongTasks = PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false;
   } catch {
-    // No long-task timing here; reports say so with null.
+    // This browser has no long-task timing, so reports give null.
   }
   const sorted = new Float32Array(size);
   return {
@@ -126,7 +124,7 @@ export function createStats(): Stats {
         if (renderer !== undefined) renderer.info.autoReset = true;
         return;
       }
-      // Count every pass of the frame (shadows too), not just the last render call.
+      // Counts every pass of the frame, shadows included, not just the last render call.
       if (renderer !== undefined) {
         renderer.info.autoReset = false;
         renderer.info.reset();

@@ -1,24 +1,24 @@
-// What holds each piece of a ruin up. `unsupportedAt` applies the vitality
-// channels as the shader does and finds every piece left standing on nothing:
-// a block above a fallen course, a lintel whose stones fell, ivy on a wall
-// that is gone, or a fallen piece that came to rest in mid-air. It is the CPU
-// reference the contract tests hold every structure and landmark to, so no
-// primitive can float a piece at any vitality.
+// Checks that every piece of a declining building is supported. `unsupportedAt`
+// applies the vitality channels as the shader does and finds every piece left
+// with no support, such as a block above a fallen course, a lintel whose stones
+// fell, ivy on a wall that is gone, or a fallen piece that came to rest in
+// mid-air. The contract tests check every structure and landmark against it,
+// so no primitive can leave a piece floating at any vitality.
 
 import { type Part, SPRAYS } from "@gaia/schema";
 import { CHANNEL_MATH, applyVitality } from "./channels.ts";
 import { FLUTTERS, type WindState } from "./sway.ts";
 
 export const SUPPORT = {
-  /** A piece whose lowest point is this close to the ground (y = 0) stands on it. */
+  /** A piece whose lowest point is this close to the ground (y = 0) rests on it. */
   ground: 0.1,
-  /** Surfaces this close touch whichever way they face: a stone set in mortar, a beam let into a post. */
+  /** Surfaces this close touch whichever way they face, such as a stone set in mortar or a beam let into a post. */
   glue: 0.015,
   /** Across a gap up to this wide a piece still rests on what is below it, as a block rests on the course under it across its joint. */
   gap: 0.06,
   /** A fallen piece may lie this far sunk into the ground, as a stone lies half in the grass. */
   sink: 0.5,
-  /** Leaf cards cling to what they grow on by stems too fine to model: ivy on a wall, a leaf on its twig. */
+  /** Leaf cards cling to what they grow on by stems too fine to model, such as ivy on a wall or a leaf on its twig. */
   cling: 0.15,
   /** A point this far behind the nearest face of a solid is inside it, as a falling block sinks into the wall under it. */
   within: 0.25,
@@ -33,7 +33,7 @@ export interface Unsupported {
   readonly at: readonly [number, number, number];
   readonly low: number;
   readonly size: number;
-  /** Standing on nothing; fallen but resting on nothing past its hinge; or fallen deep into the ground. */
+  /** `floating` rests on nothing, `unrested` has fallen but rests on nothing past its hinge, and `sunk` has fallen deep into the ground. */
   readonly why: "floating" | "unrested" | "sunk";
 }
 
@@ -42,7 +42,7 @@ const smoothstep = (e0: number, e1: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
-/** How much of a vertex stands at vitality `v`: 1 whole, 0 collapsed or not yet grown, as the shader scales it. */
+/** How much of a vertex shows at vitality `v`, from 0 for collapsed or not yet grown to 1 for whole, as the shader scales it. */
 function keepOf(part: Part, i: number, v: number): number {
   const loss = part.channels.loss[i] ?? 0;
   const grow = part.channels.grow?.[i] ?? 0;
@@ -51,7 +51,7 @@ function keepOf(part: Part, i: number, v: number): number {
   return (loss > 0 ? smoothstep(loss, loss + CHANNEL_MATH.lossBand, v) : 1) * (grow > 0 ? 1 - smoothstep(grow, grow + CHANNEL_MATH.lossBand, v) : 1);
 }
 
-/** How far a vertex has fallen at vitality `v`: 0 upright, 1 fully fallen; -1 when it never falls. */
+/** How far a vertex has fallen at vitality `v`, from 0 for upright to 1 for fully fallen, or -1 when it never falls. */
 function fallenOf(part: Part, i: number, v: number): number {
   const fall = part.channels.fall;
   const from = fall?.[i * 4 + 3] ?? 0;
@@ -132,7 +132,7 @@ function closest(px: number, py: number, pz: number, t: Float64Array, o: number,
 const bits = new Float32Array(1);
 const word = new Uint32Array(bits.buffer);
 
-/** A piece's channels apart from its shape, what makes it move and go as one, hashed from their exact bits. */
+/** A hash of the exact bits of vertex `i`'s pivot, loss, grow and fall channels. Vertices with one hash move and disappear as one piece. */
 function signature(part: Part, i: number): number {
   const c = part.channels;
   let h1 = 0x811c9dc5;
@@ -152,7 +152,7 @@ function signature(part: Part, i: number): number {
   return (h1 >>> 0) * 2 ** 21 + ((h2 >>> 0) & 0x1fffff);
 }
 
-/** Swatches that are not solid things: smoke rises on its own. */
+/** Swatches that are not solid, such as smoke, which rises on its own. */
 const WEIGHTLESS = new Set(["smoke"]);
 const CELL = 0.35;
 /** Long edges are probed every this many meters. */
@@ -160,19 +160,19 @@ const EDGE = 0.3;
 
 /**
  * Every piece of `parts` left unsupported at vitality `v`, with the ground at
- * y = 0. A piece is the vertices that move and go together: those joined by
- * triangles or sharing one pivot and one response. Every piece still showing,
+ * y = 0. A piece is the vertices that move and disappear together: those
+ * joined by triangles or sharing one `signature`. Every piece still showing,
  * whole or partway through collapsing or growing in, must rest on the ground
- * or on another piece that is itself supported, where both are at that
- * vitality: across a gap no wider than `SUPPORT.gap` from above, touching
- * within `SUPPORT.glue` from any side, or let into it (a point just behind
- * its nearest face). Leaf cards cling within `SUPPORT.cling`, or hang from
- * their stalk: a pivot on the card within `SUPPORT.cling` of what carries
- * it. Smoke is not counted. With `wind`, every piece stands where that
- * moment's wind bends it (`swayAt`). A piece that has fully fallen over its hinge
- * must also rest away from it, on the ground or on something standing, and
- * not lie sunk into the ground. With `moving: false`, only pieces wholly
- * standing are counted, as when vitality has settled between thresholds.
+ * or on another supported piece, with both at that vitality. It rests on a
+ * piece below it across a gap no wider than `SUPPORT.gap`, touches one within
+ * `SUPPORT.glue` from any side, or is let into one, with a point just behind
+ * its nearest face. Leaf cards cling within `SUPPORT.cling`, or hang from
+ * their stalk, which means a pivot on the card within `SUPPORT.cling` of the
+ * piece it grows on. Smoke is not counted. With `wind`, every piece is where
+ * that moment's wind bends it (`swayAt`). A piece that has fully fallen over
+ * its hinge must also rest away from it, on the ground or on a standing piece,
+ * and not lie sunk into the ground. With `moving: false`, only fully shown
+ * pieces count, as when vitality has settled between thresholds.
  */
 export function unsupportedAt(parts: readonly Part[], v: number, options: { readonly moving?: boolean; readonly wind?: WindState } = {}): Unsupported[] {
   const moving = options.moving ?? true;
@@ -215,7 +215,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     vertex: number;
     weightless: boolean;
     card: boolean;
-    /** Where the piece's pivot is now, and how far it lies from the piece as built: a card's stalk is on the card. */
+    /** Where the piece's pivot is now, and how far it is from the piece as built. A card's stalk is on the card. */
     stalk: [number, number, number];
     stalkGap: number;
   }
@@ -225,7 +225,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     const base = offsets[pi] as number;
     const wind = options.wind === undefined ? undefined : { state: options.wind, flutter: FLUTTERS.has(part.swatch) };
     const seen = applyVitality(part, v, undefined, wind).positions;
-    // Each piece's pivot as vitality and the wind carry it: where a card's stalk meets what holds it.
+    // Each piece's pivot after vitality and the wind move it, which is where a card's stalk meets what it grows on.
     const stalks = applyVitality({ ...part, positions: part.channels.pivot }, v, undefined, wind).positions;
     for (let i = 0; i < part.shade.length; i++) {
       const g = base + i;
@@ -256,10 +256,10 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       }
     }
   });
-  /** Still showing, whole or partly gone: it must be held up, and holds up what rests on it where it is now. */
+  /** Whether a piece still shows, whole or partly gone. A shown piece needs support and supports what rests on it where it is now. */
   const near = new Float64Array(3);
   const shown = (b: Body): boolean => (moving ? b.keepHi > 0.15 : b.keepLo > 0.999) && !b.weightless;
-  // A card's stalk may meet it between its corners: measure from its pivot to its own surface.
+  // A card's stalk may meet the card between its corners, so measure from its pivot to its own surface.
   const restTri = new Float64Array(9);
   parts.forEach((part, pi) => {
     const base = offsets[pi] as number;
@@ -307,7 +307,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     }
   });
   const triPos = Float64Array.from(tris);
-  // Each triangle's bounds, grown by how far a probe may be judged from it, for a quick rejection.
+  // Each triangle's bounds, expanded by the farthest distance a probe checks against it, for a quick rejection.
   const triBox = new Float64Array(triBody.length * 6);
   for (let t = 0; t < triBody.length; t++) {
     for (let c = 0; c < 3; c++) {
@@ -316,9 +316,9 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       triBox[t * 6 + 3 + c] = Math.max(a, b, d) + SUPPORT.within;
     }
   }
-  // Only solid triangles are hashed: a card never rests on a card, and a
-  // card's own probes and stalk find what it clings to, so every probe looks
-  // only at solid triangles. Fewer contacts can only report more floaters,
+  // Only solid triangles are hashed. A card never rests on a card, and a
+  // card's own probes and stalk find what it clings to, so every probe checks
+  // only solid triangles. Fewer contacts can only report more floating pieces,
   // never hide one.
   const cells = new Map<number, number[]>();
   const cellKey = (x: number, y: number, z: number): number => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0;
@@ -345,7 +345,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
         }
   }
 
-  // Contacts: who rests on whom, who is stuck to whom, and the farthest
+  // Contacts: which piece rests on which, which pieces touch, and the farthest
   // point from its hinge where a piece rests on another.
   const restsOn = new Map<number, Set<number>>();
   const farRest = new Map<number, number>();
@@ -363,9 +363,9 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     const was = farRest.get(key);
     if (was === undefined || d > was) farRest.set(key, d);
   };
-  // Each vertex, and points along each long edge (so a board nailed across
-  // a frame touches it even where neither has a vertex), is judged against
-  // the nearest face of each piece near it.
+  // Each vertex, and points along each long edge, is checked against the
+  // nearest face of each piece near it. The edge points let a board nailed
+  // across a frame touch it even where neither has a vertex.
   const probes: number[] = [];
   const probeBody: number[] = [];
   for (let g = 0; g < total; g++) {
@@ -427,7 +427,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       const dx = px - x, dy = py - y, dz = pz - z;
       // Behind the nearest face is inside the other piece: a beam let into a post.
       const inside = d > 1e-9 && dx * (triOut[t * 3] as number) + dy * (triOut[t * 3 + 1] as number) + dz * (triOut[t * 3 + 2] as number) < 0;
-      // A card clings to what it grows on, and holds nothing up itself.
+      // A card clings to what it grows on, and supports nothing itself.
       const card = (bodies[other] as Body).card;
       if (body.card || card) {
         if (d > SUPPORT.cling) continue;
@@ -442,9 +442,9 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     }
   }
 
-  // A leaf card also hangs from its stalk, where it meets what it grows on:
-  // its pivot, which must lie on the card itself, wherever vitality and the
-  // wind have carried it.
+  // A leaf card also hangs from its stalk, where it meets what it grows on.
+  // That is its pivot, which must be on the card itself wherever vitality and
+  // the wind have moved it.
   bodies.forEach((body, b) => {
     if (!shown(body) || !body.card || body.stalkGap > SUPPORT.cling) return;
     const [px, py, pz] = body.stalk;
@@ -487,9 +487,9 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     const size = Math.hypot(body.hi[0] - body.lo[0], body.hi[1] - body.lo[1], body.hi[2] - body.lo[2]);
     const report = (why: Unsupported["why"]): void => void out.push({ part: body.part, vertex: body.vertex, at, low: body.lo[1], size, why });
     if (held[b] !== 1) return report("floating");
-    // Fully fallen and toppled over its hinge (not hanging from it, as a
-    // shutter or a lantern does): it lies on the ground, or rests on
-    // something standing away from its hinge.
+    // A piece fully fallen and toppled over its hinge, rather than hanging
+    // from it as a shutter or a lantern does, must lie on the ground or rest
+    // on a standing piece away from its hinge.
     if (body.fallen < 0.999 || at[1] < body.pivot[1]) return;
     if (body.lo[1] < Math.min(body.restLow, 0) - SUPPORT.sink) return report("sunk");
     if (body.lo[1] <= SUPPORT.ground) return;

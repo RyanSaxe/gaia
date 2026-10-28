@@ -1,5 +1,5 @@
-// Guardrails that keep the packages honest. Each rule protects a property the
-// architecture depends on; the reason sits next to the rule.
+// Lint rules that enforce package boundaries and purity. Each rule protects a
+// property the architecture depends on, and its reason is next to it.
 
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
@@ -52,7 +52,7 @@ export default tseslint.config(
         gaia("realize", "The realizer calls primitives, not the other way round."),
         gaia("kinds", "Primitives do not know which kinds use them."),
       ]),
-      // Every component shares one material family; primitives write channels, never shaders.
+      // Every component shares one material family. Primitives write channels, never shaders.
       "no-restricted-syntax": [
         "error",
         { selector: "Literal[value=/gl_FragColor|gl_Position|void main\\s*\\(/]", message: "Primitives never ship GLSL. Pick a swatch and write vitality channels." },
@@ -82,8 +82,8 @@ export default tseslint.config(
     rules: restrict([], [three, node, gaia("world", "Realizing is a pure function of a blueprint; it never asks Jev.")]),
   },
 
-  // Tests: few and strong. They check behavior through public entry points,
-  // so changing an internal never breaks a test that should not care.
+  // Tests check behavior through public entry points, so changing an internal
+  // never breaks a test that does not depend on it.
   {
     files: ["packages/*/test/**", "app/**/*.test.ts", "tools/**/*.test.ts"],
     rules: {

@@ -1,9 +1,9 @@
 // The shaders' wind field is the CPU's (`gustAt` and `windDirAt` in
 // @gaia/realize), so the gust that bends a plant in a test is the gust that
 // bends it on screen. Tests cannot run a GPU, so this runs the GLSL text
-// itself as JavaScript: its functions use only float arithmetic and built-ins
-// that have a Math twin. The direction is computed on the CPU for every
-// shader, from the scene light's clock.
+// itself as JavaScript, which works because its functions use only float
+// arithmetic and built-ins with a Math equivalent. The CPU computes the
+// direction once for every shader, from the scene light's clock.
 
 import { describe, expect, it } from "vitest";
 import { gustAt, windDirAt } from "@gaia/realize";

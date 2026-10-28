@@ -1,9 +1,7 @@
-// A roof's covering never stands on nothing. A piece of covering can last
-// down to any vitality, because each piece reads its own noise, so wherever
-// the covering lies a timber of the roof's frame must still stand under it,
-// wherever the building's vitality has brought both; and by the time the
-// roof is a ruin, its covering lies on that frame instead of hanging its own
-// thickness above it.
+// Checks that a roof's covering always rests on its frame. Each piece of
+// covering takes its own noise, so any piece can last down to any vitality,
+// and a frame timber must lie under it at every vitality. Near vitality 0 the
+// covering lies on that frame instead of hanging its own thickness above it.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type BuildingPlan, type Built, type Part, rand } from "@gaia/schema";
@@ -14,13 +12,13 @@ type Erased = (params: unknown, ctx: { rand: ReturnType<typeof rand>; facts: Rec
 const build = (p: AnyPrimitive, stored: Readonly<Record<string, string | boolean | readonly string[]>>, seed: number, input: unknown): unknown =>
   (p.build as Erased)(resolveParams(p, stored, rand(seed), p.id), { rand: rand(seed).fork(p.id), facts: { size: 1, floors: 1 } }, input);
 
-/** The cells of ground the frame is sorted into, meters: a point of covering looks for timbers this far around it. */
+/** The size in meters of the ground cells the frame is sorted into. A point of covering checks for timbers this far round it. */
 const REACH = 0.5;
-/** How far a point of covering may lie from the nearest timber: the ridge roll of the thickest thatch over its ridge beam. */
+/** How far a point of covering may lie from the nearest timber, set by the ridge roll of the thickest thatch over its ridge beam. */
 const BELOW = 1.3;
-/** How much further from a timber a point of covering may move as both sag and fall, than it lay while whole. */
+/** How much farther from a timber a point of covering may be as both sag and fall, compared with while whole. */
 const LIFT = 0.15;
-/** By this vitality the covering has settled onto its boards, and every point of it lies this close to a timber: half the rafters' spacing and a timber's depth. */
+/** By vitality `SETTLED` the covering has settled onto its boards, and every point of it lies within `ON` of a timber: half the rafters' spacing plus a timber's depth. */
 const SETTLED = 0.1;
 const ON = 0.5;
 const VITALITIES = [0.5, 0.25, 0.1, 0.03];
@@ -90,10 +88,10 @@ function frameAt(built: Built, v: number): { whole: number[][]; now: number[][];
 }
 
 /**
- * The covering's points with no timber under them at vitality `v`: no timber lies within `BELOW` of the point that
- * also lay within it while the roof was whole and has not sunk away from it by more than `LIFT` since. From
- * `SETTLED` down the covering has settled onto its boards, and a timber must simply lie within `ON` of it, except
- * under a lean-to's slope, which caves in whole about its high edge, keeping its thickness.
+ * The covering's points with no timber under them at vitality `v`. A timber supports a point when it lies within
+ * `BELOW` of it now, lay within `BELOW` while the roof was whole, and has not moved more than `LIFT` farther from it
+ * since. From `SETTLED` down the covering has settled onto its boards, and a timber needs only to lie within `ON` of
+ * it, except under a lean-to's slope, which caves in whole about its high edge and keeps its thickness.
  */
 function unsupported(built: Built, plan: BuildingPlan, v: number): string[] {
   const { whole, now, cells } = frameAt(built, v);
@@ -101,7 +99,7 @@ function unsupported(built: Built, plan: BuildingPlan, v: number): string[] {
   for (const part of built.parts.filter((p) => p.swatch === "roof") as Part[]) {
     const at = applyVitality(part, v).positions;
     for (let i = 0; i < part.shade.length; i++) {
-      // The covering's upper surface, standing on the roof; what lies on the ground has fallen.
+      // Only the covering's upper surface on the roof. Anything on the ground has fallen.
       if ((part.normals[i * 3 + 1] as number) < 0.2 || (part.channels.grow?.[i] ?? 0) > 0 || (part.positions[i * 3 + 1] as number) < plan.floor + 1) continue;
       const p: [number, number, number] = [at[i * 3] as number, at[i * 3 + 1] as number, at[i * 3 + 2] as number];
       const rest: [number, number, number] = [part.positions[i * 3] as number, part.positions[i * 3 + 1] as number, part.positions[i * 3 + 2] as number];

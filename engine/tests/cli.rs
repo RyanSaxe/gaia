@@ -1,4 +1,5 @@
-//! The binary as the app and a terminal use it.
+//! Tests the gaia-engine binary through its command line and `rpc` protocol, as
+//! the app and a terminal use it.
 
 use std::io::Write;
 use std::process::{Command, Stdio};

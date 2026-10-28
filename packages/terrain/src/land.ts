@@ -1,13 +1,11 @@
-// How land divides into cells. A point belongs to the site nearest to it,
-// measured from the point moved by a gentle domain warp and less each site's
-// reach, so cells are organic: their borders curve and wander instead of
-// running straight. One rule serves the terrain's regions (whose landforms
-// and covers change where their cells meet), `placeAt`, and the layout of a
-// world from code, so an area's land, its cover and its name always agree.
+// Divides land into cells. A point belongs to the site with the least
+// distance minus `reach`, measured from the point after a domain warp, so cell
+// borders curve. Terrain regions, `placeAt` and the code world's layout all use
+// this rule, so an area's land, its cover and its name agree.
 
 import { fbm } from "@gaia/primitives";
 
-/** One site of a division of the land; a larger `reach` claims more ground before a neighbor's begins. */
+/** One site of a land division. A larger `reach` claims more ground from its neighbors. */
 export interface LandSite {
   readonly x: number;
   readonly z: number;
@@ -15,15 +13,15 @@ export interface LandSite {
 }
 
 /**
- * How far cell borders wander from straight lines, meters, and over what
- * wavelength: a broad sway that bends a region's whole side, and a fine one
- * that makes a small cell's edge wander like a field's.
+ * The domain warp's displacement and wavelength in meters. The broad warp
+ * (`amount`, `wavelength`) bends a region's whole side, and the fine warp
+ * (`fine`, `fineWavelength`) roughens a small cell's edge.
  */
 export const LAND_WARP = { amount: 34, wavelength: 150, fine: 5, fineWavelength: 34 } as const;
 
 const WARP_SEEDS = [5101, 5203, 5309, 5407] as const;
 
-/** A point moved by the domain warp that makes cell borders curve and wander. */
+/** Returns (x, z) displaced by the `LAND_WARP` domain warp. */
 export function warpPoint(x: number, z: number): [number, number] {
   const u = x / LAND_WARP.wavelength;
   const v = z / LAND_WARP.wavelength;
@@ -35,26 +33,26 @@ export function warpPoint(x: number, z: number): [number, number] {
   ];
 }
 
-/** Side of a lookup cell where sites stand close, meters; where they stand sparse a cell holds about one site's ground. */
+/** Minimum side in meters of a lookup cell. Where sites are sparse, `gridOf` widens cells with the land's area per site. */
 const CELL = 16;
-/** How far past its outermost sites a lookup grid reaches, meters; beyond it a lookup reads every site. */
+/** Meters the lookup grid extends past the outermost sites. A lookup outside the grid reads every site. */
 const MARGIN = 220;
 
 interface Grid {
   readonly x0: number;
   readonly z0: number;
-  /** Side of its cells, meters. */
+  /** Cell side in meters. */
   readonly cell: number;
   readonly nx: number;
   readonly nz: number;
-  /** Per lookup cell, where its candidates start in `ids` (and end at the next cell's start). */
+  /** Per lookup cell, the index in `ids` where its candidates start. They end at the next cell's start. */
   readonly starts: Int32Array;
   readonly ids: Int32Array;
 }
 
 const grids = new WeakMap<readonly LandSite[], Grid>();
 
-/** Per lookup cell, the sites that could be nearest somewhere in it. */
+/** Builds and caches a grid that lists, per lookup cell, the sites that can be nearest somewhere in it. */
 function gridOf(sites: readonly LandSite[]): Grid {
   const had = grids.get(sites);
   if (had !== undefined) return had;
@@ -72,12 +70,12 @@ function gridOf(sites: readonly LandSite[]): Grid {
   }
   const x0 = minX - MARGIN;
   const z0 = minZ - MARGIN;
-  // A few sites over a large land take cells about as wide as each one's ground: a 16 m cell there searches rings
-  // of empty cells hundreds of meters out from every one. The cells only narrow which sites a lookup reads.
+  // With few sites over a large land, cells widen with each site's share of the land. A 16 m cell there would search
+  // rings of empty cells hundreds of meters out. Cell size changes only which sites a lookup reads.
   const cell = Math.max(CELL, Math.sqrt(((maxX - minX + 2 * MARGIN) * (maxZ - minZ + 2 * MARGIN)) / Math.max(1, sites.length)) / 2);
   const nx = Math.max(1, Math.ceil((maxX + MARGIN - x0) / cell));
   const nz = Math.max(1, Math.ceil((maxZ + MARGIN - z0) / cell));
-  // Sites bucketed by lookup cell, so each cell reads only the sites around it.
+  // Bucket the sites by lookup cell so each cell reads only nearby sites.
   const bucket: number[][] = Array.from({ length: nx * nz }, () => []);
   sites.forEach((s, k) => (bucket[Math.floor((s.z - z0) / cell) * nx + Math.floor((s.x - x0) / cell)] as number[]).push(k));
   const starts = new Int32Array(nx * nz + 1);
@@ -122,7 +120,7 @@ function gridOf(sites: readonly LandSite[]): Grid {
   return grid;
 }
 
-/** The site nearest to an already warped point (wx, wz), less its reach. Ties keep the lower index. */
+/** Index of the site with the least distance minus reach from an already warped point (wx, wz). Ties keep the lower index. */
 export function nearestSite(sites: readonly LandSite[], wx: number, wz: number): number {
   const g = gridOf(sites);
   const i = Math.floor((wx - g.x0) / g.cell);
@@ -146,7 +144,7 @@ export function nearestSite(sites: readonly LandSite[], wx: number, wz: number):
   return best;
 }
 
-/** Which site's cell holds (x, z): the nearest to the warped point, less its reach. */
+/** Index of the site whose cell holds (x, z), measured from the warped point. */
 export function siteAt(sites: readonly LandSite[], x: number, z: number): number {
   const [wx, wz] = warpPoint(x, z);
   return nearestSite(sites, wx, wz);

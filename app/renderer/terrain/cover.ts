@@ -1,8 +1,8 @@
-// What covers the ground: wind-swayed grass that travels with the viewer and
-// stands on the baked lattice, grown from each region's ground cover, and
-// past the land on the wild land, grown from the wild's own covers. It reads
-// the same ground texture the mesh was built from, and the ground's vitality:
-// where the ground declines, the grass thins, shortens and turns to straw.
+// Draws the grass: wind-swayed blades that move with the viewer, grown from
+// each region's ground cover on the land and from the wild's own covers past
+// it. The vertex shader reads the same ground texture as the ground mesh, and
+// the ground's vitality, so declining ground thins and shortens the grass and
+// turns it to straw.
 
 import * as THREE from "three";
 import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_FIELD_GLSL, createClearings, hexToVec3 } from "@gaia/render";
@@ -14,15 +14,16 @@ import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 import { GROUND_DECLINE } from "@gaia/terrain";
 
 /**
- * The farthest any point of a blade reaches from its foot, meters: the
- * tallest blade is 1.3 times its cover's height, a fourth taller again with
- * a flower, and the tallest cover (silver grass) is 0.85 m, so 1.4 m; a
- * blade's spine keeps its length however it bends.
+ * The farthest any point of a blade reaches from its foot, in meters, with
+ * margin. The tallest blade is 1.3 times its cover's height and a quarter
+ * taller with a flower, and the tallest cover, silver grass, is 0.85 m, so a
+ * blade reaches at most 1.4 m. A blade's spine keeps its length however it
+ * bends.
  */
 const BLADE_REACH = 2;
-/** Short turf's blades (`turfAt` in clearings.ts), between these heights in meters, each at its own seeded height. */
+/** Height range in meters of short turf's blades (`turfAt` in clearings.ts). Each blade takes a seeded height in the range. */
 const TURF = { low: 0.05, high: 0.1 } as const;
-/** Three's frustum planes are right, left, bottom, top, far and near; the far plane culls nothing a blade's reach does not. */
+/** Three's frustum planes are right, left, bottom, top, far and near. The far plane is skipped, since the blades' reach already culls everything it would. */
 const CULLING_PLANES = [0, 1, 2, 3, 5] as const;
 
 const GRASS_VERT = /* glsl */ `
@@ -307,13 +308,14 @@ void main() {
 export interface Grass {
   readonly mesh: THREE.Mesh;
   follow(center: THREE.Vector3): void;
-  /** Where no grass grows, such as under a house and along its walk. */
+  /** Sets where no grass grows, such as under a house and along its walk. */
   clear(list: readonly Clearing[]): void;
 }
 
 /**
- * Tiers of blades by reach: a quarter reach only 14 m and another third 30 m,
- * so the grass is densest close by, where each blade can be seen.
+ * Blade tiers by reach. A quarter of the blades reach only 14 m and about
+ * another third reach 30 m, so the grass is densest close by, where each
+ * blade can be seen.
  */
 const TIERS = [
   { share: 0.25, reach: 14 },
@@ -321,17 +323,17 @@ const TIERS = [
 ] as const;
 
 /**
- * Wind-swayed blades around the viewer; each region's cover decides what
- * grows where and in what form. Blades keep their full height at every
- * distance: toward their reach each one narrows smoothly to nothing over its
- * own seeded band, so none appears or vanishes as the viewer moves.
+ * Creates the wind-swayed blades around the viewer, with each region's cover
+ * setting what grows where and in what form. Blades keep their full height at
+ * every distance. Toward its reach each blade narrows smoothly to nothing over
+ * its own seeded band, so none appears or vanishes as the viewer moves.
  */
 export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, under: Clearings, count = 150000, radius = 60): Grass {
   // One blade, one unit wide and tall: five rows and a soft tip. The vertex
   // shader gives it its cover's outline, lean and arc. A flower draws the
-  // same vertices as a stem, its first two rows, and a bloom: the stem's top
-  // is the bloom's foot, and the other rows go round it to its top, at
-  // these angles from the bloom's middle, so the bloom is an octagon.
+  // same vertices as a stem from its first two rows, and a bloom. The stem's
+  // top is the bloom's foot, and the other rows go around the bloom to its
+  // top at these angles from its center, so the bloom is an octagon.
   const rows = [0, 0.26, 0.5, 0.71, 0.87];
   const round = [-90, -90, -45, 0, 45].map((deg) => (deg * Math.PI) / 180);
   const blade = new THREE.BufferGeometry();
@@ -341,7 +343,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
     verts.push(-1, t, 0, 1, t, 0);
     const a = round[r] as number;
     const onRim = r >= 2 ? 1 : 0;
-    // The stem's foot (0, 0) and top (0, -1); the rim's points left and right of the bloom's middle.
+    // The stem's foot is (0, 0) and its top (0, -1). The rim's points lie left and right of the bloom's center.
     for (const side of [-1, 1]) bloom.push(onRim === 1 ? side * Math.cos(a) : 0, r === 0 ? 0 : Math.sin(a), onRim);
   });
   verts.push(0, 1, 0);
@@ -410,7 +412,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.frustumCulled = false;
-  // Each camera that draws the grass (the view, a painting's) culls its blades by its own frustum.
+  // Each camera that draws the grass, such as the view or a painting's, culls its blades by its own frustum.
   const frustum = new THREE.Frustum();
   const viewProjection = new THREE.Matrix4();
   mesh.onBeforeRender = (_renderer, _scene, camera) => {
@@ -425,7 +427,7 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
     mesh,
     follow(c) {
       center.value.copy(c);
-      // The clearings' mask lies around the grass, wherever it gathers.
+      // Center the clearings' mask on the grass.
       under.follow(c.x, c.z);
     },
     clear: (list) => clearings.set(list),

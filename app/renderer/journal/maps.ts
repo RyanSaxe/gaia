@@ -1,52 +1,48 @@
-// The journal's maps, drawn by the field map's own hand (`drawLand`) in the
-// page's own shape: the whole land across the endpapers, a folder's land on
-// its chapter's left-hand page, and a file's patch on the left-hand page of a
-// file with definitions. Every map runs off the page's edges. It names the
-// folders it opens onto, large, at the middle of their land, and the next
-// level down smaller wherever the map's own lettering finds room on its land;
-// every name keeps clear of the page's edge and of the fold. Close in, as on
-// the field map, each file's patch shows its bounds in fine dotted ink and
-// its name small upon it, and a tap on the name turns to its page.
+// Draws the journal's map pages with the field map's `drawLand`: the whole
+// land across the endpapers, a folder's land on its chapter's left-hand page,
+// and a file's patch on the left-hand page of a file with definitions. Every
+// map runs off the page's edges, and its names keep clear of the edges and the
+// fold. A tap on a name turns to that folder's or file's page.
 
 import type { Place, WorldPlaces } from "@gaia/terrain";
 import { landReach, pastTheEdge } from "@gaia/terrain";
 import { CLOSE, type Paper, drawLand, haloOf, letter, letterName } from "../immersive/field-map.ts";
 import { SERIF, canvasMeasure, nameFont, nameSpacing, placeNames } from "../immersive/map-names.ts";
-import type { StoodWorld } from "../terrain/world.ts";
+import type { BakedWorld } from "../terrain/world.ts";
 
 export interface MapSource {
   paper(): Paper | null;
-  stood(): StoodWorld;
+  baked(): BakedWorld;
   places(): WorldPlaces;
   placeAt(x: number, z: number): Place;
 }
 
-/** The size of a large name and the least clearance names keep from the page's edge and the fold, px. */
+/** In px, the large and small name sizes and the least clearance names keep from the page's edge and the fold. */
 const NAME = { large: 22, small: 14, edge: 14, fold: 10 } as const;
-/** Device pixels a page's pixel takes, so a map stays sharp on a dense screen. */
+/** Device pixels per page pixel, so a map stays sharp on a dense screen. */
 const DPR = 2;
 
 type Box = [number, number, number, number];
 
-/** What a tap on a map finds: the spot in the world under it, or the folder whose name it falls on. */
+/** Hit testing for a map page: the world spot under a tap, or the path of the name it falls on. */
 export interface MapTaps {
   at(px: number, py: number): { readonly x: number; readonly z: number };
   name(px: number, py: number): string | null;
   /** The box a name under (px, py) is lettered in, in the page's pixels, or null over the land. */
   nameBox(px: number, py: number): readonly [number, number, number, number] | null;
-  /** Where a spot in the world lies on the page, in its pixels. */
+  /** Projects a world spot onto the page, in its pixels. */
   page(x: number, z: number): { readonly px: number; readonly py: number };
 }
 const taps = new WeakMap<HTMLCanvasElement, MapTaps>();
-/** How to read a tap on a map the journal drew, in its page's pixels; null for anything else. */
+/** The hit testing for a map canvas the journal drew, or null for any other element. */
 export const tapsOf = (canvas: HTMLElement | null): MapTaps | null => (canvas instanceof HTMLCanvasElement ? (taps.get(canvas) ?? null) : null);
 
 /**
- * A map `w` by `h` pixels of the land of the folder or the file at `area`
- * ("" for the whole land): the whole land covers the page, so a land in the
- * page's shape fills it; a folder's land or a file's patch is framed whole,
- * the land around it running on to the edges. `fold` keeps names off a
- * spread's middle.
+ * Draws a `w` by `h` px map of the folder or file at `area`, or of the whole
+ * land for "". The whole land covers the page. A folder's land or a file's
+ * patch is framed whole, with the land around it running to the edges.
+ * `fold` keeps names off a spread's center. Returns null before the field
+ * map's paper is painted.
  */
 export function drawMapPage(src: MapSource, area: string, w: number, h: number, fold: boolean): HTMLCanvasElement | null {
   const paper = src.paper();
@@ -59,13 +55,13 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   ctx.scale(DPR, DPR);
   const mine = (path: string): boolean => area === "" || path === area || path.startsWith(`${area}/`);
   const reach = landReach(places);
-  /** The zoom at which the land is as tall or as wide as the page: the whole sheet's, as the field map counts closeness. */
+  /** The zoom at which the land just covers the page, the base for `CLOSE` as on the field map. */
   const whole = Math.max(w / (reach.x * 2), h / (reach.z * 2));
   let view: { x: number; z: number; zoom: number };
   if (area === "") view = { x: 0, z: 0, zoom: whole * 1.02 };
   else if (places.patches.some((p) => p.path === area)) view = folderView(places, (k) => k.file === area, w, h, FILE_CLOSEST);
   else view = folderView(places, (k) => k.area === area || k.area.startsWith(`${area}/`), w, h, FOLDER_CLOSEST);
-  drawLand(ctx, w, h, paper, src.stood(), view, 1.35, true);
+  drawLand(ctx, w, h, paper, src.baked(), view, 1.35, true);
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
   const close = Math.max(0, Math.min(1, (view.zoom / whole - CLOSE) / 0.8));
@@ -82,7 +78,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   const mx = (px: number): number => (px - w / 2) / view.zoom + view.x;
   const mz = (py: number): number => (py - h / 2) / view.zoom + view.z;
   const taken: Box[] = [];
-  /** Each name lettered, and the folder it names. */
+  /** Each lettered name's box and path. */
   const named: { readonly box: Box; readonly path: string }[] = [];
   taps.set(canvas, {
     at: (px, py) => ({ x: mx(px), z: mz(py) }),
@@ -99,9 +95,8 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   };
   const depth = area === "" ? 0 : (places.areas.find((a) => a.path === area)?.depth ?? 0);
 
-  // The folders the map opens onto, large, nearest the middle of their land where the whole name sits on it; a
-  // folder with too little land for a large name gets a small one, and one with too little for that, a small one
-  // lettered beside its land.
+  // Letters each child folder large, as near the center of its land as fits with the whole name on its land. A folder
+  // with too little land gets a small name, and one with too little for that gets a small name beside its land.
   for (const a of places.areas.filter((a) => a.depth === depth + 1 && mine(a.path))) {
     const cells = places.cells.filter((k) => k.area === a.path || k.area.startsWith(`${a.path}/`));
     if (cells.length === 0) continue;
@@ -130,7 +125,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
     letterName(ctx, { area: { name: a.name }, angle: 0, above: "" } as never, spot.x, spot.y, spot.size, paper.style);
   }
 
-  // The next level down, where the map's own lettering puts it, wherever it has room on the page.
+  // Grandchild folders, where `placeNames` puts them, wherever they fit on the page.
   const steps = placeNames(paper.names, Math.min(view.zoom * paper.reach * 2, 4096), canvasMeasure(ctx));
   let step = steps.next();
   while (step.done !== true) step = steps.next();
@@ -145,7 +140,7 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
     letterName(ctx, p.label, x, y, p.size, paper.style);
   }
 
-  // Close in, each file's name small on its patch, the largest first, as the field map letters them.
+  // Zoomed in close, each file's name small on its patch, largest patches first, as on the field map.
   if (close > 0) {
     ctx.font = `italic 12px ${SERIF}`;
     ctx.globalAlpha = close;
@@ -164,24 +159,24 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   return canvas;
 }
 
-/** How far inside the land's rim every corner of a folder's map keeps, meters, so the page is painted to its edges. */
+/** How far in meters inside the land's edge every corner of a folder's map stays, so the page is painted to its edges. */
 const INSIDE = 6;
 /**
- * How close a folder's map and a file's come, as a multiple of the whole sheet's zoom: a folder's holds some of
- * the land around it at a scale its trees and ways still read at, and a file's comes as close as the field map.
+ * The most a folder's map and a file's map zoom in, as multiples of the whole sheet's zoom. A folder's map keeps some
+ * surrounding land at a scale where trees and trails still read, and a file's map zooms as close as the field map.
  */
 const FOLDER_CLOSEST = 5;
 const FILE_CLOSEST = 7;
 
 /**
- * The view of a folder's map, or a file's: of every page-shaped window that
- * fits wholly inside the land, the one most nearly the cells it `owns`, the
- * most of them and the least of the land around them. The page is painted
- * to its edges, and land that is not the page's shape runs off them.
+ * Chooses the view of a folder's or file's map: of the page-shaped windows
+ * that fit inside the land, the one that best matches the cells it `owns`,
+ * covering most of them with the least surrounding land. The page is painted
+ * to its edges, and land outside the window runs off them.
  */
 function folderView(places: WorldPlaces, owns: (cell: WorldPlaces["cells"][number]) => boolean, w: number, h: number, closestBy: number): { x: number; z: number; zoom: number } {
   const reach = landReach(places);
-  // The land's cells counted on a grid, the folder's and all, summed so any window's count is four lookups.
+  // Counts all cells and the owned cells on a grid as summed-area tables, so any window's count takes four lookups.
   const n = 96;
   const [bx, bz] = [(reach.x * 2) / n, (reach.z * 2) / n];
   const sums = [new Float64Array((n + 1) * (n + 1)), new Float64Array((n + 1) * (n + 1))] as const;
@@ -212,8 +207,9 @@ function folderView(places: WorldPlaces, owns: (cell: WorldPlaces["cells"][numbe
   // The land is convex, so a window is inside it when its corners are.
   const fits = (x: number, z: number, hw: number, hh: number): boolean => [-1, 1].every((sx) => [-1, 1].every((sz) => pastTheEdge(places, x + sx * hw, z + sz * hh) <= -INSIDE));
   /**
-   * How nearly a window is the folder's land: what it holds of the folder over all the land the two cover, a little
-   * less the farther it sits from the folder's middle, so a small folder's map is centered on it.
+   * How well a window matches the folder: owned cells inside it over the union of the window's cells and the
+   * folder's, reduced by up to a quarter the farther it sits from the folder's center, so a small folder's map
+   * centers on it.
    */
   const share = (x: number, z: number, hw: number, hh: number): number => {
     const mine = count(sums[1], x, z, hw, hh);
@@ -226,13 +222,13 @@ function folderView(places: WorldPlaces, owns: (cell: WorldPlaces["cells"][numbe
     const s = share(x, z, hw, hh);
     if (s > best.share) best = { x, z, zoom, share: s };
   };
-  // The widest window that fits is a page as tall as the land; the narrowest, `closestBy` times closer.
+  // Searches zooms from the widest, where the land just covers the page, to `closestBy` times closer.
   const widest = Math.max(w / (reach.x * 2), h / (reach.z * 2));
   const closest = widest * closestBy;
   for (let zoom = widest; zoom <= closest; zoom *= 1.08) {
     for (let j = 0; j <= 24; j++) for (let i = 0; i <= 24; i++) consider(-reach.x + (reach.x * 2 * i) / 24, -reach.z + (reach.z * 2 * j) / 24, zoom);
   }
-  // Then finer, around the best.
+  // Then refines around the best window.
   for (let step = (reach.x * 2) / 48; step > 1; step /= 2) {
     const { x, z, zoom } = best;
     for (const [dx, dz, dzoom] of [[step, 0, 1], [-step, 0, 1], [0, step, 1], [0, -step, 1], [0, 0, 1.03], [0, 0, 1 / 1.03]] as const) consider(x + dx, z + dz, zoom * dzoom);

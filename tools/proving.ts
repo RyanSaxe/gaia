@@ -1,35 +1,36 @@
-// Writes the proving ground: a made-up codebase whose world holds every
-// feature a world can show, so each can be walked up to and tested. It
-// writes the facts its world is laid out from
-// (`app/renderer/terrain/fixtures/proving.json`, `CodeFacts`) and the choices Jev would make about it
-// (`fixtures/proving-judged.json`, a `Judgments`), both from the plan below,
-// or into `--out DIR`. They are never committed: the lab, the app and the
-// tests make them from this plan as they build (tools/proving-ground.ts).
-// The lab lays it out with the real `layoutWorld`, `standWorld` and bake
-// (`?world=proving`), so what it shows is what any codebase would get.
+// Writes the proving ground, a made-up codebase whose world contains every
+// feature a world can show, so each can be walked up to and tested. It writes
+// the facts its world is laid out from (`CodeFacts`, in
+// `app/renderer/terrain/fixtures/proving.json`) and the choices Jev would make
+// about it (a `Judgments`, in `fixtures/proving-judged.json`), both from the
+// plan below, or into `--out DIR`. They are never committed. The lab, the app
+// and the tests generate them from this plan as they build
+// (tools/proving-ground.ts). The lab lays the world out with the real
+// `layoutWorld`, `placeWorld` and bake (`?world=proving`), so it shows what
+// any codebase would get.
 //
-// The plan holds, by construction:
-// - areas, files and entities at every health from thriving to ruin: whole
-//   areas in ruin, failing entities in thriving areas, mixed areas;
+// The plan contains, by construction:
+// - areas, files and entities at every health from `thriving` to `ruin`, with
+//   whole areas in ruin, failing entities in thriving areas, and mixed areas
 // - brooks, trickles and ponds, with dependencies drawn across them so trails
-//   cross on footbridges and stepping stones;
-// - large and tiny areas, deep nesting, and a hub many trails branch to;
-// - every water, tree, bush and flower option Jev is offered.
+//   cross on footbridges and stepping stones
+// - large and tiny areas, deep nesting, and a hub many trails branch to
+// - every water, tree, bush and flower option Jev is offered
 // Its sky, lands, buildings, landmarks, trails, trees, bushes, stones and
-// flowers are what Jev composes them from, swept (`sweep` in @gaia/world):
-// every part of every slot and every frame with every crown, at each of three
-// healths, and every option of every part, each standing where its place lets
-// it, a waterwheel only by running water. The generator fails
-// while any sweep leaves something missing, and then the plan needs another
-// place for it; the lab's test checks the baked world shows each feature.
+// flowers come from the sweep of what Jev composes them from (`sweep` in
+// @gaia/world): every part of every slot and every frame with every crown, at
+// each of three healths, and every option of every part. Each is placed where
+// its place allows, such as a waterwheel only by running water. The generator
+// fails while any sweep leaves something missing, and then the plan needs
+// another place for it. The lab's test checks that the baked world shows each
+// feature.
 //
-// `--code DIR` writes the proving ground's code instead: real source for
-// every planned file, as poor as its health (tools/proving-code.ts), and a
-// manifest saying how each was written. The manifest goes beside DIR (`DIR-manifest.json`, or
-// `--manifest PATH`), never in it, where it would name every file and the
-// engine would take each for used. Both must lie outside Gaia's own
-// repository or under a node_modules folder, which Gaia's own world never
-// reads.
+// `--code DIR` writes the proving ground's code instead: real source for every
+// planned file, as poor as its health (tools/proving-code.ts), and a manifest
+// of how each was written. The manifest goes beside DIR (`DIR-manifest.json`,
+// or `--manifest PATH`), never in it, where it would name every file and the
+// engine would count each as used. Both must be outside Gaia's own repository
+// or under a node_modules folder, which Gaia's own world never reads.
 //
 // Usage: pnpm proving [--out DIR] [--code DIR [--manifest PATH]]
 
@@ -37,27 +38,27 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 import type { AnyKind, Blueprint, CodeFacts, EntityFacts, EntityForm, FileFacts, Library, SymbolFact } from "@gaia/schema";
-import { type Judgments, type Look, type StandsAs, type SweepPlace, layoutWorld, raisedAs, sweep } from "@gaia/world";
+import { type Judgments, type Look, type FormKind, type SweepPlace, layoutWorld, raisedAs, sweep } from "@gaia/world";
 import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS, WILD_GROUNDS } from "../app/renderer/terrain/looks.ts";
 import { fixtureJson } from "./fixture-json.ts";
 import { provingCode } from "./proving-code.ts";
 
-/** How a file or an entity fares, from thriving to ruin; `decayed` is ruin with no tests at all, so it drags its entity down less. */
+/** A planned file's or entity's health, from `thriving` to `ruin`. `decayed` is ruin with no tests at all, so it lowers its entity's quality less. */
 type Health = "thriving" | "well" | "tired" | "failing" | "ruin" | "decayed";
 
-/** The quality each health stands for, as Jev's quality would give it: what the proving ground's vitality is. */
+/** The quality each health represents, on the scale of Jev's quality, which sets the proving ground's vitality. */
 const QUALITY: Readonly<Record<Health, number>> = { thriving: 1, well: 0.75, tired: 0.5, failing: 0.25, decayed: 0.1, ruin: 0.03 };
 
 interface PlannedDir {
   readonly path: string;
   readonly health: Health;
-  /** Each file as `name:lines`, or `name:lines:health` for one that fares differently from its directory. */
+  /** Each file as `name:lines`, or `name:lines:health` for one whose health differs from its directory's. */
   readonly files: readonly string[];
-  /** Whether its land holds water and why (`WATERS`), when it is meant to have land of its own. */
+  /** The water key for its land (`WATERS`), for a directory meant to have land of its own. */
   readonly water?: string;
-  /** The landform its land takes, when its name promises one (a directory called "dunes"); otherwise the sweep's. */
+  /** The landform its land uses when its name promises one, such as a directory called "dunes". Otherwise the sweep chooses. */
   readonly landform?: string;
-  /** The entity rooted here, whether it stands as a building or a landmark, and what it does. */
+  /** The entity rooted here, whether it appears as a building or a landmark, and what it does. */
   readonly entity?: { readonly form: EntityForm; readonly as: "building" | "landmark"; readonly doc: string };
 }
 
@@ -65,8 +66,8 @@ const B = (doc: string, form: EntityForm = "package") => ({ form, as: "building"
 const L = (doc: string, form: EntityForm = "package") => ({ form, as: "landmark" as const, doc });
 
 /**
- * The made-up codebase. Directory names say what each area is for, so the
- * minimap's name tells a person what they are looking at.
+ * The made-up codebase. Directory names describe what each area is for, so
+ * the minimap's labels show a person what they are looking at.
  */
 const PLAN: readonly PlannedDir[] = [
   {
@@ -76,7 +77,7 @@ const PLAN: readonly PlannedDir[] = [
     water: "No water",
     entity: L("The proving ground: a made-up codebase with every feature of a world in it, from thriving to ruin.", "package"),
   },
-  // A brook runs through a thriving wood; its banks' entities lean on each other across it.
+  // A brook runs through a thriving wood, and the entities on its banks depend on each other across it.
   { path: "crossings", health: "thriving", files: ["flow.ts:520", "channel.ts:480", "banks.ts:420", "weir.ts:360", "crossings.test.ts:180", "NOTES.md:90"], water: "A brook" },
   { path: "crossings/west-bank", health: "thriving", files: ["package.json:30", "index.ts:140", "path.ts:300"], entity: B("Keeps the west bank's paths: a small module doing one modest job.") },
   { path: "crossings/east-bank", health: "thriving", files: ["package.json:30", "index.ts:120", "gate.ts:280"], entity: B("The east bank's gatehouse: the process a person starts to cross.") },
@@ -89,7 +90,7 @@ const PLAN: readonly PlannedDir[] = [
   { path: "hollow", health: "thriving", files: ["package.json:30", "index.ts:220", "pool.ts:520", "depth.ts:420", "hollow.test.ts:160"], water: "A still pond", entity: L("Lights the rest: the entity every other area looks to.") },
   { path: "pondside", health: "well", files: ["package.json:30", "server.ts:240", "queue.ts:420", "inlet.ts:520", "eddies.ts:480", "handoff.ts:380:failing", "pondside.test.ts:150"], water: "A still pond", entity: B("Keeps the records requests leave at the pond.") },
   { path: "pondside/records", health: "tired", files: ["package.json:30", "index.ts:100", "ledger.ts:300"], entity: B("Old records gone tired: untested, complex, full of TODOs.") },
-  // Areas without water, each named for the landform it takes, so its own landform shows.
+  // Areas without water, each named for its landform, so that landform shows.
   { path: "hills", health: "thriving", files: ["slopes.ts:480", "crests.ts:420", "hills.test.ts:140"], water: "No water", landform: "rolling-hills@1" },
   { path: "hills/kiln", health: "tired", files: ["package.json:30", "index.ts:110", "fire.ts:300"], entity: B("Fires the hills' clay: a module gone tired, untested and tangled.") },
   { path: "hills/oak", health: "thriving", files: ["package.json:30", "index.ts:180", "branches.ts:420"], entity: L("A large library the others build from.") },
@@ -127,7 +128,7 @@ const PLAN: readonly PlannedDir[] = [
   { path: "ruins/lighthouse", health: "ruin", files: ["package.json:30", "index.ts:110", "lens.ts:300"], entity: L("A lens in ruin.") },
   { path: "ruins/oak", health: "ruin", files: ["package.json:30", "index.ts:110", "temp.ts:300"], entity: L("Temporary code in ruin.") },
   { path: "hollow/willow", health: "tired", files: ["package.json:30", "index.ts:110", "fronds.ts:300"], entity: L("The hollow's fronds gone tired.") },
-  // More lands, so every landform stands thriving, tired and in ruin: areas in ruin, tired areas and thriving ones.
+  // More lands, so every landform appears thriving, tired and in ruin.
   { path: "legacy", health: "ruin", files: ["old-api.ts:640", "compat.ts:560", "adapters.ts:480", "legacy.test.ts:160"], water: "No water" },
   { path: "attic", health: "ruin", files: ["boxes.ts:600", "trunk.ts:520", "dust.ts:460", "attic.test.ts:140"], water: "No water" },
   { path: "scrapyard", health: "decayed", files: ["wreck.ts:620", "parts.ts:540", "rust.ts:480"], water: "No water" },
@@ -142,8 +143,8 @@ const PLAN: readonly PlannedDir[] = [
 ];
 
 /**
- * Dependencies, as `from -> to`, with how much Jev wants each walked. The trails that cross a stream come first, so
- * the sweep's crossings take turns across the brooks and the trickle.
+ * Dependencies as `from -> to`, with Jev's `want` for each trail. The trails that cross a stream come first, so the
+ * sweep's crossings alternate across the brooks and the trickle.
  */
 const TRAIL_PLAN: readonly (readonly [from: string, to: string, want: number])[] = [
   // Across the thriving brook.
@@ -158,10 +159,10 @@ const TRAIL_PLAN: readonly (readonly [from: string, to: string, want: number])[]
   ["ruins/house", "ruins/lighthouse", 0.8],
   ["ruins/oak", "ruins", 0.75],
   ["ruins/keep", "ruins/house", 0.7],
-  // The ruins' own hub: the oak, the mill and the lighthouse all lean on the willow, so their paths meet in ruin.
+  // The ruins' own hub. The oak, the mill and the lighthouse all depend on the willow, so their paths meet in the ruins.
   ["ruins/mill", "ruins", 0.72],
   ["ruins/lighthouse", "ruins", 0.71],
-  // A hub: many entities lean on the hollow's lantern tower, so trunk paths branch at junctions.
+  // A hub. Many entities depend on the hollow's lantern tower, so trunk paths branch at junctions.
   ["", "hollow", 0.95],
   ["crossings/mill", "hollow", 0.9],
   ["downs", "hollow", 0.88],
@@ -192,15 +193,15 @@ const TRAIL_PLAN: readonly (readonly [from: string, to: string, want: number])[]
 type FileKind = "source" | "test" | "config" | "data" | "docs" | "script";
 
 /**
- * How much of its planned size each part of file keeps. The plan's sizes were
- * written when the land gave a line of a test, a document or a configuration
- * file less ground than a line of code; every line now has the same ground,
- * so those files are planned smaller, and the land, its streams and the ways
- * across them lie as the plan was drawn for.
+ * The share of its planned size each kind of file keeps. The plan's sizes date
+ * from when the land gave a line of a test, a document or a configuration file
+ * less ground than a line of code. Every line now gets the same ground, so
+ * these factors shrink those files, and the land, its streams and the
+ * crossings stay where the plan put them.
  */
 const GROUND: Readonly<Record<FileKind, number>> = { source: 1, test: 0.85, docs: 0.6, script: 0.6, config: 0.4, data: 0.3 };
 
-/** A planned definition: the world's fact, with the doc and the constants the written code carries. */
+/** A planned definition: the world's fact, with the doc and the constants the written code includes. */
 export interface PlannedSymbol {
   readonly name: string;
   readonly kind: SymbolFact["kind"] | "constant";
@@ -210,7 +211,7 @@ export interface PlannedSymbol {
   readonly lines?: number;
 }
 
-/** A planned file: what the world reads of it, and how its code is to be written as poor as its health. */
+/** A planned file: its facts, and how to write its code as poor as its health. */
 export interface PlannedFacts extends Omit<FileFacts, "symbols"> {
   readonly kind: FileKind;
   readonly symbols: readonly PlannedSymbol[];
@@ -284,7 +285,7 @@ const byPath = new Map(drafted.map((f) => [f.path, f]));
 const entityDirs = PLAN.filter((d) => d.entity !== undefined).map((d) => d.path);
 /** A path's innermost entity. */
 const ownerOf = (path: string): string | undefined => entityDirs.filter((r) => r === "" || path === r || path.startsWith(`${r}/`)).sort((a, b) => b.length - a.length)[0];
-/** An entity's entry file: the one that gives it its public surface. */
+/** An entity's entry file, which defines its public API. */
 const entryOf = (root: string): Drafted => {
   const own = drafted.filter((f) => f.dir === root && f.kind === "source");
   const entry = own.find((f) => /\/?(index|lib|main|server)\.\w+$/.test(f.path)) ?? own[0];
@@ -292,8 +293,8 @@ const entryOf = (root: string): Drafted => {
   return entry;
 };
 
-// Imports: each directory's files import the one before (a chain the code flows along), a test imports
-// its directory's sources, and every dependency in the trail plan is an import of the other's entry.
+// Imports. Each directory's files import the one before, forming a chain, a test imports its directory's sources,
+// and every dependency in the trail plan is an import of the other entity's entry.
 for (const d of PLAN) {
   const sources = drafted.filter((f) => f.dir === d.path && f.kind === "source");
   sources.forEach((f, i) => i > 0 && f.imports.add((sources[i - 1] as Drafted).path));
@@ -320,7 +321,7 @@ const coveringTests = (path: string): string[] => {
   return [...tests].sort();
 };
 
-// A file its own entity tests is reached by the nearest test file up its tree, or by one named for it.
+// The nearest test file in `dir` or up its tree, which covers a file its own entity tests.
 const testOf = (dir: string): string | undefined => {
   for (let p: string | null = dir; p !== null; p = p === "" ? null : parentOf(p)) {
     const t = drafted.find((f) => f.dir === p && f.kind === "test");
@@ -334,7 +335,7 @@ const files: PlannedFacts[] = drafted.map((f) => {
   const prose = f.kind !== "source" && f.kind !== "test";
   const near = testOf(f.dir);
   const covering = new Set(coveringTests(f.path));
-  // Health decides whether tests reach it: its own entity's, or none.
+  // Its health decides whether tests cover it: its own entity's tests, or none.
   if (f.kind === "source" && s.tested !== "none" && near !== undefined) covering.add(near);
   const coveredBy = f.kind === "source" ? [...covering].sort() : [];
   const own = s.tested === "own" ? coveredBy.filter((t) => ownerOf(t) === ownerOf(f.path)) : [];
@@ -418,34 +419,35 @@ const facts: CodeFacts = {
 
 // ---------- what Jev would choose ----------
 
-// Every other definition of a source file stands as a tree, so each file grows trees at its health, and the rest go
-// round the stones, bushes and flowers.
-const stands: Record<string, string> = {};
+// Every other definition of a source file appears as a tree, so each file has trees at its health, and the rest cycle
+// through the stones, bushes and flowers.
+const forms: Record<string, string> = {};
 const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.composes === "tree");
 const others = Object.keys(FORMS).filter((k) => FORMS[k]?.composes !== "tree");
 let tree = 0;
 let other = 0;
 for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
-  if (f.kind === "source") f.symbols.forEach((s, k) => (stands[`${f.path}#${s.name}`] = k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)));
+  if (f.kind === "source") f.symbols.forEach((s, k) => (forms[`${f.path}#${s.name}`] = k % 2 === 0 ? (trees[tree++ % trees.length] as string) : (others[other++ % others.length] as string)));
 }
-/** What a tree, a bush, a stone or flowers is: whatever stands that is not a building or a landmark. */
-type SmallAs = Exclude<StandsAs, "building" | "landmark">;
-/** What the definitions stand as. */
-const definitionForms = (): string[] => Object.entries(stands).flatMap(([id, form]) => (id.includes("#") ? [form] : []));
-// Every file stands as one thing too, at its patch's heart, round every form; and a few files and definitions stand as
-// a building or a landmark, so the proving ground shows a thing of every size at every level of the code.
+/** The forms other than a building or a landmark: a tree, a bush, a stone or flowers. */
+type SmallFormKind = Exclude<FormKind, "building" | "landmark">;
+/** The forms of the definitions. */
+const definitionForms = (): string[] => Object.entries(forms).flatMap(([id, form]) => (id.includes("#") ? [form] : []));
+// Every file also appears as one thing at its patch's center, cycling through every form. A few files and definitions
+// appear as a building or a landmark, so the proving ground shows a thing of every size at every level of the code.
 const small = Object.keys(FORMS);
 const sources = [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).filter((f) => f.kind === "source" && f.symbols.length > 0);
-/** Every thing standing as a building or a landmark, by its id: the plan's entities, then the files and definitions raised. */
+/** Every thing that appears as a building or a landmark, by id: the plan's entities, then the raised files and definitions. */
 const raised = new Map<string, "building" | "landmark">(PLAN.flatMap((d) => (d.entity === undefined ? [] : [[d.path, d.entity.as] as const])));
 const raise = (id: string, as: "building" | "landmark"): void => {
-  stands[id] = Object.keys(COMPOSED_FORMS).find((key) => COMPOSED_FORMS[key]?.composes === as) as string;
+  forms[id] = Object.keys(COMPOSED_FORMS).find((key) => COMPOSED_FORMS[key]?.composes === as) as string;
   raised.set(id, as);
 };
-[...files].sort((a, b) => (a.path < b.path ? -1 : 1)).forEach((f, k) => (stands[f.path] = small[k % small.length] as string));
-// Every seventh source file raises itself, and every eleventh raises its first definition; a building first, then a landmark.
+[...files].sort((a, b) => (a.path < b.path ? -1 : 1)).forEach((f, k) => (forms[f.path] = small[k % small.length] as string));
+// Every seventh source file is raised, alternating building and landmark, and every eleventh raises its first
+// definition, alternating landmark and building.
 sources.forEach((f, k) => {
-  // A file of a few lines raises nothing: on its tiny patch a building or a landmark would stand on its neighbors'.
+  // A file under 40 lines raises nothing, because on its tiny patch a building or a landmark would overlap its neighbors'.
   if (f.lines < 40) return;
   if (k % 7 === 3) raise(f.path, (k / 7) % 2 < 1 ? "building" : "landmark");
   const first = f.symbols[0];
@@ -464,12 +466,12 @@ const quality: Record<string, number> = Object.fromEntries([
 ]);
 
 /**
- * The three healths every part stands at, as the proving ground's test reads them: whole (0.85 and up), tired (from
- * 0.35) and in ruin (below 0.12). A thing between tired and ruin counts toward none.
+ * The three health bands every part must appear in, as the proving ground's test reads them: `thriving` from 0.85,
+ * `tired` from 0.35, and `ruin` below 0.12. A value from 0.12 up to 0.35 counts toward none.
  */
 const bandOf = (v: number): { label?: string } => (v >= 0.85 ? { label: "thriving" } : v >= 0.35 ? { label: "tired" } : v < 0.12 ? { label: "ruin" } : {});
 
-// What Jev would compose from: the sweep of every part, standing each where its place lets it and at every health.
+// What Jev would compose from: the sweep of every part, each placed where its place allows and at every health.
 const { lib } = COMPOSING;
 const gaps: string[] = [];
 const swept = (what: string, k: AnyKind, places?: readonly SweepPlace[], parts: Library = lib, pairs?: readonly (readonly [string, string])[]): readonly Blueprint[] => {
@@ -478,7 +480,7 @@ const swept = (what: string, k: AnyKind, places?: readonly SweepPlace[], parts: 
   return blueprints;
 };
 
-/** Each region, nearest first up the tree: the directory whose land a path stands on. */
+/** The planned directory whose land a path is on: the nearest one up its tree with a `water`. */
 const regionOf = (path: string): PlannedDir => {
   for (let p: string | null = path; p !== null; p = p === "" ? null : parentOf(p)) {
     const d = PLAN.find((x) => x.path === p && x.water !== undefined);
@@ -493,7 +495,7 @@ const waterOf = (d: PlannedDir): Look => {
   return water;
 };
 
-// Each land's health is its own ground's, every file standing on it pooled by size, as the world lays it out.
+// Each land's health is its own ground's, pooled by size over the files on it, as the world lays it out.
 const unlanded = layoutWorld(facts, { lands: {}, things: {}, trails: [], waters: {}, quality }, undefined, 1);
 const regionPath = new Map(unlanded.areas.map((a) => [a.path, unlanded.regions[a.region]?.area ?? ""]));
 const ground = new Map<string, { sum: number; size: number }>();
@@ -507,8 +509,8 @@ const landHealth = (path: string): number => {
   return g === undefined || g.size === 0 ? 1 : g.sum / g.size;
 };
 
-// A land's water settles its landform's water, and a brook or a trickle runs in a valley and a pond lies in a basin, as
-// the page lays water into a land (`withWater`). A land whose name promises a landform takes it.
+// A land's water sets its landform's water. A brook or a trickle runs in a valley and a pond lies in a basin, as the
+// page sets water in a land (`withWater`). A land whose name promises a landform uses it.
 const lands = swept(
   "a land's",
   COMPOSING.biome,
@@ -519,7 +521,7 @@ const lands = swept(
     return { fixed: settles, ...(relief === undefined ? {} : { uses: { relief } }), ...bandOf(landHealth(d.path)) };
   }),
 );
-// Buildings and landmarks in the plan's order, each where its land's water lets it stand: a waterwheel only by running water.
+// Buildings and landmarks in the plan's order, each where its land's water allows, such as a waterwheel only by running water.
 const placeOf = (id: string): SweepPlace => {
   const file = id.split("#")[0] as string;
   const dir = byPath.has(file) ? parentOf(file) : file;
@@ -531,16 +533,16 @@ const composed = (as: "building" | "landmark", k: AnyKind): [string, { as: "buil
   const blueprints = swept(`a ${as}'s`, k, ids.map(placeOf));
   return ids.map((id, i) => [id, { as, blueprint: blueprints[i] as Blueprint }]);
 };
-// Every tree, bush, stone and drift of flowers takes a blueprint of its size's sweep, every frame with every crown,
-// each health's things going round the whole sweep, so every row stands thriving, tired and in ruin.
-const smallSweeps: Readonly<Record<SmallAs, readonly Blueprint[]>> = {
+// Every tree, bush, stone and drift of flowers takes a blueprint from its form's sweep, every frame with every crown.
+// Each health's things cycle through the whole sweep, so every row appears thriving, tired and in ruin.
+const smallSweeps: Readonly<Record<SmallFormKind, readonly Blueprint[]>> = {
   tree: swept("a tree's", COMPOSING.tree, undefined, COMPOSING.offered?.tree, [["form", "crown"]]),
   bush: swept("a bush's", COMPOSING.bush, undefined, COMPOSING.offered?.bush, [["form", "crown"]]),
   stone: swept("a stone's", COMPOSING.stone),
   flowers: swept("a drift's", COMPOSING.flowers),
 };
 const turns = new Map<string, number>();
-const smallThings = Object.entries(stands).flatMap(([id, form]): [string, { as: SmallAs; blueprint: Blueprint }][] => {
+const smallThings = Object.entries(forms).flatMap(([id, form]): [string, { as: SmallFormKind; blueprint: Blueprint }][] => {
   const as = FORMS[form]?.composes;
   if (as === undefined || raisedAs(as)) return [];
   const rows = smallSweeps[as];
@@ -551,20 +553,21 @@ const smallThings = Object.entries(stands).flatMap(([id, form]): [string, { as: 
 });
 const things = Object.fromEntries([...composed("building", COMPOSING.building), ...composed("landmark", COMPOSING.landmark), ...smallThings]);
 const routes = swept("a trail's", COMPOSING.link, TRAIL_PLAN.map(([from, to]) => bandOf(((quality[from] ?? 1) + (quality[to] ?? 1)) / 2)));
-// The sky stands the first of the sweep's skies; `__lab.terrain.sky(k)` shows the others.
+// The sky is the first of the sweep's skies. `__lab.terrain.sky(k)` shows the others.
 const skies = swept("the sky's", COMPOSING.world);
-// Each of the wild's grounds grows the next row of the wild bush's sweep, the bush's own: the land's bushes stand every
-// row, so the wild's two leave nothing missing.
+// Each wild ground gets the next blueprint of the wild bush's sweep, which uses the bush's own parts. The land's bushes
+// already show every part, so the wild's two grounds leave nothing missing.
 const wild = sweep(COMPOSING.wildBush, COMPOSING.offered?.wildBush ?? lib, { places: WILD_GROUNDS.map(() => ({})) }).blueprints;
 
-// The proving ground is written by hand, not judged: what Jev would choose is fixed, and every part is swept.
+// The proving ground's judgments are written here, not asked of Jev. What Jev would choose is fixed, and every part is
+// swept.
 const judged: Judgments = {
   sky: skies[0] as Blueprint,
   lands: Object.fromEntries(regions.map((d, i) => [d.path, lands[i] as Blueprint])),
   wild,
   waters: Object.fromEntries(regions.map((d) => [d.path, d.water as string])),
   things,
-  stands,
+  forms: forms,
   trails: TRAIL_PLAN.map(([from, to, want], i) => ({ from, to, want, route: routes[i] as Blueprint })),
   quality,
 };
@@ -575,7 +578,7 @@ const missing = (what: string, options: Readonly<Record<string, unknown>>, used:
   const seen = new Set(used);
   return Object.keys(options).filter((k) => !seen.has(k)).map((k) => `${what} "${k}"`);
 };
-gaps.push(...missing("water", WATERS, Object.values(judged.waters)), ...missing("form", FORMS, definitionForms()), ...missing("raised form", COMPOSED_FORMS, Object.values(stands)));
+gaps.push(...missing("water", WATERS, Object.values(judged.waters)), ...missing("form", FORMS, definitionForms()), ...missing("raised form", COMPOSED_FORMS, Object.values(forms)));
 if (gaps.length > 0) throw new Error(`The proving ground lacks ${gaps.join(", ")}.`);
 const world = layoutWorld(facts, judged, undefined, 1);
 const laidOut = world.regions.map((r) => r.area);
@@ -611,10 +614,10 @@ const fixtures = resolve(args.out ?? resolve(repo, "app/renderer/terrain/fixture
 mkdirSync(fixtures, { recursive: true });
 writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(facts)}\n`);
 writeFileSync(resolve(fixtures, "proving-judged.json"), fixtureJson(judged));
-const band = (v: number): string => (v >= 0.85 ? "thriving" : v >= 0.6 ? "well" : v >= 0.35 ? "tired" : v >= 0.12 ? "failing" : "ruin");
-const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} ${k}`).join(", ");
+const band = (v: number): string => (v >= 0.85 ? "0.85 to 1" : v >= 0.6 ? "0.6 to 0.85" : v >= 0.35 ? "0.35 to 0.6" : v >= 0.12 ? "0.12 to 0.35" : "below 0.12");
+const count = (vs: readonly number[]): string => Object.entries(vs.reduce<Record<string, number>>((n, v) => ((n[band(v)] = (n[band(v)] ?? 0) + 1), n), {})).map(([k, n]) => `${n} at vitality ${k}`).join(", ");
 console.log(`proving: ${facts.files.length} files, ${facts.repository.lines.toLocaleString("en-US")} lines, ${entities.length} entities; a ${world.size} m world of ${world.regions.length} lands and ${world.areas.length} areas`);
 console.log(`  files: ${count(world.patches.map((p) => p.vitality))}`);
 console.log(`  lands: ${count(world.regions.map((r) => landHealth(r.area)))}; ${lands.length} swept lands, ${skies.length} skies`);
 console.log(`  entities: ${count(world.things.filter((t) => (t.of ?? "entity") === "entity").map((t) => t.vitality))}`);
-console.log(`  raised: ${world.things.filter((t) => t.of === "file").length} files and ${world.things.filter((t) => t.of === "definition").length} definitions as buildings or landmarks; ${world.standing.length} files standing as plants, stones or flowers`);
+console.log(`  forms: ${world.things.filter((t) => t.of === "file").length} files and ${world.things.filter((t) => t.of === "definition").length} definitions as buildings or landmarks; ${world.naturalThings.length} files and entities as trees, bushes, stones or flowers`);

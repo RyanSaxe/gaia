@@ -1,5 +1,6 @@
-// The type language. Every field is a closed set, because Jev can only pick
-// among options Gaia supplies. Each field carries the instruction Jev reads.
+// The field types for Jev's answers. Every field is a closed set, because Jev
+// can only pick among options Gaia supplies. Each field includes the
+// instruction Jev reads.
 
 export interface ChoiceField<K extends string = string> {
   readonly type: "choice";

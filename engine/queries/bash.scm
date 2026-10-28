@@ -1,4 +1,4 @@
-; Bash: its grammar ships no tags query, so this file finds definitions too.
+; Bash: its grammar ships no tags query, so this file also captures definitions.
 (function_definition name: (word) @name) @definition.function
 ((command name: (command_name) @_c argument: (_) @name) @reference.import
   (#any-of? @_c "source" "."))

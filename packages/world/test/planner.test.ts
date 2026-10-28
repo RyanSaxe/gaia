@@ -84,7 +84,7 @@ describe("what a part needs of its place", () => {
   const buildings = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
   const features = STRUCTURE_PRIMITIVES.filter((p) => p.role === "Feature");
   const needing = features.find((p) => (p.needs?.length ?? 0) > 0);
-  /** What a place must have for the needing part: the things it needs, which here are all words. */
+  /** The features a place must provide for `needing`. All of its needs are strings here. */
   const wants = (needing?.needs ?? []).filter((n): n is string => typeof n === "string");
   const offered = (has?: readonly string[]): string[] => [...(planStructure(structure, buildings, { ...subject, ...(has === undefined ? {} : { has }) }).offered?.feature ?? [])].sort();
 
@@ -100,15 +100,15 @@ describe("what a part needs of its place", () => {
     expect(readStructure(structure, buildings, there, fakeJev(there.request, { "feature.present": true, "feature.use": id })).feature).toBe(id);
     const elsewhere = planStructure(structure, buildings, subject);
     const answers = { ...fakeJev(elsewhere.request, { "feature.present": true }), "feature.use": { type: "choice" as const, choice: id, probabilities: { [id]: 1 }, confidence: 1 } };
-    // A stray answer is refused, or ignored where only one part was offered.
-    const stood = (): string | undefined => {
+    // readStructure rejects a pick it did not offer, or ignores it when only one part was offered.
+    const picked = (): string | undefined => {
       try {
         return readStructure(structure, buildings, elsewhere, answers).feature;
       } catch {
         return undefined;
       }
     };
-    expect(stood()).not.toBe(id);
+    expect(picked()).not.toBe(id);
   });
 
   it("offers what needs a range of rank only to a thing whose rank lies in it, ends included, and to no place without a rank", () => {

@@ -1,8 +1,7 @@
-// Surfaces, foliage and ornaments. Every vertex carries its vitality
-// response and what carries it: a leaf hangs on a stalk on a twig on a limb,
-// sags with its bough and bends with it in the wind, and drops in place as
-// vitality falls. Limbs and twigs never vanish, so a failing tree stands as
-// bare twigs; only pods glow.
+// Builds bark, foliage and what hangs in a crown. Every vertex carries its
+// vitality channels and the joints that carry it, so a leaf sags and sways
+// with its bough and drops in place as vitality falls. Limbs and twigs never
+// go, so a tree at low vitality is bare twigs, and only pods glow.
 
 import { type Anchor, type BuildContext, type Built, CUT, type Limb, type Part, type Rand, type Resolved, type Skeleton, type Vec3 } from "@gaia/schema";
 import type { barkParams, blossomsParams, fruitParams, leafClumpsParams, leafStrandsParams, needlesParams } from "../flora.ts";
@@ -81,18 +80,17 @@ function meanNearest(points: readonly Vec3[]): number {
 
 const maxDepthOf = (s: Skeleton): number => s.limbs.reduce((m, l) => Math.max(m, l.depth), 0);
 
-/** A tree stands on one trunk; a shrub's many stems rise from the soil. */
+/** Whether a frame has one trunk, as a tree does, rather than a shrub's many stems from the soil. */
 export const oneTrunk = (skel: Skeleton): boolean => skel.limbs.filter((l) => l.parent === -1).length === 1;
 
-/** The shortest a tree's frame stands for each unit of the file's scale: a squat broadleaf stands 5.7 m at scale 1, a broad fir 7.7 m. */
+/** The minimum tree frame height per unit of the file's scale. At scale 1 a squat broadleaf is 5.7 m tall and a broad fir 7.7 m. */
 const TREE_HEIGHT_PER_SCALE = 5;
 
 /**
- * The scale a crown sizes its leaves, sprays and clumps by. A tree's frame
- * grows with the file's scale, and its leaves with it. A frame on one trunk
- * that stands shorter than any tree of that scale, a sapling, carries the
- * leaves of a tree its own height, so they are a young tree's rather than a
- * grown one's. A shrub's stems keep the file's scale.
+ * The scale a crown sizes its leaves, sprays and clumps by. A tree's frame and
+ * leaves grow with the file's scale. A one-trunk frame shorter than any tree
+ * of that scale, a sapling, gets the leaves of a tree its own height, so they
+ * look young rather than grown. A shrub keeps the file's scale.
  */
 export function leafScale(s: number, skel: Skeleton): number {
   if (!oneTrunk(skel)) return s;
@@ -101,14 +99,13 @@ export function leafScale(s: number, skel: Skeleton): number {
 }
 
 /**
- * What carries each limb: the joint its bough leaves the trunk at, and how
- * far it droops at a point, by the bark's rule. The trunk is the frame's
- * limb rising from the copy's base and the limbs that continue it at depth 0; a bough is
- * everything that leaves the trunk, and a stem from the ground (a shrub's)
- * is a bough of its own. Everything that grows from a bough (its limbs,
- * twigs, leaves and flowers) takes the bough's joint and its droop where it
- * grows, so a sagging or swaying bough carries all of it and nothing parts
- * from what holds it.
+ * For each limb, the joint where its bough leaves the trunk, and how far it
+ * droops at a point, by the bark's rule. The trunk is the limb rising from the
+ * copy's base and the depth-0 limbs that continue it. A bough is everything
+ * that leaves the trunk, and a stem from the ground, such as a shrub's, is its
+ * own bough. Everything that grows from a bough (its limbs, twigs, leaves and
+ * flowers) takes the bough's joint and droop where it grows, so a sagging or
+ * swaying bough carries all of it and nothing parts from what holds it.
  */
 export class Boughs {
   readonly #roots: number[];
@@ -119,7 +116,7 @@ export class Boughs {
     this.#trunk = limbs.map(() => false);
     limbs.forEach((l, i) => {
       const up = limbs[l.parent];
-      // A trunk rises from the copy's base; a stem rooted beside it is a bough.
+      // A trunk rises from the copy's base. A stem rooted beside it is a bough.
       this.#trunk[i] = l.depth === 0 && (up === undefined ? Math.hypot(l.start[0], l.start[2]) < 0.01 : (this.#trunk[l.parent] ?? false));
     });
     this.#roots = limbs.map((l, i) => {
@@ -160,26 +157,26 @@ export class Boughs {
 
 // ---------- a plant's room ----------
 
-/** The most triangles one plant draws: a tree stands by the hundred, a bush by the hundreds. */
+/** The triangle budget for one plant. Trees are placed by the hundred and bushes by the hundreds. */
 const PLANT_TRIANGLES = { tree: 40_000, bush: 12_000 } as const;
-/** A frame or a crown that stands no higher than this is a bush's, knee to head high; a tree stands over a person. */
+/** The tallest a bush's frame or crown is, in meters. Bushes are knee to head high, and trees are taller than a person. */
 const BUSH_TOP = 2.5;
-/** The most a crown takes on a bush: a bush's leaves and twigs stay small. */
+/** The triangle budget for a bush's crown, whose leaves and twigs stay small. */
 const BUSH_CROWN_TRIANGLES = 8_500;
 /** The most flowers, pods or berry clusters one plant hangs. */
 const BLOSSOM_CAP = { petals: 170, pods: 70, berries: 45 } as const;
-/** The most fruit a tree hangs: as many as its pods. */
+/** The most fruit a tree hangs, the same as its pod cap. */
 const FRUIT_TREE_CAP = BLOSSOM_CAP.pods;
 /** An apple, a pear or a pod is an icosphere of 80 triangles on a stalk of 6. */
 const HUNG_TRIANGLES = 86;
-/** The most fruit or pods one bush hangs; a tree hangs up to `FRUIT_TREE_CAP`. */
+/** The most fruit or pods one bush hangs. A tree hangs up to `FRUIT_TREE_CAP`. */
 const BUSH_HUNG = 34;
 /**
- * The most triangles what hangs in a crown may take, and the least a crown
- * leaves for it. A tree's crown leaves room for its most: 70 fruit or pods.
- * A bush's leaves 1,500 of the most it may hang, 34 fruit or pods or 45
- * clusters of up to four berries, and offers what hangs in it no more twig
- * tips than the rest of the bush can carry (`hungFrom`).
+ * The most triangles the fruit, pods or berries in a crown may take, and the
+ * least a crown leaves for them. A tree's crown leaves room for its maximum of
+ * 70 fruit or pods. A bush's crown leaves 1,500 triangles of the most it may
+ * hang (34 fruit or pods, or 45 clusters of up to four berries), and
+ * `hungFrom` offers them no more twig tips than the rest of the bush can carry.
  */
 const TREE_HUNG = Math.max(FRUIT_TREE_CAP, BLOSSOM_CAP.pods, BLOSSOM_CAP.berries) * HUNG_TRIANGLES;
 const HUNG = {
@@ -190,40 +187,40 @@ const HUNG = {
 /** The lowest a leaf may reach above the soil, meters. */
 export const SOIL = 0.005;
 
-/** Whether any of a limb stands above the soil: a limb wholly in it, where a cane roots, carries no leaves. */
+/** Whether any part of a limb is above the soil. A limb wholly in it, where a cane roots, carries no leaves. */
 export const aboveSoil = (l: Limb): boolean => Math.max(l.start[1], l.end[1]) > SOIL;
 
-/** Whether a frame, or a crown whose highest point is `top`, stands as a bush's. */
-const standsAsBush = (top: number): boolean => top <= BUSH_TOP;
+/** Whether a frame or crown whose highest point is `top` is a bush's. */
+const isBushHeight = (top: number): boolean => top <= BUSH_TOP;
 const frameTop = (skel: Skeleton): number => skel.limbs.reduce((m, l) => Math.max(m, l.end[1], l.start[1]), 0);
 
 /**
- * The triangles a crown may take on its frame: the plant's, less the
- * frame's own bark and what the crown keeps for fruit, pods or berries
- * (`HUNG`), and never more than `most` on a tree or `BUSH_CROWN_TRIANGLES`
- * on a bush. A heavy frame, a fir's many whorls or a bramble's long canes,
- * leaves its crown less, so every crown on every frame fits its plant.
+ * The triangles a crown may take on its frame: the plant's budget less the
+ * frame's bark and what the crown keeps for fruit, pods or berries (`HUNG`),
+ * and never more than `most` on a tree or `BUSH_CROWN_TRIANGLES` on a bush. A
+ * heavy frame, such as a fir's many whorls or a bramble's long canes, leaves
+ * its crown less, so every crown fits its plant's budget.
  */
 export function crownRoom(skel: Skeleton, most: number): number {
-  const bush = standsAsBush(frameTop(skel));
+  const bush = isBushHeight(frameTop(skel));
   const plant = bush ? PLANT_TRIANGLES.bush : PLANT_TRIANGLES.tree;
   return Math.max(0, Math.min(bush ? BUSH_CROWN_TRIANGLES : most, plant - (bush ? HUNG.bush : HUNG.tree).least - barkTriangles(skel)));
 }
 
 /**
- * The twig tips a crown offers what hangs in it: all of them, or where its
- * frame and leaves leave less room than the most that may hang there (a
+ * The twig tips a crown offers fruit, pods or berries: all of them, or, when
+ * the frame and leaves leave less room than the most that may hang there (a
  * fir's many whorls under dense needles, a bramble's long canes), as many as
- * the rest of the plant's triangles can carry, spread over the crown.
+ * the remaining triangles can carry, spread over the crown.
  */
 export function hungFrom(skel: Skeleton, parts: readonly Part[], anchors: Anchor[]): Anchor[] {
-  const bush = standsAsBush(frameTop(skel));
+  const bush = isBushHeight(frameTop(skel));
   const left = (bush ? PLANT_TRIANGLES.bush : PLANT_TRIANGLES.tree) - barkTriangles(skel) - parts.reduce((n, p) => n + p.indices.length / 3, 0);
   if (left >= (bush ? HUNG.bush : HUNG.tree).most) return anchors;
   return spread(anchors, Math.max(0, Math.floor(left / HUNG_TRIANGLES))).map((i) => anchors[i] as Anchor);
 }
 
-/** `n` of `points`, by index in order, spread evenly: each next the one farthest from those taken. */
+/** Indices of `n` of `points`, in order, spread evenly by taking each time the point farthest from those already taken. */
 function spread(points: readonly Anchor[], n: number): number[] {
   if (points.length <= n) return points.map((_, i) => i);
   if (n <= 0) return [];
@@ -241,11 +238,11 @@ function spread(points: readonly Anchor[], n: number): number[] {
 }
 
 /**
- * The tips a crown grows its clumps at, by index: every tip, or on a frame
- * of more tips than the crown's room gives clumps at their fewest twigs (a
- * fir's whorls carry hundreds), as many as it does, spread evenly over the
- * frame, each next the tip farthest from those taken. `fill` is how many
- * more clumps a crown of `n` tip clumps grows along its limbs.
+ * The indices of the tips a crown grows clumps at: every tip, or, when the
+ * frame has more tips than the crown's budget allows at the fewest twigs per
+ * clump (a fir's whorls have hundreds), as many as fit, spread evenly over the
+ * frame. `fill` is how many more clumps a crown of `n` tip clumps grows along
+ * its limbs.
  */
 export function crownTips(tips: readonly Anchor[], most: number, fill: (n: number) => number): number[] {
   let n = tips.length;
@@ -270,7 +267,7 @@ interface Ring {
  * curving in to the trunk within a few of its widths. A narrow fillet at
  * the very bottom turns the flare out nearly flat, so its outline meets the
  * ground in a curve instead of a point. `at` is the multiplier on the
- * trunk's radius at height `y` and angle `theta`; `rings` are the heights
+ * trunk's radius at height `y` and angle `theta`, and `rings` are the heights
  * that need a ring so the flare curves. The trunk's first ring is its base
  * at the ground, the ring the terrain sinks a tree by on a slope.
  */
@@ -305,7 +302,7 @@ function lobeAt(lobes: readonly Lobe[], theta: number, width: number): number {
   return most;
 }
 
-/** `lift` is how far the lobes reach out at the ground; `rise`, how high up the trunk the flare climbs, 1 for a tree's. */
+/** Builds a trunk's flare. `lift` is how far the lobes reach out at the ground, and `rise` is how high up the trunk the flare climbs, 1 for a tree. */
 export function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: number, rise = 1): Flare {
   const reach = trunkRadius * 1.2 * rise;
   const fillet = trunkRadius * 0.16;
@@ -323,8 +320,8 @@ const flareRingsOf = (trunkRadius: number): number[] => [...FLARE_RINGS, 5.5].ma
 
 /**
  * The bark's ridges and shade at angle `theta` around a ring centered at
- * `c`: one rule for every trunk, limb, stump and fallen log, so wood that
- * lies on the ground reads as fallen from the trees around it. The ridges
+ * `c`: one rule for every trunk, limb, stump and fallen log, so wood on the
+ * ground looks like it fell from the trees around it. The ridges
  * turn by `twist` (meters along the stem) and the bark darkens toward the
  * soil below `height`. `bump` is in the ring's radii.
  */
@@ -340,7 +337,7 @@ export function barkAt(roughness: number, seed: number, furrows: number, c: Vec3
 /**
  * Where boughs leave the top of their parent, each starts as wide as the
  * parent ends and narrows to its own width over this many of its widths, so
- * the boughs of a fork swallow the top of the trunk and no ring shows there.
+ * the boughs of a fork cover the top of the trunk and no ring shows there.
  */
 const FORK_REACH = 1.4;
 
@@ -363,12 +360,12 @@ interface Tube {
 /**
  * The tubes a frame's bark is built from, one per chain of segments, so its
  * bark runs unbroken past the joins. The bark builds its surface on them, and
- * a crown counts their triangles to know what room the frame leaves it.
+ * a crown counts their triangles to find how much of the budget the frame leaves it.
  */
 function tubesOf(skel: Skeleton): Tube[] {
   const trunkRadius = skel.limbs[0]?.startRadius ?? 0.2;
   const flareRings = flareRingsOf(trunkRadius);
-  // A tree stands on one trunk, which flares into root lobes; a shrub's many stems rise straight from the soil.
+  // A tree stands on one trunk, which flares into root lobes. A shrub's many stems rise straight from the soil.
   const trunk = oneTrunk(skel);
   const whip = trunk && trunkRadius < WHIP;
   const tubes: Tube[] = [];
@@ -445,12 +442,12 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
     const head = chain[0] as number;
     const first = skel.limbs[head] as Limb;
     const lr = r.fork(`limb${head}`);
-    // Limbs never go: twigs and leaves always have a limb under them, and a failing tree stands bare.
+    // Limbs never go, so twigs and leaves always have a limb under them and a tree at low vitality stands bare.
     const wither = 0.45 + 0.25 * lr.next();
     const furrows = first.depth === 0 ? 7 : 4;
 
     // The surface without its bark's ridges gives the normals, so the flare
-    // shades as one smooth form; the ridges go on top.
+    // shades as one smooth form. The ridges go on top.
     const smooth = (ring: Ring, theta: number): V3 => {
       const m = flared ? flare.at(ring.center[1], theta) : 1;
       return addScaled(ring.center, add(scale(ring.u, Math.cos(theta)), scale(ring.v, Math.sin(theta))), ring.radius * m);
@@ -508,18 +505,17 @@ export interface Clump {
 }
 
 /**
- * A tree's crown of twigs and leaves, at most: the rest of the 40,000-triangle
- * plant budget is for bark and blossoms. A tree is placed by the hundred, so
- * its crown thins evenly to this, or to less on a heavy frame (`crownRoom`).
- * A great tree stands alone and passes its own.
+ * The triangle budget for a tree's crown of twigs and leaves. The rest of the
+ * 40,000-triangle plant budget is for bark and blossoms. Trees are placed by
+ * the hundred, so a crown thins evenly to this, or to less on a heavy frame
+ * (`crownRoom`). A great tree stands alone and passes its own budget.
  */
 export const CLUMP_TRIANGLE_BUDGET = 16_000;
 
 /**
- * Each leaf's spray cut, and its sprays' size: a few broad maple leaves fill
- * a larger spray than many small ovals. A crown's sprays are full: the
- * family's leaves crowded around a short stalk, nearly all leaf, so fewer
- * layers of them fill a crown.
+ * Each leaf's spray cut and spray size. A few broad maple leaves fill a
+ * larger spray than many small ovals. A crown's sprays are full, with the
+ * leaves crowded round a short stalk, so fewer layers fill a crown.
  */
 const SPRAY_CUTS = {
   pointed: { cut: CUT.crowdedPointed, card: 1 },
@@ -528,17 +524,17 @@ const SPRAY_CUTS = {
   blossom: { cut: CUT.crowdedUmbels, card: 1.12 },
 } as const;
 
-/** A crown's share of the sparse sprays along each twig: full sprays fill a clump with fewer, and every twig keeps the spray at its tip. */
+/** A crown's share of the sparse sprays along each twig. Full sprays fill a clump with fewer, and every twig keeps the spray at its tip. */
 const CROWN_SHARE = 0.34;
 
 /**
- * Clumps of leaves where a canopy's mass is: one at every tip and, for a
- * full crown, more along the inner limbs, so the crown reads as one mass
- * from afar. Each clump is a fan of twigs that leave its limb along the
- * limb's last stretch and curve out to the clump's surface, with sprays
- * along them, so every leaf is on a stalk on a twig on a limb and no ball
- * sits inside to show. Twigs and sprays take their bough's joint and droop,
- * and each twig bends about where it leaves the limb.
+ * Builds clumps of leaves where a canopy's mass is: one at every tip and, for
+ * a full crown, more along the inner limbs, so the crown looks like one mass
+ * from afar. Each clump is a fan of twigs that leave the limb along its last
+ * stretch and curve out to the clump's surface, with sprays along them, so
+ * every leaf is on a stalk on a twig on a limb and no ball sits inside. Twigs
+ * and sprays take their bough's joint and droop, and each twig bends about
+ * where it leaves the limb.
  */
 export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: BuildContext, skel: Skeleton, guard?: number): Built {
   const r = ctx.rand.fork("clumps");
@@ -546,12 +542,12 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const crown = crownOf(skel.tips.map((t) => t.position));
   const boughs = new Boughs(skel);
   const spray = SPRAY_CUTS[p.leaf];
-  // Leaves keep near their own size on a great tree: its sprays grow only with the root of its scale,
+  // Leaves keep near their own size on a great tree. Its sprays grow only with the root of its scale,
   // so each covers s times the area and its clumps need 1/s as many twigs per square meter.
   const lookOf = (share: number): ClumpLook => ({ twigs: 15 / Math.max(1, s), sprays: 8 * share, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0, low: !oneTrunk(skel) });
   const shapeScale = p.shape === "plates" ? 1.2 : p.shape === "tufts" ? 0.62 : 1;
-  // Tufts are smaller than round clumps, so a tufted crown grows more of them along its limbs, as many as cover what
-  // round clumps would: at a fullness it hides as much of its frame, in more and smaller tufts.
+  // Tufts are smaller than round clumps, so a tufted crown grows enough more of them along its limbs to cover what
+  // round clumps would. At a given fullness it hides as much of its frame, with more and smaller tufts.
   const fillOf = (n: number): number => {
     const tips = Math.max(1, n);
     const fill = tips * Math.max(0, p.fullness - 0.35) * 0.9;
@@ -559,9 +555,9 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   };
   const roomFor = (most: number): number => guard ?? crownRoom(skel, most);
   const mostClumps = (look: ClumpLook, budget: number): number => Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
-  // A frame of more tips than the crown can give clumps (a fir's whorls) grows fewer, larger clumps spread over
-  // them, each holding the leaves of the tips it stands for on full twigs, so the crown keeps its leaves while the
-  // twigs hidden inside its clumps thin. Such a crown fills its frame as a fir's needles would, and may take as much.
+  // A frame with more tips than the crown can give clumps (a fir's whorls) gets fewer, larger clumps, each holding
+  // the leaves of the tips it covers on full twigs, so the crown keeps its leaves while the twigs hidden inside its
+  // clumps thin. Such a crown fills its frame as a fir's needles would, and gets the same budget.
   const sparse = lookOf(CROWN_SHARE);
   const merged = crownTips(skel.tips, mostClumps(sparse, roomFor(CLUMP_TRIANGLE_BUDGET)), fillOf).length < skel.tips.length;
   const look = merged ? lookOf(1) : sparse;
@@ -574,13 +570,13 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const base = Math.min(0.3 * s + 0.6 * spacing, 0.24 * crown.radius[0]) * p.size * shapeScale * (0.72 + 0.38 * p.fullness);
 
   const clumps: Clump[] = [];
-  // Keep foliage off the ground and clear of the lower trunk, as v1 did. The
-  // trunk forks where its first bough leaves it: a spire's trunk runs to its
-  // top, but its lowest whorl leaves far below. Roots leaving at the ground
-  // (a great tree's buttresses) are not boughs.
+  // Keep foliage off the ground and clear of the lower trunk. The trunk forks
+  // where its first bough leaves it. A spire's trunk runs to its top, but its
+  // lowest whorl leaves far below. Roots leaving at the ground (a great
+  // tree's buttresses) are not boughs.
   const trunkTop = skel.limbs.reduce((m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m), 0);
   const fork = skel.limbs.reduce((m, l) => (l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m), trunkTop);
-  // A shrub has no trunk: its clumps reach the soil, as a leaf mound's do.
+  // A shrub has no trunk, so its clumps reach the soil, as a leaf mound's do.
   const floor = oneTrunk(skel) ? Math.max(fork * 0.85, 1.2 * s) : 0;
   for (const i of kept) {
     const tip = skel.tips[i] as Anchor;
@@ -591,7 +587,7 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
     center[1] = Math.max(center[1], floor + radius * 0.5);
     clumps.push({ center, radius, limb: liftedFrom(boughs, center, tip.position, radius, boughs.limbNear(tip.position)), r: cr });
   }
-  // Fill the crown's interior so a full canopy reads as one mass.
+  // Fill the crown's interior so a full canopy looks like one mass.
   const fill = fillOf(tipCount);
   const inner = skel.limbs.map((l, i) => ({ l, i })).filter(({ l }) => l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l));
   for (let i = 0; i < fill && inner.length > 0; i++) {
@@ -605,12 +601,12 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
     clumps.push({ center, radius, limb: liftedFrom(boughs, center, at, radius, pick.i), r: fr });
   }
 
-  // Every clump stays, so the crown keeps its shape; a crown over budget thins all its twigs evenly.
+  // Every clump stays, so the crown keeps its shape. A crown over budget thins all its twigs evenly.
   let density = 1;
   const triangles = (): number => clumps.reduce((n, c) => n + twigsOf(look, c.radius, density) * twigTriangles(look), 0);
   while (triangles() > budget && density > 0.05) density -= 0.01;
-  // A sapling's crown is too light to shade itself as one canopy, which would leave its lower tiers dark under
-  // a bright top: each clump is lit as a small volume of its own, so every tier is lit alike.
+  // A sapling's crown is too sparse to shade as one canopy, which would leave its lower tiers dark under a bright
+  // top. Each clump is lit as its own small volume, so every tier is lit alike.
   const young = s < (ctx.facts.scale ?? 1);
   const lit = (c: Clump): Crown => (young ? { center: c.center, radius: [c.radius * 1.2, c.radius * 1.2, c.radius * 1.2] } : crown);
   const grown = emitClumps(clumps, lit, boughs, look, merged ? filled(clumps, lit, boughs, look, density, budget) : density);
@@ -627,9 +623,9 @@ export function emitClumps(clumps: readonly Clump[], lit: (c: Clump) => Crown, b
 }
 
 /**
- * The density that fills a crown's room: a crown of full twigs (one whose clumps stand for many tips) draws
- * fewer sprays than its estimate allows where its twigs are short, so it grows a trial of its twigs, measures
- * them, and thickens its twigs to fill the room, never past it, up to twice its clumps' own.
+ * The density that fills a crown's budget. A crown of full twigs, whose clumps each cover many tips, draws fewer
+ * sprays than its estimate where its twigs are short. So it builds a trial of its twigs, measures them, and raises
+ * the density to fill the budget without passing it, up to 2, twice its clumps' own twigs.
  */
 export function filled(clumps: readonly Clump[], lit: (c: Clump) => Crown, boughs: Boughs, look: ClumpLook, density: number, budget: number): number {
   const drawn = (d: number): number => emitClumps(clumps.map((c) => ({ ...c, r: c.r.fork("trial") })), lit, boughs, look, d).parts.reduce((n, p) => n + p.indices.length / 3, 0);
@@ -664,7 +660,7 @@ export interface ClumpLook {
   readonly low?: boolean;
 }
 
-/** The smallest a shrub's spray grows near the soil, against its others; one that would be smaller is left off. */
+/** The smallest a shrub's spray near the soil may be, relative to its other sprays. A smaller one is left off. */
 const LOWEST_SPRAY = 0.35;
 
 /**
@@ -673,7 +669,7 @@ const LOWEST_SPRAY = 0.35;
  * its fork (`emitClump`).
  */
 export const twigTriangles = (look: ClumpLook): number => 18 + 2 * (Math.max(2, Math.round(look.sprays)) + Math.max(2, Math.round(look.sprays * 0.5)));
-/** The fewest twigs a clump grows, however thin its crown: fewer would read as a twig, not a clump. */
+/** The fewest twigs a clump grows, however thin its crown. Fewer would look like a twig, not a clump. */
 export const FEWEST_TWIGS = 4;
 const twigsOf = (look: ClumpLook, radius: number, density: number): number => Math.max(FEWEST_TWIGS, Math.round(look.twigs * radius * radius * density));
 
@@ -738,8 +734,8 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
         const sdir = normalize(add(add(scale(tdir, Math.cos(ang)), scale(sideDir, sgn * Math.sin(ang))), scale(out, 0.15)));
         // Near the soil a spray turns up rather than into it, and on a shrub grows smaller to fit above it.
         const half = look.low === true ? Math.min(look.half, (at0[1] - look.ground) / 1.2) : look.half;
-        // A shrub's spray as near the soil as a card reaches along itself, 2.65 of its half widths and more for
-        // its spread, always turns up.
+        // A shrub's spray closer to the soil than a card reaches along itself (2.65 half widths, plus its spread)
+        // always turns up.
         if (at0[1] + sdir[1] * 2.3 * half - half < look.ground || (look.low === true && at0[1] - look.ground < 3.1 * half)) sdir[1] = Math.abs(sdir[1]);
         if (look.low === true ? half < LOWEST_SPRAY * look.half : at0[1] - 1.2 * look.half < look.ground) continue;
         const b = carry(at0);
@@ -805,7 +801,7 @@ export function emitTwig(bark: PartBuilder, pts: readonly V3[], r0: number, r1: 
 /**
  * A spray card rooted at `base` on its twig, reaching along `dir` and facing
  * about `face`. Its leaves shade with the crown's blended normal, so the
- * canopy lights as one volume; `shadeShift` darkens sprays deep in a clump.
+ * canopy lights as one volume. `shadeShift` darkens sprays deep in a clump.
  */
 export function emitSpray(leaf: PartBuilder, crown: Crown, base: V3, dir: V3, face: V3, half: number, form: number, r: Rand, ch: Channels, shadeShift: number): void {
   const roll = r.range(-0.5, 0.5);
@@ -814,7 +810,7 @@ export function emitSpray(leaf: PartBuilder, crown: Crown, base: V3, dir: V3, fa
   const normal = normalize(cross(across, dir));
   const n = dot(normal, face) < 0 ? scale(normal, -1) : normal;
   const reach = half * r.range(0.9, 1.15);
-  // A needle spray runs from its base (0) to its tip (1); a spray of leaves from -1 to 1.
+  // A needle spray runs from its base (0) to its tip (1), and a spray of leaves from -1 to 1.
   const needles = form === CUT.needles;
   const rows = [-1, 1].map((b) =>
     [-1, 1].map((a): CardPoint => {
@@ -846,7 +842,7 @@ const canopyShade = (crown: Crown, q: Vec3, ny: number, tint: number): number =>
 
 // ---------- leaf strands ----------
 
-/** Leaves the rest of the 40,000-triangle plant budget for bark and blossoms, or less on a heavy frame (`crownRoom`). */
+/** The triangle budget for a crown of leaf strands, or less on a heavy frame (`crownRoom`). The rest of the 40,000-triangle plant budget is for bark and blossoms. */
 export const STRAND_TRIANGLE_BUDGET = 21_000;
 
 export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: BuildContext, skel: Skeleton, guard?: number): Built {
@@ -857,9 +853,9 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   const crown = crownOf(skel.tips.map((t) => t.position));
   const boughs = new Boughs(skel);
 
-  // Leaves keep near their own size on a great tree: its strands grow only
+  // Leaves keep near their own size on a great tree. Its strands grow only
   // with the root of its scale, so it hangs more of them, each as narrow as a
-  // willow's, rather than a few wide ones that read as slabs from afar.
+  // willow's, rather than a few wide ones that look like slabs from afar.
   const g = s <= 1 ? s : Math.sqrt(s);
   // Strands hang from the tips and from the undersides of the outer limbs. A
   // shrub's stems are short, so strands hang from them too, twice as close,
@@ -883,12 +879,12 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   const leafWide = 0.085 * g;
   const anchors: Anchor[] = [];
   // A strand never reaches below the soil, and none hangs from lower than the sprays at its top reach. A tree's
-  // strands stop short of the ground; a shrub's rest on the soil, the corners of their narrowed foot clear of it
-  // however the foot turns.
+  // strands stop short of the ground. A shrub's rest on the soil, with the corners of their narrowed foot clear of
+  // it however the foot turns.
   const foot = oneTrunk(skel) ? 0 : leafWide * 1.3 * 0.7;
   const room = (h: { at: V3 }): number => h.at[1] - SOIL - foot;
   const hangsFree = (h: { at: V3 }): boolean => h.at[1] - SOIL >= leafLen * 0.8;
-  // A dense frame thins every strand's chance evenly to stay in budget: each
+  // A dense frame thins every strand's chance evenly to stay in budget. Each
   // strand is two ribbons of rows 0.3 m apart, and two sprays at its top.
   const kept = 0.45 + 0.55 * p.fullness;
   const perStrand = (h: { at: V3 }): number => 4 * Math.max(3, Math.ceil(Math.min(p.length * 2.2 * s, Math.max(0.3, h.at[1] - 0.2 * s), room(h)) / (0.3 * g))) + 4;
@@ -908,7 +904,7 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
       h.at[1] - fall * Math.pow(t, 1.08),
       h.at[2] + outward[2] * drift * Math.sin(t * Math.PI * 0.5) + Math.cos(t * 5 + sway) * 0.04 * s,
     ];
-    // The strand hangs from its limb: it sags with its bough and swings about where it hangs.
+    // The strand sags with its bough and swings about where it hangs from its limb.
     const b = boughs.at(h.limb, h.at);
     const hung = { droop: b.droop, glow: 0, pivot: h.at, bough: b.bough, twig: h.at };
     // Two sprays of leaves at the hang point hide the limb above the curtain.
@@ -916,9 +912,9 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
       const d = normalize([sr.range(-1, 1), sr.range(0.1, 0.9), sr.range(-1, 1)]);
       emitSpray(out, crown, h.at, d, normalize(add(UP, d)), leafLen * 0.8, CUT.cluster, sr, { ...hung, loss: Math.max(0.01, loss + 0.02), wither }, 0.05);
     }
-    // The strand: two crossed ribbons of small leaves, so from any side it hangs
-    // as a leafy thread. The ribbons narrow toward the bottom, and the lowest
-    // leaves fall first as vitality drops, so a failing strand shortens.
+    // The strand: two crossed ribbons of small leaves, so it looks like a leafy
+    // thread from any side. The ribbons narrow toward the bottom, and the lowest
+    // leaves fall first as vitality drops, so the strand shortens.
     const strandTint = sr.fork("tint").range(-0.08, 0.08) * 0.4;
     const segments = Math.max(3, Math.ceil(fall / (0.3 * g)));
     const half = leafWide * 1.3;
@@ -992,9 +988,10 @@ function chainsOf(skel: Skeleton): number[][] {
 const FROND = { branchlets: 1.25, lowerTier: 0.7, drape: { reach: 0.6, drop: 0.95 } } as const;
 
 /**
- * A fir's needles, at most: the rest of a plant's 40,000 triangles is for its
- * bark, which a fir's many whorls make heavy (up to about 12,000). A fir over
- * this thins every frond's branchlets evenly; no frond is dropped.
+ * The triangle budget for a fir's needles. The rest of a plant's 40,000
+ * triangles is for its bark, which a fir's many whorls make heavy, up to
+ * about 12,000. A fir over this thins every frond's branchlets evenly and
+ * drops no frond.
  */
 export const NEEDLE_TRIANGLE_BUDGET = 26_000;
 
@@ -1023,22 +1020,22 @@ function whorled(skel: Skeleton): boolean {
 }
 
 /**
- * How a pine's tufts are built: their radius as a share of the gap between
- * neighbouring limb tips, between the least and the most (meters, at medium
- * needles); twigs per square meter of tuft, needle sprays along each twig,
- * and a spray's half width at medium needles; and how many tufts a full
- * crown grows along its outer limbs for each tuft's width of limb.
+ * How a pine's tufts are built. A tuft's radius is `spacing` times the gap
+ * between neighbouring limb tips, clamped to `least` and `most` meters at
+ * medium needles. `twigs` is per square meter of tuft, `sprays` per twig, and
+ * `half` a spray's half width at medium needles. `along` is how many tufts a
+ * full crown grows along its outer limbs per tuft width of limb.
  */
 const PINE = { spacing: 0.55, least: 0.5, most: 1.1, twigs: 32, sprays: 9, half: 0.17, along: 0.8 } as const;
 
 /**
- * A pine's needles. On a frame that forks into long rising limbs, a fir's
- * fronds stand as thin fringes along bare limbs, so here the needles grow as
- * a pine's do: in tufts of needle sprays on twigs round each limb tip, and
- * for a fuller crown along the outer limbs, so the crown is a mass of
- * overlapping tufts with the limbs showing between them. Longer needles grow
- * larger tufts and fuller needles more twigs and tufts. Each twig bends with
- * its limb; as vitality falls the needles brown and drop in place.
+ * Builds a pine's needles. On a frame that forks into long rising limbs, a
+ * fir's fronds would be thin fringes along bare limbs, so here the needles
+ * grow in tufts of needle sprays on twigs round each limb tip, and for a
+ * fuller crown along the outer limbs. The crown is a mass of overlapping tufts
+ * with the limbs showing between them. Longer needles grow larger tufts and
+ * fuller needles more twigs and tufts. Each twig bends with its limb, and as
+ * vitality falls the needles brown and drop in place.
  */
 function buildPine(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
   const r = ctx.rand.fork("pine");
@@ -1077,7 +1074,7 @@ function buildPine(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: S
     center[1] = Math.max(center[1], floor + radius * 0.5);
     clumps.push({ center, radius, limb: liftedFrom(boughs, center, at, radius, k), r: fr });
   }
-  // A crown over its room thins every tuft's twigs evenly.
+  // A crown over its budget thins every tuft's twigs evenly.
   const wanted = clumps.reduce((n, c) => n + twigsOf(look, c.radius, 1) * twigTriangles(look), 0);
   const grown = emitClumps(clumps, () => crown, boughs, look, Math.min(1, budget / Math.max(1, wanted)));
   return { parts: grown.parts, anchors: hungFrom(skel, grown.parts, grown.anchors) };
@@ -1117,9 +1114,9 @@ function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel:
 }
 
 /**
- * How a juniper is tufted: how many tufts a full bush carries, two in three
- * near the dome's surface and one deeper in; each tuft's width and length at
- * medium needles; and its needles' and shoots' triangles at most. A fir's
+ * How a juniper is tufted: `tufts` on a full bush, two in three near the
+ * dome's surface and one deeper in, each tuft's `width` and length (`reach`)
+ * at medium needles, and the triangle `budget` for needles and shoots. A fir's
  * branchlets cover far less per triangle than a bush's leaf clusters, so a
  * juniper dense enough to hide most of its stems takes about twice a leafy
  * bush's triangles.
@@ -1127,11 +1124,11 @@ function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel:
 const JUNIPER = { tufts: 280, width: 0.085, reach: 0.3, budget: 20_000 } as const;
 
 /**
- * A fir's needles on a bush's many stems: a juniper. Short shoots leave the
- * stems for points spread over the bush's dome, each tipped with a small
- * frond built as a fir's is, so the bush is a mass of overlapping needle
- * tufts. A fir's fronds are sized for limbs metres long: on a bush's short
- * stems they hung as a few broad, flat sprays, like a fern's.
+ * Builds a fir's needles on a bush's many stems, as a juniper. Short shoots
+ * leave the stems for points spread over the bush's dome, each tipped with a
+ * small frond built like a fir's, so the bush is a mass of overlapping needle
+ * tufts. A fir's fronds are sized for limbs metres long, and on a bush's
+ * short stems they hung as a few broad, flat sprays, like a fern's.
  */
 export function buildJuniper(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
   let density = 1;
@@ -1209,9 +1206,9 @@ function acrossOf(dir: Vec3): V3 {
 /**
  * A spray of needles along a limb's polyline, built like a fir's frond: a
  * narrow ridge of needles along its top, and branchlets to either side that
- * reach toward the tip and droop, each a small creased needle card. The branchlets alternate and vary, so a spray
- * reads as layered, feathery needles from the side and from below rather
- * than as one flat plate.
+ * reach toward the tip and droop, each a small creased needle card. The
+ * branchlets alternate and vary, so a spray looks like layered, feathery
+ * needles from the side and from below rather than one flat plate.
  */
 function emitFrond(
   out: PartBuilder,
@@ -1224,13 +1221,13 @@ function emitFrond(
   carry: (q: Vec3) => { bough: Vec3; droop: number },
   density: number,
 ): void {
-  // Lower sprays shed first, as an ailing conifer browns from the bottom up.
+  // Lower sprays shed first, as a dying conifer browns from the bottom up.
   const loss = clamp(lossThreshold(r.next(), 0.5) + 0.12 * (1 - heightFrac), 0.02, 0.7);
   const wither = 0.7 + 0.3 * r.next();
   const tint = r.range(-0.06, 0.06);
   const lift = 0.12 * (p.fullness < 0.9 ? 1 : 0.5) * heightFrac;
 
-  // Each card sags with its bough by the bark's rule where it leaves the limb; a branchlet also bends about that point.
+  // Each card sags with its bough by the bark's rule where it leaves the limb. A branchlet also bends about that point.
   const channelsAt = (t: number, edge: number, cardTint: number, from = t, twig = false): Channels => {
     const at = pointOnPolyline(points, from).at;
     const b = carry(at);
@@ -1310,7 +1307,7 @@ function emitFrond(
   for (let k = 0; k < count; k++) {
     for (const sideSign of [-1, 1]) {
       const t = 0.1 + 0.84 * ((k + (sideSign > 0 ? 0.25 : 0.75)) / count) + r.range(-0.03, 0.03);
-      // The outer branchlets drape: they reach farther and hang lower, over the whorl below.
+      // The outer branchlets reach farther and hang lower, draping over the whorl below.
       const outer = clamp((t - 0.3) / 0.5, 0, 1);
       const reach = width * (0.8 - 0.4 * t) * r.range(0.8, 1.15) * (1 + FROND.drape.reach * outer);
       const forward = r.range(0.6, 0.95);
@@ -1335,8 +1332,8 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
   const r = ctx.rand.fork("blossoms");
   const s = ctx.facts.scale ?? 1;
   const picker = r.fork("pick");
-  // A bush hangs fewer pods than a tree, so they fit beside its frame and leaves; petals are light, and berries small.
-  const bush = standsAsBush(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
+  // A bush hangs fewer pods than a tree, so they fit beside its frame and leaves. Petals and berries are light, so their caps stay the same.
+  const bush = isBushHeight(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
   const cap = bush && p.form === "pods" ? Math.min(BUSH_HUNG, BLOSSOM_CAP.pods) : BLOSSOM_CAP[p.form];
   const want = Math.min(cap, Math.round(anchors.length * p.count));
   // Berries hang among the leaves on the plant's sides and underside first, not on top of it.
@@ -1381,12 +1378,13 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
 }
 
 /**
- * How big a fruit is (a little larger than life, so it reads among the
- * leaves from a path): an apple's radius, its stalk, and how much a pear is
- * stretched below its neck; the lowest a fruit's bottom hangs above the
- * soil; and the crop of a crown bowed with fruit. A bush hangs at most
- * `BUSH_HUNG` fruit. A tree hangs up to `FRUIT_TREE_CAP`, each `treeSize`
- * times as large, so an apple tree reads as one from a path 20 m away.
+ * Fruit sizes, a little larger than life so fruit stays visible among the
+ * leaves from a path: an apple's radius, its stalk, and how much a pear is
+ * stretched below its neck. `clear` is the lowest a fruit's bottom hangs above
+ * the soil, and `bowed` is the crop of a crown bowed with fruit. A bush hangs
+ * at most `BUSH_HUNG` fruit. A tree hangs up to `FRUIT_TREE_CAP`, each
+ * `treeSize` times as large, so an apple tree is recognizable from a path 20 m
+ * away.
  */
 const FRUIT = { radius: 0.06, stalk: 0.035, pear: 1.45, clear: 0.2, bowed: 0.8, treeSize: 1.6 } as const;
 
@@ -1402,14 +1400,14 @@ export function buildFruit(p: Resolved<typeof fruitParams>, ctx: BuildContext, a
   const pear = p.fruit === "pears";
   const top = pear ? FRUIT.pear : 0.88;
   const crown = crownOf(anchors.map((a) => a.position));
-  const tree = !standsAsBush(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
+  const tree = !isBushHeight(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
   const radius = FRUIT.radius * (tree ? FRUIT.treeSize : 1);
   // Fruit hangs only where it clears the soil.
   const room = anchors.map((a, i) => ({ a, i })).filter(({ a }) => a.position[1] - FRUIT.stalk - (top + 1) * radius * 1.15 > FRUIT.clear);
-  // A crown bowed with fruit hangs the most its plant may; a lighter crop, that share of it, however many twigs it has.
+  // A crown bowed with fruit hangs the most its plant may, and a lighter crop that share of it, however many twigs it has.
   const most = tree ? FRUIT_TREE_CAP : BUSH_HUNG;
   const want = Math.min(Math.round((most * p.crop) / FRUIT.bowed), Math.round(room.length * p.crop));
-  // Fruit shows best on the crown's outside, where it hangs clear of the leaves: twigs there are picked
+  // Fruit shows best on the crown's outside, where it hangs clear of the leaves. Twigs there are picked
   // first, the sides and underside a little before the top, and the crown's inner twigs last.
   const inner = (a: Anchor): number => (crownPlace(crown, a.position).depth < 0.7 ? 1 : 0);
   const chosen = room.map((x) => ({ ...x, key: picker.next() + inner(x.a) * 1.5 + (x.a.normal[1] > 0.35 ? 0.5 : 0) })).sort((x, y) => x.key - y.key).slice(0, want).sort((x, y) => x.i - y.i);

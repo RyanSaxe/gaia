@@ -1,14 +1,14 @@
-// The painter's own thread: it paints each view it is sent (`painter.ts`)
-// and sends the painting back, with a copy encoded for keeping, so painting
-// never takes the page's time.
+// The painter's worker. It paints each view it receives (`painter.ts`) and
+// posts back the painting with a WebP copy for storage, so painting stays off
+// the main thread.
 
 import { type PaintJob, paint } from "./painter.ts";
 
-/** What the page sends: a view to paint, named so its painting can be told apart. */
+/** A job from the page: a view to paint, with an id that matches its reply. */
 export interface PainterJob extends PaintJob {
   readonly id: number;
 }
-/** What the painter's thread answers: the painting with its copy for keeping, or why it failed. */
+/** The worker's reply: the painting with its stored copy, or the failure message. */
 export type PainterReply =
   | { readonly id: number; readonly painting: ImageBitmap; readonly kept: Blob | null }
   | { readonly id: number; readonly failed: string };
@@ -20,7 +20,7 @@ interface WorkerScope {
 
 const scope = globalThis as unknown as WorkerScope;
 
-/** WebP's quality for a kept painting: about 150 KB a page. */
+/** WebP quality for a stored painting, about 150 KB per page. */
 const KEPT = 0.82;
 
 scope.onmessage = async (e) => {

@@ -24,23 +24,24 @@ export interface Primitive<R extends Role = Role, P extends Params = Params> {
   /** Slots of the primitive's own, filled in a later request. Their input is this primitive's output. */
   readonly slots?: Readonly<Record<string, Slot>>;
   /**
-   * What a place must have for this primitive to stand there, such as running
-   * water for a waterwheel. A thing whose place lacks any of them is never
-   * offered it; where it has them all, Jev chooses as it would.
+   * What a place must have for this primitive to be used there, such as
+   * running water for a waterwheel. A thing whose place lacks any of them is
+   * never offered this primitive. Where the place has them all, Jev chooses
+   * freely.
    */
   readonly needs?: readonly Need[];
   readonly build: (params: Resolved<P>, ctx: BuildContext, input: RoleInput<R>) => RoleOutput<R>;
 }
 
 /**
- * One thing a part or a form needs of the place it stands in: something the
- * place has, such as running water, or a range of the thing's rank by
- * importance among the world's own things, from 0 (the least important) to 1
- * (the most), both ends included.
+ * One requirement a part or form has of its place: something the place has,
+ * such as running water, or a range of the thing's importance rank among the
+ * world's things, from 0 for the least important to 1 for the most, both ends
+ * included.
  */
 export type Need = string | { readonly rank: readonly [number, number] };
 
-/** Where a thing stands, as needs read it: what the place has, and the thing's rank by importance when it has one. */
+/** A thing's place as `meets` reads it: what the place has, and the thing's importance rank when it has one. */
 export interface Place {
   readonly has: readonly string[];
   readonly rank?: number;
@@ -48,8 +49,8 @@ export interface Place {
 
 /**
  * Whether a place meets every need: it has each thing needed, and its rank
- * lies in each range needed. A place with no rank meets no range. This is the
- * one rule that decides what Jev is offered; among what fits, Jev chooses.
+ * is in each range needed. A place with no rank meets no range. This is the
+ * only rule that limits what Jev is offered, and Jev chooses among what fits.
  */
 export function meets(needs: readonly Need[] | undefined, place: Place): boolean {
   return (needs ?? []).every((n) => (typeof n === "string" ? place.has.includes(n) : place.rank !== undefined && place.rank >= n.rank[0] && place.rank <= n.rank[1]));
@@ -96,7 +97,7 @@ export class Library {
     return p;
   }
 
-  /** The primitives that can fill a slot of this role, in a stable order; given a place, only those whose needs it meets (`meets`). */
+  /** The primitives that can fill a slot of this role, in a stable order. Given a place, only those whose needs it meets (`meets`). */
   forRole(role: Role, place?: Place): AnyPrimitive[] {
     return [...this.#byId.values()]
       .filter((p) => p.role === role && (place === undefined || meets(p.needs, place)))

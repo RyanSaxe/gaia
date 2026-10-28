@@ -1,13 +1,11 @@
-// The ground's vitality as the grass, the ground and the water read it: a
-// small texture over the land holding the vitality of whatever owns the
-// ground there (a file's patch, or on a lot its area's) and the vitality of
-// the area that ground lies in, which water follows, each to a 65535th in a
-// high byte (red, green) and a low byte (blue, alpha), so a change easing
-// in moves the grass smoothly rather than a 255th at a time. The bake says whose ground each sample is (`ownershipOf` in
-// @gaia/terrain); `showGroundVitality` weighs each owner's vitality by its
-// share (`vitalityOver`), so a change in vitality rewrites the texture's
-// bytes and nothing rebakes. Past the land the ground is the wild's and
-// always thrives.
+// Keeps the ground's vitality field that the grass, ground and water shaders
+// read: a small texture over the land with the vitality of each sample's
+// owner, a file's patch or for a lot its area, and of the area the sample lies
+// in, which the water follows. Each value has 16 bits in a high byte (red,
+// green) and a low byte (blue, alpha), so an easing change moves the grass
+// smoothly rather than in 255ths. The bake records each sample's owners
+// (`ownershipOf` in @gaia/terrain), so a vitality change only rewrites the
+// texture's bytes.
 
 import * as THREE from "three";
 import { CHANNEL_MATH } from "@gaia/realize";
@@ -22,12 +20,12 @@ function fieldTexture(data: Uint8Array, n: number): THREE.DataTexture {
   return t;
 }
 
-/** The field and the colors decline turns the cover toward, shared by the ground and the grass; the water reads the field. */
+/** The field and the colors declining cover turns toward, shared by the ground and the grass. The water reads the field. */
 export const vitalityUniforms = {
   uVitalityField: { value: fieldTexture(new Uint8Array([255, 255, 255, 255]), 1) },
   /** The field's origin, meters between its samples, and samples per side. */
   uVitalityMap: { value: new THREE.Vector3(0, 1, 1) },
-  /** Straw, low to high to tip: what the cover dries toward. */
+  /** The straw colors, low, high and tip, that declining cover dries toward. */
   uStrawLow: { value: hexToVec3(0xa38a55) },
   uStrawHigh: { value: hexToVec3(0xd3bb7a) },
   uStrawTip: { value: hexToVec3(0xe8d79e) },
@@ -38,11 +36,11 @@ export const vitalityUniforms = {
 };
 
 let owned: Ownership | null = null;
-/** Each sample's ground and area vitality in 255ths, exactly, and the texture's bytes made from them. */
+/** Each sample's ground and area vitality in exact 255ths, from which the texture's bytes are made. */
 let levels = new Float32Array([255, 255]);
 let bytes = new Uint8Array([255, 255, 255, 255]);
 
-/** Takes on a bake's ownership of the land, or none: then all ground thrives until `showGroundVitality`. */
+/** Sets a bake's ownership of the land. With null, all ground has full vitality until `showGroundVitality`. */
 export function setGroundOwnership(own: Ownership | null): void {
   owned = own;
   const n = own?.n ?? 1;
@@ -56,8 +54,8 @@ export function setGroundOwnership(own: Ownership | null): void {
 
 /**
  * Shows each owner's vitality on its ground (`ground[owner]`) and its area's
- * on the area's water (`area[owner]`). Call it again whenever a file's or an
- * area's vitality changes; it rewrites a few hundred kilobytes, never the bake.
+ * on the area's water (`area[owner]`). Call it whenever a file's or an area's
+ * vitality changes. It rewrites a few hundred kilobytes and never the bake.
  */
 export function showGroundVitality(ground: ArrayLike<number>, area: ArrayLike<number>): void {
   if (owned === null) return;
@@ -82,9 +80,9 @@ export function groundVitalityAt(x: number, z: number): { ground: number; area: 
 const AROUND = 13;
 
 /**
- * How far the ground around (x, z) has declined, 0 thriving to 1 all it will: `groundDecline` of the ground's own
- * vitality, averaged over a disc `radius` meters across that weighs it less toward the rim, so it changes gradually as
- * the eye moves and as soon as vitality does.
+ * How much the ground around (x, z) has declined, from 0 to 1: `groundDecline` of the ground's own vitality, averaged
+ * over a disc `radius` meters across with less weight toward the rim, so it changes gradually as the eye moves and at
+ * once when vitality does.
  */
 export function declineAround(x: number, z: number, radius: number): number {
   if (owned === null) return 0;
@@ -108,16 +106,14 @@ export function declineAround(x: number, z: number, radius: number): number {
 const g = GROUND_DECLINE;
 
 /**
- * GLSL: the field (`landVitality`: the ground's own vitality in x, its
- * area's in y), how far along its decline a vitality looks
- * (`shownVitality`, the twin of @gaia/realize's), how far ground of a
- * vitality has declined (`declineOf`, the twin of `groundDecline` in
- * @gaia/terrain), and where bare earth opens in declined ground
- * (`bareEarth`): patches a few meters across, ragged at their edges,
- * opening over more of the ground as it declines (`groundLook`'s bare
- * share), softened over `edge`. The ground paints the patches and the grass
- * thins out across a wider edge and leaves them bare, from the same
- * function.
+ * GLSL for the vitality field. `landVitality` returns the ground's own
+ * vitality in x and its area's in y. `shownVitality` is a copy of
+ * @gaia/realize's, and `declineOf` a copy of `groundDecline` in
+ * @gaia/terrain. `bareEarth` gives where bare earth shows in declined
+ * ground: ragged patches a few meters across that cover more ground as it
+ * declines (`groundLook`'s bare share), softened over `edge`. The ground
+ * paints these patches, and the grass calls the same function with a wider
+ * edge to leave them bare.
  */
 export const VITALITY_GLSL = /* glsl */ `
 uniform sampler2D uVitalityField;

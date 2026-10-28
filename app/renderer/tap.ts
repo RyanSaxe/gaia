@@ -1,13 +1,12 @@
-// The page's one way to tell a tap from a drag, for the world and the paper
-// laid over it.
+// Tells a tap from a drag, for the world canvas and the paper UI over it.
 
-/** How far a press may stray, in CSS pixels, and still be a tap: a finger wobbles more than a mouse. */
+/** How far a press may move, in CSS pixels, and still count as a tap. A finger moves more than a mouse. */
 export const tapSlop = (e: PointerEvent): number => (e.pointerType === "mouse" ? 5 : 10);
 
 /**
- * Calls `tap` when a press lifts without ever straying past `tapSlop` from
- * where it went down, so a drag that comes back is still a drag. A press that
- * shared the canvas with another finger is part of a pinch, never a tap.
+ * Calls `tap` when a press lifts without ever moving more than `tapSlop` from
+ * where it went down, so a drag that returns to its start is still a drag. A
+ * press made while another pointer was down is part of a pinch, never a tap.
  */
 export function onTap(target: HTMLElement, tap: (e: PointerEvent) => void): void {
   const down = new Map<number, { x: number; y: number; strayed: boolean }>();

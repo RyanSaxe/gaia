@@ -1,5 +1,5 @@
-// Clearings: up to twelve capsules on the ground where grass does not grow,
-// such as the floors of a few buildings and the walks to their doors. Grass shaders
+// Up to `MAX_CLEARINGS` capsules on the ground where grass does not grow, such
+// as the floors of a few buildings and the walks to their doors. Grass shaders
 // multiply each blade's height by `clearing(xz)`.
 
 import * as THREE from "three";

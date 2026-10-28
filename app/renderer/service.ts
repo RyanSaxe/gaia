@@ -1,6 +1,7 @@
-// The page's line to the world service. Inside the app, the preload passes in
-// a MessagePort once the page has loaded; messages sent before then wait for
-// it. A standalone page (the offline HTML, `pnpm lab:serve`) has no service.
+// Connects the page to the world service. Inside the app, the preload script
+// passes in a MessagePort once the page has loaded, and messages sent before
+// then are queued. A standalone page, such as the offline HTML or
+// `pnpm lab:serve`, has no service.
 
 import type { FromRenderer, ToRenderer } from "../world-service/protocol.ts";
 
@@ -13,7 +14,7 @@ declare global {
 
 export interface WorldService {
   send(message: FromRenderer): void;
-  /** Listens to everything the service says; returns a function that stops listening. */
+  /** Listens to every message from the service. Returns a function that stops listening. */
   on(listener: (message: ToRenderer) => void): () => void;
 }
 

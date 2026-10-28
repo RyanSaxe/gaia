@@ -14,7 +14,7 @@ describe("a copy's form by its crown's size on a pass's screen", () => {
     expect(band.full).toBe(true);
     expect(band.card).toBeGreaterThan(0);
     expect(band.card).toBeLessThan(1);
-    // Past the band's end the full form still dissolves under a card drawn whole to the eye.
+    // Past the band's end the full form still dissolves under a card that looks opaque.
     const leaving = farChoice(SWAP * 0.93, SWAP, TURN, false);
     expect(leaving.full).toBe(true);
     expect(leaving.card).toBeGreaterThan(0.99);
@@ -31,7 +31,7 @@ describe("a copy's form by its crown's size on a pass's screen", () => {
     expect(goneness(TURN.gone.start + 1, TURN.gone)).toBe(0);
     expect(goneness((TURN.gone.start + TURN.gone.end) / 2, TURN.gone)).toBeCloseTo(0.5, 6);
     expect(goneness(TURN.gone.end, TURN.gone)).toBe(1);
-    // A crown dissolving draws as it otherwise would; gone, it draws in no form.
+    // A dissolving crown draws as it otherwise would. Once gone, it draws in no form.
     expect(farChoice(6, SWAP, TURN, false)).toEqual({ full: false, card: 1 });
     expect(farChoice(6, 1000, TURN, false).full).toBe(false);
     expect(farChoice(TURN.gone.end, SWAP, TURN, false)).toEqual({ full: false, card: 0 });
@@ -48,7 +48,7 @@ describe("a set's far cards", () => {
   const crown = new THREE.Sphere(new THREE.Vector3(0.2, 3, -0.1), 4);
   const meshesOf = (cards: FarCards): [THREE.Mesh<THREE.InstancedBufferGeometry>, THREE.Mesh<THREE.InstancedBufferGeometry>] => cards.object.children as [THREE.Mesh<THREE.InstancedBufferGeometry>, THREE.Mesh<THREE.InstancedBufferGeometry>];
 
-  it("stand each plant's copies in buffers written when they are placed, which no pass writes again", () => {
+  it("keep each plant's copies in buffers written when they are placed, which no pass writes again", () => {
     const cards = createFarCards(createSceneLight(), TURN, 2);
     const copies = cards.copies(new THREE.Group());
     copies.place(placesOf(spots), crownsOf(spots, crown));
@@ -60,11 +60,11 @@ describe("a set's far cards", () => {
     expect(Array.from(geometry.getAttribute("aCrown").array.slice(4, 8))).toEqual(Array.from(new Float32Array([-30 + 0.2 * 0.8, 2 + 3 * 0.8, 80 - 0.1 * 0.8, 4 * 0.8])));
     const versions = (): number[] => ["aSpot", "aMore", "aCrown"].map((name) => (geometry.getAttribute(name) as THREE.InstancedBufferAttribute).version);
     const placed = versions();
-    // Passes only set the pass's size; the copies' buffers stay as they were.
+    // Passes only set the pass's size. The copies' buffers stay as they were.
     for (const [focal, ortho] of [[900, false], [450, false], [40, true]] as const) cards.pass(focal, ortho);
     expect(versions()).toEqual(placed);
-    // A vitality change eases in as the near form's does, rewriting how the copy's vitality shows and nothing else,
-    // and comes to rest exactly; standing the copies elsewhere rewrites them all.
+    // A vitality change eases in as the near form's does, rewriting only the copy's shown vitality, and comes to rest
+    // exactly. Placing the copies elsewhere rewrites them all.
     copies.setVitalityAt(1, 0.25);
     settleVitality();
     expect(geometry.getAttribute("aMore").array[5]).toBeCloseTo(shownVitality(0.25), 6);
@@ -86,7 +86,7 @@ describe("a set's far cards", () => {
     expect(fading.geometry).toBe(solid.geometry);
     const spot = solid.geometry.getAttribute("aSpot").array;
     const more = solid.geometry.getAttribute("aMore").array;
-    // Each plant's copies stand in a stretch of their own, marked with whose they are; spare room is nobody's.
+    // Each plant's copies occupy a stretch of their own, marked with their member. Spare room belongs to no member.
     const xs = (member: number): number[] => Array.from({ length: solid.geometry.instanceCount }, (_, i) => i).filter((i) => more[i * 4 + 3] === member).map((i) => spot[i * 4] as number);
     const members = [...new Set(Array.from({ length: solid.geometry.instanceCount }, (_, i) => more[i * 4 + 3] as number))].filter((m) => m > 0);
     expect(members).toHaveLength(2);
@@ -132,7 +132,7 @@ describe("a set's far forms in memory", () => {
     expect(farSlotBytes(128, TURN.gone.end, 24)).toBeLessThanOrEqual(768 * MiB);
     // A phone's trees bake at half the size, a quarter of the memory.
     expect(farSlotBytes(64, TURN.gone.end, 24)).toBeLessThanOrEqual(192 * MiB);
-    // The coarsest level held draws a view no wider than a crown that has gone: no card reads past it.
+    // The coarsest level held draws a view no wider than a crown that is gone, so no card reads past it.
     for (const frame of [32, 64, 128]) expect(frame >> (farLevels(frame, TURN.gone.end) - 1)).toBeLessThanOrEqual(TURN.gone.end);
   });
 });

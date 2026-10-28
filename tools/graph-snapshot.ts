@@ -2,11 +2,11 @@
 // layout reads (`judgedGraph`), to a JSON snapshot that `pnpm jev-world` and
 // `pnpm print-world-requests` lay the project's world out from (`factsOf`).
 // Each node's importance and quality come from the Jev answers held in the store
-// under GAIA_DATA_DIR; nothing is asked. Opening a checkout updates its project's
-// lineage record, so for an older commit point GAIA_DATA_DIR at a copy of
-// the store. The snapshot is written outside the repository unless told
-// otherwise (`SNAPSHOT`), since the repository keeps only the showcase's.
-// Builds the engine first.
+// under GAIA_DATA_DIR, and nothing is sent to Jev. Opening a checkout updates its
+// project's lineage record, so for an older commit point GAIA_DATA_DIR at a copy
+// of the store. The snapshot goes outside the repository by default
+// (`SNAPSHOT`), since the repository keeps only the showcase's. It builds the
+// engine first.
 // Usage: GAIA_DATA_DIR=dir pnpm graph-snapshot [root] [out.json]
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -31,9 +31,9 @@ const response = JSON.parse(run.stdout.toString()) as { result?: CodeGraph; erro
 if (response.result === undefined) throw new Error(response.error?.message ?? "project.graph answered nothing");
 const graph = judgedGraph(response.result);
 const defs = graph.nodes.filter((n) => n.kind === "def");
-const standing = defs.filter((n) => typeof n.judged?.value?.importance === "number").length;
-if (standing === 0) throw new Error(`No definition has an importance in ${process.env.GAIA_DATA_DIR}: Jev's answers for this project are not there.`);
+const withImportance = defs.filter((n) => typeof n.judged?.value?.importance === "number").length;
+if (withImportance === 0) throw new Error(`No definition has an importance in ${process.env.GAIA_DATA_DIR}: Jev's answers for this project are not there.`);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify(graph)}\n`);
 const files = graph.nodes.filter((n) => n.kind === "file").length;
-console.log(`${out}: ${files} files, ${defs.length} definitions, ${standing} with an importance`);
+console.log(`${out}: ${files} files, ${defs.length} definitions, ${withImportance} with an importance`);

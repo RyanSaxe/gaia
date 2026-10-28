@@ -1,8 +1,8 @@
-// Gaia's mark (docs/design-system.md, "Gaia's mark"): a G cut through a dark green page onto Gaia's own world, the
-// village at 17:30 as the renderer draws it, and beside it the name in lowercase with its ai in the meadow's green.
-// The view is a picture of the world, kept as it was taken so the mark stays the same when the world is laid out
-// again; the letters are Fraunces (OFL.txt), a heavy soft cut for the G and a lighter one for the name.
-// `pnpm brand` (tools/brand.ts) paints it into the pictures the app shows, at the sizes it shows them.
+// Paints Gaia's mark (docs/design-system.md, "Gaia's mark"): a G cut through a dark green page onto a rendered view of
+// Gaia's village at 17:30, beside the lowercase name with "ai" in the meadow's green. The view is a stored image, so
+// the mark does not change when the world's layout changes. The letters are Fraunces (OFL.txt), a heavy soft cut for
+// the G and a lighter one for the name, and `pnpm brand` (tools/brand.ts) paints the app's images at their displayed
+// sizes.
 
 import G_FACE from "./fraunces-g.woff2";
 import NAME_FACE from "./fraunces-name.woff2";
@@ -14,25 +14,24 @@ type Ctx = CanvasRenderingContext2D;
 
 const G_FAMILY = "Gaia G";
 const NAME_FAMILY = "Gaia name";
-/** The page around the G, lighter at its head. */
+/** The page's gradient around the G, lighter at the top. */
 const PAGE = ["#27342c", "#18211b"] as const;
-/** The shade the page's cut edge casts into the window. */
+/** The shadow the page's cut edge casts into the G-shaped window onto the view. */
 const EDGE_SHADE = "rgba(7, 10, 8, 0.8)";
-/** The name's ink and its ai's green, on paper and on dark. */
+/** The name's ink and its "ai" green, for paper and dark backgrounds. */
 const NAME_INK = { paper: { ink: "#2b2721", ai: "#557d4c" }, dark: { ink: "#f3ecdc", ai: "#a7c98f" } } as const;
 
 /**
- * Where the icon's parts sit on its square, as fractions of its side: the G's size and baseline, and the view's
- * placement. The view was taken in the lab at 17:30, standing at (126, -465) and looking along yaw 124.3° and 4° up,
- * with the overlays hidden; it is placed so the autumn tree stands in the G's left stroke and the stone tower in its
- * top end.
+ * Positions on the icon's square, as fractions of its side: the G's size and baseline, and the view's placement. The
+ * view was captured in the lab at 17:30 from (126, -465), at yaw 124.3° and pitch 4° up, with the overlays hidden. It
+ * is placed so the autumn tree falls in the G's left stroke and the stone tower in its top end.
  */
 const G = { size: 1.044, baseline: 0.849 } as const;
 const VIEW_AT = { x: -0.134, y: -0.348, side: 1.578 } as const;
 
 let view: HTMLImageElement | null = null;
 
-/** Loads the mark's two faces and its view; paint nothing until it resolves. */
+/** Loads the mark's two font faces and its view. Paint nothing until it resolves. */
 export async function brandReady(): Promise<void> {
   const faces = [new FontFace(G_FAMILY, `url(${G_FACE})`), new FontFace(NAME_FAMILY, `url(${NAME_FACE})`)];
   for (const face of await Promise.all(faces.map((f) => f.load()))) document.fonts.add(face);
@@ -50,8 +49,9 @@ const canvasOf = (w: number, h: number): [HTMLCanvasElement, Ctx] => {
 };
 
 /**
- * The icon's art, `size` pixels square: the dark page with the G cut through it onto the view. The cut edge shades the
- * window's top and left as a page's thickness would; `small` icons (32 px and under) shade it less, so the G stays bright.
+ * Paints the icon, `size` pixels square: the dark page with the G cut through it onto the view. The cut edge shades the
+ * window's top and left as a page's thickness would. Callers pass `small` for icons shown at 32 px and under, which
+ * shade it less so the G stays bright.
  */
 export function paintIcon(size: number, small: boolean): HTMLCanvasElement {
   if (view === null) throw new Error("paintIcon: call brandReady() first.");
@@ -68,12 +68,12 @@ export function paintIcon(size: number, small: boolean): HTMLCanvasElement {
     target.textBaseline = "alphabetic";
     target.fillText("G", size / 2, size * G.baseline);
   };
-  // The window: the view, kept only inside the G.
+  // The window: the view, clipped to the G.
   const [w, wg] = canvasOf(size, size);
   wg.drawImage(view, size * VIEW_AT.x, size * VIEW_AT.y, size * VIEW_AT.side, size * VIEW_AT.side);
   wg.globalCompositeOperation = "destination-in";
   letterG(wg);
-  // The page's cut edge: the page with the G cut out casts its shade into the window, and only there.
+  // The page's cut edge: the page with the G cut out casts its shadow into the window, and only there.
   const [edge, eg] = canvasOf(size, size);
   eg.fillStyle = PAGE[1];
   eg.fillRect(0, 0, size, size);
@@ -91,7 +91,7 @@ export function paintIcon(size: number, small: boolean): HTMLCanvasElement {
   return c;
 }
 
-/** The icon's art on the rounded square every macOS icon has, `side` pixels across, ready to set beside the name. */
+/** The icon on a macOS icon's rounded square, `side` pixels across, for placing beside the name. */
 function tile(side: number): HTMLCanvasElement {
   const [c, g] = canvasOf(side, side);
   g.beginPath();
@@ -101,7 +101,7 @@ function tile(side: number): HTMLCanvasElement {
   return c;
 }
 
-/** Writes "gaia" from its baseline's left end, its ai in green. */
+/** Writes "gaia" from the left end of its baseline, with "ai" in green, and returns the word's width. */
 function writeName(g: Ctx, x: number, baseline: number, px: number, ground: keyof typeof NAME_INK): number {
   g.font = `${px}px "${NAME_FAMILY}"`;
   g.textAlign = "left";
@@ -111,7 +111,7 @@ function writeName(g: Ctx, x: number, baseline: number, px: number, ground: keyo
     ["ai", NAME_INK[ground].ai],
     ["a", NAME_INK[ground].ink],
   ] as const;
-  // Each part starts where the whole word so far ends, so the pairs keep the face's own spacing.
+  // Each part starts at the measured width of the word so far, so the letters keep the font's own spacing.
   let word = "";
   for (const [text, color] of parts) {
     g.fillStyle = color;
@@ -122,8 +122,8 @@ function writeName(g: Ctx, x: number, baseline: number, px: number, ground: keyo
 }
 
 /**
- * The name alone, `width` pixels wide and cut to its ink, on clear ground: what the start's sheet and the slip print
- * into their paper, where the icon, a thing from outside the world, has no place.
+ * Paints the name alone, `width` pixels wide, cropped to its ink on a transparent background. The start page's sheet
+ * and the slip print it on their paper, because the icon belongs outside the world.
  */
 export function paintName(width: number): HTMLCanvasElement {
   const [, probe] = canvasOf(1, 1);
@@ -141,11 +141,11 @@ export function paintName(width: number): HTMLCanvasElement {
 const LOCKUP = { gap: 0.2, name: 0.86, baseline: 0.71 } as const;
 
 /**
- * The icon beside the name, `width` pixels wide, on clear ground so it prints on any paper, or on its own sheet of the
- * map's paper, torn by `torn` (the sheet's torn edge, `DECKLE_MASK`, loaded).
+ * Paints the icon beside the name, `width` pixels wide, on a transparent background for any paper, or on its own sheet
+ * of map paper with the torn edge `torn` (a loaded `DECKLE_MASK`).
  */
 export function paintLockup(width: number, torn?: HTMLImageElement): HTMLCanvasElement {
-  // Measure the name at the icon's side of 1, then size everything to the width asked for.
+  // Measures the name for an icon side of 1, then scales everything to `width`.
   const [, probe] = canvasOf(1, 1);
   probe.font = `100px "${NAME_FAMILY}"`;
   const nameWidth = (probe.measureText("gaia").width / 100) * LOCKUP.name;

@@ -1,6 +1,6 @@
-// Rocks: noise-lumped bodies cut by a few planes, so they read as softly
-// faceted painterly stone, half sunk into the ground. Moss grows over their
-// upward faces and recedes, drying to lichen grey, as vitality falls.
+// Builds rocks: noise-lumped bodies cut by a few planes, so they look like
+// softly faceted painted stone, partly sunk into the ground. Moss covers their
+// upward faces, and as vitality falls it recedes and dries to lichen grey.
 
 import { type Anchor, type BuildContext, type Built, CUT, type Part, type Rand, type Resolved, type Vec3 } from "@gaia/schema";
 import type { boulderParams, flatStoneParams, mossParams, outcropParams, stoneClusterParams } from "../rock.ts";
@@ -18,7 +18,7 @@ interface Stone {
   readonly leanDir: number;
   /** 0 is worn smooth, 1 is cut into sharp planes. */
   readonly facets: number;
-  /** Where a flat top cuts the body, as a share of its half height above center; 0 means none. */
+  /** Where a flat top cuts the body, as a share of its half height above center. 0 means no flat top. */
   readonly top: number;
   /** Tilt of the flat top, radians. */
   readonly topTilt: number;
@@ -27,14 +27,14 @@ interface Stone {
   /** Share of the body's height that lies below ground. */
   readonly embed: number;
   /**
-   * Keeps one half of a body split by a vertical plane through its center,
-   * at `angle`, on `side` 1 or -1. Two halves make one stone that, as
-   * vitality falls, slumps apart along the split: a crack opens.
+   * Keeps one half of a body split by a vertical plane through its center
+   * at `angle`, on `side` 1 or -1. Two halves make one stone. As vitality
+   * falls they slump apart, so a crack opens along the split.
    */
   readonly split?: { readonly angle: number; readonly side: number; readonly droop: number };
 }
 
-/** Below this the body is flattened: it is always underground, so it needs no detail. */
+/** The body is flattened below this depth. That part is always underground, so it needs no detail. */
 const HIDDEN_DEPTH = 0.2;
 
 function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdiv: number): void {
@@ -43,7 +43,7 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
   const planeCount = Math.round(6 + s.facets * 10);
   const planes: { n: V3; d: number; hue: number }[] = [];
   for (let k = 0; k < planeCount; k++) {
-    // Cuts favor the sides and shoulders; the buried base needs none.
+    // Cuts favor the sides and shoulders, because the buried base needs none.
     const a = r.next() * Math.PI * 2;
     const y = r.range(-0.25, 0.85);
     const h = Math.sqrt(1 - y * y);
@@ -64,8 +64,8 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
   const floor = -s.size[1] * HIDDEN_DEPTH;
   const tint = r.range(-0.03, 0.03);
 
-  // How deeply cut planes shaved each vertex, and the hue of the plane that shaved it most:
-  // fresh fractures read lighter than weathered rounds, and each face takes its own tone.
+  // How deeply the cut planes shaved each vertex, and the hue of the plane that shaved it most. Fresh fractures are
+  // lighter than weathered rounded stone, and each face gets its own tone.
   const fracture = new Float32Array(sphere.points.length);
   const faceHue = new Float32Array(sphere.points.length);
   const inCrack = new Float32Array(sphere.points.length);
@@ -132,7 +132,7 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     const mottle = fbm3(p[0] * 1.6, p[1] * 1.6, p[2] * 1.6, seed + 3, 3);
     // Lighter toward the top, a soft darker band where the stone meets the ground.
     const ground = clamp(above / 0.22, 0, 1);
-    // Rain streaks run down the sides: noise stretched tall.
+    // Rain streaks down the sides, from noise stretched vertically.
     const streak = fbm3(p[0] * 4.5, p[1] * 0.6, p[2] * 4.5, seed + 6, 2);
     const shade =
       (0.46 + 0.16 * mottle + 0.12 * (fracture[i] as number) + 0.08 * streak + 0.16 * clamp(above, 0, 1) - 0.2 * (1 - ground * ground) + 0.06 * n[1]) *
@@ -200,7 +200,7 @@ export function buildBoulder(p: Resolved<typeof boulderParams>, ctx: BuildContex
     strata: 0,
     embed: 0.3,
   };
-  // One stone in two halves that meet exactly: whole while healthy, cracking open in decline.
+  // One stone in two halves that meet exactly. It looks whole at high vitality and cracks open as vitality falls.
   const angle = r.next() * Math.PI;
   for (const side of [1, -1]) emitStone(out, { ...stone, split: { angle, side, droop: CRACK_DROOP } }, r.fork("body"), anchors, 3);
   return built(out, anchors);
@@ -251,7 +251,7 @@ export function buildStoneCluster(p: Resolved<typeof stoneClusterParams>, ctx: B
   const placed: { x: number; z: number; rad: number }[] = [];
   for (let k = 0; k < count; k++) {
     const sr = r.fork(`stone${k}`);
-    // The first stone is the largest; the rest shrink and gather around it.
+    // The first stone is the largest, and the rest are smaller and placed around it.
     const scale = k === 0 ? 1 : sr.range(0.3, 0.7) * Math.pow(0.9, k);
     const size: V3 = [h * scale * sr.range(1, 1.6), h * scale, h * scale * sr.range(0.9, 1.4)];
     const rad = Math.max(size[0], size[2]) * 0.45;
@@ -346,13 +346,13 @@ const GROWTH = {
   lichen: { thick: 0.012, lumps: 0.15, shade: 0.5 },
 } as const;
 
-/** Moss grows on the solid outside of stone and bark, never on bare cut wood (so a cut face keeps its rings) nor inside a hollow. */
+/** Moss grows only on solid stone and bark parts. It never grows on bare cut wood, so a cut face keeps its rings, or inside a hollow. */
 const MOSSY: ReadonlySet<string> = new Set(["stone", "bark"]);
 const mossy = (part: Part): boolean => MOSSY.has(part.swatch) && part.collision !== "none";
 
 /**
- * Everything that carries vertex `i` of `part` as it declines, so moss on it
- * slumps, falls, breaks off and rots away with it.
+ * The decline channels of vertex `i` of `part`, so moss on it slumps, falls,
+ * breaks off and rots away with it.
  */
 function carriedBy(part: Part, i: number): Pick<Channels, "loss" | "droop" | "pivot" | "bough" | "fall" | "rot" | "grain"> {
   const c = part.channels;
@@ -369,13 +369,13 @@ function carriedBy(part: Part, i: number): Pick<Channels, "loss" | "droop" | "pi
 }
 
 /**
- * Moss on every upward face of the stone or bark below it: a skin lifted a few
- * centimeters off the surface where noise and the face's tilt agree. The skin
- * is a patch (`CUT.patch`): each vertex carries how deep in the patch it
- * sits, and the shader ends the moss along a soft, winding contour of that
- * depth, never along the stone's triangles. The skin thins to nothing at that
- * edge, so it meets the stone flush. As vitality falls the edge creeps back
- * toward each patch's heart and what remains dries to lichen grey.
+ * Moss on the upward faces of the stone or bark in `base`: a skin lifted a few
+ * centimeters off the surface where noise and the face's tilt both allow it.
+ * The skin is a patch (`CUT.patch`). Each vertex carries its depth in the
+ * patch, and the shader ends the moss along a soft, winding contour of that
+ * depth, not along the stone's triangles. The skin thins to nothing at that
+ * edge, so it meets the stone flush. As vitality falls the edge recedes toward
+ * each patch's center and the rest dries to lichen grey.
  */
 export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, base: Built): Built {
   const out = new PartBuilder("moss");
@@ -386,7 +386,7 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
   const stones: Part[] = base.parts.filter(mossy);
   const threshold = 1.2 - p.cover * 1.15;
   for (const part of stones) {
-    // Bark sheds in plates; moss on it lies thin, so where a plate's neighbor has gone its edge stays on the bark.
+    // Bark sheds in plates, so moss on bark is thin. Where a neighboring plate has gone, the moss edge stays on the bark.
     const onBark = part.swatch === "bark" ? 0.2 : 1;
     const pos = part.positions;
     const nrm = part.normals;
@@ -405,7 +405,7 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       mask[i] = clamp((want - threshold + 0.15) / 0.3, 0, 1) * (y > 0.02 ? 1 : 0);
     }
     const idx = part.indices;
-    // The same vertex of the stone is the same vertex of the skin, so the skin stays smooth.
+    // Each stone vertex maps to one skin vertex, so the skin stays smooth.
     const skin = new Map<number, number>();
     const skinVertex = (i: number): number => {
       const hit = skin.get(i);
@@ -413,22 +413,22 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const q: V3 = [pos[i * 3] as number, pos[i * 3 + 1] as number, pos[i * 3 + 2] as number];
       const n: V3 = [nrm[i * 3] as number, nrm[i * 3 + 1] as number, nrm[i * 3 + 2] as number];
       const m = mask[i] as number;
-      // Cushions of two sizes, so the moss mounds unevenly rather than lying as one even coat.
+      // Noise at two scales, so the moss forms uneven mounds rather than one even coat.
       const lump = 1 + g.lumps * (0.6 * fbm3(q[0] * 4, q[1] * 4, q[2] * 4, seed + 19, 2) + 0.4 * fbm3(q[0] * 9, q[1] * 9, q[2] * 9, seed + 17, 2));
       const lift = 0.004 + g.thick * onBark * smoothstep(0.15, 0.75, m) * Math.max(0.3, lump);
       const at: V3 = [q[0] + n[0] * lift, q[1] + n[1] * lift, q[2] + n[2] * lift];
       const jitter = clamp(0.5 + 0.9 * fbm3(q[0] * 6.3, q[1] * 6.3, q[2] * 6.3, seed + 23, 2), 0, 1);
-      // On a stone that slumps or a log that splits in decline, moss rides along with it.
+      // Moss on a stone that slumps or a log that splits moves with it (`carriedBy`).
       const v = out.vertex(
         at,
         n,
-        // Mounds catch the light and hollows between them stay dark; patches of older, browner or fresher moss vary the green.
+        // Mounds are lighter and the hollows between them darker. Noise patches vary the green like older and fresher moss.
         g.shade + 0.12 * m + 0.3 * (lump - 1) + 0.08 * n[1] + 0.25 * clamp(2 * fbm3(q[0] * 4, q[1] * 4, q[2] * 4, seed + 29, 2), -1, 1),
         {
           ...carriedBy(part, i),
           wither: 0.85,
           glow: 0,
-          // Patches of yellower and bluer green, as fresh and old moss grow side by side.
+          // Patches of yellower and bluer green, like fresh and old moss side by side.
           tint: clamp(0.05 * fbm3(q[0] * 0.7, q[1] * 0.7, q[2] * 0.7, seed + 13, 2) + 0.07 * clamp(2.5 * fbm3(q[0] * 2.2, q[1] * 2.2, q[2] * 2.2, seed + 31, 2), -1, 1), -0.09, 0.09),
         },
         [m, jitter, cut],
@@ -440,7 +440,7 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const a = idx[t] as number;
       const b = idx[t + 1] as number;
       const c = idx[t + 2] as number;
-      // Only faces the patch's edge can reach: the shader cuts the rest of them away.
+      // Skip faces with every vertex below mask 0.12. The patch edge never reaches them, and the shader would cut them away.
       if (Math.max(mask[a] as number, mask[b] as number, mask[c] as number) < 0.12) continue;
       out.triangle(skinVertex(a), skinVertex(b), skinVertex(c));
     }

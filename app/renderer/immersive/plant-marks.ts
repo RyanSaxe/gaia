@@ -1,15 +1,10 @@
-// The map's marks for trees, bushes, stones and flower drifts, each drawn from its own composition as a building's is
-// (`marks.ts`) and never chosen by name. A tree's or bush's frame stands its trunk or stems and gives its crown its
-// lobes or whorls; its foliage inks them, its bloom dots them, and its bark and palette wash it, so a fir draws as tiers
-// up a spire, a willow as a dome hung with strands and a bramble as arching canes. A stone is drawn from its shape and
-// the moss on it, and a drift from its plants. So a new combination of parts draws with no new code, and a new
-// primitive needs one entry in `PLANT_INKS`, which a contract test asks for.
+// Draws the map's marks for trees, bushes, stones and flower drifts from their compositions, as `marks.ts` does for
+// buildings, never from a kind name. A new combination of parts needs no new code, and a new primitive needs one entry
+// in `PLANT_INKS`, which a contract test checks.
 //
-// A mark is drawn flat to the eye, as the great tree's is, at `s` pixels a meter of its build as it stands, lit from
-// the northwest and shadowed on the paper to the southeast as every mark is. It wears as its thing does in the world:
-// leaves dry and fall until the boughs stand bare, needles brown and drop from the whorls, a drift thins to stalks, a
-// stone pales and cracks and wood rots dark. Every copy of a build shares one drawing at each size and wear
-// (`stampPlant`), so thousands of trees cost a few hundred drawings.
+// A mark is drawn flat to the viewer at `s` pixels per meter of its build, lit from the northwest with a shadow to the
+// southeast, and worn by vitality as its thing is in the world. Every copy of a build shares one drawing at each size
+// and wear (`stampPlant`), so thousands of trees cost a few hundred drawings.
 
 import type { Palette, Params, Resolved } from "@gaia/schema";
 import {
@@ -64,27 +59,27 @@ import {
   wash,
 } from "./marks.ts";
 
-/** A tree's, bush's, stone's or drift's composition, and how big its build stands: what its mark is drawn from. */
+/** A tree's, bush's, stone's or drift's composition and its build's size, which its mark is drawn from. */
 export interface PlantComposition extends Composition {
-  /** How tall the build stands, how far it reaches from its middle, and how high its lowest leaves hang (0 for none), meters at scale 1. */
+  /** In meters at scale 1, the build's height, its radius, and the height of its lowest leaves (0 for none). */
   readonly height: number;
   readonly radius: number;
   readonly crown: number;
 }
 
-/** How a mark wears with its shown vitality, as its thing does in the world: each from 1 (whole) toward 0. */
+/** How a mark wears at its shown vitality, matching its thing in the world. */
 interface Growth {
   readonly v: number;
-  /** How much foliage still hangs, or how many flowers still stand. */
+  /** How much foliage or how many flowers remain, from 1 (all) to 0. */
   readonly leaf: number;
-  /** How far its colors have gone toward their decline. */
+  /** How far its colors have moved toward their decline colors, from 0 to 1. */
   readonly dry: number;
   readonly seed: number;
 }
 
 const growthOf = (v: number, seed: number): Growth => ({ v, leaf: ease(v, 0.04, 0.6), dry: 1 - ease(v, 0.28, 0.95), seed });
 
-/** A swatch's color as the mark washes it: the palette's healthy color on the paper, going toward its decline. */
+/** Swatch colors for the mark: the palette's healthy color, mixed toward its decline color as `dry` rises. */
 interface Hues {
   readonly g: Growth;
   of(name: string, fallback: string): string;
@@ -99,17 +94,17 @@ const huesOf = (palette: Palette, g: Growth): Hues => ({
   },
 });
 
-/** A lobe of foliage, flat to the eye: `dx` meters right of the foot, `h` up, `r` across. */
+/** A foliage lobe, flat to the viewer: `dx` meters right of the base, `h` up, with radius `r`. */
 type Lobe = readonly [number, number, number];
 
-/** A woody stroke from the ground up: points flat to the eye, meters, and its width at its foot and at its tip. */
+/** A woody stroke from the ground up: points flat to the viewer in meters, and its width at the base (`foot`) and the tip. */
 interface Bough {
   readonly pts: readonly Pt[];
   readonly foot: number;
   readonly tip: number;
 }
 
-/** A conifer's or a tiered sapling's ring of limbs, lowest first: its height, its half-span and how far its tips fall below it. */
+/** A conifer's or tiered sapling's ring of limbs, lowest first: its height, half-span, rise, and how far its tips droop below it. */
 interface Tier {
   readonly h: number;
   readonly half: number;
@@ -117,7 +112,7 @@ interface Tier {
   readonly droop: number;
 }
 
-/** What a frame stands: its wood, the lobes its foliage fills, and its whorls if it has them. */
+/** A plant's frame: its wood, the lobes its foliage fills, and its whorls if it has them. */
 interface Frame {
   readonly wood: readonly Bough[];
   readonly lobes: readonly Lobe[];
@@ -126,14 +121,14 @@ interface Frame {
   readonly trunk: boolean;
 }
 
-/** How big a build stands, meters at scale 1, and how high its lowest leaves hang. */
+/** A build's height and radius in meters at scale 1, and the height of its lowest leaves. */
 interface Size {
   readonly height: number;
   readonly radius: number;
   readonly crown: number;
 }
 
-/** What a part's ink is given to draw with. */
+/** The drawing context passed to a part's ink. */
 interface Brush {
   readonly pen: Pen;
   readonly hues: Hues;
@@ -173,7 +168,7 @@ interface DriftInk<V = Values> {
   readonly role: "Drift";
   draw(b: Brush, size: Size, p: V): void;
 }
-/** A part that the paper shows nothing of, such as how a thing moves in the wind, or that only gives the others their colors. */
+/** A part the map does not draw, such as how a thing moves in the wind, or one that only gives the others their colors. */
 interface UnseenInk {
   readonly role: "Motion" | "Palette";
 }
@@ -190,7 +185,7 @@ const overgrowth = <P extends Params>(_: P, ink: Omit<OvergrowthInk<Resolved<P>>
 const drift = <P extends Params>(_: P, ink: Omit<DriftInk<Resolved<P>>, "role">): DriftInk => ({ role: "Drift", ...ink }) as unknown as DriftInk;
 
 // ---------------------------------------------------------------------------------------------------------------
-// Pen work shared by the inks, flat to the eye in meters from the foot.
+// Drawing helpers shared by the inks, flat to the viewer, in meters from the base.
 
 const up = (b: Brush, [dx, h]: Pt): Pt => b.pen.up(dx, h);
 
@@ -213,7 +208,7 @@ function bough(b: Brush, w: Bough, color: string, inked = true): void {
   }
 }
 
-/** The union of round lobes as one path, every point taken into the mark's box. */
+/** The union of round lobes as one path. Each lobe grows the mark's box. */
 function lobesPath(b: Brush, lobes: readonly Lobe[], squash = 1): Path2D {
   const path = new Path2D();
   for (const [dx, h, r] of lobes) {
@@ -226,7 +221,7 @@ function lobesPath(b: Brush, lobes: readonly Lobe[], squash = 1): Path2D {
   return path;
 }
 
-/** A crown of lobes washed in `color`: inked round its edge only, shaded to the southeast and lit on the northwest. */
+/** Draws a crown of lobes in `color`, inked around its outline only, shaded to the southeast and lit on the northwest. */
 function crown(b: Brush, lobes: readonly Lobe[], color: string, opts: { squash?: number; scallop?: number; light?: number } = {}): void {
   if (lobes.length === 0) return;
   const { ctx } = b.pen;
@@ -270,7 +265,7 @@ function crown(b: Brush, lobes: readonly Lobe[], color: string, opts: { squash?:
   ctx.restore();
 }
 
-/** Which lobes still hang as foliage falls: each goes past its own threshold, shrinking as it goes. */
+/** The lobes still in leaf. Each lobe shrinks away as `g.leaf` drops below its own seeded threshold. */
 function kept(lobes: readonly Lobe[], g: Growth, full: number): Lobe[] {
   return lobes
     .map(([dx, h, r], k): Lobe => [dx, h, r * full * clamp01((g.leaf - noise(g.seed, k + 700) * 0.6) / 0.4) * (0.82 + 0.18 * g.leaf)])
@@ -315,7 +310,7 @@ function patch(b: Brush, rx: number, rz: number, color: string, alpha: number): 
 // ---------------------------------------------------------------------------------------------------------------
 // Frames.
 
-/** Lobes round a crown of half-width `w` and half-height `ht` centered `hc` up: one heart and a ring over the top. */
+/** Lobes for a crown of half-width `w` and half-height `ht` centered `hc` up: one central lobe and a ring of `n` over the top. */
 function crownLobes(n: number, w: number, ht: number, hc: number, seed: number, droop = 0): Lobe[] {
   const r = Math.max(0.3, Math.min(w, ht) * (n <= 5 ? 0.56 : n <= 7 ? 0.5 : 0.44));
   const lobes: Lobe[] = [[0, hc + ht * 0.12, r * 1.12]];
@@ -330,7 +325,7 @@ function crownLobes(n: number, w: number, ht: number, hc: number, seed: number, 
   return lobes;
 }
 
-/** Limbs from the head of a trunk out to each lobe, arching over first where the crown weeps. */
+/** Limbs from the top of a trunk out to each lobe, arching higher where the crown weeps. */
 function limbsTo(lobes: readonly Lobe[], from: Pt, width: number, weep = 0): Bough[] {
   return lobes.slice(1).map(([dx, h]) => {
     const mid: Pt = [from[0] + dx * 0.5, Math.max(from[1], h) + weep * Math.abs(dx) * 0.6];
@@ -347,7 +342,7 @@ const HABIT_FORM: Readonly<Record<string, { base: number; wide: number; droop: n
 
 function branchingFrame(p: Resolved<typeof branchingParams>, { height: H, radius: R, crown }: Size, seed: number): Frame {
   const habit = HABIT_FORM[p.habit] ?? (HABIT_FORM.upright as NonNullable<(typeof HABIT_FORM)[string]>);
-  // The crown sits where the build's leaves begin; leaves hanging to the ground, as strands do, leave it to the habit.
+  // The crown starts where the build's leaves begin. If the leaves hang near the ground, as strands do, the habit sets the crown's base instead.
   const base = crown > H * 0.12 ? Math.min(crown, H * 0.7) : H * habit.base;
   const ht = (H - base) / 2;
   const hc = base + ht;
@@ -371,7 +366,7 @@ function spireFrame(p: Resolved<typeof spireParams>, { height: H, radius: R, cro
   });
   const girth = Math.min(0.8, Math.max(0.1, 0.035 * H));
   const trunk: Bough = { pts: [[0, 0], [0, H]], foot: girth * 1.3, tip: girth * 0.25 };
-  // Bare whorls: limbs out to each tier's span, as a fir stands when its needles are gone.
+  // Bare whorls: limbs out to each tier's span, as on a fir that has lost its needles.
   const whorls = tiers.flatMap((t): Bough[] => [-1, 1].map((side) => ({ pts: [[0, t.h + t.rise * 0.2], [side * t.half * 0.9, t.h - t.droop * 0.8]], foot: girth * 0.35, tip: girth * 0.1 })));
   // Leaves on a spire fill its cone: a lobe up the trunk at each whorl and one out along each side.
   const lobes = tiers.flatMap((t): Lobe[] => {
@@ -414,7 +409,7 @@ function thicketFrame(p: Resolved<typeof thicketParams>, { height: H, radius: R 
   });
   const ht = (H * (1 - form.base)) / 2;
   const lobes = crownLobes(p.habit === "scrub" ? 4 : 6, R * form.wide, ht, H * form.base + ht, seed);
-  // A shrub's leaves come down to the soil round its stems, except where it stands on a bare vase or scrub of stems.
+  // Skirt lobes bring the leaves down to the soil around the stems, except on a vase or scrub habit, whose stems show bare.
   const skirt = form.base < 0.2 ? 4 : 0;
   const r = Math.max(0.12, Math.min(R, H) * 0.4);
   for (let k = 0; k < skirt; k++) lobes.push([(k / (skirt - 1) - 0.5) * 2 * (R * form.wide - r), r * 0.95, r * (0.9 + noise(seed, k + 90) * 0.25)]);
@@ -433,7 +428,7 @@ function brambleFrame(p: Resolved<typeof brambleParams>, { height: H, radius: R 
     const mid: Pt = [x0 + (x1 - x0) * 0.4, top];
     const pts: Pt[] = [[x0, 0], [x0 + (x1 - x0) * 0.15, top * 0.75], mid, [x0 + (x1 - x0) * 0.75, top * 0.7], [x1, 0.05]];
     canes.push({ pts, foot: 0.035, tip: 0.015 });
-    // Its leaves sleeve the whole cane, from the soil up over the arch and back down.
+    // Leaves cover the whole cane, from the soil up over the arch and back down.
     const r = Math.max(0.12, H * 0.2);
     for (let i = 0; i + 1 < pts.length; i++) {
       const [ax, ah] = pts[i] as Pt;
@@ -447,7 +442,7 @@ function brambleFrame(p: Resolved<typeof brambleParams>, { height: H, radius: R 
 // ---------------------------------------------------------------------------------------------------------------
 // Foliage.
 
-/** A crown's lobes as a leaf shape gathers them: soft clouds, flat layered plates, or loose tufts at the twigs. */
+/** Regroups a crown's lobes by leaf shape: soft clouds, flat layered plates, or loose tufts at the twigs. */
 function gathered(lobes: readonly Lobe[], shape: string, seed: number): Lobe[] {
   if (shape === "tufts") {
     return lobes.flatMap(([dx, h, r], k): Lobe[] =>
@@ -460,7 +455,7 @@ function gathered(lobes: readonly Lobe[], shape: string, seed: number): Lobe[] {
   return [...lobes];
 }
 
-/** Needles' outline round a lobe: a ring of short spikes, as a spray of needles reads from afar. */
+/** Draws lobes with a spiked outline, as a spray of needles reads from a distance. */
 function spiky(b: Brush, lobes: readonly Lobe[], color: string): void {
   const { ctx } = b.pen;
   const path = new Path2D();
@@ -498,7 +493,7 @@ function spiky(b: Brush, lobes: readonly Lobe[], color: string): void {
   ctx.restore();
 }
 
-/** A conifer's whorls, lowest first, each a wedge of needles whose tips droop or lift; each later tier overlaps the one below. */
+/** Draws a conifer's whorls lowest first, each a wedge of needles with drooping or lifted tips, so each tier overlaps the one below. */
 function tiers(b: Brush, ts: readonly Tier[], color: string, full: number): void {
   const g = b.hues.g;
   ts.forEach((t, k) => {
@@ -510,14 +505,14 @@ function tiers(b: Brush, ts: readonly Tier[], color: string, full: number): void
     const pts = [up(b, [-half, t.h - t.droop]), up(b, [-half * 0.35, t.h + t.rise * 0.55]), up(b, [0, t.h + t.rise]), up(b, [half * 0.35, t.h + t.rise * 0.55]), up(b, [half, t.h - t.droop]), up(b, [0, t.h + t.rise * 0.08])];
     wash(b.pen, pts, color);
     ink(b.pen, pts, true, 1.1);
-    // The northwest half of each tier catches the light.
+    // Lights the northwest half of each tier.
     wash(b.pen, [pts[0] as Pt, pts[1] as Pt, pts[2] as Pt, pts[5] as Pt], rgba("#eef4b8", 0.22 * (1 - g.dry * 0.6)));
   });
 }
 
 /**
- * Strands hanging from a dome to `hem` meters up, as the great willow's hang: tapering tresses side by side across the
- * dome, each shortening and thinning to a bare whip past its own threshold as the tree fails.
+ * Draws strands hanging from a dome down to `hem` meters, like the great willow's: tapering tresses side by side
+ * across the dome. As `leaf` drops below each strand's own threshold, it shortens and thins to a bare whip.
  */
 function strands(b: Brush, lobes: readonly Lobe[], hem: number, color: string, full: number): void {
   if (lobes.length === 0) return;
@@ -531,7 +526,7 @@ function strands(b: Brush, lobes: readonly Lobe[], hem: number, color: string, f
   const whips = new Path2D();
   for (let k = 0; k < n; k++) {
     const dx = left + ((k + 0.5) / n) * span;
-    // Each hangs from the middle of the lobe over it, or the dome's lowest lobe at its edges.
+    // Each hangs from the center height of the highest lobe over it, or from the dome's lowest lobe at its edges.
     const over = lobes.filter(([lx, , r]) => Math.abs(dx - lx) < r);
     const top = over.length > 0 ? Math.max(...over.map(([, h]) => h)) : Math.min(...lobes.map(([, h]) => h));
     const reach = (top - hem) * (0.88 + noise(b.seed, k + 800) * 0.12);
@@ -553,7 +548,7 @@ function strands(b: Brush, lobes: readonly Lobe[], hem: number, color: string, f
     tresses.quadraticCurveTo(bx - wd * 0.9, (ty + by) / 2, tx - wd, ty);
     tresses.closePath();
   }
-  // The bare whips first, so the tresses dress them while the tree lives.
+  // Draws the bare whips first, so the tresses cover them while leaves remain.
   ctx.lineWidth = Math.max(0.5, b.pen.line * 0.7);
   ctx.strokeStyle = mix(b.hues.of("bark", "#6d533a"), INK, 0.3);
   ctx.stroke(whips);
@@ -564,7 +559,7 @@ function strands(b: Brush, lobes: readonly Lobe[], hem: number, color: string, f
   ctx.fill(tresses);
   ctx.save();
   ctx.clip(tresses);
-  // Each tress in half shade on its southeast side, as the crown's lobes are.
+  // Shades the eastern part of the curtain, as the crown's lobes are shaded to the southeast.
   ctx.fillStyle = rgba(SHADE, 0.16);
   const [sx, sy] = up(b, [left + span * 0.55, hem]);
   const [ex, ey] = up(b, [right, Math.max(...lobes.map(([, h, r]) => h + r))]);
@@ -575,7 +570,7 @@ function strands(b: Brush, lobes: readonly Lobe[], hem: number, color: string, f
 // ---------------------------------------------------------------------------------------------------------------
 // Stones and old wood, drawn as they lie: a face toward the viewer and a top seen a little from above.
 
-/** A rounded stone `w` meters across and `h` tall standing at (`dx`, 0), its outline from the seed; returns its top. */
+/** Draws a rounded stone `w` meters wide and `h` tall at (`dx`, 0), with a seeded outline. Returns its top as a lobe. */
 function stone(b: Brush, dx: number, w: number, h: number, sharp: number, lean: number, color: string, seed: number): Lobe {
   const n = Math.round(14 - sharp * 7);
   const pts: Pt[] = [];
@@ -585,11 +580,11 @@ function stone(b: Brush, dx: number, w: number, h: number, sharp: number, lean: 
     const x = dx - Math.cos(a) * (w / 2) * wob + lean * Math.sin(a) * h * 0.3;
     pts.push(up(b, [x, Math.sin(a) ** (0.8 + 0.3 * (1 - sharp)) * h * wob]));
   }
-  // Its foot sinks a little into the turf.
+  // Its base sinks a little below the ground line.
   pts.push(up(b, [dx + w * 0.42, -h * 0.06]), up(b, [dx - w * 0.42, -h * 0.06]));
   const round = (1 - sharp) * 3;
   wash(b.pen, pts, color, round);
-  // Its southeast side in the cool half shade, its northwest shoulder in the light.
+  // Shades its southeast side and lights its northwest shoulder.
   const { ctx } = b.pen;
   ctx.save();
   trace(ctx, pts, true, round);
@@ -606,7 +601,7 @@ function stone(b: Brush, dx: number, w: number, h: number, sharp: number, lean: 
   ctx.fill();
   ctx.restore();
   ink(b.pen, pts, true, 1.2, INK, round);
-  // A crack opens as the stone tires.
+  // A crack opens as vitality falls from 0.55 to 0.15.
   const crack = ease(b.hues.g.v, 0.55, 0.15);
   if (crack > 0.05) {
     const c = [up(b, [dx - w * 0.1, h * 0.95]), up(b, [dx + w * 0.02, h * 0.6]), up(b, [dx - w * 0.06, h * (0.95 - crack * 0.75)])];
@@ -617,7 +612,7 @@ function stone(b: Brush, dx: number, w: number, h: number, sharp: number, lean: 
 
 const stoneHue = (b: Brush): string => b.hues.of("stone", "#a8a296");
 
-/** A log or stump's wood where it is cut or snapped: pale, with rings on a sawn face. */
+/** Draws a log's or stump's end where it is cut or snapped: pale wood, with a ring on a sawn face. */
 function endFace(b: Brush, at: Pt, rx: number, ry: number, sawn: boolean, seed: number): void {
   const [px, py] = up(b, at);
   const { ctx } = b.pen;
@@ -654,7 +649,7 @@ function endFace(b: Brush, at: Pt, rx: number, ry: number, sawn: boolean, seed: 
 // ---------------------------------------------------------------------------------------------------------------
 // Drifts: many small plants over a spread on the ground, drawn from the back of the spread to the front.
 
-/** Where a drift's plants stand on the ground, east and north of its middle, meters, farthest first. */
+/** Positions of a drift's plants in meters east and north of its center, farthest first. */
 function plantsOver(rx: number, count: number, seed: number, ring = false): [number, number][] {
   const spots: [number, number][] = [];
   for (let i = 0; i < count; i++) {
@@ -665,7 +660,7 @@ function plantsOver(rx: number, count: number, seed: number, ring = false): [num
   return spots.sort((p, q) => q[1] - p[1]);
 }
 
-/** A flower head on a stem `h` meters tall at (X, Z) on the ground, drawn by `head` at the stem's top. */
+/** Draws a stem about `h` meters tall at each spot, with a head drawn by `head` at its top. */
 function stems(b: Brush, spots: readonly [number, number][], h: number, stemColor: string, head: (top: Pt, i: number) => void): void {
   const { ctx } = b.pen;
   spots.forEach(([X, Z], i) => {
@@ -681,7 +676,7 @@ function stems(b: Brush, spots: readonly [number, number][], h: number, stemColo
   });
 }
 
-/** How many plants a drift shows: by its density and spread, fewer as it fails, and never so many they blur. */
+/** How many plants a drift shows, by its density and spread: fewer as vitality falls, and at most 40 so they never blur. */
 const drifted = (b: Brush, density: number, rx: number): number => Math.max(4, Math.round(Math.min(40, (7 + rx * 12) * density) * (0.3 + 0.7 * b.hues.g.leaf)));
 
 function dot(b: Brush, [x, y]: Pt, r: number, color: string, edge = false): void {
@@ -703,8 +698,8 @@ function flowerDrift(b: Brush, { height, radius }: Size, p: Resolved<typeof drif
   const rx = Math.max(0.3, radius);
   patch(b, rx * 1.05, rx * 0.9, b.hues.of("stem", "#6f9a3c"), 0.22 + 0.12 * p.density);
   const spots = plantsOver(rx, drifted(b, p.density, rx), b.seed);
-  // A head never smaller than a pixel and a half across, so the drift's color shows where its plants are specks, and
-  // never wider than a share of the drift itself.
+  // A head is at least 1.5 pixels across, so the drift's color shows when its plants are specks, and its radius is at
+  // most 0.3 of the drift's.
   const r = Math.min(rx * 0.3, Math.max(0.75 / b.pen.s, Math.min(0.2, height * 0.2)));
   stems(b, spots, Math.max(0.1, height * 0.8), rgba(b.hues.of("stem", "#6f9a3c"), 0.75), (top, i) => head(b, top, r, i));
 }
@@ -722,7 +717,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
   "bramble@1": skeleton(brambleParams, { frame: brambleFrame }),
   "bark@1": surface(barkParams, {
     texture: (b, w, p) => {
-      // Furrows down a thick trunk, seen only where the mark is large enough to hold them.
+      // Furrows down a thick trunk, drawn only where the trunk is at least 3 pixels wide.
       const furrows = p.roughness * b.detail;
       if (furrows < 0.05 || w.foot * b.pen.s < 3) return;
       const { ctx } = b.pen;
@@ -752,7 +747,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
     draw: (b, frame, p, size) => {
       const lobes = kept(frame.lobes, b.hues.g, 0.9);
       const leaf = b.hues.of("leaf", "#8fb04a");
-      // The curtain hangs to the build's lowest strands.
+      // The curtain hangs down to the build's lowest leaves (`size.crown`).
       strands(b, lobes, Math.max(0.05, size.crown), leaf, p.fullness);
       crown(b, lobes, leaf, { scallop: 0.3, light: 0.25 });
       return lobes;
@@ -835,7 +830,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       const n = Math.max(2, Math.min(9, Math.round(p.count)));
       const color = stoneHue(b);
       const tops: Lobe[] = [];
-      // The largest at the back, the rest smaller round and before it.
+      // One large stone at the center and smaller ones around it, drawn in a seeded order.
       const order = Array.from({ length: n }, (_, k) => k).sort((a, c) => noise(b.seed, a + 50) - noise(b.seed, c + 50));
       for (const k of order) {
         const big = k === 0 ? 1 : 0.4 + noise(b.seed, k + 70) * 0.35;
@@ -847,7 +842,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
   }),
   "outcrop@1": rock(outcropParams, {
     draw: (b, { height, radius }, p) => {
-      // A ledge seen from a little above: its lit top band over its front face in half shade.
+      // A ledge seen from a little above: a lit top band over a front face in half shade.
       const color = stoneHue(b);
       const w = radius * 2;
       const h = Math.max(0.2, height);
@@ -863,7 +858,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       const top = [...front, ...back];
       wash(b.pen, face, mix(color, SHADE, 0.24), round);
       wash(b.pen, top, mix(color, "#fff6dc", 0.14), round);
-      // Its layering on the front face: bedding along it, or joints across it.
+      // Layering on the front face: bedding lines along it, or joints across it.
       const { ctx } = b.pen;
       if (b.detail > 0.1 && p.layering !== "massive") {
         ctx.beginPath();
@@ -937,7 +932,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
           for (let i = 0; i < 4; i++) dot(b, up(b, [dx + (noise(b.seed, i) - 0.5) * r * 1.4, h - noise(b.seed, i + 9) * r * 0.5]), r * 0.12 * amount + 0.03, mix(color, "#e8e4c8", 0.55));
           continue;
         }
-        // Moss caps the top of the stone, thicker the more of it there is.
+        // Moss caps the stone's top, larger as `amount` rises.
         const lobes: Lobe[] = (p.growth === "cushions" ? [-0.5, 0, 0.5] : [0]).map((u, i) => [dx + u * r, h + (noise(b.seed, i) - 0.5) * r * 0.1, r * (p.growth === "cushions" ? 0.45 : 0.95) * (0.55 + 0.45 * amount)]);
         crown(b, lobes, color, { squash: p.growth === "velvet" ? 0.42 : 0.62, scallop: 0, light: 0.25 });
       }
@@ -966,7 +961,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
     draw: (b, size, p) =>
       flowerDrift(b, size, p, (b, [x, y], r, i) => {
         if (noise(b.seed, i + 400) > b.hues.g.leaf + 0.15) return;
-        // A stem arching over, its bells nodding below the arch.
+        // A stem arching over, with bells hanging below the arch.
         const R = r * b.pen.s;
         const { ctx } = b.pen;
         const side = noise(b.seed, i + 420) < 0.5 ? -1 : 1;
@@ -987,7 +982,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
         if (noise(b.seed, i + 400) > b.hues.g.leaf + 0.15) return;
         const { ctx } = b.pen;
         const R = r * b.pen.s;
-        // The spire of florets is as long as the plant's own top allows, however wide a head is drawn to show.
+        // The floret spike is at most three head radii long and at most 0.6 of the plant's height, however wide the head is drawn.
         const long = Math.min(R * 3, size.height * 0.6 * b.pen.s);
         b.pen.reach(x, y - long - R * 0.2, R);
         b.pen.reach(x, y + R * 0.5, R);
@@ -1061,7 +1056,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
 // ---------------------------------------------------------------------------------------------------------------
 // Drawing a whole thing from its slots.
 
-/** A thing's slots, each with its ink: the slot whose ink fills `role`. */
+/** Returns the slot whose ink fills `role`, with its ink and values. */
 function slotOf<R extends PlantInk["role"]>(plant: PlantComposition, role: R): { ink: Extract<PlantInk, { role: R }>; p: Values } | undefined {
   for (const slot of Object.values(plant.blueprint.slots)) {
     const entry = PLANT_INKS[slot.use];
@@ -1071,15 +1066,15 @@ function slotOf<R extends PlantInk["role"]>(plant: PlantComposition, role: R): {
 }
 
 /**
- * Draws a tree, a bush, a stone or a drift at (x, y), its foot on the ground there, at `s` pixels a meter of its build,
- * worn by its shown `vitality`. Returns the box it took.
+ * Draws a tree, bush, stone or drift with its base on the ground at (x, y), at `s` pixels per meter of its build, worn
+ * by its shown `vitality`. Returns the box it took.
  */
 export function drawPlant(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, plant: PlantComposition, vitality = 1): MarkBox {
   const seed = seedOf(plant.blueprint.id);
   const g = growthOf(vitality, seed);
   const hues = huesOf(plant.palette, g);
   const span = Math.max(plant.height, plant.radius * 2) * s;
-  // The ink's width follows the mark's size on the sheet, so a stone close in is not swamped by its outline.
+  // Sets the ink width from the mark's size on the sheet rather than from `s`, so a small stone zoomed in is not swamped by its outline.
   const pen: Pen = { ...penFor(ctx, x, y, s), line: Math.max(0.5, Math.min(2.2, 0.42 + 0.012 * span)) };
   const m = ctx.getTransform();
   const b: Brush = { pen, hues, detail: ease(span * Math.hypot(m.a, m.b), 18, 56), seed };
@@ -1116,20 +1111,20 @@ export function drawPlant(ctx: CanvasRenderingContext2D, x: number, y: number, s
   return [...pen.box];
 }
 
-/** Shown vitality is stamped in steps of an eighth: a drawing a step apart is never told apart on the paper. */
+/** Stamps round shown vitality to eighths. Drawings one step apart look the same on the paper. */
 const WEAR_STEPS = 8;
-/** The plants' stamps: at most this many bytes of bitmaps, the least recently stamped going first. */
+/** The plant stamp cache, capped at 48 MiB of bitmaps with least recently used eviction. */
 const PLANT_STAMPS = stampSet(Number.POSITIVE_INFINITY, 48 * 2 ** 20);
 
-/** The room a plant's mark is drawn in before its stamp is cut from it, meters round its foot: its crown or spread, and its shadow to the southeast. */
+/** The area in meters around its base that a plant's mark is drawn into before its stamp is cropped, with room for its crown or spread and its shadow to the southeast. */
 export const plantRoom = ({ height, radius }: Pick<Size, "height" | "radius">): StampRoom => {
   const side = radius * 1.5 + 1;
-  // What spreads on the ground reaches about 0.4 of its radius up and down the sheet.
+  // A spread on the ground extends about 0.4 of its radius up and down the sheet.
   const above = height * 1.15 + radius * 0.4 + 1;
   return { width: side * 2 + height * 0.45, height: above + radius * 0.5 + height * 0.15 + 1, footX: side, footY: above };
 };
 
-/** Stamps a plant's mark, as `drawPlant` draws it: every copy of a build at one size and wear shares one drawing. */
+/** Stamps a plant's mark as `drawPlant` draws it. Every copy of a build at one size and wear shares one drawing. */
 export function stampPlant(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, plant: PlantComposition, vitality = 1): MarkBox {
   const v = Math.round(clamp01(vitality) * WEAR_STEPS) / WEAR_STEPS;
   return stamp(ctx, x, y, s, `p|${plant.blueprint.id}|${v}`, (c, fx, fy, ks) => drawPlant(c, fx, fy, ks, plant, v), PLANT_STAMPS, plantRoom(plant));

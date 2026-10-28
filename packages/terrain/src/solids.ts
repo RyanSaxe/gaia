@@ -1,27 +1,26 @@
-// What a person cannot walk through: tree trunks, rocks, bushes and a
-// house's walls. Each solid is the convex hull of its outline on the ground,
-// rounded by a radius (a trunk is one point rounded by the trunk's own
-// radius), so its edge has a direction everywhere and a walker slides around
-// it without catching. Built once from placements; every step of a walk asks
-// how far the nearest edge is.
+// Indexes what a person cannot walk through, such as tree trunks, rocks,
+// bushes and walls. Each solid is the convex hull of its ground outline,
+// rounded by a radius, so its edge has a direction everywhere and a walker
+// slides around it without catching. A trunk is one point rounded by its
+// radius.
 
 import type { BuildingPlan, Part } from "@gaia/schema";
 import { type BuildingSite, siteToWorld } from "./site.ts";
 
-/** One thing in the way, as its outline on the ground in world meters. */
+/** One solid's ground outline in world meters. */
 export type SolidShape =
   /** A disc, such as a trunk at its base. */
   | { readonly x: number; readonly z: number; readonly radius: number }
-  /** Any outline, as x, z pairs: its convex hull blocks. */
+  /** Any outline as x, z pairs. Its convex hull is solid. */
   | { readonly points: readonly number[] };
 
 interface Solid {
-  /** The hull's corners as x, z pairs, counter-clockwise; one corner for a disc. */
+  /** The hull's corners as x, z pairs, counter-clockwise. A disc has one corner. */
   readonly hull: Float64Array;
   readonly round: number;
 }
 
-/** The solids of one world, indexed by ground cells so a step only asks about the few nearby. */
+/** The solids of one world, indexed by ground cells so a step checks only the few nearby. */
 export interface Solids {
   readonly count: number;
   /** @internal Solid indices by cell. */
@@ -32,7 +31,7 @@ export interface Solids {
 
 /** Meters per index cell. */
 const CELL = 4;
-/** Every solid is indexed this far past its edge, so a query within `REACH` of a point finds it from the point's cell alone. */
+/** Meters past its edge that each solid is indexed, so a query finds every solid within `REACH` from its own cell. */
 const REACH = 2;
 
 const cellKey = (ix: number, iz: number): number => (ix + 32768) * 65536 + (iz + 32768);
@@ -87,7 +86,7 @@ export function solidsOf(shapes: readonly SolidShape[]): Solids {
 
 export const NO_SOLIDS: Solids = solidsOf([]);
 
-/** A placed component's outline on the ground: its reach in `outline.length` directions at scale 1, turned and scaled as Three places it, times `share`. */
+/** A placed component's ground outline. `outline` holds its radius in `outline.length` directions at scale 1, which this turns and scales as Three places it, times `share`. */
 export function outlineShape(x: number, z: number, yaw: number, scale: number, outline: ArrayLike<number>, share = 1): SolidShape {
   const k = outline.length;
   const c = Math.cos(yaw);
@@ -105,10 +104,10 @@ export function outlineShape(x: number, z: number, yaw: number, scale: number, o
   return points.length > 0 ? { points } : { x, z, radius: 0.05 };
 }
 
-/** A building's walls: each of its masses' footprints on its site. */
+/** A building's walls, one footprint per mass on its site. */
 export function wallsShape(plan: BuildingPlan, site: BuildingSite): SolidShape[] {
-  // One shape per mass, so the walk passes through the open corner of an L
-  // or between a cluster's volumes; a round mass is its octagon.
+  // One shape per mass, so a walk can pass through the open corner of an L
+  // or between a cluster's volumes. A round mass is an octagon.
   return plan.masses.map((m) => {
     const corners: [number, number][] = m.round
       ? Array.from({ length: 8 }, (_, k) => {
@@ -126,15 +125,15 @@ export function wallsShape(plan: BuildingPlan, site: BuildingSite): SolidShape[]
   });
 }
 
-/** A walker's body, from just above the ground to the top of its head, meters above a thing's base. */
+/** The height band in meters above a thing's base that a walker's body occupies, from just above the ground to the top of the head. */
 export const BODY_BAND = { from: 0.1, to: 1.8 } as const;
 
 /**
- * The solids of a built thing standing at (x, y, z), turned by `yaw` as Three
- * turns it: each solid piece's outline across a walker's body height. A
- * piece wholly above or below that band stops nothing, so a walker passes
- * under a lintel and through a doorway between two stones. Nor does a piece
- * that only grows in as the thing declines, such as fallen stone.
+ * The solids of a built thing placed at (x, y, z) and turned by `yaw` as Three
+ * turns it: each solid piece's outline within `BODY_BAND`. A piece wholly
+ * above or below that band blocks nothing, so a walker passes under a lintel
+ * and through a doorway between two stones. A piece that only grows in as the
+ * thing declines, such as fallen stone, blocks nothing either.
  */
 export function piecesShapes(parts: readonly Part[], at: { readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }): SolidShape[] {
   const c = Math.cos(at.yaw);
@@ -158,7 +157,7 @@ export function piecesShapes(parts: readonly Part[], at: { readonly x: number; r
   return shapes;
 }
 
-/** The nearest edge to a point: signed distance (negative inside) and the outward direction there. */
+/** The nearest edge to a point: its signed distance, negative inside, and the outward normal there. */
 export interface Edge {
   distance: number;
   nx: number;
@@ -177,7 +176,7 @@ function edgeOf(solid: Solid, x: number, z: number, out: Edge): void {
     out.nz = d > 1e-9 ? dz / d : 0;
     return;
   }
-  // Outside: the nearest point on any edge. Inside: the nearest edge's line.
+  // Outside, use the nearest point on any edge. Inside, use the nearest edge's line.
   let inside = n >= 3;
   let deepest = -Infinity;
   let inX = 1;
@@ -227,8 +226,8 @@ function edgeOf(solid: Solid, x: number, z: number, out: Edge): void {
 const probe: Edge = { distance: 0, nx: 0, nz: 0 };
 
 /**
- * The nearest solid's edge to (x, z), written into `out`; `out.distance` is
- * `REACH` when nothing is that close. Accurate within `REACH` meters.
+ * Writes the nearest solid's edge to (x, z) into `out`. `out.distance` is
+ * `REACH` when nothing is that close. It is accurate within `REACH` meters.
  */
 export function nearestEdge(solids: Solids, x: number, z: number, out: Edge): Edge {
   out.distance = REACH;
@@ -249,5 +248,5 @@ export function nearestEdge(solids: Solids, x: number, z: number, out: Edge): Ed
 
 const scratch: Edge = { distance: 0, nx: 0, nz: 0 };
 
-/** How far (x, z) is from the nearest solid's edge, negative inside one; at most 2 m. */
+/** Distance from (x, z) to the nearest solid's edge, negative inside one and at most `REACH`. */
 export const clearanceAt = (solids: Solids, x: number, z: number): number => nearestEdge(solids, x, z, scratch).distance;

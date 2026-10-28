@@ -2,7 +2,7 @@
 
 Usage: build.py [world|music] [--out ASSETS_DIR] [--keep]
   world, music  only that half (default: both)
-  --out         where the files go (default: app/renderer/sound/assets; the music goes in its music/ folder)
+  --out         where the files go (default: app/renderer/sound/assets, with the music in its music/ folder)
   --keep        keep the music's MIDI, rendered parts and mixed stems in the cache's work/ folder
 """
 import argparse

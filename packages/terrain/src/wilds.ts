@@ -1,31 +1,27 @@
-// The wild land past the codebase's land. It stands for nothing and goes on
-// forever: past the baked lattice's square the ground runs on from the rim's crest
-// and settles down to the level of the land inside it, into a gentle seeded
-// roll of at most 6 m that swells farther out into soft hills, so a person
-// on the rim looks out over it. A person can walk on it without end. `groundHeightAt` is the ground anywhere, the baked
-// lattice on the land and the wild land past it; the renderer's rings draw
-// the same function through a GLSL twin of `wildNoise`, an integer hash that
-// both sides compute bit for bit. `wildsRing` is one coarse ring of it
-// around the world, for views from above.
+// Computes the wild land past the codebase's land, which represents no code
+// and has no end. `groundHeightAt` gives the ground anywhere: the baked
+// lattice on the land, and past it a seeded roll that grows into low hills.
+// The renderer draws the same heights through a GLSL twin of `wildNoise`, an
+// integer hash both sides compute bit for bit.
 
 import { heightAt } from "./lattice.ts";
 import { TERRAIN, type Terrain, frameOf } from "./world.ts";
 import { landReach } from "./edge.ts";
 
 export const WILDS = {
-  /** The coarse ring for views from above: rings and segments around, 7,680 vertices, one draw call. */
+  /** Rings and segments of the coarse ring for views from above: 7,680 vertices in one draw call. */
   rings: 48,
   segments: 160,
-  /** The coarse ring's outer radius in meters, past where far land has fully dissolved. */
+  /** The coarse ring's outer radius in meters, past where far land has fully faded out. */
   outer: 1500,
-  /** Distance over which the rim's height settles into the wild roll. */
+  /** Meters past the lattice's edge over which its height blends into the wild roll. */
   settle: 160,
   /** The wild roll's whole height range in meters. */
   variation: 6,
   /** The roll's longest wavelength in meters, and its octaves, each half as long and half as high. */
   wavelength: 260,
   octaves: 3,
-  /** Soft hills that swell in over `hillsIn` meters past the hand-over: their whole height range, and how much longer their wavelength is than the roll's. */
+  /** Hills that fade in over `hillsIn` meters past the lattice's edge, with height range `hills` in meters and noise coordinates scaled by `hillScale`. */
   hills: 12,
   hillsIn: [200, 1000],
   hillScale: 0.45,
@@ -33,10 +29,10 @@ export const WILDS = {
   tuck: 6,
 } as const;
 
-/** A circle just inside the lattice's square, past which region covers carry on outward from the land's edge. */
+/** Radius of a circle just inside the lattice's square. Past it, region covers continue outward from the land's edge. */
 export const landRadius = (t: Terrain): number => t.spec.size / 2 + TERRAIN.skirt - 8;
 
-/** The integer hash both sides share: a lattice corner and an octave to a number in [0, 1). */
+/** The integer hash shared with the GLSL twin. It maps a lattice corner and an octave to a number in [0, 1). */
 export function wildHash(ix: number, iz: number, octave: number): number {
   let h = Math.imul(ix | 0, 0x27d4eb2d) ^ Math.imul(iz | 0, 0x165667b1) ^ Math.imul(octave + 1, 0x5bd1e995);
   h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
@@ -76,9 +72,9 @@ export function wildNoise(x: number, z: number): number {
 }
 
 const bases = new WeakMap<Terrain, number>();
-/** Gives a window of the land (`Lattice.beyond`) the wild base its whole world measured, which the window cannot measure itself. */
+/** Sets the wild base for a window of the land (`Lattice.beyond`) from its whole world, since the window cannot measure it. */
 export const knowWildBase = (t: Terrain, base: number): void => void bases.set(t, base);
-/** The wild roll's middle: the mean height of the land just inside the rim, so the wild lies level with the land and the rim is a crest between them. */
+/** The wild roll's mean height: the mean height of the land just inside the rim, so the wild is level with the land and the rim is a crest between them. */
 export function wildBase(t: Terrain): number {
   let base = bases.get(t);
   if (base === undefined) {
@@ -97,10 +93,10 @@ export function wildBase(t: Terrain): number {
 
 const smooth = (t: number): number => fade(Math.max(0, Math.min(1, t)));
 
-/** The half side of the square where the baked lattice hands over to the wild land: the lattice's own edge, rim and skirt included. */
+/** Half the side of the square where the baked lattice ends and the wild land begins. The lattice includes the rim and skirt. */
 export const landHalf = (t: Pick<Terrain, "spec">): number => -frameOf(t.spec).origin - TERRAIN.spacing;
 
-/** How far a point lies past the land's square: negative inside it, the distance to it outside. */
+/** Signed distance from a point to the `landHalf` square, negative inside it. */
 export function wildPast(t: Terrain, x: number, z: number): number {
   const h = landHalf(t);
   const qx = Math.abs(x) - h;
@@ -109,10 +105,9 @@ export function wildPast(t: Terrain, x: number, z: number): number {
 }
 
 /**
- * The roll the wild land settles into at a point, swelling into soft hills
- * farther out: the wild's own ground, without the land's edge it settles
- * away from. Past the land's square by `WILDS.settle` meters, it is the
- * ground itself.
+ * The wild roll at a point, with hills fading in farther out. It is the
+ * wild's own ground, without the blend from the lattice's edge. More than
+ * `WILDS.settle` meters past the land's square, it is the ground itself.
  */
 export function wildRollAt(t: Terrain, x: number, z: number): number {
   const swell = smooth((wildPast(t, x, z) - WILDS.hillsIn[0]) / (WILDS.hillsIn[1] - WILDS.hillsIn[0]));
@@ -121,9 +116,9 @@ export function wildRollAt(t: Terrain, x: number, z: number): number {
 }
 
 /**
- * The wild land's height at a point past the land: the lattice's height at
- * the nearest point of its edge, settling over `WILDS.settle` meters into the
- * wild's roll (`wildRollAt`). At the edge it is the lattice's own height, so
+ * The wild land's height at a point past the land. It blends the lattice's
+ * height at the nearest point of its edge into the wild roll (`wildRollAt`)
+ * over `WILDS.settle` meters. At the edge it equals the lattice's height, so
  * the two meet without a step.
  */
 export function wildHeightAt(t: Terrain, x: number, z: number): number {
@@ -135,7 +130,7 @@ export function wildHeightAt(t: Terrain, x: number, z: number): number {
   return edge + (wildRollAt(t, x, z) - edge) * smooth(past / WILDS.settle);
 }
 
-/** Whether a point lies past the land, in the wild that stands for nothing. */
+/** Whether a point lies past the land, in the wild that represents no code. */
 export const inWilds = (t: Terrain, x: number, z: number): boolean => Math.max(Math.abs(x), Math.abs(z)) > landHalf(t);
 
 /** The ground's height anywhere: the baked lattice on the land, the wild land past it. */
@@ -143,40 +138,40 @@ export function groundHeightAt(t: Terrain, x: number, z: number): number {
   return inWilds(t, x, z) ? wildHeightAt(t, x, z) : heightAt(t.lattice, x, z);
 }
 
-// What grows on the wild land, as the world grows it: the renderer's ground
-// shader draws the wild's covers through GLSL twins of `wildShare`,
-// `wildPatch` and `wildScrub` (`wildNoise`'s twin makes them agree), and its
-// thickets stand where `wildThicket` says. The field map draws the same
-// functions, so the map and the world never disagree.
+// What grows on the wild land. The renderer's ground shader draws the wild's
+// covers through GLSL twins of `wildShare`, `wildPatch` and `wildScrub`, and
+// `wildNoise`'s twin makes them agree. Thickets go where `wildThicket` places
+// them. The field map draws the same functions, so the map and the world
+// agree.
 
 const smoothstep = (a: number, b: number, v: number): number => smooth((v - a) / (b - a));
 
-/** How much of the wild's own cover grows at a point, 0 to 1: none on the land, all of it some way out, drifting in from the land's covers in islands. */
+/** The wild cover's share at a point, 0 to 1: 0 on the land and 1 farther out, with a noisy, patchy boundary between. */
 export function wildShare(t: Terrain, x: number, z: number): number {
   const past = wildPast(t, x, z);
   if (past < -40) return 0;
   return smooth((past - 20 + wildNoise(x * 8 + 311, z * 8 + 311) * 55) / 22);
 }
 
-/** Which of the wild's two covers grows at a point, 0 its tall green grass to 1 its golden steppe, in broad swathes a hundred meters and more across. */
+/** The blend between the wild's two covers at a point, 0 for tall green grass and 1 for golden steppe, in patches a hundred meters or more across. */
 export const wildPatch = (x: number, z: number): number => smoothstep(-0.3, 0.3, wildNoise(x * 1.5 + 97, z * 1.5 + 97));
 
-/** Where the wild runs to scrub, 0 to 1, in patches a few hundred meters across, where its thickets gather too. */
+/** How scrubby the wild is at a point, 0 to 1, in patches a few hundred meters across. Thickets are denser where it is high. */
 export const wildScrub = (x: number, z: number): number => smoothstep(-0.1, 0.5, wildNoise(x * 0.6 + 1000, z * 0.6 + 1000));
 
 export const WILD_THICKETS = {
-  /** The world grid thickets stand on, meters, and the chance a cell holds one. */
+  /** Side in meters of the world grid cells that may hold a thicket, and the base chance a cell holds one. */
   cell: 48,
   chance: 0.42,
-  /** Bushes per thicket, fewest and most, and how far they spread from its middle, meters. */
+  /** Bushes per thicket as [fewest, most], their spread in meters from the thicket's center, and their scale range. */
   members: [1, 5],
   spread: 5,
   scale: [0.85, 1.45],
-  /** Thickets thin in over this band past the land's edge, meters, as the wild's covers take over. */
+  /** Band in meters past the land's square over which thickets fade in. */
   thinIn: [20, 140],
 } as const;
 
-/** A bush of a wild thicket: where it stands, its size, which way it turns, and its own seeds for color and growth. */
+/** A bush in a wild thicket: its position, scale, yaw, hue shift and growth seed. */
 export interface WildBush {
   readonly x: number;
   readonly z: number;
@@ -187,10 +182,10 @@ export interface WildBush {
 }
 
 /**
- * The thicket in one cell of the wild's grid (`WILD_THICKETS.cell` meters), if
- * it holds one: its bushes. Seeded by the cell, so a cell always holds the
- * same thicket. Thickets gather where the wild runs to scrub and thin out over
- * open grass; which bush they are is the one of the cover they grow in
+ * The thicket in one cell of the wild's grid (`WILD_THICKETS.cell` meters),
+ * or null when the cell has none. It is seeded by the cell, so a cell always
+ * holds the same thicket. Thickets are denser where the wild is scrubby and
+ * sparser over open grass. Each bush is the one for the cover it grows in
  * (`wildPatch`).
  */
 export function wildThicket(t: Terrain, ci: number, cj: number): { readonly bushes: readonly WildBush[] } | null {
@@ -230,9 +225,9 @@ export interface WildsRing {
 }
 
 /**
- * A coarse ring of the ground around a baked world, for views from above:
- * from just inside the land's square, where the whole-world mesh draws
- * instead, out past where far land has dissolved. Pure and deterministic.
+ * A coarse ring of ground around a baked world, for views from above. It
+ * runs from just inside the land's square, where the whole-world mesh draws
+ * instead, out past where far land has faded out.
  */
 export function wildsRing(t: Terrain): WildsRing {
   const { rings, segments, outer, tuck } = WILDS;

@@ -1,30 +1,30 @@
-// Turns what the person hears, moment by moment, into what the soundscape
-// plays: the beds' levels a few times a second, a footfall each time the
-// stride comes round, and the journal's paper as the book opens, turns and
-// shuts, with the music following along. The page drives it live from each
-// frame, and a recorded walk drives it from its log, so both sound alike.
+// Turns each moment of what the person hears into soundscape calls: bed
+// levels 15 times a second, a footfall at each stride, the journal's paper
+// sounds as the book opens, turns and shuts, and music updates. The page
+// drives it from each frame, and a recorded walk drives it from its log, so
+// both sound the same.
 
 import type { Earshot } from "../terrain/world.ts";
 import { cadence, footing, hear } from "./hearing.ts";
 import type { Music } from "./music.ts";
 import type { Soundscape } from "./soundscape.ts";
 
-/** The journal as it lies: open or shut, and whether a leaf is turning. */
+/** The journal's state: open or shut, and whether a page is turning. */
 export interface BookState {
   readonly open: boolean;
   readonly turning: boolean;
 }
 
-/** One moment of a walk: seconds on the sound's clock, what the person hears, and the book. */
+/** One moment of a walk: the time in seconds on the audio clock, what the person hears, and the journal's state. */
 export interface Moment {
   readonly t: number;
   readonly ear: Earshot;
   readonly book: BookState;
 }
 
-/** How often the beds' levels are set, seconds: they ease between, so more often only adds work. */
+/** Seconds between bed level updates. The levels ease between updates, so updating more often only adds work. */
 const MIX_EVERY = 1 / 15;
-/** A leaf still turning this long after it began is a riffle, seconds, and its sound comes in under the first leaf's. */
+/** Seconds after which a page still turning counts as a riffle, whose sound plays under the first page turn's. */
 const RIFFLE_AFTER = 0.5;
 
 export interface Listener {
@@ -34,7 +34,8 @@ export interface Listener {
 export function createListener(scape: Soundscape, music: Music | null): Listener {
   let mixed = -Infinity;
   let was: Moment | null = null;
-  // The stride's phase: a footfall each time it passes a whole number, the first soon after setting off.
+  // The stride's phase. A footfall plays each time it passes a whole number, and starting at 0.6 brings the first soon
+  // after setting off.
   let stride = 0.6;
   let foot = 0;
   let turnFrom: number | null = null;

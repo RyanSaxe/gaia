@@ -1,25 +1,15 @@
-// The world service: a utility process between the renderer and the engine.
-// It pings the engine whenever one starts and tells the renderer whether it
-// is connected, and it opens the world of the folder main names for each
-// page: the engine reads the code, Jev judges it, and the
-// laid-out world goes to the renderer over its MessagePort. When main names
-// no folder, the page offers the start (the worlds opened before, a folder,
-// or an address on GitHub) and the service opens whatever is chosen there,
-// cloning a place on GitHub into the app's own data first. Once a world
-// stands, its page sends where the person stands as they walk, which the
-// world's next open lands them at, and a painting of where they stand still,
-// which the start lays on its table as the world's card: both kept with it
-// among the recent worlds. While a world stands, its folder is asked now and
-// then for a new commit, and on one the world is judged again and the page
-// sent each thing's new vitality (`world.vitality`), which it eases to in
-// place.
+// The world service, a utility process between the renderer and the engine.
+// It opens the world for each page's folder, or offers the start page when main
+// names none, and sends progress and the finished `WorldDocument` over the
+// page's MessagePort. While a world is open, it polls the folder for new commits
+// and sends each thing's new vitality from `refreshWorld`.
 
 import type { Unreachable } from "@gaia/schema";
 import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
-import { healWorld, openWorld } from "./open-world.ts";
+import { refreshWorld, openWorld } from "./open-world.ts";
 import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer, WorldDocument } from "./protocol.ts";
-import { keepPainting, keepRecent, keepStood, offeredWorlds, stoodIn } from "./recent.ts";
+import { keepPainting, keepRecent, keepLastSpot, offeredWorlds, lastSpotIn } from "./recent.ts";
 
 const parent = process.parentPort;
 const toMain = (message: ToMain): void => parent.postMessage(message);
@@ -29,7 +19,7 @@ let status: EngineStatus = { state: "starting" };
 let renderer: MessagePortMain | null = null;
 let root: string | null = null;
 
-/** Settles once an engine has answered a ping; a new one replaces it whenever the engine goes down. */
+/** Resolves once an engine answers a ping. The `engine.down` handler replaces it with an unresolved one. */
 let connected = settleable();
 function settleable(): { promise: Promise<void>; resolve: () => void; settled: boolean } {
   const s = { promise: Promise.resolve(), resolve: () => {}, settled: false };
@@ -42,16 +32,16 @@ function settleable(): { promise: Promise<void>; resolve: () => void; settled: b
   return s;
 }
 
-/** The folder whose world each page opened and the commit it was built from or healed onto: what the page sends is kept with it, and the journal reads that commit. */
+/** The folder each page opened and the commit its world was built from or refreshed onto. The page's paintings and positions are stored with that folder, and `sendSource` reads files at that commit. */
 const openedOn = new WeakMap<MessagePortMain, { readonly folder: string; readonly commit?: string }>();
-/** Writes to the recent worlds, one after another, so a painting never races the visit it belongs to. */
+/** Runs writes to the recent worlds one at a time, so a painting's write cannot overlap the write of the visit it belongs to. */
 let keeping: Promise<void> = Promise.resolve();
 function keep(write: () => Promise<void>): Promise<void> {
   keeping = keeping.then(write).catch((error: unknown) => console.error(`gaia: could not keep the recent worlds: ${(error as Error).message}`));
   return keeping;
 }
 
-/** The person's answer to the question in flight, if any: dropped when its page goes away. */
+/** Settles the pending consent question, if any. A new page load rejects it. */
 let consenting: { resolve: (approve: boolean) => void; reject: (e: Error) => void } | null = null;
 
 function send(port: MessagePortMain | null, message: ToRenderer): void {
@@ -69,7 +59,7 @@ async function connect(): Promise<void> {
     report({ state: "connected", version });
     connected.resolve();
   } catch (error) {
-    // The engine went down mid-ping; its restart pings again.
+    // The engine exited during the ping. Its restart sends `engine.up`, which pings again.
     console.error(`gaia: engine.ping failed: ${(error as Error).message}`);
   }
 }
@@ -80,7 +70,7 @@ async function engineUp(): Promise<void> {
   if (!up) throw new Error("The engine did not start. Build it with pnpm engine.");
 }
 
-/** Offers the start on one page: the worlds opened before, and why the last address led nowhere, if it did. */
+/** Sends one page the start page's offer: the worlds opened before, and why the last address failed, if it did. */
 async function offerStart(port: MessagePortMain, refused?: { address: string; why: Unreachable }): Promise<void> {
   try {
     await engineUp();
@@ -92,8 +82,8 @@ async function offerStart(port: MessagePortMain, refused?: { address: string; wh
 }
 
 /**
- * Sends a file of the world `port` opened, as its lines, read by the engine from the commit that world was built
- * from or healed onto; null when it can't be read or lies outside that folder.
+ * Sends the lines of a file in the world `port` opened, which the engine reads at that world's commit. Sends null
+ * when the file cannot be read or is outside the folder.
  */
 async function sendSource(port: MessagePortMain, path: string): Promise<void> {
   const opened = openedOn.get(port);
@@ -109,13 +99,13 @@ async function sendSource(port: MessagePortMain, path: string): Promise<void> {
 }
 
 /**
- * How often the folder of the world a page shows is asked which commit it is read from now, ms. A commit shows in the
- * world within a few seconds of being made, and each ask is two git commands in the engine (about 10 ms for Gaia's 500
- * files), so the engine, which serves one call at a time, spends well under 1% of its time on it.
+ * How often, in milliseconds, the service checks the shown world's folder for a new commit. A commit reaches the
+ * world within a few seconds. Each check runs two git commands in the engine, about 10 ms for Gaia's 500 files, so
+ * the engine, which serves one call at a time, spends well under 1% of its time on it.
  */
 const COMMIT_EVERY_MS = 4_000;
 
-/** The page whose world's folder is watched for new commits, and the timer that asks. */
+/** The page whose folder is polled for new commits, and the polling timer. */
 let watching: { readonly port: MessagePortMain; readonly timer: ReturnType<typeof setInterval> } | null = null;
 
 function stopWatching(): void {
@@ -124,41 +114,41 @@ function stopWatching(): void {
 }
 
 /**
- * Heals the world `port` shows as its folder's code moves on: on each new commit the world is judged again
- * (`healWorld`) and the page is sent each thing's new vitality. One heal runs at a time, and a heal that fails waits
- * for the next commit. A world read from disk has no commits to notice.
+ * Polls the folder of the world `port` shows. On each new commit, `refreshWorld` judges the world again and the page
+ * gets each thing's new vitality. One refresh runs at a time, and after a failed refresh the next commit tries again. A
+ * world read from disk has no commit, so it is not polled.
  */
 function watchCommits(port: MessagePortMain, document: WorldDocument): void {
   stopWatching();
   if (document.commit === undefined) return;
   let shown = document;
   let judgedAt = document.commit;
-  let healing = false;
-  const heal = async (): Promise<void> => {
-    // The engine restarting answers nothing for a moment; the next ask tries again.
+  let refreshing = false;
+  const refresh = async (): Promise<void> => {
+    // A restarting engine fails the call. The next poll tries again.
     const now = (await engine.call("project.commit", { root: shown.root }).catch(() => ({ commit: null }))).commit;
     if (now === null || now === judgedAt) return;
     judgedAt = now;
     const started = Date.now();
-    const healed = await healWorld(engine, shown);
+    const refreshed = await refreshWorld(engine, shown);
     if (watching?.port !== port) return;
-    shown = healed.shown;
+    shown = refreshed.shown;
     openedOn.set(port, { folder: shown.root, ...(shown.commit === undefined ? {} : { commit: shown.commit }) });
-    if (healed.heal !== null) send(port, healed.heal);
-    const changed = Object.keys(healed.heal?.vitality ?? {}).length;
-    console.log(`gaia: healed ${shown.root} at ${now.slice(0, 8)} in ${Date.now() - started} ms: ${changed} things' vitality changed${shown.commit === now ? "" : "; the land moved, so its new shape waits for the next open"}`);
+    if (refreshed.update !== null) send(port, refreshed.update);
+    const changed = Object.keys(refreshed.update?.vitality ?? {}).length;
+    console.log(`gaia: refreshed ${shown.root} at ${now.slice(0, 8)} in ${Date.now() - started} ms: ${changed} things' vitality changed${shown.commit === now ? "" : "; the land changed, so its new layout appears at the next open"}`);
   };
   const timer = setInterval(() => {
-    if (healing) return;
-    healing = true;
-    heal()
-      .catch((error: unknown) => console.error(`gaia: could not heal ${shown.root}: ${(error as Error).message}`))
-      .finally(() => (healing = false));
+    if (refreshing) return;
+    refreshing = true;
+    refresh()
+      .catch((error: unknown) => console.error(`gaia: could not refresh ${shown.root}: ${(error as Error).message}`))
+      .finally(() => (refreshing = false));
   }, COMMIT_EVERY_MS);
   watching = { port, timer };
 }
 
-/** Opens the world for one page; whatever it says goes to that page's port only. `github` names a place cloned from GitHub. */
+/** Opens the world for one page and sends every message to that page's port only. `github` is the "owner/repo" of a clone. */
 async function open(port: MessagePortMain, folder: string, github?: string): Promise<void> {
   try {
     await engineUp();
@@ -173,7 +163,7 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
         }),
     });
     console.log(`gaia: opened ${folder}: ${document.summary}`);
-    const stood = await stoodIn(engine, folder);
+    const stood = await lastSpotIn(engine, folder);
     send(port, { type: "world.document", document, ...(stood === undefined ? {} : { stood }) });
     const name = github ?? document.facts.repository.name;
     toMain({ type: "world.opened", root: folder, name });
@@ -188,10 +178,10 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
 }
 
 /**
- * Opens the place chosen on the start page. An address is asked of GitHub
- * first, while the start page still shows, so one that leads nowhere is
- * answered there; then the wait covers the clone (or the fetch into the copy
- * kept from before) as the code being read.
+ * Opens the place chosen on the start page. The engine checks an address with
+ * GitHub while the start page still shows, so a bad address is reported there.
+ * The wait then shows the clone, or the fetch into an earlier clone, as the
+ * reading stage.
  */
 async function choose(port: MessagePortMain, place: StartChoice): Promise<void> {
   if ("folder" in place) return open(port, place.folder);
@@ -228,7 +218,7 @@ parent.on("message", (event) => {
     case "renderer.port": {
       renderer?.close();
       stopWatching();
-      // A question asked of a page that is gone is never answered; the next page asks again.
+      // The old page can no longer answer the consent question. The next page's opening asks again.
       consenting?.reject(new Error("The page that was asked went away."));
       consenting = null;
       root = message.root;
@@ -244,7 +234,7 @@ parent.on("message", (event) => {
           if (opened !== undefined) void keep(() => keepPainting(engine, opened.folder, m.painting));
         } else if (m.type === "world.stood") {
           const opened = openedOn.get(port);
-          if (opened !== undefined) void keep(() => keepStood(engine, opened.folder, m.stood));
+          if (opened !== undefined) void keep(() => keepLastSpot(engine, opened.folder, m.stood));
         }
         else if (m.type === "world.consent") {
           consenting?.resolve(m.approve);

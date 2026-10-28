@@ -13,7 +13,7 @@ const land: SettlingLand = {
 };
 const center = (i: number): number => -land.reach + (i + 0.5) * land.cell;
 
-/** Files scattered over both areas, from thriving to failing. */
+/** Files scattered over both areas, with vitality from 0.1 to 0.95. */
 const files: (SettlingFile & { readonly vitality: number })[] = Array.from({ length: 14 }, (_, k) => {
   const x = -80 + ((k * 37) % 160);
   return { path: `${x < 0 ? "a" : "b"}/f${k}.ts`, area: x < 0 ? "a" : "b", x, z: -75 + ((k * 53) % 150), reach: 6 + (k % 4) * 3, size: (6 + (k % 4) * 3) ** 2, vitality: [0.95, 0.2, 0.7, 0.45, 0.88, 0.1][k % 6] as number };

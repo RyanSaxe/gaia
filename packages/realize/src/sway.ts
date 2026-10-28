@@ -1,14 +1,6 @@
-// How everything that grows answers the wind field (`wind-field.ts`). A
-// plant bends where it stands, level by level: the whole plant from its
-// base, each bough about the joint where it leaves the trunk, each twig about
-// where it leaves its bough, and each leaf or flower turns on its stalk.
-// Every level turns about one axis per joint, so whatever a joint carries
-// turns as one and a broad leaf or a round stem keeps its shape; the turn
-// grows smoothly along the piece and eases toward a most it never passes.
-// A long hanging piece swings less the farther it hangs, its lower end
-// trailing its top, and a tall plant leans less than a small one. The
-// shaders read these numbers (`SWAY_GLSL` in @gaia/render), and `swayAt` is
-// the CPU reference the tests run against.
+// Computes how plants bend in the wind field (`wind-field.ts`), level by level
+// from the base to each leaf. The shaders read these numbers (`SWAY_GLSL` in
+// @gaia/render), and `swayAt` is the CPU reference the tests run against.
 
 import { CUT, type Part } from "@gaia/schema";
 import { WIND_FIELD, gustAt, windDirAt } from "./wind-field.ts";
@@ -19,49 +11,60 @@ export interface WindLevel {
   readonly lean: number;
   /** How far it swings about its lean, as a share of the lean. */
   readonly swing: number;
-  /** How fast it swings, radians per second at a gentle rhythm: smaller parts swing faster. */
+  /** How fast it swings, in radians per second at a gentle rhythm. Smaller parts swing faster. */
   readonly rate: number;
-  /** The most it ever turns, in radians: a strong wind on a supple plant eases toward this and never past it. */
+  /** The largest turn, in radians. A strong wind on a supple plant eases toward it and never past it. */
   readonly most: number;
 }
 
-/** The wind field (`WIND_FIELD`) and how every plant answers it, level by level. */
+/**
+ * The wind field (`WIND_FIELD`) and each level's response to it. A plant bends
+ * level by level: the whole plant from its base, each bough about the joint
+ * where it leaves the trunk, each twig about where it leaves its bough, and
+ * each leaf or flower on its stalk. Each level turns about one axis per joint,
+ * so everything attached to a joint turns as one and a broad leaf or a round
+ * stem keeps its shape. The turn grows smoothly along the piece and eases
+ * toward a maximum it never passes. A long hanging piece swings less the
+ * farther it hangs, with its lower end trailing its top, and a tall plant
+ * leans less than a small one.
+ */
 export const WIND = {
   ...WIND_FIELD,
   /** The whole plant bends from its base, by height. */
   trunk: { lean: 0.05, swing: 0.45, rate: 0.75, most: 0.1 },
-  /** A bough turns about its joint; its reach is a share of the plant's height, within bounds in meters. */
+  /** A bough turns about its joint. Its reach is a share of the plant's height, clamped to `least` and `longest` meters. */
   bough: { lean: 0.07, swing: 0.6, rate: 1.55, most: 0.2, reach: 0.35, least: 0.6, longest: 4 },
   /** A twig turns about where it leaves its bough, over its reach in meters. */
   twig: { lean: 0.1, swing: 0.8, rate: 2.7, most: 0.28, reach: 0.6 },
-  /** Leaves and flowers turn on their stalks, only in a gust; past its reach in meters a piece turns less, so a long strand only rustles. */
+  /** Leaves and flowers turn on their stalks, only in a gust. Past its reach in meters a piece turns less, so a long strand only rustles. */
   leaf: { lean: 0, swing: 0.16, rate: 6.5, most: 0.3, reach: 1 },
   /**
-   * How a plant answers the gust where it stands, 0 to 1: its lean and swing
-   * scale by calm + (full - calm) x gust², so the steady breeze only stirs it
-   * and a strong gust bows it; a leaf's flutter scales by full x gust².
+   * How a plant responds to the gust at its position, 0 to 1. Its lean and
+   * swing scale by calm + (full - calm) x gust², so the steady breeze only
+   * stirs it and a strong gust bows it. A leaf's flutter scales by full x gust².
    */
   answer: { calm: 0.2, full: 1.8 },
-  /** A level's turn grows along the piece over this many reaches, steepest at the joint, then holds. */
+  /** A level's turn grows along the piece over this many reaches, steepest at the joint, then stays constant. */
   grow: 1.5,
-  /** Past where its turn holds, a hanging piece swings less with distance, and its lower end trails its top by this many radians a meter. */
+  /** Past where its turn stops growing, a hanging piece swings less with distance, and its lower end lags its top by this many radians per meter. */
   trail: 0.6,
   /**
-   * Stiffness from build: a plant's trunk leans by sqrt(height / its height)
-   * of a plant this tall, within these bounds, and its boughs by the square
-   * root of that, because a taller plant's trunk and boughs are thicker.
+   * Stiffness from size. A plant's trunk leans sqrt(`height` / its height)
+   * times as far as a plant `height` meters tall, clamped to `least` and
+   * `most`, and its boughs by the square root of that, because a taller
+   * plant's trunk and boughs are thicker.
    */
   build: { height: 4, least: 0.45, most: 1.3 },
 } as const;
 
-/** Swatches whose pieces turn on their stalks in a gust: leaves and flowers, never the stems and moss that carry or cling. */
+/** Swatches whose pieces turn on their stalks in a gust: leaves and flowers, never stems or moss. */
 export const FLUTTERS: ReadonlySet<string> = new Set(["leaf", "bloom", "eye"]);
 
 /**
- * Cuts that never turn on their own, only with their twig and bough: a fir's
- * needles and the heart of its frond, too stiff to flutter, and a willow's
- * strand, too long to turn as one leaf: its rows would turn by different
- * angles and pull apart.
+ * Cuts that never turn on their own, only with their twig and bough. A fir's
+ * needles and frond center are too stiff to flutter. A willow's strand is too
+ * long to turn as one leaf, because its rows would turn by different angles
+ * and pull apart.
  */
 export const STIFF: ReadonlySet<number> = new Set([CUT.needles, CUT.core, CUT.strand]);
 
@@ -71,22 +74,22 @@ export function jointPhase(x: number, y: number, z: number, seed: number): numbe
   return (h - Math.floor(h) + seed) * 6.283185307179586;
 }
 
-/** The air where a copy stands: the hour, the world's wind, the plant's own response, its height and where it is. */
+/** The wind inputs for one copy of a plant: the time, the world's wind, the plant's own response, its height and its position. */
 export interface WindState {
   readonly time: number;
-  /** The world's wind at this moment, 1 a light breeze. */
+  /** The world's wind at this moment. 1 is a light breeze. */
   readonly strength: number;
-  /** The plant's `MotionSpec`: how far it gives, and how quickly it swings. */
+  /** The plant's `MotionSpec`: how far it bends, and how quickly it swings. */
   readonly sway: number;
   readonly frequency: number;
   /** The plant's height, meters. */
   readonly height: number;
-  /** Where the copy's base stands in the world, and its seed. */
+  /** The copy's base position in the world, and its seed. */
   readonly at: readonly [number, number, number];
   readonly seed: number;
 }
 
-/** How much a plant of `height` meters gives at its trunk, from its build (`WIND.build`). */
+/** How far a plant of `height` meters bends at its trunk, relative to the reference plant in `WIND.build`. */
 export function trunkGive(height: number): number {
   const b = WIND.build;
   return Math.min(b.most, Math.max(b.least, Math.sqrt(b.height / Math.max(height, 0.3))));
@@ -97,9 +100,9 @@ const ease = (angle: number, most: number): number => most * Math.tanh(angle / m
 
 /**
  * One level's turn at a joint, as a horizontal vector (x, z) whose length is
- * the angle and whose direction is where it leans: downwind by its lean,
- * swinging about it. `gust` is the gust at the joint; `fade` scales the
- * swing; `lag` delays it, in radians.
+ * the angle and whose direction is where it leans, downwind by its lean and
+ * swinging about it. `gust` is the gust at the joint, `fade` scales the
+ * swing, and `lag` delays it in radians.
  */
 function leanOf(level: WindLevel, s: WindState, give: number, gust: number, phase: number, fade: number, lag: number): [number, number] {
   const t = s.time * (0.5 + s.frequency) * level.rate + phase - lag;
@@ -130,10 +133,11 @@ function turnAbout(p: number[], j0: number, j1: number, j2: number, k0: number, 
 }
 
 /**
- * Bends `p` about a joint by `level`, in the gust where its bough stands:
- * one axis for the whole joint, square to where it leans, and an angle that grows smoothly from the joint over
- * `WIND.grow` reaches. Past that, the swing fades and trails with distance,
- * so a long hanging piece sways rather than whips. Writes into `p`.
+ * Bends `p` about a joint by `level`, in the gust at its bough's joint. It
+ * uses one axis for the whole joint, perpendicular to the lean, and an angle
+ * that grows smoothly from the joint over `WIND.grow` reaches. Past that, the
+ * swing fades and lags with distance, so a long hanging piece sways rather
+ * than whips. Writes into `p`.
  */
 function bendAt(p: number[], j0: number, j1: number, j2: number, level: WindLevel, s: WindState, give: number, gust: number, reach: number, phase: number): void {
   const d = Math.hypot((p[0] as number) - j0, (p[1] as number) - j1, (p[2] as number) - j2);
@@ -144,7 +148,7 @@ function bendAt(p: number[], j0: number, j1: number, j2: number, level: WindLeve
   const [lx, lz] = leanOf(level, s, give, gust, phase, full / Math.max(d, full), Math.max(0, d - full) * WIND.trail);
   const angle = Math.hypot(lx, lz);
   if (angle < 1e-7) return;
-  // up x lean: a positive turn about it carries what stands above the joint toward the lean.
+  // The axis is up x lean, so a positive turn about it moves points above the joint toward the lean.
   turnAbout(p, j0, j1, j2, lz / angle, 0, -lx / angle, angle * grow);
 }
 
@@ -152,12 +156,11 @@ const same = (a: Float32Array, i: number, b: Float32Array, k: number): boolean =
   Math.abs((a[i * 3] as number) - (b[k * 3] as number)) + Math.abs((a[i * 3 + 1] as number) - (b[k * 3 + 1] as number)) + Math.abs((a[i * 3 + 2] as number) - (b[k * 3 + 2] as number)) < 1e-5;
 
 /**
- * Where each vertex of `part`, at `positions` (as `applyVitality` places
- * them), stands in the wind. Leaves and flowers turn on their stalks only
- * where `flutter` is set, as the shader turns only `FLUTTERS` swatches, and
- * never where their cut is `STIFF`. The
- * copy stands unturned at `s.at`; the shader does the same in the copy's own
- * frame.
+ * Where each vertex of `part` moves in the wind, from `positions` as
+ * `applyVitality` places them. Leaves and flowers turn on their stalks only
+ * when `flutter` is set, as the shader turns only `FLUTTERS` swatches, and
+ * never where their cut is `STIFF`. The copy is unrotated at `s.at`, and the
+ * shader does the same in the copy's own frame.
  */
 export function swayAt(part: Part, positions: Float32Array, s: WindState, flutter: boolean): Float32Array {
   const out = new Float32Array(positions.length);
@@ -173,10 +176,10 @@ export function swayAt(part: Part, positions: Float32Array, s: WindState, flutte
     p[1] = positions[i * 3 + 1] as number;
     p[2] = positions[i * 3 + 2] as number;
     const j = (a: Float32Array, c: number): number => a[i * 3 + c] as number;
-    // One gust for everything a bough carries, where its joint stands: the gust varies over tens of meters.
+    // One gust for everything on a bough, sampled at its joint, since the gust varies over tens of meters.
     const gust = gustAt(s.at[0] + j(bough, 0), s.at[2] + j(bough, 2), s.time);
     if (flutter && !STIFF.has(Math.floor(part.cutout[i * 3 + 2] as number))) {
-      // The piece turns as one about its foot (its pivot): it nods across its stalk and the wind, and twists about the stalk, by a mix its own.
+      // The piece turns as one about its pivot. It nods across its stalk and the wind, and twists about the stalk, in its own mix of the two.
       const [p0, p1, p2] = [j(pivot, 0), j(pivot, 1), j(pivot, 2)];
       const phase = jointPhase(p0, p1, p2, s.seed);
       let sx = p0 - j(twig, 0);
@@ -202,7 +205,7 @@ export function swayAt(part: Part, positions: Float32Array, s: WindState, flutte
     }
     if (!same(twig, i, bough, i)) bendAt(p, j(twig, 0), j(twig, 1), j(twig, 2), WIND.twig, s, give, gust, WIND.twig.reach, jointPhase(j(twig, 0), j(twig, 1), j(twig, 2), s.seed));
     if (Math.hypot(j(bough, 0), j(bough, 1), j(bough, 2)) > 1e-4) bendAt(p, j(bough, 0), j(bough, 1), j(bough, 2), WIND.bough, s, give * Math.sqrt(trunk), gust, boughReach, jointPhase(j(bough, 0), j(bough, 1), j(bough, 2), s.seed));
-    // The whole plant bends from its base: each point leans by its height, and drops to keep its length.
+    // The whole plant bends from its base. Each point leans by its height and drops to keep its length.
     const y = Math.max(0, p[1] as number);
     const k = (y * y) / Math.max(s.height, 0.3);
     const ux = tx * k;

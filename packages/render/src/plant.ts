@@ -1,6 +1,6 @@
-// A realized plant as Three.js meshes. One ShaderMaterial per part applies
-// the vitality channels on the GPU, so vitality is a uniform and changing it
-// never rebuilds geometry.
+// Builds Three.js meshes for a realized plant. One ShaderMaterial per part
+// applies the vitality channels on the GPU, so vitality is a uniform and
+// changing it never rebuilds geometry.
 
 import * as THREE from "three";
 import { CUT, GRAIN, type Part, SPRAYS, type Swatch } from "@gaia/schema";
@@ -11,16 +11,11 @@ import { createSmokeMaterial } from "./smoke.ts";
 import { closeEachFrame, followVitality } from "./lag.ts";
 
 const f = (x: number): string => x.toFixed(4);
-/** How far dusk has fallen, 0 by day to 1 once it is night: lamps light across it. */
+/** GLSL for how far dusk has progressed, 0 by day to 1 at night. Lamps light up across it. */
 const DUSK = "smoothstep(0.08, 0.55, uNightness)";
 
-/** Where a fir frond's heart is gone and where it is whole, in multiples of its own size from the eye. */
-
-// The scalar channels ride four to an attribute (see \`geometryOf\`), so an
-// instanced plant stays well inside WebGL's 16 attribute slots: those that
-// color a vertex in aLook, those that move it in aLife.
-// The rot's noise, which the vertex shader reads too, so straw slumps where
-// the fragment shader opens its holes.
+// The rot's noise. The vertex shader reads it too, so straw slumps where the
+// fragment shader opens holes.
 const ROT_NOISE_GLSL = /* glsl */ `
 float rotHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float rotValue(vec3 p) {
@@ -57,11 +52,11 @@ float grainNoise(vec3 grain, vec3 rest) {
 }
 `;
 
-// A change in vitality eases in: each thing keeps how far its shown vitality
-// lags behind where it was a moment ago (`uVitalityLag`, see `easeVitality`),
-// and every step of its decline shows averaged over the vitality passed
-// through since, so a heal mends piece by piece rather than a piece at a
-// frame. At rest the lag is 0 and each step is exactly the one it eases.
+// A change in vitality eases in. Each thing keeps how far its shown vitality
+// lags behind where it was a moment ago (`uVitalityLag`, `easeVitality`), and
+// each step of its decline is averaged over the vitality passed through since,
+// so a heal mends piece by piece instead of a piece per frame. At rest the lag
+// is 0 and each step is exactly the step it eases.
 const EASED_GLSL = /* glsl */ `
 float easedRise(float t) { t = max(t, 0.0); return t >= 1.0 ? t - 0.5 : t * t * t * (1.0 - 0.5 * t); }
 // smoothstep(e0, e1, v), averaged over the vitality from v + lag to v.
@@ -81,6 +76,9 @@ float easedClamp(float now, float was) {
 }
 `;
 
+// The scalar channels are packed four to an attribute (`geometryOf`), so an
+// instanced plant stays well inside WebGL's 16 attribute slots. Those that
+// color a vertex are in aLook, and those that move it are in aLife.
 const CHANNELS_GLSL = /* glsl */ `
 attribute vec4 aLook;
 attribute vec4 aLife;
@@ -254,11 +252,11 @@ vec3 applyWind(vec3 p, mat4 model, vec3 root) {
 }
 `;
 
-// Leaf cards: each card is cut to its leaves by a procedural mask, so a
-// canopy has leafy edges with no texture. Values are signed, about a leaf's
-// width: positive inside. As a card shrinks on screen its leaves merge into
-// the card's plain outline, so distant canopies stay soft painted masses
-// instead of sparkling. CUT in @gaia/schema names the cuts.
+// A procedural mask cuts each leaf card to its leaves, so a canopy has leafy
+// edges with no texture. Mask values are signed, scaled to about a leaf's
+// width, and positive inside. As a card shrinks on screen its leaves merge into
+// the card's plain outline, so distant canopies stay soft masses instead of
+// sparkling. CUT in @gaia/schema names the cuts.
 const CUTOUT_GLSL = /* glsl */ `
 varying vec3 vCut;
 varying vec3 vLife;
@@ -271,11 +269,11 @@ vec3 cardCut() {
 }
 `;
 
-// Rot: a surface rots through as vitality falls. A surface with a grain
-// (tiles, straw, plaster, stones, boards) loses it a piece at a time; any
-// other opens ragged holes where a noise of its rest position falls below it.
-// Both follow the surface's own rest, so holes never crawl, and both faces
-// of a roof open at the same spots.
+// A surface rots through as vitality falls. A surface with a grain, such as
+// tiles, straw, plaster, stones or boards, loses it a piece at a time. Any
+// other surface opens ragged holes where a noise of its rest position falls
+// below the rot. Both follow the surface's rest position, so holes never
+// crawl, and both faces of a roof open at the same spots.
 const ROT_GLSL = /* glsl */ `
 #ifdef RUIN
 varying vec2 vRot;
@@ -858,7 +856,7 @@ void main() {
 }
 `;
 
-// Leaf cards cast scalloped shadows: the sun shines through between them.
+// Leaf cards cast scalloped shadows, with sunlight passing between the leaves.
 export const DEPTH_FRAG = /* glsl */ `
 precision highp float;
 #define SHADOW_PASS
@@ -897,9 +895,9 @@ function interleave(...columns: readonly Float32Array[]): Float32Array {
 }
 
 /**
- * `values`, `size` to a vertex and each within -1 to 1, as normalized 16-bit integers four to a vertex: the shader
- * reads each back within 1/32767 of what was written. Three values still take four slots: on macOS, ANGLE's Metal
- * backend copies any vertex buffer whose stride is not a multiple of four bytes into a second, padded one.
+ * Packs `values`, `size` to a vertex and each within -1 to 1, as normalized 16-bit integers four to a vertex. The
+ * shader reads each back within 1/32767 of what was written. Three values still take four slots, because on macOS,
+ * ANGLE's Metal backend copies any vertex buffer whose stride is not a multiple of four bytes into a padded copy.
  */
 function snorm16(values: Float32Array, size: number): THREE.BufferAttribute {
   const n = values.length / size;
@@ -909,7 +907,7 @@ function snorm16(values: Float32Array, size: number): THREE.BufferAttribute {
   }
   return new THREE.BufferAttribute(out, 4, true);
 }
-/** A part whose pieces fall, grow, rot or spin, which its material compiles in. */
+/** Whether a part's pieces fall, grow, rot or spin, which its material then compiles in. */
 export const hasRuin = (part: Part): boolean => {
   const c = part.channels;
   return c.fall !== undefined || c.grow !== undefined || c.rot !== undefined || c.spin !== undefined;
@@ -927,9 +925,9 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
     leave[i] = frames.reach[i * 2 + 1] as number;
   }
   const center = (k: number): Float32Array => frames.center.filter((_, i) => i % 3 === k);
-  // Normals and the channels that color a vertex, which the contract holds within -1 to 1 (tint within 0.1, the rest
-  // 0 to 1), take 16 bits. Whatever moves a vertex keeps full floats: a loss threshold off by 1/65534 moves a leaf's
-  // edge across the samples it covers.
+  // Normals and the channels that color a vertex take 16 bits, since the contract holds them within -1 to 1, tint
+  // within 0.1 and the rest within 0 to 1. Channels that move a vertex keep full floats, because a loss threshold off
+  // by 1/65534 moves a leaf's edge across the samples it covers.
   g.setAttribute("position", new THREE.BufferAttribute(part.positions, 3));
   g.setAttribute("normal", snorm16(part.normals, 3));
   g.setAttribute("aCutout", new THREE.BufferAttribute(part.cutout, 3));
@@ -955,9 +953,9 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
 }
 
 /**
- * Lets the page's copy of each of `geometry`'s buffers go once the GPU holds it, but those named in `keep` ("index"
- * for the index): a plant's geometry never changes once built, and three reads a buffer's array only to upload it.
- * What a ray is cast against keeps its position, normal and index, which three's raycast reads.
+ * Frees the page's copy of each of `geometry`'s buffers once the GPU has it, except those named in `keep` ("index"
+ * for the index). A plant's geometry never changes once built, and three reads a buffer's array only to upload it. A
+ * mesh that rays are cast against keeps its position, normal and index, which three's raycast reads.
  */
 export function letGoOnUpload(geometry: THREE.BufferGeometry, keep: readonly string[] = []): void {
   const letGo = (a: THREE.BufferAttribute): void => {
@@ -969,12 +967,12 @@ export function letGoOnUpload(geometry: THREE.BufferGeometry, keep: readonly str
   if (geometry.index !== null && !keep.includes("index")) letGo(geometry.index);
 }
 
-/** Bark, stone and a building's fabric are solid; leaves, moss and blooms are thin and scatter light; fruit and berries are solid under a waxy skin. */
+/** Foliage amount per swatch, from 0 for solid to 1 for thin. Bark, stone and a building's fabric are solid. Leaves, moss and blooms are thin and scatter light. Fruit and berries are solid under a waxy skin. */
 export const FOLIAGE: Readonly<Record<string, number>> = {
   bark: 0, leaf: 1, bloom: 0.6, fruit: 0.2, berry: 0.2, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6, wood: 0, cap: 0.3, stalk: 0.35, spot: 0.3,
   wall: 0, render: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0,
 };
-/** The colors a spray borrows: its stalks the bark's, a blossom spray's petals the family's bloom and its few fresh leaves the stem green. */
+/** The colors a spray uses: the bark's for its stalks, the family's bloom for a blossom spray's petals, and stem green for its few fresh leaves. */
 export const sprayColors = (plant: Pick<Realized, "palette">): { uBark: { value: THREE.Vector3 }; uStem: { value: THREE.Vector3 }; uBloomColor: { value: THREE.Vector3 } } => ({
   uBark: { value: vec3Of(plant.palette.swatches.bark?.healthy ?? [0.4, 0.33, 0.3]) },
   uStem: { value: vec3Of(plant.palette.swatches.stem?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [0.4, 0.6, 0.3]) },
@@ -982,11 +980,11 @@ export const sprayColors = (plant: Pick<Realized, "palette">): { uBark: { value:
 });
 /** Swatches lit from inside at night, like window glass. */
 export const LAMP: ReadonlySet<string> = new Set(["glass"]);
-/** Closed shapes, drawn front-faced; a building's boards and panes show from both sides. */
+/** Swatches of closed shapes, drawn with front faces only. A building's boards and panes show from both sides. */
 export const CLOSED: ReadonlySet<string> = new Set(["bark", "stone", "wood"]);
 
 export function createPlant(plant: Realized, light: SceneLight): PlantView {
-  // Only the palette is read once the plant stands, so the parts' arrays go once the meshes are made.
+  // Only the palette is read after building, so the parts' arrays are freed once the meshes are made.
   const { palette } = plant;
   const object = new THREE.Group();
   const box = new THREE.Box3();
@@ -1006,9 +1004,9 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const shared = {
     // The shaders read how far along its decline the plant looks (`shownVitality`), not its vitality.
     uVitality: { value: 1 },
-    // Where that was a moment ago, less where it is: a change eases in (`easeVitality`).
+    // Where that was a moment ago minus where it is now, so a change eases in (`easeVitality`).
     uVitalityLag: { value: 0 },
-    // A single plant keeps its full detail: thinning is for the many copies a world places.
+    // A single plant keeps full detail. Thinning is for the many copies a world places.
     uDetail: { value: 0 },
     uSeed: { value: 0 },
     uSway: { value: plant.motion.sway },
@@ -1110,7 +1108,7 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
 }
 
 /**
- * A renderer on an opaque canvas. Three always asks for a canvas with alpha,
+ * Creates a renderer on an opaque canvas. Three always asks for a canvas with alpha,
  * and leaf-card edges resolve to partial alpha, so on such a canvas the page
  * behind would show through every leaf's edge as a pale outline.
  */

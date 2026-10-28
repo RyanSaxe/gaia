@@ -1,7 +1,8 @@
-//! `project.graph`: walks a project, parses every file its language table
-//! knows through tree-sitter, counts lines, reads history from git, and
-//! returns the code graph (`packages/schema/src/graph.ts`). The rules
-//! resolve imports and calls; what they cannot goes out pending, for Jev.
+//! Builds the code graph for `project.graph` (`packages/schema/src/graph.ts`).
+//! It walks a project, parses every file in the language table with
+//! tree-sitter, counts lines and reads history from git. The rules in
+//! `resolve.rs` turn imports and calls into edges, and send the ones they
+//! cannot resolve to Jev as pending references.
 
 pub mod entities;
 pub mod git;
@@ -27,8 +28,8 @@ const DAY: i64 = 86_400;
 /// The history window used to count recent commits, in days.
 const RECENT_DAYS: i64 = 14;
 
-/// Parses keyed by language and content hash, so a file is parsed again
-/// only when it changes, for as long as the engine runs.
+/// Parses keyed by language and content hash, so the engine parses a file
+/// again only when it changes, for as long as it runs.
 type ParseCache = Mutex<HashMap<(String, String), Arc<FileParse>>>;
 
 fn cache() -> &'static ParseCache {
@@ -138,7 +139,7 @@ fn ancestors(dir: &str) -> Vec<String> {
     out
 }
 
-/// A placeholder until lineage matching (`lineage.rs`) gives every node its own.
+/// A placeholder lineage until `lineage::assign` gives every node its own.
 fn fresh_lineage(id: &str) -> String {
     walk::content_hash(id.as_bytes())
 }
@@ -166,7 +167,6 @@ impl Touches {
     }
 }
 
-/// Builds the code graph of the project at `root`.
 pub fn build(root: &Path) -> Result<CodeGraph, String> {
     build_with(root, &lineage::Store, &Links::new())
 }
@@ -178,25 +178,26 @@ pub struct Link {
     /// The call that chose it, with its version.
     pub call: String,
     pub p: f64,
-    /// The candidates it chose among, sorted. The answer holds only while
+    /// The candidates it chose among, sorted. The answer applies only while
     /// they are still the reference's candidates.
     pub candidates: Vec<String>,
 }
 
-/// Jev's links, by `ref_key`: one for each set of candidates a reference
-/// has had, since which other links apply can change its candidates, and
-/// each set keeps its own answer.
+/// Jev's links, by `ref_key`. A reference has one link for each set of
+/// candidates it has had, because the links applied elsewhere can change its
+/// candidates, and each set keeps its own answer.
 pub type Links = HashMap<String, Vec<Link>>;
 
-/// A pending reference's identity, which a link answer is held under.
+/// The key a pending reference's link answer is stored under.
 pub fn ref_key(r: &PendingRef) -> String {
     format!("{}|{}|{}|{}", r.from, r.kind, r.text, r.at.start)
 }
 
-/// The project's id: its repository's root commit, so it names the project
-/// wherever it is cloned. A folder inside a repository is a project of its
-/// own, named by the root commit and where the folder sits; a folder
-/// outside git is named by a hash of its path.
+/// The project's id. For a repository's top level it is the root commit, so
+/// the id is the same wherever the repository is cloned. A folder inside a
+/// repository is a project of its own, with an id hashed from the root commit
+/// and the folder's path in the repository. A folder outside git gets a hash
+/// of its path.
 pub fn project_id(root: &Path) -> String {
     let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     match (git::root_commit(root), git::toplevel(root)) {
@@ -214,7 +215,7 @@ pub fn build_linked(root: &Path, links: &Links) -> Result<CodeGraph, String> {
     build_with(root, &lineage::Store, links)
 }
 
-/// Builds the graph, matching lineage against the record `keeper` holds.
+/// Builds the graph, matching lineage against the record `keeper` loads.
 fn build_with(
     root: &Path,
     keeper: &dyn lineage::Keeper,
@@ -375,7 +376,7 @@ fn build_with(
         all_def_ids[k] = def_ids;
     }
 
-    // The rules: imports, calls and references, by rule or pending.
+    // Resolve imports, calls and references by rule, or leave them pending.
     let dirs: BTreeSet<String> = dir_lines.keys().cloned().collect();
     let units: Vec<resolve::Unit> = files
         .iter()
@@ -401,8 +402,9 @@ fn build_with(
         .collect();
     let resolved = resolve::run(&units, &dirs, &packages, &entities::installed(&listed));
     let mut edges = resolved.edges;
-    // References Jev resolved become edges, and ones it put outside leave the
-    // pending list; one whose candidates changed since is pending again.
+    // References Jev resolved become edges, and ones it placed outside the
+    // repository leave the pending list. A reference whose candidates changed
+    // since Jev answered is pending again.
     let mut pending: Vec<PendingRef> = Vec::new();
     for r in resolved.pending {
         let mut offered = r.candidates.clone();
@@ -434,7 +436,7 @@ fn build_with(
     let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let project_id = project_id(root);
 
-    // Lineage, matched against the last graph this project kept.
+    // Lineage, matched against the store's record of this project's last graph.
     let commit = snapshot.commit().map(String::from);
     let previous = keeper.load(&project_id);
     let renames = match (
@@ -490,7 +492,7 @@ fn build_with(
             Node::Dir(d) => d.lineage = lineage_of(&d.id),
             Node::File(f) => f.lineage = lineage_of(&f.id),
             Node::Def(d) => d.lineage = lineage_of(&d.id),
-            // A block follows its holder: its lineage is its holder's and its place there.
+            // A block's lineage is a hash of its definition's or file's lineage and its index there.
             Node::Block(b) => {
                 let index = b.id.rsplit('/').next().unwrap_or("0");
                 b.lineage =
@@ -609,7 +611,7 @@ mod tests {
                         spec.name, file.path
                     );
                 }
-                // An alias joins the import holding it, and a default export names its definition.
+                // An alias attaches to the import that contains it, and a default export names its definition.
                 if let Some(kind) = capture.strip_prefix("alias.") {
                     let found = parsed.refs.iter().flat_map(|r| &r.aliases).any(|a| {
                         matches!(
@@ -625,7 +627,7 @@ mod tests {
                         spec.name, file.path
                     );
                 }
-                // A re-export joins the import holding it.
+                // A re-export attaches to the import that contains it.
                 if let Some(kind) = capture.strip_prefix("reexport.") {
                     let found = parsed.refs.iter().any(|r| {
                         (kind == "all" && r.passes_all)
@@ -651,7 +653,7 @@ mod tests {
                         file.path
                     );
                 }
-                // An import or call may resolve, go pending or lie outside, so the parse is checked.
+                // An import or call may resolve, become pending or point outside, so the test checks the parse.
                 let kind = match capture {
                     "reference.import" => parse::RefKind::Import,
                     "reference.call" | "reference.send" => parse::RefKind::Call,
@@ -678,7 +680,7 @@ mod tests {
         )
         .unwrap();
         let src = "local M = {}\n\n-- Walks names.\nfunction M.walk(root, depth)\n  local out = {}\n  for i = 1, depth do\n    if i > 3 and depth > 0 then\n      out[#out + 1] = root\n    elseif i > 5 then\n      print(i)\n    else\n      helper(i)\n    end\n  end\n  return out\nend\n\nfunction M:size()\n  return #self\nend\n\nreturn M\n";
-        // With its tags query, Lua's definitions and calls come from it; without, from node kinds.
+        // With its tags query, Lua's definitions and calls come from the query. Without it, they come from node kinds.
         for (tags, walk_name) in [(Some(tags.as_str()), "walk"), (None, "M.walk")] {
             let loaded = languages::from_wasm("lua", &wasm, tags).unwrap();
             let p = parse::parse(&loaded, src).unwrap();
@@ -797,7 +799,7 @@ mod tests {
                 .any(|p| p.text == "react" || p.text == "lodash")
         );
         // A sub-path of the package a configuration names goes to Jev with the
-        // file below it with that last name; `super` inside a module is its file.
+        // file below it with that last name. `super` inside a module is its file.
         let extra = g
             .pending
             .iter()
@@ -805,9 +807,9 @@ mod tests {
             .expect("demo/extra goes to Jev");
         assert!(extra.candidates.contains(&"file:src/extra.ts".to_string()));
         assert!(edge("def:src/util.rs#tests", "file:src/util.rs", "imports"));
-        // Calls: one target by rule; an owner or `this` narrows; a receiver
-        // the rule cannot place goes to Jev; a function's locals stay local;
-        // a macro reaches only a macro.
+        // A call with one target resolves by rule. An owner or `this` narrows the
+        // candidates. A receiver the rule cannot place goes to Jev. A function's
+        // locals stay local, and a macro call resolves only to a macro.
         assert!(edge("def:src/a.ts#caller", "def:src/b.ts#helper", "calls"));
         assert!(edge(
             "def:src/a.ts#caller",
@@ -849,9 +851,9 @@ mod tests {
                 .iter()
                 .any(|e| e.to == "def:src/util.rs#format" && e.kind == "calls")
         );
-        // A path that names nothing here leads outside, as `Vec::new` does;
-        // a call on a value reaches no free function, as `.join` doesn't;
-        // and an impl inside a module owns its methods.
+        // A path that names nothing here, such as `Vec::new`, points outside. A
+        // call on a value, such as `.join`, never resolves to a free function.
+        // An impl inside a module owns its methods.
         assert!(
             !g.pending
                 .iter()
@@ -940,7 +942,7 @@ mod tests {
             "def:lib/tools.js#other",
             "calls"
         ));
-        // A namespace from outside the repository reaches nothing in it, even a function of the same name.
+        // A namespace from outside the repository resolves to nothing in it, even a function of the same name.
         assert!(!g.edges.iter().any(|e| e.to == "def:src/strings.ts#join"));
         assert!(!g.pending.iter().any(|p| p.text == "join"));
         std::fs::remove_dir_all(dir).unwrap();
@@ -971,7 +973,7 @@ mod tests {
             calls_to_run, 3,
             "start(), c.run() and engine.run() each reach core's run"
         );
-        // A module from outside the repository reaches nothing in it, even a method of the same name.
+        // A module from outside the repository resolves to nothing in it, even a method of the same name.
         assert!(
             !g.edges
                 .iter()
@@ -1121,7 +1123,7 @@ mod tests {
         assert!(!has_edge(&g, from, "def:apps/web/scale.ts#scale", "calls"));
         // `export *` passes on only what its module exports.
         assert!(!has_edge(&g, from, "def:packages/geo/src/hidden.ts#tidy", "calls"));
-        // A cycle ends, and a chain longer than the rule follows reaches nothing.
+        // A cycle ends, and a chain longer than `HOPS` resolves to nothing.
         assert!(!has_edge(
             &g,
             from,
@@ -1487,7 +1489,7 @@ mod tests {
             );
         }
 
-        // A file split in two: the larger part keeps the file's lineage.
+        // When a file splits in two, the larger part keeps the file's lineage.
         std::fs::remove_file(dir.join("src/walk.ts")).unwrap();
         std::fs::create_dir_all(dir.join("src/walk")).unwrap();
         std::fs::write(dir.join("src/walk/core.ts"), walk).unwrap();
@@ -1557,7 +1559,7 @@ mod tests {
 
     #[test]
     fn a_folder_carries_the_package_rooted_there_its_imports_resolve_by_name_and_exports_are_marked() {
-        // Only a manifest makes an entity: a folder holding a main, server or index file and no manifest is none.
+        // Only a manifest makes an entity. A folder with a main, server or index file and no manifest is not one.
         let dir = project(
             "facts",
             &[

@@ -6,7 +6,7 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { dirname } from "node:path";
 
-/** The largest report accepted, bytes. A report is a few hundred. */
+/** The largest report accepted, in bytes. A report is a few hundred bytes. */
 export const TELEMETRY_LIMIT = 8 * 1024;
 
 /** One report as a line of JSON stamped with when it arrived, or null when the body is not one JSON object. */
@@ -21,7 +21,7 @@ export function telemetryLine(body: string, received: Date): string | null {
   return `${JSON.stringify({ received: received.toISOString(), ...parsed })}\n`;
 }
 
-/** Answers POST /telemetry: appends the report to `file`, refusing anything too large or not a JSON object. */
+/** Handles POST /telemetry: appends the report to `file`, refusing anything too large or not a JSON object. */
 export function handleTelemetry(req: IncomingMessage, res: ServerResponse, file: string): void {
   if (req.method !== "POST") {
     res.writeHead(405, { allow: "POST", "content-type": "text/plain" }).end("POST a report.");

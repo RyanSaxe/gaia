@@ -54,7 +54,7 @@ describe("where a person is", () => {
     expect([...seen].sort()).toEqual(["lot", "src/main.ts", "src/ui/menu.ts"]);
     expect(placeAt(world, 50, 0).file?.vitality ?? 0.4).toBe(0.4);
     for (const [x, z] of [[140, 0], [0, -140], [120, 120], [900, 0]] as const) expect(placeAt(world, x, z)).toEqual({ area: WILD_AREA, file: null });
-    // Outlines trace each area holding its subdirectories', and each patch's own cell.
+    // Each area's outline includes its subdirectories, and each patch's outline is its own cell.
     const lines = outlinesOf(world, 4);
     const ring = (path: string, list: typeof lines.areas) => list.find((o) => o.path === path)!.rings.flat().length;
     expect(ring("", lines.areas)).toBeGreaterThan(0);
@@ -64,8 +64,8 @@ describe("where a person is", () => {
 });
 
 describe("whose ground a point is, and how alive it is", () => {
-  it("takes its owner's vitality away from borders, eases into a neighbor's across a few meters, and thrives in the wild", () => {
-    // Cells every 16 m, as a world from code lays them: a thriving patch to the west, a failing one to the east, a tired one inside the west.
+  it("takes its owner's vitality away from borders, eases into a neighbor's across a few meters, and has vitality 1 in the wild", () => {
+    // Cells every 16 m, as a world from code lays them: a patch at vitality 1 to the west, one at 0.1 to the east, and one at 0.45 inside the west.
     const size = 300;
     const sites: OwnedSite[] = [];
     for (let x = -144; x <= 144; x += 16) for (let z = -144; z <= 144; z += 16) sites.push({ x, z, owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1 });
@@ -87,7 +87,7 @@ describe("whose ground a point is, and how alive it is", () => {
     }
     expect(inside).toBeGreaterThan(500);
 
-    // Across the border between the thriving and the failing patch, the ground eases from one to the other.
+    // Across the border between the patches at vitality 1 and 0.1, ownership blends from one to the other.
     for (const z of [-90, 37, 101]) {
       let edge = -60;
       while (ownerAt(edge + 0.25, z) === 0) edge += 0.25;
@@ -101,11 +101,11 @@ describe("whose ground a point is, and how alive it is", () => {
       expect(share(edge + 20, 1)).toBe(1);
     }
 
-    // Past the land the ground is the wild's, which thrives.
+    // Past the land the ground belongs to the wild, at vitality 1.
     expect(groundOwners(sites, { size }, size / 2 + 20, 0)).toEqual([{ owner: WILD_OWNER, share: 1 }]);
     expect(vitalityAt(own, values, size / 2 + 30, 10)).toBe(1);
 
-    // Rows worked out apart, as the bake's threads do, give the same bytes.
+    // Rows computed separately, as the bake's threads do, give the same bytes.
     const grid = ownershipGrid(size + 80);
     const top = ownershipRows(sites, { size }, grid, 0, 40);
     const rest = ownershipRows(sites, { size }, grid, 40, grid.n);

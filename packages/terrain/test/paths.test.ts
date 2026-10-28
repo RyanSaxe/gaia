@@ -31,7 +31,7 @@ const STYLE: RouteSpec = { width: 1.4, wear: 0.7, edging: "none", winding: 0.45,
 /** Baked once for every test here: the sample world first, then two random ones. Tests only read them. */
 const baked: readonly Terrain[] = [sampleWorld(), randomWorld(lib, 7003), randomWorld(lib, 7011)].map((w) => bakeTerrain(w, lib));
 
-/** Every pair of region hearts, all wanted: far more trails than any budget allows. */
+/** A trail between every pair of regions, from points near their centers: far more trails than any budget allows. */
 function everyPair(t: Terrain): TrailRequest[] {
   const ends: TrailEnd[] = t.spec.regions.map((r) => ({ id: r.id, x: r.x * 0.8, z: r.z * 0.8 }));
   const out: TrailRequest[] = [];
@@ -41,9 +41,9 @@ function everyPair(t: Terrain): TrailRequest[] {
   return out;
 }
 
-// Some tests here bake a world or plan a network: up to a second alone, several when other work shares the machine.
+// Some tests here bake a world or plan a network. Each takes up to a second alone, and several when other work shares the machine.
 describe("trails", { timeout: 20_000 }, () => {
-  // Planned once: these networks are only read.
+  // Planned once and only read.
   const planned = baked.map((t) => ({ t, network: planTrails(t, everyPair(t), 41) }));
 
   it("routes the same network for the same terrain, requests and seed", () => {
@@ -61,7 +61,7 @@ describe("trails", { timeout: 20_000 }, () => {
       expect(network.trails.length + network.dropped.length).toBe(requests.length);
       for (const d of network.dropped) expect(d.reason.length).toBeGreaterThan(10);
       expect(network.trails.length).toBeGreaterThan(requests.length / 2);
-      // Shared ways: the tread is far shorter than the trails walked.
+      // Trails share ways, so the tread is far shorter than the trails' total length.
       const tread = network.ways.reduce((n, w) => n + w.length, 0);
       const walked = network.trails.reduce((n, tr) => n + tr.length, 0);
       expect(tread).toBeLessThan(walked * 0.6);
@@ -97,7 +97,7 @@ describe("trails", { timeout: 20_000 }, () => {
           });
           if (close) beside++;
         }
-        // Where two ways cross there is a meter or two of closeness; never a long run.
+        // Where two ways cross they run close for a meter or two, never a long run.
         expect(beside).toBeLessThanOrEqual(Math.max(3, interior * 0.08));
       }
     }
@@ -170,7 +170,7 @@ describe("trails", { timeout: 20_000 }, () => {
           const u = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / (c.span * c.span)));
           return Math.hypot(x - (ax + (bx - ax) * u), z - (az + (bz - az) * u)) < 1.5;
         };
-        // Where there is water to cross: a course's dry spring or seep is stepped over.
+        // Check only where there is water to cross. A course's dry spring or seep needs no crossing.
         for (const at of over.filter((at) => waterDepthAt(t, ...at) > 0.1)) expect(way.crossings.some((c) => onDeck(c, at)), `${way.id} crosses a stream at ${at.map((v) => v.toFixed(1))} with nothing to cross on`).toBe(true);
         for (const c of way.crossings) {
           crossings++;
@@ -196,7 +196,7 @@ describe("trails", { timeout: 20_000 }, () => {
       const p = way.points;
       const count = p.length / 2;
       if (count < 30) continue;
-      // Along its own center line, away from where other ways meet it, it reads itself, rising from 0 to 1.
+      // Along its own center line, away from where other ways meet it, each sample names this way, with its position rising from 0 to 1.
       let last = -1;
       for (let k = 0; k < count; k += 3) {
         const i = sample(p[k * 2] as number, p[k * 2 + 1] as number);
@@ -213,7 +213,7 @@ describe("trails", { timeout: 20_000 }, () => {
     for (let i = 0; i < field.length; i += 97) if ((field[i] as number) >= TRAILS.reach) expect(places[i * 2]).toBe(-1);
   });
 
-  it("wears a trail by the vitality of the entities it joins: bare between thriving ones, grown over toward a failing one", () => {
+  it("wears a trail by the vitality of the entities it joins: bare between ones at high vitality, grown over toward one at low vitality", () => {
     const wear = 0.8;
     expect(trailWearAt(wear, 1, 1, 0.5)).toBeCloseTo(wear, 5);
     // Each end holds its own entity's vitality, and the wear runs smoothly between them.
@@ -226,10 +226,10 @@ describe("trails", { timeout: 20_000 }, () => {
       expect(before === Infinity || before - w < wear * 0.1).toBe(true);
       before = w;
     }
-    // A failing pair leaves a faint trace, never nothing, so the route still reads.
+    // With vitality 0 at both ends the trail keeps a faint trace, so the route still shows.
     expect(trailWearAt(wear, 0, 0, 0.5)).toBeGreaterThan(0);
     expect(trailWearAt(wear, 0.6, 0.6, 0.5)).toBeGreaterThan(trailWearAt(wear, 0.1, 0.1, 0.5));
-    // It grows over as the land looks (`shownVitality`): worn bare from 0.85, a trace from 0.45 down.
+    // It follows the land's curve (`shownVitality`): full wear from vitality 0.85 up, a trace from 0.45 down.
     expect(trailWearAt(wear, 0.85, 0.85, 0.5)).toBeCloseTo(trailWearAt(wear, 1, 1, 0.5), 5);
     expect(trailWearAt(wear, 0.45, 0.45, 0.5)).toBeCloseTo(trailWearAt(wear, 0, 0, 0.5), 5);
   });
@@ -245,13 +245,13 @@ describe("trails", { timeout: 20_000 }, () => {
       return tr === undefined ? [] : [tr.from, tr.to];
     };
     const thriving = new Set(placesOf(0));
-    // The first trail's entities thrive; every other entity fails.
+    // The first trail's entities have vitality 1, and every other entity 0.02.
     const vitality = (place: string): number => (thriving.has(place) ? 1 : 0.02);
     const both = wayWear(network, shared, vitality);
     const first = wayWear(lone(0), shared, vitality);
     both.forEach((w, s) => expect(w).toBeGreaterThanOrEqual((first[s] as number) - 1e-9));
     for (let a = 0; a <= 1; a += 0.1) expect(wayWearAt(both, a)).toBeGreaterThanOrEqual(wayWearAt(first, a) - 1e-9);
-    // With every entity failing, the way grows over.
+    // With every entity at vitality 0.02, the way grows over.
     const failing = wayWear(network, shared, () => 0.02);
     failing.forEach((w, s) => expect(w).toBeLessThan(both[s] as number));
     // A lone trail's way wears exactly as that trail does.
@@ -273,7 +273,7 @@ describe("trails", { timeout: 20_000 }, () => {
       if (d === 0) continue;
       moved++;
       expect(field[i] as number).toBeLessThanOrEqual(TRAILS.blend + 0.6);
-      // Where ways meet each may ease the same ground, but never far.
+      // Where ways meet, each may level the same ground, but never far.
       expect(d).toBeLessThanOrEqual(TRAILS.maxCut * 3 + 1e-4);
     }
     expect(moved).toBeGreaterThan(0);

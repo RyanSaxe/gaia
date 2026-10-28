@@ -1,12 +1,8 @@
-// One page of the journal, drawn from its words (`words.ts`): where it lives
-// in small capitals, its name, its vitality as a wash and a reading, a
-// definition's signature, then its list or its text. A list's rows are
-// links: a tap turns to that page. Code uses the journal's type with its
-// line numbers written by hand down a pencil-ruled gutter; a long line wraps
-// under a small hanging indent, and the page ends on a whole line, with the
-// rest a drag away. A document is set as prose. A left-hand page carries its
-// picture, and under it what Jev says of the thing as its caption. Nothing
-// fades.
+// Builds one journal page's DOM from its `PageWords` (`words.ts`): the path in
+// small capitals, the name with quality and importance meters, a definition's
+// signature, then its rows or its code. A code page ends on a whole line with a
+// fold to the rest, and a left-hand page holds a picture with a caption of
+// facts across its foot.
 
 import { type Measure, canvasMeasure, nameBreaks } from "../immersive/map-names.ts";
 import { TRAVELLER_SVG } from "../immersive/map-styles.ts";
@@ -15,7 +11,7 @@ import { type Piece, highlight } from "./highlight.ts";
 import { TITLE_FAMILY } from "./title-face.ts";
 import type { Folded, Full, Mark, PageWords, Row, Snippet } from "./words.ts";
 
-/** The field map's health colors: russet when failing, ochre as it declines, green when well. */
+/** The page's vitality color: russet at 0, ochre at 0.5 and green at 1, interpolated between. */
 export function healthColor(v: number): string {
   const stops: readonly (readonly [number, readonly [number, number, number]])[] = [
     [0, [154, 98, 70]],
@@ -34,13 +30,13 @@ export function healthColor(v: number): string {
   return "rgb(111,154,74)";
 }
 
-/** A page's size in its own pixels, as the book lays it. */
+/** A page's size in its own pixels, as in the book. */
 const PAGE_W = 520;
 const PAGE_H = 660;
 /**
- * The world's name on the title page, lettered as Gaia's mark letters its name: at most `size` px, its lines no wider
- * than the page less its 44 px margins (journal.css), smaller for a name that would take more than `lines` lines or
- * has a run too long for one line, but never below `least` px; a run longer still breaks where it must.
+ * The world's name on the title page, in the face of Gaia's logo. It is at most `size` px, with lines no wider than the
+ * page minus its 44 px margins (journal.css). A name that would need more than `lines` lines, or has a piece too long
+ * for one line, shrinks, but not below `least` px. A piece longer still breaks wherever it must.
  */
 const TITLE = { size: 52, least: 22, width: PAGE_W - 88, lines: 3 } as const;
 
@@ -51,13 +47,13 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   return e;
 };
 
-/** A score as the page shows it: a percentage, so it reads as a share of 0 to 1. */
+/** Formats a score from 0 to 1 as a percentage. */
 const percent = (v: number): string => `${Math.round(Math.max(0, Math.min(1, v)) * 100)}%`;
 
-/** The ink an importance's meter is drawn in; a quality's is its health color. */
+/** The color of the importance meter. The quality meter uses `healthColor`. */
 const INK = "#6b5640";
 
-/** A score as the page shows it: a short meter filled to its share, then its percentage. */
+/** A score as a short meter filled to its share, followed by its percentage. */
 function meter(v: number, color: string, cls: string): HTMLElement {
   const m = el("span", cls);
   const track = el("i", "jp-track");
@@ -69,7 +65,7 @@ function meter(v: number, color: string, cls: string): HTMLElement {
   return m;
 }
 
-/** A page's two numbers beside its name, each with its meter: its quality, in its health color, and how much it matters, in ink. */
+/** The two numbers beside a page's name, each with a meter: quality in its vitality color, and importance in ink. */
 function numbersOf(words: PageWords): HTMLElement {
   const numbers = el("span", "jp-numbers");
   const quality = el("span", "jp-number");
@@ -83,7 +79,7 @@ function numbersOf(words: PageWords): HTMLElement {
   return numbers;
 }
 
-/** A mark beside a line of the appendix: green for key to understanding, russet for what needs work most. */
+/** Mark colors beside appendix lines: green for code that is key to understanding, russet for code that most needs work. */
 const MARK_COLOR = { understand: "#5f8f3e", improve: "#a4553a" } as const;
 function marked(e: HTMLElement, mark: Mark | undefined): void {
   if (mark === undefined) return;
@@ -106,7 +102,7 @@ function rowsOf(rows: readonly Row[], turnTo: (of: string) => void): HTMLElement
   return list;
 }
 
-/** An entity's trails, at its page's foot, by their way: what it imports from and what imports from it, each name a tap to its page. */
+/** An entity's trails at the foot of its page: what it imports from and what imports from it. Each name turns to its page. */
 function trailsOf(trails: NonNullable<PageWords["trails"]>, turnTo: (of: string) => void): HTMLElement {
   const foot = el("div", "jp-trails");
   for (const [label, rows] of [["uses", trails.uses], ["used by", trails.usedBy]] as const) {
@@ -130,15 +126,15 @@ function trailsOf(trails: NonNullable<PageWords["trails"]>, turnTo: (of: string)
   return foot;
 }
 
-/** What a marked block is called in the appendix, in its stroke's color where its code starts. */
+/** The label of a marked block in the appendix, shown in its stroke's color at the block's first line. */
 const MARK_LABEL = { improve: "weak", understand: "key" } as const;
 
 /**
- * A page's lead: the definition that matters most, at a glance, unmarked:
- * the name of the part it stands for and that part's page, then its first
- * line and its key block, the rest folded away. A tap on the name turns to
- * that part's page; a tap on the code, to the definition in full, as the
- * reference under it says.
+ * A page's lead: its most important definition, without marks. It shows the
+ * name and page of the part it belongs to, then the signature and the key
+ * lines, with the rest folded. A tap on the name turns to that part's page,
+ * and a tap on the code turns to the definition in full, as the reference
+ * under it says.
  */
 function leadOf(s: Snippet, path: string, turnTo: (of: string) => void, fullOf: ((of: string) => InFull) | undefined): HTMLElement {
   const lead = el("div", "jp-lead");
@@ -168,7 +164,7 @@ function leadOf(s: Snippet, path: string, turnTo: (of: string) => void, fullOf: 
       e.stopPropagation();
       full.turn();
     });
-    // A snippet is a button itself, which never holds another, so its reference is lettered, not a button.
+    // The snippet is a button, and a button cannot contain another, so its reference is a span.
     code.append(referenceOf(`in full, p. ${full.folio}`, full.turn, "on", "span"));
   }
   snippet.append(head, code);
@@ -181,9 +177,8 @@ function leadOf(s: Snippet, path: string, turnTo: (of: string) => void, fullOf: 
 }
 
 /**
- * A reference by hand, as a book says where something goes on: "→ in full,
- * p. 5,415a" to the appendix, or "← back to its page, p. 5,415". A tap goes
- * where it says.
+ * A cross-reference such as "→ in full, p. 5,415a" to the appendix or "← back
+ * to its page, p. 5,415". A tap turns to that page.
  */
 function referenceOf(says: string, tap: () => void, way: "on" | "back", tag: "button" | "span" = "button"): HTMLElement {
   const ref = el(tag, way === "back" ? "jp-xref back" : "jp-xref", says);
@@ -195,7 +190,7 @@ function referenceOf(says: string, tap: () => void, way: "on" | "back", tag: "bu
   return ref;
 }
 
-/** Where a thing lives, in small capitals, each folder a tap to its page, and in a definition's path its file a tap to the file's. */
+/** A thing's path in small capitals. Each folder, and a definition's file, turns to its page. */
 function whereOf(path: readonly string[], turnTo: (of: string) => void): HTMLElement {
   const where = el("div", "jp-where");
   path.forEach((name, k) => {
@@ -217,17 +212,17 @@ const indentOf = (line: string): number => {
   return [...lead].reduce((n, c) => n + (c === "\t" ? 2 : 1), 0);
 };
 
-/** How far a definition's lines are indented in common: what its code is set back by on the page. */
+/** The smallest indent among a definition's non-blank lines, which the page removes from every line. */
 const baseIndent = (lines: readonly string[]): number => Math.min(...lines.filter((l) => l.trim() !== "").map(indentOf), Infinity);
 
-/** A definition's signature, inked as its code is. */
+/** A definition's signature, highlighted like its code. */
 function signatureOf(signature: string, path: string): HTMLElement {
   const sig = el("div", "jp-sig");
   sig.append(...inkedLine(highlight([signature], path)[0], signature).childNodes);
   return sig;
 }
 
-/** A line's text as its pieces, inked by what each is, without the indent the page sets as a hanging indent. */
+/** A line's text as highlighted pieces, without the leading indent, which the page sets with `--ind`. */
 function inkedLine(pieces: readonly Piece[] | undefined, line: string): HTMLElement {
   const text = el("span", "jp-text");
   let lead = true;
@@ -248,12 +243,12 @@ function codeOf(at: readonly number[], body: Full, base: number, pieces: readonl
     const n = body.first + k;
     const row = el("div", "jp-line");
     row.dataset.line = String(n);
-    // The first mark over a line is the one its stroke shows; the block's first line says what it is.
+    // The first mark covering a line sets its stroke, and the block's first line gets the mark's label.
     const mark = body.marks.find((m) => m.from <= n && n <= m.to);
     marked(row, mark);
     if (mark !== undefined && mark.from === n) row.dataset.label = MARK_LABEL[mark.kind];
     if (body.prose === true) {
-      // A document's heading is set as one, without the marks that make it; a fenced block's lines as code.
+      // A Markdown heading is styled as a heading without its # marks, and a fenced block's lines as code.
       const heading = body.pre?.[k] === true ? null : /^(#{1,6})\s+(.*)$/.exec(line);
       if (heading !== null) row.classList.add(`h${(heading[1] as string).length}`);
       if (body.pre?.[k] === true) row.classList.add("pre");
@@ -270,8 +265,8 @@ function codeOf(at: readonly number[], body: Full, base: number, pieces: readonl
 }
 
 /**
- * A page of a file's code as a riffle's leaf shows it in passing: the file's path as its running head, its lines
- * from `first` set as every page sets code, and its number.
+ * A page of a file's code for a riffle's leaf: the file's path as its running head, its lines from `first` set like
+ * any code page, and its folio.
  */
 export function renderPassingPage(path: string, first: number, lines: readonly string[], folio: string): HTMLElement {
   const page = el("div", "jp");
@@ -284,20 +279,20 @@ export function renderPassingPage(path: string, first: number, lines: readonly s
   return page;
 }
 
-/** Where a page's text is set in full: a turn there, and the number of its first page in the appendix, such as "5,475a". */
+/** Where a page's text appears in full: a function that turns there, and the folio of its first appendix page, such as "5,475a". */
 export interface InFull {
   readonly turn: () => void;
   readonly folio: string;
 }
 
 /**
- * A page from its words; `turnTo` turns the book to a row's page, and `folio`
- * is the page's number. A list too long for one page is drawn a slice of rows
- * at a time: the first page under the full heading, each page it runs on to
- * under a running head, as a book's pages carry one. A page with text names
- * where it is set in full (`full`): its name, its folds and its code turn
- * there, and a reference at its foot says where. `fullOf` names where any
- * definition is set in full, for the code a page leads with.
+ * Builds a page from its words. `turnTo` turns the book to a row's page, and
+ * `folio` is the page's number. A list too long for one page is drawn a slice
+ * of `rows` at a time: the first page under the full heading, and each
+ * continuation under a running head. A page with text links to where it
+ * appears in full (`full`): its name, its folds and its code turn there, and a
+ * reference at its foot gives the page. `fullOf` finds the full text of any
+ * definition, for the code a page leads with.
  */
 export function renderPage(words: PageWords, folio: string, turnTo: (of: string) => void, rows?: { readonly from: number; readonly to: number }, full?: InFull, fullOf?: (of: string) => InFull): HTMLElement {
   const inFull = full?.turn;
@@ -328,16 +323,16 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
     body.append(rowsOf(rows === undefined ? words.body.rows : words.body.rows.slice(rows.from, rows.to), turnTo));
     if (words.trails !== undefined && (rows === undefined || rows.from === 0)) body.append(trailsOf(words.trails, turnTo));
   } else if (words.body.kind === "code") {
-    // From the line it opens at; lines above it fold away.
+    // Starts at `opensAt` and folds the lines above it.
     const { opensAt, kind: _, ...code } = words.body;
     const skipped = opensAt - code.first;
     const shown: Full = { ...code, kind: "full", first: opensAt, lines: code.lines.slice(skipped) };
     if (skipped > 0 && inFull !== undefined) body.append(foldOf(linesOf(skipped), inFull));
     setItems(body, shown, fullItems(shown), baseIndent(code.lines), piecesOf(shown, words), turnTo);
-    // Where a long definition's page ends, a fold: the book shows it, with how many lines it holds, when lines are left over.
+    // A fold at the end of a long definition's page. `finish` in book.ts shows it with the count of remaining lines when some are left over.
     if (full !== undefined) {
       body.append(foldOf("", full.turn, "after"));
-      // The code itself is a tap to it in full, and the page's foot says where that is.
+      // A tap on the code turns to it in full, and the reference at the page's foot gives the page.
       for (const code of body.querySelectorAll<HTMLElement>(".jp-code")) {
         code.classList.add("jp-tapcode");
         code.addEventListener("click", (e) => {
@@ -354,9 +349,8 @@ export function renderPage(words: PageWords, folio: string, turnTo: (of: string)
 }
 
 /**
- * A text in full, as the appendix sets it: its lines, each definition with a
- * page of its own folded to one line, and how many lines are left out. Each
- * item is one row on the page, so a page is a run of items.
+ * One row of a text in the appendix: a line, a definition with its own page
+ * folded to one line, or a count of lines left out. A page is a run of items.
  */
 export type FullItem =
   | { readonly kind: "line"; readonly at: number }
@@ -367,7 +361,7 @@ export function fullItems(body: Full): FullItem[] {
   const items: FullItem[] = [];
   const folds = new Map((body.folded ?? []).map((f) => [f.from, f]));
   for (let k = 0; k < body.lines.length; k++) {
-    // A definition with a page of its own is one line here, which turns to it.
+    // A definition with its own page becomes one fold line that turns to it.
     const fold = folds.get(body.first + k);
     if (fold !== undefined) {
       items.push({ kind: "fold", fold });
@@ -378,14 +372,14 @@ export function fullItems(body: Full): FullItem[] {
   return items;
 }
 
-/** Each of a text's lines as its pieces, inked by what they are; a document's are left plain. */
+/** Each of a text's lines as highlighted pieces. A document's lines stay plain. */
 const piecesOf = (body: Pick<Full, "lines" | "prose">, words: PageWords): Piece[][] => (body.prose === true ? [] : highlight(body.lines, words.path.join("/")));
 
 /**
- * A page of a definition in full, in the appendix: `items` of its
- * `fullItems`, its first page under the full heading, its path a way up to
- * each folder, and a reference back to its page in the journal at its foot;
- * the rest under a running head, which turns back there too.
+ * Builds an appendix page of a definition in full from a slice of its
+ * `fullItems`. The first page has the full heading, the path linking to each
+ * folder, and a reference back to its journal page at its foot. Later pages
+ * have a running head that also turns back there.
  */
 export function renderFullPage(words: PageWords, body: Full, folio: string, items: { readonly from: number; readonly to: number }, first: boolean, back: () => void, turnTo: (of: string) => void): HTMLElement {
   const page = el("div", "jp jp-full");
@@ -410,7 +404,7 @@ export function renderFullPage(words: PageWords, body: Full, folio: string, item
   }
   const content = el("div", "jp-body");
   setItems(content, body, fullItems(body).slice(items.from, items.to), baseIndent(body.lines), piecesOf(body, words), turnTo);
-  // Its first page says by hand where its page in the journal is: the appendix's number without its letter.
+  // The first page's back reference uses the appendix folio without its letter, which is the journal page's folio.
   page.append(head, content, ...(first ? [referenceOf(`back to its page, p. ${folio.replace(/[a-z]+$/, "")}`, back, "back")] : []), el("div", "jp-folio", folio));
   return page;
 }
@@ -424,7 +418,7 @@ function setItems(content: HTMLElement, body: Full, items: readonly FullItem[], 
     if (start.kind === "line") content.append(codeOf(run.map((r) => (r.kind === "line" ? r.at : 0)), body, base, pieces));
     else {
       for (const r of run) {
-        // A definition with a page of its own folds to one line that turns there; past what the appendix sets, the rest.
+        // A definition with its own page folds to one line that turns there. A "rest" item counts the lines the appendix leaves out.
         if (r.kind === "fold") content.append(foldOf(`${linesOf(r.fold.to - r.fold.from + 1)}, page ${r.fold.page.toLocaleString("en-US")}`, () => turnTo(r.fold.of)));
         else content.append(foldOf(`${linesOf((r as Extract<FullItem, { kind: "rest" }>).lines)}, not set here`));
       }
@@ -439,15 +433,15 @@ function setItems(content: HTMLElement, body: Full, items: readonly FullItem[], 
   close();
 }
 
-/** How many lines, as a fold says it: "1 line", "20 lines". */
+/** A line count as a fold shows it: "1 line", "20 lines". */
 export const linesOf = (n: number): string => `${n.toLocaleString("en-US")} ${n === 1 ? "line" : "lines"}`;
 
 /**
- * Lines folded away, wherever code is shown: "⋯ 20 lines" in the hand at the
- * code's indent, with anything else it says, such as the page they are on,
- * and a tap to them where they can be read. Every fold in the journal is this
- * one; a long definition's page folds where it ends (`after`), which the book
- * places and words once the page is laid out.
+ * A fold for hidden lines anywhere code is shown, such as "⋯ 20 lines" at the
+ * code's indent, with any extra text such as their page, and a tap that turns
+ * to where they can be read. Every fold in the journal uses this. A long
+ * definition's page gets an `after` fold, which `finish` in book.ts places and
+ * labels once the page is laid out.
  */
 function foldOf(says: string, tap?: () => void, where?: "after"): HTMLElement {
   const fold = el(tap === undefined ? "span" : "button", where === undefined ? "jp-fold" : `jp-fold ${where}`, says);
@@ -462,14 +456,14 @@ function foldOf(says: string, tap?: () => void, where?: "after"): HTMLElement {
 }
 
 /**
- * The title page, facing the contents: a frontispiece painting of the world
- * running to the page's edges and the world's name lettered across its sky as
- * Gaia's mark letters its own. The world's vitality is read on the contents facing it.
+ * The title page, facing the contents: a full-bleed painting of the world with
+ * its name lettered across the sky in the face of Gaia's logo. The world's
+ * vitality appears on the facing contents page.
  */
 export function renderTitle(name: string, folio: string, painting: HTMLElement): HTMLElement {
   const page = el("div", "jp jp-picture jp-title-page");
   const lettered = el("div", "jp-title-lettering");
-  // Broken where the name breaks (`nameBreaks`), in lines of about one length (journal.css).
+  // Breaks the name at `nameBreaks` points into lines of similar length (journal.css).
   const lettering = el("div", "jp-book-name");
   lettering.append(...nameBreaks(name).flatMap((piece, k) => (k === 0 ? [piece] : [document.createElement("wbr"), piece])));
   measure ??= canvasMeasure(document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D);
@@ -479,10 +473,10 @@ export function renderTitle(name: string, folio: string, painting: HTMLElement):
   return page;
 }
 
-/** Measures the title page's lettering, made on its first use. */
+/** The title lettering's measure, created on first use. */
 let measure: Measure | null = null;
 
-/** The size, px, the title page letters `name` at (`TITLE`), measured with `measure`. */
+/** The font size in px for `name` on the title page (`TITLE`), measured with `measure`. */
 export function titleSize(name: string, measure: Measure): number {
   const width = (text: string): number => measure(text, `600 ${TITLE.size}px ${TITLE_FAMILY}`, 0);
   const longest = Math.max(...nameBreaks(name).map(width));
@@ -490,7 +484,7 @@ export function titleSize(name: string, measure: Measure): number {
   return Math.max(TITLE.least, TITLE.size * fit);
 }
 
-/** You are here, on a map's page: the field map's own traveller, their footprints behind them along the way they look. */
+/** The traveller marker on a map page, the same as the field map's, with footprints behind it along its heading. */
 export function renderTraveller(px: number, py: number, yaw: number): HTMLElement {
   const here = el("div", "jp-here");
   here.innerHTML = TRAVELLER_SVG;
@@ -499,8 +493,8 @@ export function renderTraveller(px: number, py: number, yaw: number): HTMLElemen
 }
 
 /**
- * Moves a map's traveller to (px, py) in the page's own pixels, facing `yaw`, to a few thousandths of a pixel, so
- * walking or travelling they glide; it is hidden off the page. Setting nothing when nothing changed.
+ * Moves a map page's traveller to (px, py) in the page's pixels, facing `yaw`, to three decimal places of a percent so
+ * it moves smoothly. It hides the marker off the page and writes no style when nothing changed.
  */
 export function placeTraveller(here: HTMLElement, px: number, py: number, yaw: number): void {
   const left = `${((px / PAGE_W) * 100).toFixed(3)}%`;
@@ -515,8 +509,8 @@ export function placeTraveller(here: HTMLElement, px: number, py: number, yaw: n
 }
 
 /**
- * A trip's way ahead on a map's page, in the vermilion pencil of the cross it ends at: the line and the cross, laid
- * over the map, the line's path set in the page's own pixels as the trip goes (`journalPages`' `follow`).
+ * A trip's route on a map page in vermilion: a line ending at a cross, over the map. `follow` in `journalPages` sets
+ * the line's path in the page's pixels as the trip goes.
  */
 export function renderWay(): { readonly way: SVGSVGElement; readonly cross: HTMLElement } {
   const way = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -535,7 +529,7 @@ export function placeCross(cross: HTMLElement, px: number, py: number): void {
   cross.style.top = `${((py / PAGE_H) * 100).toFixed(2)}%`;
 }
 
-/** A spot marked on a map's page: a vermilion pencil cross, the field map's own mark. A second click on it travels there. */
+/** A vermilion cross marking a spot on a map page, as on the field map. A second click on it travels there. */
 export function renderCross(px: number, py: number): HTMLElement {
   const cross = el("div", "jp-cross");
   cross.innerHTML = '<svg viewBox="0 0 18 18"><path d="M3 3 L15 15 M15 3 L3 15"/></svg>';
@@ -543,7 +537,7 @@ export function renderCross(px: number, py: number): HTMLElement {
   return cross;
 }
 
-/** A pencil underline under a name lettered on a map, while the pointer is on it; `box` in the page's pixels. */
+/** An underline under a name on a map while the pointer is on it. `box` is in the page's pixels. */
 export function renderNameLine(box: readonly [number, number, number, number]): HTMLElement {
   const line = el("div", "jp-name-line");
   line.style.left = `${((box[0] / PAGE_W) * 100).toFixed(2)}%`;
@@ -552,15 +546,15 @@ export function renderNameLine(box: readonly [number, number, number, number]): 
   return line;
 }
 
-/** A pointer's spot on a picture, in the page's own pixels, which the book's turn and tilt leave alone. */
+/** A pointer's position on a picture in the page's pixels, unaffected by the book's 3D transform. */
 export const pagePx = (picture: HTMLElement, e: MouseEvent): { readonly px: number; readonly py: number } => ({
   px: (e.offsetX * PAGE_W) / (picture.offsetWidth || PAGE_W),
   py: (e.offsetY * PAGE_H) / (picture.offsetHeight || PAGE_H),
 });
 
 /**
- * A left-hand page: its picture, its caption and its number. `onTap`, given,
- * hears a tap on the picture, at a spot in the page's own pixels.
+ * A left-hand page: its picture, caption and folio. `onTap`, if given,
+ * receives a tap on the picture as a point in the page's pixels.
  */
 export function renderPicture(picture: HTMLElement | null, folio: string, onTap?: (px: number, py: number) => void, caption: readonly CaptionFact[] = []): HTMLElement {
   const page = el("div", "jp jp-picture");
@@ -568,7 +562,7 @@ export function renderPicture(picture: HTMLElement | null, folio: string, onTap?
     page.append(picture);
     if (onTap !== undefined) {
       picture.classList.add("jp-tap");
-      // One handler, set afresh: a map or a painting is the same element each time its page is drawn.
+      // Uses `onclick` so a redraw replaces the handler, since a map or painting is the same element on every redraw.
       picture.onclick = (e) => {
         e.stopPropagation();
         const at = pagePx(picture, e);
@@ -577,7 +571,7 @@ export function renderPicture(picture: HTMLElement | null, folio: string, onTap?
     }
   }
   if (caption.length > 0) {
-    // Lettered across the picture's foot.
+    // Lettered across the bottom of the picture.
     const plate = el("div", "jp-caption");
     for (const fact of caption) {
       const item = el("span", "jp-caption-item");

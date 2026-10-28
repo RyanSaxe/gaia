@@ -7,7 +7,7 @@ import { randomSlots } from "@gaia/world/testing";
 import { CHANNEL_MATH, applyVitality, easedClamp, easedStep, mergeParts, realize, resolveParams, rotAt, shownVitality, spinAt, triangleCount } from "@gaia/realize";
 
 const lib = new Library(FLORA_PRIMITIVES);
-/** Every tree and every bush part, each frame with each crown: the sweeps of a tree's parts and a bush's. */
+/** Every tree and bush blueprint from the sweeps of their parts, each frame with each crown. */
 const trees = sweep(tree, new Library(TREE_PRIMITIVES), { pairs: [["form", "crown"]] }).blueprints;
 const bushes = sweep(bush, new Library(BUSH_PRIMITIVES), { pairs: [["form", "crown"]] }).blueprints;
 const firstTree = (where: (bp: Blueprint) => boolean = () => true): Blueprint => trees.find(where) as Blueprint;
@@ -116,7 +116,7 @@ describe("vitality response", () => {
     });
   }
 
-  it("shows vitality 0.85 and up fully healthy, 0.45 and below as ruin, and falls evenly between with nothing that jumps", () => {
+  it("shows vitality 0.85 and up as 1 and 0.45 and below as 0, and rises evenly between with nothing that jumps", () => {
     for (const v of [0.85, 0.9, 0.99, 1]) expect(shownVitality(v)).toBe(1);
     for (const v of [0, 0.1, 0.36, 0.45]) expect(shownVitality(v)).toBe(0);
     for (let v = 0; v < 1; v += 0.001) {
@@ -197,14 +197,15 @@ describe("vitality response", () => {
     });
 
     it("eases a step that a ramp at the film's pace crosses over many frames, not a few", () => {
-      // Shown vitality from ruin to whole in 2.7 s, a frame every 1/60 s; the narrowest band any piece crosses, at the
-      // very start of the change, where the least vitality has yet been passed through.
+      // Shown vitality rises from 0 to 1 in 2.7 s, with a frame every 1/60 s. The step is the narrowest band any piece
+      // crosses, `lossBand`, at the very start of the change, where the least vitality has been passed through.
       const frame = 1 / 60;
       const dv = frame / 2.7;
       const e0 = 0;
       const e1 = e0 + CHANNEL_MATH.lossBand;
       const keep = Math.exp(-frame / CHANNEL_MATH.vitalityLag);
-      // The shown vitality follows the one given, and where it was follows the shown one (`followVitality` in @gaia/render).
+      // The shown vitality eases toward the given one, and the previous shown value eases toward the shown one
+      // (`followVitality` in @gaia/render).
       let [shown, was] = [0, 0];
       let [steppedWorst, easedWorst, stepped, eased] = [0, 0, smoothstep(e0, e1, 0), easedStep(e0, e1, 0, 0)];
       for (let v = dv; v <= 1 + 30 * dv; v += dv) {
@@ -253,9 +254,9 @@ describe("structures", () => {
   });
 
   for (const [name, blueprint] of [["A cottage", cottage], ["A mill", mill]] as const) {
-    it(`${name} falls to ruin as vitality drops, and shows none of it while healthy`, () => {
+    it(`${name} collapses as vitality drops, and shows no collapse at high vitality`, () => {
       const parts = mergeParts(realize(blueprint, structure, structureLib, { seed: 4, facts }).parts);
-      /** How far the falling pieces stand from where they were built, at most. */
+      /** The largest distance a falling piece has moved from where it was built. */
       const moved = (v: number): number =>
         Math.max(
           ...parts.map((p) => {
@@ -265,7 +266,7 @@ describe("structures", () => {
             return at.reduce((m, x, i) => ((fall[Math.floor(i / 3) * 4 + 3] as number) > 0 ? Math.max(m, Math.abs(x - (p.positions[i] as number))) : m), 0);
           }),
         );
-      // Overgrowth and rubble are gone into their pivots while healthy, and spread out when failing.
+      // Overgrowth and rubble are collapsed into their pivots at high vitality, and spread out at low vitality.
       const grown = (v: number): number =>
         Math.max(
           ...parts.map((p) => {
@@ -279,7 +280,7 @@ describe("structures", () => {
       expect(grown(0.05)).toBeGreaterThan(0.3);
       // Doors swing, shutters hang and chimneys topple: whole meters, not a tremble.
       expect(moved(0.05) - moved(1)).toBeGreaterThan(1);
-      // Walls and roofs rot through: no holes while healthy, deep ones when failing.
+      // Walls and roofs rot through, with no holes at high vitality and deep ones at low vitality.
       const rotMost = Math.max(...parts.flatMap((p) => (p.channels.rot === undefined ? [] : [Math.max(...p.channels.rot)])));
       expect(rotAt(1)).toBe(0);
       expect(rotMost * rotAt(0.05)).toBeGreaterThan(0.6);
@@ -306,7 +307,7 @@ describe("structures", () => {
     expect(new Set(built.parts.map((p) => p.swatch))).toEqual(new Set(["masonry", "wall", "timber", "roof", "smoke", "glass", "trim", "leaf", "bloom", "moss"]));
   });
 
-  it("turns a mill's wheel while healthy, slows it as it fails and stops it near the bottom", () => {
+  it("turns a mill's wheel at full speed at vitality 1, slower at 0.4, and not at all near 0", () => {
     expect(validate(mill, structure, structureLib)).toEqual([]);
     const parts = realize(mill, structure, structureLib, { seed: 4, facts }).parts;
     expect(parts.some((p) => p.channels.spin?.some((x) => x !== 0))).toBe(true);
@@ -316,7 +317,7 @@ describe("structures", () => {
     expect(spinAt(0.05)).toBe(0);
   });
 
-  it("lights windows and smokes only while healthy", () => {
+  it("lights windows brightest and smokes at high vitality, and has no smoke at low vitality", () => {
     const built = realize(cottage, structure, structureLib, { seed: 4, facts });
     const emitted = (v: number) => built.parts.filter((p) => p.swatch === "glass").reduce((sum, p) => sum + applyVitality(p, v).emission.reduce((a, b) => a + b, 0), 0);
     expect(emitted(1)).toBeGreaterThan(emitted(0.4) * 2);
@@ -361,7 +362,7 @@ describe("the understory", () => {
     { blueprints: sweep(wildflowers, all).blueprints, kind: wildflowers },
   ];
   for (const { blueprints, kind } of groups) {
-    it(`stands every ${kind.id} part valid and light enough to place by the hundred`, () => {
+    it(`builds every ${kind.id} part valid and light enough to place by the hundred`, () => {
       const over: string[] = [];
       for (const blueprint of blueprints) {
         expect(validate(blueprint, kind, all), named(blueprint)).toEqual([]);
@@ -374,8 +375,9 @@ describe("the understory", () => {
   }
 
   it("keeps a shrub and a bramble under every crown on the ground: their lowest leaves reach the soil and none sinks into it", () => {
-    // Clumps and a mound fill a shrub's frame down to the ground, and strands rest on the soil; a sapling stands on
-    // its one stem, its leaves on the branches above. Each frame stands at its smallest and largest under each crown.
+    // Clumps and a mound fill a shrub's frame down to the ground, and strands rest on the soil. A sapling stands on
+    // its one stem, with its leaves on the branches above. The test checks each frame at its smallest and largest under
+    // each crown.
     const shrubs = [...bushes, ...extremes].filter((b) => b.slots.form?.use !== "sapling@1");
     for (const crown of bushLib.forRole("Foliage")) expect(shrubs.filter((b) => b.slots.crown?.use === crown.id).length, crown.id).toBeGreaterThanOrEqual(4);
     for (const blueprint of shrubs) {
@@ -391,7 +393,7 @@ describe("the understory", () => {
     for (const blueprint of bushes) {
       const name = named(blueprint);
       const parts = realize(blueprint, bush, all, { seed: 3, facts: { scale: 1, age: 0 } }).parts;
-      // A spray's leaves drop in place around its loss; anything else collapses onto its pivot.
+      // A spray's leaves drop in place around its loss. Anything else collapses onto its pivot.
       const fallen = (part: Part, v: number): number => {
         const pos = applyVitality(part, v).positions;
         let gone = 0;
@@ -403,7 +405,7 @@ describe("the understory", () => {
       };
       const leaf = parts.find((p) => p.swatch === "leaf")!;
       const bark = parts.find((p) => p.swatch === "bark")!;
-      // A tired bush thins as it tires, so a third may have gone by 0.6, but no more.
+      // A bush thins as its vitality falls, so up to a third of it may be gone by vitality 0.6, but no more.
       expect(fallen(leaf, 0.6), name).toBeLessThan(1 / 3);
       expect(fallen(leaf, 0.1), name).toBeGreaterThan(0.6);
       expect(fallen(bark, 0.1), name).toBe(0);

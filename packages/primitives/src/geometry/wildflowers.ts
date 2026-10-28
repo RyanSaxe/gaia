@@ -1,7 +1,7 @@
-// Wildflower drifts: one species per drift, many stems thickest at its heart
-// and thinning toward its ragged edge. Petals fold toward their head at
-// night, and as vitality falls they droop, fade to straw and drop, edges of
-// the drift first; stems hold on longer.
+// Builds wildflower drifts: one species per drift, with stems densest at the
+// center and thinning toward a ragged edge. Petals fold toward their head at
+// night. As vitality falls they droop, fade to straw and drop, from the
+// drift's edge inward, and stems last longer.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { driftParams } from "../wildflowers.ts";
@@ -15,23 +15,23 @@ interface Flower {
   /** Direction the stem leaves the ground, before it bends. */
   readonly lean: V3;
   readonly height: number;
-  /** How far the flower sits from the drift's heart, 0 to 1. */
+  /** The flower's distance from the drift's center, from 0 to 1 at the edge. */
   readonly edge: number;
   readonly r: Rand;
 }
 
-/** Flowers per square meter at the heart of a drift of density 1. */
+/** Flowers per square meter at the center of a drift of density 1. */
 const PER_SQUARE_METER = 24;
 const MAX_FLOWERS = 300;
-/** The most triangles a drift takes on average: it is placed by the hundred, beside the 12,000 a bush may. */
+/** The triangle budget for one drift, counted with average head sizes. Drifts are placed by the hundred, so it is below the 12,000 a bush may use. */
 const DRIFT_TRIANGLES = 11_000;
-/** A stem in two segments of three sides, and its two strap leaves. */
+/** Triangles in a stem of two three-sided segments and its two strap leaves. */
 const STEM_TRIANGLES = 16;
 /**
- * A head's triangles on average, in full and in the lighter form a crowded
- * drift takes: a daisy's rays and eye, a cup's petals and eye, four bells
- * of 25 or 15 (without the shoulder ring), and eleven or so florets of 8 or
- * 4 (a tetrahedron rather than an octahedron).
+ * Average triangles per head, in full and in the light form a crowded drift
+ * uses: a daisy's rays and eye, a cup's petals and eye, about four bells of
+ * 25 or 15 (a light bell has no shoulder ring), and about eleven florets of 8
+ * or 4 (a tetrahedron instead of an octahedron).
  */
 const HEAD_TRIANGLES: Readonly<Record<Species, { readonly full: number; readonly light: number }>> = {
   daisies: { full: 31, light: 31 },
@@ -40,7 +40,7 @@ const HEAD_TRIANGLES: Readonly<Record<Species, { readonly full: number; readonly
   spikes: { full: 92, light: 46 },
 };
 
-/** Night closing per species: open faces fold tight, bells and spikes barely change. */
+/** How far each species closes at night. Open faces fold tight, and bells and spikes barely change. */
 const CLOSE: Record<Species, number> = { daisies: 1, cups: 0.9, bells: 0.3, spikes: 0.25 };
 
 export function buildDrift(species: Species, p: Resolved<typeof driftParams>, ctx: BuildContext): Built {
@@ -50,13 +50,13 @@ export function buildDrift(species: Species, p: Resolved<typeof driftParams>, ct
   const stems = new PartBuilder("stem");
   const s = 0.85 + 0.15 * (ctx.facts.scale ?? 1);
   const heads = HEAD_TRIANGLES[species];
-  // A drift too crowded to draw in full keeps its flowers and lightens every head, then thins to fit if it must.
+  // A drift over budget keeps its flowers and draws every head light, then places fewer flowers if still over.
   const { flowers, light } = layout(p, r.fork("layout"), s, (want) => want * (STEM_TRIANGLES + heads.full) > DRIFT_TRIANGLES, Math.floor(DRIFT_TRIANGLES / (STEM_TRIANGLES + heads.light)));
   for (const f of flowers) {
     const headLoss = clamp(lossThreshold(f.r.next(), 0.78) + 0.12 * f.edge, 0.02, 0.85);
     const tint = f.r.range(-0.06, 0.06);
     emitStem(stems, f, headLoss, species === "bells");
-    // The head rides its stem: it sags and sways with it about the stem's foot.
+    // The head sags and sways with its stem about the stem's foot (`bough`).
     const ch = { loss: headLoss, droop: 0.35, wither: 1, glow: 0, close: CLOSE[species], tint, bough: f.base };
     if (species === "daisies") emitDaisy(petals, eyes, f, ch);
     else if (species === "cups") emitCup(petals, eyes, f, ch);
@@ -69,8 +69,8 @@ export function buildDrift(species: Species, p: Resolved<typeof driftParams>, ct
 }
 
 /**
- * Stems scattered over a rotated ellipse, thickest at its heart, never closer than a hand's width. A drift of more
- * flowers than `crowded` allows draws them light, and no more than `lightMost` of them.
+ * Scatters stems over a rotated ellipse, densest at the center and never closer than a hand's width. When `crowded`
+ * returns true for the count, every flower is light and at most `lightMost` are placed.
  */
 function layout(p: Resolved<typeof driftParams>, r: Rand, s: number, crowded: (want: number) => boolean, lightMost: number): { flowers: Flower[]; light: boolean } {
   const rx = p.spread;
@@ -84,7 +84,7 @@ function layout(p: Resolved<typeof driftParams>, r: Rand, s: number, crowded: (w
   for (let tries = 0; out.length < want && tries < want * 30; tries++) {
     const a = r.next() * Math.PI * 2;
     const d = Math.sqrt(r.next());
-    // A ragged edge: the boundary wanders with angle.
+    // The boundary radius varies with angle, so the edge is ragged.
     const edgeAt = 0.75 + 0.25 * Math.sin(a * 3 + turn * 2) * Math.cos(a * 2 - turn);
     if (d > edgeAt) continue;
     const edge = d / edgeAt;
@@ -160,7 +160,7 @@ function emitStem(out: PartBuilder, f: Flower, headLoss: number, arching: boolea
   }
 }
 
-/** The direction a head faces: up along its stem and well out to one side, so open faces read from eye height. */
+/** The direction a head faces: up along its stem and well out to one side, so open faces are visible from eye height. */
 function facingOf(f: Flower, outward: number): V3 {
   const a = f.r.next() * Math.PI * 2;
   return normalize(add(f.lean, [Math.cos(a) * outward, 0.15, Math.sin(a) * outward]));
@@ -179,7 +179,7 @@ function emitDisc(out: PartBuilder, center: V3, facing: V3, radius: number, rise
   for (let j = 0; j < 6; j++) out.triangle(hub, first + j, first + ((j + 1) % 6));
 }
 
-/** Many slim white-to-any rays round a raised eye. */
+/** Many slim rays in the bloom swatch round a raised eye, like a daisy. */
 function emitDaisy(petals: PartBuilder, eyes: PartBuilder, f: Flower, look: HeadLook): void {
   const facing = facingOf(f, 1.1);
   const [u, v] = basis(facing);
@@ -234,10 +234,10 @@ function emitCup(petals: PartBuilder, eyes: PartBuilder, f: Flower, look: HeadLo
   emitDisc(eyes, addScaled(f.top, facing, radius * 0.08), facing, radius * 0.22, radius * 0.12, look, 0.35);
 }
 
-/** A bell's sides: five reads as round at a flower's size. */
+/** Sides per bell. Five look round at a flower's size. */
 const SIDES = 5;
 
-/** A bell's rings: its shoulder, its mouth and its flared lip, each as far down its axis, as wide, and as flared. A light bell has no shoulder. */
+/** A bell's shoulder, mouth and flared lip rings, each as distance down the axis, width and flare. A light bell has no shoulder. */
 const BELL_RINGS = [[0.25, 0.6, 0], [1, 1, 0], [1.25, 1.35, 0.4]] as const;
 
 /** An arching stem hung with nodding bells on one side, like a bluebell. */

@@ -1,9 +1,7 @@
-// Press "/" and a slip of the journal's paper is laid over the world: type a
-// few letters of any folder, building or landmark, file or definition, choose
-// one, and the journal opens at its page. Letters are matched in order, as a
-// fuzzy finder matches them: in the name before the path, at the start of a
-// word, and run together rank higher. It is a reader's shortcut, so nothing on
-// the screen announces it.
+// A fuzzy finder for the journal. "/" opens it over the world, and choosing a
+// folder, building or landmark, file or definition opens the journal at its
+// page. Matches in the name rank above matches in the path, and letters at a
+// word start or in a run rank higher. No on-screen hint advertises it.
 
 import type { Journal } from "@gaia/world";
 
@@ -12,19 +10,19 @@ export interface Findable {
   /** The journal's place for it. */
   readonly at: string;
   readonly name: string;
-  /** Where it lives: a folder's path, or a definition's file. */
+  /** Its location: the parent folder's path, or a definition's file. */
   readonly where: string;
   readonly page: number;
 }
 
-/** A findable that matches, with how well and which letters of its name matched. */
+/** A matching findable, with its score and the indexes of the matched letters in its name. */
 export interface Found {
   readonly item: Findable;
   readonly score: number;
   readonly letters: readonly number[];
 }
 
-/** Whether a letter begins a word: the first, after a separator, or a capital after a small letter. */
+/** Whether the letter at `k` starts a word: the first letter, one after a separator, or a capital after a lowercase letter. */
 const startsWord = (text: string, k: number): boolean => {
   if (k === 0) return true;
   const before = text[k - 1] as string;
@@ -33,22 +31,23 @@ const startsWord = (text: string, k: number): boolean => {
 };
 
 /**
- * How well `term` matches `text` with its letters in order, and where: each
- * letter scores, more at the start of a word and more again run on from the
- * last, less the farther it is from the last; the whole term as one run
- * scores most, and the whole text more again. Null if some letter is missing.
+ * Scores how well `term` matches `text` with its letters in order, and returns
+ * the matched positions. Each letter scores, more at a word start and more when
+ * it directly follows the previous match, and less the farther it is from the
+ * previous match. The whole term as one run scores highest, and a term equal to
+ * the whole text higher still. Returns null if a letter is missing.
  */
 function matchOf(text: string, term: string): { score: number; letters: number[] } | null {
   const lower = text.toLowerCase();
-  // The whole term as one run, at the start of a word if it can be.
+  // The whole term as one run, preferring one at a word start.
   const runs = [...lower.matchAll(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))].map((m) => m.index ?? 0);
   const run = runs.find((k) => startsWord(text, k)) ?? runs[0];
   if (run !== undefined) {
     const letters = Array.from({ length: term.length }, (_, q) => run + q);
     return { score: term.length * 4 + (startsWord(text, run) ? 8 : 0) + (term.length === lower.length ? 16 : 0), letters };
   }
-  // Otherwise each letter in order, two ways: running on from the last letter where it can, or at the start of a
-  // word where it can. The better of the two is the match.
+  // Otherwise matches each letter in order two ways: preferring the letter right after the last match, or preferring
+  // a word start. The higher score wins.
   const spelled = (runOn: boolean): { score: number; letters: number[] } | null => {
     const letters: number[] = [];
     let score = 0;
@@ -70,9 +69,10 @@ function matchOf(text: string, term: string): { score: number; letters: number[]
 }
 
 /**
- * The findables matching `query`, best first, at most `limit`. Each word of
- * the query must match the item's name or, scoring less, its path; a shorter
- * name breaks a tie, so `world` finds the folder before every file in it.
+ * Returns up to `limit` findables matching `query`, best first. Each query
+ * word must match the item's name or, scoring less, its path. Shorter names
+ * and paths score slightly higher, so `world` finds the folder before the
+ * files in it.
  */
 export function find(items: readonly Findable[], query: string, limit = 8): Found[] {
   const terms = query.toLowerCase().split(/\s+/).filter((t) => t !== "");
@@ -112,7 +112,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   return e;
 };
 
-/** The finder's slip in `layer`, searching `items` as they stand when it opens; `choose` turns the journal to a place. */
+/** Creates the finder in `layer`. It reads `items` each time it opens, and `choose` turns the journal to the chosen place. */
 export function createFinder(layer: HTMLElement, items: () => readonly Findable[], choose: (at: string) => void): Finder {
   const veil = el("div", "finder");
   veil.hidden = true;
@@ -146,12 +146,12 @@ export function createFinder(layer: HTMLElement, items: () => readonly Findable[
       ...shown.map((f, k) => {
         const row = el("button", "finder-row");
         row.type = "button";
-        // The name, its matched letters inked darker.
+        // The name, with its matched letters in bold.
         const name = el("span", "finder-name");
         const marked = new Set(f.letters);
         [...f.item.name].forEach((ch, q) => name.append(marked.has(q) ? el("b", "", ch) : document.createTextNode(ch)));
         row.append(name, el("span", "finder-where", f.item.where), el("span", "finder-page", f.item.page.toLocaleString("en-US")));
-        // Only a pointer that moves picks a row: rows drawn under a resting one leave the first picked.
+        // Only pointer movement selects a row, so new rows drawn under a resting pointer keep the first row selected.
         row.addEventListener("pointermove", () => {
           if (on !== k) pick(k);
         });
@@ -174,7 +174,7 @@ export function createFinder(layer: HTMLElement, items: () => readonly Findable[
     e.preventDefault();
     e.stopPropagation();
   });
-  // A click off the slip puts it away.
+  // A press outside the slip closes the finder.
   veil.addEventListener("pointerdown", (e) => {
     if (e.target === veil) close();
   });
@@ -199,11 +199,11 @@ export function createFinder(layer: HTMLElement, items: () => readonly Findable[
   };
 }
 
-/** Everything in the journal the finder turns to: every folder, building or landmark, file and definition. */
+/** Everything the finder can open: every folder, building or landmark, file and definition in the journal. */
 export function findablesOf(journal: Pick<Journal, "entries">): Findable[] {
   const parent = (path: string): string => path.split("/").slice(0, -1).join("/");
   return journal.entries.flatMap((e): Findable[] => {
-    // A file's own page is the file's, which is found by its name.
+    // Skips a file's own page, since the file's entry is found by the same name.
     if (e.kind === "own") return [];
     if (e.kind === "definition") return [{ at: e.of, name: e.of.slice(e.of.indexOf("#") + 1), where: e.of.slice(0, e.of.indexOf("#")), page: e.page }];
     if (e.kind === "entity") return [{ at: e.of, name: e.name, where: e.of.slice("entity:".length), page: e.page }];

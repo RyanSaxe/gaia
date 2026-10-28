@@ -1,7 +1,7 @@
-// The lab (the app's renderer) as ONE self-contained HTML page: esbuild
-// bundles app/renderer/main.ts, and the app's own index.html carries the JS
-// and CSS inline. `pnpm lab:html` writes the page to a file; `pnpm lab:serve`
-// rebuilds it on every change and serves it.
+// Builds the lab, the app's renderer, as one self-contained HTML page. esbuild
+// bundles app/renderer/main.ts, and the app's own index.html includes the JS
+// and CSS inline. `pnpm lab:html` writes the page to a file, and
+// `pnpm lab:serve` rebuilds it on every change and serves it.
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -14,8 +14,8 @@ const renderer = resolve(root, "app/renderer");
 const SCRIPT = { bundle: true, format: "iife", minify: true, write: false, target: "es2022", tsconfig: resolve(root, "tsconfig.json"), legalComments: "none" } as const;
 
 /**
- * `import X from "./file.ts?worker"`, as Vite reads it for the app: the file
- * bundled on its own and run as a worker. The one-file lab carries the
+ * `import X from "./file.ts?worker"`, as Vite handles it for the app: the file
+ * bundled on its own and run as a worker. The one-file lab includes the
  * worker's script inline and starts it from a blob URL.
  */
 const inlineWorkers: Plugin = {
@@ -34,7 +34,7 @@ const inlineWorkers: Plugin = {
   },
 };
 
-/** `import text from "./file.svg?raw"`, as Vite reads it for the app: the file's text as a string. */
+/** `import text from "./file.svg?raw"`, as Vite handles it for the app: the file's text as a string. */
 const rawText: Plugin = {
   name: "raw-text",
   setup(b) {

@@ -1,52 +1,18 @@
-// The map paints itself: the wait is the field map's own sheet, painted as
-// the world is opened (docs/design-system.md, "The field sheet"), on its
-// paper, with its torn edge and, after dark, its lantern. A world chosen on
-// the start rises into it as its card, a painting of where the person last
-// stood still; when the land comes the card turns over onto its back, bare paper, and the
-// map is drawn from nothing, as for any world. As soon as the land is
-// divided, a pen
-// draws every area's border. Each file's health is washed in once it is
-// settled, whenever that is, spreading over the ground around it as the map
-// spreads it (`settling.ts`), so the sheet never shows a color it later
-// changes. Each area's name is lettered in the map's survey capitals once its
-// last answer about its looks is in, before its wash if that comes later.
-// While the world bakes, the pen draws each building's and landmark's mark at
-// its laid-out place, one by one. Once the
-// world stands, its relief is drawn in with the same hand: the hills, ponds,
-// contours and trees wash in over each area's own ground, from the middle
-// outward as the pen went over the borders, while the pen draws each river
-// from its source to its mouth and each trail along its way. As soon as the
-// world is ready to show, the paper folds away into it, as a jump on the map
-// does, and whatever of the drawing is still to come goes with it.
-//
-// Between those, a pencil shows what Jev is doing to the code. It shades
-// exactly the ground each wash will paint, in light graphite, one hatching
-// for each stage: an area while its looks are asked, and again once the
-// folder pass reaches it; a file once its links are read, once Jev reads it
-// for its quality, and once Jev reads closer round it; then, after the pass,
-// a file or an area once Jev has chosen what its things stand as, and again
-// once what Jev raised there is composed. The pencil is on the
-// paper, to its edge as the wash goes, and each wash takes it away in just
-// the measure that it paints.
-// Answers come in bursts, but every stroke is drawn at a hand's pace, one
-// after another (`pace.ts`), so the sheet keeps moving all the time Jev is
-// at work and never shows anything before it has happened.
-//
-// The washes are painted by the field map's own painter (`wash.ts`) in the
-// page's idle time, a few milliseconds a step: each change is laid on a
-// canvas over just the part of the sheet it touches, paper and all, shown by
-// a CSS opacity transition over what was there, then copied into the sheet
-// beneath it. Names and marks are small canvases revealed by transforms, and
-// the borders, rivers and trails are SVG paths drawn by a transition of their
-// dash, so nothing here redraws per frame and a busy page thread never stalls
-// the sheet.
+// Draws the field map on the wait's sheet as a world opens (docs/design-system.md,
+// "The field sheet"). Each stroke shows a step that has already happened: pencil
+// hatching for each stage of Jev's work, a vitality wash as each file settles
+// (`settling.ts`), area names, building and landmark marks, then the relief,
+// spaced out by `pace.ts`. Every change is a canvas revealed by a CSS opacity or
+// transform transition, or an SVG path animated by its dash, and canvases are
+// painted in idle time a few milliseconds per step, so a busy main thread never
+// stalls the sheet.
 
 import { shownVitality } from "@gaia/realize";
 import { rand, seedOf } from "@gaia/schema";
 import type { Outline } from "@gaia/terrain";
 import type { LotPlace } from "@gaia/world";
 import type { FilePatch, Settled } from "../../world-service/protocol.ts";
-import type { StoodWorld } from "../terrain/world.ts";
+import type { BakedWorld } from "../terrain/world.ts";
 import { MARGIN, drawRivers, drawTrails, drawingPlants, letterName, nearestAreas, paintRelief, riverCourse, riverStretches, riverStrokes, strokeContours } from "../immersive/field-map.ts";
 import { CELL, type NameLand, canvasMeasure, nameLand, placeNames } from "../immersive/map-names.ts";
 import { DECKLE_MASK, MAP_STYLE, dryness, healthColor, healthWeight, landWash } from "../immersive/map-styles.ts";
@@ -59,11 +25,11 @@ import { type CellBox, type SettlingHealth, settlingHealth } from "./settling.ts
 import type { WaitView } from "./wait.ts";
 
 /**
- * How the map paints itself, ms, as wait.css times it: the pen over one border and the most it staggers over all of
- * them; a wash coming in; the time between two marks, at least and at most, and the most all the marks take; the
- * relief's wash staggered over the areas, and one area's coming in; a chosen card turning over; the pen over the rivers and the trails, when it
- * starts on each once the world stands, how far it goes a millisecond in the sheet's pixels, the least and the most
- * one line takes, and the time between two lines; and the paper folding away.
+ * Animation timings in milliseconds, matching wait.css. `penMs` draws one border and `penSpreadMs` staggers all of
+ * them. `washMs` fades in a wash. `markGapMs` bounds the gap between two marks, and `marksMs` is the total time spread
+ * over all of them. `relief` staggers the relief wash over the areas and fades in each one. `turnMs` flips a chosen
+ * card. `rivers` and `trails` give each line's start after the world is built, its speed in sheet pixels per
+ * millisecond, its duration bounds and the gap between lines. `foldMs` folds the paper away.
  */
 const PACE = {
   penMs: 1300,
@@ -78,10 +44,9 @@ const PACE = {
   foldMs: 1100,
 } as const;
 /**
- * Each kind of stroke's pace (`pace.ts`): names, the pencil over a file, the pencil over an area and a file's wash, at
- * most this many ms apart, each burst spread over at least and at most this long. A slice of the pass can take 20 s
- * of the engine's own work and bring only a few new marks, so a burst is spread over at least 12 s and a few marks
- * are drawn slowly: the sheet then follows the work by about 11 s on the opening's real order, and is never still.
+ * The `pace.ts` pace for names, file pencil marks, area pencil marks and file washes. A slice of the understanding
+ * pass can take 20 s of engine work and produce only a few marks, so each burst is spread over at least 12 s. The
+ * sheet then trails the work by about 11 s, in the opening's real order, and never stops changing.
  */
 const PACED: Readonly<Record<"name" | "pencil" | "survey" | "wash", Pace>> = {
   name: { everyMs: 1500, spreadMs: [12000, 25000] },
@@ -90,9 +55,9 @@ const PACED: Readonly<Record<"name" | "pencil" | "survey" | "wash", Pace>> = {
   wash: { everyMs: 1500, spreadMs: [12000, 25000] },
 };
 /**
- * The pencil: one light graphite hatching for each stage of reading the code, laid over just the cells the wash will
- * paint. Each is at its angle, radians, its lines this many of the sheet's CSS pixels apart, this light; a line this
- * wide; and a mark coming in over this long, ms.
+ * The pencil hatching, one light graphite style per stage of Jev's work, drawn over exactly the cells the wash will
+ * paint. Each style has an angle in radians, a line spacing in sheet CSS pixels and an alpha. `width` is the line
+ * width, and `ms` is a mark's fade-in time in milliseconds.
  */
 export const PENCIL = {
   graphite: "rgb(84, 78, 70)",
@@ -109,9 +74,10 @@ export const PENCIL = {
   },
 } as const;
 /**
- * What the pencil marks: an area while its looks are asked and once the folder pass reaches it; a file once its links
- * are read, once it is read for itself, and once Jev reads closer round it; and after the pass, a file or an area once
- * Jev has chosen what its things stand as, and once what it raised there is composed.
+ * The stages the pencil marks. An area is marked `asked` while its looks are asked, and `surveyed` once the folder pass
+ * reaches it. A file is marked `links` when its links are read, `quality` when it is read for itself, and `closer` for
+ * a closer reading. After the pass, a file or area is marked `chosen` once Jev chooses its forms, and `composed` once
+ * its composing requests are answered.
  */
 type Settling = "chosen" | "composed";
 type AreaMark = "asked" | "surveyed" | Settling;
@@ -120,19 +86,19 @@ type Stroke = { readonly of: "area"; readonly path: string; readonly mark: AreaM
 
 /** How far an area's relief wash reaches past its own ground, and how soft its edge is, in cells. */
 const FEATHER = { reach: 2, soft: 0.8 } as const;
-/** Paper pixels round a change that are painted again with it: as far as its wash bleeds, and a cell for the smoothing of its cells. */
+/** Paper pixels around a change that are repainted with it: the wash's bleed plus one cell for cell smoothing. */
 const AROUND = 40;
-/** The most a run of idle work may take, ms, and how much of an idle slot it leaves. */
+/** The longest a run of idle work may take, and how much of an idle slot it leaves free, in milliseconds. */
 const STEP_MS = 6;
 const SPARE_MS = 2;
 
 const STYLE = MAP_STYLE;
 const SVG = "http://www.w3.org/2000/svg";
 const wait = (ms: number): Promise<void> => new Promise((r) => window.setTimeout(r, ms));
-/** Shows `el` by its CSS transition: a frame after it joins the page, so it starts from nothing. */
+/** Adds the `shown` class two frames later, so `el`'s CSS transition starts from its hidden state. */
 const show = (el: Element): void => void requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add("shown")));
 
-/** A ring of x, z pairs with every other point. */
+/** Returns a ring of x, z pairs with every other point removed. A ring of fewer than 12 points is returned whole. */
 function thin(ring: readonly number[]): number[] {
   if (ring.length < 24) return [...ring];
   const out: number[] = [];
@@ -140,26 +106,26 @@ function thin(ring: readonly number[]): number[] {
   return out;
 }
 
-/** The land as the sheet paints it, once divided. */
+/** The divided land, in the form the sheet paints it. */
 interface Land {
   readonly reach: number;
   /** How much wider than deep the land is (`LandOutline`). */
   readonly aspect?: number;
-  /** The canvases' side in their own pixels, and how many of them a sheet's pixel takes. */
+  /** `device` is the canvases' side in device pixels, and `k` is device pixels per paper pixel. */
   readonly device: number;
   readonly k: number;
   readonly n: number;
-  /** Each area's path in the order every raster here indexes them, and its land's healthy wash. */
+  /** Each area's path, in the order every raster here indexes areas, and its land's color at full vitality. */
   readonly paths: readonly string[];
   readonly lands: readonly (readonly [number, number, number])[];
   readonly nearest: Int16Array;
-  /** Each area's wash as it dries: its pigment pools at its rim once its own ground's health is known. */
+  /** Each area's wash. Its pigment pools at its rim once its own ground's vitality is known. */
   readonly washes: WashArea[];
   readonly fade: HTMLCanvasElement;
   readonly health: SettlingHealth;
-  /** The cells, each in its color with as much paint as is settled, a pixel a cell. */
+  /** One pixel per cell, in the cell's color, with alpha set to its settled paint. */
   readonly under: CanvasRenderingContext2D;
-  /** Each area's name, lettered where it goes and waiting to be shown, by its path, once they are placed. */
+  /** Each area's name element by path, lettered at its place and hidden until shown. Null until names are placed. */
   names: ReadonlyMap<string, HTMLElement> | null;
 }
 
@@ -181,7 +147,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     <div class="wait-lantern"></div>`;
   const sheetEl = veil.querySelector(".wait-sheet") as HTMLElement;
   sheetEl.style.setProperty("--deckle", DECKLE_MASK);
-  // The sheet opens in the land's shape, which `divide` gives it again, so the paper never changes shape as it fills.
+  // The sheet opens in the land's aspect, and `divide` sets it again, so the paper keeps its shape as it fills.
   sheetEl.style.setProperty("--aspect", Math.max(1, aspect).toFixed(4));
   const ground = veil.querySelector(".wait-ground") as HTMLCanvasElement;
   const layers = veil.querySelector(".wait-layers") as HTMLElement;
@@ -192,13 +158,13 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const side = sheetEl.clientWidth || Math.min(window.innerWidth * 0.94, window.innerHeight * 0.9, 980);
   const device = Math.max(1, Math.round(side * dpr));
-  /** A place on the sheet `v` pixels in, as a share of the sheet, so it holds if the sheet's size changes, and `off` pixels from it. */
+  /** A CSS position `v` pixels into the sheet, as a percentage so it survives a resize, plus `off` pixels. */
   const placed = (v: number, off: number): string => `calc(${((v / side) * 100).toFixed(3)}% + ${off.toFixed(1)}px)`;
 
-  // ---------- idle work: one queue of steps, a few milliseconds of the page's idle time at a time ----------
+  // ---------- idle work: one queue of generator steps, run a few milliseconds of idle time at a time ----------
   const jobs: Generator<void>[] = [];
   let idleHandle = 0;
-  /** Once the paper folds, the wait takes no more work and brings in no more marks. */
+  /** Set when the paper folds. After that, `work` drops new jobs and no more marks appear. */
   let folded = false;
   const work = (job: Generator<void>): void => {
     if (folded) return;
@@ -221,8 +187,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     schedule();
   }
 
-  // The sheet's paper, anchored as the map's is, laid once the land's scale is known; a clean copy stays to lay
-  // each change on.
+  // The sheet's paper, anchored as the field map's is, is laid once the land's scale is known. `paper` keeps a clean
+  // copy to paint each change on.
   const paper = document.createElement("canvas");
   paper.width = paper.height = device;
   ground.width = ground.height = device;
@@ -231,11 +197,11 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     layGround(paper.getContext("2d") as CanvasRenderingContext2D, STYLE, device / 2, device / 2, device / (2 * reach), device, device);
     groundCtx.drawImage(paper, 0, 0);
   };
-  // Until the land comes, the sheet is the paper Gaia's own land would be painted on.
+  // Until the land arrives, the paper is laid at a reach of 560 m, the scale of Gaia's own land.
   layPaper(560);
 
-  // ---------- a map chosen on the start ----------
-  /** The chosen card's face, lying on the sheet until the land is divided. */
+  // ---------- a card chosen on the start page ----------
+  /** The chosen card's face, shown on the sheet until the land is divided. */
   let chosen: HTMLCanvasElement | null = null;
   function choose(face: HTMLImageElement | HTMLCanvasElement): void {
     chosen?.remove();
@@ -244,17 +210,18 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     el.height = face instanceof HTMLImageElement ? face.naturalHeight : face.height;
     (el.getContext("2d") as CanvasRenderingContext2D).drawImage(face, 0, 0);
     el.className = "wait-chosen";
-    // The sheet takes the chosen card's shape before anything comes in, so the card rises into a sheet of its own shape.
+    // The sheet takes the card's aspect first, so the card rises into a sheet of the same shape.
     const aspect = el.width / Math.max(1, el.height);
     sheetEl.style.setProperty("--aspect", Math.max(1, aspect).toFixed(4));
-    // As wide as the square the sheet is drawn on, and as deep as the land and its margin, in its middle.
+    // The face spans the width of the sheet's square and the depth of the land plus its margin, centered vertically.
     el.style.top = `${((1 - 1 / Math.max(1, aspect)) * 50).toFixed(3)}%`;
     el.style.height = `${(100 / Math.max(1, aspect)).toFixed(3)}%`;
     ground.after(el);
     chosen = el;
   }
   /**
-   * Turns the chosen card over in its place, its `front` on one side and the sheet's face, bare paper, on the other, bending as the journal's leaves do (`curl.ts`), while the sheet waits unseen beneath it.
+   * Flips the chosen card in place, with `front` on one side and the sheet's bare paper on the other, using the journal's
+   * page curl (`curl.ts`). The sheet stays hidden under it until the flip ends.
    */
   function turnOver(front: HTMLCanvasElement): Promise<void> {
     const veilBox = veil.getBoundingClientRect();
@@ -272,7 +239,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     stage.className = "wait-turn";
     stage.style.cssText = `left:${box.left - veilBox.left}px;top:${box.top - veilBox.top}px;width:${w}px;height:${h}px;`;
     stage.style.setProperty("--deckle", DECKLE_MASK);
-    // Under it, the sheet's own shadow, as narrow as the card is seen as it turns.
+    // The sheet's shadow under the card, scaled to the card's projected width as it turns.
     const shadow = document.createElement("i");
     shadow.className = "wait-turn-shadow";
     const card = document.createElement("div");
@@ -281,7 +248,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     veil.append(stage);
     const nowhere = { right: document.createElement("i"), left: document.createElement("i") };
     const curl = createCurl(card, pageOf(front), pageOf(face()), w, h, true, nowhere);
-    // The card's angle is a hidden leaf's, eased as the journal's leaves are, which the strips and the card's place follow.
+    // A hidden element's CSS rotation, eased like the journal's page turns, sets the card's angle. The curl strips and
+    // the card's position follow it.
     const leaf = document.createElement("div");
     leaf.className = "wait-turn-leaf";
     stage.append(leaf);
@@ -290,10 +258,11 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     const tick = (): void => {
       const deg = angleOf(leaf);
       curl.at(deg, true);
-      // Hinged at its edge as a leaf is, the card is carried across as it turns, so it turns over about its middle.
+      // The curl hinges at the card's edge, so this translation carries the card across as it turns, and it flips about
+      // its center.
       const r = (deg * Math.PI) / 180;
       card.style.transform = `translateX(${(c * (1 - Math.cos(r))).toFixed(1)}px) translateZ(${(c * Math.sin(r)).toFixed(1)}px)`;
-      // Drawn a little within the card while it is off the flat, so its tilted edges never show the shadow's own edge.
+      // Shrinks the shadow slightly while the card is tilted, so the shadow's edge never shows past the card's edges.
       const within = 1 - 0.12 * Math.abs(Math.sin(r));
       shadow.style.transform = `scale(${(Math.abs(Math.cos(r)) * within).toFixed(3)}, ${within.toFixed(3)})`;
       frame = requestAnimationFrame(tick);
@@ -310,7 +279,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       stage.remove();
     });
   }
-  /** The sheet's paper as it is painted now, in the sheet's shape: the middle of the square it is drawn on. */
+  /** Returns the sheet's paper as currently painted, cropped to the sheet's aspect from the middle of its square. */
   function face(): HTMLCanvasElement {
     const shape = Math.max(1, Number.parseFloat(sheetEl.style.getPropertyValue("--aspect")) || 1);
     const h = Math.max(1, Math.round(device / shape));
@@ -322,23 +291,23 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   let land: Land | null = null;
-  /** What came before the land was ready to take it. */
+  /** Names, marks and relief that arrived before the land was ready. */
   const namesWaiting = new Set<string>();
-  let marksWaiting: Pick<StoodWorld, "buildings" | "landmarks"> | null = null;
-  let stoodWaiting: StoodWorld | null = null;
-  /** Layers shown and not yet copied into the sheet beneath. */
+  let marksWaiting: Pick<BakedWorld, "buildings" | "landmarks"> | null = null;
+  let bakedWaiting: BakedWorld | null = null;
+  /** Layers fading in that are not yet copied into the sheet below. */
   let showing = 0;
-  /** The land's own work, done once every name is placed. */
+  /** Resolves once `divide` finishes, which ends with placing every name. */
   let ready: Promise<void> = Promise.resolve();
 
-  // ---------- the pace: every stroke one after another, at a hand's pace ----------
+  // ---------- pacing: strokes drawn one after another (`pace.ts`) ----------
   const names = pacer<string>(PACED.name);
   const fileMarks = pacer<Stroke>(PACED.pencil);
   const areaMarks = pacer<Stroke>(PACED.survey);
   const washesDue = pacer<readonly [string, number]>(PACED.wash);
   const pacers: readonly Pacer<unknown>[] = [names, fileMarks, areaMarks, washesDue];
   let ticking = 0;
-  /** Draws whatever is due, and wakes again when the next stroke is. */
+  /** Draws every stroke that is due and sets a timer for the next one. */
   function tick(): void {
     ticking = 0;
     const now = performance.now();
@@ -350,7 +319,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     if (Number.isFinite(next)) ticking = window.setTimeout(tick, Math.max(16, next - now));
     else for (const resolve of paced.splice(0)) resolve();
   }
-  /** Something new is queued: draw from now. */
+  /** Restarts the timer after new strokes are queued. */
   const pace = (): void => {
     if (folded) return;
     window.clearTimeout(ticking);
@@ -360,16 +329,16 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   /** Resolves once every queued stroke has been drawn. */
   const allPaced = (): Promise<void> => (pacers.every((q) => q.size === 0) ? Promise.resolve() : new Promise((resolve) => paced.push(resolve)));
 
-  // ---------- the pencil: what Jev is doing to the code ----------
+  // ---------- pencil marks: Jev's progress through the code ----------
   /**
-   * The pencil is laid on the sheet's own paper (`pencil`, the sheet's size, kept apart so each wash can lay it again
-   * under its paint): each mark shades exactly the cells its wash will paint, an area's or a file's, to the paper's
-   * edge, and a wash coming in takes the pencil away in just the measure it paints.
+   * Pencil marks are kept on their own sheet-sized canvas, `pencil`, so each wash can repaint them under its paint. Each
+   * mark shades exactly the cells its area's or file's wash will paint, out to the paper's edge. A wash removes the
+   * pencil in proportion to how much it paints.
    */
   const pencil = document.createElement("canvas");
   pencil.width = pencil.height = device;
   const pencilCtx = pencil.getContext("2d") as CanvasRenderingContext2D;
-  /** Each file's index by path; each cell's file, the one whose health weighs most there in its area, or -1; and each file's and each area's cells' box. */
+  /** Each file's index by path, each cell's file or -1, and each file's and area's cell box. A cell's file is the one in its area whose vitality weighs most there. */
   let fileIndex = new Map<string, number>();
   let fileOf: Int16Array | null = null;
   let fileBox: CellBox[] = [];
@@ -379,11 +348,11 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   const sketched = new Set<string>();
   const surveyed = new Set<string>();
   let slices = 0;
-  /** Marks due and not yet drawn, for want of the land or of idle time. */
+  /** Marks that are due but not drawn yet, because the land or idle time is not available yet. */
   const marksDue: Stroke[] = [];
   let drawingMarks = false;
 
-  /** An area is being asked about: its ground is lightly shaded. */
+  /** Queues the `asked` mark for each area with a request in flight, once per area. */
   function asked(areas: readonly string[]): void {
     const now = performance.now();
     areaMarks.add(
@@ -394,10 +363,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   /**
-   * A slice of the understanding pass read these files and areas. A file is first shaded for its links; read again in
-   * a later pass, shaded across for itself, and again for the closer reading Jev asked for. A slice reads what the one
-   * before held a second time, so only a reading two slices after the last counts as another. An area is shaded across
-   * once the folder pass reaches it.
+   * Queues marks for the files and areas one understanding slice read. A file's first reading is marked `links`, a later
+   * one `quality`, and the next `closer`. A slice rereads what the slice before it held, so a reading counts as new only
+   * two or more slices after the file's last one. An area is marked `surveyed` once the folder pass reaches it.
    */
   function read(files: readonly string[], areas: readonly string[]): void {
     slices++;
@@ -426,10 +394,10 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   /**
-   * After the pass, Jev has chosen what these files' and areas' things stand as, or composed what it raised there: one
-   * more stroke over each, so the sheet keeps moving until the world stands.
+   * Queues one more mark over each file and area whose forms Jev chose or whose composing it finished after the pass,
+   * so the sheet keeps changing until the world is built.
    */
-  function standing(chosen: Settled, composed: Settled): void {
+  function markComposed(chosen: Settled, composed: Settled): void {
     const now = performance.now();
     const of = (by: Settling, s: Settled): Stroke[] => [...s.files.map((path) => ({ of: "file" as const, path, mark: by })), ...s.areas.map((path) => ({ of: "area" as const, path, mark: by }))];
     const strokes = [...of("chosen", chosen), ...of("composed", composed)];
@@ -438,7 +406,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     pace();
   }
 
-  /** A mark is due: drawn in the page's idle time, once the land can take it. */
+  /** Queues a due mark to draw in idle time once the land exists. */
   function drawMark(stroke: Stroke): void {
     marksDue.push(stroke);
     drawMarksDue();
@@ -465,15 +433,15 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   const cellPx = (l: Land): number => (CELL * l.device) / (l.reach * 2);
 
   /**
-   * One mark: the stage's graphite hatching over exactly the cells of the area or file, softened at their edge as the
-   * cells are, laid into the pencil kept for the washes and shown over the sheet, less where the wash already lies.
+   * Draws one mark: the stage's graphite hatching over exactly the area's or file's cells, softened at the edge like the
+   * cells. It goes into `pencil` for later washes and fades in over the sheet, except where a wash already lies.
    */
   function* shade(l: Land, stroke: Stroke): Generator<void> {
     const index = stroke.of === "area" ? l.paths.indexOf(stroke.path) : (fileIndex.get(stroke.path) ?? -1);
     const box = index < 0 ? null : stroke.of === "area" ? areaBox[index] : fileBox[index];
     if (box === null || box === undefined || fileOf === null) return;
     const owner = stroke.of === "area" ? l.nearest : fileOf;
-    // The cells, a pixel each, with a cell's margin round them so the softened edge is whole.
+    // The cells, one pixel each, with a one-cell margin so the softened edge is complete.
     const [i0, j0] = [Math.max(0, box[0] - 1), Math.max(0, box[1] - 1)];
     const [i1, j1] = [Math.min(l.n - 1, box[2] + 1), Math.min(l.n - 1, box[3] + 1)];
     const [cw, ch] = [i1 - i0 + 1, j1 - j0 + 1];
@@ -505,7 +473,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     t.lineCap = "round";
     t.strokeStyle = PENCIL.graphite;
     t.lineWidth = PENCIL.width * perCss;
-    // Lines across the box, each a little uneven in weight and place, as a hand hatches.
+    // Lines across the box, each with slightly random alpha and spacing so the hatching looks hand drawn.
     for (let o = -reachPx / 2 + r.range(0, every); o < reachPx / 2; o += every * r.range(0.85, 1.15)) {
       const [cx, cz] = [rw / 2 - dz * o, rh / 2 + dx * o];
       t.globalAlpha = style.alpha * r.range(0.75, 1.15);
@@ -515,17 +483,17 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       t.stroke();
     }
     t.globalAlpha = 1;
-    // Only over its own cells, softened at their edge as a cell's wash is.
+    // Clips the hatching to its own cells, softened at their edge as a cell's wash is.
     t.globalCompositeOperation = "destination-in";
     t.imageSmoothingEnabled = true;
     t.imageSmoothingQuality = "high";
     t.drawImage(cells, 0, 0, cw, ch, i0 * px - rx, j0 * px - ry, cw * px, ch * px);
-    // And to the paper's edge as the wash goes, ragged and square, never short of it at a rounded rim.
+    // Clips it to the paper's ragged square edge with the wash's mask, so it never stops short at a rounded rim.
     const f = l.fade.width / l.device;
     t.drawImage(l.fade, rx * f, ry * f, rw * f, rh * f, 0, 0, rw, rh);
     yield;
     pencilCtx.drawImage(tex, rx, ry);
-    // Shown over the sheet, less where the wash lies already, then laid into the sheet beneath.
+    // Fades in over the sheet, minus where a wash already lies, then is copied into the sheet below.
     t.globalCompositeOperation = "destination-out";
     t.drawImage(l.under.canvas, i0, j0, cw, ch, i0 * px - rx, j0 * px - ry, cw * px, ch * px);
     tex.className = "wait-layer";
@@ -545,7 +513,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     }, PENCIL.ms + 150);
   }
 
-  /** Each cell's file, the one whose health weighs most there among its area's files, and each file's and area's box. */
+  /** Computes each cell's file, the one in the cell's area whose vitality weighs most there, and each file's and area's cell box. */
   function* fileCells(l: Land, patches: readonly FilePatch[]): Generator<void> {
     const n = l.n;
     const of = new Int16Array(n * n).fill(-1);
@@ -587,10 +555,10 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   // ---------- the land is divided ----------
   function divide(size: number, aspect: number | undefined, outlines: readonly Outline[], patches: readonly FilePatch[], lots: readonly LotPlace[]): void {
     const reach = size / 2 + MARGIN;
-    // The sheet opened in the shape the land was to have; a land of another shape reshapes it.
+    // The sheet opened in the expected land aspect. A land with a different aspect reshapes it.
     const shape = Math.max(1, reach / (size / 2 / (aspect ?? 1) + MARGIN));
     sheetEl.style.setProperty("--aspect", shape.toFixed(4));
-    // A chosen card turns over, as the journal turns a leaf, onto its back: the bare paper the map is drawn on.
+    // A chosen card flips over to the bare paper the map is drawn on, and then `divide` runs again.
     if (chosen !== null) {
       const front = chosen;
       chosen = null;
@@ -610,8 +578,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     ready = new Promise((resolve) =>
       work(
         (function* (): Generator<void> {
-          // The outlines follow the lattice they were traced on, a point a meter: eased into a pen's line, and every
-          // other point kept, still finer than a pixel on the sheet.
+          // The outlines follow the lattice they were traced on, one point per meter. `easeRing` smooths them and `thin`
+          // keeps every other point, which is still finer than a sheet pixel.
           const eased: (readonly (readonly number[])[])[] = [];
           // Each area's border as the field map draws it, never along the land's own edge.
           const borders: string[] = [];
@@ -621,8 +589,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
             borders.push(borderPath(o.rings, edge));
             if (i % 4 === 3) yield;
           }
-          // The pen draws every area's border from the middle outward, keeping inside the land as the map's
-          // hedgerows do.
+          // Borders are drawn shallowest area first, then from the center outward, clipped to the land as the field map's
+          // hedgerows are.
           const order = outlines
             .map((o, i) => {
               let x = 0;
@@ -649,8 +617,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           show(sheetEl);
           yield;
 
-          // Each cell's area, from the outlines as traced (`nameLand`, as the field map rasters them for its names), and
-          // past the areas the nearest one, as the field map samples the land.
+          // Each cell's area from the traced outlines (`nameLand`, which the field map also uses for its names), and outside
+          // the areas the nearest one, as the field map samples the land.
           const named = yield* nameLand(outlines, size, reach, lots, aspect);
           const { at, n } = named;
           const nearest = nearestAreas(at, n);
@@ -670,17 +638,17 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           }
           const under = document.createElement("canvas");
           under.width = under.height = n;
-          // The health come in so far washes in now, while the hedgerows and the names are made ready.
+          // Washes in the vitality received so far, while the hedgerows and names are prepared.
           land = { reach, ...(aspect === undefined ? {} : { aspect }), device, k: device / PAPER, n, paths, lands: paths.map((p) => landWash(STYLE, p)), nearest, washes, fade, health, under: under.getContext("2d") as CanvasRenderingContext2D, names: null };
           settle({});
           yield;
-          // Which file's ground each cell is, for the pencil, then the marks that came before it.
+          // Computes each cell's file for the pencil, then draws the marks that arrived before it.
           yield* fileCells(land, patches);
           drawMarksDue();
           yield;
 
-          // The hedgerow under each border, a soft band of leaves, comes in as the pen goes: so soft that it is
-          // painted at the sheet's own size in CSS pixels, a border a step.
+          // The hedgerow under each border is a soft green band that fades in with the pen lines. It is soft enough to paint
+          // at the sheet's CSS pixel size, one border per step.
           const hedgeSide = Math.round(side);
           hedges.width = hedges.height = hedgeSide;
           const h = hedges.getContext("2d") as CanvasRenderingContext2D;
@@ -697,14 +665,14 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           show(hedges);
           yield;
 
-          // Every name's place, worked out once as the field map places them on its whole sheet, the same size as this
-          // one, so a name lettered later never moves one lettered before it.
+          // Places every name once, as the field map places them on a sheet of this size, so a name lettered later never
+          // moves an earlier one.
           land.names = yield* letterNames(named);
           names.add([...land.names.keys()].filter((p) => namesWaiting.has(p)), performance.now());
           namesWaiting.clear();
           pace();
           if (marksWaiting !== null) drawMarks(marksWaiting);
-          if (stoodWaiting !== null) relief(stoodWaiting);
+          if (bakedWaiting !== null) relief(bakedWaiting);
           resolve();
         })(),
       ),
@@ -712,18 +680,17 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   /**
-   * Each area's name lettered on its own canvas where `placeNames` puts it, the place the field map letters it in,
-   * waiting to be shown: no name is left out, none covers another, and each keeps off the marks to come and the
-   * rose's corner.
+   * Letters each area's name on its own hidden canvas at the place `placeNames` gives it, the same place as on the field
+   * map. Every name is placed, none overlaps another, and each avoids the marks to come and the compass corner.
    */
   function* letterNames(named: NameLand): Generator<void, Map<string, HTMLElement>> {
     const out = new Map<string, HTMLElement>();
     const placing = yield* placeNames(named, side, canvasMeasure(document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D));
     const zoom = side / (named.reach * 2);
-    // A sheet smaller than names are placed for letters them smaller, as the field map does.
+    // On a sheet smaller than the names were placed for, the names shrink, as on the field map.
     const shrink = Math.min(1, zoom / placing.scale);
     for (const p of placing.places) {
-      // The lettering on its own canvas, level, turned by its wrapper to the way the area runs and written along it.
+      // The name is lettered level on its canvas, and its wrapper rotates it to run along the area.
       const pad = 6;
       const w = p.halfW * 2 + pad * 2;
       const h = p.top + 12 + pad * 2;
@@ -753,10 +720,10 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     return out;
   }
 
-  // ---------- each file's health, as it settles ----------
-  /** Health come in and not yet laid on the cells. */
+  // ---------- each file's vitality, as it settles ----------
+  /** Vitality received and not yet applied to the cells. */
   const healthIn: Record<string, number> = {};
-  /** Whether a job is taking the health come in, and how many jobs are laying or painting it. */
+  /** Whether a job is consuming `healthIn`, and how many jobs are still drawing marks or washes. */
   let settling = false;
   let laying = 0;
   function settle(vitality: Readonly<Record<string, number>>): void {
@@ -767,7 +734,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     work(settleIn(land));
   }
 
-  /** Lays the health come in on the cells, a few files a step, then paints the cells it touched and letters the names it was waiting on. */
+  /** Applies received vitality to the cells, 12 files per step, then paints the cells it touched. */
   function* settleIn(l: Land): Generator<void> {
     let cells: CellBox | null = null;
     const grow = (more: CellBox | null): void => {
@@ -790,11 +757,11 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       }
       yield;
     }
-    // Health that comes in from here on is another job's.
+    // Vitality that arrives from here on starts another job.
     settling = false;
     const box = cells as CellBox | null;
     if (box !== null) {
-      // The cells it touched, in their color with as much paint as is settled there, a band of rows a step.
+      // Writes the touched cells' colors and settled paint, 32 rows per step.
       const [i0, j0, i1, j1] = box;
       for (let ja = j0; ja <= j1; ja += 32) {
         const jb = Math.min(j1, ja + 31);
@@ -815,7 +782,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     washedIfDone();
   }
 
-  /** Resolves once every change asked for so far has been painted and has come in. */
+  /** Resolves once every change requested so far has been painted and faded in. */
   const washed: (() => void)[] = [];
   const quiet = (): boolean => showing === 0 && laying === 0 && Object.keys(healthIn).length === 0;
   const allWashed = (): Promise<void> => (quiet() ? Promise.resolve() : new Promise((resolve) => washed.push(resolve)));
@@ -824,8 +791,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   };
 
   /**
-   * Paints one change: the paper and the wash over the part of the sheet it touches, opaque, as the field map paints
-   * them. It comes in over what was there, and is then copied into the sheet beneath.
+   * Paints one change as an opaque layer of paper and wash over the region it touches, as the field map paints them.
+   * The layer fades in over the sheet and is then copied into the sheet below.
    */
   function* paintLayer(l: Land, cells: CellBox): Generator<void> {
     const scale = PAPER / (l.reach * 2);
@@ -844,7 +811,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     scratch.height = rh + bleed * 2;
     const s = scratch.getContext("2d") as CanvasRenderingContext2D;
     s.setTransform(l.k, 0, 0, l.k, bleed - rx, bleed - ry);
-    // What the areas' rims are as this change starts: one settling while it is painted waits for its own layer.
+    // Snapshots the areas' rims as this change starts. An area that settles during painting gets its own layer later.
     const sheet: WashSheet = { reach: l.reach, half: l.reach - MARGIN, ...(l.aspect === undefined ? {} : { aspect: l.aspect }), n: l.n, cell: CELL, nearest: l.nearest, areas: [...l.washes], fade: l.fade };
     yield* layWash(s, l.under.canvas, sheet, STYLE, [x0 - bleed / l.k, y0 - bleed / l.k, x1 + bleed / l.k, y1 + bleed / l.k]);
     const layer = document.createElement("canvas");
@@ -852,7 +819,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     layer.height = rh;
     const c = layer.getContext("2d") as CanvasRenderingContext2D;
     c.drawImage(paper, rx, ry, rw, rh, 0, 0, rw, rh);
-    // The pencil lies on the paper still where the wash does not paint, and goes in the measure that it does.
+    // Keeps the pencil where the wash does not paint, and removes it in proportion to the wash's paint.
     const graphite = document.createElement("canvas");
     graphite.width = rw;
     graphite.height = rh;
@@ -881,10 +848,10 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     }, PACE.washMs + 150);
   }
 
-  // ---------- names, as each area's last answer comes in ----------
+  // ---------- names, as each area settles ----------
   /** The names asked for so far. */
   const lettering = new Set<string>();
-  /** An area's last answer is in: its name is lettered in its turn, at the pace names are lettered. */
+  /** Queues an area's name once its last answer is in, at the names' pace. */
   function letter(path: string): void {
     if (lettering.has(path)) return;
     lettering.add(path);
@@ -904,7 +871,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   // ---------- marks, while the world bakes ----------
-  function drawMarks(things: Pick<StoodWorld, "buildings" | "landmarks">): void {
+  function drawMarks(things: Pick<BakedWorld, "buildings" | "landmarks">): void {
     const l = land;
     if (l === null) {
       marksWaiting = things;
@@ -917,14 +884,14 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       ...things.landmarks.map((m) => ({ x: m.x, z: m.z, draw: ((c, x, y) => stampLandmark(c, x, y, s, m, shownVitality(m.vitality), m.name)) as Draw })),
       ...things.buildings.map((m) => ({ x: m.x, z: m.z, draw: ((c, x, y) => stampBuilding(c, x, y, s, m, shownVitality(m.vitality), m.name)) as Draw })),
     ];
-    // From the middle outward, as the pen went over the borders.
+    // From the center outward, like the borders.
     all.sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z));
     const gap = Math.max(PACE.markGapMs[0], Math.min(PACE.markGapMs[1], PACE.marksMs / Math.max(1, all.length)));
     const start = performance.now();
     work(
       (function* (): Generator<void> {
         for (const [q, m] of all.entries()) {
-          // Each mark on its own canvas round its foot, as large as the tallest mark the map draws, then cut to it.
+          // Draws each mark on its own canvas around its base point, sized for the tallest mark the map draws, then crops it.
           const fx = 90 * s;
           const fy = 125 * s;
           const canvas = document.createElement("canvas");
@@ -965,21 +932,21 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     );
   }
 
-  // ---------- the relief, once the world stands ----------
-  function relief(stood: StoodWorld): void {
+  // ---------- the relief, once the world is built ----------
+  function relief(baked: BakedWorld): void {
     const l = land;
     if (l === null) {
-      stoodWaiting = stood;
+      bakedWaiting = baked;
       return;
     }
     void (async () => {
       const zoom = side / (l.reach * 2);
-      // The pen sets out over the rivers and the trails at once, while the relief is painted out of sight.
-      const pens = penLines(l, stood, zoom);
+      // Starts the pen lines for rivers and trails at once, while the relief is painted off screen.
+      const pens = penLines(l, baked, zoom);
       const pensDone = wait(pens.ms);
       layers.append(pens.svg);
       show(pens.svg);
-      // Over the washes as they finally lie, so the relief comes in over exactly what is there.
+      // Waits for every stroke and wash, so the relief is painted over the final washes.
       await allPaced();
       await allWashed();
       const sx = (x: number): number => (x + l.reach) * zoom;
@@ -990,8 +957,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         c.drawImage(from, 0, 0);
         return c;
       };
-      // The relief washes in over each area's own ground, from the middle outward, under the pen's lines: each area as
-      // soon as it is cut, at its time from the first.
+      // Fades in the relief over each area's own ground, from the center outward and under the pen lines. Each area's
+      // layer starts as soon as it is cut, delayed by its share of `PACE.relief.spreadMs` after the first.
       const washes: HTMLCanvasElement[] = [];
       let first = 0;
       const lay = (layer: HTMLCanvasElement, share: number): void => {
@@ -1005,13 +972,13 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       const whole = await new Promise<HTMLCanvasElement>((resolve) =>
         work(
           (function* (): Generator<void> {
-            // What washes in over the areas: the hills and the ponds, the contours over them and the trees. And the
-            // whole relief as the field map draws it, the rivers and the trails too, laid over once it is all in.
+            // `lands` holds what fades in over the areas: hills, ponds, contours and trees. `whole` is the complete relief as
+            // the field map draws it, rivers and trails included, which replaces the layers once they are all in.
             const lands = sheetOf(ground);
-            const contours = yield* paintRelief(lands, stood.terrain, STYLE, l.reach, l.device);
+            const contours = yield* paintRelief(lands, baked.terrain, STYLE, l.reach, l.device);
             const whole = sheetOf(lands.canvas);
             whole.setTransform(dpr, 0, 0, dpr, 0, 0);
-            drawRivers(whole, stood.terrain.streams, sx, sx, zoom);
+            drawRivers(whole, baked.terrain.streams, sx, sx, zoom);
             yield;
             for (const c of [lands, whole]) {
               c.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * (side / 2), dpr * (side / 2));
@@ -1019,8 +986,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
               c.setTransform(dpr, 0, 0, dpr, 0, 0);
               yield;
             }
-            drawTrails(whole, stood.ways, sx, sx, zoom, 1, STYLE);
-            for (const c of [lands, whole]) yield* drawingPlants(c, stood, sx, sx, zoom, 1, () => true, STEP_MS);
+            drawTrails(whole, baked.ways, sx, sx, zoom, 1, STYLE);
+            for (const c of [lands, whole]) yield* drawingPlants(c, baked, sx, sx, zoom, 1, () => true, STEP_MS);
             yield;
             yield* reliefWashes(l, lands.canvas, lay);
             resolve(whole.canvas);
@@ -1028,17 +995,17 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         ),
       );
       await Promise.all([wait(first + PACE.relief.spreadMs + PACE.relief.ms - performance.now()), pensDone]);
-      // Then the sheet keeps the field map's own drawing of all of it, in the frame the washes and the pen's lines go:
-      // the same but for where a line crosses a tree.
+      // Copies the field map's full drawing into the sheet in the same frame that removes the layers. It differs from them
+      // only where a line crosses a tree.
       groundCtx.drawImage(whole, 0, 0);
       for (const layer of [...washes, pens.svg]) layer.remove();
     })();
   }
 
   /**
-   * The relief over each area's own ground, as the cells divide the sheet, feathered a little past it so neighbors
-   * coming in overlap softly: each a layer handed to `lay` as it is cut, nearest the middle first, with its share of
-   * the way out. Every pixel is wholly inside one area's layer, so once all are in the sheet is the relief exactly.
+   * Cuts the relief into one layer per area's own ground, feathered a little past it so neighboring layers overlap
+   * softly. Hands each layer to `lay` as it is cut, nearest the center first, with its share of the distance outward.
+   * Every pixel is fully inside one area's layer, so once all are in, the sheet shows the relief exactly.
    */
   function* reliefWashes(l: Land, from: HTMLCanvasElement, lay: (layer: HTMLCanvasElement, share: number) => void): Generator<void> {
     const { n, nearest } = l;
@@ -1058,7 +1025,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     for (const [q, [a, b]] of order.entries()) {
       const [i0, j0, i1, j1] = [Math.max(0, b.i0 - pad), Math.max(0, b.j0 - pad), Math.min(n - 1, b.i1 + pad), Math.min(n - 1, b.j1 + pad)];
       const [cols, rows] = [i1 - i0 + 1, j1 - j0 + 1];
-      // Its own cells, and the same reached a little farther, a pixel a cell.
+      // The area's own cells, and the same cells grown by `FEATHER.reach`, one pixel per cell.
       const own = new ImageData(cols, rows);
       const reached = new ImageData(cols, rows);
       const r = FEATHER.reach;
@@ -1069,7 +1036,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) if (di * di + dj * dj <= r * r && i + di >= i0 && i + di <= i1 && j + dj >= j0 && j + dj <= j1) reached.data[((j + dj - j0) * cols + (i + di - i0)) * 4 + 3] = 255;
         }
       }
-      // The reach softened into a feather a pixel a cell, where a blur is cheap, and its own ground whole.
+      // Blurs the grown cells into a feather at one pixel per cell, where a blur is cheap, and keeps the own cells sharp.
       const [cells, soft] = [document.createElement("canvas"), document.createElement("canvas")];
       cells.width = soft.width = cols;
       cells.height = soft.height = rows;
@@ -1078,8 +1045,8 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       sc.filter = `blur(${FEATHER.soft}px)`;
       sc.drawImage(cells, 0, 0);
       (cells.getContext("2d") as CanvasRenderingContext2D).putImageData(own, 0, 0);
-      // In whole pixels of the sheet, so the layer lies on it exactly: the feather drawn smooth, its own ground
-      // whole over it, then the relief cut to the two.
+      // Aligns the layer to whole sheet pixels so it lands exactly. It draws the smooth feather, the sharp own cells over
+      // it, then the relief clipped to both.
       const [x0, y0] = [Math.floor(i0 * cellPx), Math.floor(j0 * cellPx)];
       const [x1, y1] = [Math.min(l.device, Math.ceil((i1 + 1) * cellPx)), Math.min(l.device, Math.ceil((j1 + 1) * cellPx))];
       const layer = document.createElement("canvas");
@@ -1103,16 +1070,15 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
 
   /**
-   * The pen's lines over the relief: each river from its source to its mouth in the field map's wash, edge and
-   * water, the longest first, then each trail along its way in its dots, at the pen's pace; with how long the pen
-   * takes over them all.
+   * Builds the pen lines over the relief. Each river draws from source to mouth in the field map's wash, edge and water
+   * strokes, longest first. Each trail then draws along its course in dots. Returns the SVG and the total duration.
    */
-  function penLines(l: Land, stood: StoodWorld, zoom: number): { readonly svg: SVGSVGElement; readonly ms: number } {
+  function penLines(l: Land, baked: BakedWorld, zoom: number): { readonly svg: SVGSVGElement; readonly ms: number } {
     const svg = document.createElementNS(SVG, "svg");
     svg.setAttribute("class", "wait-pens");
     svg.setAttribute("viewBox", `${-l.reach} ${-l.reach} ${l.reach * 2} ${l.reach * 2}`);
     const f = (v: number): string => v.toFixed(2);
-    /** A line's length on the sheet, and how long the pen takes over it. */
+    /** Returns how long the pen takes over a line, from its length on the sheet, within `pace.ms`. */
     const timed = (points: readonly (readonly [number, number])[], pace: { readonly pxPerMs: number; readonly ms: readonly [number, number] }): number => {
       let length = 0;
       for (let k = 1; k < points.length; k++) length += Math.hypot((points[k] as [number, number])[0] - (points[k - 1] as [number, number])[0], (points[k] as [number, number])[1] - (points[k - 1] as [number, number])[1]);
@@ -1122,9 +1088,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       `<path class="pen" d="${d}" pathLength="1" stroke="${stroke}" stroke-width="${f(width / zoom)}" style="transition-duration:${Math.round(ms)}ms;transition-delay:${Math.round(delay)}ms"${extra}/>`;
     let end = 0;
     let html = "";
-    // Rivers, as `drawRivers` draws them: the same course in the same stretches, every river's wash first, then its
-    // edges, then all the water. The pen runs down each river stretch by stretch.
-    const streams = [...stood.terrain.streams].filter((s) => s.stations.length > 1).sort((a, b) => b.stations.length - a.stations.length);
+    // Rivers match `drawRivers`: the same course in the same stretches, with every river's wash first, then the edges,
+    // then the water. Each river animates stretch by stretch.
+    const streams = [...baked.terrain.streams].filter((s) => s.stations.length > 1).sort((a, b) => b.stations.length - a.stations.length);
     const layers: string[] = ["", "", ""];
     streams.forEach((stream, q) => {
       const st = stream.stations;
@@ -1145,11 +1111,11 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       }
     });
     html += layers.join("");
-    // Trails, as `drawTrails` dots them, shown through a mask the pen draws along each.
+    // Trails are dotted as `drawTrails` dots them, and revealed through a mask that a pen line draws along each.
     const stride = Math.max(2, Math.round(3 / zoom)) * 2;
     let dots = "";
     let reveal = "";
-    stood.ways.forEach((trail, q) => {
+    baked.ways.forEach((trail, q) => {
       const p = trail.points;
       const points: [number, number][] = [];
       for (let k = 0; k < p.length; k += stride) points.push([p[k] as number, p[k + 1] as number]);
@@ -1177,15 +1143,15 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         asked(o.asking);
         for (const path of o.settled) letter(path);
       } else if (o.stage === "understood") read(o.files, o.areas);
-      else if (o.stage === "standing") standing(o.chosen, o.composed);
+      else if (o.stage === "composed") markComposed(o.chosen, o.composed);
     },
     baking(health) {
-      // The world is ready to bake: whatever is still queued is drawn quickly now, so the pace never holds it back.
+      // The world is about to bake. Everything still queued is drawn quickly now, so pacing never delays the world.
       const now = performance.now();
       washesDue.add(Object.entries(health), now);
       for (const q of pacers) q.flush(now);
       pace();
-      // Every area is settled now: each name not yet lettered is, the largest area's first.
+      // Every area is settled now, so every name not yet lettered is queued, the largest area's first.
       void ready.then(() => {
         for (const path of land?.names?.keys() ?? []) letter(path);
         names.flush(performance.now());
@@ -1195,20 +1161,20 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     chosen: choose,
     face,
     marks: drawMarks,
-    stood: relief,
+    baked: relief,
     night(n) {
       veil.style.setProperty("--night", n.toFixed(2));
     },
     async lift() {
-      // The paper folds as soon as the world is ready to show, and whatever of the drawing is still to come goes with
-      // it: nothing of the wait keeps painting under the world.
+      // The paper folds as soon as the world is ready to show. Unfinished drawing is dropped, so the wait never paints
+      // under the world.
       folded = true;
       jobs.length = 0;
       window.clearTimeout(ticking);
       sheetEl.classList.add("folding");
       veil.classList.add("lifted");
       await wait(PACE.foldMs);
-      // Nor animating, or holding its canvases.
+      // Removes the wait's elements, so nothing keeps animating or holding canvases.
       veil.replaceChildren();
     },
     sheet: () => sheetEl.getBoundingClientRect(),

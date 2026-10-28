@@ -1,12 +1,8 @@
-// Composes one heightfield from per-region landforms. Each region's landform
-// is blended with its neighbors' by weights that fall smoothly to zero across
-// a wide band at every region edge, so heights are continuous by construction.
-// Region cells are domain-warped, so their borders curve and wander instead of
-// running straight; ground covers blend by the same weights broken into seeded
-// patches, so one cover drifts into the next. The world's edge closes in with
-// a gentle rim, which ends every sight line on the world's own ground. The
-// result is fitted into the relief budget, then water is solved and cut into
-// it. Everything here is pure and deterministic.
+// Composes one heightfield from per-region landforms, fits it into the relief
+// budget and cuts water into it. Region heights and covers blend by weights
+// that fall smoothly to 0 across `TERRAIN.blend` at each border, so heights are
+// continuous. A tile baked alone (`bakeTile`) matches a whole-world bake byte
+// for byte.
 
 import { type AnyPrimitive, type BuildContext, type Blueprint, type Landform, type Library, rand, seedOf } from "@gaia/schema";
 import { fbm, fieldAt } from "@gaia/primitives";
@@ -19,34 +15,34 @@ import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
 import { routeRivers, valleySurface } from "./rivers.ts";
 
 export interface RegionSpec {
-  /** The directory the region stands for. */
+  /** The directory the region represents. */
   readonly id: string;
   readonly x: number;
   readonly z: number;
-  /** The region's ground level, meters, from the world layout. */
+  /** The region's ground level in meters, from the world layout. */
   readonly base: number;
   /**
-   * How far the region's own ground reaches from its middle, meters: a
-   * larger region claims more land before its neighbor's begins. Absent, 0,
-   * which divides the land evenly between neighboring middles.
+   * Meters subtracted from each distance to the region's center, so a larger
+   * region claims more land before its neighbor's begins. Defaults to 0,
+   * which splits land evenly between neighboring centers.
    */
   readonly reach?: number;
   /**
-   * The cells the region's land is made of, when it is more than one: its
-   * ground is every point whose nearest site (`siteAt`) is one of these, so
-   * its border follows theirs. Absent, the region is one cell, at its middle
-   * with its reach. A world laid out from code gives each region the sites
-   * of its files' patches.
+   * The sites whose cells make up the region's land. The region holds every
+   * point whose nearest site (`siteAt`) is one of these, so its border
+   * follows theirs. When absent, the region is one cell at (`x`, `z`) with
+   * `reach`. A world laid out from code gives each region the sites of its
+   * patches and lots.
    */
   readonly sites?: readonly LandSite[];
-  /** A blueprint of the `biome` kind. Terrain reads its relief slot. */
+  /** A blueprint of the `biome` kind. `landformsOf` reads its relief slot. */
   readonly biome: Blueprint;
 }
 
 export interface WorldSpec {
-  /** The land's width, west to east, meters: the side of its square when it has no `aspect`. */
+  /** The land's west-to-east width in meters. Without `aspect`, the land is a square of this side. */
   readonly size: number;
-  /** How much wider than deep the land is (`LandOutline`); a world laid out from code takes `LAND_ASPECT`. */
+  /** Width over depth of the land (`LandOutline`). A world laid out from code uses `LAND_ASPECT`. */
   readonly aspect?: number;
   readonly regions: readonly RegionSpec[];
 }
@@ -54,32 +50,32 @@ export interface WorldSpec {
 export const TERRAIN = {
   /** Meters between lattice samples. */
   spacing: 1,
-  /** Land drawn beyond the walkable square on every side, meters. */
+  /** Meters of land baked past the walkable land on every side. */
   skirt: 80,
-  /** Width of the band over which neighboring regions' landforms and covers blend, meters. */
+  /** Width in meters of the band where neighboring regions' landforms and covers blend. */
   blend: 130,
-  /** How far region borders wander from straight lines, meters, and over what wavelength (`LAND_WARP`). */
+  /** The domain warp's displacement and wavelength in meters (`LAND_WARP`), which curves region borders. */
   warp: LAND_WARP.amount,
   warpWavelength: LAND_WARP.wavelength,
-  /** How strongly covers break into patches across a blend; 0 is a plain gradient. */
+  /** Strength of the noise that breaks cover blends into patches. 0 gives a plain gradient. */
   drift: 1.2,
-  /** How abruptly one cover's patch gives way to the next's. */
+  /** Exponent on each cover share. A higher value gives sharper patch edges. */
   driftEdge: 3,
   /** Wavelength of the cover patches, meters. */
   driftWavelength: 30,
-  /** How high the world's edge rises, meters. */
+  /** Height in meters of the rim at the world's edge. */
   rim: 7,
-  /** Width of the rim's climb, meters, ending this far past the walkable edge. */
+  /** The rim climbs over `rimWidth` meters and reaches full height `rimOvershoot` meters past the walkable edge. */
   rimWidth: 60,
   rimOvershoot: 15,
-  /** Water may cut this far below the lowest fitted ground, so fitting leaves room for it. */
+  /** Meters water may cut below the lowest fitted ground. The fit leaves this much of the range spare. */
   waterMargin: 1.6,
-  /** The relief is fitted on a survey of every this-many samples a side, as land baked in tiles must be. */
+  /** The relief fit reads every `survey`th sample on each axis. `planTerrain` needs this because tiled land is never composed whole. */
   survey: 4,
   /**
-   * A survey misses the steepest meter of a slope, so a fit it has to scale
-   * down is taken this share flatter, which keeps every sample inside the
-   * budget: at 5 km a 4 m survey alone overshoots by 0.12%.
+   * A survey misses the steepest meter of a slope. When the fit scales the
+   * relief down, it scales it this share further, which keeps every sample
+   * inside the budget. At 5 km a 4 m survey alone overshoots by 0.12%.
    */
   surveyMargin: 0.002,
 } as const;
@@ -92,32 +88,32 @@ export interface Terrain {
   readonly lattice: Lattice;
   /** Water surface height per lattice sample, DRY where there is none. */
   readonly waterLevel: Float32Array;
-  /** Meters from each lattice sample to the nearest water's edge, up to `SHORE_CAP`; thin water's banks stand back (`shoreField`). */
+  /** Meters from each lattice sample to the nearest water's edge, capped at `SHORE_CAP` (`shoreField`). Shallow water starts above 0, so its banks are narrower. */
   readonly shore: Float32Array;
   /** 1 where a sample's nearest water is a pond's, else 0 (`nearPond`). */
   readonly nearPond: Uint8Array;
   /** Index of the region whose cover dominates each lattice sample. */
   readonly region: Uint8Array;
   /**
-   * The ground cover per lattice sample, as the regions with the largest
-   * shares: COVER_TAPS region indices per sample, largest share first, and
+   * The regions with the largest cover shares at each lattice sample,
+   * `COVER_TAPS` region indices per sample, largest first. `coverShares` holds
    * their shares in 255ths, summing to 255. Covers blend by these shares.
    */
   readonly coverRegions: Uint8Array;
   readonly coverShares: Uint8Array;
   readonly streams: readonly SolvedStream[];
   readonly ponds: readonly SolvedPond[];
-  /** The vertical scale applied to fit the budget, about `mean`; 1 means the landforms fit as chosen. */
+  /** The vertical scale about `mean` that fits the relief budget. 1 means the landforms fit unscaled. */
   readonly fit: number;
   readonly mean: number;
   /** Each pond's depth, in the order of `ponds`. */
   readonly pondDepths: readonly number[];
-  /** Relief over the walkable square. */
+  /** Relief measured over the walkable land. */
   readonly report: ReliefReport;
   readonly landforms: readonly Landform[];
 }
 
-/** The plan a bake of the whole world followed: what a tile of it needs to be baked alone (`bakeTile`). */
+/** The plan a whole-world bake used, which `bakeTile` needs to bake one tile alone. */
 export const planOf = (t: Terrain): TerrainPlan => ({
   spec: t.spec,
   landforms: t.landforms,
@@ -143,7 +139,7 @@ export function landformsOf(spec: WorldSpec, lib: Library): Landform[] {
     const params = resolveParams(p, slot.params, root.fork("params"), `${r.id}.relief`);
     return (p.build as ErasedBuild)(params, { rand: root.fork("relief"), facts: { extent } }, null) as Landform;
   });
-  // Rivers follow the land: routed over the ground the regions compose, rim and all, and carved into every region's.
+  // `routeRivers` routes rivers over the composed ground, rim included, and carves their valleys into every landform.
   const weights = new Float64Array(spec.regions.length);
   const ground = (lfs: readonly Landform[]) => (x: number, z: number): number => {
     regionWeights(spec, x, z, weights);
@@ -163,9 +159,9 @@ const DRIFT_SEED = 6007;
 const FIELD_CELL = 24;
 
 /**
- * What `regionWeights` reads quickly: per lookup cell (over warped points),
- * the regions that can weigh anything in it and, for each, the sites that
- * can be its nearest there, as (region, from, to) triples over `order`.
+ * A grid of lookup cells over warped points for `regionWeights`. Each cell
+ * lists the regions that can have weight in it and, for each, the sites that
+ * can be nearest there, as (region, from, to) triples into `order`.
  */
 interface RegionField {
   readonly x0: number;
@@ -173,7 +169,7 @@ interface RegionField {
   readonly sites: readonly (readonly LandSite[])[];
   readonly starts: Int32Array;
   readonly runs: Int32Array;
-  /** Site indices grouped per run: a run of region r lists indices into `sites[r]`. */
+  /** Site indices grouped by run. A run for region r lists indices into `sites[r]`. */
   readonly order: Int32Array;
 }
 const fields = new WeakMap<WorldSpec, RegionField>();
@@ -217,7 +213,7 @@ function regionField(spec: WorldSpec): RegionField {
       });
       starts[j * n + i] = runs.length;
       sites.forEach((list, r) => {
-        // A region farther than the blend band beyond the nearest weighs nothing anywhere in this cell.
+        // A region more than `TERRAIN.blend` past the nearest region has no weight anywhere in this cell.
         if ((regionLo[r] as number) > bestHi + TERRAIN.blend) return;
         const los = lo[r] as Float64Array;
         const from = order.length;
@@ -232,7 +228,7 @@ function regionField(spec: WorldSpec): RegionField {
   return field;
 }
 
-/** The region that holds (x, z) most: the index of its largest weight. */
+/** The index of the region with the largest weight at (x, z). */
 export function regionAt(spec: WorldSpec, x: number, z: number): number {
   const weights = new Float64Array(spec.regions.length);
   regionWeights(spec, x, z, weights);
@@ -244,9 +240,10 @@ export function regionAt(spec: WorldSpec, x: number, z: number): number {
 }
 
 /**
- * Each region's blend weight at a point: 1 for the nearest, falling smoothly to
- * 0 across the blend band. Distances are measured from a domain-warped point,
- * so the cells' borders curve and wander. Heights blend by these weights.
+ * Writes each region's blend weight at (x, z) into `out`. The nearest region
+ * gets 1, and the others fall smoothly to 0 across `TERRAIN.blend`. It
+ * measures distances from the warped point (`warpPoint`), so region borders
+ * curve. Heights blend by these weights.
  */
 export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
   const [wx, wz] = warpPoint(x, z);
@@ -276,9 +273,9 @@ export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float6
   for (let r = 0; r < count; r++) out[r] = 1 - smooth(((out[r] as number) - nearest) / TERRAIN.blend);
 }
 
-/** Meters a side of the cells every region's sites are sorted into, for points past the region field. */
+/** Side in meters of the cells `siteCellsOf` sorts sites into, for points outside the region field. */
 const OUTSIDE_CELL = 64;
-/** Every region's sites sorted into cells, with each cell's bounds and its largest reach, kept with the field. */
+/** Every region's sites sorted into cells, with each cell's corner and largest reach. Cached per `RegionField`. */
 interface SiteCells {
   readonly cells: readonly { readonly x0: number; readonly z0: number; readonly reach: number; readonly sites: readonly (readonly [number, LandSite])[] }[];
 }
@@ -304,23 +301,23 @@ function siteCellsOf(f: RegionField): SiteCells {
 }
 
 /**
- * Each region's distance from (wx, wz) past the region field, into `out`
- * (Infinity for a region that weighs nothing there), and the nearest: the
- * same as measuring every site, but measuring only the sites that can be
- * within the blend band of the nearest. A point far past the land costs as
- * much as one beside it, however many sites the world has.
+ * Writes each region's distance from (wx, wz) into `out` for a point outside
+ * the region field, and returns the nearest distance. A region with no weight
+ * there keeps Infinity. It measures only the sites in cells that can lie
+ * within `TERRAIN.blend` of the nearest, and gives the same distances as
+ * measuring every site.
  */
 function outsideDistances(f: RegionField, wx: number, wz: number, out: Float64Array): number {
   const { cells } = siteCellsOf(f);
-  // The least distance any site in each cell can be, from the cell's bounds and its largest reach.
+  // A lower bound on the distance to any site in each cell, from the cell's bounds and its largest reach.
   const least = cells.map((c) => Math.hypot(Math.max(c.x0 - wx, 0, wx - c.x0 - OUTSIDE_CELL), Math.max(c.z0 - wz, 0, wz - c.z0 - OUTSIDE_CELL)) - c.reach);
-  // Seeded from the cell that can hold the nearest site, so the first pass passes over nearly every other cell.
+  // Start from the cell with the smallest bound, so the first pass skips nearly every other cell.
   let first = 0;
   for (let k = 1; k < least.length; k++) if ((least[k] as number) < (least[first] as number)) first = k;
   let nearest = Infinity;
   for (const [, s] of cells[first]?.sites ?? []) nearest = Math.min(nearest, Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0));
   for (let pass = 0; pass < 2; pass++) {
-    // First the nearest site, then every site within the blend band of it: no other can weigh anything.
+    // Pass 0 finds the nearest distance. Pass 1 records every site within `TERRAIN.blend` of it, since no other has weight.
     const within = pass === 0 ? (): number => nearest : (): number => nearest + TERRAIN.blend;
     cells.forEach((c, k) => {
       if ((least[k] as number) > within()) return;
@@ -335,10 +332,11 @@ function outsideDistances(f: RegionField, wx: number, wz: number, out: Float64Ar
 }
 
 /**
- * Each region's share of the ground cover at a point, summing to 1. The blend
- * weights are broken into seeded patches, so across a band one cover drifts
- * into the next in islands rather than along a gradient. A region whose blend
- * weight is 0 has no share, so every region's core is its own cover.
+ * Writes each region's share of the ground cover at (x, z) into `out`,
+ * summing to 1. Seeded noise breaks the blend weights into patches, so across
+ * a blend band one cover changes to the next in islands instead of along a
+ * gradient. A region with 0 blend weight gets no share, so each region's core
+ * shows only its own cover.
  */
 export function coverWeights(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
   regionWeights(spec, x, z, out);
@@ -360,7 +358,7 @@ function coverFromBlend(spec: WorldSpec, x: number, z: number, out: Float64Array
   for (let i = 0; i < spec.regions.length; i++) out[i] = (out[i] as number) / total;
 }
 
-/** The world's edge: a gentle rise around the land's rounded rectangle (`pastTheEdge`), with a little wander. */
+/** Height of the rim around the land's rounded rectangle (`pastTheEdge`), varied by noise. */
 export function rimAt(land: LandOutline, x: number, z: number): number {
   const rise = smooth((pastTheEdge(land, x, z) - TERRAIN.rimOvershoot + TERRAIN.rimWidth) / TERRAIN.rimWidth);
   if (rise === 0) return 0;
@@ -368,7 +366,7 @@ export function rimAt(land: LandOutline, x: number, z: number): number {
   return TERRAIN.rim * rise * (0.8 + 0.3 * wander);
 }
 
-/** The ground blended from every region's landform by its weight, before the rim. */
+/** The weighted mean of every region's landform height at (x, z), without the rim. */
 function blended(spec: WorldSpec, landforms: readonly Landform[], weights: Float64Array, x: number, z: number): number {
   let total = 0;
   let sum = 0;
@@ -383,7 +381,7 @@ function blended(spec: WorldSpec, landforms: readonly Landform[], weights: Float
   return sum / total;
 }
 
-/** The composed ground before fitting and water: continuous everywhere. */
+/** Returns the composed ground height before fitting and water. It is continuous everywhere. */
 export function composer(spec: WorldSpec, landforms: readonly Landform[]): (x: number, z: number) => number {
   const weights = new Float64Array(spec.regions.length);
   return (x, z) => {
@@ -392,13 +390,13 @@ export function composer(spec: WorldSpec, landforms: readonly Landform[]): (x: n
   };
 }
 
-/** The ground at (x, z) cut down to the world's river valleys, where they reach. */
+/** Height `h` at (x, z), lowered to the river valley surface (`valleySurface`) where the valleys reach. */
 function cutToValleys(landforms: readonly Landform[], x: number, z: number, h: number): number {
   const net = landforms[0]?.valleys;
   return net === undefined ? h : Math.min(h, valleySurface(net, x, z));
 }
 
-/** How many regions' shares of the cover each lattice sample keeps: more than ever meet at one point. */
+/** Number of region cover shares each lattice sample keeps. More regions than this never meet at one point. */
 export const COVER_TAPS = 4;
 
 /** The composed ground of some lattice rows, before fitting and water. */
@@ -406,40 +404,39 @@ export interface ComposedRows {
   /** The first row and one past the last. */
   readonly z0: number;
   readonly z1: number;
-  /** Per sample of these rows: the blended height with the rim, and the cover. */
+  /** Per sample of these rows, the blended height with the rim and valleys, and the cover. */
   readonly raw: Float32Array;
   readonly region: Uint8Array;
   readonly coverRegions: Uint8Array;
   readonly coverShares: Uint8Array;
 }
 
-/** The baked lattice's shape for a world: samples every TERRAIN.spacing meters over the walkable square and its skirt. */
+/** The world's baked lattice, with a sample every `TERRAIN.spacing` meters over a square of `size` plus the skirt on each side. */
 export const latticeOf = (spec: WorldSpec): Lattice => createLattice(spec.size + TERRAIN.skirt * 2, TERRAIN.spacing);
 
-/** The world lattice's frame alone, as `latticeOf` lays it, without its samples: for reading positions, not heights. */
+/** The frame of `latticeOf`'s lattice without allocating its samples. Use it to convert positions, not to read heights. */
 export function frameOf(spec: WorldSpec): { readonly n: number; readonly spacing: number; readonly origin: number } {
   const n = Math.round((spec.size + TERRAIN.skirt * 2) / TERRAIN.spacing) + 1;
   return { n, spacing: TERRAIN.spacing, origin: (-(n - 1) * TERRAIN.spacing) / 2 };
 }
 
 /**
- * Composes lattice rows [z0, z1): each sample's blended height and its cover.
- * Rows are independent, so a bake may compose them in parts, on several
- * threads, and get the same bytes as composing them at once.
+ * Composes each sample's blended height and cover for lattice rows [z0, z1).
+ * Rows are independent, so a bake can compose them in parts on several
+ * threads and get the same bytes as composing them at once.
  */
 export function composeRows(spec: WorldSpec, landforms: readonly Landform[], z0: number, z1: number): ComposedRows {
   const lattice = frameOf(spec);
   return { z0, z1, ...composeRect(spec, landforms, lattice, 0, lattice.n, z0, z1) };
 }
 
-/** The composed ground of a rectangle of samples, before fitting and water: columns [x0, x1) of rows [z0, z1), row by row. */
+/** The composed ground of columns [x0, x1) of rows [z0, z1), row-major, before fitting and water. */
 type ComposedRect = Omit<ComposedRows, "z0" | "z1">;
 
 /**
- * Composes columns [x0, x1) of rows [z0, z1) of lattice `l`, which may lie
- * anywhere: the world's own lattice, a coarser survey of it, or a tile. Every
- * sample is composed alone from where it stands, so the same point gives the
- * same bytes in any of them.
+ * Composes columns [x0, x1) of rows [z0, z1) of lattice `l`, which may be the
+ * world's lattice, a coarser survey of it, or a tile. Each sample depends
+ * only on its world position, so a point gives the same bytes in any of them.
  */
 function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: LatticeFrame, x0: number, x1: number, z0: number, z1: number): ComposedRect {
   const count = spec.regions.length;
@@ -460,7 +457,7 @@ function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: Lattice
       regionWeights(spec, x, z, weights);
       raw[k] = cutToValleys(landforms, x, z, blended(spec, landforms, weights, x, z) + rimAt(spec, x, z));
       coverFromBlend(spec, x, z, weights);
-      // The largest shares, largest first; ties keep the lower index.
+      // Keep the `COVER_TAPS` largest shares in `top`, largest first. Ties keep the lower index.
       top.fill(-1);
       for (let i = 0; i < count; i++) {
         const w = weights[i] as number;
@@ -492,7 +489,7 @@ function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: Lattice
   return { raw, region, coverRegions, coverShares };
 }
 
-/** Fits composed rows (covering every lattice row, in order) into the budget, then solves and cuts the water. */
+/** Fits composed rows into the relief budget, then solves and cuts the water. The parts must cover every lattice row once, in any order. */
 export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], parts: readonly ComposedRows[]): Terrain {
   const lattice = latticeOf(spec);
   const { n } = lattice;
@@ -511,12 +508,12 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
   }
   if (filled !== n) throw new Error(`Composed rows end at ${filled} of ${n}.`);
 
-  // Fit: scale the relief about its mean until the walkable square fits the
-  // budget. Range, slopes and steps all shrink with the scale. The scale is
-  // found on a survey of every `TERRAIN.survey`th sample, checked once at
-  // every sample, and searched for at every sample only when the survey's
-  // overshoots, so a large world fits in two passes over its samples, not
-  // fifteen, and land up to 3 km across comes out exactly as before.
+  // Scale the relief about its mean until the walkable land fits the budget.
+  // Range, slopes and steps all shrink with the scale. The scale is searched
+  // on a survey of every `TERRAIN.survey`th sample and checked once at every
+  // sample. The search runs at every sample only when the survey's scale
+  // fails that check, so a large world fits in two passes over its samples
+  // instead of fifteen.
   const s = TERRAIN.survey;
   const sn = Math.floor((n - 1) / s) + 1;
   const surveyed = new Float32Array(sn * sn);
@@ -528,7 +525,7 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
   const heights = raw.map((h) => mean + (h - mean) * fit);
   const final: Lattice = { ...lattice, heights };
 
-  // Water, solved from the fitted ground and cut into it.
+  // Solve the water from the fitted ground and cut it in.
   const { streams, ponds } = solveWater(spec, landforms, lattice, (x0, z0, side) => {
     const out = new Float32Array(side * side);
     for (let j = 0; j < side; j++) {
@@ -562,13 +559,12 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
 }
 
 /**
- * Solves the world's water bed by bed, in order: each stream from the fitted
- * ground along its bed, after the ones before it have been cut in, then each
- * pond from the ground around it. Each bed is solved on a window of just the
- * ground it reads, `side` samples square from lattice sample (`x0`, `z0`),
- * which `groundOf` gives fitted, with the beds before it cut in again. So a
- * plan that composes only those windows and a bake of the whole world that
- * copies them out of its ground solve the same water, to the bit.
+ * Solves the world's water one bed at a time, in `waterBeds` order. For each
+ * bed, `groundOf` returns the fitted ground in a window `side` samples square
+ * from lattice sample (`x0`, `z0`), and this function cuts the earlier beds
+ * into that window before solving the bed on it. So `planTerrain`, which
+ * composes only those windows, and `finishTerrain`, which copies them from its
+ * whole ground, solve the same water bit for bit.
  */
 function solveWater(
   spec: WorldSpec,
@@ -597,13 +593,13 @@ function solveWater(
   return { streams, ponds };
 }
 
-/** A bed of water as `solveWater` solves it, in its order, with the lattice rectangle, [x0, x1) by [z0, z1), within which it reads and cuts the ground. */
+/** One water bed for `solveWater`. `rect` is the lattice rectangle [x0, x1) by [z0, z1) where it reads and cuts the ground. */
 type WaterBed = { readonly rect: readonly [number, number, number, number] } & (
   | { readonly kind: "stream"; readonly path: Float32Array; readonly width: number; readonly depth: number; readonly widths?: Float32Array; readonly seep?: boolean; readonly floors?: Float32Array }
   | { readonly kind: "pond"; readonly x: number; readonly z: number; readonly radius: number; readonly depth: number }
 );
 
-/** Every bed of the world's water in the order `solveWater` solves them: each region's streams, then each region's ponds. */
+/** Every water bed in the order `solveWater` solves them: all regions' streams, then all regions' ponds. */
 function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice | LatticeFrame): WaterBed[] {
   const toIndex = (w: number): number => (w - l.origin) / l.spacing;
   const rect = (minX: number, maxX: number, minZ: number, maxZ: number, reach: number): [number, number, number, number] => [
@@ -616,7 +612,7 @@ function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice |
   spec.regions.forEach((r, ri) => {
     for (const bed of (landforms[ri] as Landform).water) {
       if (bed.kind !== "stream") continue;
-      // A river's whole course runs past its region; a stream of a valley's own runs while its region holds it.
+      // A river, which has `widths`, keeps its whole course. A valley's own stream keeps only its run inside its region (`keptRun`).
       const path = bed.widths !== undefined ? Float32Array.from(bed.path, (v, k) => v + (k % 2 === 0 ? r.x : r.z)) : keptRun(spec, ri, bed.path);
       if (path === null) continue;
       let minX = Infinity;
@@ -643,7 +639,7 @@ function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice |
   return beds;
 }
 
-/** What a world decides once, before any of its land is composed in full: how its relief is fitted, and its water. */
+/** A world's relief fit and solved water, computed once before any of its land is composed in full. */
 export interface TerrainPlan {
   readonly spec: WorldSpec;
   readonly landforms: readonly Landform[];
@@ -655,11 +651,11 @@ export interface TerrainPlan {
 }
 
 /**
- * Plans a world's land without composing all of it: fits the relief on a
- * survey, as `finishTerrain` does, and solves the water from the ground
- * composed along its beds alone. Where `finishTerrain`'s check at every
- * sample keeps the survey's fit, which it does for every world up to 3 km and
- * for the 5 km sample world, the plan and the whole-world bake agree exactly.
+ * Plans a world's land without composing all of it. It fits the relief on a
+ * survey as `finishTerrain` does, and solves the water from ground composed
+ * only along its beds. The plan matches the whole-world bake exactly when
+ * `finishTerrain`'s check at every sample keeps the survey's fit. That holds
+ * for every world up to 3 km and for the 5 km sample world.
  */
 export function planTerrain(spec: WorldSpec, landforms: readonly Landform[]): TerrainPlan {
   const lattice = latticeOf(spec);
@@ -677,12 +673,12 @@ export function planTerrain(spec: WorldSpec, landforms: readonly Landform[]): Te
   return { spec, landforms, mean, fit, streams, ponds };
 }
 
-/** Land is baked in square tiles of `size` samples a side, each composed with a margin wide enough for its shore. */
+/** Tiles are `size` samples square. Each is composed with a `margin` wide enough to measure its shore. */
 export const TILE = { size: 256, margin: shoreMargin(TERRAIN.spacing) } as const;
 
-/** One tile of a world's land, as the whole world's bake would hold it. */
+/** One tile of a world's land, with the values a whole-world bake has for those samples. */
 export interface TerrainTile {
-  /** The world lattice's column and row of the tile's first sample, its samples a side, and how many of the world's samples apart they lie. */
+  /** `x0` and `z0` are the world lattice column and row of the tile's first sample. `n` is its samples per side, and `stride` is the world-lattice step between them. */
   readonly x0: number;
   readonly z0: number;
   readonly n: number;
@@ -698,13 +694,13 @@ export interface TerrainTile {
 }
 
 /**
- * Bakes the tile whose first sample is the world lattice's column `x0`, row
- * `z0`, from `plan` alone: its own ground composed with a margin, fitted, the
- * plan's water cut in and the shore measured, byte for byte as a bake of the
- * whole world holds those samples. With a `stride`, the tile takes every
- * stride-th sample of the world's lattice, as a coarser level of the land
- * does: the same heights, water and cover there, and the shore measured
- * between its own samples.
+ * Bakes the tile whose first sample is world lattice column `x0`, row `z0`,
+ * from `plan` alone. It composes the tile's ground with a margin, fits it,
+ * cuts in the plan's water and measures the shore, byte for byte as a
+ * whole-world bake has those samples. With a `stride`, the tile takes every
+ * stride-th world sample, as a coarser level of the land does. Heights, water
+ * and cover then match the world's at those samples, and the shore is
+ * measured between the tile's own samples.
  */
 export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number = TILE.size, stride = 1): TerrainTile {
   const world = frameOf(plan.spec);
@@ -740,13 +736,13 @@ export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number
   };
 }
 
-/** Whether `heights` scaled about `mean` by `fit` keep the walkable square inside the relief budget, with room for water. */
+/** Whether `heights` scaled about `mean` by `fit` keep the walkable land inside the relief budget, with room for water. */
 function fitsBudget(spec: WorldSpec, l: Lattice, heights: Float32Array, mean: number, fit: number): boolean {
   const inside = (ix: number, iz: number): boolean => withinLand(spec, worldOf(l, ix), worldOf(l, iz));
   return withinBudget(measureRelief(l, heights.map((h) => mean + (h - mean) * fit), inside), TERRAIN.waterMargin);
 }
 
-/** The largest scale about its mean that keeps `l`'s heights inside the budget: 1 when they already fit, else found to 14 halvings. */
+/** The largest scale about the mean that keeps `l`'s heights inside the budget. It is 1 when they already fit, else a 14-step bisection between 0.1 and 1. */
 function fitRelief(spec: WorldSpec, l: Lattice): { mean: number; fit: number } {
   let mean = 0;
   for (const h of l.heights) mean += h;
@@ -763,15 +759,16 @@ function fitRelief(spec: WorldSpec, l: Lattice): { mean: number; fit: number } {
   return { mean, fit: lo };
 }
 
-/** Bakes the world's one height truth. */
+/** Bakes the whole world's terrain in one pass. */
 export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
   const landforms = landformsOf(spec, lib);
   return finishTerrain(spec, landforms, [composeRows(spec, landforms, 0, frameOf(spec).n)]);
 }
 
 /**
- * The part of a region's stream bed that stays inside the region and the
- * walkable square: the longest unbroken run where the region dominates.
+ * The longest unbroken run of a region's stream bed, in world coordinates,
+ * where each point is at least 30 m inside the land (`withinLand`) and no
+ * other region's weight reaches 0.75. Returns null for a run under 12 points.
  */
 function keptRun(spec: WorldSpec, ri: number, local: Float32Array): Float32Array | null {
   const r = spec.regions[ri] as RegionSpec;

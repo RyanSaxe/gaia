@@ -1,5 +1,6 @@
 // The light at any hour of a world's day. The hour comes from the person's
-// clock, which only the renderer reads; this stays a pure function of it.
+// clock, which only the renderer reads, so this module stays a pure function
+// of the hour.
 
 import type { DayKey, DaySpec, LightSpec, Rgb, Vec3 } from "@gaia/schema";
 import { mixLab } from "@gaia/primitives";
@@ -18,7 +19,7 @@ const turn = (from: number, to: number): number => ((to - from + 3 * Math.PI) % 
 
 /**
  * The slope at a key of a monotone cubic through it, from the changes over the spans before and after (Fritsch and
- * Butland): zero where the key is a peak or a trough, so the curve never overshoots a key.
+ * Butland). It is zero where the key is a peak or a trough, so the curve never overshoots a key.
  */
 function slopeAt(before: number, after: number, spanBefore: number, spanAfter: number): number {
   const a = before / spanBefore;
@@ -37,9 +38,10 @@ function hermite(p0: number, p1: number, m0: number, m1: number, span: number, t
 }
 
 /**
- * Where a body stands `t` of the way from key `i` to the next: a smooth curve through the keys' directions, in
- * height and bearing, that passes each key at its hour, turns the short way between keys and never overshoots a key.
- * A body moves along it without a corner or a jump in speed, so the sun rises and sets on a steady slant.
+ * Where the sun or moon is `t` of the way from key `i` to the next. It follows a smooth curve through the keys'
+ * directions, in height and bearing, that passes each key at its hour, turns the short way between keys and never
+ * overshoots a key. The body moves along it without a corner or a jump in speed, so the sun rises and sets on a
+ * steady slant.
  */
 function bodyAt(keys: readonly DayKey[], i: number, t: number, direction: (light: LightSpec) => Vec3): Vec3 {
   const n = keys.length;
@@ -64,7 +66,7 @@ function mixLight(a: LightSpec, b: LightSpec, t: number, sunDirection: Vec3, moo
   return {
     sunDirection,
     sunColor: mixColor(a.sunColor, b.sunColor, t),
-    // A body below the horizon lends the land no direct light.
+    // A sun below the horizon gives the land no direct light.
     sunIntensity: lerp(a.sunIntensity, b.sunIntensity, t) * smoothstep(-0.04, 0.06, sunDirection[1]),
     moonDirection,
     moonColor: mixColor(a.moonColor, b.moonColor, t),
@@ -82,10 +84,10 @@ function mixLight(a: LightSpec, b: LightSpec, t: number, sunDirection: Vec3, moo
 }
 
 /**
- * The light at a local hour (any real number; 24 hours wrap). Between two
- * keys, colors mix in OKLab, the sun and moon move along a smooth curve
- * through the keys (`bodyAt`), and numbers move linearly; the last key wraps
- * to the first across midnight.
+ * The light at a local hour, any real number, wrapping every 24 hours.
+ * Between two keys, colors mix in OKLab, the sun and moon move along a smooth
+ * curve through the keys (`bodyAt`), and numbers interpolate linearly. The
+ * last key wraps to the first across midnight.
  */
 export function lightAt(day: DaySpec, hour: number): LightSpec {
   const keys = day.keys;

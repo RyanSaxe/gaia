@@ -1,31 +1,27 @@
-// What a page of the journal says. Every page says the same few things in
-// the same shape: where it lives, its name, its vitality, a definition's
-// signature as the code writes it, then either a list or text. The contents,
-// a chapter, an entity and a file with definitions list rows (each one's
-// name, vitality and page); a definition is its code, a file with
-// definitions as a thing of its own is its own code with each definition
-// folded to a line that turns to its page, and a file with none is its whole
-// text, a document's set as prose. The book draws whatever words it is
-// handed, so a new kind of page needs nothing new in the book.
+// Builds each journal page's `PageWords`: path, name, vitality, a definition's
+// signature, then either rows or text. Chapters, entities and files with
+// definitions list rows, and definitions and files show their text. The book
+// draws whatever words it gets, so a new kind of page needs no change to the
+// book.
 
 import type { CodeSymbol, Journal, JournalEntry } from "@gaia/world";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 
 /**
- * What Jev points out in a definition's lines, which only the appendix marks:
- * the block key to understanding it, and the block that most needs work.
+ * A block Jev picked in a definition's lines: the one key to understanding it,
+ * or the one that most needs work. Only the appendix shows marks.
  */
 export interface Mark {
   readonly kind: "understand" | "improve";
 }
 
-/** One line of a list, indented by how deep it sits under the page's own subject. */
+/** One row of a list, indented by its depth under the page's subject. */
 export interface Row {
   readonly of: string;
   readonly name: string;
   readonly depth: number;
   readonly vitality: number;
-  /** How much it matters, 0 to 1, Jev's importance; absent before the understanding pass has judged it. */
+  /** Jev's importance, 0 to 1. Absent until the understanding pass judges it. */
   readonly importance?: number;
   readonly page: number;
 }
@@ -33,37 +29,36 @@ export interface Row {
 export interface Rows {
   readonly kind: "rows";
   readonly rows: readonly Row[];
-  /** What a file's or folder's first page leads with: a snippet of the definition that matters most. */
+  /** The snippet a file's or folder's first page leads with, from its most important definition. */
   readonly lead?: Snippet;
 }
 
 /**
- * A definition at a glance: its first line, then its key block, with the
- * lines between and after folded away, as the definition's own page opens on
- * it. A tap on its name turns to the part of the page it stands for; a tap on
- * its code, to the definition in full.
+ * A short view of a definition: its signature, then its key block, with the
+ * lines between and after folded. A tap on its name turns to the page of the
+ * part it belongs to, and a tap on its code turns to the definition in full.
  */
 export interface Snippet {
-  /** The part of the page it stands for, a file of a folder or a definition of a file, its name and page. */
+  /** The part it represents, a folder's file or a file's definition, with its name and page. */
   readonly of: string;
   readonly name: string;
   readonly page: number;
-  /** The definition whose code it shows, which the appendix holds in full. */
+  /** The definition whose code it shows. The appendix has it in full. */
   readonly shows: string;
-  /** Its first line, as the code writes it, and that line's number. */
+  /** The definition's first line and its line number. */
   readonly signature: { readonly n: number; readonly text: string };
-  /** The block shown, from the number of its first line. */
+  /** The shown block's lines, starting at line `first`. */
   readonly first: number;
   readonly lines: readonly string[];
-  /** How many lines are folded away between its first line and the block, and after the lines shown. */
+  /** How many lines are folded between the signature and the block, and after the block. */
   readonly before: number;
   readonly after: number;
 }
 
-/** How many of a block's lines a snippet shows: the rest fold away. */
+/** How many of a block's lines a snippet shows. The rest are folded. */
 const SNIPPET_LINES = 3;
 
-/** A run of a file's lines that is a definition with a page of its own, shown as one line that turns to it. */
+/** The line range of a definition that has its own page. It shows as one line that turns to that page. */
 export interface Folded {
   readonly from: number;
   readonly to: number;
@@ -71,17 +66,17 @@ export interface Folded {
   readonly page: number;
 }
 
-/** How text is set: lines numbered by hand down a gutter, and a document's lines as prose. */
+/** Text for a page: numbered code lines, or a document's lines as prose. */
 interface Text {
-  /** Its lines, numbered from `first`; empty until its file's text arrives. */
+  /** Its lines, numbered from `first`. Empty until the file's text arrives. */
   readonly first: number;
   readonly lines: readonly string[];
-  /** The lines Jev points out, by line number. */
+  /** The line ranges Jev marked. */
   readonly marks: readonly (Mark & { readonly from: number; readonly to: number })[];
   readonly folded?: readonly Folded[];
-  /** Set as prose, not code: a document's text, its lines its paragraphs. */
+  /** Whether it is set as prose: a document's text, with one paragraph per line. */
   readonly prose?: boolean;
-  /** Which of a document's lines are set as code: a fenced block's. */
+  /** Which of a document's lines are fenced code. */
   readonly pre?: readonly boolean[];
   /** How many lines of a file too long to set are left out after these. */
   readonly rest?: number;
@@ -99,24 +94,24 @@ export interface Full extends Text {
 }
 
 export interface PageWords {
-  /** The folders it lives in, outermost first, its file last for a definition: ["app", "world-service", "open-world.ts"]. */
+  /** Its folders, outermost first, with the file last for a definition: ["app", "world-service", "open-world.ts"]. */
   readonly path: readonly string[];
   readonly name: string;
   readonly vitality: number;
-  /** How much it matters, 0 to 1, Jev's importance; absent before the understanding pass has judged it. */
+  /** Jev's importance, 0 to 1. Absent until the understanding pass judges it. */
   readonly importance?: number;
-  /** A definition's first line, as the code writes it. */
+  /** A definition's first line. */
   readonly signature?: string;
   readonly body: Rows | Code | Full;
-  /** An entity's trails, at its page's foot, by their way: the entities it imports from, and those that import from it. */
+  /** An entity's trails at the foot of its page: the entities it imports from and those that import from it. */
   readonly trails?: { readonly uses: readonly Row[]; readonly usedBy: readonly Row[] };
 }
 
-/** What the words are read from: the world, each place's and file's vitality, and a file's text once it has arrived. */
+/** The data words are built from: the journal, the world, vitality by id, and each file's text once it arrives. */
 export interface WordsSource {
   readonly journal: Journal;
   readonly world: { readonly name: string; readonly symbols: readonly Pick<CodeSymbol, "id" | "kind" | "line" | "lines">[] };
-  /** Each item's own vitality: a folder's, a file's by its path, a definition's by its id, or an entity's by `entity:<path>`. */
+  /** Vitality by id: a folder's or file's path, a definition's id, or an entity's `entity:<path>`. */
   vitality(of: string): number;
   /** A file's lines, or undefined until they arrive. */
   lines(path: string): readonly string[] | undefined;
@@ -124,7 +119,7 @@ export interface WordsSource {
   thing?(of: string): JudgedThing | undefined;
 }
 
-/** The one of `parts` that matters most, by Jev's importance; none before the understanding pass has judged any. */
+/** The part with the highest Jev importance, or undefined before the understanding pass judges any. */
 export function mostImportant(src: WordsSource, parts: readonly string[]): string | undefined {
   let top: { readonly of: string; readonly importance: number } | undefined;
   for (const of of parts) {
@@ -134,7 +129,7 @@ export function mostImportant(src: WordsSource, parts: readonly string[]): strin
   return top?.of;
 }
 
-/** Every definition in a file, the ones inside another included. */
+/** Every definition in a file, including nested ones. */
 function definitionsOf(src: WordsSource, file: string): string[] {
   const all: string[] = [];
   const gather = (of: string): void => {
@@ -146,15 +141,14 @@ function definitionsOf(src: WordsSource, file: string): string[] {
   return all;
 }
 
-/** A folder's files, or a file's definitions: what a page's lead is chosen from. */
+/** The candidates for a page's lead: a folder's files, or a file's definitions. */
 const partsOf = (src: WordsSource, e: JournalEntry): string[] => (e.kind === "file" ? definitionsOf(src, e.of) : e.lists.filter((of) => src.journal.entry(of)?.kind === "file"));
 
 /**
- * A page's lead: a snippet of its part that matters most, a file's most
- * important definition, or a folder's most important file shown by that
- * file's most important definition. It shows the definition's first line and
- * its key block, the rest folded, with nothing marked: Jev's marks are the
- * appendix's alone.
+ * A page's lead snippet: a file's most important definition, or for a folder,
+ * the most important definition of its most important file. It shows the
+ * signature and key block with the rest folded, and no marks, since only the
+ * appendix shows Jev's marks.
  */
 function leadOf(src: WordsSource, e: JournalEntry): Snippet | undefined {
   if (e.lead === undefined) return undefined;
@@ -198,7 +192,7 @@ const importanceOf = (src: WordsSource, of: string): { importance?: number } => 
 
 const folders = (path: string): string[] => path.split("/").slice(0, -1);
 
-/** The words of the contents: the top chapters with the chapters inside them, then the files at the root. */
+/** The contents page's words: each top-level entry, with each top chapter's subchapters under it. */
 export function contentsWords(src: WordsSource): PageWords {
   const rows: Row[] = [];
   for (const of of src.journal.contents) {
@@ -209,21 +203,19 @@ export function contentsWords(src: WordsSource): PageWords {
   return { path: [], name: src.world.name, vitality: src.vitality(""), body: { kind: "rows", rows } };
 }
 
-/** An entry as a row of a list. */
 function rowOf(src: WordsSource, e: JournalEntry, depth: number): Row {
   return { of: e.of, name: e.name, depth, vitality: src.vitality(e.of), ...importanceOf(src, e.of), page: e.page };
 }
 
-/** The rows of entries listed by their `of`. */
 const rowsOf = (src: WordsSource, ofs: readonly string[]): Row[] => ofs.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0));
 
 /**
- * The words of one entry's page. `marked` gives a definition's code Jev's
- * marks, as only the appendix shows them; its page shows the code plain.
+ * Builds one entry's page words. With `marked`, a definition's code carries
+ * Jev's marks, for the appendix. Its journal page shows the code without marks.
  */
 export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): PageWords {
   if (e.kind === "entity" && e.text === undefined) {
-    // An entity with no README lists what its folder holds, and at its foot its trails by their way.
+    // An entity with no README lists its folder's contents, with its trails at the foot.
     const path = e.of.slice("entity:".length);
     return { path: path === "" ? [] : path.split("/"), name: e.name, vitality: src.vitality(e.of), body: { kind: "rows", rows: rowsOf(src, e.lists) }, trails: { uses: rowsOf(src, e.uses ?? []), usedBy: rowsOf(src, e.usedBy ?? []) } };
   }
@@ -232,8 +224,8 @@ export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): Page
     return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), ...importanceOf(src, e.of), body: { kind: "rows", rows: rowsOf(src, e.lists), ...(lead === undefined ? {} : { lead }) } };
   }
   if (e.kind === "file" && e.lists.length > 0) {
-    // A file with definitions lists itself first, as a thing of its own, then every definition in it, the ones inside
-    // another under it.
+    // A file with definitions lists its own page first, then every definition in it, with nested ones indented under
+    // their parent.
     const lead = leadOf(src, e);
     const rows: Row[] = [];
     const walk = (of: string, depth: number): void => {
@@ -245,8 +237,8 @@ export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): Page
     return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), ...importanceOf(src, e.of), body: { kind: "rows", rows, ...(lead === undefined ? {} : { lead }) } };
   }
   if (e.kind === "own" || e.kind === "file" || e.kind === "entity") {
-    // Its own text: a file with definitions its lines outside them, each definition folded to the line it begins on;
-    // a folder's thing, its README.
+    // The page's own text. A file's own page shows the file with each definition folded after its first line, a file
+    // without definitions shows its whole text, and an entity shows its README.
     const file = fileOfEntry(e) as string;
     const held = e.kind === "own" ? (src.journal.entry(file)?.lists ?? []) : [];
     const folded = held.flatMap((of): Folded[] => {
@@ -272,9 +264,9 @@ export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): Page
   const line = symbol?.line ?? 1;
   const count = symbol?.lines ?? 1;
   const signature = text?.[line - 1]?.trim();
-  // The blocks Jev picked: the key one and the one most in need. A definition too long for its page opens on its key block.
+  // The blocks Jev picked: the key block and the weakest block. A definition longer than `FITS` lines opens at its key block.
   const { key, weak } = src.thing?.(e.of)?.picks ?? {};
-  // Marked, where the two overlap, the gutter shows the one most in need, which comes first.
+  // Where the two overlap, the gutter shows the weak mark, which comes first.
   const marks = !marked ? [] : [...(weak === undefined ? [] : [{ kind: "improve" as const, from: weak.start, to: weak.end }]), ...(key === undefined ? [] : [{ kind: "understand" as const, from: key.start, to: key.end }])];
   const opensAt = count - 1 > FITS && key !== undefined ? key.start : line + 1;
   return {
@@ -287,7 +279,7 @@ export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): Page
   };
 }
 
-/** The file whose text an entry's page shows: a definition's, a file with definitions as a thing of its own, a file with none, or a folder's README. */
+/** The file whose text an entry's page shows: a definition's file, a file's own page, a file without definitions, or an entity's README. */
 export function fileOfEntry(e: JournalEntry): string | undefined {
   if (e.kind === "definition") return e.of.slice(0, e.of.indexOf("#"));
   if (e.kind === "own") return e.of.slice("own:".length);
@@ -296,14 +288,14 @@ export function fileOfEntry(e: JournalEntry): string | undefined {
   return undefined;
 }
 
-/** A document, whose text is set as prose. */
+/** File extensions of documents, whose text is set as prose. */
 const PROSE = /\.(md|mdx|markdown|txt|rst)$/i;
 /**
- * A document's text as its paragraphs: lines a writer wrapped by hand joined
- * into one, a heading, a list item, a quote, a table row and a blank line
- * each its own, a list item with a bullet, a fenced block's lines kept as
- * they are, set as code, without its fences. Links and images say their
- * words, and emphasis and code marks are dropped.
+ * Converts a document's lines to paragraphs. Hard-wrapped lines join into
+ * one. Headings, table rows and markup lines stand alone, list items and
+ * quotes start a new paragraph, and list items get a bullet. A fenced block's
+ * lines are kept as code without the fences. Links and images keep their
+ * text, and bold and inline code marks are dropped.
  */
 export function proseOf(lines: readonly string[]): { readonly lines: readonly string[]; readonly pre: readonly boolean[] } {
   const out: string[] = [];
@@ -336,7 +328,7 @@ export function proseOf(lines: readonly string[]): { readonly lines: readonly st
     const line = inline(raw).trim();
     if (line === "") {
       flush();
-      // One blank line between paragraphs, however many the writer left.
+      // Keeps one blank line between paragraphs, however many the source has.
       if (out.length > 0 && out[out.length - 1] !== "") {
         out.push("");
         pre.push(false);
@@ -345,7 +337,7 @@ export function proseOf(lines: readonly string[]): { readonly lines: readonly st
       flush();
       // A list item is set with a bullet.
       paragraph = [line.replace(/^[-*+]\s+/, "• ")];
-      // A heading, a table row or a line of markup stands alone; a list item or a quote runs on over its lines.
+      // A heading, table row or markup line stands alone. A list item or quote continues over its following lines.
       if (/^(#{1,6}\s|\||<)/.test(line)) flush();
     } else paragraph.push(line);
   }
@@ -353,24 +345,25 @@ export function proseOf(lines: readonly string[]): { readonly lines: readonly st
   return { lines: out, pre };
 }
 
-/** The most of a file the journal sets: so many lines, each cut at what a page holds. A one-line data file can run to half a megabyte. */
+/** The most of a file the journal sets: `lines` lines, each cut at `chars` characters, since a one-line data file can be half a megabyte. */
 const SET = { lines: 2000, chars: 1500 } as const;
 /**
- * A file's text as the journal sets it, and how many lines of it are left
- * out; none of a file that isn't text, such as an image, or before it comes.
+ * A file's text as the journal sets it, and how many lines are left out. It
+ * returns no lines for a binary file, such as an image, or before the text
+ * arrives.
  */
 function setOf(lines: readonly string[] | undefined): { readonly lines: readonly string[]; readonly rest: number } {
   if (lines === undefined || lines.slice(0, 50).some((l) => l.includes("\u0000") || l.includes("\uFFFD"))) return { lines: [], rest: 0 };
   return { lines: lines.slice(0, SET.lines).map((l) => (l.length > SET.chars ? `${l.slice(0, SET.chars)} …` : l)), rest: Math.max(0, lines.length - SET.lines) };
 }
 
-/** How many lines after its signature a definition's page holds whole, about. */
+/** About how many lines after its signature a definition's page holds. */
 const FITS = 24;
 
 /**
- * A definition's or a file's words for the appendix: its name, then all of
- * its text with Jev's marks, which only the appendix shows. What Jev judged
- * otherwise is on its page and its caption.
+ * A definition's or file's words for the appendix: its name, then its full
+ * text with Jev's marks, which only the appendix shows. Jev's other judgments
+ * appear on its page and caption.
  */
 export function appendixWords(src: WordsSource, e: JournalEntry): PageWords {
   const page = wordsOf(src, e, true);

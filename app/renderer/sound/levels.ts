@@ -1,6 +1,6 @@
-// How loud the person wants the music and the world, each 0 (silent) to 1
-// (as mixed), set on the slip's sliders and kept in the page's storage so a
-// return visit sounds the same. The sound reads them; the slip sets them.
+// Stores the person's music and world volume, each from 0 (silent) to 1 (as
+// mixed). The slip's sliders set them, the sound reads them, and
+// `localStorage` keeps them so a return visit sounds the same.
 
 export interface Levels {
   readonly music: number;
@@ -27,12 +27,12 @@ function stored(): Levels {
   }
 }
 
-/** A slider's place as a gain: its square, so its middle is about 12 dB down and its travel feels even to the ear. */
+/** Converts a slider position to a gain by squaring it, so its middle is about 12 dB down and its travel sounds even. */
 export const gainOf = (level: number): number => level * level;
 
 let store: LevelStore | null = null;
 
-/** The page's one store of levels. */
+/** Returns the page's single level store, creating it on first call. */
 export function soundLevels(): LevelStore {
   if (store !== null) return store;
   let levels = stored();

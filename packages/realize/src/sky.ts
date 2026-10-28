@@ -1,42 +1,42 @@
 // The sky's color in any direction, and the air between the eye and the land.
-// These are the CPU references for SKY_GLSL and `aerial()` in @gaia/render:
-// the dome and every distant surface compute their color with the same
-// function, so far land dissolves into exactly the sky behind it.
+// These are the CPU references for SKY_GLSL and `aerial()` in @gaia/render.
+// The dome and every distant surface compute their color with the same
+// function, so far land fades into exactly the sky behind it.
 
 import type { LightSpec, Rgb, Vec3 } from "@gaia/schema";
 
-/** How the air treats distance, in meters. Land fully dissolves into the sky by `dissolveEnd`. */
+/** How the air fades distant land, in meters. Land fully fades into the sky by `dissolveEnd`. */
 export const AIR = {
   /** Past this, the haze reaches its full strength. */
   hazeFull: 900,
-  /** Rays that skim the land thicken toward the sky: how fast that falls off with the ray's slope, and over which distances it comes in. */
+  /** Rays that skim the land thicken toward the sky color. `skim` is how fast that falls off with the ray's slope, and `skimFrom` the distances over which it comes in. */
   skim: 20,
   skimFrom: [80, 420],
-  /** How much of the local air's own tint the near haze takes; the rest is the sky behind it. */
+  /** How much of the local air's own tint the near haze takes. The rest is the sky behind it. */
   tint: 0.6,
   /** The local air's tint gives way to the sky's own color between these distances. */
   tintFade: [300, 900],
   dissolveStart: 900,
   dissolveEnd: 1400,
-  /** Low mist holds the horizon's color to the first height and thins out by the second (heights of a direction); the horizon takes the air's color by mist times `mistGain`, at most `mistSky`. */
+  /** Low mist keeps the horizon's color up to the first direction height in `mistRise` and thins out by the second. The horizon takes the air's color by mist times `mistGain`, at most `mistSky`. */
   mistRise: [0.01, 0.14],
   mistGain: 2.2,
   mistSky: 0.75,
-  /** Above the land the air thins: from `thinFrom` meters up, past any eye's height, haze and mist fall as `thinScale / (thinScale + meters above that)` (`airFromHeight`). */
+  /** Above the land the air thins. From `thinFrom` meters up, past any eye's height, haze and mist fall as `thinScale / (thinScale + meters above that)` (`airFromHeight`). */
   thinFrom: 6,
   thinScale: 40,
-  /** The sky lays its colors by a direction's height eased in over the lowest `horizonEase` of the sky and exact above it (`heightAbove`), so each color leaves the horizon level and the horizon shows no line. */
+  /** The sky colors by a direction's height, eased in over the lowest `horizonEase` of the sky and exact above it (`heightAbove`), so each color starts level at the horizon and the horizon shows no line. */
   horizonEase: 0.02,
 } as const;
 
 /**
- * How a low sun colors the sky, by the hour's glow, whole while the sun stands above the second height in `lasts` (a
- * direction's height) and gone once it sinks below the first. Each color thins upward from the horizon to about a
- * third by its `…Reach` (a direction's height), starting level so the horizon shows no line. Away from the sun the
- * low sky cools by `cool`. Once the sun has set (between the depths in `setBy`) the earth's blue shadow lies along
- * that horizon (`shadow`) under a band of the glow (`belt`, centered `beltAt` up and `beltWidth` wide). Toward the
- * sun the low sky burns deeper by `ember`, gathered to the sun's bearing by `emberFocus`, and the haze round the sun
- * widens into a glow (`aureole`, gathered by `aureoleFocus`).
+ * How a low sun colors the sky, scaled by the hour's glow. Twilight is full while the sun is above the second
+ * direction height in `lasts` and gone once it sinks below the first. Each color thins upward from the horizon to
+ * about a third by its `…Reach` direction height, starting level so the horizon shows no line. Away from the sun the
+ * low sky cools by `cool`. Once the sun has set, between the depths in `setBy`, the earth's blue shadow (`shadow`)
+ * lies along that horizon under a band of the glow (`belt`), centered `beltAt` up and `beltWidth` wide. Toward the sun
+ * the low sky deepens by `ember`, concentrated at the sun's bearing by `emberFocus`, and the haze around the sun
+ * widens into a glow (`aureole`), concentrated by `aureoleFocus`.
  */
 export const TWILIGHT = {
   lasts: [-0.2, -0.02],
@@ -71,7 +71,7 @@ const smoothstep = (lo: number, hi: number, x: number): number => {
   const t = clamp01((x - lo) / (hi - lo));
   return t * t * (3 - 2 * t);
 };
-/** A direction's height above the horizon: 0 below it, eased in over the lowest `AIR.horizonEase` so it leaves the horizon level, and exact above that. */
+/** A direction's height above the horizon: 0 below it, eased in over the lowest `AIR.horizonEase` so it starts level at the horizon, and exact above that. */
 const heightAbove = (y: number): number => (y <= 0 ? 0 : y >= AIR.horizonEase ? y : (y * y * (2 * AIR.horizonEase - y)) / (AIR.horizonEase * AIR.horizonEase));
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 /** How strongly twilight colors the sky at this hour: the hour's glow, fading as the sun sinks below the horizon. */
@@ -86,9 +86,9 @@ const normalize2 = (x: number, y: number): [number, number] => {
  * The sky's color looking along `dir` (a unit vector): the gradient from
  * horizon to zenith, the hour's glow on the sun's side, twilight's colors
  * (`TWILIGHT`), the haze around the sun, and the local air's low mist along
- * the horizon when `look` carries it. Below the horizon it holds the horizon's color, so nothing seen
- * there can meet the sky at a line. Clouds, stars and the moon are drawn on
- * top by the dome only.
+ * the horizon when `look` includes it. Below the horizon it keeps the
+ * horizon's color, so nothing seen there can meet the sky at a line. Only the
+ * dome draws clouds, stars and the moon, on top.
  */
 export function skyColorAt(look: SkyInput & { readonly fog?: AirInput["fog"] }, dir: Vec3): Rgb {
   const { light, sky } = look;
@@ -112,7 +112,7 @@ export function skyColorAt(look: SkyInput & { readonly fog?: AirInput["fog"] }, 
   color = mix(color, light.horizonGlow, twilight * away * set * TWILIGHT.belt * belt);
   const ember: Rgb = [light.horizonGlow[0] * light.sunColor[0], light.horizonGlow[1] * light.sunColor[1], light.horizonGlow[2] * light.sunColor[2]];
   color = mix(color, ember, twilight * toward ** TWILIGHT.emberFocus * low(TWILIGHT.emberReach) * TWILIGHT.ember);
-  // Toward the sun too, below the horizon the sky holds the horizon's color.
+  // Toward the sun too, below the horizon the sky keeps the horizon's color.
   const level = Math.hypot(dir[0], e, dir[2]);
   const sunDot = Math.max((dir[0] * sun[0] + e * sun[1] + dir[2] * sun[2]) / level, 0);
   color = mix(color, light.sunColor, Math.pow(sunDot, 10) * 0.28 * sunUp);
@@ -123,10 +123,10 @@ export function skyColorAt(look: SkyInput & { readonly fog?: AirInput["fog"] }, 
 }
 
 /**
- * The color of a surface at `point` seen from `eye` through the air. Near
- * and middle distance haze toward the local air's tint; farther, toward the
- * sky's own color along the same ray; past `AIR.dissolveEnd` the surface is
- * gone and only the sky remains.
+ * The color of a surface at `point` seen from `eye` through the air. Near and
+ * middle distances haze toward the local air's tint. Farther ones haze toward
+ * the sky's own color along the same ray. Past `AIR.dissolveEnd` the surface
+ * is gone and only the sky remains.
  */
 export function aerialAt(look: AirInput, color: Rgb, eye: Vec3, point: Vec3): Rgb {
   const ray: Vec3 = [point[0] - eye[0], point[1] - eye[1], point[2] - eye[2]];

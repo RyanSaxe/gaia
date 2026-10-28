@@ -1,40 +1,42 @@
-// `import X from "./file.ts?worker"` gives a constructor for a worker running
-// that file: Vite does this for the app, and tools/lab-page.ts for the one-file lab.
+// `import X from "./file.ts?worker"` returns a constructor for a worker that
+// runs that file. Vite provides it for the app, and tools/lab-page.ts for the
+// one-file lab.
 declare module "*?worker" {
   const WorkerConstructor: new () => Worker;
   export default WorkerConstructor;
 }
 
-// `import text from "./file.svg?raw"` gives the file's text: Vite does this for the app, and tools/lab-page.ts for the one-file lab.
+// `import text from "./file.svg?raw"` returns the file's text. Vite provides it for the app, and tools/lab-page.ts for the
+// one-file lab.
 declare module "*?raw" {
   const text: string;
   export default text;
 }
 
-// `import url from "./picture.webp"` gives the picture's address: a file Vite serves for the app, and a data URL
-// tools/lab-page.ts inlines for the one-file lab.
+// `import url from "./picture.webp"` returns the image's URL. Vite serves it as a file for the app, and
+// tools/lab-page.ts inlines it as a data URL for the one-file lab.
 declare module "*.webp" {
   const url: string;
   export default url;
 }
 
-// `import url from "./face.woff2"` gives the font file's address, as a picture's does: a file Vite serves for the app,
-// and a data URL `pnpm brand` (tools/brand.ts) and tools/lab-page.ts inline.
+// `import url from "./face.woff2"` returns the font's URL. Vite serves it as a file for the app, and `pnpm brand`
+// (tools/brand.ts) and tools/lab-page.ts inline it as a data URL.
 declare module "*.woff2" {
   const url: string;
   export default url;
 }
 
-// `import url from "./wind.ogg"` gives the recording's address, as a picture's does: a file Vite serves for the app,
-// and a data URL tools/lab-page.ts inlines for the one-file lab.
+// `import url from "./wind.ogg"` returns the recording's URL. Vite serves it as a file for the app, and
+// tools/lab-page.ts inlines it as a data URL for the one-file lab.
 declare module "*.ogg" {
   const url: string;
   export default url;
 }
 
-// `import { facts, judged } from "virtual:proving-ground"` gives the proving ground: the facts its world is laid out
-// from and the choices fixed for it, made from the plan in tools/proving.ts as the page is built, by Vite's plugin for
-// the app and the tests and esbuild's for the one-file lab (tools/proving-ground.ts).
+// `import { facts, judged } from "virtual:proving-ground"` returns the proving ground's facts and its fixed judgments.
+// tools/proving-ground.ts builds them from the plan in tools/proving.ts at build time, as a Vite plugin for the app
+// and tests and an esbuild plugin for the one-file lab.
 declare module "virtual:proving-ground" {
   import type { CodeFacts } from "@gaia/schema";
   import type { Judgments } from "@gaia/world";

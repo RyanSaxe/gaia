@@ -1,6 +1,6 @@
-// A turret stands over a corner of the main body, and the main roof's eave
-// runs into it there: no corner of the covering comes out through the
-// turret's angled face.
+// Checks that where a turret stands over a corner of the main body, the main
+// roof's eave runs into it, and no corner of the covering pokes out through
+// the turret's angled face.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type BuildingPlan, type Built, rand } from "@gaia/schema";
@@ -17,7 +17,7 @@ const ROOFS = [
 ] as const;
 
 describe("a turret", () => {
-  // Builds 162 houses and their roofs: a few seconds alone, more when other work shares the machine.
+  // Builds 162 houses and their roofs, a few seconds alone and more on a busy machine.
   it.each(ROOFS)("takes the main roof's %s eave into it, never through its angled face", { timeout: 30_000 }, (_name, roof, params) => {
     for (const shape of ["long", "snug", "gable-fronted"]) {
       for (const form of ["gabled", "hipped", "half-hipped"]) {
@@ -34,7 +34,7 @@ describe("a turret", () => {
             let through = 0;
             for (let v = 0; v < covering.shade.length; v++) {
               const [x, y, z] = [covering.positions[v * 3] as number, covering.positions[v * 3 + 1] as number, covering.positions[v * 3 + 2] as number];
-              // The cone's own covering stands above the turret's walls, and fallen covering lies on the ground.
+              // Skip the cone's own covering, above the turret's walls, and fallen covering on the ground.
               if (y > plan.floor + turret.wallHeight - 1 || (covering.channels.grow?.[v] ?? 0) > 0) continue;
               if (sx * (x - corner.x) <= 0 || sz * (z - corner.z) <= 0) continue;
               if (Math.abs(x - turret.x) < turret.width / 2 && Math.abs(z - turret.z) < turret.width / 2 && (sx * (x - turret.x) + sz * (z - turret.z)) / Math.SQRT2 > turret.width / 2) through++;

@@ -59,7 +59,7 @@ export function randomSlots(k: AnyKind, lib: Library, random: () => number): Rec
   return slots;
 }
 
-/** A Jev for tests: every request answered by `fakeJev`, the same answers for the same request, never the network. */
+/** A Jev client for tests that answers with `fakeJev`. It gives the same answers for the same request and never uses the network. */
 export function fakeJevClient(prefer: Readonly<Record<string, string | number | boolean>> = {}): JevClient {
   return {
     async ask(request) {

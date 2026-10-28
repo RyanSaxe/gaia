@@ -41,7 +41,7 @@ describe("a batch of buildings", () => {
     }
     expect([...owners].sort()).toEqual([0, 1, 2, 3]);
     members.forEach((m, i) => {
-      // The fourth column of its matrix is where it stands.
+      // The fourth column of its matrix is its position.
       expect(row(i, 3).slice(0, 3)).toEqual([m.x, m.y, m.z]);
       expect(row(i, 4)[0]).toBeCloseTo(shownVitality(m.vitality), 6);
     });
@@ -59,15 +59,15 @@ describe("a batch of buildings", () => {
     const was = row(3, 4)[0] as number;
     batch.setVitality(3, 0.9);
     const now = shownVitality(0.9);
-    // A frame drawn with no time passing moves nothing; each frame's time moves the shown vitality a little toward
-    // the new one, and where it was a little behind that, so the change starts gently.
+    // A frame with no time passing moves nothing. Each frame's time moves the shown vitality a little toward the new
+    // one, and its previous value a little behind that, so the change starts gently.
     easeVitality(0);
     expect(row(3, 4)[0]).toBe(was);
     const shown: number[] = [];
     for (let k = 0; k < 30; k++) {
       easeVitality(1 / 60);
       shown.push(row(3, 4)[0] as number);
-      // Where it was (shown + lag) stays between where it started and where it shows now.
+      // The previous value, shown + lag, stays between where it started and where it shows now.
       const behind = (row(3, 4)[0] as number) + (row(3, 5)[2] as number);
       expect(behind).toBeGreaterThanOrEqual(Math.min(was, row(3, 4)[0] as number) - 1e-6);
       expect(behind).toBeLessThanOrEqual(Math.max(was, row(3, 4)[0] as number) + 1e-6);
@@ -87,7 +87,7 @@ describe("a batch of buildings", () => {
     batch.move(1, { x: 300, y: 0, z: 300, yaw: 0 });
     expect(batch.pick(down(300, 300))?.member).toBe(1);
     expect(row(1, 3).slice(0, 3)).toEqual([300, 0, 300]);
-    // Every mesh's bounds take the building where it now stands, so no pass culls it.
+    // Every mesh's bounds include the building at its new position, so no pass culls it.
     for (const m of meshes) expect(m.geometry.boundingSphere?.containsPoint(new THREE.Vector3(300, 3, 300))).toBe(true);
   });
 });

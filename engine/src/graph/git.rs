@@ -1,22 +1,23 @@
-//! A project's history from `git log`: when each file was first committed,
-//! which commits touched it and who wrote them. One `git log` call reads the
-//! whole history; a directory outside git has none. Neither call ever reaches
-//! the network: in a copy cloned without file contents (`clone.rs`), commits
-//! and trees are all there, and `GIT_NO_LAZY_FETCH` makes git fail rather
-//! than fetch anything missing.
+//! Reads a project's history and names from git: each commit's time, author
+//! and changed files, the root commit, renames and commit counts. Every call
+//! sets `GIT_NO_LAZY_FETCH`, so git fails rather than fetch a missing object
+//! and never reaches the network. A copy cloned without file contents
+//! (`clone.rs`) still has every commit and tree.
 
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 
-/// One commit: when it was made, by whom, and the files it touched.
+/// One commit's Unix time in seconds, its author's email and the files it changed.
 pub struct Commit {
     pub at: i64,
     pub author: String,
     pub files: Vec<String>,
 }
 
-/// The history of the files under `root`, newest commit first, paths relative to `root`.
+/// The history of the files under `root`, newest commit first, with paths
+/// relative to `root`. One `git log` call reads it all. Empty when git fails,
+/// as for a directory outside git.
 pub fn history(root: &Path) -> Vec<Commit> {
     let out = Command::new("git")
         .env("GIT_NO_LAZY_FETCH", "1")
@@ -56,7 +57,8 @@ pub fn parse(log: &str) -> Vec<Commit> {
         .collect()
 }
 
-/// The commit that roots the history, which names the project wherever it is cloned.
+/// The first 12 characters of the history's root commit. `project_id` uses it,
+/// so a project keeps its ID wherever it is cloned.
 pub fn root_commit(root: &Path) -> Option<String> {
     let out = Command::new("git")
         .env("GIT_NO_LAZY_FETCH", "1")
@@ -74,7 +76,8 @@ pub fn root_commit(root: &Path) -> Option<String> {
         .map(|l| l.trim().chars().take(12).collect())
 }
 
-/// The top of the working tree holding `root`, if it is in git.
+/// The canonical top-level folder of the git working tree that contains `root`,
+/// or None outside git.
 pub fn toplevel(root: &Path) -> Option<std::path::PathBuf> {
     let out = Command::new("git")
         .env("GIT_NO_LAZY_FETCH", "1")
@@ -90,9 +93,10 @@ pub fn toplevel(root: &Path) -> Option<std::path::PathBuf> {
     std::path::Path::new(&top).canonicalize().ok()
 }
 
-/// The repository's name: the last part of its `origin` remote's address,
-/// or with no remote the folder of its main checkout, which its worktrees
-/// share. A worktree's folder or a branch never changes it.
+/// The repository's name. It is the last part of the `origin` remote's
+/// address, without `.git`. With no remote, it is the folder name of the main
+/// checkout, which all its worktrees share, so a worktree's folder or a branch
+/// never changes it.
 pub fn name(root: &Path) -> Option<String> {
     let git = |args: &[&str]| {
         let out = Command::new("git")
@@ -119,7 +123,7 @@ pub fn name(root: &Path) -> Option<String> {
         "--path-format=absolute",
         "--git-common-dir",
     ])?);
-    // A submodule keeps its history elsewhere, so its own folder names it.
+    // A submodule's git directory is not named `.git`, so its own top-level folder gives the name.
     let checkout = if common.file_name()? == ".git" {
         common.parent()?.to_path_buf()
     } else {
@@ -128,7 +132,7 @@ pub fn name(root: &Path) -> Option<String> {
     Some(checkout.file_name()?.to_string_lossy().into_owned())
 }
 
-/// Runs git in `root`, never reaching the network.
+/// Runs git in `root` with `GIT_NO_LAZY_FETCH`, so it never reaches the network.
 fn git_in(root: &Path, args: &[&str]) -> Option<std::process::Output> {
     Command::new("git")
         .env("GIT_NO_LAZY_FETCH", "1")
@@ -139,8 +143,8 @@ fn git_in(root: &Path, args: &[&str]) -> Option<std::process::Output> {
         .ok()
 }
 
-/// Whether `from` is `to` or in its history. Both must be commit ids, so
-/// neither can be read as one of git's options.
+/// Whether `from` is `to` or an ancestor of it. It accepts only hex commit ids
+/// of 4 to 64 characters, so git can't read either argument as an option.
 fn is_ancestor(root: &Path, from: &str, to: &str) -> bool {
     let id = |c: &str| (4..=64).contains(&c.len()) && c.chars().all(|ch| ch.is_ascii_hexdigit());
     id(from)
@@ -149,7 +153,7 @@ fn is_ancestor(root: &Path, from: &str, to: &str) -> bool {
             .is_some_and(|out| out.status.success())
 }
 
-/// How many commits since `from` up to `to` touched a file under `root`.
+/// How many commits after `from` up to `to` changed a file under `root`.
 /// None when `from` is not in `to`'s history, as after a rebase or a switch
 /// to another branch, or when either is not a commit git knows.
 pub fn commits_between(root: &Path, from: &str, to: &str) -> Option<u64> {
@@ -166,9 +170,10 @@ pub fn commits_between(root: &Path, from: &str, to: &str) -> Option<u64> {
     String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
-/// Where each file that existed at `from` lives at `to`, composing git's
-/// renames commit by commit, at git's own 50% similarity. Files never
-/// renamed are left out. None when `from` is not an ancestor of `to`.
+/// Maps each renamed file's path at `from` to its path at `to`. It follows
+/// git's renames commit by commit at 50% similarity, git's default, and drops
+/// a renamed file that is later deleted. None when `from` is not an ancestor
+/// of `to`.
 pub fn renames(root: &Path, from: &str, to: &str) -> Option<BTreeMap<String, String>> {
     if !is_ancestor(root, from, to) {
         return None;
@@ -189,7 +194,7 @@ pub fn renames(root: &Path, from: &str, to: &str) -> Option<BTreeMap<String, Str
     if !out.status.success() {
         return None;
     }
-    // From each path as it was at `from` to where it is now, and back.
+    // `now` maps a path at `from` to its current path, and `origin` maps it back.
     let mut now: BTreeMap<String, String> = BTreeMap::new();
     let mut origin: BTreeMap<String, String> = BTreeMap::new();
     for line in String::from_utf8_lossy(&out.stdout).lines() {
