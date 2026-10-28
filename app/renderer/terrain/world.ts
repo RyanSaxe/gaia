@@ -402,7 +402,7 @@ export interface ViewPin {
 }
 
 /** The air last applied at the eye: the ground's decline around it, the eye's height above the land, and the resulting air. */
-export interface LaidAir {
+export interface AppliedAir {
   readonly decline: number;
   readonly height: number;
   readonly air: AtmosphereSpec;
@@ -531,7 +531,7 @@ export interface WorldInside {
   readonly openingSteps: Readonly<Record<string, number>>;
   readonly frameCalls: number;
   readonly passes: Readonly<Record<Pass, Drawn>>;
-  readonly breathed: LaidAir | null;
+  readonly appliedAir: AppliedAir | null;
   // Controls a measure or a capture uses to hold the world still.
   /** The wind's clock, frozen at this many seconds, or null to run. */
   frozen: number | null;
@@ -539,7 +539,7 @@ export interface WorldInside {
   detailPin: { readonly x: number; readonly z: number } | null;
   viewPin: ViewPin | null;
   /** Pauses streaming while a measure draws a pinned view. */
-  streamHeld: boolean;
+  streamPaused: boolean;
   /** Set while a measure drives the frames itself, so the page's own loop draws none. */
   driving: boolean;
   /** Meters a second along a trip's tread. */
@@ -913,12 +913,12 @@ export function createWorld(root: HTMLElement): World {
     // The wind strength. Every swaying part scales its response to the one wind field by this.
     light.uWind.value = look.wind.strength;
     skyLook = look;
-    breathe(camera.position);
+    applyAir(camera.position);
   }
   /** Each region's air as Jev chose it, the world it was realized for, and a buffer for each region's weight. */
   let airs: { readonly world: WorldSpec; readonly airs: readonly AtmosphereSpec[]; readonly weights: Float64Array } | null = null;
   /** The air last applied, with the decline around the eye and the eye's height above the land. */
-  let breathed: LaidAir | null = null;
+  let appliedAir: AppliedAir | null = null;
   /**
    * Applies the air at `eye` in front of the hour's sky. It blends each region's air by distance over the band where
    * landforms and covers blend (`regionWeights`), so the air changes gradually from one region to the next. Over
@@ -926,14 +926,14 @@ export function createWorld(root: HTMLElement): World {
    * with the eye's height above the land (`airFromHeight`). Every pass uses it: the view, the water's mirror and the
    * far forms. A view from above uses thin, clear air instead, so the whole land stays legible.
    */
-  function breathe(eye: { readonly x: number; readonly y: number; readonly z: number }): void {
+  function applyAir(eye: { readonly x: number; readonly y: number; readonly z: number }): void {
     if (skyLook === null) return;
     if (airs?.world !== world) airs = { world, airs: world.regions.map((r) => regionAir({ blueprint: r.biome, kind: biome }, lib, seedOf(r.id))), weights: new Float64Array(world.regions.length) };
     regionWeights(world, eye.x, eye.z, airs.weights);
     const decline = declineAround(eye.x, eye.z, MURK_REACH);
     const height = eye.y - groundHeightAt(terrain, eye.x, eye.z);
     const local = aerial !== null ? overviewAir(world.size) : airFromHeight(murkyAir(mixAir(airs.airs, airs.weights), decline), height);
-    breathed = { decline, height, air: local };
+    appliedAir = { decline, height, air: local };
     sky.apply({ light: skyLook.light, ...throughAir(skyLook, local) });
   }
   const shadow = createSunShadow(light, 2048);
@@ -2114,7 +2114,7 @@ export function createWorld(root: HTMLElement): World {
   /** The view position when pinned apart from the person, as the travel test pins it. */
   let viewPin: ViewPin | null = null;
   /** Pauses streaming while a measure draws a pinned view. The land and the layers wait for the frames that move the person. */
-  let streamHeld = false;
+  let streamPaused = false;
   /** Set while a measure drives the frames itself, so the app's own loop draws none. */
   let driving = false;
   /** Meters a second along a trip's tread: `TRAVEL.pace`, unless a measure sets another. */
@@ -2156,7 +2156,7 @@ export function createWorld(root: HTMLElement): World {
       updateWalk(dt);
       detailEye.set(detailPin?.x ?? camera.position.x, camera.position.y, detailPin?.z ?? camera.position.z);
       ground.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-      if (!streamHeld) {
+      if (!streamPaused) {
         land.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
         wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
         // While a trip goes faster than 1.5 times walking pace, only its marks request tiles. Requesting walking's lead as
@@ -2175,12 +2175,12 @@ export function createWorld(root: HTMLElement): World {
       lantern.follow(lanternEye, forward, lanternGround, 0, dt);
       shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
     }
-    breathe(camera.position);
+    applyAir(camera.position);
     // Every pass thins distant detail by distance from the person's eyes, or from the camera above.
     light.uEye.value.copy(aerial === null ? detailEye : camera.position);
     if (aerial === null) drifts.follow(crownsNear, viewFocal());
     // The far streams follow the person and advance their fades by the frame's own time.
-    if (!streamHeld && aerial === null) for (const set of farSets) set.stream.follow(light.uEye.value, viewFocal(), dt);
+    if (!streamPaused && aerial === null) for (const set of farSets) set.stream.follow(light.uEye.value, viewFocal(), dt);
     castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
@@ -2555,7 +2555,7 @@ export function createWorld(root: HTMLElement): World {
     captureCamera.position.copy(from);
     captureCamera.lookAt(toward);
     light.uEye.value.copy(captureCamera.position);
-    breathe(from);
+    applyAir(from);
     ground.follow(from.x, from.z);
     grass.follow(captureCamera.position);
     shadowCenter.set(shade.x, shade.y, shade.z);
@@ -2661,7 +2661,7 @@ export function createWorld(root: HTMLElement): World {
       depth: footing.depth,
       night: light.uNightness.value,
       gust: gustAt(x, z, light.uTime.value),
-      decline: breathed?.decline ?? 0,
+      decline: appliedAir?.decline ?? 0,
       canopy: canopyOver(files.crowns, x, z),
       stream: stream === null ? null : { ...stream, d: Math.max(0, stream.d) },
       mill,
@@ -2802,7 +2802,7 @@ export function createWorld(root: HTMLElement): World {
       get bakeMs() { return bakeMs; },
       get openingSteps() { return openingSteps; },
       get frameCalls() { return frameCalls; },
-      get breathed() { return breathed; },
+      get appliedAir() { return appliedAir; },
       get trip() { return trip; },
       set trip(t) { trip = t; },
       get body() { return body; },
@@ -2815,8 +2815,8 @@ export function createWorld(root: HTMLElement): World {
       set detailPin(at) { detailPin = at; },
       get viewPin() { return viewPin; },
       set viewPin(pin) { viewPin = pin; },
-      get streamHeld() { return streamHeld; },
-      set streamHeld(on) { streamHeld = on; },
+      get streamPaused() { return streamPaused; },
+      set streamPaused(on) { streamPaused = on; },
       get driving() { return driving; },
       set driving(on) { driving = on; },
       get travelPace() { return travelPace; },

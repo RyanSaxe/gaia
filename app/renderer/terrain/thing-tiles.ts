@@ -32,11 +32,11 @@ export interface ThingTiles {
   open(spec: WorldSpec, given?: ReadonlyMap<string, ReadonlyMap<string, readonly unknown[]>>): void;
   /**
    * Call every frame with the person's position. It keeps the near tiles,
-   * drops far ones, and places one changed layer. Without `asking` it
+   * drops far ones, and places one changed layer. Without `requesting` it
    * requests no tiles of its own, as while a trip requests what its way will
    * see.
    */
-  follow(x: number, z: number, asking?: boolean): void;
+  follow(x: number, z: number, requesting?: boolean): void;
   /** Resolves once every layer's tiles within sight of (x, z) are placed. */
   ready(x: number, z: number): Promise<void>;
   /**
@@ -56,7 +56,7 @@ export interface ThingTiles {
   /** How many tiles each layer has, for reports. */
   held(): Record<string, number>;
   /** The tiles each layer has requested and not yet received, by name: a count and a few keys. */
-  asking(): Record<string, { readonly count: number; readonly some: readonly string[] }>;
+  pending(): Record<string, { readonly count: number; readonly some: readonly string[] }>;
 }
 
 /** Meters beyond its sight at which a tile is requested, so a tile from a worker arrives before any of it can be seen. */
@@ -70,7 +70,7 @@ interface Held<T> {
   readonly layer: TileLayer<T>;
   readonly tiles: Map<string, readonly T[]>;
   /** The tiles requested and not yet received, each with its promise. */
-  readonly asking: Map<string, Promise<void>>;
+  readonly pending: Map<string, Promise<void>>;
   /** The tiles whose things were last placed. */
   placed: Set<string>;
   dirty: boolean;
@@ -83,7 +83,7 @@ export function createThingTiles(focal: () => number): ThingTiles {
   let generation = 0;
   let at = { x: Number.NaN, z: Number.NaN };
   /** Where walking last requested tiles. */
-  let askedAt = { x: Number.NaN, z: Number.NaN };
+  let requestedAt = { x: Number.NaN, z: Number.NaN };
   /** Where the person was at the last follow. */
   let person = { x: Number.NaN, z: Number.NaN };
   let lates: { layer: string; distance: number; sight: number }[] = [];
@@ -111,13 +111,13 @@ export function createThingTiles(focal: () => number): ThingTiles {
    * meters that it does not have. The promises resolve when the tiles arrive.
    * A failed tile is dropped with a warning and requested again next time.
    */
-  const ask = <T>(h: Held<T>, x: number, z: number, lead = AHEAD): Promise<void>[] => {
+  const request = <T>(h: Held<T>, x: number, z: number, lead = AHEAD): Promise<void>[] => {
     const mine = generation;
     const waits: Promise<void>[] = [];
     for (const [ti, tj] of within(x, z, sight(h) + lead)) {
       const key = `${ti},${tj}`;
       if (h.tiles.has(key)) continue;
-      const coming = h.asking.get(key);
+      const coming = h.pending.get(key);
       if (coming !== undefined) {
         waits.push(coming);
         continue;
@@ -130,17 +130,17 @@ export function createThingTiles(focal: () => number): ThingTiles {
       }
       const wait = got.then(
         (things) => {
-          h.asking.delete(key);
+          h.pending.delete(key);
           if (things === null || mine !== generation) return;
           h.tiles.set(key, things);
           h.dirty = true;
         },
         (error: unknown) => {
-          h.asking.delete(key);
+          h.pending.delete(key);
           console.warn(`standing: ${h.layer.name} tile ${key} failed and will be asked for again`, error);
         },
       );
-      h.asking.set(key, wait);
+      h.pending.set(key, wait);
       waits.push(wait);
     }
     return waits;
@@ -163,23 +163,23 @@ export function createThingTiles(focal: () => number): ThingTiles {
   };
   return {
     add(layer) {
-      all.push({ layer: layer, tiles: new Map(), asking: new Map(), placed: new Set(), dirty: false } as Held<unknown>);
+      all.push({ layer: layer, tiles: new Map(), pending: new Map(), placed: new Set(), dirty: false } as Held<unknown>);
     },
     open(next, given) {
       spec = next;
       generation++;
       at = { x: Number.NaN, z: Number.NaN };
-      askedAt = { x: Number.NaN, z: Number.NaN };
+      requestedAt = { x: Number.NaN, z: Number.NaN };
       person = { x: Number.NaN, z: Number.NaN };
       for (const h of all) {
         h.tiles.clear();
-        h.asking.clear();
+        h.pending.clear();
         h.placed = new Set();
         for (const [key, things] of given?.get(h.layer.name) ?? []) h.tiles.set(key, things);
         h.dirty = true;
       }
     },
-    follow(x, z, asking = true) {
+    follow(x, z, requesting = true) {
       if (spec === null) return;
       person = { x, z };
       if (!(Math.hypot(x - at.x, z - at.z) < STEP)) {
@@ -193,11 +193,11 @@ export function createThingTiles(focal: () => number): ThingTiles {
           }
         }
       }
-      // Clear the last request spot while not asking, so requests resume at once when asking does, as when a trip ends.
-      if (!asking) askedAt = { x: Number.NaN, z: Number.NaN };
-      else if (!(Math.hypot(x - askedAt.x, z - askedAt.z) < STEP)) {
-        askedAt = { x, z };
-        for (const h of all) void ask(h, x, z);
+      // Clear the last request spot while not requesting, so requests resume at once when requesting does, as when a trip ends.
+      if (!requesting) requestedAt = { x: Number.NaN, z: Number.NaN };
+      else if (!(Math.hypot(x - requestedAt.x, z - requestedAt.z) < STEP)) {
+        requestedAt = { x, z };
+        for (const h of all) void request(h, x, z);
       }
       // Place one layer a frame, so no frame places everything at once.
       const next = all.find((h) => h.dirty);
@@ -205,12 +205,12 @@ export function createThingTiles(focal: () => number): ThingTiles {
     },
     async ready(x, z) {
       if (spec === null) return;
-      await Promise.all(all.flatMap((h) => ask(h, x, z)));
+      await Promise.all(all.flatMap((h) => request(h, x, z)));
       for (const h of all) if (h.dirty) placeLayer(h);
     },
     async fetch(x, z) {
       if (spec === null) return;
-      await Promise.all(all.flatMap((h) => ask(h, x, z, 0)));
+      await Promise.all(all.flatMap((h) => request(h, x, z, 0)));
     },
     late() {
       const out = lates;
@@ -218,6 +218,6 @@ export function createThingTiles(focal: () => number): ThingTiles {
       return out;
     },
     held: () => Object.fromEntries(all.map((h) => [h.layer.name, h.tiles.size])),
-    asking: () => Object.fromEntries(all.map((h) => [h.layer.name, { count: h.asking.size, some: [...h.asking.keys()].slice(0, 6) }])),
+    pending: () => Object.fromEntries(all.map((h) => [h.layer.name, { count: h.pending.size, some: [...h.pending.keys()].slice(0, 6) }])),
   };
 }

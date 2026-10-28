@@ -218,13 +218,13 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   function heldView(pin: ViewPin): Uint8Array {
     world.viewPin = pin;
     world.detailPin = { x: pin.x, z: pin.z };
-    world.streamHeld = true;
+    world.streamPaused = true;
     try {
       return grabFrame(1);
     } finally {
       world.viewPin = null;
       world.detailPin = null;
-      world.streamHeld = false;
+      world.streamPaused = false;
     }
   }
 
@@ -745,8 +745,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     travelTest,
     /** Each tile placed within sight of the person since the last call (`Standing.late`), whose things could be seen appearing. */
     tilesLate: () => world.thingTiles.late(),
-    /** The tiles each layer still waits for (`ThingTiles.asking`), and the land's workers. */
-    tilesAsking: () => ({ ...world.thingTiles.asking(), workers: world.land.workers() }),
+    /** The tiles each layer still waits for (`ThingTiles.pending`), and the land's workers. */
+    tilesPending: () => ({ ...world.thingTiles.pending(), workers: world.land.workers() }),
     /** The walk's state: the held keys, whether a tap's walk or a trip is under way, and why the last trip ended. */
     walkState: () => ({ keys: [...world.keys], goal: world.goal !== null, trip: world.trip !== null, lastEnd: world.tripEnd }),
     /**
@@ -836,7 +836,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, ground and water use them. */
     groundVitality: (x?: number, z?: number) => groundVitalityAt(x ?? world.walker.x, z ?? world.walker.z),
     /** The air settings last applied at the eye: the ground's decline around it, the eye's height above the land, and the air values. */
-    air: () => world.breathed,
+    air: () => world.appliedAir,
     understory: () => world.understory.stats(),
     /** A hash of the baked heights, water levels and shore distances, to prove a change leaves the bake identical byte for byte. */
     bakeHash: () => contentHash(world.terrain.lattice.heights, world.terrain.waterLevel, world.terrain.shore),

@@ -99,8 +99,8 @@ window.__shots = (() => {
     /** Waits until the land around the person and everything standing near them is in. */
     async settle() {
       for (let k = 0; k < 120; k++) {
-        const asking = Object.entries(T.tilesAsking()).some(([what, a]) => what !== "workers" && a.count > 0);
-        if (!asking && T.landLead().every((lead) => lead > 0)) break;
+        const pending = Object.entries(T.tilesPending()).some(([what, a]) => what !== "workers" && a.count > 0);
+        if (!pending && T.landLead().every((lead) => lead > 0)) break;
         await new Promise((r) => setTimeout(r, 250));
       }
       await window.__lab.frames(20);
