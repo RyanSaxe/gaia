@@ -1,5 +1,5 @@
-// Every primitive in the manifest must keep this contract. A new primitive is
-// covered as soon as it is listed in PRIMITIVES; nobody writes these tests per primitive.
+// The contract every primitive in `PRIMITIVES` must keep. A new primitive is
+// covered once it is listed there, with no tests written per primitive.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, GRAIN, Library, type Part, type Skeleton, rand } from "@gaia/schema";
@@ -60,7 +60,7 @@ const inputFor = (p: AnyPrimitive): unknown[] =>
 const allFinite = (a: Float32Array): boolean => a.every(Number.isFinite);
 const inUnit = (a: Float32Array): boolean => a.every((x) => x >= 0 && x <= 1);
 const CUTS = new Set<number>(Object.values(CUT));
-/** Every vertex sits across its card within -1 to 1 and names a cut the renderer knows. */
+/** Whether every vertex's position across its card is within -1 to 1 and its cut is one of `CUT`. */
 const cutsKnown = (part: Part): boolean =>
   part.cutout.length === part.shade.length * 3 &&
   part.cutout.every((x, i) => Number.isFinite(x) && (i % 3 !== 0 || Math.abs(x) <= 1) && (i % 3 !== 2 || CUTS.has(Math.floor(x))));
@@ -93,8 +93,8 @@ describe("manifest", () => {
   });
 });
 
-// Each test builds every sample of a primitive: up to a second alone, several when other work shares the machine.
-// Needles on a bush grow as a juniper of 280 tufts per sample, about 12 s alone and over 20 s on a busy CI runner.
+// Each test builds every sample of a primitive, up to a second alone and several seconds on a busy machine.
+// Needles on a bush build a juniper of 280 tufts per sample, about 12 s alone and over 20 s on a busy CI runner.
 const SLOW: Readonly<Record<string, number>> = { "needles@1": 60_000 };
 
 describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
@@ -128,7 +128,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
           expect([c.grow, c.rot].every((a) => a === undefined || (a.length === part.shade.length && inUnit(a)))).toBe(true);
           expect(c.fall === undefined || (c.fall.length === part.shade.length * 4 && allFinite(c.fall) && c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1)))).toBe(true);
           expect(c.spin === undefined || (c.spin.length === part.shade.length * 3 && allFinite(c.spin))).toBe(true);
-          // A grain names a covering the shader knows how to rot.
+          // A grain's kind is one of `GRAIN`, which the shader can rot.
           expect(c.grain === undefined || (c.grain.length === part.shade.length * 3 && allFinite(c.grain) && c.grain.every((x, i) => i % 3 !== 2 || Object.values(GRAIN).includes(x as never)))).toBe(true);
           expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
           expect(cutsKnown(part)).toBe(true);
@@ -229,7 +229,7 @@ function full(p: AnyPrimitive): Stored[] {
  * How many deep a crown's leaves lie over its silhouette seen from the side:
  * the area of its leaf cards over the ellipse its leaves span. A crown whose
  * frame shows through between thin fringes or scattered clusters lies about
- * one or two deep; a full one, several.
+ * one or two deep, and a full one several.
  */
 function leafLayers(parts: readonly Part[]): number {
   let area = 0;
@@ -256,7 +256,7 @@ function leafLayers(parts: readonly Part[]): number {
  * The fewest layers a full crown's leaves lie in over its silhouette
  * (`leafLayers`). The sparse crowns this guards against, a bush's leaf mound
  * stretched over a tree's frame or a fir's fronds along a broadleaf's limbs,
- * lay one to two deep; a bramble's leaves sleeve its canes, with ground
+ * lay one to two deep. A bramble's leaves cover its canes, with ground
  * between them, about two and a half deep.
  */
 const FULL_LAYERS = 2.4;
@@ -308,7 +308,7 @@ function combinations(p: AnyPrimitive): Stored[] {
   return out;
 }
 
-/** True when a point lies within a mass's footprint; a round mass's octagon reaches past its inscribed circle at the corners. */
+/** True when a point lies within a mass's footprint. A round mass's octagon reaches past its inscribed circle at the corners. */
 const inFootprint = (m: BuildingPlan["masses"][number], x: number, z: number): boolean =>
   m.round ? Math.hypot(x - m.x, z - m.z) < m.width / 2 / Math.cos(Math.PI / 8) : Math.abs(x - m.x) < m.width / 2 && Math.abs(z - m.z) < m.depth / 2;
 
@@ -347,7 +347,7 @@ describe.each(lib.forRole("Dressing").filter((p) => "extras" in p.params).map((p
           if (door === undefined) throw new Error(`${JSON.stringify(stored)}: no door`);
           const fence = (build(p, { extras: ["fence"], walk: "stepping stones" }, plan, seed) as Built).parts.find((part) => part.swatch === "wall");
           if (fence === undefined) throw new Error(`${JSON.stringify(stored)}: no fence`);
-          // A walk half a meter wide leads straight out from the door; no triangle of the fence in front of the door reaches into it.
+          // A walk half a meter wide leads straight out from the door, and no triangle of the fence in front of the door reaches into it.
           let across = 0;
           for (let t = 0; t < fence.indices.length; t += 3) {
             const vs = [0, 1, 2].map((k) => fence.indices[t + k] as number);
@@ -392,7 +392,7 @@ describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))("%s", { timeo
 });
 
 /**
- * A landmark's proportions as it stands at full health: its width across x and across z, and how far it reaches at
+ * A landmark's proportions at full vitality: its width across x and across z, and how far it reaches at
  * the ground, each over its height. Fallen stone that grows in is left out.
  */
 function proportions(built: Built): number[] {
@@ -409,10 +409,10 @@ function proportions(built: Built): number[] {
 }
 
 describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))("%s", (_id, p) => {
-  // Builds every sample from four seeds: a few seconds alone, more when other work shares the machine.
+  // Builds every sample from four seeds, a few seconds alone and more on a busy machine.
   it("stands in proportions of its own from each seed, given the same answers", { timeout: 60_000 }, () => {
     for (const s of samples(p)) {
-      // The same answers, their scales resolved alike: only the build's own seed differs.
+      // The same answers, their scales resolved alike. Only the build's own seed differs.
       const params = resolveParams(p, s, rand(1), p.id);
       const seen = [1, 2, 3, 4].map((seed) => proportions((p.build as Erased)(params, { rand: rand(seed).fork(p.id), facts }, null) as Built));
       const spread = (k: number): number => {
@@ -443,7 +443,7 @@ describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))("%s", (_id
   it("picks each measure of its shape within the band its words allow, and no two words' bands meet", () => {
     for (const [name, measure] of Object.entries(bands)) {
       if (!("by" in measure)) continue;
-      // A measure set by a field's words names a band, or none, for every word of it.
+      // A measure set by a field has a band, or null, for every option of that field.
       const field = p.params[measure.by] as Field | undefined;
       expect(field?.type, name).toBe("choice");
       if (field?.type === "choice") expect(Object.keys(measure.bands).sort(), name).toEqual(Object.keys(field.options).sort());

@@ -1,8 +1,8 @@
-// Drift primitives: the low plants of the grass, one species shape per
-// drift. Petals take the palette's bloom swatch, stems, leaves and fern
-// fronds its stem swatch, and open faces its eye swatch; mushrooms take its
-// cap and stalk swatches. Geometry lives in ./geometry/wildflowers.ts,
-// ./geometry/ferns.ts and ./geometry/mushrooms.ts.
+// Drift primitives: low plants among the grass, one species per drift. Each
+// part uses one palette swatch: `bloom` for petals, `stem` for stems, leaves and
+// fern fronds, `eye` for flower centers, and `cap`, `stalk` and `spot` for
+// mushrooms. Geometry is in ./geometry/wildflowers.ts, ./geometry/ferns.ts and
+// ./geometry/mushrooms.ts.
 
 import { primitive, t } from "@gaia/schema";
 import { buildFerns } from "./geometry/ferns.ts";
@@ -72,7 +72,7 @@ export const mushroomParams = {
     flat: "Broad caps spread nearly flat, like a parasol, for code that feels sheltering and open",
     pointed: "Slender pointed caps, like a pixie's hat, for code that feels mischievous and odd",
   }),
-  // Natural sizes: the world keeps a patch of short turf round a drift of them (the understory's mushrooms group), so they show.
+  // Real mushroom heights in meters. The renderer's mushrooms group grows short turf round each drift, so they stay visible.
   height: t.scale("How tall the mushrooms stand: barely above the moss for code that feels hidden underfoot, ankle-high for code that feels small but present, a hand high for code that feels quietly thriving", { "barely above the moss": 0.09, "ankle-high": 0.13, "a hand high": 0.19 }),
 };
 

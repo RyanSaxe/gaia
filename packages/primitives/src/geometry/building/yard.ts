@@ -1,10 +1,8 @@
-// Features that stand in the yard on the house's free side, each saying
-// what its entity does for the rest of the code: a dovecote that keeps open
-// house, a well the others draw from, a bell that signals, a forge that makes
-// tools and a granary that keeps what was made. Each declines through its
-// channels as the code fails: the dovecote's roof rots open, the well's water
-// sinks, the bell hangs askew, the forge goes cold and the granary slumps
-// off its stones. Nothing is rebuilt.
+// Builds yard features on the house's free side: a dovecote, a well, a bell,
+// a forge and a granary. As vitality falls each declines through its channels,
+// with no geometry rebuilt: the dovecote's roof rots open, the well's water
+// sinks, the bell hangs askew, the forge goes cold and the granary slumps off
+// its stones.
 
 import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Rand, type Resolved, type Vec3 } from "@gaia/schema";
 import type { bellParams, dovecoteParams, forgeParams, granaryParams, wellParams } from "../../structure.ts";
@@ -30,7 +28,7 @@ interface Yard {
   readonly axes: readonly [V3, V3, V3];
 }
 
-/** The frame of a feature whose middle stands `x` out from the house's free side and `z` along it. */
+/** The frame of a feature whose center is `x` out from the house's free side and `z` along it. */
 function yard(plan: BuildingPlan, x: number, z: number): Yard {
   const side = featureSide(plan);
   const x0 = side * (plan.width / 2 + x);
@@ -69,8 +67,8 @@ function slope(b: PartBuilder, e0: V3, e1: V3, t1: V3, t0: V3, rows: number, out
 }
 
 /**
- * Rafters under a `slope` with the same corners, from its eave up to its top edge about every 0.55 m (the first and
- * last along its edges, so a hipped slope's hips have theirs), so whatever is left of its covering lies on them.
+ * Rafters under a `slope` with the same corners, from its eave up to its top edge about every 0.55 m, so what is left
+ * of its covering rests on them. The first and last run along the edges, so a hipped slope has rafters on its hips.
  */
 function slopeFrame(b: PartBuilder, e0: V3, e1: V3, t1: V3, t0: V3, out: V3, ch: Channels): void {
   let n = normalize(cross(sub(e1, e0), sub(t0, e0)));
@@ -79,7 +77,7 @@ function slopeFrame(b: PartBuilder, e0: V3, e1: V3, t1: V3, t0: V3, out: V3, ch:
   for (let k = 0; k <= count; k++) beam(b, addScaled(lerp(e0, e1, k / count), n, -0.05), addScaled(lerp(t0, t1, k / count), n, -0.05), 0.07, 0.08, n, 0.42, ch);
 }
 
-/** Tufts of rank grass in a ring about a feature's foot, which grow in as the code fails. */
+/** Tufts of rank grass in a ring round a feature's foot, which grow in as vitality falls. */
 function weedsAbout(b: PartBuilder, Y: Yard, inner: number, outer: number, count: number, r: Rand): void {
   const spots = Array.from({ length: count }, () => {
     const a = r.next() * TAU;
@@ -90,7 +88,7 @@ function weedsAbout(b: PartBuilder, Y: Yard, inner: number, outer: number, count
   weeds(b, spots, r.fork("tufts"));
 }
 
-/** A round mass standing for a feature's walls, so ivy climbs them as it climbs the house's. */
+/** A round mass for a feature's walls, so `ivy` climbs them as it climbs the house's. */
 const roundPlan = (Y: Yard, radius: number, height: number): BuildingPlan => {
   const c = Y.at(0, 0, 0);
   const m: Mass = { x: c[0], z: c[2], width: radius * 2, depth: radius * 2, round: true, wallHeight: height, storeys: 1, rise: 0, ridge: "x", roof: "cone", fall: 1, ends: [true, true] };
@@ -104,7 +102,7 @@ export function buildDovecote(p: Resolved<typeof dovecoteParams>, ctx: BuildCont
   return p.cote === "a cote on a post" ? postCote(r, plan) : roundCote(r, plan);
 }
 
-/** Angles from `a0` to `a1` around a ring, less the gaps, as runs to lay stones in. */
+/** The arcs of a full ring outside `gaps`, as runs to lay stones in. The turn starts at the end of the first gap, or at `start` when there are no gaps. */
 function freeArcs(gaps: readonly (readonly [number, number])[], start: number): [number, number][] {
   const from = gaps[0]?.[1] ?? start;
   const norm = gaps.map(([g0, g1]): [number, number] => {
@@ -137,7 +135,7 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
   const radial = (a: number): V3 => Y.dir(Math.cos(a), 0, Math.sin(a));
   const tangent = (a: number): V3 => Y.dir(-Math.sin(a), 0, Math.cos(a));
 
-  // Rows of rough stones round a mortar core; the door faces out from the house and two rings of flight holes run under the eaves.
+  // Rows of rough stones round a mortar core. The door faces out from the house, and two rings of flight holes run under the eaves.
   const rows = 12;
   const rowH = (H + 0.6) / rows;
   const doorTop = -0.6 + rowH * Math.round(1.75 / rowH);
@@ -162,7 +160,7 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
       }
     }
   }
-  // Where a point lies round the cote: its angle, the one nearest `near`, so a face across the seam reads one way round.
+  // A point's angle round the cote, taking the turn nearest `near`, so a face across the 0 to 2π seam gets consistent angles.
   const centre = Y.at(0, 0, 0);
   const angleOf = (p: Vec3, near: number): number => {
     const d = sub(p, centre);
@@ -170,7 +168,7 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
     return a + TAU * Math.round((near - a) / TAU);
   };
   // The mortar core behind the stones, rotting through from the top a block at a time, each row after the one above
-  // it; the flight holes and the doorway show dark in it.
+  // it. The flight holes and the doorway show dark in it.
   const sides = 16;
   const blocks = Math.round((TAU * (R - 0.06)) / (STONE[0] as number));
   for (let j = 0; j < rows; j++) {
@@ -193,7 +191,7 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
     quad(wood, dark, radial(h.a), 0, still(ring(h.a, R, h.y), 0.3));
     box(stone, ring(h.a, R + 0.04, h.y - 0.15), [tangent(h.a), UP, radial(h.a)], [0.13, 0.03, 0.11], 0.6, still(ring(h.a, R, h.y - 0.15), 0.4));
   }
-  // A plank door, which swings open on its hinge as the cote is left.
+  // A plank door, which swings open on its hinge as vitality falls.
   const hinge = ring(-doorHalf, R - 0.05, 0);
   const swing = 1.1 * featureSide(plan);
   for (let k = 0; k < 4; k++) {
@@ -279,7 +277,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
   const weed = new PartBuilder("leaf");
   const top = 3.0;
   const foot = Y.at(0, 0, 0);
-  // A stout post braced at its foot, which rots and lets the cote lurch over on it.
+  // A stout post braced at its foot. As it rots, the cote lurches over on it.
   log(wood, Y.at(0, -0.7, 0), Y.at(0, top, 0), 0.11, 0.42, still(foot, 0.55, { rot: 0.35 }), 8);
   for (let k = 0; k < 4; k++) {
     const a = (k / 4) * TAU + Math.PI / 4;
@@ -338,8 +336,8 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
 
 /**
  * A block of squared stones over [x0, x1] × [z0, z1] in the yard's frame,
- * from `y0` up to `y1` in courses that break joint round a plain core;
- * `ch` gives each stone's channels from its course.
+ * from `y0` up to `y1` in courses that break joint round a plain core. `ch`
+ * gives each stone's channels from its course.
  */
 function stoneBlock(b: PartBuilder, Y: Yard, x0: number, x1: number, z0: number, z1: number, y0: number, y1: number, rows: number, r: Rand, ch: (row: number, c: V3) => Channels): void {
   const [X, , Z] = Y.axes;
@@ -370,7 +368,7 @@ function stoneBlock(b: PartBuilder, Y: Yard, x0: number, x1: number, z0: number,
 
 // ---------- well ----------
 
-/** A wooden bucket hanging on its rope, `bottom` at its foot; it falls into the well as the code fails. */
+/** A wooden bucket hanging on its rope, with `c` at the center of its bottom. It falls into the well as vitality falls. */
 function bucket(b: PartBuilder, c: V3, ch: Channels): void {
   const sides = 10;
   const h = 0.28;
@@ -408,7 +406,7 @@ export function buildWell(p: Resolved<typeof wellParams>, ctx: BuildContext, pla
   const mid = (inner + outer) / 2;
   const deep = Y.at(0, -1.2, 0);
 
-  // Courses of stones round the shaft under flat coping stones, a few of which work loose and fall in as the well is left.
+  // Courses of stones round the shaft under flat coping stones, a few of which come loose and fall in as vitality falls.
   const courses: readonly (readonly [number, number])[] = [[-0.5, -0.2], [-0.2, 0.1], [0.1, 0.4], [0.4, 0.7]];
   for (const [j, [y0, y1]] of courses.entries()) {
     const count = Math.max(9, Math.round((TAU * outer) / (0.42 + 0.1 * r.next())));
@@ -425,7 +423,7 @@ export function buildWell(p: Resolved<typeof wellParams>, ctx: BuildContext, pla
     const loose = k % 4 === 1 ? lossThreshold(r.next(), 0.3, 0.06) : 0;
     box(stone, ring(a, mid + 0.01, top - 0.06), [tangent(a), UP, radial(a)], [(outer + 0.06) * Math.sin(Math.PI / slabs) - 0.012, 0.06, 0.2], 0.58 + 0.08 * r.next(), still(loose > 0 ? ring(a, inner * 0.4, -0.5) : ring(a, mid, top - 0.12), 0.4 + 0.3 * r.next(), { loss: loose, tint: (r.next() - 0.5) * 0.04 }));
   }
-  // The shaft goes down dark below the stones to water that sinks away as the code fails.
+  // The dark shaft below the stones, down to water that sinks away as vitality falls.
   const sides = 14;
   for (let k = 0; k < sides; k++) {
     const a0 = (k / sides) * TAU;
@@ -446,7 +444,7 @@ export function buildWell(p: Resolved<typeof wellParams>, ctx: BuildContext, pla
     const tip = Y.at(0, 1.75, 0);
     const along = normalize(sub(pin, tip));
     const far = addScaled(pin, along, 1.9);
-    // As the well fails the pole tips, its bucket end down to the coping, once the bucket has gone.
+    // As vitality falls the pole tips its bucket end down to the coping, after the bucket has gone.
     const tipped = { loss: 0, droop: 0, wither: 0.55, glow: 0, pivot: pin, fall: [0, 0, 0.26 * featureSide(plan), 0.24] as const };
     log(wood, addScaled(tip, along, -0.08), far, 0.07, 0.45, tipped, 7);
     lump(stone, addScaled(far, UP, -0.32), [0.24, 0.2, 0.22], r.next() * Math.PI, 0.45, tipped, r);
@@ -479,7 +477,7 @@ export function buildWell(p: Resolved<typeof wellParams>, ctx: BuildContext, pla
   }
   bucket(wood, Y.at(0, 0.98, 0), lost);
 
-  // Moss creeps over the coping and rank grass round the foot.
+  // Moss on the coping and rank grass round the foot.
   for (let k = 0; k < 6; k++) {
     const a = r.next() * TAU;
     lump(moss, ring(a, mid + (r.next() - 0.5) * 0.15, top), [0.13 + 0.06 * r.next(), 0.035, 0.09], a, 0.5, { loss: 0, droop: 0, wither: 0.3, glow: 0, pivot: ring(a, mid, top), tint: (r.next() - 0.5) * 0.06, grow: 0.3 + 0.25 * r.next() }, r);
@@ -494,7 +492,7 @@ export function buildWell(p: Resolved<typeof wellParams>, ctx: BuildContext, pla
 /** A bell's outer profile from its lip up to its crown, as (radius, height) in parts of its mouth's radius. */
 const BELL_PROFILE: readonly (readonly [number, number])[] = [[1, 0], [0.97, 0.07], [0.86, 0.17], [0.7, 0.36], [0.61, 0.6], [0.58, 0.84], [0.5, 0.97], [0.32, 1.03], [0, 1.05]];
 
-/** A cast bell of mouth radius `B` hanging from `hang`, its clapper inside; it hangs askew and then is gone as the code fails. */
+/** A cast bell of mouth radius `B` hanging from `hang`, with its clapper inside. As vitality falls it hangs askew, then goes. */
 function castBell(b: PartBuilder, hang: V3, B: number, ch: Channels): void {
   const sides = 14;
   const H = 1.15 * B;
@@ -537,7 +535,7 @@ export function buildBell(p: Resolved<typeof bellParams>, ctx: BuildContext, pla
   const half = B + 0.3;
   const spring = 2.05;
   const hang = Y.at(0, spring + 0.02, 0);
-  // The bell hangs askew from one strap as the code fails, then it is gone.
+  // As vitality falls the bell hangs askew from one strap, then goes.
   const askew = 0.5 * featureSide(plan);
   const along = Y.dir(0, 0, askew);
   const swung = (wither: number): Channels => ({ loss: 0.14, droop: 0, wither, glow: 0, pivot: hang, fall: [along[0], along[1], along[2], 0.4] });
@@ -602,7 +600,7 @@ export function buildBell(p: Resolved<typeof bellParams>, ctx: BuildContext, pla
     span = outerZ + 0.18;
     eaveX = pier / 2 + 0.3;
   }
-  // A little roof over it all, rotting through and sagging as the code fails.
+  // A little roof over it all, rotting through and sagging as vitality falls.
   const eaveY = ridgeY - 0.55;
   const sag = (q: V3): Channels => ({ loss: 0, droop: 0.05, wither: 0.6, glow: 0, pivot: Y.at(0, ridgeY, 0), rot: clamp(0.35 + 0.35 * r.next() + 0.3 * (ridgeY - q[1]), 0, 1) });
   for (const s of [-1, 1]) {
@@ -638,7 +636,7 @@ export function buildForge(p: Resolved<typeof forgeParams>, ctx: BuildContext, p
   const weed = new PartBuilder("leaf");
   const stoneCh = (_: number, c: V3): Channels => still(c, 0.35 + 0.35 * r.next(), { tint: (r.next() - 0.5) * 0.05 });
 
-  // The chimney stack nearest the house, the hearth before it at working height, and the plastered hood between them.
+  // The chimney stack nearest the house, the hearth in front of it at working height, and the plastered hood between them.
   const stack = p.stack;
   stoneBlock(stone, Y, 1.15, 1.7, -0.4, 0.4, -0.4, stack, Math.round((stack + 0.4) / 0.3), r, stoneCh);
   const capC = Y.at(1.425, stack + 0.06, 0);
@@ -648,7 +646,7 @@ export function buildForge(p: Resolved<typeof forgeParams>, ctx: BuildContext, p
   smoke(puffs, addScaled(pot, UP, 0.38), r.fork("smoke"));
   const hearthTop = 0.82;
   stoneBlock(stone, Y, 1.7, 2.6, -0.6, 0.6, -0.35, hearthTop, 4, r, stoneCh);
-  // A fire pit ringed with stones, its coals glowing at dusk while the code is healthy and dying out as it fails.
+  // A fire pit ringed with stones. Its coals glow at night at high vitality and die out as vitality falls.
   for (const [cx, cz, hx, hz] of [[2.15, -0.3, 0.3, 0.04], [2.15, 0.3, 0.3, 0.04], [1.88, 0, 0.04, 0.26], [2.42, 0, 0.04, 0.26]] as const) {
     const c = Y.at(cx, hearthTop + 0.05, cz);
     box(stone, c, Y.axes, [hx, 0.05, hz], 0.35, still(c, 0.5));
@@ -672,7 +670,7 @@ export function buildForge(p: Resolved<typeof forgeParams>, ctx: BuildContext, p
   beam(wood, Y.at(lipX + 0.02, lipY - 0.06, -0.7), Y.at(lipX + 0.02, lipY - 0.06, 0.7), 0.14, 0.12, UP, 0.42, still(Y.at(lipX, lipY, 0), 0.55));
   for (const s of [-1, 1]) beam(wood, Y.at(lipX - 0.02, hearthTop, s * 0.6), Y.at(lipX - 0.02, lipY - 0.12, s * 0.6), 0.1, 0.1, Z, 0.42, still(Y.at(lipX, hearthTop, s * 0.6), 0.55));
 
-  // The anvil on its stump, tongs leaning against it and a hammer on its face; a quench trough by the hearth.
+  // The anvil on its stump, tongs leaning against it, a hammer on its face, and a quench trough by the hearth.
   const stumpAt = Y.at(3.35, 0, -0.35);
   log(wood, addScaled(stumpAt, UP, -0.12), addScaled(stumpAt, UP, 0.5), 0.24, 0.4, still(stumpAt, 0.55, { rot: 0.3 }), 9);
   const ironCh = still(stumpAt, 0.2);
@@ -699,8 +697,8 @@ export function buildForge(p: Resolved<typeof forgeParams>, ctx: BuildContext, p
 
   if (p.shelter === "an open shed") {
     // Four posts carry plates and rafters under one slope falling away from
-    // the house. As the forge fails the covering rots and falls in, then
-    // the rafters and plates, and last the outer posts lean and fall.
+    // the house. As vitality falls the covering rots and falls in, then the
+    // rafters and plates, and last the outer posts lean and fall.
     const inX = 0.9;
     const outX = 4.05;
     const edge = 1.45;
@@ -709,7 +707,7 @@ export function buildForge(p: Resolved<typeof forgeParams>, ctx: BuildContext, p
     for (const [x, y] of [[inX, hiY], [outX, loY]] as const) {
       for (const s of [-1, 1]) {
         const base = Y.at(x, -0.4, s * edge);
-        // An outer post tips out, away from the house: about up × out.
+        // An outer post tips out, away from the house, about the axis up × out.
         const falls = x === outX ? { fall: [0, s * 0.3, -featureSide(plan) * 1.25, 0.13] as const } : {};
         beam(wood, base, Y.at(x, y, s * edge), 0.15, 0.15, X, 0.42 + 0.05 * r.next(), still(Y.at(x, 0, s * edge), 0.55, { rot: 0.3, ...falls }));
       }
@@ -734,7 +732,7 @@ export function buildForge(p: Resolved<typeof forgeParams>, ctx: BuildContext, p
 
 // ---------- granary ----------
 
-/** How long a length of weatherboard rots away at a time, meters: the shader's cell for GRAIN.boards. */
+/** The length of weatherboard that rots away at a time, in meters. It matches the shader's cell for `GRAIN.boards`. */
 const BOARD = 0.6;
 
 /** A staddle stone standing at `foot`: a tapering post under a round cap like a mushroom's, so nothing climbs from the ground into the store. */
@@ -777,7 +775,7 @@ export function buildGranary(p: Resolved<typeof granaryParams>, ctx: BuildContex
   const weed = new PartBuilder("leaf");
   const seed = Math.floor(r.next() * 1e6);
 
-  // Staddle stones in two rows; the outer row topples as the store fails, and the store slumps over onto its side.
+  // Staddle stones in two rows. As vitality falls the outer row topples and the store slumps over onto its side.
   const rowX = W / 2 - 0.22;
   const across = L > 2.6 ? 4 : 3;
   const zs = Array.from({ length: across }, (_, k) => -(L / 2 - 0.22) + ((L - 0.44) * k) / (across - 1));
@@ -839,7 +837,7 @@ export function buildGranary(p: Resolved<typeof granaryParams>, ctx: BuildContex
     box(stone, c, Y.axes, [0.15, (top + 0.35) / 2, 0.42], 0.5 + 0.1 * r.next(), still(c, 0.45));
   }
 
-  // The roof, gabled or hipped, rotting through and sagging; boarded gables under a gabled one.
+  // The roof, gabled or hipped, rotting through and sagging, with boarded gables under a gabled one.
   const over = 0.28;
   const verge = 0.22;
   const rise = (W / 2 + over) * 0.95;

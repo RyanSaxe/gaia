@@ -1,8 +1,7 @@
-// A building's feature: what sets it apart and says what it does. A
-// waterwheel turns beside a mill and slows to a stop as it fails; a tower
-// rises from the corner of an archive, its windows lamplit at night, and
-// crumbles from the top down. Each builds against the house's plan, on the
-// side the chimney leaves free, so the two never meet.
+// Builds a building's feature: a waterwheel beside a mill, which slows to a
+// stop as vitality falls, or a tower at the corner of an archive, lit at
+// night, which crumbles from the top down. Each goes on the side away from the
+// chimney (`featureSide`), so the two never meet.
 
 import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Opening, type Resolved, type Vec3 } from "@gaia/schema";
 import type { towerParams, waterwheelParams } from "../../structure.ts";
@@ -11,7 +10,7 @@ import { UP, beam, box, log, quad, tri } from "../blocks.ts";
 import { PLASTER, chimneyEnd, on, ruinAt, ruinOf, still, wallGrain, wallRot, wallTop, wallsOf } from "./frame.ts";
 import { type Hold, ivy, rubble, wallSheet } from "./ruin.ts";
 
-/** Builds into another builder, every vertex and pivot moved by `off`: a feature's own frame placed beside the house. */
+/** A `PartBuilder` that moves every vertex and pivot by `off`, so a feature built in its own frame sits beside the house. */
 class Moved extends PartBuilder {
   constructor(
     swatch: string,
@@ -46,7 +45,7 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
   const rate = p.drive === "overshot" ? 0.11 : -0.09;
   const spin: Vec3 = [rate, 0, 0];
   const on3 = (x: number, angle: number, radius: number): V3 => [cx + x, cy + Math.sin(angle) * radius, cz + Math.cos(angle) * radius];
-  /** Every piece of the wheel turns about the axle; some rot through as it fails, and none comes loose to hang in the air. */
+  /** Channels for a wheel piece. Every piece turns about the axle and some rot through as vitality falls. None comes loose, so nothing hangs in the air. */
   const turning = (wither: number, lost: number, top = 0.4): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot: center, tint: (r.next() - 0.5) * 0.04, spin, ...(r.next() < lost ? { rot: clamp(0.5 + top, 0, 1) } : {}) });
 
   // Two rims of short beams, spokes from the hub, and paddles between the rims.
@@ -65,7 +64,7 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
   const paddles = Math.round(14 + 4 * R);
   for (let k = 0; k < paddles; k++) {
     const a = (k / paddles) * Math.PI * 2;
-    // Buckets lean back against the turn on an overshot wheel; paddles stand straight out on an undershot one.
+    // Buckets lean back against the turn on an overshot wheel. Paddles stick straight out on an undershot one.
     const lean = p.drive === "overshot" ? 0.45 : 0;
     const inner = on3(0, a, R - 0.36);
     const outer = on3(0, a + lean * 0.35, R + 0.02);
@@ -88,7 +87,7 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
     if (k > 20) break;
   }
   box(stone, [pierX, cy - 0.04, cz], [[1, 0, 0], UP, [0, 0, 1]], [0.3, 0.07, 0.36], 0.62, still0([pierX, cy, cz], 0.45));
-  // A stone-lined pit the wheel turns in, low walls either side.
+  // A stone-lined pit for the wheel, with low walls on either side.
   for (const x of [cx - W / 2 - 0.2, cx + W / 2 + 0.2]) {
     if (Math.abs(x) < plan.width / 2 + 0.05) continue;
     for (let s = -R * 0.85; s < R * 0.85; ) {
@@ -106,8 +105,8 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
     const y = cy + R + 0.22;
     const z0 = -plan.depth / 2 - 2.4;
     const z1 = cz + 0.25;
-    // Trestles behind the wheel carry it; as the mill fails their legs
-    // spread and lean, but only once the trough and the crossbeams on them
+    // Trestles behind the wheel carry the flume. As vitality falls their legs
+    // spread and lean, but only after the trough and the crossbeams on them
     // have gone, each shrinking back onto what holds it.
     const spread = 0.34;
     const crossbeams: number[] = [];
@@ -139,9 +138,9 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
 // ---------- tower ----------
 
 /**
- * One face of a pyramid cap from the eave square up to the apex, in courses that rot through, over rafters about
- * 0.75 m apart at the eave that run up to the apex (the first along its hip), so whatever is left of it lies on them.
- * Their ends meet at the apex or stand on the soffit, out of sight, so they are left open.
+ * One face of a pyramid cap from the eave square up to the apex, in courses that rot through. Rafters about 0.75 m
+ * apart at the eave run up to the apex, the first along the hip, so what is left of the courses rests on them. The
+ * rafter ends meet at the apex or sit on the soffit out of sight, so they are built open.
  */
 function capFace(b: PartBuilder, frame: PartBuilder, corners: readonly [V3, V3], apex: V3, rows: number, rotAt: (q: V3) => number, pivot: V3): void {
   const [a, c] = corners;
@@ -180,7 +179,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const T = clamp(Math.min(plan.width, plan.depth) * 0.62, 3, 3.8);
   const houseTop = Math.max(...plan.masses.map((m) => wallTop(plan, m) + m.rise));
   const H = clamp(houseTop + p.height + 2.5 * (ctx.facts.reach ?? 0.5), 8, 19);
-  // At the back corner on the free side, joined to the house a little, clear of its windows.
+  // At the back corner on the free side, overlapping the house a little and clear of its windows.
   const off: V3 = [side * (plan.width / 2 + T / 2 - 0.35), 0, -plan.depth / 2 - T / 2 + 1.05];
   const render = new Moved("render", "solid", off);
   const stone = new Moved("masonry", "solid", off);
@@ -195,7 +194,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const faces = wallsOf(tower0);
   for (let y = plan.floor + 1.0; y + 1.3 < H - 0.5; y += storey) {
     for (const w of faces) {
-      // Windows look away from the house, and every way once above its roof.
+      // Windows face away from the house, and face every way once above its roof.
       const outward = w.n[0] * side > 0.5 || w.n[2] < -0.5 || y > houseTop - 0.5;
       if (outward) windows.push({ kind: "window", mass: 0, position: on(w, w.length / 2, y), normal: w.n, width: 0.52, height: 1.15 });
     }
@@ -204,7 +203,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const ruin = ruinOf(tower);
   const seed = Math.floor(r.next() * 1e6);
 
-  // Rendered walls in hand-laid cells, rotting through from the top as the archive fails, a patch of render at a time.
+  // Rendered walls in hand-laid cells. As vitality falls they rot through from the top, a patch of render at a time.
   const rendered: Hold = (w, q) => ({ rot: clamp(wallRot(tower, body, ruin, q) * 0.7 + 0.35 * clamp(q[1] / H, 0, 1) ** 2, 0, 1), grain: wallGrain(w, GRAIN.plaster, PLASTER) });
   for (const w of faces) {
     const pivot = on(w, w.length / 2, H / 2);
@@ -214,10 +213,10 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
       return { shade: 0.56 + 0.1 * n, c: still(pivot, 0.55 + 0.2 * up, { ...rendered(w, q), tint: 0.02 * n }) };
     });
   }
-  // Quoins up every corner, and a string course at every storey; the top
-  // courses fall first. Each quoin stands on the one below and goes no later
-  // than it, sinking down the corner as it goes; a string course goes before the quoins
-  // it runs between, and the cornice before them all.
+  // Quoins up every corner and a string course at every storey, with the top
+  // courses falling first. Each quoin rests on the one below and goes no later
+  // than it, sinking down the corner as it goes. A string course goes before
+  // the quoins it runs between, and the cornice goes before them all.
   let highest = 0;
   for (const w of faces) {
     let under = 0;
@@ -246,7 +245,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
     const top = on(w, w.length / 2, H - 0.1, 0.07);
     box(stone, top, [w.u, UP, w.n], [w.length / 2 + 0.12, 0.12, 0.1], 0.6, still(on(w, w.length / 2, H - 0.22, -0.1), 0.45, { loss: Math.max(lossThreshold(r.next(), 0.25, 0.08), highest + LOSS_BAND + 0.01) }));
   }
-  // Tall, narrow windows, lamplit at night: one goes dark at a time as the archive fails.
+  // Tall, narrow windows, lit at night. As vitality falls they go dark one at a time.
   for (const o of windows) {
     const w = faces.find((f) => f.n[0] === o.normal[0] && f.n[2] === o.normal[2]);
     if (w === undefined) continue;
@@ -282,9 +281,9 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const capRot = (q: V3): number => clamp(0.35 + 0.5 * (1 - (q[1] - H) / (T * 0.9)) + 0.3 * ruinAt(ruin, q), 0, 1);
   let apex: V3;
   if (p.cap === "lantern") {
-    // An open lantern room: four posts round a lamp that burns at night, under
-    // a small steep cap. The posts stand to the end and carry the cap; the
-    // rails between them go one by one, each shrinking back onto a post.
+    // An open lantern room: four posts round a lamp lit at night, under a
+    // small steep cap. The posts never go, and they carry the cap. The rails
+    // between them go one by one, each shrinking back onto a post.
     const lh = 1.7;
     const post = T / 2 - 0.2;
     for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
@@ -296,7 +295,7 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
         beam(wood, [a[0], y, a[1]], [b2[0], y, b2[1]], 0.08, 0.08, UP, 0.45, still([a[0], y, a[1]], 0.55, { loss: lossThreshold(r.next(), 0.2, 0.05) }));
       }
     }
-    // The lamp stands on a low table on the floor of the room, and goes out into it.
+    // The lamp sits on a low table on the room's floor, and collapses into it when it goes.
     const lampC: V3 = [0, H + 0.1 + 0.45, 0];
     box(glass, lampC, [[1, 0, 0], UP, [0, 0, 1]], [0.32, 0.45, 0.32], 0.85, { loss: lossThreshold(r.next(), 0.5, 0.3), droop: 0, wither: 0.4, glow: 1, pivot: [0, H + 0.1, 0] });
     box(wood, [0, H + 0.05, 0], [[1, 0, 0], UP, [0, 0, 1]], [0.42, 0.05, 0.42], 0.4, still([0, H, 0], 0.5));
@@ -309,8 +308,8 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
     apex = [0, H + T * 0.95, 0];
     for (let k = 0; k < 4; k++) capFace(roof, wood, [ring[k] as V3, ring[(k + 1) % 4] as V3], apex, 6, capRot, capPivot);
   }
-  // A finial, which leans and falls as the archive fails, coming to rest
-  // down the hip of the cap from its foot at the apex.
+  // A finial that leans and falls as vitality falls, coming to rest along the
+  // cap's hip with its foot at the apex.
   const corner = p.cap === "lantern" ? eave - 0.15 : eave;
   const eaveY = p.cap === "lantern" ? H + 1.7 : H;
   const tip = Math.PI / 2 + Math.atan2(apex[1] - eaveY, corner * Math.SQRT2) - 0.03;

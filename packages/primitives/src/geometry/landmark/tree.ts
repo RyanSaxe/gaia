@@ -1,8 +1,8 @@
-// One great old tree: the flora frames and crowns grown at a landmark's
-// scale, then aged. An ancient tree is lower and broader on a massive,
-// buttressed trunk, some of its great limbs are broken off to stubs, and
-// its highest limbs stand bare above the crown. In decline its leaves thin
-// and drop, its boughs sag and its bark greys to a bare snag.
+// Builds a great tree landmark from the flora frames and crowns, grown at
+// landmark scale and then aged. An ancient tree is lower and broader, on a
+// massive buttressed trunk, with great limbs broken to stubs and bare top
+// limbs above the crown. As vitality falls its leaves thin and drop, its
+// boughs sag and its bark greys to a bare snag.
 
 import type { Anchor, BuildContext, Built, Limb, Resolved, Skeleton } from "@gaia/schema";
 import type { greatTreeParams } from "../../landmark.ts";
@@ -12,7 +12,7 @@ import { CLUMP_TRIANGLE_BUDGET, STRAND_TRIANGLE_BUDGET, buildBark, buildLeafClum
 
 type TreeParams = Resolved<typeof greatTreeParams>;
 
-/** How each form grows: its frame, and the crown on it. */
+/** Each form's frame and crown parameters. */
 const FORMS = {
   "a spreading oak": { frame: { habit: "spreading", density: 5, spread: 44, stature: 0.95 }, crown: "clumps", leaf: "lobed", shape: "round", bole: 1 },
   "a tall elm": { frame: { habit: "upright", density: 5, spread: 34, stature: 1.25 }, crown: "clumps", leaf: "oval", shape: "round", bole: 1 },
@@ -22,19 +22,20 @@ const FORMS = {
 } as const;
 
 /**
- * Ages a frame: `age` 0 is a young giant, slim and reaching; 1 is ancient,
- * squat on a massive trunk that forks low, with buttress roots, great limbs
- * broken to stubs and its highest limbs bare. `bole` stretches the bare
- * trunk below the crown. Returns the aged frame and the tips that still
- * carry leaves.
+ * Ages a frame. At `age` 0 it is a young giant, slim and tall. At 1 it is
+ * ancient: squat on a massive trunk that forks low, with buttress roots, great
+ * limbs broken to stubs and bare top limbs. `bole` stretches the bare trunk
+ * below the crown. Returns the aged frame, its buttresses and the tips that
+ * still carry leaves.
  */
 function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => boolean): { skeleton: Skeleton; buttresses: Buttress[]; trunkRadius: number } {
   const trunk = skel.limbs.filter((l) => l.depth === 0);
   const fork = trunk.reduce((m, l) => Math.max(m, l.end[1]), 0);
-  // The fork drops and the trunk thickens with age; the crown above moves with the fork.
+  // With age the fork drops and the trunk thickens.
   const stretch = bole * (1 - 0.38 * age);
-  // The trunk stretches; the crown moves with the fork, whole, except that a
-  // crown lowered with age never sinks a drooping limb below where it hung.
+  // The trunk stretches and the crown moves with the fork as a whole. When age
+  // lowers the crown, points of drooping limbs below the fork scale with the
+  // trunk instead of dropping with the fork, so they stay above the ground.
   const lower = (q: readonly [number, number, number], trunk = false): V3 => {
     const moved = trunk || (stretch < 1 && q[1] <= fork) ? q[1] * stretch : q[1] + fork * (stretch - 1);
     return [q[0], moved, q[2]];
@@ -78,7 +79,7 @@ function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => 
       });
     }
   }
-  // Tips on what remains carry leaves, but an ancient crown's highest limbs stand bare.
+  // Tips on the remaining limbs carry leaves, except an ancient crown's highest limbs, which are bare.
   const ends = new Map<string, number>();
   skel.limbs.forEach((l, i) => ends.set(l.end.join(","), i));
   const top = skel.tips.reduce((m, t) => Math.max(m, t.position[1]), 0);
@@ -101,18 +102,17 @@ interface Buttress {
 }
 
 /**
- * How an old trunk's buttresses stand, against its width: they run as far
- * as its round roots did, stand `height` times as tall where they leave the
- * trunk, are `thick` of its radius across, and their top edge falls to the
- * ground as the `sweep` power of the way out.
+ * Buttress proportions relative to the trunk's base radius. `height` scales
+ * how tall a buttress is where it leaves the trunk, `thick` is its thickness,
+ * and its top edge falls to the ground as the `sweep` power of the distance out.
  */
 const BUTTRESS = { height: 1.6, thick: 0.2, sweep: 1.6 } as const;
 
 /**
- * An old trunk's buttress roots: each a thin blade that leaves the trunk
- * tall, curving a little as it runs out, its top edge sweeping down to the
- * ground and its foot sunk into it. Bark like the trunk's, never lost, and
- * swaying with the trunk's base.
+ * Builds an old trunk's buttress roots. Each is a thin blade, tall where it
+ * leaves the trunk and curving a little as it runs out, with its top edge
+ * sweeping down to the ground and its foot sunk below it. It uses the trunk's
+ * bark, never goes, and sways with the trunk's base.
  */
 function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, roughness: number, seed: number): Built {
   const out = new PartBuilder("bark", "solid");
@@ -166,7 +166,7 @@ function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, r
         out.vertex(q, nrm, clamp(shade, 0, 1), { loss: 0, droop: 0, wither, glow: 0, pivot: root, bough: root });
       }
     }
-    // Wound counter-clockwise seen from outside: each quad's face agrees with its corners' normals.
+    // Wound counter-clockwise seen from outside, so each quad's face agrees with its corners' normals.
     for (let i = 0; i < along; i++) {
       for (let j = 0; j < around; j++) {
         const a = first + i * (around + 1) + j;
@@ -189,22 +189,22 @@ function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, r
 }
 
 /**
- * One great old tree, four or five times a person's reach across, of the
- * chosen form and age. It declines as a flora tree does, to a bare grey snag.
- */
-/**
- * A great tree's crown, at most: twice a tree's, so its crown fills out
- * across every limb. A great tree stands alone and a person walks up to it,
- * but its crown fills much of the screen, so each layer of leaf cards costs
- * its whole area to draw: at the density its size would call for (about
- * 160,000 triangles for an oak) it drew 2.5 times as many card layers as a
- * tree's ceiling allows, and the frame paid for it.
+ * The most crown triangles a great tree may have: twice a tree's budget, so
+ * the crown fills out across every limb. Up close a great tree's crown fills
+ * much of the screen, so each layer of leaf cards costs its whole area to
+ * draw. At the density its size would call for, about 160,000 triangles for an
+ * oak, it drew 2.5 times as many card layers as a tree's limit allows, and
+ * frame time rose.
  */
 const CROWN_GUARD = 2 * CLUMP_TRIANGLE_BUDGET;
 
+/**
+ * Builds one great tree of the chosen form and age, four or five times a
+ * person's reach across. It declines like a flora tree, to a bare grey snag.
+ */
 export function buildGreatTree(p: TreeParams, ctx: BuildContext): Built {
   const form = FORMS[p.form];
-  // A young giant stands a little taller; an ancient one spreads lower and wider.
+  // A young giant is a little taller, and an ancient one is lower and wider.
   const scale = p.size * (ctx.facts.scale ?? 1) * (1.06 - 0.12 * p.age);
   const inner: BuildContext = { rand: ctx.rand.fork("great-tree"), facts: { ...ctx.facts, scale } };
     const grown = growBranching({ ...form.frame, spread: form.frame.spread * (1 + 0.18 * p.age), stature: form.frame.stature * (1.08 - 0.2 * p.age) }, inner);

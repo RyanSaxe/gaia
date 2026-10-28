@@ -1,6 +1,6 @@
-// Route primitives: how a trail between two places looks and runs. The
-// terrain finds the route over the ground; these say how wide and worn the
-// tread is, what lines it, how freely it wanders and how it crosses water.
+// The trail primitive sets how a trail between two places looks. The terrain
+// package finds the path over the ground. `trailParams` set the tread's width
+// and wear, its edging, how much it winds and how it crosses a stream.
 
 import { type RouteSpec, primitive, t } from "@gaia/schema";
 

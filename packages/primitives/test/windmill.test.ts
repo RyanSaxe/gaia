@@ -1,6 +1,6 @@
-// A windmill's sails turn about its windshaft and sweep clear of its body at
-// every turn; as it fails they stop before its cap lists, and the cap lists
-// about the windshaft itself, so the sails never leave their shaft.
+// Checks that a windmill's sails turn about its windshaft and clear its body
+// at every turn. As vitality falls they stop before the cap lists, and the cap
+// lists about the windshaft itself, so the sails never leave their shaft.
 
 import { describe, expect, it } from "vitest";
 import { type Built, type Part, rand } from "@gaia/schema";
@@ -18,7 +18,7 @@ const buildOf = (stored: Record<string, string>): Built =>
   (windmill.build as Erased)(resolveParams(windmill, stored, rand(4), windmill.id), { rand: rand(4).fork("windmill"), facts: { scale: 1 } }, null) as Built;
 const at = (a: Float32Array, i: number, width: number): number[] => Array.from(a.subarray(i * width, i * width + width));
 
-/** Every turning vertex of a mill: where it stands, its pivot and its spin. */
+/** Every turning vertex of a mill, with its position, pivot and spin. */
 function turning(built: Built): { p: number[]; pivot: number[]; spin: number[] }[] {
   return built.parts.flatMap((part: Part) => {
     const spin = part.channels.spin;
@@ -28,7 +28,7 @@ function turning(built: Built): { p: number[]; pivot: number[]; spin: number[] }
 }
 
 describe("a windmill", () => {
-  // Builds eighteen mills; the clearance case turns each sail through a full turn: a few seconds alone.
+  // Builds eighteen mills, and the clearance case turns each sail through a full turn: a few seconds alone.
   it.each(mills)("turns its sails about one windshaft, and they clear the body at every turn: %o", { timeout: 30_000 }, (stored) => {
     const built = buildOf(stored);
     const sails = turning(built);
@@ -81,7 +81,7 @@ describe("a windmill", () => {
         const [x, y, z, from] = at(fall, i, 4) as [number, number, number, number];
         if (from === 0) continue;
         listing++;
-        // The shown vitality the list starts at: the sails turn at a tenth of their speed or less by then.
+        // By the vitality where the list starts, the sails turn at a tenth of their speed or less.
         expect(spinAt(from)).toBeLessThan(0.1);
         const most = Math.hypot(x, y, z);
         expect(Math.abs((x * axis[0]! + y * axis[1]! + z * axis[2]!) / (most * rate))).toBeCloseTo(1, 5);

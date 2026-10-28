@@ -1,7 +1,7 @@
-// A building's doors and windows, each set in the wall the plan puts it in:
-// small-paned casements with stone sills, lamplit at night, and a plank
-// door with steps. As the house is abandoned the door swings ajar, panes
-// break, shutters hang askew and boards cover windows.
+// Builds a building's doors and windows in the walls the plan assigns them:
+// small-paned casements with stone sills, lit at night, and a plank door with
+// steps. As vitality falls, the door swings ajar, panes break, shutters hang
+// askew and boards cover windows.
 
 import type { BuildContext, BuildingPlan, Built, Resolved } from "@gaia/schema";
 import type { casementsParams } from "../../structure.ts";
@@ -25,8 +25,8 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
     const pivot = at(0, o.height / 2, 0);
     const wood = (): Channels => still(pivot, 0.5, { tint: (wr.next() - 0.5) * 0.02 });
     if (o.kind === "window") {
-      // A dark pane, which breaks as the house fails, and in front of it the
-      // lamplit pane, which goes out below its threshold.
+      // A dark pane that breaks as vitality falls, and in front of it a lit
+      // pane that goes out below its loss threshold.
       quad(glass, [at(-hw, 0, 0.035), at(hw, 0, 0.035), at(hw, o.height, 0.035), at(-hw, o.height, 0.035)], w.n, 0.2, still(pivot, 1, { rot: 0.85 }));
       const lit: Channels = { loss: lossThreshold(wr.next(), 0.62, 0.2), droop: 0, wither: 0.25, glow: 0.7 + 0.3 * wr.next(), pivot };
       quad(glass, [at(-hw, 0, 0.045), at(hw, 0, 0.045), at(hw, o.height, 0.045), at(-hw, o.height, 0.045)], w.n, [0.55, 0.55, 0.85, 0.85], lit);
@@ -39,8 +39,8 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
       const bar = (): Channels => ({ ...wood(), loss: wr.next() < 0.6 ? lossThreshold(wr.next(), 0.3, 0.05) : 0 });
       for (let i = 1; i <= bars.v; i++) box(frame, at(-hw + (o.width * i) / (bars.v + 1), o.height / 2, 0.06), axes, [0.018, o.height / 2, 0.02], 0.5, bar());
       for (let i = 1; i <= bars.h; i++) box(frame, at(0, (o.height * i) / (bars.h + 1), 0.06), axes, [hw, 0.018, 0.02], 0.5, bar());
-      // Some windows are boarded up as the house is abandoned: boards nailed
-      // across the frame, each growing out from the side it is nailed to first.
+      // As vitality falls, boards cover about half the windows. Each board
+      // grows in from the side it is nailed to first.
       if (wr.next() < 0.55) {
         const from = 0.24 + 0.14 * wr.next();
         for (let k = 0; k < 3; k++) {
@@ -54,7 +54,7 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
       }
       const sillC = at(0, -0.06, 0.1);
       box(stone, sillC, axes, [hw + 0.14, 0.045, 0.12], 0.62, still(sillC, 0.5));
-      // Shutters: upright boards with a ledge; one may hang off its hinge as the house declines.
+      // Shutters are upright boards with a ledge. As vitality falls, a loose one hangs off its hinge.
       if (p.shutters) {
         for (const sign of [-1, 1]) {
           const sw = hw + 0.02;
@@ -84,11 +84,11 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
     } else {
       const h = o.height;
       const arched = p.door === "arched";
-      // The door leaf swings ajar on its hinges, into the dark, as the house is abandoned.
+      // As vitality falls, the door leaf swings ajar on its hinges and shows the dark inside.
       const hinge = at(-hw, 0, 0.035);
       const ajar = 1.0 + 0.2 * wr.next();
       const leaf = (wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot: hinge, tint: (wr.next() - 0.5) * 0.02, fall: [0, ajar, 0, 0.46], ...extra });
-      // Planks; an arched door's tops follow its arch.
+      // Planks. An arched door's plank tops follow the arch.
       const planks = 5;
       for (let k = 0; k < planks; k++) {
         const x = -hw + (o.width * (k + 0.5)) / planks;
@@ -98,7 +98,7 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
       for (const ly of [0.28, 0.74]) box(frame, at(0, h * ly, 0.08), axes, [hw - 0.06, 0.06, 0.018], 0.48, leaf(0.5));
       const knob = at(hw * 0.62, h * 0.48, 0.11);
       box(frame, knob, axes, [0.03, 0.03, 0.03], 0.3, leaf(0.5));
-      // Frame and lintel; an arched door's frame is a ring of short beams.
+      // Frame and lintel. An arched door's frame is a ring of short beams.
       const fw = 0.11;
       if (arched) {
         const spring = h - hw;

@@ -1,9 +1,7 @@
-// Structure primitives: a building's plan, walls, roof, openings, dressing
-// and feature. Every part builds against the one plan the footprint lays
-// out, so walls, roof, windows, flower boxes and a mill's wheel agree by
-// construction. Geometry lives in ./geometry/building/, one file per part:
-// layout (massing, door and windows), walls, roofs, openings, garden, ruin
-// and features.
+// Structure primitives: a building's plan, walls, roof, openings, dressing and
+// feature. Every part builds from the one plan that `cottagePlan` lays out, so
+// walls, roof, windows, flower boxes and a mill's wheel line up. Geometry is in
+// ./geometry/building/.
 
 import { primitive, t } from "@gaia/schema";
 import { buildTower, buildWaterwheel } from "./geometry/building/features.ts";
@@ -210,7 +208,7 @@ export const waterwheel = primitive({
   role: "Feature",
   doc: "A wooden waterwheel turning slowly in a stone-lined pit beside the house, for code that feels quaint and old-fashioned, unhurried, doing things the way they were always done. It slows to a stop as the code fails.",
   params: waterwheelParams,
-  // A wheel turns only where water runs past.
+  // Jev is offered a waterwheel only where the place has running water.
   needs: ["running water"],
   build: (p, ctx, plan) => buildWaterwheel(p, ctx, plan),
 });

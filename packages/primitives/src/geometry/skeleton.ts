@@ -1,5 +1,5 @@
-// Skeleton growth. Each branch draws from its own forked stream, so growing
-// more in one branch never shifts another.
+// Grows tree and bush skeletons. Each branch draws from its own forked random
+// stream, so adding growth to one branch never shifts another.
 
 import type { Anchor, BuildContext, Limb, Rand, Resolved, Skeleton } from "@gaia/schema";
 import type { branchingParams, saplingParams, spireParams } from "../flora.ts";
@@ -34,7 +34,7 @@ interface Grown {
   readonly end: V3;
   readonly depth: number;
   readonly parent: number;
-  /** The branch this segment belongs to; a branch is a short chain of segments. */
+  /** The branch this segment belongs to. A branch is a short chain of segments. */
   readonly chain: number;
   readonly terminal: boolean;
 }
@@ -42,7 +42,7 @@ interface Grown {
 const UP: V3 = [0, 1, 0];
 const DEG = Math.PI / 180;
 
-/** Recursive splitting, then fitted so height over width matches `stature`. */
+/** Grows a frame by recursive splitting, then scales it so height over width matches `stature`. */
 export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildContext): Skeleton {
   const habit = HABITS[p.habit];
   const s = ctx.facts.scale ?? 1;
@@ -59,7 +59,7 @@ export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildCon
   const trunkRand = frame.fork("trunk");
   const trunkLength = height * habit.trunk;
 
-  // The trunk: three gently wandering segments.
+  // The trunk is three segments with small random turns.
   let at: V3 = [0, 0, 0];
   let dir: V3 = [0, 1, 0];
   let parent = -1;
@@ -127,8 +127,8 @@ export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildCon
 
   split(frame.fork("crown"), at, dir, ((height - trunkLength) * 0.62) / habit.ratio, 0, parent, 0);
 
-  // Fit to the declared proportions around the fork, so the trunk itself
-  // only stretches upward and never leans further than it grew.
+  // Scale to the declared proportions about the fork. The trunk only
+  // stretches vertically, so it never leans further than it grew.
   const fork = at;
   let top = 0;
   let minX = 0, maxX = 0, minZ = 0, maxZ = 0;
@@ -144,12 +144,12 @@ export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildCon
   const grownWidth = Math.max(0.01, (maxX - minX + maxZ - minZ) / 2);
   const fx = Math.min(1.6, Math.max(0.6, width / grownWidth));
   const fy = height / Math.max(0.01, top);
-  // Limbs that arch down level out softly above the ground, never into it.
+  // Points below 0.6 m ease upward, so arching limbs level out above 0.25 m and never reach the ground.
   const above = (y: number): number => (y >= 0.6 ? y : 0.6 - 0.35 * (1 - Math.exp((y - 0.6) / 0.35)));
   const fit = (q: V3, trunk: boolean): V3 =>
     trunk ? [q[0], q[1] * fy, q[2]] : [fork[0] + (q[0] - fork[0]) * fx, above(q[1] * fy), fork[2] + (q[2] - fork[2]) * fx];
 
-  // Pipe model: a branch's radius follows how many tips it carries.
+  // Pipe model: a branch's radius grows with the square root of the tips it carries.
   const totalTips = Math.max(1, chainTips[0] ?? 1);
   const baseRadius = height * habit.girth * Math.pow(3 / p.density, 0.3);
   const chainRadius = (c: number): number => baseRadius * Math.sqrt((chainTips[c] ?? 1) / totalTips);
@@ -188,12 +188,11 @@ export function growBranching(p: Resolved<typeof branchingParams>, ctx: BuildCon
 type SaplingHabit = Resolved<typeof saplingParams>["habit"];
 
 /**
- * How a young tree carries its tiers: its width for its height, where its
- * lowest tier leaves the stem, branches per tier, how far each branch rises
- * above level (radians), how its outer half bends (up toward the light, or
- * down under its own weight), how far its side twigs tilt, and how far the
- * stem leans toward the light. A tiered sapling's branches droop at their
- * tips and carry a second twig hung below the first, so each tier has depth.
+ * Each sapling habit's shape: width for its height, where the lowest tier
+ * leaves the stem, branches per tier, each branch's rise above level in
+ * radians, how its outer half bends (positive up, negative down), its side
+ * twigs' tilts, and the stem's lean. A tiered sapling's branches droop at
+ * their tips and carry a second twig below the first, so each tier has depth.
  */
 const SAPLING: Readonly<Record<SaplingHabit, { width: number; low: number; perTier: number; rise: number; bend: number; twigs: readonly number[]; lean: number }>> = {
   reaching: { width: 0.42, low: 0.38, perTier: 2, rise: 0.85, bend: 0.25, twigs: [0.2], lean: 0.03 },
@@ -202,10 +201,10 @@ const SAPLING: Readonly<Record<SaplingHabit, { width: number; low: number; perTi
 };
 
 /**
- * A young tree: one thin stem to its top and a few tiers of slender
- * branches, shortest at the top, each with a side twig, so it reads as a
- * tree that will grow rather than a small grown one. It stands at its own
- * height, never the file's: a sapling is no taller than a person.
+ * Grows a young tree: one thin stem and a few tiers of slender branches,
+ * shortest at the top, each with a side twig, so it looks young rather than
+ * small. Its height is `stature` capped at 1.8 m, ignoring the file's scale,
+ * so a sapling is never taller than a person.
  */
 export function growSapling(p: Resolved<typeof saplingParams>, ctx: BuildContext): Skeleton {
   const habit = SAPLING[p.habit];
@@ -216,7 +215,7 @@ export function growSapling(p: Resolved<typeof saplingParams>, ctx: BuildContext
   const limbs: Limb[] = [];
   const tips: Anchor[] = [];
   const lean = r.next() * Math.PI * 2;
-  // The stem: six gently wandering segments, tapering to a whip at the top.
+  // The stem is six segments with small random turns, tapering to a thin tip.
   const along: V3[] = [[0, 0, 0]];
   for (let i = 1; i <= 6; i++) {
     const f = i / 6;
@@ -247,7 +246,7 @@ export function growSapling(p: Resolved<typeof saplingParams>, ctx: BuildContext
       const first = limbs.length - 1;
       limbs.push({ start: mid, end, startRadius: r0 * 0.65, endRadius: r0 * 0.3, depth: 1, parent: first });
       tips.push({ position: end, normal: d2, size: 0.6 + 0.4 * Math.min(1, len / (width / 2 + 0.06)) });
-      // Side twigs from the middle, so a branch carries leaves along its length; a second one, on the other side, hangs lower.
+      // Side twigs leave from the middle, so a branch carries leaves along its length. A second twig, on the other side, hangs lower.
       const hand = br.next() < 0.5 ? -1 : 1;
       habit.twigs.forEach((tilt, n) => {
         const side = normalize(rotate(d1, UP, br.range(0.55, 0.9) * hand * (n === 0 ? 1 : -1)));
@@ -261,13 +260,13 @@ export function growSapling(p: Resolved<typeof saplingParams>, ctx: BuildContext
 }
 
 /**
- * A spire grows this many whorls for each ring Jev asks for, so its levels
- * stand close enough that needles fill the sky between them, while a sparse
- * spire stays sparser than a dense one.
+ * Whorls grown for each one in Jev's `whorls` answer. The levels sit close
+ * enough that needles fill the gaps between them, and a sparse spire still has
+ * fewer whorls than a dense one.
  */
 const WHORLS_PER_RING = 1.4;
 
-/** A straight leader with whorls of limbs, shaped as a cone of the declared proportions. */
+/** Grows a straight leader with whorls of limbs in a cone of the declared proportions. */
 export function growSpire(p: Resolved<typeof spireParams>, ctx: BuildContext): Skeleton {
   const s = ctx.facts.scale ?? 1;
   const height = 9 * s * Math.pow(p.stature / 2.2, 0.35);
@@ -277,7 +276,6 @@ export function growSpire(p: Resolved<typeof spireParams>, ctx: BuildContext): S
   const tips: Anchor[] = [];
   const baseRadius = height * 0.032;
 
-  // The leader.
   const leaderRand = frame.fork("leader");
   const trunkSegs = 6;
   const trunkTop = height * 0.98;

@@ -1,17 +1,10 @@
-// A windmill: a stone tower mill, a timber smock mill or a post mill, its
-// sails turning on the spin channel about a windshaft tipped up a little, so
-// the sails lean back over the cap and sweep clear of the widening body
-// below. Sails and cap stand on the mill's front (+z). As vitality falls the
-// sails' canvas or shutters tear away to bare frames and the sails slow to a
-// stop (`spinAt` in @gaia/realize); then the cap, or a post mill's whole
-// body, lists on its curb or post. The list turns about the windshaft
-// itself, through the hub, so the sails (which turn about the same axis)
-// stay on their shaft without a fall of their own. The body stands: it
-// greys, its stage and boards rot through, its lamps go out, and fallen
-// stone and boards gather at its foot. Each mill's seed picks its proportions
-// within its words (`WINDMILL_SHAPE`): how broad its body stands and how much
-// it narrows, how high its stage and curb stand, how far and how broad its
-// sails reach, and how far and to which side its cap lists.
+// Builds a windmill: a stone tower mill, a timber smock mill or a post mill,
+// whose sails on the front (+z) turn on the spin channel about a windshaft
+// tipped up `TILT`. As vitality falls the sails tear to bare frames and stop
+// (`spinAt` in @gaia/realize), then the cap, or a post mill's whole body,
+// lists about the windshaft, so the sails stay on their shaft without a fall
+// of their own. Each mill's seed picks its proportions within the bands of its
+// answers (`WINDMILL_SHAPE`).
 
 import { type Anchor, type BuildContext, type Built, GRAIN, type Rand, type Resolved, type Vec3 } from "@gaia/schema";
 import type { windmillParams } from "../../landmark.ts";
@@ -24,18 +17,18 @@ type MillParams = Resolved<typeof windmillParams>;
 
 /** The windshaft's rise above level, radians. */
 const TILT = 0.14;
-/** Along the windshaft, out of the front; up the sails' plane, leaning back; and across it. */
+/** Unit axes: along the windshaft out of the front, up the sails' plane leaning back, and across that plane. */
 const SHAFT: V3 = [0, Math.sin(TILT), Math.cos(TILT)];
 const PLANE_UP: V3 = [0, Math.cos(TILT), -Math.sin(TILT)];
 const ACROSS: V3 = [1, 0, 0];
-/** How far the cap lists once failing, radians, and the shown vitality it starts to at, once the sails have all but stopped; it has listed fully 0.14 lower. */
+/** How far the cap and a post mill's buck list, in radians, and the vitality where the list starts, once the sails have almost stopped. The list is complete 0.14 lower. */
 const LIST = { cap: 0.3, buck: 0.15, from: 0.16 } as const;
 
 /**
- * What a mill's seed picks within its words, each against its body's own measure: how broad the body stands at its
- * foot and how broad at its head, how high its stage (a post mill's buck) and its curb stand, how far its sails reach
- * as a share of its height and how broad they are, how far its cap lists once failing, in radians (a post mill's
- * buck half as far), and the bearing its weather comes from, which sets the side it lists to.
+ * The bands a mill's seed picks from, each relative to its body's own measure: the body's breadth at foot and head,
+ * the height of its stage (a post mill's buck) and curb, the sails' reach as a share of the mill's height and their
+ * breadth, how far the cap lists in radians (a post mill's buck half as far), and the bearing the weather comes from,
+ * which sets the side it lists to.
  */
 export const WINDMILL_SHAPE = {
   foot: about(1, 0.12),
@@ -62,13 +55,13 @@ interface Parts {
   readonly timber: PartBuilder;
   readonly roof: PartBuilder;
   readonly glass: PartBuilder;
-  /** The sails' canvas or shutters, their pale bars and laths, and their whips, which turn and stop no walker. */
+  /** The sails' canvas or shutters, their pale bars and laths, and their whips. They turn and have no collision. */
   readonly cloth: PartBuilder;
   readonly lath: PartBuilder;
   readonly frame: PartBuilder;
 }
 
-/** A body's shape, laid out before it is built, so the hub can stand where the sails clear it. */
+/** A body's shape, laid out before it is built so the hub can go where the sails clear the body. */
 interface Body {
   readonly hubY: number;
   /** The lowest a sail's tip may sweep. */
@@ -78,11 +71,11 @@ interface Body {
   build(parts: Parts, hub: V3, r: Rand): void;
 }
 
-/** A piece of the cap or buck: it lists about the windshaft through `pivot` as the mill fails. */
+/** Channels for a piece of the cap or buck, which lists about the windshaft through `pivot` as vitality falls. */
 const listing = (pivot: Vec3, angle: number, wither: number, extra: Partial<Channels> = {}): Channels =>
   still(pivot, wither, { ...extra, fall: [SHAFT[0] * angle, SHAFT[1] * angle, SHAFT[2] * angle, LIST.from] });
 
-/** Boards that rot a whole length at a time: piece `k` of a run `j`. */
+/** The grain for boards that rot a whole length at a time: piece `k` of run `j`. */
 const board = (j: number, k: number): Vec3 => [k + 0.5, j + 0.5, GRAIN.boards];
 
 /** An opening in a ring wall: a door or window at angle `along`, over `rows` courses from `course`, `half` radians either side. */
@@ -93,7 +86,7 @@ interface Opening {
   readonly half: number;
 }
 
-/** Where each course of stone starts, from `y0` up to `y1`: courses about `mean` tall, deep and shallow by turns of chance, the lowest two a deeper plinth. */
+/** The start heights of stone courses from `y0` to `y1`, each about `mean` tall with random variation. The lowest two are deeper, as a plinth. */
 function coursesOf(y0: number, y1: number, mean: number, r: Rand): number[] {
   const n = Math.max(3, Math.round((y1 - y0) / mean));
   const weights = Array.from({ length: n }, (_, c) => (0.55 + 0.9 * r.next()) * (c < 2 ? 1.3 : 1));
@@ -115,8 +108,8 @@ const RUBBLE = { joint: 0.05, mortar: 0.035 } as const;
 
 /**
  * One course's stones as angle spans of varied lengths about `mean` meters, each course starting somewhere new so no
- * joint runs up the wall. On a polygon every corner is a joint, and the quoins either side of it are long and short
- * by turns, course over course.
+ * joint runs up the wall. On a polygon every corner is a joint, and the quoins on either side alternate long and
+ * short from course to course.
  */
 function stoneSpans(sides: number, rad: number, mean: number, odd: boolean, r: Rand): { a0: number; a1: number; quoin: boolean }[] {
   const gap = RUBBLE.joint / (2 * rad);
@@ -179,7 +172,7 @@ function masonry(parts: Parts, sides: number, ys: readonly number[], wallAt: (y:
           at + o.half <= b0 || at - o.half >= b1 ? [[b0, b1]] : ([[b0, at - o.half], [at + o.half, b1]] as [number, number][]).filter(([s, e]) => e - s > 0.02),
         );
       }
-      // Every stone has its own tone; one in seven is a dark, weathered one and one in eight a pale, fresh one.
+      // Every stone has its own tone. One in seven is dark and weathered, and one in eight is pale and fresh.
       const odd = cr.next();
       const shade = 0.3 + 0.42 * cr.next() + 0.08 * (ya / top) - (c < 2 ? 0.08 : 0) + (odd < 0.14 ? -0.2 : odd < 0.26 ? 0.16 : 0) + (quoin ? 0.14 : 0);
       const wither = 0.4 + 0.45 * cr.next();
@@ -195,7 +188,7 @@ function masonry(parts: Parts, sides: number, ys: readonly number[], wallAt: (y:
   }
 }
 
-/** A plank door, or a window's dark pane and the lamp behind it, set into an opening of a ring wall. Lamps go out as the mill fails. */
+/** A plank door, or a window's dark pane and the lamp behind it, set into an opening of a ring wall. Lamps go out as vitality falls. */
 function fill(parts: Parts, sides: number, o: Opening, ys: readonly number[], rad: number, thick: number, door: boolean, r: Rand): void {
   const ya = ys[o.course] as number;
   const yb = (ys[o.course + o.rows] as number) - RUBBLE.joint;
@@ -213,14 +206,14 @@ function fill(parts: Parts, sides: number, o: Opening, ys: readonly number[], ra
   quad(parts.glass, span(yb, inset - 0.02), out, [0.55, 0.55, 0.85, 0.85], lit);
 }
 
-/** A boarded stage ringing a wall at `y`, reaching `out` past it, with a rail; its boards rot through a length at a time. */
+/** A boarded stage ringing a wall at `y`, reaching `out` past it, with a rail. Its boards rot through a length at a time. */
 function stage(parts: Parts, sides: number, y: number, wall: number, out: number, r: Rand): void {
   const rim = wall + out;
   courseSpans(sides, rim, 1.3, false).forEach(([a0, a1], k) => {
     const u = r.next();
     const mid = (a0 + a1) / 2;
     const foot = ringPoint(sides, mid, wall - 0.2, y);
-    // A board's post and the rail over it rot away with it, so none is left standing on nothing.
+    // A board's post and the rail over it rot away with it, so neither is left without support.
     const plank = still(foot, 0.6, { rot: 0.7, grain: board(1, k), tint: (u - 0.5) * 0.04 });
     ringBlock(parts.timber, sides, a0, a1, y, y + 0.14, rim, out + 0.12, 0.5 + 0.1 * u, plank, true);
     ringBlock(parts.timber, sides, a0, a1, y + 0.92, y + 1.02, rim - 0.04, 0.08, 0.52, plank, true);
@@ -258,7 +251,7 @@ function fantail(parts: Parts, capY: number, capR: number, hub: V3, list: number
   }
 }
 
-/** A flat floor across a ring wall at `y`, facing up (`facing` 1) or down (-1), so a look over the head never sees into the hollow below. */
+/** A flat floor across a ring wall at `y`, facing up (`facing` 1) or down (-1), so a view over the wall's head never sees into the hollow below. */
 function fan(b: PartBuilder, sides: number, y: number, rad: number, facing: 1 | -1, shade: number, ch: Channels): void {
   const n = sides === 0 ? 16 : sides;
   const off = sides === 0 ? 0 : Math.PI / sides;
@@ -308,7 +301,7 @@ function dome(parts: Parts, sides: number, y0: number, rad: number, rise: number
   box(parts.timber, [0, top + 0.42, 0], [[1, 0, 0], UP, [0, 0, 1]], [0.16, 0.16, 0.16], 0.45, c);
 }
 
-/** Lapped weatherboards over a flat face from corner `a` to corner `b` (each where it stands at a height), from `y0` to `y1`, rotting through a length at a time; with the dark lining behind them, so a hole shows the frame, never the sky. */
+/** Lapped weatherboards over a flat face from corner `a` to corner `b` (each a function of height), from `y0` to `y1`, rotting through a length at a time. A dark lining behind them makes a hole show the frame, never the sky. */
 function boarded(parts: Parts, run: number, a: (y: number) => V3, b: (y: number) => V3, y0: number, y1: number, ch: (grain: (q: Vec3) => Vec3) => Channels, lining: Channels, r: Rand): void {
   const rows = Math.max(4, Math.round((y1 - y0) / 0.3));
   const bh = (y1 - y0) / rows;
@@ -322,8 +315,8 @@ function boarded(parts: Parts, run: number, a: (y: number) => V3, b: (y: number)
     const yb = ya + bh + 0.01;
     const grain = (q: Vec3): Vec3 => [dot(q, along) / 1.7 + run * 13, run * 7 + k + 0.5, GRAIN.boards];
     const c = ch(grain);
-    // Each board is lit along its proud lower edge and shaded at its top, tucked under the board above, so the laps
-    // read as stripes from far off.
+    // Each board is lighter along its proud lower edge and darker at its top, tucked under the board above, so the
+    // laps look like stripes from far off.
     const shade = 0.5 + 0.1 * r.next();
     quad(parts.boards, [out(a(ya), 0.07), out(b(ya), 0.07), b(yb), a(yb)], normalize(addScaled(n0, UP, 0.3)), [shade + 0.08, shade + 0.08, shade - 0.16, shade - 0.16], c);
     quad(parts.boards, [a(ya), b(ya), out(b(ya), 0.07), out(a(ya), 0.07)], [0, -1, 0], 0.1, c);
@@ -332,8 +325,8 @@ function boarded(parts: Parts, run: number, a: (y: number) => V3, b: (y: number)
 }
 
 /**
- * A small window over boards: a frame, its dark pane and the lamp behind it. A lamp goes out as the mill fails,
- * shrinking onto the window; one in a listing body, whose pivot is what it lists about, only dims.
+ * A small window over boards: a frame, its dark pane and the lamp behind it. As vitality falls the lamp goes out,
+ * shrinking onto the window. A lamp in a listing body only dims, because its pivot is the list's pivot.
  */
 function boardWindow(parts: Parts, at: V3, n: V3, half: number, ch: Channels, r: Rand): void {
   const t = normalize(cross(UP, n));
@@ -345,7 +338,7 @@ function boardWindow(parts: Parts, at: V3, n: V3, half: number, ch: Channels, r:
   quad(parts.glass, pane(0.13), n, [0.55, 0.55, 0.85, 0.85], { ...ch, loss: out, wither: 0.25, glow: 0.8 + 0.2 * r.next() });
 }
 
-/** What gathers at the foot as the mill fails: fallen stones and boards, growing in, never in a walker's way. */
+/** Fallen stones and boards that grow in round the mill's foot as vitality falls. A person walks over them. */
 function fallen(parts: Parts, foot: number, stones: number, r: Rand): void {
   for (let i = 0; i < stones + 6; i++) {
     const a = r.next() * Math.PI * 2;
@@ -442,7 +435,7 @@ function smockMill(h: number, m: MillShape): Body {
   };
 }
 
-/** A tower's or smock's cap: its skirt, a floor over the wall's head, and the dome, all listing about the windshaft as the mill fails. */
+/** A tower's or smock's cap: its skirt, a floor over the wall's head, and the dome, all listing about the windshaft as vitality falls. */
 function cap(parts: Parts, sides: number, y0: number, rad: number, rise: number, profile: Profile, hub: V3, list: number, r: Rand): void {
   const ch = (u: number): Channels => listing(hub, list, 0.7, { tint: (u - 0.5) * 0.04 });
   curbRing(parts.timber, sides, y0 - 0.32, y0 + 0.02, rad - 0.02, 0.14, ch, r);
@@ -516,10 +509,10 @@ function postMill(h: number, m: MillShape): Body {
   };
 }
 
-/** How far the cap lists, about the windshaft: to its weather's lee side, which is +x or -x. */
+/** How far the cap lists about the windshaft, signed toward the lee side of its weather, +x or -x. */
 const capList = (m: MillShape): number => m.list * (Math.cos(m.weather) >= 0 ? 1 : -1);
 
-/** A profile's share of its radius at share `t` of its rise; 1 below the eaves, 0 above the apex. */
+/** A profile's share of its radius at share `t` of its rise. 1 below the eaves, 0 above the apex. */
 function profileAt(profile: Profile, t: number): number {
   if (t <= 0) return 1;
   for (let i = 0; i + 1 < profile.length; i++) {
@@ -534,8 +527,8 @@ function profileAt(profile: Profile, t: number): number {
  * The sails: whips from the hub, each carrying a frame of bars and hemlaths
  * twisted from a steep weather at the heel to a flatter one at the tip, and
  * canvas or shutters on its trailing side. Everything turns about the
- * windshaft; canvas tears through and shutters and a few bars rot away as
- * the mill fails, leaving the bare frames.
+ * windshaft. As vitality falls, canvas tears through and shutters and a few
+ * bars rot away, leaving the bare frames.
  */
 function sails(parts: Parts, hub: V3, count: number, R: number, blade: number, shutters: boolean, shaft: number, r: Rand): void {
   const rate = count === 6 ? 0.12 : 0.15;
@@ -567,7 +560,7 @@ function sails(parts: Parts, hub: V3, count: number, R: number, blade: number, s
       for (const v of [-trail, -trail / 2]) beam(parts.lath, at(u0, v, 0.02), at(u1, v, 0.02), 0.06, 0.05, SHAFT, 0.52, turning(0.6, { tint }));
       beam(parts.lath, at(u0, lead * 0.55, 0.02), at(u1, lead * 0.55, 0.02), lead * 0.9, 0.04, t, 0.55, turning(0.6, { tint }));
       if (shutters) {
-        // A shutter across each bay, turned a little open, going whole as it rots.
+        // A shutter across each bay, turned a little open. It goes whole as it rots.
         const um = (u0 + u1) / 2;
         const c = at(um, -trail / 2 - 0.06, -0.02);
         const across = normalize(sub(at(um, -0.12), at(um, -trail)));
@@ -577,7 +570,7 @@ function sails(parts: Parts, hub: V3, count: number, R: number, blade: number, s
       }
     }
     if (shutters) continue;
-    // Canvas spread over the front of the bars, tearing through to tatters as the mill fails.
+    // Canvas over the front of the bars, which tears to tatters as vitality falls.
     const across = 3;
     const v0 = -trail + 0.04;
     const v1 = -0.14;
@@ -589,8 +582,8 @@ function sails(parts: Parts, hub: V3, count: number, R: number, blade: number, s
         };
         const p = [corner(j, i), corner(j, i + 1), corner(j + 1, i + 1), corner(j + 1, i)] as const;
         const n = normalize(cross(sub(p[1], p[0]), sub(p[3], p[0])));
-        // A touch lighter toward the whip, so a sail reads as cloth, not a flat board.
-        // Kept a little below the wall's white, so moonlight doesn't make the cloth glare.
+        // A little lighter toward the whip, so a sail looks like cloth, not a flat board.
+        // It stays a little darker than the wall's white, so moonlight does not make the cloth glare.
         const [s0, s1] = [0.4 + (0.06 * i) / across, 0.4 + (0.06 * (i + 1)) / across];
         quad(parts.cloth, p, dot(n, SHAFT) < 0 ? scale(n, -1) : n, [s0, s1, s1, s0], turning(0.85, { tint, rot: 0.85 }));
       }
@@ -598,7 +591,7 @@ function sails(parts: Parts, hub: V3, count: number, R: number, blade: number, s
   }
 }
 
-/** A windmill whose sails turn on its cap; see `windmillParams` for its axes. */
+/** Builds a windmill whose sails turn on its cap. See `windmillParams`. */
 export function buildWindmill(p: MillParams, ctx: BuildContext): Built {
   const r = ctx.rand.fork("windmill");
   const h = p.height * (ctx.facts.scale ?? 1);

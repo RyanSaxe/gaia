@@ -1,6 +1,5 @@
-// Biome primitives: what one region of the world grows and breathes. Each
-// directory's biome picks its own ground cover, air and drifting accents, and
-// names the palette families native to it.
+// Biome primitives: the ground cover, air, drifting accents and native palette
+// families of one region. Each region directory has its own biome.
 
 import type { AccentForm, GroundSpec, NativeFamilies } from "@gaia/schema";
 import { primitive, t } from "@gaia/schema";
@@ -17,7 +16,7 @@ const AIRS = {
   "pollen-filled": { tint: 0xf1e2a8, tintAmount: 0.32, density: 0.0065, mist: 0.06, specks: 1 },
 } as const;
 
-/** How much each distance thickens the air. */
+/** Fog density multiplier for each `distance` answer. */
 const DISTANCE = { "for miles": 0.55, "softened distance": 1, "close and dreamy": 1.7 } as const;
 
 export const air = primitive({
@@ -55,7 +54,7 @@ interface Cover {
   readonly width: number;
   readonly density: number;
   readonly clump: number;
-  /** Lean from upright, outline roundness and arc, each 0 to 1: blades, sprigs or low round leaves. */
+  /** Lean from upright, outline roundness and arc, each 0 to 1. Together they shape the cover as blades, sprigs or low round leaves. */
   readonly lean: number;
   readonly round: number;
   readonly bend: number;
@@ -72,7 +71,7 @@ const COVERS = {
   "clover meadow": { soil: 0x5e8944, low: 0x4f8b42, high: 0x8ec45e, tip: 0xa4d07a, height: 0.1, width: 0.036, density: 1, clump: 0, lean: 0.72, round: 0.95, bend: 0.1, flowers: [0xf3f0f2, 0xe7a5c8, 0xc9b6ec] },
 } as const satisfies Record<string, Cover>;
 
-/** How tall each length grows the cover, and how thick each amount of wildflowers is. */
+/** Cover height multiplier for each `length` answer, and wildflower density for each `wildflowers` answer. */
 const LENGTH = { cropped: 0.65, natural: 1, "tall and unkempt": 1.45 } as const;
 const WILDFLOWERS = { none: 0, "a scattering": 0.03, "drifts of them": 0.11 } as const;
 
@@ -123,7 +122,7 @@ export const groundCover = primitive({
 
 // ---------- ambient accents ----------
 
-// Petals take the cherry blossom's pink a shade deeper and darker than the sky, so they read against it.
+// The petals are a deeper, darker cherry-blossom pink than the sky, so they stay visible against it.
 const ACCENTS = {
   "drifting petals": { form: "petals", color: 0xe48aa6, size: 0.075, glow: 0 },
   "fireflies at dusk": { form: "fireflies", color: 0xf6ea8c, size: 0.07, glow: 1 },

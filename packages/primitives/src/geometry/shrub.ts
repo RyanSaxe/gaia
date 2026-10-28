@@ -1,8 +1,8 @@
-// Shrubs: many stems from one root crown, leafy to the ground, so a bush
-// reads as one leafy mass rather than a small tree. Its leaves grow in
-// crowded clusters on short twigs from its stems, at several depths, with a
-// ragged outline; scrub grows clusters only at its tips. Berries and flowers
-// come from blossoms@1 on the anchors its twigs leave.
+// Builds shrubs: many stems from one root crown, leafy to the ground, so a
+// bush looks like one leafy mass rather than a small tree. Leaves grow in
+// crowded clusters on short twigs at several depths, with a ragged outline,
+// and scrub grows clusters only at its tips. `blossoms@1` adds berries and
+// flowers at the anchors the twigs leave.
 
 import { type Anchor, type BuildContext, type Built, CUT, type Limb, type Resolved, type Skeleton } from "@gaia/schema";
 import type { brambleParams, leafMoundParams, thicketParams } from "../flora.ts";
@@ -17,7 +17,7 @@ const HABITS = {
 
 const UP: V3 = [0, 1, 0];
 
-/** Stems from the root crown out to tips spread over a dome, plus low tips so leaves reach the ground; or, for scrub, a low wiry tangle. */
+/** Stems from the root crown out to tips spread over a dome, plus low tips so leaves reach the ground, or for scrub, a low wiry tangle. */
 export function growThicket(p: Resolved<typeof thicketParams>, ctx: BuildContext): Skeleton {
   if (p.habit === "scrub") return growScrub(p, ctx);
   const habit = HABITS[p.habit];
@@ -105,15 +105,15 @@ function growScrub(p: Resolved<typeof thicketParams>, ctx: BuildContext): Skelet
 const CANE_TIP = 0.12;
 /**
  * How deep a cane roots past where it touches down, as a share of how far
- * out it touches: on a slope the soil falls away from the root, and a cane
- * rooted this deep still meets ground falling 24 degrees, as steep as any
- * plant stands on (`PLANT_SLOPE` in @gaia/terrain).
+ * out it touches. On a slope the soil falls away from the root, and a cane
+ * rooted this deep still meets ground falling 24 degrees, the steepest any
+ * plant is placed on (`PLANT_SLOPE` in @gaia/terrain).
  */
 const ROOTING = 0.45;
 
 /**
- * A bramble: canes from one root that rise steeply, arch over and run
- * long and low back to the soil, where their tips touch down. Each wanders
+ * Grows a bramble: canes from one root that rise steeply, arch over and run
+ * long and low back to the soil, where their tips touch down. Each curves
  * sideways as it goes, so neighbours cross into a tangle, and short side
  * shoots along its arch carry the leaves and berries.
  */
@@ -138,7 +138,7 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
       const out = 0.03 + reach * t;
       return [Math.cos(heading) * out, apex * Math.sin(Math.PI * Math.pow(t, 0.7)), Math.sin(heading) * out];
     };
-    // Each cane rises from the soil on its own, as a shrub's stems do, so it is a bough of its own.
+    // Each cane rises from the soil on its own, like a shrub's stem, so it is its own bough.
     let parent = -1;
     for (let k = 0; k < SEGMENTS; k++) {
       const t0 = k / SEGMENTS;
@@ -156,8 +156,8 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
       limbs.push({ start: end, end: shootEnd, startRadius: cane * 0.28, endRadius: cane * 0.12, depth: 2, parent });
       tips.push({ position: shootEnd, normal: shoot, size: CANE_TIP });
     }
-    // The tip where the cane touches down, and the cane diving on into the soil past it as a rooting tip does, so it
-    // meets the ground wherever the soil falls away; on level ground the root is hidden.
+    // The tip where the cane touches down, and the cane continuing into the soil past it like a rooting tip, so it
+    // meets the ground wherever the soil falls away. On level ground the root is hidden.
     const touch = at(1);
     const dive = normalize(add(normalize(sub(touch, at(0.98))), [0, -1, 0]));
     const deep = ROOTING * Math.hypot(touch[0], touch[2]);
@@ -169,20 +169,22 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
 
 /**
  * A feathery shrub's needle sprays, built along twigs as a crown's are: the spray's cut, half width, twigs per square
- * meter of clump, and sprays along each twig, or along a full twig of a mound whose clumps stand for several tips.
+ * meter of clump, sprays per twig, and sprays per full twig on a mound whose clumps each cover several tips.
  */
 const FEATHERY = { cut: CUT.needles, half: 0.12, twigs: 26, sprays: 5, fullSprays: 8 } as const;
 /** A crowded cluster's half width, by leaf. */
 const CROWDED_HALF = { rounded: 0.108, glossy: 0.095 } as const;
 
 /**
- * How a bush lays its clusters: how many a full bush shows over clumps of
- * this much surface (the sum of their radii squared, square meters, about a
- * waist-high spreading bush's), and how many ride each twig; the depths
- * twigs reach into a clump (a share of its radius) and each depth's share;
- * cluster size at the rim and deep inside; and its ragged
- * outline: how lumpy each clump is, how much clump sizes vary, the share of
- * twigs that stray past a clump, and how much of the rim is notched away.
+ * How a bush lays its clusters:
+ * - `clusters` on a full bush over clumps of `surface` square meters (the sum
+ *   of their radii squared, about a waist-high spreading bush), and `perTwig`.
+ * - `layers`: the depths twigs reach into a clump, as a share of its radius,
+ *   and each depth's share of the twigs.
+ * - `rim` and `inside`: cluster size at the rim and deep inside.
+ * - The ragged outline: clump lumpiness (`lumps`), clump size variation
+ *   (`spread`), the share of twigs that stray past a clump (`strays`), and how
+ *   much of the rim is notched away (`notches`).
  */
 const MOUND = {
   clusters: 1250,
@@ -196,11 +198,11 @@ const MOUND = {
   strays: 0.08,
   notches: 0.5,
 };
-/** Scrub's tufts: clusters only at its tips, each tuft this wide, this share of tips bare. */
+/** Scrub's tufts: clusters only at its tips, each tuft `radius` wide, with a `bare` share of tips left bare. */
 const TUFTS = { ...MOUND, clusters: 750, perTwig: 4, radius: 0.2, bare: 0.25, strays: 0.05, notches: 0.2 };
 /** Below this fullness ("in tufts at its tips"), clusters grow only at the frame's tips. */
 const TUFTED = 0.25;
-/** How far a cluster card reaches from its base, as a multiple of its size: along its direction (twice its reach, up to 1.15 times 1.15), and across it. */
+/** How far a cluster card reaches from its base, as a multiple of its size, along its direction (2 × 1.15 × 1.15) and across it. */
 const CARD_ALONG = 2.65;
 const CARD_ACROSS = 1.15;
 /** The most a mound's clusters grow past a bush's to cover a frame larger than its room allows (`buildLeafMound`). */
@@ -215,17 +217,16 @@ const CLUSTER = 2;
 const FEWEST_CLUSTER_TWIGS = 2;
 
 /**
- * A bush's leaves. Rounded and glossy bushes grow crowded leaf clusters
- * (`CUT.crowded`) on short twigs from their stems: over clumps at every stem
- * tip and along the stems, at three depths, small at the rim and larger
- * inside, faced out and up so few are seen edge-on, with a ragged outline of
- * uneven clumps, notches and a few stray twigs. Leaves alone fill the bush;
- * nothing dark stands inside it. Scrub ("in tufts at its tips") grows
- * clusters only at most of its tips. A feathery bush keeps its needle sprays.
- * Every cluster hangs from its twig, each twig ends under its outermost
- * cluster, and each bends with its stem and about where it leaves it; as
- * vitality falls the clusters brown and drop in place, and bare stems and
- * twigs stand.
+ * Builds a bush's leaves. Rounded and glossy bushes grow crowded leaf
+ * clusters (`CUT.crowded`) on short twigs: over clumps at every stem tip and
+ * along the stems, at three depths, small at the rim and larger inside, faced
+ * out and up so few are seen edge-on. Uneven clumps, notches and a few stray
+ * twigs make the outline ragged. Leaves alone fill the bush, with no dark body
+ * inside. Scrub ("in tufts at its tips") grows clusters only at most of its
+ * tips, and a feathery bush uses needle sprays (`buildNeedleMound`). Each twig
+ * ends under its outermost cluster and bends with its stem about where it
+ * leaves it. As vitality falls the clusters brown and drop in place, leaving
+ * bare stems and twigs.
  */
 export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext, skel: Skeleton): Built {
   if (p.leaves === "feathery") return buildNeedleMound(p, ctx, skel);
@@ -238,13 +239,13 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
   const look = tufts ? TUFTS : MOUND;
   const half = CROWDED_HALF[p.leaves];
   const base = clamp(Math.min(reach, top) * 0.45, 0.16, 1) * (0.8 + 0.3 * p.fullness);
-  // On a tree's frame a mound fills it to the ground, so it may take what a fir's needles do.
+  // On a tree's frame a mound fills it to the ground, so it gets the same triangle budget as a fir's needles.
   const budget = crownRoom(skel, NEEDLE_TRIANGLE_BUDGET);
   const perTwig = CLUSTER_TWIG + look.perTwig * CLUSTER;
   const kept = crownTips(skel.tips, Math.floor(budget / (FEWEST_CLUSTER_TWIGS * perTwig)), (n) => fillOf(n, p.fullness, tufts));
   const clumps = clumpsOf(skel, boughs, p, r.fork("clumps"), base, tufts, kept);
   const surface = clumps.reduce((n, c) => n + c.radius * c.radius, 0);
-  // A mound larger than a bush's, on a tree's frame, grows as many clusters for each square meter of its clumps.
+  // A mound larger than a bush's, on a tree's frame, grows the same number of clusters per square meter of clump.
   const wanted = look.clusters * (0.8 + 0.25 * Math.max(p.fullness, 0.45)) * Math.max(1, surface / MOUND.surface);
   // A crowded frame thins every clump's twigs evenly to stay in budget, and grows its clusters larger to cover what
   // the thinned ones would have, so a tree's mound is as full as a bush's, its leaves gathered in larger clusters.
@@ -278,7 +279,7 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
       }
       const stray = tr.next() < look.strays;
       if (stray) depth = tr.range(1.2, 1.45);
-      // Notches open gaps in the outline, never holes through it: only the outer layer is notched.
+      // Only the outer layer is notched, so notches open gaps in the outline, never holes through it.
       if (depth >= 0.95 && !stray && notch(d) < -1 + 1.2 * look.notches) continue;
       let goal = addScaled(clump.center, d, clump.radius * depth * lump(d) * tr.range(0.92, 1.05));
       goal[1] = Math.max(goal[1], half * 1.4);
@@ -287,9 +288,9 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
       if (length(sub(goal, root)) < 0.06) goal = addScaled(root, d, 0.08);
       const along = normalize(sub(goal, root));
       const b = boughs.at(clump.limb, root);
-      // A cluster holds many leaves, so a tired bush must lose them steadily to read as tired:
-      // clusters drop evenly from 0.75 down to 0.25, outer ones first, so about three in ten
-      // have gone by 0.6, half by 0.5, and a failing bush stands bare.
+      // A cluster holds many leaves, so a bush must lose clusters steadily for its decline to show.
+      // Clusters drop evenly between vitality 0.75 and 0.25, outer ones first, so about three in ten
+      // have gone by 0.6 and half by 0.5, and the bush is bare by 0.25.
       const loss = clamp(DROP.from - (DROP.from - DROP.to) * tr.next() + (depth >= 0.95 ? DROP.rim : -DROP.rim), 0.02, 0.9);
       const n = stray ? 2 : look.perTwig;
       const size = half * larger * clump.leaves * (look.inside + (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
@@ -299,7 +300,7 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
       emitTwig(twigs, [root, lerp(root, goal, tip)], 0.003, 0.0015, () => twigCh);
       for (const t of ts) {
         const at = lerp(root, goal, t);
-        // A card reaches up to 2.65 of its size along its direction and 1.15 across it: none may dip into the soil.
+        // A card reaches up to 2.65 of its size along its direction and 1.15 across it. None may dip into the soil.
         if (at[1] - CARD_ACROSS * size < SOIL) continue;
         const out = normalize([at[0] - clump.center[0], (at[1] - clump.center[1]) * 1.2, at[2] - clump.center[2]]);
         const jitter: V3 = [tr.range(-1, 1), tr.range(-0.6, 0.6), tr.range(-1, 1)];
@@ -329,7 +330,7 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
   return { parts, anchors: hungFrom(skel, parts, anchors) };
 }
 
-/** How tall a frame stands and how far its tips reach from its middle. */
+/** A frame's height, and how far its tips reach from its center. */
 function extentOf(skel: Skeleton): { top: number; reach: number } {
   let top = 0.3;
   let reach = 0.3;
@@ -348,28 +349,28 @@ function onLimb(limb: Limb, q: V3): V3 {
 }
 
 /**
- * Below this size a tip's clump shrinks in proportion, so a frame of thin
- * canes can ask for clumps sized to its canes; at and above it a clump
- * grows with its tip from three quarters of the mound's base size.
+ * Below this tip size a clump shrinks in proportion, so a frame of thin canes
+ * gets clumps sized to its canes. At and above it, a clump grows with its tip
+ * from three quarters of the mound's base size.
  */
 const SMALL_TIP = 0.3;
 const clumpShare = (size: number): number => (size >= SMALL_TIP ? 0.75 + 0.35 * size : (0.75 + 0.35 * SMALL_TIP) * (size / SMALL_TIP));
 /** A small tip's leaves shrink with its clump, but never below this share of a bush's, so a cane's leaves stay leaves. */
 const SMALLEST_LEAVES = 0.65;
 
-/** A clump on a bush, and how large its leaves are against a bush's: smaller on a small tip's clump. */
+/** A clump on a bush, with its leaf size relative to a bush's, smaller on a small tip's clump. */
 interface MoundClump extends Clump {
   readonly leaves: number;
 }
 const leavesOf = (size: number): number => (size >= SMALL_TIP ? 1 : Math.max(SMALLEST_LEAVES, size / SMALL_TIP));
 
-/** How many clumps a mound of `n` tip clumps grows along its stems: none for scrub's tufts. */
+/** How many clumps a mound of `n` tip clumps grows along its stems. None for scrub's tufts. */
 const fillOf = (n: number, fullness: number, tufts: boolean): number => (tufts ? 0 : Math.round(n * Math.max(0, fullness - 0.2) * 1.2));
 
 /**
- * Clumps over a bush: one at each kept stem tip (`crownTips`) and more along the stems, their sizes uneven; or, for
- * scrub, a tuft at most tips. Where the frame has more tips than the mound keeps, each clump grows to hold the
- * leaves of the tips it stands for.
+ * Clumps over a bush: one at each kept stem tip (`crownTips`) and more along the stems, of uneven sizes, or for scrub
+ * a tuft at most tips. When the frame has more tips than the mound keeps, each clump grows to hold the leaves of the
+ * tips it covers.
  */
 function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundParams>, r: BuildContext["rand"], base: number, tufts: boolean, kept: readonly number[]): MoundClump[] {
   const out: MoundClump[] = [];
@@ -405,8 +406,8 @@ function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundPa
  * A feathery bush's leaves: at every stem tip, and along the stems for a
  * full mound, a clump of twigs that leave the stem and curve out to the
  * mound's surface with needle sprays along them, down to the soil. Each twig
- * sways with its stem and bends about where it leaves it; as vitality falls
- * the needles brown and drop in place, and bare twigs stand.
+ * sways with its stem and bends about where it leaves it. As vitality falls
+ * the needles brown and drop in place, leaving bare twigs.
  */
 function buildNeedleMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext, skel: Skeleton): Built {
   const r = ctx.rand.fork("mound");
@@ -418,8 +419,8 @@ function buildNeedleMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext
   const fillFor = (n: number): number => Math.round(n * Math.max(0, p.fullness - 0.25) * 1.4);
   const lookOf = (sprays: number): ClumpLook => ({ twigs: FEATHERY.twigs * (0.7 + 0.5 * p.fullness), sprays, half: FEATHERY.half * (0.8 + 0.4 * base), cut: FEATHERY.cut, shape: "round", ground: 0.02 });
   const mostClumps = (look: ClumpLook): number => Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
-  // A frame of more tips than the mound can give clumps grows fewer, larger clumps spread over them, each holding
-  // the leaves of the tips it stands for on full twigs, so the mound keeps its needles while its hidden twigs thin.
+  // A frame with more tips than the mound can give clumps gets fewer, larger clumps, each holding the leaves of the
+  // tips it covers on full twigs, so the mound keeps its needles while its hidden twigs thin.
   const merged = crownTips(skel.tips, mostClumps(lookOf(FEATHERY.sprays)), fillFor).length < skel.tips.length;
   const clumpLook = lookOf(merged ? FEATHERY.fullSprays : FEATHERY.sprays);
   const kept = crownTips(skel.tips, mostClumps(clumpLook), fillFor);

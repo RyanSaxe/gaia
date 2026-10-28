@@ -1,5 +1,6 @@
-// The primitive manifest. Adding a primitive is one file plus one line here;
-// the contract tests then cover it automatically.
+// `PRIMITIVES` lists every primitive. The contract tests in
+// test/contract.test.ts run against each entry, so listing a primitive here
+// puts it under test.
 
 import type { AnyPrimitive } from "@gaia/schema";
 import { FLORA_PRIMITIVES } from "./flora.ts";

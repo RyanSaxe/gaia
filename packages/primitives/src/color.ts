@@ -1,5 +1,5 @@
-// Color math in OKLab, where equal distances look equally different. Turns of
-// hue, such as the light's warmth, work here, never in raw RGB.
+// Color math in OKLab, where equal distances look equally different. Hue
+// shifts, such as the light's warmth, use these functions instead of raw RGB.
 
 import type { ColorShift, Rgb } from "@gaia/schema";
 
@@ -52,7 +52,7 @@ export function mixRgb(x: Rgb, y: Rgb, t: number): Rgb {
   return [x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t];
 }
 
-/** Mixes in OKLab, so a blend of two colors never passes through grey mud. */
+/** Mixes in OKLab, so a blend of two colors does not dull toward grey partway. */
 export function mixLab(x: Rgb, y: Rgb, t: number): Rgb {
   const a = toOklab(x);
   const b = toOklab(y);
@@ -60,18 +60,19 @@ export function mixLab(x: Rgb, y: Rgb, t: number): Rgb {
 }
 
 /**
- * Turns a color toward a hue. The hue turns at most `maxTurn`, and colors far
- * around the wheel from the target hue barely turn at all, so a pink canopy
- * is never dragged through orange into green: a family keeps its identity.
+ * Turns a color's hue toward `s.hue` by at most `s.maxTurn` degrees, then
+ * applies `s.lightness` and `s.chroma`. A color more than 60 degrees from the
+ * target turns less, and one past 150 degrees does not turn, so a pink canopy
+ * never shifts through orange into green.
  */
 export function shiftColor(c: Rgb, s: ColorShift): Rgb {
   const [L, C, h] = toLch(c);
   const d = ((s.hue - h + 540) % 360) - 180;
   const x = Math.min(1, Math.max(0, (Math.abs(d) - 60) / 90));
-  // Deep, dark greens hold like evergreens; bright ones turn.
+  // Colors below lightness 0.32 do not turn and colors above 0.62 turn fully, so dark evergreen greens keep their hue.
   const y = Math.min(1, Math.max(0, (L - 0.32) / 0.3));
   const reach = (1 - x * x * (3 - 2 * x)) * y * y * (3 - 2 * y);
-  // Near-grey colors have no meaningful hue; turning them would invent one.
+  // The turn fades out below chroma 0.04. A near-grey color's hue is noise, and turning it would add a tint.
   const turn = Math.max(-s.maxTurn, Math.min(s.maxTurn, d * s.pull)) * reach * Math.min(1, C / 0.04);
   return fromLch(Math.min(0.97, Math.max(0.05, L + s.lightness)), C * s.chroma, h + turn);
 }

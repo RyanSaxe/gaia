@@ -1,5 +1,6 @@
-// A lookout tower crumbles from the top down, and its door and lintel go
-// with the wall around them: no doorway is left standing above the rubble.
+// Checks that a lookout tower crumbles from the top down and its door and
+// lintel go with the wall around them, so no doorway is left standing above
+// the rubble.
 
 import { describe, expect, it } from "vitest";
 import { type Built, type Part, rand } from "@gaia/schema";
@@ -12,7 +13,7 @@ const PLANS = ["round", "square", "octagonal"] as const;
 const CROWNS = ["a conical roof", "battlements", "an open lantern room"] as const;
 
 describe("a lookout tower", () => {
-  // Builds nine towers and reads each at four vitalities: a few seconds alone, more when other work shares the machine.
+  // Builds nine towers and poses each at four vitalities, a few seconds alone and more on a busy machine.
   it("never leaves its door or lintel standing higher than the wall beside the doorway", { timeout: 30_000 }, () => {
     for (const plan of PLANS) {
       for (const crown of CROWNS) {
@@ -20,7 +21,7 @@ describe("a lookout tower", () => {
         const built = (lookoutTower.build as Erased)(resolveParams(lookoutTower, stored, rand(3), lookoutTower.id), { rand: rand(3).fork("tower"), facts: { scale: 1 } }, null) as Built;
         const timber = built.parts.find((p) => p.swatch === "timber") as Part;
         const stone = built.parts.find((p) => p.swatch === "masonry") as Part;
-        // The door and its lintel: the timber at the tower's foot, around the doorway's middle.
+        // The door and its lintel: the timber at the tower's foot, around the doorway's center.
         const whole = applyVitality(timber, 1).positions;
         const door = Array.from({ length: timber.shade.length }, (_, v) => v).filter((v) => (whole[v * 3 + 1] as number) < 3);
         const cx = door.reduce((s, v) => s + (whole[v * 3] as number), 0) / door.length;
