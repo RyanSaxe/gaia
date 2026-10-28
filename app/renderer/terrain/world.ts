@@ -690,7 +690,7 @@ export function createWorld(root: HTMLElement): World {
       if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.id);
     });
     // An entity that appears as a plant, stone or flowers.
-    for (const s of code?.world.standing ?? []) if (s.of === "entity") entityOfPlace.set(s.path, s.path);
+    for (const s of code?.world.plants ?? []) if (s.of === "entity") entityOfPlace.set(s.path, s.path);
   }
   knowEntities();
   /** The entity that placed landmark `i` represents, found by its place id. */
@@ -837,7 +837,7 @@ export function createWorld(root: HTMLElement): World {
   }
   /** Each understory placement's shown vitality, which is that of the thing it represents. */
   function understoryShown(): Float32Array {
-    const own = (k: number): number => thingVitality.get(code?.standing(k)?.represented.id ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
+    const own = (k: number): number => thingVitality.get(code?.symbolOf(k)?.represented.id ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
     return understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own);
   }
   function showUnderstoryVitality(): void {
@@ -985,7 +985,7 @@ export function createWorld(root: HTMLElement): World {
   /** The definition, file or entity a tree represents, which gives its file. */
   const treeSymbol = (t: { readonly symbol: number }) => {
     const own = code?.stand.symbols.length ?? 0;
-    return code?.standing(t.symbol < own ? t.symbol : (forestOf[t.symbol - own] ?? -1));
+    return code?.symbolOf(t.symbol < own ? t.symbol : (forestOf[t.symbol - own] ?? -1));
   };
   const treeFile = (t: { readonly symbol: number }): string | undefined => treeSymbol(t)?.file;
   const treeVitality = (t: Tree): number => thingVitality.get(t.represented.id) ?? t.represented.vitality;
@@ -1383,7 +1383,7 @@ export function createWorld(root: HTMLElement): World {
       ? []
       : symbolPlacements.flatMap((at, i) => {
           const p = placed[at];
-          const sym = code?.standing(i);
+          const sym = code?.symbolOf(i);
           if (p === undefined || sym === undefined) return [];
           const { x, z } = p;
           return [[at, {

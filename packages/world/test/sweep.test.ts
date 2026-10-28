@@ -13,7 +13,7 @@ const KINDS: readonly (readonly [AnyKind, Library, SweepOptions])[] = [
 ];
 
 /** Every part, option and absence that appears in the blueprints, read from the blueprints alone. */
-function standing(k: AnyKind, lib: Library, blueprints: readonly Blueprint[]): string[] {
+function covered(k: AnyKind, lib: Library, blueprints: readonly Blueprint[]): string[] {
   const out = new Set<string>();
   for (const bp of blueprints) {
     for (const name of Object.keys(k.slots)) {
@@ -48,7 +48,7 @@ describe("a sweep of a kind's parts", () => {
       const { blueprints, missing } = sweep(k, lib, options);
       expect(missing).toEqual([]);
       for (const bp of blueprints) expect(validate(bp, k, lib)).toEqual([]);
-      const stood = new Set(standing(k, lib, blueprints));
+      const stood = new Set(covered(k, lib, blueprints));
       expect(possible(k, lib).filter((x) => !stood.has(x))).toEqual([]);
     });
   }

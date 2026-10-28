@@ -151,7 +151,7 @@ describe("the showcase, as it is and fixed, and the proving ground, stood as the
   it("stand every definition, file and entity the layout lays out as a tree, a stone, a bush or flowers, however crowded its patch", () => {
     for (const { root, code, stood } of worlds) {
       const trees = new Set(stood.trees.map((tree) => tree.symbol));
-      const left = code.stand.symbols.flatMap((s, i) => (s.rule === AS_THING || stood.symbols[i]! >= 0 || trees.has(i) ? [] : [code.standing(i)?.represented.id ?? String(i)]));
+      const left = code.stand.symbols.flatMap((s, i) => (s.rule === AS_THING || stood.symbols[i]! >= 0 || trees.has(i) ? [] : [code.symbolOf(i)?.represented.id ?? String(i)]));
       expect(left, root).toEqual([]);
     }
   });

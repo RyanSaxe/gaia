@@ -163,7 +163,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const keys = planned.map((p) => requestKey(p.request));
   // Form requests depend on the importance the understanding pass judges, so `composeWorld` plans them again after the
   // pass. This early plan uses the stored judgments and only counts the missing requests for the estimate.
-  const standing = planForms(facts, LOOKS, { graph }).requests;
+  const formRequests = planForms(facts, LOOKS, { graph }).requests;
 
   // A file's vitality is Jev's quality, so the renderer gets it once the understanding pass has judged the file.
   const healthUnsent = new Set(land.patches.map((p) => p.path));
@@ -179,7 +179,7 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
 
   const { records } = await engine.call("store.read", { project, table: "answers" });
   const stored = new Map(Object.entries(records as Record<string, JevResponse>));
-  const missing = [...planned.filter((_, i) => !stored.has(keys[i] as string)), ...standing.filter((p) => !stored.has(requestKey(p.request)))];
+  const missing = [...planned.filter((_, i) => !stored.has(keys[i] as string)), ...formRequests.filter((p) => !stored.has(requestKey(p.request)))];
   /** Pending understanding requests, or null when `understanding.plan` did not run. */
   const toUnderstand = understanding === null ? null : understanding.pending.reduce((n, p) => n + p.requests, 0);
   // Requests to send to Jev. The understanding share is planned before Jev resolves links, so the count is corrected to

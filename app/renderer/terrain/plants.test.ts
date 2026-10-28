@@ -6,7 +6,7 @@ import { AS_THING } from "./stand.ts";
 describe("one build for each blueprint", () => {
   const doc = provingWorld();
   const code = openedWorld(doc);
-  const things = [...doc.world.symbols, ...doc.world.standing];
+  const things = [...doc.world.symbols, ...doc.world.plants];
 
   it("stands each tree, bush, stone and flowers as its own blueprint's build: things answered alike share one, and no two blueprints do", () => {
     let small = 0;

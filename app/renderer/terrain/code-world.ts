@@ -51,9 +51,9 @@ export interface OpenedWorld {
   readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: ThingFacts; readonly vitality: number; readonly represented: Represented }[];
   /**
    * What each of `stand.symbols` represents, by index: the definitions in `world.symbols` order, then each file and
-   * entity that appears as flowers, a stone, a bush or a tree (`world.standing`).
+   * entity that appears as flowers, a stone, a bush or a tree (`world.plants`).
    */
-  readonly standing: (i: number) => StandingOf | undefined;
+  readonly symbolOf: (i: number) => SymbolOf | undefined;
   /** The light, sky and wind Jev composed for the world. */
   readonly sky: Blueprint;
   /** The bush Jev composed for each wild ground past the land (`WILD_GROUNDS`). The wild represents no code. */
@@ -269,14 +269,14 @@ function routeOf(trail: { readonly from: string; readonly to: string; readonly r
 }
 
 /** What one of the stand's symbols represents: its page, its file, which an entity lacks, and its form. */
-export interface StandingOf {
+export interface SymbolOf {
   readonly represented: Represented;
   readonly file?: string;
   readonly form: string;
 }
 
 /** The page of a file or entity that appears as a plant, stone or flowers of its own. */
-const representStanding = (s: CodeWorld["standing"][number], files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): Represented => {
+const representPlant = (s: CodeWorld["plants"][number], files: ReadonlyMap<string, FileFacts>, entities: ReadonlyMap<string, EntityFacts>): Represented => {
   if (s.of === "file") {
     const f = files.get(s.path);
     if (f === undefined) throw new Error(`${s.path} stands in the world but is not among its files.`);
@@ -335,15 +335,15 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
   const houses = world.things.filter((t) => t.as === "building");
   const rises = world.things.filter((t) => t.as === "landmark");
   // What each of the stand's symbols represents: every definition, then each file and entity that appears as a plant, stone or flowers.
-  const symbolOf = (i: number): StandingOf | undefined => {
+  const symbolOf = (i: number): SymbolOf | undefined => {
     const sym = world.symbols[i];
     if (sym !== undefined) {
       const file = files.get(sym.file);
       return file === undefined ? undefined : { represented: representSymbol(sym, file), file: sym.file, form: sym.form };
     }
-    const own = world.standing[i - world.symbols.length];
+    const own = world.plants[i - world.symbols.length];
     if (own === undefined) return undefined;
-    return { represented: representStanding(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form };
+    return { represented: representPlant(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form };
   };
   // Every distinct blueprint of each group, in the order the stand's symbols first use it. Two things with the same blueprint share one entry.
   const plants: Record<PlantGroup, Blueprint[]> = { trees: [], rocks: [], shrubs: [], flowers: [], mushrooms: [] };
@@ -363,7 +363,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     const patch = s.file === undefined ? undefined : patchOf.get(s.file);
     return { x: s.x, z: s.z, rule: group, variant: variantOf(group, s.blueprint), radius: group === "flowers" || group === "mushrooms" ? 0.8 : 1, scale: symbolScale(s.lines, group, s.importance), vitality: s.vitality, ...(patch === undefined ? {} : { patch }) };
   };
-  const symbols = [...world.symbols.map((s) => symbol(s, s.id)), ...world.standing.map((s) => symbol(s, s.path || "The repository's root"))];
+  const symbols = [...world.symbols.map((s) => symbol(s, s.id)), ...world.plants.map((s) => symbol(s, s.path || "The repository's root"))];
   return {
     world,
     spec,
@@ -372,14 +372,14 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     files,
     buildings: houses.map((t) => ({ ...thingOf(t, world, files, entities), blueprint: t.blueprint, kindName: composedName(t.blueprint), vitality: t.vitality })),
     landmarks: rises.map((t) => ({ path: t.path, blueprint: t.blueprint, vitality: t.vitality, ...thingOf(t, world, files, entities) })),
-    standing: symbolOf,
+    symbolOf,
     sky,
     wild,
     stand: {
       lots: houses.map(lot),
       landmarks: rises.map((t, i) => ({ landmark: i, lot: lot(t) })),
       // An entity that appears as a plant, stone or flowers. Its trails end at its lot's center.
-      places: world.standing.flatMap((s) => (s.of === "entity" ? [{ id: s.path, x: s.x, z: s.z, radius: 2 }] : [])),
+      places: world.plants.flatMap((s) => (s.of === "entity" ? [{ id: s.path, x: s.x, z: s.z, radius: 2 }] : [])),
       patches: world.patches.map((p) => ({ x: p.x, z: p.z, radius: p.radius })),
       cells: (() => {
         const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));

@@ -31,9 +31,9 @@ const response = JSON.parse(run.stdout.toString()) as { result?: CodeGraph; erro
 if (response.result === undefined) throw new Error(response.error?.message ?? "project.graph answered nothing");
 const graph = judgedGraph(response.result);
 const defs = graph.nodes.filter((n) => n.kind === "def");
-const standing = defs.filter((n) => typeof n.judged?.value?.importance === "number").length;
-if (standing === 0) throw new Error(`No definition has an importance in ${process.env.GAIA_DATA_DIR}: Jev's answers for this project are not there.`);
+const withImportance = defs.filter((n) => typeof n.judged?.value?.importance === "number").length;
+if (withImportance === 0) throw new Error(`No definition has an importance in ${process.env.GAIA_DATA_DIR}: Jev's answers for this project are not there.`);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify(graph)}\n`);
 const files = graph.nodes.filter((n) => n.kind === "file").length;
-console.log(`${out}: ${files} files, ${defs.length} definitions, ${standing} with an importance`);
+console.log(`${out}: ${files} files, ${defs.length} definitions, ${withImportance} with an importance`);

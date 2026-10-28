@@ -171,7 +171,7 @@ export interface CodeThing {
 }
 
 /** A file or entity that appears as flowers, a stone, a bush or a tree, placed on the file's own plot or on the entity's lot. */
-export interface CodeStanding {
+export interface CodePlant {
   readonly of: "file" | "entity";
   /** A file's path or an entity's root path. */
   readonly path: string;
@@ -263,7 +263,7 @@ export interface CodeWorld extends WorldPlaces {
   /** Every definition placed on its file's patch. One that appears as a building or landmark is also in `things`. */
   readonly symbols: readonly CodeSymbol[];
   /** Each file and entity that appears as flowers, a stone, a bush or a tree. */
-  readonly standing: readonly CodeStanding[];
+  readonly plants: readonly CodePlant[];
   readonly trails: readonly CodeTrail[];
   readonly regions: readonly CodeRegion[];
 }
@@ -992,13 +992,13 @@ function plotDefinitions(f: FileFacts, defs: readonly PlacedDef[], leaf: { reado
  * of them over one shared path network (`planTrails` in @gaia/terrain), so
  * none is dropped here.
  */
-function chooseTrails(wanted: readonly CodeTrail[], standing: readonly string[], weights: ReadonlyMap<string, number>): CodeTrail[] {
-  const known = new Set(standing);
+function chooseTrails(wanted: readonly CodeTrail[], entityPaths: readonly string[], weights: ReadonlyMap<string, number>): CodeTrail[] {
+  const known = new Set(entityPaths);
   const order = wanted
     .filter((t) => t.want > 0.5 && known.has(t.from) && known.has(t.to) && t.from !== t.to)
     .map((t) => ({ ...t, weight: weights.get(`${t.from}\n${t.to}`) ?? 1 }))
     .sort((a, b) => b.want - a.want || b.weight - a.weight || (a.from + a.to < b.from + b.to ? -1 : 1));
-  const group = new Map(standing.map((p) => [p, p]));
+  const group = new Map(entityPaths.map((p) => [p, p]));
   const root = (p: string): string => {
     const g = group.get(p) as string;
     if (g === p) return p;
@@ -1149,12 +1149,12 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
   const things: CodeThing[] = [];
   const lots: LotPlace[] = [];
   const symbols: CodeSymbol[] = [];
-  const standing: CodeStanding[] = [];
-  /** Adds a `CodeStanding` for a file or entity that has a form and no building or landmark. */
-  const stand = (of: CodeStanding["of"], path: string, name: string, lines: number, at: { x: number; z: number }, vitality: number, value: number | undefined, file?: string): void => {
+  const plants: CodePlant[] = [];
+  /** Adds a `CodePlant` for a file or entity that has a form and no building or landmark. */
+  const addPlant = (of: CodePlant["of"], path: string, name: string, lines: number, at: { x: number; z: number }, vitality: number, value: number | undefined, file?: string): void => {
     const form = forms[path];
     if (form === undefined || composed(path) !== undefined) return;
-    standing.push({ of, path, name, form, ...small(path), lines, ...(value === undefined ? {} : { importance: value }), x: at.x, z: at.z, ...(file === undefined ? {} : { file }), vitality });
+    plants.push({ of, path, name, form, ...small(path), lines, ...(value === undefined ? {} : { importance: value }), x: at.x, z: at.z, ...(file === undefined ? {} : { file }), vitality });
   };
   /** Per directory: total ground, the ground-weighted sum of its leaves' centers, and the centers themselves. */
   const held = new Map<string, { ground: number; x: number; z: number; hearts: { x: number; z: number }[] }>();
@@ -1186,7 +1186,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       const vitality = folderQuality(path) ?? judged.quality?.[path] ?? 1;
       const t = composed(path);
       if (t !== undefined) things.push({ path, name: e.name, as: t.as, blueprint: t.blueprint, area: path, x: leaf.x, z: leaf.z, lot: LAYOUT.lotReach[t.as], vitality });
-      stand("entity", path, e.name, e.lines, leaf, vitality, importance.get(`dir:${path}`));
+      addPlant("entity", path, e.name, e.lines, leaf, vitality, importance.get(`dir:${path}`));
       continue;
     }
     const f = files.get(path) as FileFacts;
@@ -1197,7 +1197,7 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
     const own = composed(path);
     const fileFacts: ThingFacts = { path, name: baseName(path), lines: f.lines, exports: f.symbols.filter((x) => x.exported).length, dependents: f.importedBy };
     if (own !== undefined) things.push({ path, of: "file", name: baseName(path), as: own.as, blueprint: own.blueprint, area, x: plotted.own.x, z: plotted.own.z, lot: LAYOUT.lotReach[own.as], file: path, facts: fileFacts, vitality });
-    stand("file", path, baseName(path), f.lines, plotted.own, vitality, importance.get(`file:${path}`), path);
+    addPlant("file", path, baseName(path), f.lines, plotted.own, vitality, importance.get(`file:${path}`), path);
     for (const { def, x, z } of plotted.defs) {
       const mine = quality.get(`def:${def.id}`) ?? vitality;
       // A definition with a building or landmark is also added to `things`, on its own plot.
@@ -1278,9 +1278,9 @@ function layOut(facts: CodeFacts, judged: Judgments, graph: CodeGraph | undefine
       cells,
       things,
       symbols,
-      standing,
+      plants,
       // Trails join entities, whatever form each has.
-      trails: chooseTrails(judged.trails, [...things.filter((t) => (t.of ?? "entity") === "entity").map((t) => t.path), ...standing.filter((s) => s.of === "entity").map((s) => s.path)], weights),
+      trails: chooseTrails(judged.trails, [...things.filter((t) => (t.of ?? "entity") === "entity").map((t) => t.path), ...plants.filter((s) => s.of === "entity").map((s) => s.path)], weights),
       regions,
     },
     lots,
