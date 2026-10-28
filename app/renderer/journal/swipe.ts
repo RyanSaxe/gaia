@@ -1,16 +1,15 @@
-// A swipe sideways on a trackpad, or the wheel, turns the journal's pages one
-// at a time: however long a gesture runs, its momentum included, it turns one
-// page.
+// Turns a sideways trackpad swipe or a wheel gesture into one page turn,
+// however long the gesture and its momentum run.
 
-/** How far a gesture travels before it turns a page, px, and how long it rests before it is over, ms. */
+/** The px a gesture travels before it turns a page, and the ms without events that end the gesture. */
 export const SWIPE = { reach: 40, rest: 200 } as const;
 
 /**
- * Reads gestures from wheel events, each event's deltas and when it came: the
- * larger of its two deltas adds up until the sum reaches `reach`, which turns
- * a page, forward (1) for a swipe to the left or a scroll down and back (-1)
- * the other way. The rest of that gesture turns nothing, until `rest` passes
- * with no event.
+ * Reads gestures from wheel events, given each event's deltas and time. The
+ * larger of the two deltas adds up until the sum reaches `reach`, which
+ * returns 1 (forward) for a swipe to the left or a scroll down, or -1 for the
+ * other way. The rest of that gesture returns null until `rest` ms pass with
+ * no event.
  */
 export function swipes(reach: number = SWIPE.reach, rest: number = SWIPE.rest): (dx: number, dy: number, at: number) => 1 | -1 | null {
   let sum = 0;

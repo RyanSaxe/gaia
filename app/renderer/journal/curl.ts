@@ -1,35 +1,32 @@
-// A turning leaf that bends, and the shadow it casts on the pages beneath. The leaf is cut into
-// strips, each a window onto its own part of the page on either face, hinged
-// one to the next, so the leaf curves as it goes over: the part by the spine
-// leads and the free edge trails, most in mid-turn and not at all at either
-// end. The book's own leaf still turns as it always did, out of sight; each
-// frame the strips take its angle, so a turn by hand bends the same way. A
-// painting or a map on a page is a canvas, which a copy of the page would
-// lose, so each strip draws just its own part of it.
+// Bends a turning leaf and casts its shadow on the pages beneath. The leaf is
+// cut into hinged strips, each showing its part of both faces, so the spine
+// side leads and the free edge trails, most in mid-turn. The book's own leaf
+// still turns out of sight, and each frame the strips follow its angle, so a
+// drag bends the same way.
 
 import "./curl.css";
 
-/** How many strips a leaf is cut into, and how far its free edge trails its spine at the middle of a turn, degrees. */
+/** How many strips a leaf is cut into, and how many degrees its free edge trails the spine at mid-turn. */
 const STRIPS = 10;
 const BEND = 54;
 /**
- * How far each strip's faces reach under the next strip, the page's pixels: two strips bent apart meet at a line both
- * edges only half cover, which shows what lies behind as a pale seam, so each face runs on a little past it.
+ * How far in page pixels each strip's faces extend under the next strip. Two strips bent apart meet at a line that
+ * both edges only half cover, which shows a pale seam, so each face extends a little past it.
  */
 const OVERLAP = 1.5;
-/** How dark the shadow a leaf casts is at its deepest, and how far it reaches across the page beneath, the book's pixels. */
+/** The leaf shadow's darkest opacity, and how far in book pixels it reaches across the page beneath. */
 const SHADOW = { dark: 0.34, reach: 150 } as const;
 
 export interface Curl {
   /**
-   * Lays the strips at the leaf's angle now, degrees, 0 lying on the right to -180 on the left; `forward` when it goes
-   * right to left. Returns the angle of the strip by the spine, which leads the leaf.
+   * Sets the strips for the leaf's current angle in degrees, from 0 lying on the right to -180 on the left. `forward`
+   * means turning right to left. Returns the angle of the strip by the spine, which leads the leaf.
    */
   at(deg: number, forward: boolean): number;
   remove(): void;
 }
 
-/** A copy of `page` for one strip, its canvases cut to just the strip's part: `x0` and `w` in the page's pixels. */
+/** A copy of `page` for one strip, with its canvases cropped to the strip's part, since cloning loses canvas content. `x0` and `w` are in page pixels. */
 function stripOf(page: HTMLElement, x0: number, w: number, pw: number): HTMLElement {
   const copy = page.cloneNode(true) as HTMLElement;
   const from = [...page.querySelectorAll("canvas")];
@@ -49,9 +46,9 @@ function stripOf(page: HTMLElement, x0: number, w: number, pw: number): HTMLElem
 }
 
 /**
- * Cuts the leaf showing `front` and `back` into strips laid in `host`, a box
- * placed as the leaf is; `shades` are the two layers over the right and left
- * pages the leaf's shadow falls on.
+ * Cuts the leaf showing `front` and `back` into strips in `host`, which is
+ * positioned like the leaf. `shades` are the layers over the right and left
+ * pages that receive the leaf's shadow.
  */
 export function createCurl(host: HTMLElement, front: HTMLElement | null, back: HTMLElement | null, pw: number, ph: number, bend: boolean, shades: { readonly right: HTMLElement; readonly left: HTMLElement }): Curl {
   const strips: HTMLElement[] = [];
@@ -64,15 +61,15 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
     strip.className = "jb-strip";
     strip.style.width = `${w}px`;
     strip.style.height = `${ph}px`;
-    // Every strip but the last runs on under the next; the last ends at the page's own edge.
+    // Every strip but the last extends under the next. The last ends at the page's edge.
     const over = i < n - 1 ? OVERLAP : 0;
     for (const [page, side] of [[front, "front"], [back, "back"]] as const) {
       const face = document.createElement("div");
       face.className = `jb-strip-face ${side}`;
       face.style.right = `${-over}px`;
       if (page !== null) {
-        // The back is seen mirrored once the leaf is over: strip i shows the back page's part counted from its far edge,
-        // and so runs on under the next strip on the page's nearer side.
+        // The back is mirrored once the leaf is over, so strip i shows the back page's part counted from its far edge,
+        // and its overlap extends on the page's near side.
         const x0 = side === "front" ? i * w : pw - (i + 1) * w - over;
         const copy = stripOf(page, x0, w + over, pw);
         copy.style.left = `${-x0}px`;
@@ -98,21 +95,21 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
     at(deg, forward) {
       const p = Math.min(1, Math.max(0, -deg / 180));
       const lift = Math.sin(Math.PI * p);
-      // The leaf's own angle at its middle; the spine's strips lead it, the free edge trails.
+      // The bend at this angle. The spine strip leads the leaf's angle by half of it, and the free edge trails.
       const b = (bend ? BEND * lift : 0) * (forward ? 1 : -1);
       const spine = deg - b / 2;
       let angle = spine;
       strips.forEach((s, i) => {
-        // Each strip turns back toward flat a little more than the one before, so the bend gathers toward the edge.
+        // Each strip turns back a little more than the one before, so the bend increases toward the edge.
         const step = i === 0 ? angle : (b * (2 * i)) / (n * (n - 1));
         if (i > 0) angle += step;
         s.style.transform = i === 0 ? `rotateY(${step.toFixed(2)}deg)` : `translateX(${w}px) rotateY(${step.toFixed(2)}deg)`;
-        // A strip turned away from the light darkens, its back as much as its front.
+        // Darkens both faces of a strip by how far it is turned from flat.
         const dim = 0.22 * Math.abs(Math.sin((angle * Math.PI) / 180)) ** 1.6;
         for (const face of [faces[2 * i], faces[2 * i + 1]]) (face?.lastElementChild as HTMLElement | undefined)?.style.setProperty("opacity", dim.toFixed(3));
       });
-      // The shadow falls just past the leaf's edge on the page beneath: on the right page while the leaf is over it, on
-      // the left once it has crossed the spine. Deepest when the leaf stands up, gone when it lies on either side.
+      // The shadow falls just past the leaf's edge on the page beneath: the right page before the leaf crosses the
+      // spine, the left after. It is darkest when the leaf is upright and absent when it lies flat.
       const edge = pw * Math.cos((deg * Math.PI) / 180);
       const dark = SHADOW.dark * lift;
       const reach = 30 + SHADOW.reach * lift;
@@ -136,7 +133,7 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
   };
 }
 
-/** The angle a leaf stands at, degrees, read from its transform as the browser has it this frame. */
+/** A leaf's current angle in degrees, read from its computed transform this frame. */
 export function angleOf(leaf: HTMLElement): number {
   const m = new DOMMatrixReadOnly(getComputedStyle(leaf).transform);
   // rotateY(θ) puts cos θ at m11 and -sin θ at m13.

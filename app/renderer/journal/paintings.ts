@@ -1,68 +1,63 @@
-// The journal's paintings. A thing's page pictures the world's own view of
-// it (`WorldHandle.view`), painted on painters' own threads. A page is never
-// seen before its painting exists: the book waits for it before the leaf that
-// shows it moves (`painted`). So that wait is rare, paintings are made ahead,
-// out of sight: the title page once the world stands, then the pages on
-// either side of the one open, then the things nearest the person while they
-// stand still, never while they walk. Each painting is kept with the world
-// (`PaintingStore`), so a world opened again is not painted again, and a
-// thing whose vitality changed is: on opening, or at once when it changes
-// while the world stands (`repaint`).
+// Paints the journal's pictures from the world's view of each thing
+// (`WorldHandle.view`) on painter workers. The book shows a page only after
+// its painting is done (`painted`), so paintings are made ahead: the
+// title page first, then the pages around the open one, then the things near a
+// person who is not walking. `PaintingStore` keeps them between visits, and a
+// change of vitality repaints a thing (`repaint`).
 
 import type { Pixels } from "../terrain/capture.ts";
 import type { PainterJob, PainterReply } from "./painter-worker.ts";
 import PainterWorker from "./painter-worker.ts?worker";
 import type { PaintingStore } from "./painting-store.ts";
 
-/** The view taken of a thing, pixels: half the painting's size, as fine as its finest strokes need. */
+/** The size in pixels of the view captured of a thing: half the painting's size, fine enough for its finest strokes. */
 const VIEW = { w: 520, h: 660 } as const;
-/** The painting, device pixels: two to each of a page's pixels. */
+/** The painting's size in device pixels, two per page pixel. */
 const PAINTED = { w: 1040, h: 1320 } as const;
-/** How often the things near the person are looked at again while they walk, ms. */
+/** How many ms to wait before checking again for near things to paint while the person walks. */
 const IDLE_CHECK = 400;
-/** The least time between views taken of things near the person, ms: each draws the world once more in a frame. */
+/** The minimum ms between views captured of things near the person, since each renders the world once more in a frame. */
 const NEAR_EVERY = 3000;
 
 export interface PaintingsOptions {
-  /** The world's own view of a thing, `wide` as a frontispiece shows it, or null when nothing stands for it. */
+  /** Captures the world's view of a thing, wide for the title page with `wide`, or null when no thing in the world matches `id`. */
   view(id: string, w: number, h: number, wide?: boolean): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
   /** Where paintings are kept between visits. */
   store?: PaintingStore;
-  /** A painting's key in the store: its world, its thing and how the thing stands; null keeps nothing for it. */
+  /** A painting's key in the store, from its world, its thing and the thing's form and vitality. Null skips the store. */
   keyOf?(id: string, wide: boolean): string | null;
-  /** Whether the things near the person may be painted now: never while they walk. */
+  /** Whether things near the person may be painted now. False while they walk. */
   idle?(): boolean;
 }
 
 export interface Paintings {
   /**
-   * The painting of what `id` stands for, on a canvas of its own. The book
-   * shows it only once `painted` has settled, so it is whole when seen.
-   * `wide` paints the thing small in its land, as the title page's
-   * frontispiece shows the world.
+   * Returns a new canvas with the painting for `id`. The book shows it only
+   * after `painted` resolves, so it is complete when seen. `wide` paints the
+   * thing small in its land, as on the title page.
    */
   picture(id: string, wide?: boolean): HTMLCanvasElement;
-  /** Settles once `id` is painted, or found to have nothing to paint, painting it before anything else. */
+  /** Resolves once `id` is painted, or found to have nothing to paint. Moves it to the front of the queue. */
   painted(id: string, wide?: boolean): Promise<void>;
-  /** Paints these next, ahead of the reader. */
+  /** Queues these next, ahead of the reader. */
   ahead(ids: readonly string[], wide?: boolean): void;
-  /** Paints these when nothing else waits and the person stands still: the things nearest them. */
+  /** Queues the things nearest the person, painted only when nothing else waits and the person is not walking. */
   near(ids: readonly string[]): void;
   /**
-   * Paints these afresh when the person stands still, things whose look changed in place, such as their vitality: each
-   * keeps showing its old painting until the new one is done, so no page waits on it or goes blank. One not painted
-   * yet is left alone, since it will be painted as it is now.
+   * Repaints things whose look changed in place, such as their vitality, when the person is not walking. Each shows
+   * its old painting until the new one is done, so no page waits or goes blank. A thing not yet painted is skipped,
+   * since its first painting will show its current look.
    */
   repaint(ids: readonly string[]): void;
-  /** How far the painting of `id` is: not begun, under way, done, or nothing stands for it. */
+  /** The painting state of `id`: waiting, painting, done, or none when no thing matches it. */
   state(id: string, wide?: boolean): "waiting" | "painting" | "done" | "none";
-  /** Forgets every painting, for a world that changed. */
+  /** Drops every painting when the world changes. */
   clear(): void;
 }
 
 /**
- * Paints `seen`, `w` by `h` device pixels, on a painter's thread of its own, the same strokes for the same `seed`, and
- * answers the copy encoded for keeping (WebP), or null when it could not be painted.
+ * Paints `seen` at `w` by `h` device pixels on a new painter worker, with the same strokes for the same `seed`. Returns
+ * the painting encoded for storage (WebP), or null when it could not be painted.
  */
 export async function paintKept(seen: { readonly color: Pixels; readonly mask: Pixels }, w: number, h: number, seed: string): Promise<Blob | null> {
   const worker = new PainterWorker();
@@ -80,7 +75,7 @@ export async function paintKept(seen: { readonly color: Pixels; readonly mask: P
   }
 }
 
-/** How soon a painting is wanted: asked for by the book, ahead of the reader, or near the person. */
+/** A painting's priority: 0 for the book's request, 1 for ahead of the reader, 2 for near the person. */
 type Rank = 0 | 1 | 2;
 
 interface Painting {
@@ -94,19 +89,19 @@ interface Painting {
   readonly settle: () => void;
 }
 
-/** What a painting is of, as the queue and the store name it: a thing, or a thing seen wide. */
+/** The id prefix for a wide painting in the queue. */
 const WIDE = "wide:";
 const named = (thing: string, wide: boolean): string => (wide ? `${WIDE}${thing}` : thing);
-/** A painting's seed: the same thing is always painted with the same strokes. */
+/** A painting's seed from its id, so the same thing always gets the same strokes. */
 const seedOf = (id: string): number => [...id].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0;
-/** Painters working at once: enough to keep ahead of a reader, never so many the computer labors. */
+/** How many painter workers run at once: a third of the CPU cores, from 1 to 3. */
 const PAINTERS = Math.max(1, Math.min(3, Math.floor((navigator.hardwareConcurrency ?? 4) / 3)));
 
 export function createPaintings(options: PaintingsOptions): Paintings {
   let paintings = new Map<string, Painting>();
   const painters = Array.from({ length: PAINTERS }, () => ({ worker: null as Worker | null, busy: false }));
   let jobs = 0;
-  /** One view taken at a time: each draws the world, so they never share a frame. */
+  /** Captures run one at a time, since each renders the world and two must never share a frame. */
   let viewing: Promise<unknown> = Promise.resolve();
   let idleTimer = 0;
   let lastNear = -Infinity;
@@ -127,7 +122,7 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     return p;
   };
   const finish = (p: Painting, state: "done" | "none", bitmap: ImageBitmap | null): void => {
-    // Painted afresh, the old painting goes; a fresh one that came to nothing leaves the old one shown.
+    // A new painting replaces the old one. A repaint that produced nothing leaves the old one shown.
     if (bitmap !== null) {
       if (p.done !== bitmap) p.done?.close();
       p.done = bitmap;
@@ -138,7 +133,7 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     p.settle();
   };
 
-  /** The waiting painting wanted soonest, in the order asked; near things only while the person stands still. */
+  /** The waiting painting with the best rank, in request order. A near thing waits while the person walks and until `NEAR_EVERY` has passed. */
   function take(): string | undefined {
     let best: [string, Painting] | undefined;
     for (const [id, p] of paintings) if (p.state === "waiting" && (best === undefined || p.rank < best[1].rank)) best = [id, p];
@@ -207,7 +202,7 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       canvas.height = PAINTED.h;
       const p = want(id, 0);
       if (p.done !== null) (canvas.getContext("2d") as CanvasRenderingContext2D).drawImage(p.done, 0, 0);
-      // One painted afresh shows its old painting until the new one is done.
+      // A painting being redone shows its old painting until the new one is done.
       if (p.state === "waiting" || p.state === "painting") p.shown.add(canvas);
       pump();
       return canvas;
@@ -236,7 +231,7 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     },
     state: (thing, wide = false) => paintings.get(named(thing, wide))?.state ?? "waiting",
     clear() {
-      // A cleared world's paintings settle at once, so nothing waits on them.
+      // Resolves every cleared painting at once, so nothing waits on them.
       for (const p of paintings.values()) {
         p.done?.close();
         p.settle();

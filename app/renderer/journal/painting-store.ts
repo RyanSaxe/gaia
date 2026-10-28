@@ -1,8 +1,7 @@
-// Where the journal keeps its paintings between visits: the page's own
-// store in the browser (IndexedDB), each painting under a key that names its
-// world, its thing and how the thing stood when it was painted, so a world
-// opened again is never painted again, and a thing whose vitality changed is.
-// Where the store can't be opened, nothing is kept and everything still works.
+// Stores the journal's paintings between visits in IndexedDB, keyed by world,
+// thing, form and vitality, so a reopened world reuses them and a thing whose
+// vitality changed is repainted. If the store cannot open, nothing is kept and
+// painting still works.
 
 export interface PaintingStore {
   get(key: string): Promise<Blob | null>;

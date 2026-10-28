@@ -1,9 +1,7 @@
-// What Jev says about an item, as its picture's caption, lettered across the
-// foot of the left-hand page as a plate in an old book carries one: each
-// concept of quality Jev answered, a short label and a percentage
-// ("readability  45%"). A concept Jev hasn't answered, or whose answer
-// doesn't count, is left out, so a caption shows whatever of them there is,
-// and none at all before anything is judged.
+// Builds a picture's caption from Jev's judgment of an item: a label and a
+// percentage for each quality concept Jev answered, such as "readability
+// 45%". An unanswered concept is left out, so a caption is empty before
+// anything is judged.
 
 import type { JudgedThing } from "../../world-service/protocol.ts";
 
@@ -12,7 +10,7 @@ export interface CaptionFact {
   readonly value: string;
 }
 
-/** The concepts of quality in the order a caption letters them, each by its name on the plate. */
+/** The quality concepts in caption order, each with its caption label. */
 const CONCEPTS: readonly (readonly [string, string])[] = [
   ["correctness", "correctness"],
   ["readability", "readability"],
@@ -27,8 +25,8 @@ const CONCEPTS: readonly (readonly [string, string])[] = [
 ];
 
 /**
- * The caption of an item the understanding pass judged: each concept it
- * answered, as a percentage. A concept whose answer doesn't count, such as
+ * Returns the caption for an item the understanding pass judged: each
+ * answered concept as a percentage. A concept with no answer, such as
  * robustness where nothing can fail, is left out.
  */
 export function conceptsCaption(thing: JudgedThing): CaptionFact[] {

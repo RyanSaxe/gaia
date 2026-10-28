@@ -4,7 +4,7 @@ import { titleSize } from "./page.ts";
 import { thumbIndex } from "./pages.ts";
 
 describe("the world's name on the title page", () => {
-  // Lowercase letters about 0.56 of the size wide, as Fraunces's are, as near as a test can measure without a browser.
+  // Approximates each letter as 0.56 of the font size wide, like Fraunces lowercase, since the test has no browser.
   const measure: Measure = (text, font, spacing) => text.length * (0.56 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
 
   it("keeps its full size for a short name and for a long one that breaks into a few lines", () => {

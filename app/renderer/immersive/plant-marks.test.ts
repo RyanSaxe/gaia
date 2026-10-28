@@ -8,7 +8,7 @@ import { markOf } from "../terrain/plant-mark.ts";
 import type { MarkBox } from "./marks.ts";
 import { PLANT_INKS, type PlantComposition, drawPlant, plantRoom } from "./plant-marks.ts";
 
-/** The roles whose primitives stand in the world as trees, bushes, stones and drifts, so the map must ink them. */
+/** The roles whose primitives appear in the world as trees, bushes, stones and drifts, so the map must ink them. */
 const DRAWN: ReadonlySet<Role> = new Set(["Skeleton", "Surface", "Foliage", "Ornament", "Rock", "Overgrowth", "Drift"]);
 
 describe("the plant marks' table", () => {
@@ -24,8 +24,8 @@ describe("the plant marks' table", () => {
 });
 
 /**
- * Every point a drawing shows, from a canvas that only records: a path's points count once it is filled or stroked,
- * and paint inside a clip, which shows only within the shape clipped to, counts not at all.
+ * A canvas that only records the points a drawing shows. A path's points count once it is filled or stroked. Paint
+ * inside a clip shows only within the clip shape, so it does not count.
  */
 function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][] } {
   const points: [number, number][] = [];
@@ -50,7 +50,7 @@ function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][]
     }
   }
   (globalThis as { Path2D?: unknown }).Path2D = Path2DRecorder;
-  // The canvas's own path, taken when it is filled or stroked.
+  // The canvas's current path, recorded when it is filled or stroked.
   const current: [number, number][] = [];
   const path = pathInto(current);
   const clips: boolean[] = [];
@@ -75,7 +75,7 @@ function recorder(): { ctx: CanvasRenderingContext2D; points: [number, number][]
   return { ctx, points };
 }
 
-/** Every tree, bush, stone and drift the sweep stands, built once, with the size its mark is drawn at. */
+/** Every tree, bush, stone and drift from the sweep, built once, with the size its mark is drawn at. */
 const plants: [string, PlantComposition][] = (
   [
     [COMPOSING.tree, COMPOSING.offered?.tree ?? COMPOSING.lib],
@@ -91,10 +91,10 @@ const plants: [string, PlantComposition][] = (
 );
 
 describe("a plant's mark composed from its blueprint", () => {
-  // Strokes and the brush's offset to the southeast reach a little past the points a mark places.
+  // Strokes and the wash offset to the southeast extend a little past the points a mark places.
   const inside = (box: MarkBox, [x, y]: [number, number], slack: number): boolean => x >= box[0] - slack && x <= box[2] + slack && y >= box[1] - slack && y <= box[3] + slack;
 
-  // From the whole sheet's zoom to the closest, in pixels a meter.
+  // Zooms from the whole sheet's to the closest, in pixels per meter.
   it.each([
     [1, 1.25],
     [0.5, 1.25],
