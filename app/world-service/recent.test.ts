@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EngineClient } from "@gaia/schema";
-import { PAINTING_MAX, RECENT_KEY, keepPainting, keepRecent, keepStood, offeredWorlds, recentWorlds, stoodIn } from "./recent.ts";
+import { PAINTING_MAX, RECENT_KEY, keepPainting, keepRecent, keepLastSpot, offeredWorlds, recentWorlds, lastSpotIn } from "./recent.ts";
 
 /**
  * A fake engine whose in-memory store holds `recent` as the recent worlds. `checkedOut` gives each folder's current
@@ -77,19 +77,19 @@ describe("the recent worlds", () => {
     const engine = storeEngine();
     const stood = { x: 12.5, z: -40, yaw: 1.2, layout: "0badcafe", by: { path: "packages/world", x: 10, z: -38 } };
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1 });
-    expect(await stoodIn(engine, "/code/gaia")).toBeUndefined();
-    await keepStood(engine, "/code/gaia", stood);
+    expect(await lastSpotIn(engine, "/code/gaia")).toBeUndefined();
+    await keepLastSpot(engine, "/code/gaia", stood);
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 2 });
-    expect(await stoodIn(engine, "/code/gaia")).toEqual(stood);
+    expect(await lastSpotIn(engine, "/code/gaia")).toEqual(stood);
     expect(await offeredWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 2 }]);
   });
 
   it("drops a spot that is malformed or of a world no longer kept", async () => {
     const engine = storeEngine();
     await keepRecent(engine, { root: "/code/gaia", name: "gaia", at: 1 });
-    await keepStood(engine, "/code/gaia", { x: Number.NaN, z: 0, yaw: 0, layout: "k", by: null });
-    await keepStood(engine, "/code/gaia", { x: 1, z: 0, yaw: 0, layout: "k", by: { path: 7 } });
-    await keepStood(engine, "/code/gone", { x: 1, z: 0, yaw: 0, layout: "k", by: null });
+    await keepLastSpot(engine, "/code/gaia", { x: Number.NaN, z: 0, yaw: 0, layout: "k", by: null });
+    await keepLastSpot(engine, "/code/gaia", { x: 1, z: 0, yaw: 0, layout: "k", by: { path: 7 } });
+    await keepLastSpot(engine, "/code/gone", { x: 1, z: 0, yaw: 0, layout: "k", by: null });
     expect(await recentWorlds(engine)).toEqual([{ root: "/code/gaia", name: "gaia", at: 1 }]);
   });
 

@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { AIR, type Realized } from "@gaia/realize";
 import type { Blueprint } from "@gaia/schema";
 import { settleVitality } from "@gaia/render";
-import { clearanceAt, fordBeside, footingAt, frameOf, groundHeightAt, heightAt, junctionVitality, placeAt, planTrip, stanceAt, standAt, stoodBy, type StoodSpot, type Stride, TRAVEL, trailWay, travelFrom, travelStep, wadingAt, WALK_TO, walkStep, type Walker, waterDepthAt, wayVitalityAt, wayWear } from "@gaia/terrain";
+import { clearanceAt, fordBeside, footingAt, frameOf, groundHeightAt, heightAt, junctionVitality, placeAt, planTrip, stanceAt, standAt, lastSpotAt, type LastSpot, type Stride, TRAVEL, trailWay, travelFrom, travelStep, wadingAt, WALK_TO, walkStep, type Walker, waterDepthAt, wayVitalityAt, wayWear } from "@gaia/terrain";
 import { groundVitality, sweep } from "@gaia/world";
 import { contentHash } from "./far-store.ts";
 import { CLIP } from "./land.ts";
@@ -795,9 +795,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       return s ?? null;
     },
     /** Moves to where the world's next open would land the person, as if they last stood at `stood`, or as on a first visit. */
-    valley: (stood?: StoodSpot) => world.valleyView(stood),
-    /** The person's spot, as the page saves it with the world (`stoodBy`). */
-    stood: () => (world.code === null ? null : stoodBy(world.code.world, world.walker.x, world.walker.z, world.walker.yaw)),
+    valley: (stood?: LastSpot) => world.valleyView(stood),
+    /** The person's spot, as the page saves it with the world (`lastSpotAt`). */
+    stood: () => (world.code === null ? null : lastSpotAt(world.code.world, world.walker.x, world.walker.z, world.walker.yaw)),
     walker: () => ({ x: world.walker.x, z: world.walker.z, yawDeg: (world.walker.yaw * 180) / Math.PI, pitchDeg: (world.walker.pitch * 180) / Math.PI, eye: world.walker.eye }),
     /**
      * Points the camera at the land from above for a capture, from exactly `pos` toward `target`. Without them it

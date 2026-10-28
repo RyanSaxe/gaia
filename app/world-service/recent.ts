@@ -5,7 +5,7 @@
 // whole only to offer the start page or to write a world.
 
 import type { EngineClient } from "@gaia/schema";
-import type { StoodSpot } from "@gaia/terrain";
+import type { LastSpot } from "@gaia/terrain";
 import { APP_STORE } from "./open-world.ts";
 import type { RecentWorld } from "./protocol.ts";
 
@@ -21,10 +21,10 @@ export const PAINTING_MAX = 256_000;
 const isPainting = (painting: unknown): painting is string => typeof painting === "string" && painting.startsWith("data:image/webp;base64,") && painting.length <= PAINTING_MAX;
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-/** Whether a value is a valid `StoodSpot`. */
-const isStood = (s: unknown): s is StoodSpot => {
+/** Whether a value is a valid `LastSpot`. */
+const isLastSpot = (s: unknown): s is LastSpot => {
   if (typeof s !== "object" || s === null) return false;
-  const { x, z, yaw, layout, by } = s as Partial<Record<keyof StoodSpot, unknown>>;
+  const { x, z, yaw, layout, by } = s as Partial<Record<keyof LastSpot, unknown>>;
   const byOk = by === null || (typeof by === "object" && by !== null && typeof (by as { path?: unknown }).path === "string" && finite((by as { x?: unknown }).x) && finite((by as { z?: unknown }).z));
   return finite(x) && finite(z) && finite(yaw) && typeof layout === "string" && byOk;
 };
@@ -46,7 +46,7 @@ export async function recentWorlds(engine: EngineClient): Promise<RecentWorld[]>
         ...(typeof r.github === "string" ? { github: r.github } : {}),
         at: typeof r.at === "number" ? r.at : 0,
         ...(typeof r.commit === "string" ? { commit: r.commit } : {}),
-        ...(isStood(r.stood) ? { stood: r.stood } : {}),
+        ...(isLastSpot(r.stood) ? { stood: r.stood } : {}),
         ...(isPainting(r.painting) ? { painting: r.painting } : {}),
       },
     ];
@@ -85,13 +85,13 @@ export async function keepRecent(engine: EngineClient, world: Omit<RecentWorld, 
 }
 
 /** Returns where the person was when they last left the world of `root`, if stored. */
-export async function stoodIn(engine: EngineClient, root: string): Promise<StoodSpot | undefined> {
+export async function lastSpotIn(engine: EngineClient, root: string): Promise<LastSpot | undefined> {
   return (await recentWorlds(engine)).find((r) => r.root === root)?.stood;
 }
 
 /** Stores `stood` with the recent world of `root`. Drops it when it is malformed or `root` is no longer a recent world. */
-export async function keepStood(engine: EngineClient, root: string, stood: unknown): Promise<void> {
-  if (!isStood(stood)) return;
+export async function keepLastSpot(engine: EngineClient, root: string, stood: unknown): Promise<void> {
+  if (!isLastSpot(stood)) return;
   const kept = await recentWorlds(engine);
   if (!kept.some((r) => r.root === root)) return;
   await keep(

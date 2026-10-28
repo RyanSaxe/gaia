@@ -9,7 +9,7 @@ import type { MessagePortMain } from "electron";
 import { createEngineClient } from "./engine-client.ts";
 import { healWorld, openWorld } from "./open-world.ts";
 import type { EngineStatus, FromMain, FromRenderer, StartChoice, ToMain, ToRenderer, WorldDocument } from "./protocol.ts";
-import { keepPainting, keepRecent, keepStood, offeredWorlds, stoodIn } from "./recent.ts";
+import { keepPainting, keepRecent, keepLastSpot, offeredWorlds, lastSpotIn } from "./recent.ts";
 
 const parent = process.parentPort;
 const toMain = (message: ToMain): void => parent.postMessage(message);
@@ -163,7 +163,7 @@ async function open(port: MessagePortMain, folder: string, github?: string): Pro
         }),
     });
     console.log(`gaia: opened ${folder}: ${document.summary}`);
-    const stood = await stoodIn(engine, folder);
+    const stood = await lastSpotIn(engine, folder);
     send(port, { type: "world.document", document, ...(stood === undefined ? {} : { stood }) });
     const name = github ?? document.facts.repository.name;
     toMain({ type: "world.opened", root: folder, name });
@@ -234,7 +234,7 @@ parent.on("message", (event) => {
           if (opened !== undefined) void keep(() => keepPainting(engine, opened.folder, m.painting));
         } else if (m.type === "world.stood") {
           const opened = openedOn.get(port);
-          if (opened !== undefined) void keep(() => keepStood(engine, opened.folder, m.stood));
+          if (opened !== undefined) void keep(() => keepLastSpot(engine, opened.folder, m.stood));
         }
         else if (m.type === "world.consent") {
           consenting?.resolve(m.approve);

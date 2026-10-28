@@ -175,7 +175,7 @@ export interface CodeMarks {
  * the nearest thing that represents code with its position then. That thing's `path` is an entity's or file's path,
  * or a definition's `<file>#<name>`.
  */
-export interface StoodSpot {
+export interface LastSpot {
   readonly x: number;
   readonly z: number;
   readonly yaw: number;
@@ -206,9 +206,9 @@ export function layoutKey(world: CodeMarks): string {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
-/** The `StoodSpot` to save for a person at (x, z) facing `yaw`. */
-export function stoodBy(world: CodeMarks, x: number, z: number, yaw: number): StoodSpot {
-  let by: StoodSpot["by"] = null;
+/** The `LastSpot` to save for a person at (x, z) facing `yaw`. */
+export function lastSpotAt(world: CodeMarks, x: number, z: number, yaw: number): LastSpot {
+  let by: LastSpot["by"] = null;
   let nearest = Infinity;
   const consider = (path: string, px: number, pz: number): void => {
     const d = Math.hypot(px - x, pz - z);
@@ -224,7 +224,7 @@ export function stoodBy(world: CodeMarks, x: number, z: number, yaw: number): St
  * Once an edit has moved things, it is beside the thing they stood by at its new position, at the same offset and
  * facing the same way, and the caller checks the ground there. Returns null on a first visit or when that thing is gone.
  */
-export function returnTo(world: CodeMarks, stood: StoodSpot | undefined): Return | null {
+export function returnTo(world: CodeMarks, stood: LastSpot | undefined): Return | null {
   if (stood === undefined) return null;
   if (stood.layout === layoutKey(world)) return { x: stood.x, z: stood.z, yaw: stood.yaw, exact: true };
   if (stood.by === null) return null;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
 import { type CodeFacts, type FileFacts, Library, rand, seedOf } from "@gaia/schema";
-import { OPENING, type Terrain, amongCode, bakeTerrain, clearOfCode, openingSpot, openingView, returnTo, stoodBy, waterDepthAt } from "@gaia/terrain";
+import { OPENING, type Terrain, amongCode, bakeTerrain, clearOfCode, openingSpot, openingView, returnTo, lastSpotAt, waterDepthAt } from "@gaia/terrain";
 import { composeWorld, judgeWorld, layoutWorld } from "@gaia/world";
 import { fakeJevClient } from "@gaia/world/testing";
 import type { WorldDocument } from "../../world-service/protocol.ts";
@@ -111,7 +111,7 @@ describe("where a person comes back to in a world they were in before", () => {
   const { world } = provingWorld();
   // Beside the first building, 6 m east and 2 m north of it, facing west.
   const house = world.things[0] as (typeof world.things)[number];
-  const stood = stoodBy(world, house.x + 6, house.z - 2, Math.PI / 2);
+  const stood = lastSpotAt(world, house.x + 6, house.z - 2, Math.PI / 2);
   /** The world after an edit: `edit` changes its things, and so its layout. */
   const edited = (edit: (things: (typeof world.things)[number][]) => (typeof world.things)[number][]): typeof world => ({ ...world, things: edit([...world.things]) });
 

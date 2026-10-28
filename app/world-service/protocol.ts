@@ -3,7 +3,7 @@
 // world service talks to the renderer over its own MessagePort.
 
 import type { CodeFacts, PatchPlace, Span, Unreachable } from "@gaia/schema";
-import type { Outline, StoodSpot } from "@gaia/terrain";
+import type { Outline, LastSpot } from "@gaia/terrain";
 import type { CodeWorld, DefinitionLines, LotPlace } from "@gaia/world";
 
 /** Main process → world service. */
@@ -46,7 +46,7 @@ export interface RecentWorld {
    * stored with the app settings, not in the project's store, because each write rewrites a whole store and a
    * project's store holds all of Jev's answers.
    */
-  readonly stood?: StoodSpot;
+  readonly stood?: LastSpot;
   /**
    * Set only in the start page's offer, when the folder's code has moved on from `commit`. It counts the commits that
    * touched the folder since then, or is null when `commit` is no longer in its history, such as after a rebase.
@@ -169,7 +169,7 @@ export type ToRenderer =
   /** No folder is named, so the page shows the start page and answers with `world.choose`. Sent again with `refused` when a typed address fails. */
   | { readonly type: "world.start"; readonly offer: StartOffer }
   /** The laid-out world, and where the person was when they last left it, if they opened it before (`RecentWorld.stood`). */
-  | { readonly type: "world.document"; readonly document: WorldDocument; readonly stood?: StoodSpot }
+  | { readonly type: "world.document"; readonly document: WorldDocument; readonly stood?: LastSpot }
   | { readonly type: "world.failed"; readonly root: string; readonly message: string }
   /** The answer to `world.source`: the file's lines, or null when it cannot be read or is outside the folder. */
   | { readonly type: "world.source"; readonly path: string; readonly lines: readonly string[] | null }
@@ -210,7 +210,7 @@ export type FromRenderer =
   /** Asks for a file's text by project-relative path, for the journal's code pages. The service reads it at the world's commit, or the commit it healed onto (`world.vitality`). */
   | { readonly type: "world.source"; readonly path: string }
   /** Where the person is in this page's world, sent periodically as they walk and when the page unloads. The world service stores it as `RecentWorld.stood`. */
-  | { readonly type: "world.stood"; readonly stood: StoodSpot };
+  | { readonly type: "world.stood"; readonly stood: LastSpot };
 
 /** Returns the status bar text for an engine state. */
 export function statusText(status: EngineStatus | "standalone"): string {

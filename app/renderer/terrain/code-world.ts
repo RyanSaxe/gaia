@@ -6,7 +6,7 @@
 import { type Blueprint, type EntityFacts, type FileFacts, type RouteSpec, type SymbolFact, type ThingFacts, rand, seedOf } from "@gaia/schema";
 import { link } from "@gaia/kinds";
 import { buildSlots } from "@gaia/realize";
-import { type StoodSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
+import { type LastSpot, type WorldSpec, outlinesOf } from "@gaia/terrain";
 import { type CodeWorld, type FormKind, layoutWorld } from "@gaia/world";
 import type { ConsentPlan, Heal, JudgedThing, Opening, StartChoice, StartOffer, WorldDocument } from "../../world-service/protocol.ts";
 import { type WorldService, worldService } from "../service.ts";
@@ -67,7 +67,7 @@ export interface OpenedWorld {
   /** How the judging went, in words. */
   readonly summary: string;
   /** Where the person stood when they last left this world, if they were here before (`returnTo`). */
-  readonly stood?: StoodSpot;
+  readonly stood?: LastSpot;
 }
 
 /**
@@ -131,7 +131,7 @@ export const symbolScale = (lines: SymbolFact["lines"], rule: string, importance
 };
 
 /** Opens the world through the world service, which judges and lays it out, and keeps the wait screen updated. */
-function serviceWorld(service: WorldService, veil: Veil): Promise<{ readonly document: WorldDocument; readonly stood?: StoodSpot }> {
+function serviceWorld(service: WorldService, veil: Veil): Promise<{ readonly document: WorldDocument; readonly stood?: LastSpot }> {
   return new Promise((resolve, reject) => {
     const off = service.on((m) => {
       if (m.type === "world.progress") veil.opening(m.opening);
@@ -237,7 +237,7 @@ export async function codeWorld(veil: Veil): Promise<OpenedWorld> {
   const service = worldService();
   let document: WorldDocument;
   // Where the person stood when they last left this world. Only the world service keeps it.
-  let stood: StoodSpot | undefined;
+  let stood: LastSpot | undefined;
   let landed = false;
   const watched: Veil = { ...veil, opening: (o) => ((landed ||= o.stage === "land"), veil.opening(o)) };
   // If the world cannot open, the wait screen shows why and stays. Nothing else replaces it.

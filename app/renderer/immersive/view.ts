@@ -4,7 +4,7 @@
 // The world service keeps where the person stands and a painting of their view
 // for the next visit.
 
-import { type PlaceArea, stoodBy } from "@gaia/terrain";
+import { type PlaceArea, lastSpotAt } from "@gaia/terrain";
 import { type CodeWorld, areaVitality, entityOf, journalOf } from "@gaia/world";
 import { SLIP_LOGO } from "../brand/logo.ts";
 import { onTap } from "../tap.ts";
@@ -32,7 +32,7 @@ const FRONTISPIECE = "wide-2";
 /** Every `every` ms while the person stands still, paints the nearest `count` things within `reach` meters, if they have moved `moved` meters since the last pass. */
 const NEAR = { reach: 120, count: 24, every: 3000, moved: 15 } as const;
 /**
- * `keepStood` runs every `check` ms and sends the person's position (`world.stood`) once they have moved `moved`
+ * `sendLastSpot` runs every `check` ms and sends the person's position (`world.stood`) once they have moved `moved`
  * meters or turned `turned` degrees since the last send. While they walk, it sends at most every `every` ms. It also
  * sends on pagehide. Each send rewrites the app's settings, about a megabyte.
  */
@@ -299,7 +299,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   // Sends the person's position to the world service as they walk, so the next open starts there. Without a world service, nothing is kept.
   if (service !== null) {
     let kept: { readonly x: number; readonly z: number; readonly yaw: number; readonly at: number } | null = null;
-    const keepStood = (): void => {
+    const sendLastSpot = (): void => {
       const code = world.code();
       if (!lifted || code === null) return;
       const p = world.person();
@@ -310,7 +310,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
         if (p.walking && now - kept.at < KEEP.every) return;
       }
       kept = { x: p.x, z: p.z, yaw: p.yaw, at: now };
-      service.send({ type: "world.stood", stood: stoodBy(code, p.x, p.z, p.yaw) });
+      service.send({ type: "world.stood", stood: lastSpotAt(code, p.x, p.z, p.yaw) });
     };
     // The opening position counts as sent, so nothing is sent until the person moves.
     world.onLifted(() => {
@@ -336,12 +336,12 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
         .finally(() => (painting = false));
     };
     window.setInterval(() => {
-      keepStood();
+      sendLastSpot();
       paintStood();
     }, KEEP.check);
     window.addEventListener("pagehide", () => {
       if (kept !== null) kept = { ...kept, at: -Infinity };
-      keepStood();
+      sendLastSpot();
     });
   }
   // Places the trail markers on every bake, before the grass and walking read the ground.
