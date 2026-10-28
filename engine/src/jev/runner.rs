@@ -631,7 +631,7 @@ fn file_requests(
     // Each question about a line goes to the first piece that contains the line,
     // and a question about a definition on a cut line goes to the piece with its
     // signature, so each piece's questions are about the source it shows.
-    let homes: Vec<Option<usize>> = questions
+    let question_pieces: Vec<Option<usize>> = questions
         .iter()
         .map(|q| {
             let line = line_of(q)?;
@@ -642,7 +642,7 @@ fn file_requests(
         })
         .collect();
     // The pieces with at least one question about their own source.
-    let homed: HashSet<usize> = homes.iter().flatten().copied().collect();
+    let pieces_with_questions: HashSet<usize> = question_pieces.iter().flatten().copied().collect();
     for (index, piece) in pieces.iter().enumerate() {
         let mut state = base.clone();
         state.insert(
@@ -684,11 +684,11 @@ fn file_requests(
         // by each piece's bytes.
         let mine: Vec<&Asked> = questions
             .iter()
-            .zip(&homes)
-            .filter(|(q, home)| match (line_of(q), home) {
+            .zip(&question_pieces)
+            .filter(|(q, assigned)| match (line_of(q), assigned) {
                 (Some(_), Some(h)) => *h == index,
                 (Some(_), None) => true,
-                (None, _) => index == 0 || !homed.contains(&index),
+                (None, _) => index == 0 || !pieces_with_questions.contains(&index),
             })
             .map(|(q, _)| q)
             .collect();
