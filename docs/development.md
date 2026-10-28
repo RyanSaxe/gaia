@@ -2,8 +2,8 @@
 
 Start with the [README](../README.md) and [Jev setup](connect-jev.md).
 The project uses Node 26, pnpm 10, Git and stable Rust from rustup. Install
-`curl` as well; the engine uses it for OpenRouter requests and grammar downloads.
-`pnpm engine` selects rustup's cargo through `tools/cargo-env.ts`.
+`curl` as well. The engine uses it for OpenRouter requests and grammar
+downloads. `pnpm engine` selects rustup's cargo through `tools/cargo-env.ts`.
 
 ## Run the app
 
@@ -15,8 +15,8 @@ Set `GAIA_PROJECT` to a local project path to skip the start page, or to
 `proving`, `showcase` or `showcase-fixed` for a bundled test world. Set
 `GAIA_ENGINE` to use an engine binary at a different path.
 
-Use the local stand-in described in [Jev setup](connect-jev.md#local-development)
-when exercising requests without spending money or sending code to OpenRouter.
+To test requests without spending money or sending code to OpenRouter, use
+the local stand-in described in [Jev setup](connect-jev.md#local-development).
 
 ## The standalone lab
 
@@ -27,21 +27,22 @@ pnpm lab:html
 Open `dist/lab.html` in a browser. It bundles the renderer, fonts and world
 fixtures into one offline page. It has no engine connection and opens the
 [showcase](showcase.md) unless a query names another world. The showcase opens
-from its saved Jev answers; a missing answer fails with the request's name.
+from its saved Jev answers. If an answer is missing, the page fails and names
+the request.
 
 | Query | Use |
 | --- | --- |
 | `?world=proving` | Every supported visual feature, including ruin |
-| `?world=showcase` | A small codebase with a mixture of healthy and poor code, the page's world with no query |
+| `?world=showcase` | A small codebase with healthy and poor code, and the page's world when no query names one |
 | `?world=showcase-fixed` | The same showcase with its broken module repaired |
 | `?hour=22` | Pin the lighting to an hour |
 | `?start` | Show the start page |
-| `?sound=record` | Play nothing aloud; keep what the person hears for `__lab.sound.render()` |
+| `?sound=record` | Play nothing aloud, and keep what the person hears for `__lab.sound.render()` |
 
 Queries can be combined, for example `?world=proving&hour=22`.
 
 `pnpm lab:serve` rebuilds and serves the page on the machine's Tailscale IPv4
-address. It listens on port 5180 by default; set `LAB_PORT` to choose another
+address. It listens on port 5180 by default. Set `LAB_PORT` to choose another
 free port. Check for an existing server before starting one.
 
 For scripted inspection, the page exposes `window.__lab`:
@@ -58,7 +59,9 @@ __lab.sound.record(true)  // with ?sound=record: keep a walk, then
 __lab.sound.render({ music: "layers" })  // its sound as base64 WAV
 ```
 
-The hooks are defined in [terrain/hooks.ts](../app/renderer/terrain/hooks.ts),
+[main.ts](../app/renderer/main.ts) defines `window.__lab` and its top-level
+hooks, such as `hour`. The `terrain`, `immersive` and `sound` hooks are defined
+in [terrain/hooks.ts](../app/renderer/terrain/hooks.ts),
 [immersive/view.ts](../app/renderer/immersive/view.ts) and
 [sound/index.ts](../app/renderer/sound/index.ts). Scripted Electron windows
 call `webContents.setAudioMuted(true)`, so a run never plays through the
@@ -69,8 +72,8 @@ machine's speakers.
 
 Use the [proving ground](proving-ground.md) to inspect every affected form at
 vitality 1, 0.65 and 0.3, by day and at night. Also open Gaia's own checkout in
-the app to catch changes that only appear in a large composition. The app keeps
-Jev's answers for it in its own store after the first live open.
+the app to catch changes that only appear in a large composition. After the
+first live open, the app keeps Jev's answers for it in its own store.
 
 | Command | Result |
 | --- | --- |
@@ -80,7 +83,8 @@ Jev's answers for it in its own store after the first live open.
 | `pnpm brand` | Regenerates the app's brand images and macOS icon |
 
 For changes to frame cost or walking detail, compare before and after on a
-quiet machine with `pnpm probe`. Its Electron window must remain uncovered.
+quiet machine with `pnpm probe`. Its Electron window stays hidden except
+during the hitch walk. Leave the window uncovered while it shows.
 
 | Probe | Measures |
 | --- | --- |
@@ -92,21 +96,24 @@ quiet machine with `pnpm probe`. Its Electron window must remain uncovered.
 | `pnpm probe stress` | The proving ground with five times as many code trees |
 | `pnpm probe paint` | Journal painting capture and rendering |
 
-`--world showcase` or `--world proving` selects a world; the swap test runs in
-the showcase and the likeness test in the proving ground unless one is named.
-`--spot` limits the stops; `--dpr` sets the pixel ratio. The probes fail on
-WebGL errors. A timing on a busy machine is not a reliable baseline.
+`--world showcase` or `--world proving` selects a world. Unless one is named,
+the swap test runs in the showcase and the likeness test in the proving
+ground. `--spot` limits the stops, and `--dpr` sets the pixel ratio. A probe
+fails on any WebGL error. A timing from a busy machine is not a reliable
+baseline.
 
-The likeness test stands one copy of every build that turns far, at vitality
-1, 0.65 and 0.3, at its swap size and at a half, a quarter and an eighth of
-it, and draws it there as its far form and as its full form. The air is clear
-while it draws, since both forms would fade into it alike. At each size it
-compares how much of the crown's part of the screen each form covers. It fails
-when a far form past its swap strays farther from its full form's share than
-it does at the swap (`LIKENESS_BAR` in [`probe.ts`](../tools/probe.ts)). It
-also reports each form's ink and how unlike the two look cell by cell.
-`__lab.terrain.likeness(name, vitality, sizes, true)` returns the three
-views as pictures.
+The likeness test places one copy of every build that has a far form, at
+vitality 1, 0.65 and 0.3. It draws each copy as its far form and as its full
+form, at its swap size and at a half, a quarter and an eighth of it. Haze is
+off while it draws, because haze would fade both forms alike. At each size it
+compares how much of the crown's part of the screen each form covers. Below
+the swap size, a far form's coverage may stray no farther from its full form's
+than it does at the swap size, within the margins in `LIKENESS_BAR`
+([`probe.ts`](../tools/probe.ts)). The test fails otherwise. It also reports
+each form's ink, which is the form's mean change from the empty view, and how
+much the two forms differ cell by cell.
+`__lab.terrain.likeness(name, vitality, sizes, true)` also returns the empty
+view, the far form and the full form as pictures.
 
 ## Components and fixtures
 
@@ -114,58 +121,64 @@ To add a primitive:
 
 1. Declare it in `packages/primitives/src/` with pure geometry in `geometry/`.
    Fill every vitality channel and describe its closed parameters for Jev.
-2. Register it in `library.ts`. Shared contract tests cover determinism,
-   parameter ranges, channel ranges, triangle budgets and vitality response.
-3. The [proving ground](proving-ground.md) follows on its own: the lab, the
-   app and the tests make it from the plan in `tools/proving.ts` as they
-   build. Its sky, lands, buildings, landmarks, trails, trees, bushes, stones
-   and flowers are sweeps of the parts Jev composes them from (`sweep` in
-   [`@gaia/world`](../packages/world/src/sweep.ts)), so a new part of one
-   stands there with each of its options, thriving, tired and in ruin. The
-   build fails and names what is missing while the plan has no place for it,
-   such as an area with running water; add a directory to the plan then. A
-   new part a tree, bush, stone or drift may grow from also needs words with a
-   feel for every option, which `looks.test.ts` checks. Inspect the result in
-   the app and screenshots.
-4. Add the primitive's map ink: in `app/renderer/immersive/marks.ts` for a
-   part of a building or landmark, in `app/renderer/immersive/plant-marks.ts`
-   for a part of a tree, bush, stone or flower drift. Their contract tests ask
-   every primitive in those roles for its ink.
+2. Add it to its family's list, such as `FLORA_PRIMITIVES` in `flora.ts`,
+   which `library.ts` collects into `PRIMITIVES`. Shared contract tests cover
+   determinism, parameter ranges, channel ranges, triangle budgets and
+   vitality response.
+3. The [proving ground](proving-ground.md) picks it up without extra work. The
+   lab, the app and the tests build the proving ground from the plan in
+   `tools/proving.ts`. Its sky, lands, buildings, landmarks, trails, trees,
+   bushes, stones and flowers are sweeps of the parts Jev composes them from
+   (`sweep` in [`@gaia/world`](../packages/world/src/sweep.ts)). A new part
+   therefore appears there with each of its options, at high, middle and low
+   vitality. If the plan has no place the part needs, such as an area with
+   running water, the build fails and names what is missing. Add a directory
+   to the plan for it. A new part for trees, bushes, stones or flower drifts
+   also needs words that give every option a feel, which `looks.test.ts`
+   checks. Inspect the result in the app and in screenshots.
+4. Add how the map draws the primitive, in `app/renderer/immersive/marks.ts`
+   for a part of a building or landmark, or in
+   `app/renderer/immersive/plant-marks.ts` for a part of a tree, bush, stone or
+   flower drift. Their contract tests check every primitive in those roles.
 
 The lab's fixture bundles live in `app/renderer/terrain/fixtures/`:
 
 | Bundle | Source and regeneration |
 | --- | --- |
-| `proving*` | The made-up codebase planned in `tools/proving.ts` and the sweeps it stands. Not committed: the lab, the app and the tests make its facts and judgments as they build ([`proving-ground.ts`](../tools/proving-ground.ts)), and `pnpm proving` writes the same files. |
+| `proving*` | The made-up codebase planned in `tools/proving.ts`, with its sweeps. These files are not committed. The lab, the app and the tests generate its facts and judgments when they build ([`proving-ground.ts`](../tools/proving-ground.ts)), and `pnpm proving` writes the same files. |
 | `showcase*` | Source bundles, judged graphs and saved Jev answers for the [showcase](showcase.md). |
 
-The repository keeps Jev's answers for the showcase only. To count what
-composing another project's world asks and costs, such as Gaia's own,
-`GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` writes its judged graph from the
-answers an app store holds, `pnpm jev-world` judges and composes its world from
-that graph, and `pnpm print-world-requests` prints the requests without sending
-them. They keep those files in `~/.cache/gaia-snapshot/` unless their arguments
-name others ([`snapshot-paths.ts`](../tools/snapshot-paths.ts)).
+The repository keeps Jev's answers for the showcase only. To count the
+requests and cost of composing another project's world, such as Gaia's own,
+use three tools.
+`GAIA_DATA_DIR=dir pnpm graph-snapshot [root]` writes the project's judged
+graph from the answers in an app store. `pnpm jev-world` judges and composes
+its world from that graph. `pnpm print-world-requests` prints the requests
+without sending them. The tools keep their files in `~/.cache/gaia-snapshot/`
+unless their arguments name other paths
+([`snapshot-paths.ts`](../tools/snapshot-paths.ts)).
 
 If a new primitive or schema change invalidates the showcase's bundled answers,
-use the proving ground for visual coverage and open a checkout in the app
-against the local stand-in for integration. Use a temporary store for that run.
-Re-ask Jev for the showcase ([showcase.md](showcase.md#update-the-bundled-worlds))
-before submitting changes that invalidate its answers.
+use the proving ground for visual coverage. For integration, open a checkout
+in the app against the local stand-in, with a temporary store. Re-ask Jev for
+the showcase ([showcase.md](showcase.md#update-the-bundled-worlds)) before
+submitting changes that invalidate its answers.
 
-Saved Jev answers are keyed by request hash. Changing request state, wording or
+Gaia keys saved Jev answers by request hash. Changing request state, wording or
 options can invalidate them. Never relabel a saved answer as the answer to a
 new request. Rejudge affected requests with approval before replacing a live
 fixture bundle. Keep a snapshot's graph, judgments and design answers together.
 
 ## Sound files
 
-The files in `app/renderer/sound/assets/` are made by [`tools/sound/`](../tools/sound/README.md):
-`pnpm sound` rebuilds all of them, `pnpm sound world` the field recordings and `pnpm sound music` the
-music. It needs [uv](https://docs.astral.sh/uv/), `curl`, and `ffmpeg` with libopus; the first music build
-also compiles sfizz with CMake and Ninja. The recordings, sample libraries and sfizz's source are fetched
-once into `~/.cache/gaia-sound/` (set `GAIA_SOUND_CACHE` to move it), about 3.5 GB, and checked against
-the sums in `tools/sound/sources.json`.
+The scripts in [`tools/sound/`](../tools/sound/README.md) make the files in
+`app/renderer/sound/assets/`. `pnpm sound` rebuilds all of them,
+`pnpm sound world` rebuilds the field recordings, and `pnpm sound music`
+rebuilds the music. The scripts need [uv](https://docs.astral.sh/uv/), `curl`, and `ffmpeg`
+with libopus. The first music build also compiles sfizz with CMake and Ninja.
+The recordings, sample libraries and sfizz's source, about 3.5 GB, are
+downloaded once into `~/.cache/gaia-sound/` and checked against the sums in
+`tools/sound/sources.json`. Set `GAIA_SOUND_CACHE` to use another directory.
 
 ## Checks
 
@@ -178,7 +191,7 @@ pnpm exec tsx tools/cargo.ts clippy --all-targets -- -D warnings
 `pnpm check` runs TypeScript, ESLint and Vitest. CI runs these and the Rust
 checks on Linux, Windows and macOS, plus an Electron rendering probe on macOS.
 
-The pre-commit hook checks types and changed TypeScript files, and runs clippy
-when Rust changes. It runs no tests. Run relevant tests during development and
-all checks before submitting a broad change. Fix failures without bypassing
-the hook.
+The pre-commit hook checks types, lints changed TypeScript and JavaScript
+files, and runs clippy when Rust changes. It runs no tests. Run relevant tests
+during development and all checks before submitting a broad change. Fix
+failures without bypassing the hook.
