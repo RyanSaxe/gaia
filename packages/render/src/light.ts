@@ -45,6 +45,11 @@ export interface SceneLight {
   readonly uSkyGlowAmount: { value: number };
   /** Where the person's eyes are. Every pass thins distant detail from here, so shadows and the mirror agree with the view. */
   readonly uEye: { value: THREE.Vector3 };
+  /**
+   * 1 draws everything as if through clear air, with no haze, mist or dissolve into the sky: for a check that compares
+   * two forms of one thing far away, which the air would hide alike. 0 in the world.
+   */
+  readonly uClearAir: { value: number };
 }
 
 /** The lantern's warm pool: about 12 m across, fading smoothly to nothing by `LANTERN.reach`. */
@@ -190,6 +195,7 @@ export function createSceneLight(): SceneLight {
     uSkyGlow: { value: hexToVec3(0xffffff) },
     uSkyGlowAmount: { value: 0 },
     uEye: { value: new THREE.Vector3() },
+    uClearAir: { value: 0 },
   };
 }
 
@@ -197,6 +203,7 @@ const f1 = (x: number): string => x.toFixed(1);
 const f2 = (x: number): string => x.toFixed(2);
 
 export const LIGHT_GLSL = /* glsl */ `
+uniform float uClearAir;
 uniform vec3 uSunDirection;
 uniform vec3 uSunColor;
 uniform float uSunIntensity;
@@ -399,6 +406,7 @@ vec3 skyColor(vec3 dir) {
 // behind it; farther, toward
 // the sky behind along the same ray; by ${AIR.dissolveEnd} m only the sky remains.
 vec3 aerial(vec3 color, vec3 worldPosition) {
+  if (uClearAir > 0.5) return color;
   vec3 ray = worldPosition - cameraPosition;
   float dist = length(ray);
   vec3 sky = skyColor(ray / max(dist, 1e-4));

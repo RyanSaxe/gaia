@@ -285,6 +285,15 @@ under the far form. View, reflection and shadow passes select appropriate
 detail from screen size. Grass narrows smoothly rather than changing height as
 the person approaches.
 
+A far form keeps its tree's outline as it shrinks past the size it turns far
+at. There its edge is sharpened to match the full form's. Smaller, each texel
+it reads stands for more of the plant, and a twig, strand or needle finer than
+a texel covers only part of one. The far form draws that part as it is, where
+a sharpened edge would cut it away, so its outer twigs thin with distance as
+the full form's do rather than vanish. The [likeness probe](development.md#visual-verification)
+holds each far form to its full form at a half, a quarter and an eighth of the
+size it turns far at.
+
 Do not reduce density abruptly to rescue frame time. Batch and instance shared
 geometry, stream ahead of the person, cache far forms, and keep shadow updates
 stable in world space. Memory for far forms is a fixed budget: a build whose

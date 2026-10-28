@@ -88,12 +88,25 @@ quiet machine with `pnpm probe`. Its Electron window must remain uncovered.
 | `pnpm probe steps` | Changes during walking with the wind frozen |
 | `pnpm probe hitch` | Frame times and stutters during a walk |
 | `pnpm probe swap` | Transitions between full geometry and baked far forms |
+| `pnpm probe likeness` | Baked far forms beside their full forms at and past the swap |
 | `pnpm probe stress` | The proving ground with five times as many code trees |
 | `pnpm probe paint` | Journal painting capture and rendering |
 
-`--world showcase` or `--world proving` selects a world. `--spot` limits the
-stops; `--dpr` sets the pixel ratio. The probes fail on WebGL errors. A timing
-on a busy machine is not a reliable baseline.
+`--world showcase` or `--world proving` selects a world; the swap test runs in
+the showcase and the likeness test in the proving ground unless one is named.
+`--spot` limits the stops; `--dpr` sets the pixel ratio. The probes fail on
+WebGL errors. A timing on a busy machine is not a reliable baseline.
+
+The likeness test stands one copy of every build that turns far, at vitality
+1, 0.65 and 0.3, at its swap size and at a half, a quarter and an eighth of
+it, and draws it there as its far form and as its full form. The air is clear
+while it draws, since both forms would fade into it alike. At each size it
+compares how much of the crown's part of the screen each form covers. It fails
+when a far form past its swap strays farther from its full form's share than
+it does at the swap (`LIKENESS_BAR` in [`probe.ts`](../tools/probe.ts)). It
+also reports each form's ink and how unlike the two look cell by cell.
+`__lab.terrain.likeness(name, vitality, sizes, true)` returns the three
+views as pictures.
 
 ## Components and fixtures
 
