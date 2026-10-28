@@ -1,6 +1,5 @@
 // Draws the signs that name things: a wooden signboard on a post at the end
-// of each building's walk or at a landmark's foot, and a small plaque on a
-// stake at a tree's foot. Signs are always present, so nothing appears as a
+// of each building's walk or at a landmark's foot. Signs are always present, so nothing appears as a
 // person walks up, and all of them draw as one instanced mesh with names from
 // one atlas. As the vitality of what a sign names drops, its paint fades and
 // flakes, its wood greys, and it leans on its post.
@@ -16,8 +15,6 @@ export interface Sign {
   readonly z: number;
   /** The painted face's rotation about y. */
   readonly yaw: number;
-  /** 1 for a building's signboard, and smaller for a tree's plaque. */
-  readonly scale: number;
   readonly name: string;
   /** A smaller second line, such as what the thing is. */
   readonly note: string;
@@ -219,6 +216,7 @@ export function createSigns(light: SceneLight, capacity = SLOT.cols * SLOT.rows)
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const up = new THREE.Vector3(0, 1, 0);
+  const unit = new THREE.Vector3(1, 1, 1);
   return {
     mesh,
     set(signs) {
@@ -227,7 +225,7 @@ export function createSigns(light: SceneLight, capacity = SLOT.cols * SLOT.rows)
       names.needsUpdate = true;
       shown.forEach((s, i) => {
         q.setFromAxisAngle(up, s.yaw);
-        m.compose(new THREE.Vector3(s.x, s.y, s.z), q, new THREE.Vector3(s.scale, s.scale, s.scale));
+        m.compose(new THREE.Vector3(s.x, s.y, s.z), q, unit);
         mesh.setMatrixAt(i, m);
         // Each sign leans its own way: mostly back or to one side, never into the reader.
         life.setXYZW(i, shownVitality(s.vitality), ((i * 2.399) % (Math.PI * 2)) * 0.5 + 0.2, i, widths[i] ?? 1);
