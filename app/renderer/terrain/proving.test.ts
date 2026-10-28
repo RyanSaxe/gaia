@@ -4,7 +4,7 @@ import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITI
 import { landmark, structure } from "@gaia/kinds";
 import { realize } from "@gaia/realize";
 import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, extentOf, groundLook, heightAt, siteToWorld, turningExtent, junctionVitality, ownershipOf, placeAt, vitalityAt, vitalityOver, waterDepthAt, wayVitalityAt } from "@gaia/terrain";
-import { type Stood, areaVitality, groundVitality, missingFrom, sweep } from "@gaia/world";
+import { type PlacedBlueprint, areaVitality, groundVitality, missingFrom, sweep } from "@gaia/world";
 import { openedWorld, provingWorld } from "./code-world.ts";
 import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "./looks.ts";
 import { type Placed, type BuildingToPlace, groundSites, landmarkBase, needsBank, ownerVitality, placeWorld, understoryVitality } from "./place.ts";
@@ -43,28 +43,28 @@ describe("the proving ground", () => {
     const used = (options: object, chosen: Iterable<string>): string[] => Object.keys(options).filter((k) => ![...chosen].includes(k));
     // Labels by vitality: "thriving" from 0.85, "tired" from 0.35, and "ruin" below 0.12. A thing between 0.12 and 0.35 gets no label.
     const healths = ["thriving", "tired", "ruin"];
-    const stood = (blueprint: Blueprint | undefined, v: number): Stood[] => {
+    const labeled = (blueprint: Blueprint | undefined, v: number): PlacedBlueprint[] => {
       if (blueprint === undefined) return [];
       const label = v >= 0.85 ? "thriving" : v >= 0.35 ? "tired" : v < 0.12 ? "ruin" : undefined;
       return [{ blueprint, ...(label === undefined ? {} : { label }) }];
     };
-    const lacking = (k: AnyKind, of: readonly Stood[]): string[] => missingFrom(k, COMPOSING.lib, of, { labels: healths });
+    const lacking = (k: AnyKind, of: readonly PlacedBlueprint[]): string[] => missingFrom(k, COMPOSING.lib, of, { labels: healths });
     // A land's vitality is its own ground's: every file on it, pooled by size.
     const regionOf = new Map(doc.world.areas.map((a) => [a.path, a.region]));
     const lands = doc.world.regions.map((r, i) => {
       const own = doc.world.patches.filter((p) => regionOf.get(p.area) === i);
       const size = own.reduce((n, p) => n + p.radius * p.radius, 0);
-      return stood(r.biome, own.reduce((n, p) => n + p.vitality * p.radius * p.radius, 0) / size);
+      return labeled(r.biome, own.reduce((n, p) => n + p.vitality * p.radius * p.radius, 0) / size);
     });
     expect(lacking(COMPOSING.biome, lands.flat())).toEqual([]);
     for (const [as, k] of [["building", COMPOSING.building], ["landmark", COMPOSING.landmark]] as const) {
-      expect(lacking(k, doc.world.things.filter((t) => t.as === as).flatMap((t) => stood(t.blueprint, t.vitality))), as).toEqual([]);
+      expect(lacking(k, doc.world.things.filter((t) => t.as === as).flatMap((t) => labeled(t.blueprint, t.vitality))), as).toEqual([]);
     }
-    expect(lacking(COMPOSING.link, doc.world.trails.flatMap((t) => stood(t.route, ((endVitality.get(t.from) ?? 1) + (endVitality.get(t.to) ?? 1)) / 2)))).toEqual([]);
+    expect(lacking(COMPOSING.link, doc.world.trails.flatMap((t) => labeled(t.route, ((endVitality.get(t.from) ?? 1) + (endVitality.get(t.to) ?? 1)) / 2)))).toEqual([]);
     // Every tree's and bush's frame with every crown, every stone and every drift, each under all three labels.
     const small = [...doc.world.symbols, ...doc.world.plants];
     for (const [as, k, pairs] of [["tree", COMPOSING.tree, [["form", "crown"]]], ["bush", COMPOSING.bush, [["form", "crown"]]], ["stone", COMPOSING.stone, []], ["flowers", COMPOSING.flowers, []]] as const) {
-      const of = small.filter((s) => s.as === as).flatMap((s) => stood(s.blueprint, s.vitality));
+      const of = small.filter((s) => s.as === as).flatMap((s) => labeled(s.blueprint, s.vitality));
       expect(missingFrom(k, COMPOSING.offered?.[as] ?? COMPOSING.lib, of, { labels: healths, pairs }), as).toEqual([]);
     }
     // Its sky is the first of the sweep's skies.

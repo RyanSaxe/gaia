@@ -51,7 +51,7 @@ const keysOf = (value: Value | readonly string[]): readonly string[] => (Array.i
 const allKeys = (field: Field): string[] => (field.type === "set" ? Object.keys(field.members) : valuesOf(field).map(String));
 
 /** A placed blueprint, with its place's label if it has one. */
-export interface Stood {
+export interface PlacedBlueprint {
   readonly blueprint: Blueprint;
   readonly label?: string;
 }
@@ -69,13 +69,13 @@ export interface Coverage {
  * sweep's `missing` is this list for its blueprints. A world's blueprints, labelled by their places, can be checked
  * the same way.
  */
-export function missingFrom(k: AnyKind, lib: Library, stood: readonly Stood[], coverage: Coverage = {}): string[] {
+export function missingFrom(k: AnyKind, lib: Library, placed: readonly PlacedBlueprint[], coverage: Coverage = {}): string[] {
   const labels = coverage.labels ?? [];
   const under = new Map<string, Set<string>>();
   const seen = new Set<string>();
   const absent = new Set<string>();
   const paired = new Set<string>();
-  for (const { blueprint, label } of stood) {
+  for (const { blueprint, label } of placed) {
     for (const name of Object.keys(k.slots)) {
       const filled = blueprint.slots[name];
       if (filled === undefined) {
@@ -129,7 +129,7 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
   const partsOf = (name: string): AnyPrimitive[] => lib.forRole((k.slots[name] as AnyKind["slots"][string]).role);
 
   /** The labels each part has appeared under, by `slot=id`. An unlabelled sweep uses the label "". */
-  const stood = new Map<string, Set<string>>();
+  const labelsOf = new Map<string, Set<string>>();
   const seen = new Set<string>();
   const used = new Map<string, number>();
   const paired = new Set<string>();
@@ -137,8 +137,8 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
   const option = (name: string, p: AnyPrimitive, param: string, key: string): string => `${part(name, p)}.${param}=${key}`;
   const pairing = (a: string, pa: string, b: string, pb: string): string => `${a}=${pa}+${b}=${pb}`;
 
-  const unstood = (name: string, p: AnyPrimitive, label: string | undefined): boolean => {
-    const under = stood.get(part(name, p));
+  const uncovered = (name: string, p: AnyPrimitive, label: string | undefined): boolean => {
+    const under = labelsOf.get(part(name, p));
     if (labels.length === 0) return under === undefined;
     return label !== undefined && !(under?.has(label) ?? false);
   };
@@ -180,7 +180,7 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
       // Rank parts by what they have left to cover, most pressing first, then by least use. The library's order breaks ties.
       const ranked = fitting.map((p) => {
         const pending = pairsLeft(name, p, slots);
-        const fresh = unstood(name, p, label);
+        const fresh = uncovered(name, p, label);
         const left = optionsLeft(name, p);
         const wanted = fresh || left > 0 || pending.now > 0 || pending.later > 0;
         return { p, wanted, rank: [(p.needs?.length ?? 0) > 0 && wanted ? 1 : 0, pending.now, fresh ? 1 : 0, pending.later, left, -(used.get(part(name, p)) ?? 0)] };
@@ -201,7 +201,7 @@ export function sweep(k: AnyKind, lib: Library, options: SweepOptions = {}): Swe
       slots[name] = { use: best.id, params };
       const key = part(name, best);
       used.set(key, uses + 1);
-      stood.set(key, (stood.get(key) ?? new Set()).add(label ?? ""));
+      labelsOf.set(key, (labelsOf.get(key) ?? new Set()).add(label ?? ""));
       for (const [param, value] of Object.entries(params)) for (const v of keysOf(value)) seen.add(option(name, best, param, v));
     }
     for (const [a, b] of pairs) {

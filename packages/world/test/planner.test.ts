@@ -101,14 +101,14 @@ describe("what a part needs of its place", () => {
     const elsewhere = planStructure(structure, buildings, subject);
     const answers = { ...fakeJev(elsewhere.request, { "feature.present": true }), "feature.use": { type: "choice" as const, choice: id, probabilities: { [id]: 1 }, confidence: 1 } };
     // readStructure rejects a pick it did not offer, or ignores it when only one part was offered.
-    const stood = (): string | undefined => {
+    const picked = (): string | undefined => {
       try {
         return readStructure(structure, buildings, elsewhere, answers).feature;
       } catch {
         return undefined;
       }
     };
-    expect(stood()).not.toBe(id);
+    expect(picked()).not.toBe(id);
   });
 
   it("offers what needs a range of rank only to a thing whose rank lies in it, ends included, and to no place without a rank", () => {

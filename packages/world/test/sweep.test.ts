@@ -48,8 +48,8 @@ describe("a sweep of a kind's parts", () => {
       const { blueprints, missing } = sweep(k, lib, options);
       expect(missing).toEqual([]);
       for (const bp of blueprints) expect(validate(bp, k, lib)).toEqual([]);
-      const stood = new Set(covered(k, lib, blueprints));
-      expect(possible(k, lib).filter((x) => !stood.has(x))).toEqual([]);
+      const coveredKeys = new Set(covered(k, lib, blueprints));
+      expect(possible(k, lib).filter((x) => !coveredKeys.has(x))).toEqual([]);
     });
   }
 
