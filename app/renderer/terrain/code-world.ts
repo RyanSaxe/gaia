@@ -56,6 +56,8 @@ export interface OpenedWorld {
   readonly standing: (i: number) => StandingOf | undefined;
   /** The light, sky and wind Jev composed for the world. */
   readonly sky: Blueprint;
+  /** The bush Jev composed for each of the wild's grounds past the land (`WILD_GROUNDS`), which stands for no code. */
+  readonly wild: readonly Blueprint[];
   /** Every distinct blueprint the world's trees, stones, bushes and flowers take, by the group that draws them: each stands one build, copied. */
   readonly plants: PlantBuilds;
   /** What the bake thread needs to stand this world's things, given the request's trail styles. */
@@ -306,6 +308,8 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
   // A world Jev composed no sky or land for is a fault, never a default.
   const sky = world.sky;
   if (sky === undefined) throw new Error(`${world.name} has no sky: Jev composes every world's light, sky and wind.`);
+  const wild = world.wild;
+  if (wild === undefined) throw new Error(`${world.name} has no wild bushes: Jev composes the bush of each of the wild's grounds.`);
   const landOf = (r: CodeWorld["regions"][number]): Blueprint => {
     if (r.biome === undefined) throw new Error(`${r.area || "The repository's root"} has no land: Jev composes every area's.`);
     return r.biome;
@@ -369,6 +373,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     landmarks: rises.map((t) => ({ path: t.path, blueprint: t.blueprint, vitality: t.vitality, ...thingOf(t, world, files, entities) })),
     standing: symbolOf,
     sky,
+    wild,
     stand: {
       lots: houses.map(lot),
       landmarks: rises.map((t, i) => ({ landmark: i, lot: lot(t) })),

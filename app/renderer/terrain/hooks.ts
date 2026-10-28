@@ -324,7 +324,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     return [
       ...world.treeBlueprints.map((bp, k) => ({ name: unique(composedName(bp)), plant: () => world.treeBuild(k), far: world.treeFar[k] as FarOf })),
       ...world.understory.farBuilds().map((b) => ({ name: unique(composedName(b.blueprint)), plant: b.plant, far: b.far })),
-      ...world.wildGrowth.farPresets,
+      ...world.wildGrowth.farBuilds().map((b) => ({ name: unique(composedName(b.blueprint)), plant: b.plant, far: b.far })),
     ];
   };
 

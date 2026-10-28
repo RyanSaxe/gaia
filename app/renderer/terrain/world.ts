@@ -36,9 +36,10 @@ import { type Grass, createGrass } from "./cover.ts";
 import { type GroundMesh, createGround, createGroundTexture } from "./ground.ts";
 import { createRegionCovers } from "./regions.ts";
 import { type Water, createWater } from "./water.ts";
-import { type WildGrowth, createWildGrowth, wildBushBuilds } from "./wilds.ts";
+import { type WildGrowth, createWildGrowth } from "./wilds.ts";
 import { type Crown, type Drifts, createDrifts } from "./drifts.ts";
 import { type Understory, createUnderstory, understoryBuilds } from "./understory.ts";
+import { type PlantMark, markOf } from "./plant-mark.ts";
 import { type BuildAsk, made, makeAhead, makeLater, plantAsk } from "./made.ts";
 import { createClearings } from "./clearings.ts";
 import { type WayPiece, type Ways, createWays, crossingVitality, setTrailEnds } from "./trails.ts";
@@ -154,6 +155,15 @@ export interface Tree {
   readonly represented: Represented;
 }
 
+/** A tree, a stone, a bush or a drift where it stands, its size against its build's, and its build. */
+export interface StoodPlant {
+  readonly x: number;
+  readonly z: number;
+  readonly vitality: number;
+  readonly scale: number;
+  readonly build: PlantMark;
+}
+
 /** The world as it stands after a bake: what a map draws and what markers stand beside. */
 export interface StoodWorld {
   readonly terrain: Terrain;
@@ -163,7 +173,10 @@ export interface StoodWorld {
   readonly buildings: readonly { readonly x: number; readonly z: number; readonly name: string; readonly kind: string; readonly vitality: number; readonly plan: BuildingPlan; readonly blueprint: Blueprint; readonly palette: Palette }[];
   /** Each landmark, with the blueprint and colors its map mark is drawn from. */
   readonly landmarks: readonly { readonly x: number; readonly z: number; readonly name: string; readonly vitality: number; readonly blueprint: Blueprint; readonly palette: Palette }[];
-  readonly trees: readonly { readonly x: number; readonly z: number; readonly vitality: number }[];
+  /** Each tree, with the build its map mark is drawn from. */
+  readonly trees: readonly StoodPlant[];
+  /** Each stone, bush and drift of flowers, as the trees are. */
+  readonly understory: readonly StoodPlant[];
   /** Each area's ground cover, by its path: the one the ground shader paints its own ground with. */
   readonly grounds: ReadonlyMap<string, GroundSpec>;
   /**
@@ -588,8 +601,6 @@ const overviewAir = (size: number): AtmosphereSpec => ({ ...CLEAR_AIR, density: 
 const UNDERSTORY_LEAST = 0.3;
 /** How far round the eye failing ground murks the air, meters: the band regions' airs blend over, so murk gathers as gradually as a region's air. */
 const MURK_REACH = TERRAIN.blend;
-/** Every build the page makes before any codebase's world opens, whatever it shows: the wild's bushes (made.ts). */
-export const openingBuilds = (): BuildAsk[] => wildBushBuilds();
 
 export function createWorld(root: HTMLElement): World {
   root.innerHTML = TEMPLATE;
@@ -822,9 +833,13 @@ export function createWorld(root: HTMLElement): World {
     });
   }
   /** Each stone, bush and drift of flowers shows the vitality of what it stands for. */
-  function showUnderstoryVitality(): void {
+  /** Each understory placement's vitality as it shows: that of what it stands for. */
+  function understoryShown(): Float32Array {
     const own = (k: number): number => thingVitality.get(code?.standing(k)?.represented.id ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
-    understory.setVitality(understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own));
+    return understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own);
+  }
+  function showUnderstoryVitality(): void {
+    understory.setVitality(understoryShown());
   }
 
   const vitalityListeners: ((changed: readonly string[]) => void)[] = [];
@@ -956,6 +971,8 @@ export function createWorld(root: HTMLElement): World {
     return { base, trunk, height, radius };
   };
   let variants: TreeVariant[] = [];
+  /** Each tree build's map mark, by its variant. */
+  let treeMarks: readonly PlantMark[] = [];
   /** How many times each tree that stands for code stands, for measuring at scale (`forest`): once in a world a person walks. */
   let forestCopies = 1;
   let trees: readonly Tree[] = [];
@@ -986,7 +1003,7 @@ export function createWorld(root: HTMLElement): World {
   // Before every pass (the sun's shadow, the water's mirror and the view),
   // each instanced blueprint packs only the cells that pass's camera sees.
   // Past the land: the wild's covers and its scattered bushes, which stand for nothing.
-  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, bushForms);
+  const wildGrowth = createWildGrowth(scene, light, covers, lib, floraLib, clearings, bushForms);
   const instanced = (): Copies[] => [...treeViews, ...understory.all(), ...wildGrowth.all()];
   // Far forms: each tree and bush build bakes its own far form, drawn as cards
   // where a copy is small on a pass's screen (woods.ts). Each set's cards hold
@@ -1012,6 +1029,7 @@ export function createWorld(root: HTMLElement): World {
     treeAsks = blueprints.map(plantAsk);
     treeBuilds = treeAsks.map((ask) => made(ask, floraLib));
     variants = treeBuilds.map((built) => variantOf(built as Realized));
+    treeMarks = treeBuilds.map((built, k) => markOf(blueprints[k] as Blueprint, built as Realized));
     treeFar = variants.map((_, k) => treeForms.add(treeBuild(k), () => makeLater(treeAsks[k] as BuildAsk, floraLib)));
     void (async (): Promise<void> => {
       for (const k of variants.keys()) {
@@ -2038,7 +2056,12 @@ export function createWorld(root: HTMLElement): World {
         const lm = landmarks[s.landmark] as (typeof landmarks)[number];
         return { x: s.site.x, z: s.site.z, name: lm.name, vitality: thingVitality.get(landmarkEntity(i).id) ?? 1, blueprint: lm.blueprint, palette: lm.built.palette };
       }),
-      trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: treeVitality(t) })),
+      trees: trees.map((t) => ({ x: t.x, z: t.z, vitality: treeVitality(t), scale: t.scale, build: treeMarks[t.variant] as PlantMark })),
+      understory: ((shown) =>
+        understory.placements().flatMap((p, i) => {
+          const build = understory.mark(p.rule, p.variant);
+          return build === undefined ? [] : [{ x: p.x, z: p.z, vitality: shown[i] ?? 1, scale: p.scale, build }];
+        }))(understoryShown()),
       // An area shows its region's ground.
       grounds: new Map(places.areas.flatMap((a, i) => {
         const ground = regionGrounds[code?.world.areas[i]?.region ?? 0];
@@ -2175,12 +2198,13 @@ export function createWorld(root: HTMLElement): World {
     const opened = await codeWorld(veil);
     code = opened;
     reportStage("laid out", { things: opened.world.things.length, symbols: opened.world.symbols.length });
-    // The buildings, landmarks and one build of each distinct tree, stone, bush and flowers are made on other threads
-    // while the wait draws the land.
+    // The buildings, landmarks and one build of each distinct tree, stone, bush and flowers, and the wild's bushes, are
+    // made on other threads while the wait draws the land.
     const composedLandmarks = landmarkAsks(opened);
-    await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks, ...opened.plants.trees.map(plantAsk), ...understoryBuilds(opened.plants)]);
+    await makeAhead([...settlementBuilds(opened.buildings), ...composedLandmarks, ...opened.plants.trees.map(plantAsk), ...understoryBuilds(opened.plants), ...opened.wild.map(plantAsk)]);
     buildTrees(opened.plants.trees);
     understory.build(opened.plants);
+    wildGrowth.build(opened.wild);
     landmarks = composedLandmarks.map((ask) => landmarkOf(composedName(ask.blueprint), ask));
     for (const v of settlement.views()) scene.remove(v.object);
     settlement = createSettlement(light, opened.buildings);

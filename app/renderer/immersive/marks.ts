@@ -37,17 +37,17 @@ import {
   windmillParams,
 } from "@gaia/primitives";
 
-type Pt = readonly [number, number];
+export type Pt = readonly [number, number];
 /** A point east, north and up from the thing's foot, in units. */
 type P3 = readonly [number, number, number];
 
-const INK = "#3a2f22";
+export const INK = "#3a2f22";
 /** What a wash fades toward as its thing tires: dry straw on the paper. */
 const FADED = "#cdbf9c";
 /** The sheet's own paper, which every wash lets show through a little. */
-const PAPER = "#efe5cb";
+export const PAPER = "#efe5cb";
 /** The cool violet that shade leans toward, as the map shades its hills. */
-const SHADE = "#4a4660";
+export const SHADE = "#4a4660";
 /** The warm light on a lit face. */
 const LIGHT = "#fff4d6";
 const GLASS = "#3f3a36";
@@ -63,19 +63,19 @@ const STOREY = 2.3;
 /** How much taller a roof is drawn than it stands: a little steeper, as a mapmaker draws it, so its covering carries the mark. */
 const ROOF_LIFT = 1.25;
 
-const clamp01 = (t: number): number => Math.max(0, Math.min(1, t));
+export const clamp01 = (t: number): number => Math.max(0, Math.min(1, t));
 const clamp = (t: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, t));
 /** 0 at `a` and 1 at `b`, eased; `a` may lie above `b`. */
-const ease = (v: number, a: number, b: number): number => {
+export const ease = (v: number, a: number, b: number): number => {
   const t = clamp01((v - a) / (b - a));
   return t * t * (3 - 2 * t);
 };
 /** A number in [0, 1) from a seed and an index, the same every time. */
-const noise = (seed: number, i: number): number => {
+export const noise = (seed: number, i: number): number => {
   const n = Math.sin(seed * 91.3458 + i * 47.853 + 0.5) * 43758.5453;
   return n - Math.floor(n);
 };
-const seedOf = (text: string): number => {
+export const seedOf = (text: string): number => {
   let h = 2166136261;
   for (let k = 0; k < text.length; k++) h = Math.imul(h ^ text.charCodeAt(k), 16777619);
   return (h >>> 0) / 4294967296;
@@ -85,15 +85,15 @@ const rgbOf = (hex: string): [number, number, number] => {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 };
-const hexOf = (c: Rgb): string => `#${c.map((v) => Math.round(clamp01(v) * 255).toString(16).padStart(2, "0")).join("")}`;
+export const hexOf = (c: Rgb): string => `#${c.map((v) => Math.round(clamp01(v) * 255).toString(16).padStart(2, "0")).join("")}`;
 /** The color `t` of the way from `a` to `b`, as hex. */
-const mix = (a: string, b: string, t: number): string => {
+export const mix = (a: string, b: string, t: number): string => {
   const pa = rgbOf(a);
   const pb = rgbOf(b);
   const k = clamp01(t);
   return `#${pa.map((c, i) => Math.round(c + ((pb[i] as number) - c) * k).toString(16).padStart(2, "0")).join("")}`;
 };
-const rgba = (hex: string, a: number): string => `rgba(${rgbOf(hex).join(",")},${a.toFixed(3)})`;
+export const rgba = (hex: string, a: number): string => `rgba(${rgbOf(hex).join(",")},${a.toFixed(3)})`;
 const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
 /** How a mark is worn by its shown vitality (`shownVitality`), as its thing is in the world: each from 0 (sound) to 1 (gone). */
@@ -129,7 +129,7 @@ const worn = (c: string, w: Wear, rots = 0): string => mix(mix(mix(c, PAPER, 0.1
 const shaded = (c: string, t = 0.2): string => mix(c, SHADE, t);
 const lit = (c: string, t = 0.2): string => mix(c, LIGHT, t);
 
-interface Pen {
+export interface Pen {
   readonly ctx: CanvasRenderingContext2D;
   readonly s: number;
   /** The ink's width in pixels. */
@@ -147,7 +147,7 @@ interface Pen {
 }
 
 /** The view: east runs right and a little up, north runs up and to the left. `lean` tips the thing east as it rises. */
-function penFor(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, lean = 0): Pen {
+export function penFor(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, lean = 0): Pen {
   const m = ctx.getTransform();
   const device = s * Math.hypot(m.a, m.b);
   const box: [number, number, number, number] = [x, y, x, y];
@@ -179,7 +179,7 @@ function penFor(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, 
 const on = (pen: Pen, pts: readonly P3[]): Pt[] => pts.map(([X, Z, H]) => pen.at(X, Z, H));
 
 /** A path through `pts`; a closed one may round its corners by `round` pixels, as plump thatch is. */
-function trace(ctx: CanvasRenderingContext2D, pts: readonly Pt[], close = true, round = 0): void {
+export function trace(ctx: CanvasRenderingContext2D, pts: readonly Pt[], close = true, round = 0): void {
   ctx.beginPath();
   if (close && round > 0 && pts.length > 2) {
     // Each corner's curve meets its edges within the nearer half of the shorter one, so a short edge or a sharp
@@ -217,14 +217,14 @@ function trace(ctx: CanvasRenderingContext2D, pts: readonly Pt[], close = true, 
 }
 
 /** Washes a shape, the brush a touch off the pen's line to the southeast as a hand's is. */
-function wash(pen: Pen, pts: readonly Pt[], color: string, round = 0): void {
+export function wash(pen: Pen, pts: readonly Pt[], color: string, round = 0): void {
   const d = 0.22 * pen.s;
   trace(pen.ctx, pts.map(([px, py]) => [px + d, py + d * 0.8] as Pt), true, round);
   pen.ctx.fillStyle = color;
   pen.ctx.fill();
 }
 
-function ink(pen: Pen, pts: readonly Pt[], close = true, weight = 1, color = INK, round = 0): void {
+export function ink(pen: Pen, pts: readonly Pt[], close = true, weight = 1, color = INK, round = 0): void {
   if (weight <= 0) return;
   trace(pen.ctx, pts, close, round);
   pen.ctx.lineWidth = pen.line * weight;
@@ -269,7 +269,7 @@ function hull(pts: readonly Pt[]): Pt[] {
 }
 
 /** The shadow things cast on the paper to the southeast, soft at its edge: each point of their feet, with the height standing over it. */
-function castShadow(pen: Pen, feet: readonly (readonly [number, number, number])[], strength = 1): void {
+export function castShadow(pen: Pen, feet: readonly (readonly [number, number, number])[], strength = 1): void {
   const pts: Pt[] = [];
   for (const [X, Z, height] of feet) {
     pts.push(pen.at(X, Z, 0));
@@ -280,11 +280,14 @@ function castShadow(pen: Pen, feet: readonly (readonly [number, number, number])
   const cx = h.reduce((a, q) => a + q[0], 0) / h.length;
   const cy = h.reduce((a, q) => a + q[1], 0) / h.length;
   for (const [grow, a] of [[1.14, 0.09], [0.96, 0.13]] as const) {
-    wash(pen, h.map(([px, py]) => [cx + (px - cx) * grow, cy + (py - cy) * grow] as Pt), `rgba(80,66,48,${(a * strength).toFixed(3)})`);
+    const soft = h.map(([px, py]): Pt => [cx + (px - cx) * grow, cy + (py - cy) * grow]);
+    // The soft edge reaches past the feet, so the box a mark reports holds it.
+    for (const [px, py] of soft) pen.reach(px, py);
+    wash(pen, soft, `rgba(80,66,48,${(a * strength).toFixed(3)})`);
   }
 }
 
-const ellipseFeet = (X: number, Z: number, rx: number, rz: number, height: number): [number, number, number][] =>
+export const ellipseFeet = (X: number, Z: number, rx: number, rz: number, height: number): [number, number, number][] =>
   Array.from({ length: 12 }, (_, k) => [X + Math.cos((k / 12) * Math.PI * 2) * rx, Z + Math.sin((k / 12) * Math.PI * 2) * rz, height] as [number, number, number]);
 
 /**
@@ -463,12 +466,12 @@ export interface BuildingComposition extends Composition {
   readonly plan: BuildingPlan;
 }
 
-type Values = Readonly<Record<string, unknown>>;
+export type Values = Readonly<Record<string, unknown>>;
 
 const PRIMITIVE = new Map(PRIMITIVES.map((p) => [p.id as string, p] as const));
 
 /** A slot's words as its primitive's build reads them, each scale at its level's own value rather than a seeded draw within it. */
-function valuesOf(id: string, words: Values): Values {
+export function valuesOf(id: string, words: Values): Values {
   const p = PRIMITIVE.get(id);
   if (p === undefined) return words;
   const out: Record<string, unknown> = {};
@@ -3089,10 +3092,16 @@ function drawLandmarkAt(ctx: CanvasRenderingContext2D, x: number, y: number, s: 
 
 /** Sizes are kept in steps of 2^(1/4): a glide draws a mark anew about every fifth of the way to twice its size. */
 const STAMP_STEPS = 4;
-/** How many stamps are kept, the least recently stamped going first. */
-const STAMPS_KEPT = 160;
 /** The bitmap a stamp is first drawn into, in units round the mark's foot: room for the widest range and the tallest tower. */
-const SCRATCH = { width: 180, height: 170, footX: 90, footY: 125 } as const;
+const SCRATCH: StampRoom = { width: 180, height: 170, footX: 90, footY: 125 };
+
+/** The room a mark is drawn in before its stamp is cut from it, in units round its foot. */
+export interface StampRoom {
+  readonly width: number;
+  readonly height: number;
+  readonly footX: number;
+  readonly footY: number;
+}
 
 interface Stamp {
   readonly canvas: HTMLCanvasElement;
@@ -3103,12 +3112,23 @@ interface Stamp {
   readonly height: number;
 }
 
-const stamps = new Map<string, Stamp>();
+/** Stamps kept for reuse, the least recently stamped going first once there are `most` or their bitmaps hold more than `bytes`. */
+export interface Stamps {
+  readonly kept: Map<string, Stamp>;
+  readonly most: number;
+  readonly bytes: number;
+  held: number;
+}
+
+export const stampSet = (most: number, bytes = Number.POSITIVE_INFINITY): Stamps => ({ kept: new Map(), most, bytes, held: 0 });
+
+/** The buildings' and landmarks' stamps: one sheet's worth of each at a size or two. */
+const MARK_STAMPS = stampSet(160);
 let scratch: CanvasRenderingContext2D | null = null;
 
-function stampOf(s: number, device: number, draw: (c: CanvasRenderingContext2D, x: number, y: number, s: number) => MarkBox): Stamp {
-  const w = Math.ceil(SCRATCH.width * s * device);
-  const h = Math.ceil(SCRATCH.height * s * device);
+function stampOf(s: number, device: number, draw: (c: CanvasRenderingContext2D, x: number, y: number, s: number) => MarkBox, room: StampRoom): Stamp {
+  const w = Math.ceil(room.width * s * device);
+  const h = Math.ceil(room.height * s * device);
   if (scratch === null || scratch.canvas.width < w || scratch.canvas.height < h) {
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(w, scratch?.canvas.width ?? 0);
@@ -3119,8 +3139,8 @@ function stampOf(s: number, device: number, draw: (c: CanvasRenderingContext2D, 
   c.setTransform(1, 0, 0, 1, 0, 0);
   c.clearRect(0, 0, w, h);
   c.setTransform(device, 0, 0, device, 0, 0);
-  const fx = SCRATCH.footX * s;
-  const fy = SCRATCH.footY * s;
+  const fx = room.footX * s;
+  const fy = room.footY * s;
   const box = draw(c, fx, fy, s);
   // A little room for the ink's width and the brush's offset past the points the mark placed.
   const pad = 1 + s;
@@ -3135,20 +3155,38 @@ function stampOf(s: number, device: number, draw: (c: CanvasRenderingContext2D, 
   return { canvas, left: x0 / device - fx, top: y0 / device - fy, width: canvas.width / device, height: canvas.height / device };
 }
 
-/** Stamps the mark `key` names at (x, y), `s` pixels a unit, drawing it with `draw` only when no stamp of it is kept at this size and on this screen. */
-function stamp(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, key: string, draw: (c: CanvasRenderingContext2D, x: number, y: number, s: number) => MarkBox): MarkBox {
+/**
+ * Stamps the mark `key` names at (x, y), `s` pixels a unit, drawing it into `room` with `draw` only when `stamps`
+ * keeps no stamp of it at this size and on this screen.
+ */
+export function stamp(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  key: string,
+  draw: (c: CanvasRenderingContext2D, x: number, y: number, s: number) => MarkBox,
+  stamps: Stamps = MARK_STAMPS,
+  room: StampRoom = SCRATCH,
+): MarkBox {
   const m = ctx.getTransform();
   const device = Math.hypot(m.a, m.b);
   const kept = 2 ** (Math.ceil(Math.log2(s) * STAMP_STEPS - 1e-6) / STAMP_STEPS);
   const id = `${key}|${kept.toFixed(4)}|${device.toFixed(2)}`;
-  let st = stamps.get(id);
+  const bytes = (t: Stamp): number => t.canvas.width * t.canvas.height * 4;
+  let st = stamps.kept.get(id);
   if (st === undefined) {
-    st = stampOf(kept, device, draw);
-    if (stamps.size >= STAMPS_KEPT) stamps.delete(stamps.keys().next().value as string);
+    st = stampOf(kept, device, draw, room);
+    stamps.held += bytes(st);
+    while (stamps.kept.size > 0 && (stamps.kept.size >= stamps.most || stamps.held > stamps.bytes)) {
+      const [oldest, gone] = stamps.kept.entries().next().value as [string, Stamp];
+      stamps.kept.delete(oldest);
+      stamps.held -= bytes(gone);
+    }
   } else {
-    stamps.delete(id);
+    stamps.kept.delete(id);
   }
-  stamps.set(id, st);
+  stamps.kept.set(id, st);
   const k = s / kept;
   // On whole device pixels, so a stamp shown at its own size is copied rather than resampled.
   const left = Math.round((x + st.left * k) * device) / device;

@@ -1,11 +1,12 @@
 // What a codebase's world is made from. Jev composes its sky, its lands,
 // its buildings, landmarks, trails, trees, bushes, stones and flowers part by
-// part (`COMPOSING`), and chooses among the looks here for what is still a
-// choice: what each entity, file and definition stands as (`FORMS` and
-// `COMPOSED_FORMS`, offered by importance through `SIZES`) and whether a land
-// holds water. Each option's words are what Jev reads.
+// part (`COMPOSING`), and the bushes of the wild past the land, and chooses
+// among the looks here for what is still a choice: what each entity, file and
+// definition stands as (`FORMS` and `COMPOSED_FORMS`, offered by importance
+// through `SIZES`) and whether a land holds water. Each option's words are
+// what Jev reads.
 
-import { biome, bush, landmark, link, rock, structure, tree, wildflowers, world } from "@gaia/kinds";
+import { biome, bush, landmark, link, rock, structure, tree, wildBush, wildflowers, world } from "@gaia/kinds";
 import { BUSH_PRIMITIVES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
 import { Library } from "@gaia/schema";
 import type { Composing, Look, Looks, StandsAs } from "@gaia/world";
@@ -94,9 +95,18 @@ export const WATERS: Readonly<Record<string, Look>> = {
 };
 
 /**
- * What Jev composes the world from, part by part: the sky, each land, building, landmark, trail, tree, bush, stone
- * and drift of flowers's kind, and every primitive that could fill a part. A tree and a bush are offered only their
- * own size's parts.
+ * The wild past the land, which stands for no code: its two grounds, in the ground cover's own words, tall unkempt
+ * green grass and dry golden grass in patches through it. Jev composes a bush for each from the world around it.
+ */
+export const WILD_GROUNDS = [
+  { cover: "lush grass", length: "tall and unkempt", wildflowers: "a scattering" },
+  { cover: "golden steppe", length: "tall and unkempt", wildflowers: "none" },
+] as const;
+
+/**
+ * What Jev composes the world from, part by part: the sky, each land, building, landmark, trail, tree, bush, stone,
+ * drift of flowers and wild bush's kind, and every primitive that could fill a part. A tree and a bush, the wild's
+ * too, are offered only their own size's parts.
  */
 export const COMPOSING: Composing = {
   building: structure,
@@ -108,12 +118,14 @@ export const COMPOSING: Composing = {
   bush,
   stone: rock,
   flowers: wildflowers,
+  wildBush,
   lib: new Library(PRIMITIVES),
-  offered: { tree: new Library(TREE_PRIMITIVES), bush: new Library(BUSH_PRIMITIVES) },
+  offered: { tree: new Library(TREE_PRIMITIVES), bush: new Library(BUSH_PRIMITIVES), wildBush: new Library(BUSH_PRIMITIVES) },
 };
 
 export const LOOKS: Looks = {
   compose: COMPOSING,
   form: { ...FORMS, ...COMPOSED_FORMS },
   water: WATERS,
+  wild: WILD_GROUNDS,
 };
