@@ -150,12 +150,6 @@ export const CUT = {
    * falls. It is never a card, so it does not fade when seen edge-on.
    */
   patch: 6,
-  /**
-   * The solid center of a fir's frond, inside its needles. No primitive
-   * writes this cut now. It is never a card, so it does not thin when seen
-   * edge-on.
-   */
-  core: 8,
   /** A spray in bloom: umbels of five-petaled flowers on fine stalks, with a few small fresh leaves, like a cherry's. */
   umbels: 9,
   /** A crowded cluster of overlapping rounded leaves around a short stalk, its rim leafy, like the leaves of a bush seen close. */
