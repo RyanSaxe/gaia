@@ -90,7 +90,7 @@ uniform float uHigh;
 uniform float uOpacity;
 uniform float uBillow;
 uniform float uCells;
-uniform float uStand;
+uniform float uHorizon;
 uniform float uWind;
 uniform vec3 uMoonDisc;
 uniform float uMoonSize;
@@ -160,10 +160,10 @@ void main() {
   dome.x /= uStretch;
   float az = atan(dir.x, -dir.z);
   vec2 ring = vec2(az * 6.0, e * 6.5 * uStretch) * uScale;
-  vec2 p = mix(dome * uScale, ring, uStand) + wind;
+  vec2 p = mix(dome * uScale, ring, uHorizon) + wind;
   float n = fbm(p);
   // The horizon projection wraps behind the camera; blend the seam there only.
-  float wrapW = smoothstep(0.8, 1.0, (az + 3.14159) / 6.28318) * uStand;
+  float wrapW = smoothstep(0.8, 1.0, (az + 3.14159) / 6.28318) * uHorizon;
   n = mix(n, fbm(p - vec2(6.28318 * 6.0 * uScale, 0.0)), wrapW);
   float cells = noise(p * 5.0 + 3.0);
   n = mix(n, n * (0.35 + 1.25 * smoothstep(0.25, 0.75, cells)), uCells);
@@ -175,15 +175,15 @@ void main() {
   float top = uHigh * smoothstep(uThreshold - 0.32, uThreshold + 0.08, column);
   float rise = clamp(e / max(top, 1e-3), 0.0, 1.5);
   // Full at the foot, thinning upward, so the top breaks up into billows.
-  n += uStand * (0.36 - rise * 0.5);
+  n += uHorizon * (0.36 - rise * 0.5);
   // Dome clouds thin out toward the horizon instead of stopping at a line:
   // fewer and smaller there, and fading over a wide band of sky.
-  n -= (1.0 - smoothstep(0.0, 0.22, e)) * 0.08 * (1.0 - uStand);
+  n -= (1.0 - smoothstep(0.0, 0.22, e)) * 0.08 * (1.0 - uHorizon);
   float d = smoothstep(uThreshold, uThreshold + uSoftness, n);
-  float band = mix(smoothstep(uLow, uLow + 0.14, e) * (1.0 - smoothstep(uHigh - 0.12, uHigh + 0.04, y)), 1.0 - smoothstep(uHigh * 0.8, uHigh * 1.25, e), uStand);
+  float band = mix(smoothstep(uLow, uLow + 0.14, e) * (1.0 - smoothstep(uHigh - 0.12, uHigh + 0.04, y)), 1.0 - smoothstep(uHigh * 0.8, uHigh * 1.25, e), uHorizon);
   // Clouds standing on the horizon rise out of its haze.
-  d *= band * smoothstep(0.0, mix(0.02, 0.06, uStand), y);
-  vec2 sunStep = mix(vec2(flatSun.x / uStretch, flatSun.y), vec2(0.0, 0.5), uStand) * 0.22;
+  d *= band * smoothstep(0.0, mix(0.02, 0.06, uHorizon), y);
+  vec2 sunStep = mix(vec2(flatSun.x / uStretch, flatSun.y), vec2(0.0, 0.5), uHorizon) * 0.22;
   float n2 = fbm(p + sunStep);
   float lit = clamp(0.62 + (n - n2) * 3.2, 0.0, 1.0);
   float body = smoothstep(uThreshold, uThreshold + uSoftness * 2.5 + 0.12, n);
@@ -191,7 +191,7 @@ void main() {
   // Clouds standing on the horizon are lit from above: bright billowed tops,
   // and only their lowest edge cools into shade.
   // Against a glowing low-sun horizon they turn to soft violet silhouettes.
-  shade = mix(shade, (0.6 + 0.4 * lit) * (0.8 + 0.22 * smoothstep(0.0, 0.7, rise)) * (1.0 - uSkyGlowAmount * 0.5), uStand);
+  shade = mix(shade, (0.6 + 0.4 * lit) * (0.8 + 0.22 * smoothstep(0.0, 0.7, rise)) * (1.0 - uSkyGlowAmount * 0.5), uHorizon);
   vec3 cloud = mix(uCloudShade, uCloudLit, clamp(shade, 0.0, 1.0));
   // A low sun lights clouds from beneath and on the edges facing it, in its
   // deepened glow, the clouds toward it most. Once it has set, the earth's
@@ -256,7 +256,7 @@ export function createSky(light: SceneLight): Sky {
     uOpacity: { value: 1 },
     uBillow: { value: 0.5 },
     uCells: { value: 0 },
-    uStand: { value: 0 },
+    uHorizon: { value: 0 },
     uMoonDisc: { value: new THREE.Vector3(1, 1, 1) },
     uMoonSize: { value: 0.026 },
     uMoonPhase: { value: 1 },
@@ -291,7 +291,7 @@ export function createSky(light: SceneLight): Sky {
       u.uOpacity.value = c.opacity;
       u.uBillow.value = c.billow;
       u.uCells.value = c.cells;
-      u.uStand.value = c.horizon;
+      u.uHorizon.value = c.horizon;
       u.uMoonDisc.value.copy(v3(s.moon.color));
       u.uMoonSize.value = s.moon.size;
       u.uMoonPhase.value = s.moon.phase;

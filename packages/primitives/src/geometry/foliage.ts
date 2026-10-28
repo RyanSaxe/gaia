@@ -191,7 +191,7 @@ export const SOIL = 0.005;
 export const aboveSoil = (l: Limb): boolean => Math.max(l.start[1], l.end[1]) > SOIL;
 
 /** Whether a frame or crown whose highest point is `top` is a bush's. */
-const standsAsBush = (top: number): boolean => top <= BUSH_TOP;
+const isBushHeight = (top: number): boolean => top <= BUSH_TOP;
 const frameTop = (skel: Skeleton): number => skel.limbs.reduce((m, l) => Math.max(m, l.end[1], l.start[1]), 0);
 
 /**
@@ -202,7 +202,7 @@ const frameTop = (skel: Skeleton): number => skel.limbs.reduce((m, l) => Math.ma
  * its crown less, so every crown fits its plant's budget.
  */
 export function crownRoom(skel: Skeleton, most: number): number {
-  const bush = standsAsBush(frameTop(skel));
+  const bush = isBushHeight(frameTop(skel));
   const plant = bush ? PLANT_TRIANGLES.bush : PLANT_TRIANGLES.tree;
   return Math.max(0, Math.min(bush ? BUSH_CROWN_TRIANGLES : most, plant - (bush ? HUNG.bush : HUNG.tree).least - barkTriangles(skel)));
 }
@@ -214,7 +214,7 @@ export function crownRoom(skel: Skeleton, most: number): number {
  * the remaining triangles can carry, spread over the crown.
  */
 export function hungFrom(skel: Skeleton, parts: readonly Part[], anchors: Anchor[]): Anchor[] {
-  const bush = standsAsBush(frameTop(skel));
+  const bush = isBushHeight(frameTop(skel));
   const left = (bush ? PLANT_TRIANGLES.bush : PLANT_TRIANGLES.tree) - barkTriangles(skel) - parts.reduce((n, p) => n + p.indices.length / 3, 0);
   if (left >= (bush ? HUNG.bush : HUNG.tree).most) return anchors;
   return spread(anchors, Math.max(0, Math.floor(left / HUNG_TRIANGLES))).map((i) => anchors[i] as Anchor);
@@ -1333,7 +1333,7 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
   const s = ctx.facts.scale ?? 1;
   const picker = r.fork("pick");
   // A bush hangs fewer pods than a tree, so they fit beside its frame and leaves. Petals and berries are light, so their caps stay the same.
-  const bush = standsAsBush(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
+  const bush = isBushHeight(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
   const cap = bush && p.form === "pods" ? Math.min(BUSH_HUNG, BLOSSOM_CAP.pods) : BLOSSOM_CAP[p.form];
   const want = Math.min(cap, Math.round(anchors.length * p.count));
   // Berries hang among the leaves on the plant's sides and underside first, not on top of it.
@@ -1400,7 +1400,7 @@ export function buildFruit(p: Resolved<typeof fruitParams>, ctx: BuildContext, a
   const pear = p.fruit === "pears";
   const top = pear ? FRUIT.pear : 0.88;
   const crown = crownOf(anchors.map((a) => a.position));
-  const tree = !standsAsBush(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
+  const tree = !isBushHeight(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
   const radius = FRUIT.radius * (tree ? FRUIT.treeSize : 1);
   // Fruit hangs only where it clears the soil.
   const room = anchors.map((a, i) => ({ a, i })).filter(({ a }) => a.position[1] - FRUIT.stalk - (top + 1) * radius * 1.15 > FRUIT.clear);

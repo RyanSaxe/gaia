@@ -206,7 +206,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
    * Maps a page id to the id of its thing in the world. `entity:<path>` maps to the entity's path, `own:<file>` to the
    * file, and any other id to itself.
    */
-  const standsFor = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of.startsWith("own:") ? of.slice("own:".length) : of);
+  const thingIdOf = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of.startsWith("own:") ? of.slice("own:".length) : of);
   /**
    * The journal's map canvases by area, drawn once per field map paper: the whole land ("") for the endpapers and one
    * per folder. While the paper repaints after a vitality change, `mapOf` returns the map drawn from the previous paper.
@@ -226,10 +226,10 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       return spread === null ? null : halfOf(spread, side);
     },
     map: (area) => mapOf(area, 520, 660, false),
-    picture: (of) => paintings.picture(standsFor(of)),
-    painted: (of) => (of === "" ? paintings.painted("", true) : paintings.painted(standsFor(of))),
+    picture: (of) => paintings.picture(thingIdOf(of)),
+    painted: (of) => (of === "" ? paintings.painted("", true) : paintings.painted(thingIdOf(of))),
     frontispiece: () => paintings.picture("", true),
-    ahead: (ofs) => paintings.ahead(ofs.map(standsFor)),
+    ahead: (ofs) => paintings.ahead(ofs.map(thingIdOf)),
     turnTo: (at) => journal.turnTo(at),
     person: () => world.person(),
     mapped: () =>
@@ -244,7 +244,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       if (!jump(x, z, undefined, true)) journal.close();
     },
     travel: (of) => {
-      const at = world.seenFrom(standsFor(of));
+      const at = world.seenFrom(thingIdOf(of));
       if (at === null) return;
       journal.close();
       jumpTo(at, true);
@@ -387,7 +387,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
       // Each patch, definition and entity's own vitality. A definition uses its own value, whatever its form.
       const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.symbols.map((d) => [d.id, d.vitality] as const), ...code.things.map((t) => [entityOf(t.path), t.vitality] as const)]);
-      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(standsFor(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(standsFor(of)) };
+      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(thingIdOf(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(thingIdOf(of)) };
     }
     // A directory's vitality pools its files and subdirectories, weighted by patch area, as the map's wash does.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
@@ -558,7 +558,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       /** Opens the journal at the map, "contents", or a thing's path or id. Null shuts it. */
       journal: (at?: string | null) => (at === null ? journal.close() : journal.open(at)),
       /** The state of a page's painting: waiting, painting, done, or none when no thing in the world matches the page. */
-      painting: (of: string) => paintings.state(standsFor(of)),
+      painting: (of: string) => paintings.state(thingIdOf(of)),
       /** Tucks the minimap below the bottom of the screen or brings it back, as a tap on its edge does. */
       tuck: (on: boolean) => minimap.tuck(on),
       /** The person's place, the state of the minimap, compass, field map and journal, and the number of marked trail crossings. */

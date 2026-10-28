@@ -95,7 +95,7 @@ function thicketOf(t: Terrain, ci: number, cj: number, grounds: number, cache: T
 }
 
 /** Whether cell (ci, cj)'s thicket is placed around an anchor at (ax, az): its cell's center is within `WILD_GROWTH.reach`. */
-const standsAround = (ci: number, cj: number, ax: number, az: number): boolean => Math.hypot((ci + 0.5) * WILD_THICKETS.cell - ax, (cj + 0.5) * WILD_THICKETS.cell - az) <= WILD_GROWTH.reach;
+const nearAnchor = (ci: number, cj: number, ax: number, az: number): boolean => Math.hypot((ci + 0.5) * WILD_THICKETS.cell - ax, (cj + 0.5) * WILD_THICKETS.cell - az) <= WILD_GROWTH.reach;
 
 /**
  * Each ground's bush's copies within `WILD_GROWTH.reach` of (ax, az).
@@ -110,7 +110,7 @@ function wildSpots(t: Terrain, ax: number, az: number, grounds: number, cache: T
   const hi = (v: number): number => Math.ceil((v + reach) / cell);
   for (let cj = lo(az); cj <= hi(az); cj++) {
     for (let ci = lo(ax); ci <= hi(ax); ci++) {
-      if (!standsAround(ci, cj, ax, az)) continue;
+      if (!nearAnchor(ci, cj, ax, az)) continue;
       const thicket = thicketOf(t, ci, cj, grounds, cache);
       if (thicket !== null) out[thicket.ground]?.push(...thicket.spots);
     }
@@ -134,7 +134,7 @@ function wildClearings(t: Terrain, ax: number, az: number, x0: number, z0: numbe
   const out: Clearing[] = [];
   for (let cj = Math.floor((z0 - margin) / cell); cj <= Math.floor((z1 + margin) / cell); cj++) {
     for (let ci = Math.floor((x0 - margin) / cell); ci <= Math.floor((x1 + margin) / cell); ci++) {
-      if (!standsAround(ci, cj, ax, az)) continue;
+      if (!nearAnchor(ci, cj, ax, az)) continue;
       const thicket = thicketOf(t, ci, cj, clears.length, cache);
       const outline = thicket === null ? undefined : clears[thicket.ground];
       if (thicket === null || outline === undefined) continue;
