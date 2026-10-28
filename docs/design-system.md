@@ -281,7 +281,10 @@ letters in project names green. Brand construction lives in
 
 A distant form is baked from the same component and shaders as the full one.
 The transition preserves coverage and silhouette, then dissolves fine detail
-under the far form. View, reflection and shadow passes select appropriate
+under the far form. While both draw, the far form stands just in front of its
+full form, and the full form thins sample by sample through its coverage, never
+a whole pixel at a time, so neither shows through the other as a stipple. View,
+reflection and shadow passes select appropriate
 detail from screen size. Grass narrows smoothly rather than changing height as
 the person approaches.
 
