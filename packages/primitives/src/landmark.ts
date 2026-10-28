@@ -1,9 +1,8 @@
-// Landmark primitives: great things a person steers by from far away, each
-// 12 to 30 m tall, or spread wide, so it reads through the haze from across
-// the world. A few strong axes per primitive change the whole form, so the
-// same few primitives make very different landmarks, and each build's seed
-// picks its proportions within its words, so two landmarks Jev answered alike
-// still differ. Geometry lives in ./geometry/landmark/.
+// Landmark primitives build the large forms a person navigates by. Each is 12
+// to 30 m tall or as wide, so it stays visible through the haze across the
+// world. Each build's seed picks its proportions within the bands of its answers
+// (`landmarkShape`), so two landmarks with the same answers still differ.
+// Geometry is in ./geometry/landmark/.
 
 import { primitive, t } from "@gaia/schema";
 import { ROCK_ARCH_SHAPE, buildRockArch } from "./geometry/landmark/arch.ts";
@@ -165,8 +164,8 @@ export const rotunda = primitive({
 export const LANDMARK_PRIMITIVES = [lookoutTower, standingStones, greatTree, windmill, rockArch, rotunda];
 
 /**
- * What each landmark's seed picks within its words, by primitive: the bands its build's `landmarkShape` keeps to. A
- * great tree has none: its seed already grows its whole frame, every limb's length and turn.
+ * The proportion bands that each landmark primitive's build passes to `landmarkShape`, by primitive id. The great
+ * tree has no entry, because its seed already sets every limb's length and turn.
  */
 export const LANDMARK_SHAPES: Readonly<Record<string, Bands>> = {
   [lookoutTower.id]: TOWER_SHAPE,

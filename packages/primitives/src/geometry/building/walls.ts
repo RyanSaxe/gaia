@@ -1,9 +1,8 @@
-// A building's walls, built against its plan: each mass's walls stand on a
-// plinth and rise to the roofline over them, so gables, hipped ends, a
-// lean-to's slope and a turret's ring all meet their roofs. A failing house
-// falls to ruin: plaster falls away and walls rot through, worst at one
-// weak corner where timbers topple and rubble gathers; ivy climbs the
-// walls and weeds grow tall. Walls another mass hides are never built.
+// Builds a building's walls from its plan. Each mass's visible walls stand on
+// a plinth and rise to the roofline over them, so gables, hipped ends, a
+// lean-to's slope and a turret's ring all meet their roofs. As vitality falls,
+// plaster falls away and walls rot through, worst at the weak corner (`Ruin`),
+// and ivy and weeds grow.
 
 import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Rand, type Resolved } from "@gaia/schema";
 import type { fieldstoneParams, timberFrameParams } from "../../structure.ts";
@@ -12,7 +11,7 @@ import { UP, beam, box, pillow } from "../blocks.ts";
 import { PLASTER, type Ruin, STONE, type Wall, clearings, coarseness, massOf, on, peakOf, ruinAt, ruinOf, shownWalls, still, topAt, wallGrain, wallRot, wallTop, wobble } from "./frame.ts";
 import { type Hold, ivy, rubble, wallSheet, weedSpots, weeds } from "./ruin.ts";
 
-/** Floor to floor, meters; a floor beam marks each storey on a timber frame. */
+/** Floor-to-floor height in meters. A timber frame has a floor beam at each storey. */
 const STOREY = 2.3;
 
 // ---------- shared ----------
@@ -40,10 +39,10 @@ function plinth(b: PartBuilder, plan: BuildingPlan, r: Rand, coarse: number): vo
 }
 
 /**
- * The floor inside the walls, just under the door's sill: timber over the ground the house stands on, so none of
- * that ground shows through a door or a hole, such as a mill's wheel pit, dug where the lattice reaches under the
- * wheel's wall. Each mass's floor lies a few millimetres above the last's where they overlap, so none flickers. It
- * rots through by the weak corner as the walls do.
+ * The floor inside the walls, just under the door's sill. It covers the ground under the house, so no ground shows
+ * through a door or a hole, such as a mill's wheel pit, dug where the terrain lattice reaches under the wheel's wall.
+ * Each mass's floor is a few millimetres above the previous one where they overlap, so they do not z-fight. It rots
+ * through near the weak corner as the walls do.
  */
 function floor(b: PartBuilder, plan: BuildingPlan, ruin: Ruin): void {
   plan.masses.forEach((m, i) => {
@@ -54,8 +53,8 @@ function floor(b: PartBuilder, plan: BuildingPlan, ruin: Ruin): void {
 }
 
 /**
- * How the wall's core rots at a point: a block at a time, after what is in front of it, `behind` of its depth. It is
- * the last of the wall to stand, so ivy holds to it.
+ * How the wall's core rots at a point: in stone blocks, at `behind` times the wall's rot, so it goes just after the
+ * surface in front of it. The core is the last of the wall to go, so ivy holds to it.
  */
 const coreOf = (plan: BuildingPlan, ruin: Ruin, behind: number): Hold => (w, p) => ({ rot: wallRot(plan, massOf(plan, w), ruin, p) * behind, grain: wallGrain(w, GRAIN.stones, STONE) });
 
@@ -67,7 +66,7 @@ function core(b: PartBuilder, plan: BuildingPlan, hold: Hold, inset: number, fro
   }
 }
 
-/** Ivy, weeds and rubble around any walls as the house declines; the ivy holds to `hold`. */
+/** Ivy, weeds and rubble round the walls as vitality falls. The ivy goes with `hold`. */
 function overgrowth(plan: BuildingPlan, ruin: Ruin, r: Rand, stones: PartBuilder, size: number, coarse: number, hold: Hold): { moss: PartBuilder; weed: PartBuilder } {
   const moss = new PartBuilder("moss");
   const weed = new PartBuilder("leaf");
@@ -79,13 +78,13 @@ function overgrowth(plan: BuildingPlan, ruin: Ruin, r: Rand, stones: PartBuilder
 
 // ---------- timber frame ----------
 
-/** Triangles a building's walls keep within, however many masses and storeys it has. */
+/** The triangle budget for a building's walls, whatever its masses and storeys. */
 const WALL_TRIANGLES = 9_800;
 
 /**
- * Builds a building's walls at its coarseness, and again coarser while they
- * run over budget, so every building fits by construction. The same plan
- * always settles on the same coarseness.
+ * Builds a building's walls at its coarseness, then rebuilds them coarser
+ * while they are over `WALL_TRIANGLES`, so every building fits. The same plan
+ * always ends at the same coarseness.
  */
 function withinBudget(plan: BuildingPlan, build: (coarse: number) => Built): Built {
   let coarse = coarseness(plan);
@@ -115,7 +114,7 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
   const timber = new PartBuilder("timber", "solid");
   const ruin = ruinOf(plan);
   plinth(masonry, plan, r.fork("plinth"), coarse);
-  // Fallen plaster bares a band of the rubble behind it before the wall opens.
+  // Fallen plaster exposes a band of the rubble core before the wall opens.
   const hold = coreOf(plan, ruin, 0.92);
   core(masonry, plan, hold, 0.03, plan.floor, coarse);
   floor(timber, plan, ruin);
@@ -152,11 +151,11 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
     const lean = (s: number, y: number): V3 => on(w, s + wobble(plan, seed, on(w, s, y), 0.09), y, out);
     const pivotOf = (s: number): V3 => on(w, s < w.length / 2 ? 0 : w.length, top);
     const zoneAt = (s: number, y = top): number => ruinAt(ruin, on(w, s, y));
-    // In the collapse, timbers go: lost below a threshold that rises toward the weak corner.
+    // In the collapse, timbers go below a loss threshold that rises toward the weak corner.
     const gone = (s: number, y = top): number => (zoneAt(s, y) > 0.3 ? lossThreshold(r.next(), 0.14 + 0.3 * zoneAt(s, y), 0.05) : 0);
     const ch = (s: number, sag = 0, y = top): Channels => still(pivotOf(s), 0.5, { droop: sag * Math.sin((Math.PI * clamp(s / w.length, 0, 1))), tint: (r.next() - 0.5) * 0.03, loss: gone(s, y) });
-    // Every timber, with where it runs and the vitality below which it falls
-    // or goes, so the plaster it frames goes first.
+    // Every timber's extent and the vitality below which it falls or goes,
+    // so the plaster it frames can go first.
     const members: { s0: number; s1: number; y0: number; y1: number; gives: number }[] = [];
     const member = (c: Channels, s0: number, s1: number, y0: number, y1: number): Channels => {
       members.push({ s0: Math.min(s0, s1), s1: Math.max(s0, s1), y0: Math.min(y0, y1), y1: Math.max(y0, y1), gives: Math.max(c.loss, c.fall?.[3] ?? 0) });
@@ -164,7 +163,7 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
       return c.loss > 0 ? { ...c, pivot: lean(s0, Math.min(y0, y1)) } : c;
     };
 
-    // Sill and wall plate run the whole length; the plate sags a little as the house declines.
+    // The sill and wall plate run the whole length. The plate sags a little as vitality falls.
     beam(timber, lean(-0.05, sill), lean(w.length + 0.05, sill), beamW, 0.09, w.n, 0.42, member(ch(w.length / 2), 0, w.length, sill, sill));
     const plates = clamp(Math.round(w.length / (1.4 * coarse)), 1, 6);
     for (let k = 0; k < plates; k++) {
@@ -191,8 +190,8 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
         const zone = zoneAt(s);
         if (a === sill && zone > 0.3) {
           // A post in the collapse topples outward off its sill and comes to
-          // rest with its head on the ground: it turns past level by as much
-          // as the sill stands above the ground.
+          // rest with its head on the ground. It turns past level by the angle
+          // that the sill's height makes over the post's length.
           const base = lean(s, a);
           const length = b2 - a;
           const tip = Math.PI / 2 + Math.asin(clamp((base[1] - 0.04) / length, 0, 0.9));
@@ -201,7 +200,7 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
         } else beam(timber, lean(s, a), lean(s, b2), beamW * 0.9, 0.09, w.n, 0.44 + 0.08 * r.next(), member(ch(s, 0, (a + b2) / 2), s, s, a, b2));
       }
     }
-    // Floor beams at every storey; rails at window-sill height between posts, and braces in the end bays.
+    // Floor beams at every storey, rails at window-sill height between posts, and braces in the end bays.
     const all = [...filled].sort((a, b) => a - b);
     for (const y of floors) {
       for (let i = 0; i + 1 < all.length; i++) {
@@ -236,7 +235,7 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
       if (s1 - s0 > 0.4) beam(timber, lean(s0, collar), lean(s1, collar), beamW * 0.9, 0.09, w.n, 0.42, member(ch(peak.s, 0, collar), s0, s1, collar, collar));
     }
 
-    // Plaster panels between the timbers. Some are loose, and fall away as the house declines.
+    // Plaster panels between the timbers. Some are loose and fall away as vitality falls.
     const verticals = [0, ...filled, w.length].sort((a, b) => a - b);
     const levels = [plan.floor, ...(p.framing === "close studding" ? floors : [...rails, ...floors]), top].sort((a, b) => a - b);
     for (let i = 0; i + 1 < verticals.length; i++) {
@@ -262,16 +261,16 @@ function timberFrame(p: Resolved<typeof timberFrameParams>, ctx: BuildContext, p
       wallSheet(plaster, plan, w, top, 0.008, 0.6 * coarse, (q) => ({ shade: 0.58, c: still(pivot, 0.55, { rot: wallRot(plan, m, ruin, q), grain }) }));
     }
   }
-  // Chunks of plaster and stone lie where the corner gave way.
+  // Chunks of plaster and stone at the collapsed corner.
   const { moss, weed } = overgrowth(plan, ruin, r.fork("overgrowth"), masonry, 0.2, coarse, hold);
   rubble(plaster, plan, ruin, r.fork("plaster-rubble"), 0.16, 14);
   return { parts: [masonry.part(), plaster.part(), timber.part(), moss.part(), weed.part()], anchors: [] };
 }
 
 /**
- * One plaster panel: a slightly bulging 3x3 sheet, its shade hand-laid. It
- * goes no later than any timber framing it (`framing`, the highest
- * threshold among them), and slumps down onto the timber under it as it goes.
+ * One plaster panel: a slightly bulging 3x3 sheet with varied shade. It goes
+ * no later than any timber framing it (`framing` is the highest threshold
+ * among them), and slumps onto the timber under it as it goes.
  */
 function panel(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, w: Wall, s0: number, s1: number, y0: number, y1: number, rough: number, r: Rand, seed: number, framing: number): void {
   const center = on(w, (s0 + s1) / 2, (y0 + y1) / 2, 0.01);
@@ -329,7 +328,7 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
   core(mortar, plan, hold, -0.005, -plan.footing, coarse);
   floor(boards, plan, ruin);
   const walls = shownWalls(plan);
-  // Stones grow on a big house, so the walls stay within about 600 stones, and more only when the walls run over budget.
+  // A big house uses bigger stones, so its walls have about 600 at most. Stones grow again only when the walls are over budget.
   const area = walls.reduce((sum, w) => sum + w.length * ((wallTop(plan, massOf(plan, w)) + peakOf(plan, w).y) / 2 + 0.12), 0);
   const size = Math.max(p.stones, Math.sqrt(area / (0.84 * 600))) * Math.sqrt(coarse / coarseness(plan));
   for (const w of walls) {
@@ -353,11 +352,11 @@ function fieldstone(p: Resolved<typeof fieldstoneParams>, ctx: BuildContext, pla
         if (clear && mid > -0.02 && mid < w.length + 0.02) {
           const c = on(w, clamp(mid, 0.05, w.length - 0.05) + wobble(plan, seed, on(w, mid, cy), 0.07), cy, 0);
           const ground = clamp(cy / 1.8, 0, 1);
-          // Stones fall from the top of the walls, and from the weak corner most.
+          // Stones fall from the top of the walls, and most at the weak corner.
           const fallen = wallRot(plan, m, ruin, c);
-          // A tall house's upper courses fall too, so a ruin is broken down from above as well as at its weak corner.
+          // A tall house's upper courses fall too, so the walls break down from above as well as at the weak corner.
           const missing = r.next() < 0.05 + 0.95 * Math.max(0, fallen - 0.3);
-          // The stone rots with the wall behind it, reading the rot at the middle of its block, and goes from its top down.
+          // The stone rots with the wall behind it, using the rot at its block's center, and goes from its top down.
           const [u, v] = wallGrain(w, GRAIN.stones, STONE)(c);
           const row = Math.floor(v);
           pillow(stones, c, w.u, w.n, len * 0.94, h * 0.9, 0.05 + 0.05 * r.next(), 0.4 + 0.25 * r.next(), {

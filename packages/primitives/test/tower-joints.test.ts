@@ -1,6 +1,6 @@
-// A lookout tower's walls are closed behind their mortar joints: looking
-// level at a joint between two courses, from straight on or across the
-// wall's curve, a person sees mortar, never the sky through the wall.
+// Checks that a lookout tower's walls are closed behind their mortar joints.
+// A level ray through a joint between two courses, straight on or across the
+// wall's curve, hits mortar and never passes through the wall.
 
 import { describe, expect, it } from "vitest";
 import { type Built, type Part, rand } from "@gaia/schema";
@@ -34,12 +34,12 @@ function hits(part: Part, a: readonly number[], b: readonly number[]): boolean {
 }
 
 describe("a lookout tower", () => {
-  // Casts some 4,500 rays at three towers: several seconds alone, more when other work shares the machine.
+  // Casts about 4,500 rays at three towers, several seconds alone and more on a busy machine.
   it.each(["round", "square", "octagonal"] as const)("is closed behind every joint between its courses, %s", { timeout: 60_000 }, (plan) => {
     const stored = { height: "a squat watchtower", plan, profile: "straight", galleries: "none", crown: "a conical roof", masonry: "dressed blocks" };
     const built = (lookoutTower.build as Erased)(resolveParams(lookoutTower, stored, rand(5), lookoutTower.id), { rand: rand(5).fork("tower"), facts: { scale: 1 } }, null) as Built;
     const stone = built.parts.find((p) => p.swatch === "masonry") as Part;
-    // The wall and what is set in it, such as the door and its lintel; glass is seen through.
+    // The wall and what is set in it, such as the door and its lintel. Glass is seen through.
     const solid = built.parts.filter((p) => p.swatch !== "glass");
     // Each course's top, where a joint opens above it: the heights most of the blocks' upward faces lie at, below 8 m.
     const count = new Map<number, number>();
@@ -54,7 +54,7 @@ describe("a lookout tower", () => {
     // Level rays from outside across the tower, through each joint and the courses either side of it: toward the
     // axis, and passing it at half and 85% of the wall's radius, across the wall's curve.
     for (const y of tops) {
-      // The wall's radius there: the middle of the radii of the course's own block tops.
+      // The wall's radius there: the median radius of the course's own block tops.
       const radii: number[] = [];
       for (let v = 0; v < stone.shade.length; v++) {
         if (Math.abs((stone.positions[v * 3 + 1] as number) - y) < 1e-3 && (stone.normals[v * 3 + 1] as number) > 0.99) radii.push(Math.hypot(stone.positions[v * 3] as number, stone.positions[v * 3 + 2] as number));

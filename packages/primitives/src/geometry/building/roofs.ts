@@ -1,9 +1,9 @@
-// A building's roofs: one over each mass, in the form its plan gives it
-// (gabled, hipped, half-hipped, a lean-to's one slope or a turret's cone),
-// covered in thatch or tiles. Each lies on the roofline its walls rise to,
-// so they meet by construction. A failing roof sags and rots into holes
-// over bare rafters, worst over the weak corner; a lean-to caves in about
-// its high edge, the chimney topples and the smoke stops.
+// Builds a building's roofs: one over each mass in the form its plan gives it
+// (gabled, hipped, half-hipped, a lean-to's one slope or a turret's cone), in
+// thatch or tiles, laid on the roofline its walls rise to. As vitality falls a
+// roof sags and rots into holes over bare rafters, worst over the weak corner,
+// a lean-to caves in about its high edge, and the chimney topples and its
+// smoke stops.
 
 import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Rand, type Resolved } from "@gaia/schema";
 import type { thatchParams, tilesParams } from "../../structure.ts";
@@ -15,7 +15,7 @@ import { lump } from "./ruin.ts";
 interface ProfilePoint {
   readonly b: number;
   readonly y: number;
-  /** A sharp edge: the faces either side keep their own normals. */
+  /** A sharp edge, where the faces on either side keep their own normals. */
   readonly crease?: boolean;
   /** Part of the upper surface, which takes lumps and courses. */
   readonly top?: boolean;
@@ -62,12 +62,12 @@ function hipOf(f: RoofFrame, a: number, b: number): { drop: number; n: V3 | null
   return { drop, n: normalize([f.ax[0] * k, 1, f.ax[2] * k]) };
 }
 
-/** How far past its end walls a roof reaches: a hipped roof's ends reach as far as its eaves. */
+/** How far past its end walls a roof reaches. A hipped roof's ends reach as far as its eaves. */
 const overEnd = (f: RoofFrame, reach: number, gable: number): number => (f.m.roof === "hip" ? reach - f.halfSpan : gable);
 
 /**
- * The vitality channels a lean-to's whole slope shares as the building
- * fails: it caves in, turning down about its high edge.
+ * The channels a lean-to's whole slope shares as vitality falls. It caves
+ * in, turning down about its high edge.
  */
 function caveIn(f: RoofFrame, r: Rand): Partial<Channels> {
   if (f.m.roof !== "lean-to") return {};
@@ -95,7 +95,7 @@ const roofCoordsOf = (f: RoofFrame, p: V3): { a: number; b: number } => ({
 
 /**
  * Extrudes a closed, counter-clockwise (b, y) profile along the ridge from
- * `a0` to `a1`, and caps both gable ends. `shape` displaces each point and
+ * `a0` to `a1`, and caps both gable ends. `shape` displaces each point,
  * `chan` gives each vertex its channels and shade, and `bend` turns a
  * vertex's normal where a hipped end tilts the surface.
  */
@@ -209,7 +209,7 @@ function extrudeRoof(
   }
 }
 
-/** The eave sag a declining house shows: most at the eaves and mid-span. */
+/** How far a roof sags as vitality falls, most at the eaves and mid-span. */
 function sagOf(f: RoofFrame, a: number, b: number, reach: number): number {
   const e = clamp(Math.abs(b) / reach, 0, 1);
   const mid = Math.sin(Math.PI * clamp((a + f.halfLength + 1) / (2 * f.halfLength + 2), 0, 1));
@@ -224,17 +224,17 @@ const sagAt = (f: RoofFrame, ruin: Ruin, reach: number, a: number, bv: number): 
 });
 
 /**
- * A covering's upper surface settles onto its own underside as it rots, straight below: rotten thatch slumps and
- * loose tiles lie down on their boards. Any piece of it can last to any vitality, and once it stands alone it would
- * hang its covering's thickness above the frame; settled, it lies on the boards over the rafters. It settles from its
- * rot, the eaves and the collapse first, and all of it by vitality 0.15. A lean-to's slope keeps its thickness: it
- * caves in about its high edge instead, every point turning about that.
+ * A covering's upper surface settles straight down onto its own underside as it rots: rotten thatch slumps and loose
+ * tiles lie down on their boards. Any piece can last to any vitality, and once alone it would hang its covering's
+ * thickness above the frame. Settled, it lies on the boards over the rafters. Its threshold follows its rot, so the
+ * eaves and the collapse settle first, and all of it by vitality 0.15. A lean-to's slope keeps its thickness and
+ * caves in about its high edge instead.
  */
 function settles(f: RoofFrame, base: V3, rot: number): Partial<Channels> {
   return f.m.roof === "lean-to" ? {} : { loss: 0.05 + 0.3 * rot, pivot: base };
 }
 
-/** The chimney, its cap and pot, and where its smoke rises from. A gable stack needs a free gable end; otherwise it rises through the ridge. */
+/** The chimney, its cap and pot, and where its smoke rises from. A gable stack needs a free gable end. Otherwise it rises through the ridge. */
 function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, wanted: "gable" | "ridge" | "none", r: Rand): V3 | null {
   if (wanted === "none") return null;
   const end = chimneyEnd(plan);
@@ -247,7 +247,7 @@ function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, wanted: "
   let deep: number;
   let topple: V3;
   if (where === "gable") {
-    // Against the outside face of the free gable; it topples back over the roof.
+    // Against the outside face of the free gable. It topples back over the roof.
     const sign = end;
     base = roofPoint(f, sign * (f.halfLength + 0.34), 0, 0);
     topple = [-sign * f.ax[0], 0, -sign * f.ax[2]];
@@ -268,11 +268,12 @@ function chimney(stack: PartBuilder, plan: BuildingPlan, f: RoofFrame, wanted: "
   const lean = plan.settle * 0.05 * (r.next() - 0.5);
   const courses = Math.max(3, Math.round((crown - foot) / 0.42));
   const shoulder = where === "gable" ? top * 0.8 : foot;
-  // Above the break, the stack topples as one piece as the house fails:
-  // back over the ridge from a gable end, or down the slope from the ridge.
-  // It breaks at the ridge and topples about the edge of the break on the
-  // side it falls to, so it comes to rest lying along the ridge beam: by then
-  // the covering has rotted and settled onto its boards, and holds nothing up.
+  // As vitality falls, the stack above the break topples as one piece: back
+  // over the ridge from a gable end, or along the ridge toward the roof's
+  // middle from the ridge. It breaks at the ridge and turns about the edge of
+  // the break on the side it falls to, so it comes to rest along the ridge
+  // beam. By then the covering has settled onto its boards, so the stack rests
+  // on the beam, not on the covering.
   const breakAt = ridgeY;
   const hinge = addScaled(addScaled(addScaled(base, f.ax, lean * (breakAt - foot)), UP, breakAt), topple, deep * 0.4);
   const tip = Math.PI / 2;
@@ -311,12 +312,12 @@ export function smoke(b: PartBuilder, at: V3, r: Rand): void {
 }
 
 /**
- * The frame under a roof's covering: rafters down each slope, and on a
- * hipped end hip rafters along its hips and jack rafters up it from its eave,
- * a ridge beam and purlins. It is hidden while the roof is whole and bare
- * where the covering rots through. It never goes before the covering on it,
- * because any piece of covering may last: every point of it sags and falls
- * just as the covering over it does, so the covering never lifts off it.
+ * The frame under a roof's covering: rafters down each slope, hip rafters
+ * along a hipped end's hips with jack rafters up it from its eave, a ridge
+ * beam and purlins. It is hidden while the roof is whole and shows where the
+ * covering rots through. It never goes before the covering on it, because any
+ * piece of covering may last. Every point of it sags and falls just as the
+ * covering over it does, so the covering never lifts off it.
  */
 function rafters(b: PartBuilder, debris: PartBuilder, f: RoofFrame, ruin: Ruin, { reach, a0, a1, fall }: Slab, r: Rand): void {
   const under = undersideOf(f);
@@ -413,9 +414,9 @@ function profileOf(f: RoofFrame, reach: number, ridgeStop: number, courses: (sig
 }
 
 /**
- * Where a turret stands over a corner of a mass, the eave's corner past that wall corner would come out through the
- * turret's angled face there: points of the covering past a line parallel to that face, just inside it, are moved
- * back onto it, so the covering runs into the turret and its corner stays hidden.
+ * Where a turret stands over a corner of a mass, the eave's corner would poke out through the turret's angled face.
+ * This moves covering points past a line just inside that face back onto the line, so the covering runs into the
+ * turret and its corner stays hidden.
  */
 function turretCut(plan: BuildingPlan, m: Mass): (p: V3) => V3 {
   const cuts = plan.masses.flatMap((t) =>
@@ -442,9 +443,9 @@ function turretCut(plan: BuildingPlan, m: Mass): (p: V3) => V3 {
 }
 
 /**
- * Builds into another builder, each vertex taking the channels `at` its own
- * place: a frame that sags and falls just as the covering over it does, so
- * the covering never lifts off it.
+ * A builder that writes into `into`, with each vertex taking the channels
+ * `at` gives for its position. The roof frame uses it to sag and fall just as
+ * the covering over it does, so the covering never lifts off it.
  */
 class Following extends PartBuilder {
   constructor(
@@ -463,9 +464,9 @@ class Following extends PartBuilder {
   }
 }
 
-/** How wide a bundle of thatch is along the ridge, meters: the straw rots a bundle at a time. */
+/** A thatch bundle's width along the ridge, in meters. The straw rots a bundle at a time. */
 const BUNDLE = 0.22;
-/** How wide a tile is round a cone, meters: a cone rots a tile at a time. */
+/** A tile's width round a cone, in meters. A cone rots a tile at a time. */
 export const TILE = 0.27;
 
 function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolved<typeof thatchParams>, ruin: Ruin, seed: number, r: Rand, budget: number): Slab {
@@ -513,8 +514,8 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
     const bump = pt.top === true ? 0.035 * fbm3(a * 0.9, pt.b * 0.9, pt.y * 0.5, seed, 2) : 0;
     const end = Math.max(0, Math.abs(a) - f.halfLength) / overGable;
     // Gable ends round down a little. A hipped end drops the whole slab to its eave, so its cut end would stand across
-    // it as a flat board the thatch's full thickness tall: it rounds over to its eave instead, the cut no thicker than
-    // the lip.
+    // it as a flat board the thatch's full thickness tall. It rounds over to its eave instead, leaving the cut no
+    // thicker than the lip.
     const hipped = f.m.roof === "hip" && f.m.ends[a < 0 ? 0 : 1];
     const round = pt.top !== true ? 0 : hipped ? end * end * Math.max(0, pt.y - under(pt.b) - lip) : f.m.roof !== "hip" ? end * end * T * 0.35 : 0;
     // A settled roof dips mid-ridge, and hipped ends fall away.
@@ -594,7 +595,7 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
   const a0 = -f.halfLength - overGable;
   const a1 = f.halfLength + overGable;
   const tileW = p.covering === "pantiles" ? 0.3 : p.covering === "slates" ? 0.36 : 0.22;
-  // Pantiles need a few segments per tile for their roll; each slope keeps to its share of the roofs' triangles.
+  // Pantiles need a few segments per tile for their roll. Each slope keeps to its share of the roofs' triangles.
   const wanted = Math.round((a1 - a0) / (p.covering === "pantiles" ? tileW / 4 : tileW));
   const segments = Math.max(8, Math.min(wanted, Math.floor(budget / (2 * profile.length))));
   const fall = caveIn(f, r);
@@ -658,7 +659,7 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
   const courses = Math.max(4, Math.round(reach / courseH));
   const radOf = (c: number): number => reach * (1 - c / courses);
   // Each course goes round in a whole number of tiles or bundles, so their edges run straight down the cone and
-  // meet at its seam; what is left of a course stays in pieces of that course.
+  // meet at its seam. What is left of a course stays in whole pieces.
   const piece = covering === GRAIN.straw ? BUNDLE : TILE;
   const around = (c: number): number => Math.max(3, Math.round((Math.PI * (radOf(c) + radOf(c + 1))) / piece));
   // It sags about its apex, most at the eaves and over the collapse.
@@ -704,30 +705,30 @@ function cone(roof: PartBuilder, wood: PartBuilder, plan: BuildingPlan, m: Mass,
     const r1 = radOf(c + 1);
     const last = c === courses - 1;
     // Each course: the butt of its tiles stepping out over the course below (the eave's edge under the first), then
-    // their face, tucked under the course above; the last runs on to the apex. Its underside follows it.
+    // their face, tucked under the course above. The last course runs on to the apex. Its underside follows it.
     const butt = c === 0 ? ring(reach, 0, true, 0, 0) : ring(r0 + 0.02, thick * 0.55, false, c, 0);
     band([butt, ring(r0, thick, false, c, 0.05), ring(last ? 0.02 : r1 + 0.02, thick * 0.55, false, c, 0.97), ...(last ? [ring(0, thick * 0.55, false, c, 0.999)] : [])], false);
     band([ring(r0, 0, true, c, 0), ring(r1, 0, true, c, 0.999)], true);
   }
-  // Rafters run down under it from the apex to the eave, one at each of its sides, so whatever is left of it lies on
-  // them; each sags just as the cone over it does.
+  // Rafters run down under it from the apex to the eave, one at each of its sides, so what is left of it rests on
+  // them. Each sags just as the cone over it does.
   const frame = new Following(wood, (p) => ({ droop: sag(p, Math.hypot(p[0] - m.x, p[2] - m.z)), pivot: apex }));
   for (let i = 0; i < sides; i++) {
     const t = (i / sides) * Math.PI * 2;
     const along = (rad: number): V3 => [m.x + Math.sin(t) * rad, y(rad) - 0.09, m.z + Math.cos(t) * rad];
     beam(frame, along(0.08), along(reach - 0.05), 0.07, 0.1, UP, 0.42, still(apex, 0.55));
   }
-  // It leans and falls to lie down the cone from its foot at the apex.
+  // The finial leans and falls to lie down the cone, with its foot at the apex.
   const tip = Math.PI / 2 + Math.atan(k) - 0.03;
   const finial: Channels = { loss: 0, droop: 0, wither: 0.5, glow: 0, pivot: apex, fall: [tip * Math.SQRT1_2, 0, -tip * Math.SQRT1_2, 0.3] };
   log(wood, addScaled(apex, UP, -0.1), addScaled(apex, UP, 0.7), 0.045, 0.45, finial, 6);
   box(wood, addScaled(apex, UP, 0.74), [[1, 0, 0], UP, [0, 0, 1]], [0.07, 0.07, 0.07], 0.5, finial);
 }
 
-/** Every mass's roof in one covering, the rafters under each slope, and the main body's chimney and smoke. */
-/** Triangles all of a building's slopes share, by each mass's length, so a building of many masses keeps its budget. */
+/** The triangle budget all of a building's slopes share, split by each mass's length, so a building of many masses stays within it. */
 const ROOF_TRIANGLES = 4300;
 
+/** Builds every mass's roof in one covering, the rafters under each slope, and the main body's chimney and smoke. */
 function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFrame, ruin: Ruin, seed: number, r: Rand, budget: number) => Slab, coneStyle: { thick: number; overhang: number; course: number; covering: number }, wanted: "gable" | "ridge" | "none"): Built {
   const seed = Math.floor(r.next() * 1e6);
   const roof = new PartBuilder("roof", "solid");

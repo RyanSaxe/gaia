@@ -1,16 +1,11 @@
-// A stone lookout tower in courses of blocks, built from a few strong axes:
-// its plan (round, square or eight-sided), how it rises (straight, tapering,
-// or in stages that set back on string courses), walkways on corbels, and
-// its crown. Every block has its own loss threshold that rises with height,
-// and never falls below the thresholds of the blocks it rests on, so as
-// vitality falls the tower crumbles from the top down to a jagged stump and
-// no block is ever left above a gap; rubble gathers at its foot, everything
-// a course carries (galleries, the crown, its roof) goes before it, and its
-// lamps go out one by one. Each tower's seed picks its proportions within its
-// words (`TOWER_SHAPE`): its girth, how much it narrows, where its stages
-// meet, how high its head stands, how far its walkways reach, how tall its
-// merlons stand, and the side its weather comes from, where its top breaks
-// lowest.
+// Builds a stone lookout tower in courses of blocks: its plan (round, square
+// or eight-sided), how it rises (straight, tapering or in stages that set back
+// on string courses), walkways on corbels, and its crown. Each block's loss
+// threshold rises with height and is never below those of the blocks it rests
+// on, so as vitality falls the tower crumbles from the top down to a jagged
+// stump with no block above a gap, and everything a course carries goes first.
+// Each tower's seed picks its proportions and weather bearing within the bands
+// of its answers (`TOWER_SHAPE`).
 
 import type { Anchor, BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { lookoutTowerParams } from "../../landmark.ts";
@@ -23,15 +18,15 @@ export const COURSE = 0.56;
 /** Mortar gap between blocks, meters, and how far the mortar is set back behind a course's least proud block. */
 export const JOINT = 0.035;
 export const MORTAR = 0.012;
-/** Faces of each plan; 0 is round. */
+/** Faces of each plan. 0 is round. */
 const SIDES = { round: 0, square: 4, octagonal: 8 } as const;
 /** How far a gallery's walkway reaches past the wall, how thick it is, and its parapet's height. */
 const GALLERY = { out: 0.95, slab: 0.24, parapet: 0.9 } as const;
 /** A parapet kept low, so a lantern room's glass shows above it. */
 const LOW_PARAPET = 0.5;
 /**
- * How far behind the wall's face a going piece sinks, meters: never so deep in a thick wall that partway gone it hangs
- * inside the wall with no face near enough to hold it (`SUPPORT.within` in @gaia/realize).
+ * How far behind the wall's face a going piece sinks, in meters. It is shallow enough that a piece partway gone in a
+ * thick wall still has a face within `SUPPORT.within` (@gaia/realize) to hold it.
  */
 const SINK_DEPTH = 0.18;
 /** How far past an opening's edge a going block sinks, meters, so it stays in the wall beside the opening. */
@@ -40,11 +35,11 @@ const OPENING_CLEAR = 0.35;
 type TowerParams = Resolved<typeof lookoutTowerParams>;
 
 /**
- * What a tower's seed picks within its words: its girth against its words' own, how much straight or tapering walls
- * narrow from foot to head and how far each stage sets back, how stage heights grow or shrink upward (a power of the
- * even split), its head's height against its crown's own, a walkway's reach and a merlon's height in meters and in
- * courses, the bearing its weather comes from and how much lower its top breaks on that side. Straight walls stay
- * all but plumb beside tapering ones, whatever the seed.
+ * The bands a tower's seed picks from: its girth relative to its answers', how much straight or tapering walls narrow
+ * from foot to head and how far each stage sets back, how stage heights grow or shrink upward (a power of the even
+ * split), its head's height relative to its crown's, a walkway's reach in meters and a merlon's height in courses,
+ * and the bearing the weather comes from with how much lower the top breaks on that side. Straight walls stay almost
+ * plumb next to tapering ones, whatever the seed.
  */
 export const TOWER_SHAPE = {
   girth: about(1, 0.08),
@@ -79,7 +74,7 @@ function shapeOf(p: TowerParams, height: number, seeded: TowerShape): Shape {
   const sides = SIDES[p.plan];
   const radius = height * (p.profile === "stepped" ? 0.165 : 0.15) * seeded.girth;
   const gallery = p.galleries !== "none";
-  // The shaft stops where the crown starts: a cone's eaves sit about three quarters up.
+  // The shaft stops where the crown starts. A cone's eaves sit about three quarters up.
   const drum = Math.max(1.6, height * 0.1);
   const shaft =
     p.crown === "a conical roof" ? height * 0.74 * seeded.head - (gallery ? GALLERY.slab + drum : COURSE * 0.55)
@@ -151,8 +146,8 @@ export function courseSpans(sides: number, rad: number, len: number, odd: boolea
 /**
  * One block of a ring wall between two angles and two heights: outer face, top, ends, inner face, and with `under`
  * its underside. With `joint`, mortar at radius `mortar`, behind its face, fills the joint below it and half the
- * joint past each end, so the joints round it read as dark recesses from outside and never let the sky through;
- * every block of a course sets its mortar at the same radius, so the mortar is one unbroken ring.
+ * joint past each end, so the joints round it look like dark recesses from outside and never let the sky through.
+ * Every block of a course sets its mortar at the same radius, so the mortar is one unbroken ring.
  */
 export function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number, y0: number, y1: number, rad: number, thick: number, shade: number, ch: Channels, under = false, joint = 0, mortar = rad): void {
   const am = (a0 + a1) / 2;
@@ -187,7 +182,7 @@ export function ringBlock(b: PartBuilder, sides: number, a0: number, a1: number,
   if (under) quad(b, [outer(a0, y0), inner(a0, y0), inner(a1, y0), outer(a1, y0)], [0, -1, 0], shade - 0.22, ch);
 }
 
-/** A flat floor across the top of a shaft, in wedges; each wedge shrinks toward `foot` of its middle angle as it goes. */
+/** A flat floor across the top of a shaft, in wedges. Each wedge shrinks toward `foot` at its middle angle as it goes. */
 function disc(b: PartBuilder, sides: number, y: number, rad: number, shade: number, ch: Channels, foot: (a: number) => V3): void {
   const n = sides === 0 ? 16 : sides;
   const off = sides === 0 ? 0 : Math.PI / sides;
@@ -199,7 +194,7 @@ function disc(b: PartBuilder, sides: number, y: number, rad: number, shade: numb
   }
 }
 
-/** How readily a piece at share `rise` of the tower's height falls: higher first, jagged by `u`. */
+/** The loss threshold of a piece at share `rise` of the tower's height. Higher pieces fall first, and `u` makes the edge jagged. */
 const fallsAt = (rise: number, u: number): number => clamp(0.04 + 0.62 * Math.pow(rise, 1.35) + (u - 0.5) * 0.16, 0.02, 0.7);
 
 /** The most a block's threshold reaches, so whatever it carries still has room to go first while the tower is whole. */
@@ -233,7 +228,7 @@ function overlaps(a0: number, a1: number, b0: number, b1: number): boolean {
  */
 class Courses {
   readonly laid: Laid[] = [];
-  /** The highest threshold among blocks overlapping angles a0..a1 whose tops lie between y0 and y1; -1 when there are none. */
+  /** The highest threshold among blocks overlapping angles a0..a1 whose tops lie between y0 and y1. -1 when there are none. */
   under(a0: number, a1: number, y0: number, y1: number): number {
     let most = -1;
     for (const b of this.laid) if (b.y1 >= y0 && b.y1 <= y1 && overlaps(a0, a1, b.a0, b.a1)) most = Math.max(most, b.loss);
@@ -247,14 +242,13 @@ class Courses {
 
 /**
  * A walkway on stepped corbels ringing the wall at height `y`, with a
- * parapet `parapet` meters high along its edge (none where battlements
- * stand there instead). Its pieces
- * fall a little before the wall they hang from.
+ * parapet `parapet` meters high along its edge, or none where battlements
+ * stand instead. Its pieces fall a little before the wall they hang from.
  */
 function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thick: number, courses: Courses, parapet: number, out: number, r: Rand): number {
   const rim = wall + out;
-  // A gallery never outlasts the wall it is let into: it goes once the
-  // blocks it hangs from stand whole, shrinking back into them.
+  // A gallery never outlasts the wall it is let into. It goes while the
+  // blocks it hangs from are still whole, shrinking back into them.
   const held = Math.max(0, courses.ring(y - 1.6, y + 0.05)) + LET_IN;
   const root = (a: number, h: number): V3 => ringPoint(sides, a, wall - Math.min(thick * 0.5, SINK_DEPTH), h);
   let most = 0;
@@ -283,8 +277,8 @@ function gallery(stone: PartBuilder, sides: number, y: number, wall: number, thi
 }
 
 /**
- * A stone tower in courses of blocks, crumbling from the top down as
- * vitality falls. See `lookoutTowerParams` for its axes.
+ * Builds a stone tower in courses of blocks, which crumbles from the top down
+ * as vitality falls. See `lookoutTowerParams`.
  */
 export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   const r = ctx.rand.fork("tower");
@@ -299,7 +293,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   const thick = wallAt(0) * 0.32;
   const blockLen = p.masonry * 1.1;
   const topGallery = p.galleries !== "none";
-  // Galleries at every stage stand where the stages meet; the top one rings the shaft's head.
+  // Galleries at every stage go where the stages meet, and the top one rings the shaft's head.
   const midGalleries = p.galleries === "a gallery at every stage" ? shape.stages : [];
 
   // Openings: a door at the foot and slit windows climbing the shaft, clear
@@ -312,9 +306,9 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
     const along = sides === 0 ? r.next() * Math.PI * 2 : facetOf(sides, r.next() * Math.PI * 2);
     if (!busy(c, 3)) slits.push({ course: c, rows: 3, along, half: 0.3 / wallAt(c * ch) });
   }
-  // Where a going block at angle `a` and height `y` sinks to, just behind the face of the wall it stands in: the top
-  // of the plinth, which never goes, or the foot of its own stage, and beside any opening it would pass on the way, so
-  // that partway gone it is still let into standing wall.
+  // Where a going block at angle `a` and height `y` sinks to, just behind the face of its wall: the top of the
+  // plinth, which never goes, or the foot of its own stage, moved beside any opening on the way, so that partway gone
+  // it is still inside standing wall.
   const setBack = (y: number): boolean => p.profile === "stepped" && shape.stages.some((s) => Math.abs(s - y) < ch * 0.25);
   const stageFoot = (y: number): number => Math.max(ch * 2, ...(p.profile === "stepped" ? shape.stages.filter((s) => s <= y + 1e-6) : []));
   /** Angle `a`, or just past the nearer side of any opening between heights y0 and y1 that it lies in. */
@@ -335,7 +329,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
 
   // The courses, in running bond: each course shifts half a block. A block
   // rests on the blocks under its span and falls no later than any of them,
-  // so the tower comes down from the top and nothing hangs over a gap; a
+  // so the tower comes down from the top and nothing hangs over a gap. A
   // block with nothing under it is never laid.
   const laid = new Courses();
   for (let c = 0; c < courses; c++) {
@@ -364,13 +358,13 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       // sinks onto a ledge that still stands.
       const under = setBack(y0) ? below + LET_IN : below;
       const rise = (y0 + ch / 2) / height;
-      // Higher blocks fall first; a seeded jitter makes the falling top jagged, and it breaks lower on the side the
+      // Higher blocks fall first. A seeded jitter makes the falling top jagged, and it breaks lower on the side the
       // weather comes from.
       const weathered = fallsAt(rise, u) + seeded.exposure * (2 * facing(mid, seeded.weather) - 1);
       const loss = c < 2 ? 0 : clamp(Math.max(weathered, under), 0.02, MOST);
       for (const [b0, b1] of pieces) laid.laid.push({ a0: b0, a1: b1, y0, y1, loss });
-      // A falling block sinks down into the wall below it as it goes, never hanging in the air; a block an opening
-      // cuts in two, each piece into the wall below itself, not into the opening.
+      // A falling block sinks into the wall below it as it goes, never hanging in the air. When an opening cuts a
+      // block in two, each piece sinks into the wall below itself, not into the opening.
       const shade = 0.52 + 0.22 * cr.next() + 0.08 * rise - (c < 2 ? 0.08 : 0);
       const channels: Omit<Channels, "pivot"> = { loss, droop: 0, wither: 0.45 + 0.4 * cr.next(), glow: 0, tint: (cr.next() - 0.5) * 0.05 };
       const bulge = (cr.next() - 0.5) * 0.04;
@@ -379,7 +373,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   }
 
   // A string course where each stage meets the next, a little proud of the
-  // wall below; it goes before the blocks it is set on.
+  // wall below. It goes before the blocks it is set on.
   for (const s of shape.stages) {
     const rad = wallAt(s - ch / 2) + 0.08;
     for (const [a0, a1] of courseSpans(sides, rad, blockLen * 1.4, false)) {
@@ -392,7 +386,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
   }
   for (const g of midGalleries) gallery(stone, sides, g, wallAt(g - ch / 2), thick, laid, GALLERY.parapet, seeded.reach, r.fork(`gallery${g.toFixed(1)}`));
 
-  // The openings: dark, then lamplit panes in each slit; a plank door at the foot.
+  // The openings: a dark pane and a lit pane in each slit, and a plank door at the foot.
   for (const sl of slits) {
     const rad = wallAt(sl.course * ch + ch);
     const half = sl.half;
@@ -425,12 +419,12 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
     quad(glass, [corner(sl.along - half, y0, inset - 0.02), corner(sl.along + half, y0, inset - 0.02), corner(sl.along + half, y1, inset - 0.02), corner(sl.along - half, y1, inset - 0.02)], out, [0.55, 0.55, 0.85, 0.85], lit);
   }
 
-  // The head of the shaft: a walkway ringing it, or a projecting cornice.
-  // The crown goes first, and always before the top of the wall that carries it.
-  // The crown goes in two tiers, each whole while the one above it goes:
-  // first the roof and the lantern's glass, then the deck, posts, drum and
-  // battlements they stand on, then the walkway or the top course. Each
-  // piece shrinks back toward where it stands, so it never leaves its perch.
+  // The head of the shaft: a walkway ringing it, or a projecting cornice. The
+  // crown always goes before the top of the wall that carries it, in two
+  // tiers, each whole while the one above it goes. First the roof and the
+  // lantern's glass go, then the deck, posts, drum and battlements they stand
+  // on, then the walkway or the top course. Each piece shrinks back toward
+  // where it stands, so it never leaves its perch.
   const headWall = wallAt(shaft - ch / 2);
   let perch = laid.ring(shaft - ch * 1.6, shaft + 0.05);
   const tier = (k: number, u: number): number => clamp(perch + LET_IN * (k + 1) + 0.02 * k + 0.015 * u, 0.02, 0.92);
@@ -453,7 +447,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       ringBlock(stone, sides, a0, a1, shaft - ch * 0.15, deck, rim, thick * 1.3, 0.55 + 0.1 * u, still(foot((a0 + a1) / 2, shaft), 0.6, { loss, tint: (u - 0.5) * 0.04 }), true);
     }
   }
-  // A floor across the top, so a look down never sees into the hollow shaft.
+  // A floor across the top, so a view down never sees into the hollow shaft.
   disc(stone, sides, deck - 0.02, rim * 0.98, 0.5, still([0, 0, 0], 0.6, { loss: tier(0, 1) }), (a) => ringPoint(sides, a, rim * 0.9, deck - 0.02));
 
   if (p.crown === "battlements") {
@@ -467,8 +461,8 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
     crownRoof(p, shape, height, shaft, deck, topGallery ? headWall : rim, topGallery, { stone, timber, roof, glass }, tier, r);
   }
 
-  // Fallen stone at the foot: it gathers as the tower crumbles. It grows in,
-  // and never stops a walker.
+  // Fallen stone at the foot, which grows in as the tower crumbles. A person
+  // walks over it.
   for (let i = 0; i < 26; i++) {
     const a = r.next() * Math.PI * 2;
     const d = wallAt(0) * (sides === 0 ? 1 : 1.1) + 0.3 + Math.pow(r.next(), 1.6) * Math.max(2.5, height * 0.2);
@@ -485,7 +479,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
 /**
  * A roof over the tower's head: a lantern room of posts and lit glass, or a
  * stone drum when a gallery rings the head, then a cone (a pyramid on a
- * polygon) with a finial. It goes first as the tower fails.
+ * polygon) with a finial. It goes first as vitality falls.
  */
 function crownRoof(
   p: TowerParams,
@@ -506,7 +500,7 @@ function crownRoof(
   const corner = sides === 0 ? 1 : 1 / Math.cos(Math.PI / sides);
   let eave = deck;
   let overhang = base * 1.12;
-  // Where each roof facet stands, by its middle angle: what it shrinks back onto as it goes.
+  // The point each roof facet shrinks back onto as it goes, by its middle angle.
   let seat = (a: number): V3 => ringPoint(sides, a, base * 0.9, deck);
   if (p.crown === "an open lantern room") {
     const roomH = height * (ringed ? 0.14 : 0.1);
@@ -534,7 +528,7 @@ function crownRoof(
       quad(glass, [p0, p1, [p1[0], top, p1[2]], [p0[0], top, p0[2]]], n, 0.2, still(pivot, 1, { loss: tier(1, 0) }));
       // Its lamps go out one by one, never outlasting the room around them.
       const lit: Channels = { loss: lossThreshold(r.next(), 0.92, tier(1, 1)), droop: 0, wither: 0.25, glow: 0.9 + 0.1 * r.next(), pivot };
-      // The lamplit pane lies just outside the dark one, as a window's does, so it shows at night.
+      // The lit pane lies just outside the dark one, as a window's does, so it shows at night.
       const q = (pt: V3, y: number): V3 => [pt[0] * 1.012, y, pt[2] * 1.012];
       quad(glass, [q(p0, deck), q(p1, deck), q(p1, top), q(p0, top)], n, [0.6, 0.6, 0.9, 0.9], lit);
     }

@@ -1,5 +1,5 @@
 // Color families from the world design system. Jev chooses a family by its
-// description; the colors themselves are authored, never generated.
+// description. The colors are hand-picked constants, never generated.
 
 import type { Palette, Rgb } from "@gaia/schema";
 
@@ -18,8 +18,8 @@ export const PALETTE_FAMILIES = {
 export type PaletteFamily = keyof typeof PALETTE_FAMILIES;
 
 /**
- * The same families as a thing's colors are chosen by (`palette@1`): each with the feel it gives the thing, so Jev
- * chooses by mood. A land names its native families in `PALETTE_FAMILIES`' own words, so its request stays as it is.
+ * The options `palette@1` offers Jev, each described by the feel it gives a thing, so Jev chooses by mood. A land's
+ * native families use the descriptions in `PALETTE_FAMILIES` instead, so the land request does not change.
  */
 export const COLOR_FEELS: Readonly<Record<PaletteFamily, string>> = {
   "spring-meadow": "Fresh yellow-greens with pale bark and white flowers, for code that feels fresh, young and full of promise",
@@ -35,7 +35,7 @@ export const COLOR_FEELS: Readonly<Record<PaletteFamily, string>> = {
 
 const hex = (h: number): Rgb => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 
-/** Healthy colors per family: bark, leaf, bloom, and the ripe fruit and dark berries that belong with them. */
+/** Each family's colors at full vitality. `fruit` is the ripe fruit and `berry` the dark berries that suit the family. */
 const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number; fruit: number; berry: number }> = {
   "spring-meadow": { bark: 0x8a7560, leaf: 0x8fbf4a, bloom: 0xf4f1e6, fruit: 0xd2553a, berry: 0x3e1a3c },
   "deep-forest": { bark: 0x4a3a2e, leaf: 0x2f6b3e, bloom: 0xd9c37a, fruit: 0xa8352c, berry: 0x2c1830 },
@@ -49,10 +49,9 @@ const HEALTHY: Record<PaletteFamily, { bark: number; leaf: number; bloom: number
 };
 
 /**
- * The same families on the ground: the stone a family's rocks are made of,
- * the moss that grows on them, the stems and eyes of its wildflowers, the
- * pale wood a fallen log or stump shows where it is cut or split, and its
- * mushrooms' caps and pale stalks.
+ * Each family's understory colors: rock and moss, wildflower stems and
+ * centers (`eye`), the pale wood where a fallen log or stump is cut or split,
+ * and mushroom caps and stalks.
  */
 const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: number; eye: number; wood: number; cap: number; stalk: number }> = {
   "spring-meadow": { stone: 0x9b988c, moss: 0x5f8a3e, stem: 0x6f9a3c, eye: 0xf0c43c, wood: 0xd6b98e, cap: 0xcc9e66, stalk: 0xf2e8d0 },
@@ -67,20 +66,20 @@ const UNDERSTORY: Record<PaletteFamily, { stone: number; moss: number; stem: num
 };
 
 /**
- * A mushroom cap's spots: white on the silver-birch's scarlet caps, like a
- * fly agaric's; every other family's are its cap color, so they never show.
+ * Mushroom spot colors. The silver-birch family's scarlet caps get white spots,
+ * like a fly agaric. Every other family's spots use the cap color, so they do
+ * not show.
  */
 const SPOTS: Partial<Record<PaletteFamily, number>> = { "silver-birch": 0xf2ede2 };
 
-/** Every family declines toward the same dry, grey-brown tones, so decline reads the same everywhere. */
+/** The dry grey-brown colors every family declines toward, so low vitality looks the same in every family. */
 const DECLINE = { bark: 0x6f6a64, leaf: 0x9a8a5c, bloom: 0x8c7a66, fruit: 0x6e5236, berry: 0x5e4a42, stone: 0xbcb5a8, moss: 0x9e9884, stem: 0x9a8a5c, eye: 0x8c7a66, wood: 0x9c978e, cap: 0x7a6c5e, stalk: 0xa49884 };
 
 /**
- * A building's colors in each family: walls, timber, roof, the masonry of its
- * base and chimney, painted trim, the lamplight in its windows and its
- * chimney smoke. A tower's render is its own color, a shade off the walls,
- * so a timber turret's plaster stands out against a tower behind it. Each
- * family's buildings belong with its plants.
+ * Each family's building colors, chosen to suit its plants. `masonry` is the
+ * base and chimney, `trim` the paintwork and `glass` the lamplight in the
+ * windows. `render` is a tower's plaster, a shade off `wall`, so a timber
+ * turret's plaster stands out against a tower behind it.
  */
 const BUILDING: Record<PaletteFamily, { wall: number; render: number; timber: number; roof: number; masonry: number; trim: number; glass: number }> = {
   "spring-meadow": { wall: 0xf1e4c8, render: 0xd9c6a2, timber: 0x6b4f3a, roof: 0x8f7f62, masonry: 0xa89d8a, trim: 0x7fa36a, glass: 0xffbf66 },
@@ -94,7 +93,7 @@ const BUILDING: Record<PaletteFamily, { wall: number; render: number; timber: nu
   "bluebell-wood": { wall: 0xe6e5df, render: 0xcac6c0, timber: 0x5a4e48, roof: 0x6a7480, masonry: 0x9a9a9e, trim: 0x7078c0, glass: 0xffc470 },
 };
 
-/** Buildings decline toward grime, moss and dark, empty windows. */
+/** The colors buildings decline toward: grime, moss and dark, empty windows. */
 const BUILDING_DECLINE = { wall: 0x8f8f7c, render: 0x8c897a, timber: 0x55504a, roof: 0x6c7050, masonry: 0x77766c, trim: 0x77706a, glass: 0x2c323b };
 const SMOKE = { healthy: 0xf2eee8, decline: 0x8a8580 };
 

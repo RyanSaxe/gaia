@@ -1,11 +1,9 @@
-// Great stones set by people long ago: a ring, an avenue, a dolmen, a field
-// of cairns or a loose group of menhirs, all from one lumpy slab. A stone
-// never bends: as vitality falls it leans whole about its toe, or falls flat
-// into the grass, or snaps, its top lying broken at its foot. Lintels and a
-// dolmen's capstone go first. Each group's seed picks its proportions within
-// its words (`STANDING_STONES_SHAPE`): how far apart its stones stand, how
-// broad they are against their height, and the bearing its weather comes
-// from, which most of them lean and fall away from.
+// Builds standing stones: a ring, an avenue, a dolmen, a field of cairns or a
+// loose group of menhirs, each stone cut from one lumpy slab. As vitality falls
+// the lintels and a dolmen's capstone go first, then each stone leans whole
+// about its toe, falls flat or snaps, and never bends. Each group's seed picks
+// its proportions and weather bearing within the bands of its answers
+// (`STANDING_STONES_SHAPE`).
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { standingStonesParams } from "../../landmark.ts";
@@ -15,9 +13,9 @@ import { type Bands, about, landmarkShape, lump, smoothNormals, still } from "./
 type StonesParams = Resolved<typeof standingStonesParams>;
 
 /**
- * What a group's seed picks within its words: how far apart its stones stand (a ring's span, an avenue's rows, a
- * field's spread) and how broad its stones are, each against its arrangement's own, and the bearing its weather comes
- * from. A dolmen's chamber keeps its own proportions, as its uprights hold up its capstone.
+ * The bands a group's seed picks from: stone spacing (a ring's span, an avenue's rows, a field's spread) and stone
+ * breadth, each relative to its arrangement's own, and the bearing the weather comes from. A dolmen's chamber keeps
+ * its own proportions, because its uprights hold up its capstone.
  */
 export const STANDING_STONES_SHAPE = {
   spacing: about(1, 0.12),
@@ -31,17 +29,17 @@ const DOWNWIND = 1.1;
 type Decline =
   /**
    * It turns about its toe by `most` radians once vitality drops below
-   * `from`: a lean; or, with `flat`, as far as it takes to lie in the grass.
+   * `from`. With `flat`, it turns as far as it takes to lie in the grass.
    */
   | { readonly kind: "tilt"; readonly most: number; readonly from: number; readonly flat?: boolean }
-  /** Above `at` (a share of its height) it snaps below `loss`, and the top lies broken at its foot. */
+  /** Below vitality `loss` it snaps at `at`, a share of its height, and the top lies broken at its foot. */
   | { readonly kind: "snap"; readonly at: number; readonly loss: number }
   | { readonly kind: "firm" };
 
 interface Stone {
   readonly x: number;
   readonly z: number;
-  /** Turns the slab's broad face; 0 faces it along z. */
+  /** The turn of the slab's broad face. 0 faces it along z. */
   readonly yaw: number;
   readonly width: number;
   readonly depth: number;
@@ -53,9 +51,8 @@ interface Stone {
 }
 
 /**
- * The ground point a stone tips over: the edge of its foot on the side it
- * leans toward, the farthest of its points near the ground in that
- * direction, so it turns about where it really meets the ground.
+ * The ground point a stone tips over: its point near the ground that is
+ * farthest toward its lean, so it turns about where it meets the ground.
  */
 function toeOf(s: Stone, local: readonly V3[]): V3 {
   const dir: V3 = [Math.cos(s.toward), 0, Math.sin(s.toward)];
@@ -90,7 +87,7 @@ export function restAngle(points: readonly V3[], hinge: V3, axis: V3, ground: nu
 /**
  * The lumpy slab a stone is cut from, in its own frame: centered on the
  * ground, `sink` meters of it below, tapering and rounding toward the top,
- * its faces cut flat as sharply as `facets` asks.
+ * its faces cut flat as sharply as `facets` sets.
  */
 function slabShape(s: { width: number; depth: number; height: number }, facets: number, sink: number, r: Rand, subdiv: number): { points: V3[]; triangles: readonly (readonly [number, number, number])[]; seed: number } {
   const sphere = icosphere(subdiv);
@@ -143,8 +140,8 @@ function shadeOf(p: V3, height: number, n: V3, seed: number): { shade: number; m
 }
 
 /**
- * A standing stone. It leans or falls whole about its toe, never bending;
- * or it snaps, and its top lies broken at its foot once it has gone.
+ * A standing stone. It leans or falls whole about its toe without bending,
+ * or it snaps and its top lies broken at its foot.
  */
 function emitStone(b: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: number): void {
   const shape = slabShape(s, facets, 0.55, r, subdiv);
@@ -243,7 +240,7 @@ function emitLintel(b: PartBuilder, a: Stone, c: Stone, thick: number, depth: nu
     b.vertex(p, n, 0.5 + 0.16 * mottle + 0.08 * n[1], { loss, droop: 0, wither: clamp(0.6 + 0.3 * mottle, 0.2, 0.95), glow: 0, pivot, tint: 0.02 * mottle });
   });
   for (const [i, j, k] of sphere.triangles) b.triangle(first + i, first + j, first + k);
-  // Outward of the gateway, it lies where it slid off.
+  // The fallen lintel lies outward of the gateway, where it slid off.
   const out = Math.hypot(x, z) > 0.5 ? Math.atan2(z, x) : r.next() * Math.PI * 2;
   const reach = thick + 1.2 + r.next() * 1.2;
   emitFallen(b, { x: x + Math.cos(out) * reach, z: z + Math.sin(out) * reach, yaw: yaw + r.range(-0.4, 0.4), width: depth, depth: thick, length: span * 0.9 }, facets, loss, r);
@@ -258,8 +255,8 @@ function declineOf(sr: Rand, lean: number): Decline {
 }
 
 /**
- * A stone of the arrangement, its size jittered from the arrangement's own, leaning and falling about `downwind`, or
- * any way at all where its weather has no say, as under a dolmen's capstone.
+ * A stone of the arrangement, its size jittered from the arrangement's, leaning and falling within `DOWNWIND` of
+ * `downwind`. With `downwind` null, as under a dolmen's capstone, it leans any way.
  */
 function stoneAt(sr: Rand, x: number, z: number, yaw: number, size: { width: number; depth: number; height: number }, downwind: number | null, lean = 0): Stone {
   const toward = downwind === null ? sr.next() * Math.PI * 2 : downwind + (sr.next() * 2 - 1) * DOWNWIND;
@@ -277,9 +274,9 @@ function stoneAt(sr: Rand, x: number, z: number, yaw: number, size: { width: num
 }
 
 /**
- * Great stones in one of five arrangements. In decline the lintels and
- * capstone fall first; then stones lean, snap and fall flat, until a few
- * crooked stumps are left in the grass.
+ * Builds great stones in one of five arrangements. As vitality falls the
+ * lintels and capstone fall first, then stones lean, snap and fall flat,
+ * until a few crooked stumps are left in the grass.
  */
 export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   const r = ctx.rand.fork("stones");
@@ -287,24 +284,24 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   const shape = landmarkShape(STANDING_STONES_SHAPE, p, ctx);
   // The weather blows from its bearing, so the stones lean and fall the other way.
   const downwind = shape.weather + Math.PI;
-  // What has fallen grows in only once it has fallen, and stops no walker.
+  // Fallen pieces grow in only once they have fallen, and a person walks over them.
   const out = new PartBuilder("stone", "solid");
   const h = p.height * scale;
   const size = { width: h * 0.42 * shape.breadth, depth: h * 0.22 * shape.breadth, height: h };
   const count = Math.max(4, Math.round(p.count));
   const stones: Stone[] = [];
   const lintels: [number, number][] = [];
-  /** Where the arrangement's heart is, for its center stone. */
+  /** The arrangement's center, for its center stone. */
   let heart: [number, number] = [0, 0];
 
   if (p.arrangement === "ring") {
-    // Never so close that less than three quarters of a stone's width opens between two.
+    // The radius keeps at least three quarters of a stone's width between neighbors.
     const ringR = Math.max(h * 1.1 * shape.spacing, (count * size.width * 1.75) / (Math.PI * 2));
     const turn = r.next() * Math.PI * 2;
     for (let k = 0; k < count; k++) {
       const sr = r.fork(`stone${k}`);
       const a = turn + (k / count) * Math.PI * 2 + sr.range(-0.06, 0.06);
-      // Faces turn toward the center, as a ring is laid out.
+      // Faces turn toward the center, as in a real stone ring.
       stones.push(stoneAt(sr, Math.cos(a) * ringR, Math.sin(a) * ringR, -a + Math.PI / 2, size, downwind));
     }
     if (p.lintels) for (let k = 0; k + 1 < count; k += 2) lintels.push([k, k + 1]);
@@ -418,7 +415,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
 function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, width: number, thick: number, facets: number, r: Rand): void {
   const top = Math.min(...legs.map((l) => l.height)) * 0.98;
   const shape = slabShape({ width: length, depth: width, height: thick }, facets, 0, r, 3);
-  // The slab's own frame stands up; turn it to lie flat, its thickness upward.
+  // The slab's own frame is upright. Turn it to lie flat, with its thickness upward.
   const yaw = r.range(-0.08, 0.08);
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
@@ -444,17 +441,17 @@ function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, wi
 }
 
 /**
- * A cairn: small stones piled in a rounded cone, about `tall` meters high,
- * each course bedded on the stones below it. Its top stones tumble first as
- * vitality falls, coming to rest around its foot: a stone never outlasts
- * the stones it rests on, so none is ever left above a gap.
+ * A cairn: small stones piled in a rounded cone about `tall` meters high,
+ * each course resting on the stones below. As vitality falls its top stones
+ * tumble first and come to rest round its foot. A stone never outlasts the
+ * stones it rests on, so none is left above a gap.
  */
 function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: number, r: Rand): void {
   const base = tall * 0.55;
   const stone = clamp(tall * 0.13, 0.2, 0.45);
   // Bedded courses rise about 0.62 of a stone each.
   const rows = Math.max(3, Math.round(tall / (stone * 0.62)));
-  /** Where the pile's slope meets the ground, from its heart. */
+  /** The distance from the pile's center to where its slope meets the ground. */
   const slope = base + stone * 0.3;
   /** The stones of the course below: where each stands, how wide, its top and its threshold. */
   let below: { x: number; z: number; s: number; top: number; loss: number }[] = [];
@@ -470,7 +467,7 @@ function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: n
       const sx = x + Math.cos(a) * rad;
       const sz = z + Math.sin(a) * rad;
       const ry = s * (0.78 - 0.12 * facets);
-      // It beds on the stones under it, sunk a little into the course below,
+      // It rests on the stones under it, sunk a little into the course below,
       // and as it goes it slides down the pile's slope into them.
       const under = below.filter((o) => Math.hypot(o.x - sx, o.z - sz) < (o.s + s) * 0.95);
       if (row > 0 && under.length === 0) continue;
@@ -485,7 +482,7 @@ function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: n
     if (course.length === 0) break;
     below = course;
   }
-  // What tumbled lies around the foot.
+  // Tumbled stones lie round the foot.
   for (let k = 0; k < Math.round(tall / (stone * 0.8)); k++) {
     const a = r.next() * Math.PI * 2;
     const d = base + stone + r.next() * tall * 0.5;

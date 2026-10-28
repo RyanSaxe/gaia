@@ -1,8 +1,7 @@
-// Reading a building's plan: its masses and their walls, the roofline each
-// wall rises to, where each opening sits, and where the building gives way
-// first as it declines. Every part of a building reads the plan through
-// these, so walls, roofs, openings, dressing and feature agree by
-// construction.
+// Queries on a building's plan: its masses and walls, the roofline each wall
+// rises to, where each opening sits, and where the building collapses first as
+// vitality falls. Every part builder queries the plan through these functions,
+// so walls, roofs, openings, dressing and feature line up.
 
 import type { BuildingPlan, Mass, Opening, Vec3 } from "@gaia/schema";
 import { type Channels, type V3, clamp, fbm3 } from "../kit.ts";
@@ -17,7 +16,7 @@ export interface Wall {
   readonly mass: number;
 }
 
-/** A round turret's walls: an octagon whose faces stand `width / 2` from its center. */
+/** A round turret's wall count. The walls form an octagon whose faces are `width / 2` from its center. */
 const ROUND_SIDES = 8;
 
 /** The walls of one mass, in order: front (+z) first, then clockwise seen from above. */
@@ -43,7 +42,7 @@ function massWalls(m: Mass, index: number): Wall[] {
   ];
 }
 
-/** Every wall of every mass, including those another mass hides; `shownWalls` leaves those out. */
+/** Every wall of every mass, including those another mass hides. `shownWalls` leaves those out. */
 export function wallsOf(plan: BuildingPlan): Wall[] {
   return plan.masses.flatMap((m, i) => massWalls(m, i));
 }
@@ -69,7 +68,7 @@ export function roofCoords(m: Mass, x: number, z: number): { a: number; b: numbe
   return m.ridge === "x" ? { a: dx, b: dz } : { a: dz, b: dx };
 }
 
-/** How steeply a hipped end falls: as the slopes do, or more steeply for a half-hip's small hip. */
+/** The slope of a hipped end: the same as the roof slopes, or 2.2 times steeper for a half-hip's small hip. */
 export function hipSlope(m: Mass): number {
   const k = m.rise / spanOf(m).halfSpan;
   return m.roof === "half-hip" ? 2.2 * k : k;
@@ -134,7 +133,7 @@ export function hidden(plan: BuildingPlan, w: Wall, s: number, y: number): boole
   return plan.masses.some((m, i) => i !== w.mass && insideMass(plan, m, p));
 }
 
-/** The walls some part of which shows: a wall wholly inside another mass is left out. */
+/** The walls that are at least partly visible. A wall wholly inside another mass is left out. */
 export function shownWalls(plan: BuildingPlan): Wall[] {
   return wallsOf(plan).filter((w) => {
     const top = wallTop(plan, massOf(plan, w));
@@ -148,8 +147,8 @@ export function shownWalls(plan: BuildingPlan): Wall[] {
 
 /**
  * How much coarser a big building's fine work is (studs, plaster cells,
- * plinth stones, ivy), 1 for a cottage: a power of how many times a
- * cottage's wall area its shown walls cover, so every building keeps its
+ * plinth stones, ivy), 1 for a cottage. It is the 0.65 power of the shown wall
+ * area over a cottage's 90 square meters, so every building keeps its
  * triangle budget however many masses it has.
  */
 export function coarseness(plan: BuildingPlan): number {
@@ -180,14 +179,14 @@ export function clearings(plan: BuildingPlan, w: Wall, margin: number): { s0: nu
 /** The settled lean of a building: a gentle, seeded wobble that grows with `settle`. */
 export const wobble = (plan: BuildingPlan, seed: number, p: Vec3, amount: number): number => plan.settle * amount * fbm3(p[0] * 0.35, p[1] * 0.35, p[2] * 0.35, seed, 2);
 
-/** A piece that only withers as vitality falls. */
+/** Channels for a piece that only withers as vitality falls. */
 export const still = (pivot: Vec3, wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
 
 /**
- * The end of the main mass's ridge a gable chimney stands at: a gable end
- * no other mass joins, with fewer openings, so a waterwheel or tower takes
- * the other. 0 when the main roof has no free gable, so a chimney rises
- * through the ridge.
+ * The end of the main mass's ridge where a gable chimney goes: a gable end no
+ * other mass joins, with fewer openings, so a waterwheel or tower takes the
+ * other end. Returns 0 when the main roof has no free gable, and the chimney
+ * then rises through the ridge.
  */
 export function chimneyEnd(plan: BuildingPlan): -1 | 0 | 1 {
   const m = plan.masses[0] as Mass;
@@ -209,9 +208,10 @@ export function chimneyEnd(plan: BuildingPlan): -1 | 0 | 1 {
 }
 
 /**
- * Where a declining building gives way first: the front corner away from the
- * door, so a person walking up sees it. Walls crumble and timbers fall there
- * first, the roofs sag and rot through over it, and rubble gathers below.
+ * Where a building collapses first as vitality falls: the front corner away
+ * from the door, so a person walking up sees it. Walls crumble and timbers
+ * fall there first, the roofs sag and rot through over it, and rubble collects
+ * below.
  */
 export interface Ruin {
   readonly x: number;
@@ -241,15 +241,15 @@ export function ruinAt(r: Ruin, p: Vec3): number {
   return t * t * (3 - 2 * t);
 }
 
-/** The pieces walls rot in, meters across and up: the shader's cells for GRAIN.plaster and GRAIN.stones. */
+/** The size of the pieces walls rot in, in meters across and up. They match the shader's cells for `GRAIN.plaster` and `GRAIN.stones`. */
 export const PLASTER = [0.3, 0.3] as const;
 export const STONE = [0.4, 0.3] as const;
 
 /**
- * Where a point on wall `w` lies in its courses, as a grain of `kind`
- * (`GRAIN`), in pieces `size` meters across. Its pieces count down from the
- * eaves, so each breaks away from its top edge and what is left of it rests
- * on what is below.
+ * A point's position in the courses of wall `w`, as a grain of `kind`
+ * (`GRAIN`) in pieces of `size` meters. The vertical coordinate is negated, so
+ * each piece breaks away from its top edge and what is left of it rests on
+ * the piece below.
  */
 export const wallGrain = (w: Wall, kind: number, size: readonly [number, number]) => (p: Vec3): Vec3 => [
   ((p[0] - w.o[0]) * w.u[0] + (p[2] - w.o[2]) * w.u[2]) / size[0],

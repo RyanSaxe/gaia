@@ -1,13 +1,9 @@
-// Ruin obeys gravity, and so does everything that grows. Every landmark and
-// every building put together from the structure primitives is checked at
-// vitalities from tired to ruined: no piece may stand on nothing, and a piece
-// that falls must come to rest. Every plant put together from the flora
-// primitives is checked healthy, tired and failing, in still air and in a
-// strong gust: every leaf, flower and twig is carried by what it grows on.
-// Every plant and drift of wildflowers also keeps its shape in that gust: the
-// wind turns pieces about their joints, so no triangle stretches, splits or
-// folds. A new primitive in these roles is covered as soon as it is in
-// PRIMITIVES.
+// Every landmark and building is built at `VITALITIES` and
+// `BUILDING_VITALITIES`, where no piece may stand on nothing and a falling
+// piece must come to rest. Every plant is built at `FLORA_VITALITIES` in still
+// air and a strong gust, where every leaf, flower and twig must stay on what it
+// grows on, and every plant and wildflower drift must keep its shape in the
+// gust. A new primitive in these roles is covered once it is in `PRIMITIVES`.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, type Field, Library, type Part, rand } from "@gaia/schema";
@@ -16,22 +12,21 @@ import { FLUTTERS, type WindState, applyVitality, gustAt, resolveParams, unsuppo
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
-/** Vitalities from tired to ruined, each falling inside some pieces' collapse. */
+/** Vitalities from 0.62 down to 0.06, each inside some pieces' collapse band. */
 const VITALITIES = [0.62, 0.45, 0.3, 0.2, 0.12, 0.06];
-/** Buildings are many times larger, so they are held at fewer. */
+/** Buildings are many times larger, so they are checked at fewer vitalities. */
 const BUILDING_VITALITIES = [0.45, 0.2, 0.06];
 /** A building is its plan and one primitive in each of these roles. */
 const BUILDING_ROLES = ["Walls", "Roof", "Openings", "Dressing", "Feature"] as const;
 /**
- * A great tree's crown and twigs hang from joints the flora primitives share
- * with every tree, so trees answer to flora's rules, not these.
+ * Landmarks checked by the flora rules instead of these. A great tree's crown
+ * and twigs hang from the same joints as every flora tree.
  */
 const TREES = new Set(["great-tree@1"]);
-/** Plants are held healthy, tired and failing. */
 const FLORA_VITALITIES = [1, 0.5, 0.15];
 /** A whole plant's triangles: a tree's crown, bark and blossoms together. */
 const PLANT_BUDGET = 40_000;
-/** A great tree stands alone, one to a region, so its crown and its great frame may take more. */
+/** A great tree stands alone, one to a region, so its crown and frame get a larger budget. */
 const GREAT_TREE_BUDGET = 80_000;
 
 type Stored = Record<string, string | boolean | string[]>;
@@ -88,7 +83,7 @@ describe("buildings", () => {
 /**
  * The gustiest world's strongest gust in ten minutes over a supple plant: the
  * most any plant bends. That world blows at strength 1.55, and its gusts come
- * from the wind field; 2 leaves room to spare.
+ * from the wind field. 2 leaves room to spare.
  */
 const GUST: WindState = (() => {
   let time = 0;
@@ -98,10 +93,10 @@ const GUST: WindState = (() => {
 /** Moments through that gust, so each level is caught near the top of its swing. */
 const GUST_MOMENTS = [0, 0.35, 0.7, 1.05, 1.4].map((dt) => ({ ...GUST, time: GUST.time + dt }));
 
-/** How far a triangle's edge may stretch or shrink in the wind, as a ratio: a smooth bend changes it a little. */
+/** How far a triangle's edge may stretch or shrink in the wind, as a ratio. A smooth bend changes it a little. */
 const STRETCH = 1.25;
 
-/** Each triangle of `parts`, healthy, whose edge stretches or shrinks past `STRETCH` or which turns over, in each of `moments`. */
+/** Each triangle of `parts` at full vitality whose edge stretches or shrinks past `STRETCH` or which turns over, in each of `moments`. */
 function misshapen(parts: readonly Part[], moments: readonly WindState[]): string[] {
   const out: string[] = [];
   const at = (a: Float32Array, i: number): [number, number, number] => [a[i * 3] as number, a[i * 3 + 1] as number, a[i * 3 + 2] as number];

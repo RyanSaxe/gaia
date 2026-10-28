@@ -1,6 +1,6 @@
-// A fallen log and a stump decline through the channels every renderer
-// draws: halves that settle apart, bark that sheds from the top, a top that
-// crumbles into a hollow, and moss that goes with whatever carries it.
+// Checks how a fallen log and a stump decline through the standard channels:
+// halves that settle apart, bark that sheds from the top, a top that crumbles
+// into a hollow, and moss that moves with what it grows on.
 
 import { describe, expect, it } from "vitest";
 import { type Built, type Part, rand } from "@gaia/schema";
@@ -26,7 +26,7 @@ describe("fallen log", () => {
 
   it("sheds its bark from the top first, and keeps some low down", () => {
     const bark = partOf(log("broken"), "bark");
-    // Bark that has gone has shrunk to nothing; sagging keeps a surface's size.
+    // Bark that has gone has shrunk to nothing, while sagging keeps a surface's size.
     const area = (positions: Float32Array, facing: (ny: number) => boolean): number => {
       let sum = 0;
       for (let t = 0; t < bark.indices.length; t += 3) {
@@ -51,7 +51,7 @@ describe("fallen log", () => {
     const face = Array.from({ length: wood.shade.length }, (_, i) => i).filter((i) => Math.abs(wood.normals[i * 3] as number) > 0.85);
     const shades = face.map((i) => wood.shade[i] as number);
     expect(new Set(shades.map((s) => s.toFixed(2))).size).toBeGreaterThan(4);
-    // Each face's middle, by the end it is at.
+    // Each face's center, by which end it is at.
     const at = (i: number, k: number): number => wood.positions[i * 3 + k] as number;
     const end = (i: number): number => Math.sign(at(i, 0));
     const middles = new Map([-1, 1].map((side) => {
@@ -75,7 +75,7 @@ describe("fallen log", () => {
     const skin = partOf(moss.build({ cover: 0.85, growth: "velvet" }, { rand: rand(3), facts: {} }, body), "moss");
     const bark = partOf(body, "bark");
     expect(skin.indices.length).toBeGreaterThan(0);
-    // Each moss vertex moves as the bark under it does: it keeps its height over the bark's top.
+    // Each moss vertex moves as the bark under it does, so it keeps its height over the bark's top.
     const lift = (v: number): number => highest(applyVitality(skin, v).positions) - highest(applyVitality(bark, v).positions);
     expect(Math.abs(lift(0) - lift(1))).toBeLessThan(0.05);
   });

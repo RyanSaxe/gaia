@@ -1,6 +1,6 @@
-// World primitives: the light, sky and wind one repository's whole
-// world shares. Every option is authored as words with colors behind them, and
-// each axis is chosen to stay beautiful beside every option of every other axis.
+// World primitives: the light, sky and wind for a repository's whole world.
+// Each option is words for Jev backed by hand-picked colors and numbers, and
+// each option is chosen to look good with every option of the other axes.
 
 import type { ColorShift, CloudSpec, DayKey, DaySpec, Rgb, Vec3 } from "@gaia/schema";
 import { primitive, t } from "@gaia/schema";
@@ -9,9 +9,9 @@ import { hex, shiftColor } from "./color.ts";
 // ---------- light ----------
 
 interface Hour {
-  /** The local hour this key stands for. */
+  /** The local hour of this key. */
   readonly at: number;
-  /** Sun elevation in degrees: its bearing follows from it (`sunAzimuth`). */
+  /** Sun elevation in degrees. `sunAzimuth` derives the bearing from it. */
   readonly elevation: number;
   readonly sun: number;
   readonly intensity: number;
@@ -28,10 +28,9 @@ interface Hour {
   readonly nightness: number;
 }
 
-// The night keys keep a cool blue ambient and shadow well above black: the
-// land always reads as shapes under the moon, whatever moon the world has.
-// The moon rises in the north-east as the sun sets, across the sky from it.
-// Azimuth 0 faces +z, and azimuth 180 is the compass's north.
+// The night keys keep a cool blue ambient and shadow well above black, so the
+// land's shapes stay visible under any moon. The moon rises in the north-east
+// as the sun sets, opposite it. Azimuth 0 faces +z, and azimuth 180 is north.
 const HOURS = {
   "deep night": { at: 2, elevation: -32, sun: 0x7a6a9a, intensity: 0, ambient: 0x4c5e98, ambientIntensity: 0.38, shadow: 0x2b386c, glowColor: 0x34487c, glow: 0.1, zenithDim: 0.6, moonElevation: 40, moonAzimuth: 235, moon: 1, nightness: 1 },
   dawn: { at: 6, elevation: 8, sun: 0xffc4a2, intensity: 1.0, ambient: 0xb3b5dc, ambientIntensity: 0.64, shadow: 0x7c78aa, glowColor: 0xf7c7b2, glow: 0.7, zenithDim: 0.22, moonElevation: 8, moonAzimuth: 265, moon: 0.06, nightness: 0.1 },
@@ -55,23 +54,23 @@ const BRUSH = {
   "bold gouache": { bands: 3, softness: 0.1 },
 } as const;
 
-/** The disc a world's moon shows, and the light it lends the land. */
+/** Each moon's disc in the sky and the light it casts on the land. */
 const MOONS = {
   "silver moon": { disc: 0xeef1f8, light: 0xa9bce6, brightness: 0.4, size: 0.026, phase: 1 },
   "amber harvest moon": { disc: 0xf7cd8e, light: 0xc4b9a8, brightness: 0.42, size: 0.036, phase: 1 },
   "thin pale crescent": { disc: 0xf1f1ea, light: 0x97a8d6, brightness: 0.2, size: 0.024, phase: 0.2 },
 } as const;
 
-/** Where the sun stands highest: azimuth 35, south-south-east on the compass. */
+/** The sun's azimuth at midday: 35, south-south-east on the compass. */
 const MIDDAY_AZIMUTH = 35;
 const RADIANS = Math.PI / 180;
 
 /**
- * The bearing (degrees of azimuth) where a real sun stands at `elevation`, rising or setting, on the path that climbs
- * to `highest` at midday and sinks to `lowest` at midnight. A real sun circles the sky's pole once a day: such a path
- * is the one seen from latitude 90 - (highest - lowest) / 2 when the sun's declination is (highest + lowest) / 2, so a
- * sun that rides high rises farther north and sets steeply, and a low one rises nearer the east and sets at a slant. Its
- * highest point is turned to `MIDDAY_AZIMUTH`.
+ * Returns the azimuth in degrees of a real sun at `elevation`, rising or setting, on a daily path that peaks at
+ * `highest` at midday and reaches `lowest` at midnight. A real sun circles the sky's pole once a day. This path is the
+ * one seen from latitude 90 - (highest - lowest) / 2 when the sun's declination is (highest + lowest) / 2. A high sun
+ * rises farther north and sets steeply, and a low one rises nearer the east and sets at a slant. The path's highest
+ * point faces `MIDDAY_AZIMUTH`.
  */
 function sunAzimuth(elevation: number, rising: boolean, highest: number, lowest: number): number {
   const latitude = (90 - (highest - lowest) / 2) * RADIANS;
@@ -116,13 +115,13 @@ export const daylight = primitive({
     const brush = BRUSH[p.brush];
     const moon = MOONS[p.moon];
     const warm = (c: number): Rgb => shiftColor(hex(c), warmth);
-    // The path lifts or lowers the sun by day; at night it stays below the horizon.
+    // `p.path` scales the daytime elevation, clamped to 5 to 76 degrees. Night elevations are unchanged.
     const elevationOf = (hour: Hour): number => (hour.elevation > 0 ? Math.min(76, Math.max(5, hour.elevation * p.path)) : hour.elevation);
     const highest = elevationOf(HOURS.midday);
     const lowest = elevationOf(HOURS["deep night"]);
     const keyOf = (hour: Hour): DayKey => {
       const elevation = elevationOf(hour);
-      // The sun climbs from the deep of night to midday and sinks after it.
+      // The sun rises between the deep night key's hour and midday, and sets after midday.
       const rising = hour.at > HOURS["deep night"].at && hour.at < HOURS.midday.at;
       return {
         hour: hour.at,
@@ -170,14 +169,14 @@ type CloudShape = Omit<CloudSpec, "threshold">;
 const CLOUD_FORMS = {
   "fair-weather puffs": { scale: 3.0, stretch: 1.2, softness: 0.08, low: 0.03, high: 0.95, opacity: 0.95, billow: 0.65, cells: 0, horizon: 0 },
   "towering cumulus": { scale: 1.0, stretch: 1, softness: 0.06, low: 0.0, high: 0.55, opacity: 1, billow: 0.9, cells: 0, horizon: 1 },
-  // Thin and high: fine streaks nine times longer than wide, faint, kept to the upper sky.
+  // Faint streaks nine times longer than wide, kept to the upper sky.
   "cirrus streaks": { scale: 3.4, stretch: 9, softness: 0.14, low: 0.22, high: 1.05, opacity: 0.38, billow: 0.15, cells: 0, horizon: 0 },
   "low drifting banks": { scale: 0.9, stretch: 3.5, softness: 0.1, low: 0.0, high: 0.32, opacity: 0.88, billow: 0.45, cells: 0, horizon: 1 },
 } as const satisfies Record<string, CloudShape>;
 
 /**
- * The two overcast skies: the noise level above which there is cloud, how much softer their edges are than the cloud
- * form's own, and how overcast they are (`CloudSpec.overcast`). A fair sky's lowest threshold is 0.5.
+ * For each overcast sky: the noise level above which there is cloud, the multiplier on the cloud form's edge
+ * softness, and the `CloudSpec.overcast` amount. A fair sky's lowest threshold is 0.5.
  */
 const OVERCAST = {
   "a heavy sky, with breaks of light": { threshold: 0.4, soften: 1.3, amount: 0.6 },
@@ -218,7 +217,7 @@ export const sky = primitive({
     const colors = SKY_COLORS[p.character];
     const form = CLOUD_FORMS[p.clouds];
     if (p.overcast === "fair") return { zenith: hex(colors.zenith), horizon: hex(colors.horizon), clouds: { ...form, threshold: p.cover } };
-    // An overcast sky sets its own cover, whatever the fair cover says, and softens its clouds' edges.
+    // An overcast sky ignores `p.cover`, uses its own threshold and softens the cloud edges.
     const o = OVERCAST[p.overcast];
     return { zenith: hex(colors.zenith), horizon: hex(colors.horizon), clouds: { ...form, threshold: o.threshold, softness: form.softness * o.soften, overcast: o.amount } };
   },
@@ -236,9 +235,9 @@ export const wind = primitive({
     strength: t.scale("How hard the wind blows", WIND_LEVELS),
   },
   build: (p) => {
-    // A world blows exactly its level: every plant is tuned at breezy, and one
-    // seed realizes every world's sky, so a seeded spread would only shift
-    // every world's breeze alike.
+    // The strength is exactly the chosen level, with no seeded spread. Every
+    // plant is tuned at breezy, and one seed realizes every world's sky, so a
+    // spread would shift every world's wind by the same amount.
     const strength = Object.values(WIND_LEVELS).reduce((a, b) => (Math.abs(b - p.strength) < Math.abs(a - p.strength) ? b : a));
     return { strength };
   },

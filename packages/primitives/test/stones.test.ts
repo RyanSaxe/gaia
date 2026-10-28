@@ -1,5 +1,5 @@
-// Great stones decline whole: a stone leans or falls flat about its toe and
-// never bends, whatever its arrangement.
+// Checks that standing stones decline whole. A stone leans or falls flat
+// about its toe and never bends, in every arrangement.
 
 import { describe, expect, it } from "vitest";
 import { type Built, rand } from "@gaia/schema";
@@ -32,7 +32,7 @@ describe("standing stones", () => {
       for (const [p, q] of [[a, b], [b, c], [a, c]] as const) expect(gap(failing, p, q)).toBeCloseTo(gap(healthy, p, q), 3);
       if (at(failing, a).some((x, i) => Math.abs(x - (at(healthy, a)[i] as number)) > 0.3)) tilted++;
     }
-    // And decline shows: some stones have moved a long way.
+    // Some stones have moved a long way, so decline is visible.
     expect(tilted).toBeGreaterThan(0);
   });
 });

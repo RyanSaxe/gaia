@@ -1,6 +1,6 @@
-// Small solids that buildings are made of: oriented boxes, quads, logs,
-// pillowed stones and flat stepping stones. Each writes its vertices with
-// one channel response, so a piece moves and withers as one.
+// Small solids for buildings: oriented boxes, quads, beams, logs, pillowed
+// stones and flat stepping stones. Each writes all its vertices with one set
+// of channels, so a piece moves and withers as one.
 
 import type { Rand, Vec3 } from "@gaia/schema";
 import { type Channels, type PartBuilder, type V3, addScaled, cross, dot, normalize, scale, sub } from "./kit.ts";
@@ -35,8 +35,8 @@ export function tri(b: PartBuilder, p: readonly [Vec3, Vec3, Vec3], n: Vec3, sha
 }
 
 /**
- * An oriented box: center, three unit axes and half sizes. Tops catch a
- * little more light and undersides a little less, as painted wood does.
+ * An oriented box from a center, three unit axes and half sizes. Top faces
+ * are a little lighter and undersides a little darker, like painted wood.
  */
 export function box(b: PartBuilder, c: Vec3, axes: readonly [Vec3, Vec3, Vec3], half: Vec3, shade: number, ch: Channels, skip: { bottom?: boolean; ends?: boolean } = {}): void {
   for (let i = 0; i < 3; i++) {
@@ -58,10 +58,10 @@ export function box(b: PartBuilder, c: Vec3, axes: readonly [Vec3, Vec3, Vec3], 
 }
 
 /**
- * A box between two points with a square-ish section; `up` orients the
- * section. In `pieces` lengths, its sides have a ring of vertices at every
- * joint, so a channel that bends it (a sag that follows a covering) can bend
- * it there. `open` leaves off its ends, for a timber whose ends are always
+ * A box between two points with a rectangular section that `up` orients.
+ * With `pieces` above 1, its sides get a ring of vertices at each joint
+ * between pieces, so a channel can bend it there, such as a sag that follows
+ * a covering. `open` leaves off its ends, for a timber whose ends are always
  * hidden, such as rafters meeting at an apex over a soffit.
  */
 export function beam(b: PartBuilder, from: Vec3, to: Vec3, width: number, thick: number, up: Vec3, shade: number, ch: Channels, { pieces = 1, open = false }: { readonly pieces?: number; readonly open?: boolean } = {}): void {
@@ -75,7 +75,7 @@ export function beam(b: PartBuilder, from: Vec3, to: Vec3, width: number, thick:
     box(b, addScaled(from, axis, 0.5), [a, v, side], [len / 2, width / 2, thick / 2], shade, ch, { ends: open });
     return;
   }
-  // Its four sides, each a strip of quads along it, shaded as a box's are, and its two ends.
+  // The four sides, each a strip of quads along the beam and shaded like a box's, then the two ends.
   const at = (t: number, u: number, w: number): V3 => addScaled(addScaled(addScaled(from, axis, t), v, (u * width) / 2), side, (w * thick) / 2);
   for (const [n, u0, w0, u1, w1] of [[v, 1, -1, 1, 1], [scale(v, -1), -1, 1, -1, -1], [side, 1, 1, -1, 1], [scale(side, -1), -1, -1, 1, -1]] as const) {
     const lift = dot(n, UP) > 0.7 ? 0.08 : dot(n, UP) < -0.7 ? -0.12 : 0;
@@ -115,8 +115,8 @@ export function log(b: PartBuilder, from: Vec3, to: Vec3, radius: number, shade:
 }
 
 /**
- * A stone set into a wall: a rounded pillow lying on the plane through `c`
- * with outward normal `n`, `w` wide along `u` and `h` tall, standing `proud` out.
+ * A stone set into a wall: a rounded pillow on the plane through `c` with
+ * outward normal `n`, `w` wide along `u`, `h` tall and `proud` out from the plane.
  */
 export function pillow(b: PartBuilder, c: Vec3, u: Vec3, n: Vec3, w: number, h: number, proud: number, shade: number, ch: Channels, r: Rand): void {
   const v = normalize(cross(n, u));

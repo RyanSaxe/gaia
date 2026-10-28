@@ -1,7 +1,7 @@
-// What a declining building gathers: ivy climbing its walls, weeds around
-// its feet and rubble where it gives way. Each piece grows out of its own
-// pivot below a vitality threshold, so a healthy house shows none of it and
-// a failing one is overgrown, with no geometry rebuilt.
+// Builds what grows on a building at low vitality: ivy on the walls, weeds
+// round its base and rubble where it collapses. Each piece grows out of its
+// pivot below its vitality threshold, so a house at full vitality shows none
+// of it and no geometry is rebuilt as vitality changes.
 
 import { type BuildingPlan, CUT, type Rand, type Vec3 } from "@gaia/schema";
 import { type Channels, type PartBuilder, type V3, addScaled, clamp, cross, icosphere, normalize, rotate } from "../kit.ts";
@@ -29,8 +29,8 @@ export function wallSheet(b: PartBuilder, plan: BuildingPlan, w: Wall, y0: numbe
   const holes = clearings(plan, w, 0).filter((h) => h.y1 <= top + 1e-3);
   const peak = peakOf(plan, w).y;
   const gableRows = peak - top > 0.05 ? Math.max(1, Math.round((peak - top) / cell)) : 0;
-  // A gable's sheet has a column at each end of its crest, so however coarse its cells it reaches the gable's top and
-  // the stones laid up to it rest on it.
+  // A gable's sheet has a column break at each end of its crest, so at any cell size it reaches the gable's top and the
+  // stones laid up to it rest on it.
   const crest = gableRows > 0 ? Array.from({ length: 17 }, (_, k) => (w.length * k) / 16).filter((s) => topAt(plan, w, s) > peak - 1e-3) : [];
   const cols = breaks(0, w.length, cell, [...holes.flatMap((h) => [h.s0, h.s1]), ...crest.slice(0, 1), ...crest.slice(-1)]);
   const body = breaks(y0, top, cell, holes.flatMap((h) => [h.y0, h.y1]));
@@ -72,15 +72,15 @@ function card(b: PartBuilder, c: Vec3, n: Vec3, up: Vec3, size: number, twist: n
   b.triangle(idx[0] as number, idx[2] as number, idx[3] as number);
 }
 
-/** How the last of a wall to stand rots at a point on it, and the pieces it rots in: what ivy holds to there. */
+/** The rot and grain at a point on the wall layer that lasts longest. Ivy at that point goes with that layer. */
 export type Hold = (w: Wall, p: Vec3) => { readonly rot: number; readonly grain: (p: Vec3) => Vec3 };
 
 /**
- * Ivy climbing the walls: strands from the ground at the corners and over
- * the collapse. The lowest leaves come first as vitality falls, and the
- * strands reach higher as it keeps falling, up over the eaves. On a wall
- * that rots through, each leaf goes with the piece of wall it `hold`s to, a
- * little before it, so no ivy hangs over a hole.
+ * Ivy on the walls: strands from the ground at the corners and over the
+ * collapse. As vitality falls the lowest leaves appear first, and the strands
+ * reach higher toward the wall's top. On a wall that rots through, each leaf
+ * goes a little before the piece of wall it clings to (`hold`), so no ivy
+ * hangs over a hole.
  */
 export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coarse = 1, hold?: Hold): void {
   for (const w of shownWalls(plan)) {
@@ -94,7 +94,7 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
       let s = s0;
       for (let y = 0.15; y < reach; y += 0.22 * coarse) {
         s = clamp(s + (r.next() - 0.5) * 0.35, 0.1, w.length - 0.1);
-        // Ivy clings to the wall: never past its top, where there is nothing to hold.
+        // Ivy stays at least 0.3 m below the wall's top, and off openings and hidden wall.
         if (holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) || hidden(plan, w, s, y) || y > topAt(plan, w, s) - 0.3) continue;
         for (let k = 0; k < 2; k++) {
           const ss = clamp(s + (r.next() - 0.5) * 0.5, 0.05, w.length - 0.05);
@@ -109,7 +109,7 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
             pivot: c,
             tint: (r.next() - 0.5) * 0.06,
             grow: clamp(0.62 - 0.5 * height + 0.1 * zone + (r.next() - 0.5) * 0.08, 0.06, 0.7),
-            // A leaf stands off the wall, so it reads the rot a hair away from the piece behind it: it goes a little early.
+            // A leaf's rot is 0.06 above the wall piece behind it, so the leaf goes a little before that piece.
             ...(held && { rot: Math.min(1, held.rot + 0.06), grain: held.grain }),
           };
           const n = normalize(addScaled(w.n, [r.next() - 0.5, r.next() * 0.4, r.next() - 0.5], 0.5));
@@ -121,11 +121,10 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
 }
 
 /**
- * Tufts of rank grass: long blades fanning out from a point on the ground,
- * darker at the root and pale at the tip, rooted a little below it so no
- * unevenness of the ground under them lifts their roots into the air. They
- * grow in below their thresholds, the rankest first, so a failing house
- * stands in long, dry grass.
+ * Tufts of rank grass: long blades fanning out from a point, darker at the
+ * root and pale at the tip. They root a little below the ground, so uneven
+ * ground never leaves a root in the air. Each grows in below its threshold,
+ * the rankest first, so a house at low vitality sits in long, dry grass.
  */
 export function weeds(b: PartBuilder, spots: readonly { x: number; z: number; grow: number; size: number }[], r: Rand): void {
   for (const spot of spots) {
@@ -151,7 +150,7 @@ export function weeds(b: PartBuilder, spots: readonly { x: number; z: number; gr
   }
 }
 
-/** Weed spots around a building's feet and through its yard: rankest at the collapse. */
+/** Weed spots round a building's base and through its yard, rankest at the collapse. */
 export function weedSpots(plan: BuildingPlan, ruin: Ruin, r: Rand, count: number): { x: number; z: number; grow: number; size: number }[] {
   const out: { x: number; z: number; grow: number; size: number }[] = [];
   const door = plan.openings.find((o) => o.kind === "door");
@@ -171,8 +170,8 @@ export function weedSpots(plan: BuildingPlan, ruin: Ruin, r: Rand, count: number
 }
 
 /**
- * A rough lump of rubble lying on the ground: a squashed, jittered
- * icosphere, sunk a little, that grows in below its threshold.
+ * A rough lump of rubble on the ground: a squashed, jittered icosphere, sunk
+ * a little, that grows in below its `grow` threshold.
  */
 export function lump(b: PartBuilder, c: Vec3, radii: Vec3, yaw: number, shade: number, ch: Channels, r: Rand): void {
   const blob = icosphere(0);
@@ -192,13 +191,13 @@ export function lump(b: PartBuilder, c: Vec3, radii: Vec3, yaw: number, shade: n
 
 /**
  * Rubble at the foot of the collapse and in a few heaps along the walls:
- * stones and chunks of wall lying on the ground, the ones nearest the weak
- * corner first.
+ * stones and chunks of wall on the ground. The pieces nearest the weak corner
+ * appear first.
  */
 export function rubble(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, size: number, count: number): void {
   const walls = shownWalls(plan);
   for (let i = 0; i < count; i++) {
-    // Most rubble lies near the weak corner, inside and out; the rest along the walls.
+    // 70% of the rubble lies near the weak corner, inside and out, and the rest along the walls.
     const near = i < count * 0.7;
     let x: number;
     let z: number;

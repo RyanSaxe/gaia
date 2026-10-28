@@ -1,6 +1,5 @@
-// Rock primitives: the rock kind's bodies, stone and old wood lying still in
-// the grass, and the moss that grows on them. Geometry lives in
-// ./geometry/rock.ts and ./geometry/wood.ts.
+// The rock kind's primitives: stones, a fallen log, a stump, and the moss that
+// grows on them. Geometry is in ./geometry/rock.ts and ./geometry/wood.ts.
 
 import { primitive, t } from "@gaia/schema";
 import { barkParams } from "./flora.ts";

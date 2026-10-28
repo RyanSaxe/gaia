@@ -1,7 +1,7 @@
-// The small, lived-in things around a building: the walk to its door,
-// flower boxes under the windows, a lantern, a woodpile and a fence. As the
-// house is left, the flowers die, boxes tip off their brackets, the lantern
-// hangs askew and pickets lean and fall.
+// Builds the dressing around a building: a stone walk to the door, flower
+// boxes under the windows, a lantern, a woodpile and a fence. As vitality
+// falls, the flowers die, boxes tip off their brackets, the lantern hangs
+// askew and pickets lean and fall.
 
 import type { BuildContext, BuildingPlan, Built, Vec3, Resolved } from "@gaia/schema";
 import type { cottageGardenParams } from "../../structure.ts";
@@ -29,7 +29,7 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
     for (const [a, bb, cc] of blob.triangles) b.triangle(base + a, base + bb, base + cc);
   };
 
-  // The walk: stones leading out from the doorstep.
+  // The walk is a line of stones leading out from the doorstep.
   if (door !== undefined) {
     const { wall: w, s } = placeOf(plan, door);
     const start = 0.36 * steps + 0.42;
@@ -48,18 +48,17 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
     }
   }
 
-  // Flower boxes under the ground-floor windows: flowers go first, then the leaves wilt.
+  // Flower boxes under the ground-floor windows. As vitality falls, the flowers go first, then the leaves wilt.
   if (extras.has("flower boxes")) {
-    // Under the ground-floor windows that look toward the walk, so a big house keeps its budget.
+    // Only ground-floor windows facing the walk get boxes, at most 6, so a big house stays within its triangle budget.
     const boxed = plan.openings.filter((o) => o.kind === "window" && o.position[1] < plan.floor + 1.5 && o.normal[2] > 0.3).slice(0, 6);
     for (const o of boxed) {
       const { wall: w, s } = placeOf(plan, o);
       const y = o.position[1] - 0.12;
       const hw = o.width / 2 + 0.06;
-      // The box hangs on the wall under the sill. As the house fails its
-      // plants die back into it, then it pitches forward about its bottom
-      // edge on the wall and is gone before it would hang there, so it is
-      // never left in the air.
+      // The box hangs on the wall under the sill. As vitality falls, its
+      // plants die back into it, then it tips forward about its bottom edge
+      // on the wall. Its loss removes it before the tip would leave it in the air.
       const boxC = on(w, s, y - 0.1, 0.13);
       const pivot = on(w, s, y - 0.2, -0.04);
       const tip = 0.85 + 0.3 * r.next();
@@ -84,9 +83,9 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
     }
   }
 
-  // A lantern on a bracket beside the door, lit at night while the code is healthy: where the wall shows, a little
-  // nearer the door where a wall's end or another mass leaves no more room, and clear of the windows if it can be.
-  // With no wall beside the door to hang on, there is none.
+  // A lantern on a bracket beside the door, lit at night at high vitality. It goes where the wall is visible, nearer
+  // the door when a wall's end or another mass leaves no room, and clear of the windows when possible. With no wall
+  // beside the door, there is no lantern.
   if (extras.has("lantern") && door !== undefined) {
     const { wall: w, s } = placeOf(plan, door);
     const ly = plan.floor + door.height * 0.92;
@@ -95,10 +94,10 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
     const free = (at: number): boolean => shows(at) && !plan.openings.some((o) => o !== door && sameWall(placeOf(plan, o).wall, w) && Math.abs(placeOf(plan, o).s - at) < o.width / 2 + 0.55);
     const ls = spots.find(free) ?? spots.find(shows);
     if (ls !== undefined) {
-      // The bracket works loose from the wall and the lantern hangs askew.
+      // As vitality falls, the bracket comes loose and the lantern hangs askew.
       const mount = on(w, ls, ly + 0.25, 0);
       const sag = 0.55;
-      // It hangs askew, then is gone with the wall it is fixed to.
+      // The lantern starts to fall at vitality 0.36 and goes below 0.24.
       const hang = { fall: [w.u[0] * sag, w.u[1] * sag, w.u[2] * sag, 0.36] as const, loss: 0.24 };
       beam(wood, mount, on(w, ls, ly + 0.25, 0.42), 0.05, 0.05, w.u, 0.35, still(mount, 0.5, hang));
       const c = on(w, ls, ly, 0.4);
@@ -116,7 +115,7 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
       const holes = clearings(plan, w, 0.1)
         .filter((h) => h.y0 < 1.3 + plan.floor)
         .map((h) => [h.s0, h.s1] as const);
-      // Where another mass or a lean-to stands against the wall, there is no room either.
+      // A stretch of wall that another mass or a lean-to hides is also a hole.
       for (let s = 0.25; s < w.length; s += 0.5) if (hidden(plan, w, s, 0.5) || hidden(plan, w, s, 1.2)) holes.push([s - 0.3, s + 0.3] as const);
       holes.sort((a, b) => a[0] - b[0]);
       let from = 0.25;
@@ -131,8 +130,8 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
       const s0 = best.s0 + (best.s1 - best.s0 - len) / 2;
       const rad = 0.085;
       const rows = 5;
-      // The top of the pile goes first: a log never outlasts the row under
-      // it, and sinks down into the pile as it goes.
+      // As vitality falls, the top rows go first. A log never outlasts the row
+      // under it, and it sinks into the pile as it goes.
       let under = 0;
       for (let row = 0; row < rows; row++) {
         const n = Math.floor((len - row * rad) / (rad * 2.05));
@@ -168,14 +167,14 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
       const u = normalize(sub(b2, a));
       const n: V3 = [u[2], 0, -u[0]];
       const count = Math.floor(len / 0.2);
-      /** Each picket along the run: how far along, and the vitality it starts to lean or go at. */
+      /** Each picket's distance along the run, and the vitality below which it starts to lean or go. */
       const pickets: { t: number; gives: number }[] = [];
       for (let i = 0; i <= count; i++) {
         const q = addScaled(a, u, (len * i) / count);
         if (Math.abs(q[2] - front) < 0.01 && Math.abs(q[0] - gateX) < 0.62) continue;
         const h = 0.78 + 0.06 * Math.sin(i * 0.9);
         const base: V3 = [q[0], -0.25, q[2]];
-        // Pickets lean every which way as the garden is left, then some fall.
+        // As vitality falls, pickets lean in random directions, then some fall.
         const leanBy = (r.next() < 0.5 ? -1 : 1) * (0.2 + 0.55 * r.next());
         const ch: Channels = {
           loss: r.next() < 0.22 ? lossThreshold(r.next(), 0.32, 0.04) : 0,
@@ -189,7 +188,7 @@ export function buildGarden(p: Resolved<typeof cottageGardenParams>, ctx: BuildC
         box(fence, [q[0], (h - 0.25) / 2, q[2]], [u, UP, n], [0.035, (h + 0.25) / 2, 0.014], 0.55 + 0.08 * r.next(), ch);
         pickets.push({ t: (len * i) / count, gives: Math.max(ch.fall?.[3] ?? 0, ch.loss > 0 ? ch.loss + LOSS_BAND : 0) });
       }
-      // A rail goes before any picket it is nailed to leans or goes, shrinking back onto the first.
+      // A rail goes before any picket it is nailed to leans or goes, shrinking back toward the first picket.
       const rail = (t0: number, t1: number, ry: number): Channels => {
         const first = pickets.find((pk) => pk.t >= t0 - 0.11) ?? { t: t0, gives: 0 };
         return { loss: Math.max(...pickets.map((pk) => pk.gives)) + 0.01, droop: 0, wither: 0.6, glow: 0, pivot: addScaled([a[0], ry, a[2]], u, first.t), tint: 0 };

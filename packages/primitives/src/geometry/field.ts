@@ -1,4 +1,4 @@
-// The one evaluator for height fields. Pure and deterministic: the same field
+// The only evaluator for height fields. It is deterministic, so the same field
 // and point give the same height on every thread and machine.
 
 import type { HeightField } from "@gaia/schema";
@@ -65,12 +65,13 @@ function ridged(seed: number, x: number, z: number, octaves: number, gain: numbe
   return sum / norm;
 }
 
-/** A valley's bends: the second, shorter wave keeps them from repeating, and no bend turns tighter than this many half widths, so its shoulders never fold onto each other. */
+/** A valley's bends. The second, shorter wave keeps them from repeating. No bend is tighter than `tightest` half widths, so the shoulders never fold onto each other. */
 const VALLEY_BENDS = { second: 0.15, apart: 2.1, tightest: 1.5 } as const;
 
 /**
- * The sideways offset of a trough's axis at distance `u` along it: it swings `meander` meters to either side every
- * `meanderWavelength`, or less where a bend that wide would turn tighter than the valley's floor allows.
+ * The sideways offset of a trough's axis at distance `u` along it. The axis swings `meander` meters to either side
+ * every `meanderWavelength`, or less where a swing that wide would bend tighter than `VALLEY_BENDS.tightest` half
+ * widths.
  */
 export function troughOffset(f: Extract<HeightField, { op: "trough" }>, u: number): number {
   const p1 = ((f.seed % 997) / 997) * Math.PI * 2;
@@ -82,30 +83,29 @@ export function troughOffset(f: Extract<HeightField, { op: "trough" }>, u: numbe
 }
 
 /**
- * How a stream winds across its trough's floor, in channel widths: from one bend to the next as it winds from
- * hardly at all to strongly, the tightest a bend may turn, as real streams' meanders do, and how far past the floor's
- * edge onto its gentle toe a bend may reach, as a share of the floor.
+ * How a stream winds across its trough's floor. `apart` is the distance between bends in channel widths, from barely
+ * winding to strongly winding. `tightest` is the smallest bend radius in channel widths, as in real stream meanders.
+ * `toe` is how far a bend may reach onto the gentle toe past the floor's edge, as a multiple of the floor's half width.
  */
 const BENDS = { apart: [10, 26], tightest: 2, toe: 1.4 } as const;
-/** The trough's winding, meters, from straight to strongly meandering (`valley@1`), which sets how its stream winds. */
+/** The range of a trough's `meander` in meters, from straight to strongly meandering in `valley@1`. It sets how the stream winds. */
 const MEANDER = [4, 30] as const;
-/** The bends' two waves: the second, shorter one keeps them from repeating; together they bend this much sharper than one. */
+/** The stream's two bend waves. The second, shorter wave keeps the bends from repeating. `sharper` is how much tighter their sum bends than one wave. */
 const WAVES = { second: 0.15, apart: 2.1, sharper: 0.85 + 0.15 * 2.1 * 2.1 } as const;
 
-/** What sets how a stream bends: its valley's seed, winding (meters), floor share and half width. */
+/** The trough fields that set how a stream bends: seed, `meander` in meters, floor share and half width. */
 export type BendOf = Pick<Extract<HeightField, { op: "trough" }>, "seed" | "meander" | "floor" | "halfWidth">;
 
 /**
- * How far a stream `width` meters wide swings from its valley's own line at distance `s` along it: its meanders
- * across the floor at its own scale.
+ * How far a stream `width` meters wide swings from its valley's axis at distance `s` along it. These are the stream's
+ * own meanders across the floor, at the stream's scale.
  */
 export function bedBend(f: BendOf, s: number, width: number): number {
   const m = Math.max(0, Math.min(1, (f.meander - MEANDER[0]) / (MEANDER[1] - MEANDER[0])));
   const apart = width * (BENDS.apart[0] + (BENDS.apart[1] - BENDS.apart[0]) * m);
   const k = (Math.PI * 2) / apart;
-  // As wide as the bends may swing without turning tighter than the tightest a stream turns, its channel on the floor
-  // and the floor's gentle toe, never up the valley's sides: a winding valley's stream swings as wide as that allows,
-  // a straight one's hardly at all.
+  // The widest swing that keeps every bend within `BENDS.tightest` and the channel on the floor and its toe, never up
+  // the valley's sides. A winding valley's stream swings that wide, and a straight valley's stream barely swings.
   const onFloor = BENDS.toe * f.floor * f.halfWidth - width / 2;
   const swing = Math.min(onFloor, 1 / (BENDS.tightest * width * k * k * WAVES.sharper)) * Math.min(1, 0.15 + 1.4 * m);
   const p1 = ((f.seed % 811) / 811) * Math.PI * 2;
@@ -114,8 +114,8 @@ export function bedBend(f: BendOf, s: number, width: number): number {
 }
 
 /**
- * The sideways offset of a stream's bed `width` meters wide at distance `u` along its trough: the trough's own axis,
- * and the stream's meanders across the floor at its own scale, which the trough's long winding alone never shows.
+ * The sideways offset of a stream bed `width` meters wide at distance `u` along its trough. It adds the stream's own
+ * meanders (`bedBend`) to the trough's axis (`troughOffset`), whose long bends are too broad to look like a stream's.
  */
 export function bedOffset(f: Extract<HeightField, { op: "trough" }>, u: number, width: number): number {
   return troughOffset(f, u) + bedBend(f, u, width);
@@ -139,7 +139,7 @@ export function fieldAt(f: HeightField, x: number, z: number): number {
       const big = f.wavelength * 2.5;
       const p = u / f.wavelength + f.wander * 0.8 * fbm(f.seed, x / big, z / big, 2, 0.5);
       const t = p - Math.floor(p);
-      // A long windward climb, then a shorter, steeper lee; both ends flat.
+      // A long windward climb, then a shorter, steeper lee face, flat at both ends.
       const rise = 0.62;
       const shape = t < rise ? smooth(0, rise, t) : 1 - smooth(rise, 1, t);
       const crest = 0.68 + 0.32 * fbm(f.seed + 7, x / (big * 1.3), z / (big * 1.3), 2, 0.5);
@@ -150,8 +150,8 @@ export function fieldAt(f: HeightField, x: number, z: number): number {
       const s = Math.sin(f.angle);
       const u = x * c + z * s;
       const v = -x * s + z * c;
-      // How far from the axis itself, where it bends, not across the valley's run, so a bend keeps the valley's own
-      // width and sides: the nearest point of the axis, found by a few Newton steps from the point straight across.
+      // Distance is measured from the bent axis, not across the valley's run, so a bend keeps the valley's width and
+      // sides. A few Newton steps from the point straight across find the nearest point on the axis.
       let a = u;
       for (let step = 0; step < 4; step++) {
         const off = troughOffset(f, a);

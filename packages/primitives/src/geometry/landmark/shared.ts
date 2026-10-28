@@ -1,33 +1,33 @@
-// Small tools every landmark shares: the proportions its seed picks within
-// its words, a piece that only withers, smooth normals for lumpy stones, and
-// fallen rubble that grows in at the foot of what breaks.
+// Helpers every landmark uses: seeded proportions within the bands of its
+// answers, channels for a piece that only withers, smooth normals for lumpy
+// stones, and rubble that grows in at the foot of what breaks.
 
 import type { BuildContext, Part, Rand, Vec3 } from "@gaia/schema";
 import { type Channels, type PartBuilder, type V3, cross, icosphere, normalize, sub } from "../kit.ts";
 
-/** The least and the most a measure of a landmark may be. */
+/** The minimum and maximum of one landmark measure. */
 export type Band = readonly [number, number];
 
 /**
- * A measure the words of one field set: each word its own band, or none (`null`) for a word the measure has no part
- * in, such as a dome's rise over an open ring. The words differ by it, so no two of their bands meet: a build of one
- * word never takes another's look.
+ * A measure set by the answer to one field (`by`). Each answer has its own band, or `null` when the measure does not
+ * apply, such as a dome's rise over an open ring. No two bands overlap, so a build never looks like one with a
+ * different answer.
  */
 export interface ByWord {
   readonly by: string;
   readonly bands: Readonly<Record<string, Band | null>>;
 }
 
-/** A landmark's measures: each kept within one band whatever its words, or set by the words of one field. */
+/** A landmark's measures. Each has one fixed band, or a band for each answer to one field. */
 export type Bands = Readonly<Record<string, Band | ByWord>>;
 
-/** A build's measures, each picked inside its band; a measure its word has no part in is 0. */
+/** A build's measures, each picked inside its band. A measure that does not apply to the answer is 0. */
 export type Shape<B extends Bands> = { readonly [M in keyof B]: number };
 
-/** The band a share either side of `mid`: what a measure no word sets ranges over round its usual look. */
+/** A band `share` either side of `mid`, for a measure that no answer sets. */
 export const about = (mid: number, share: number): Band => [mid * (1 - share), mid * (1 + share)];
 
-/** The band a measure keeps for a build answered `answers`, or null where its word has no part in it. */
+/** The band of `measure` for these answers, or null when the measure does not apply. */
 export function bandOf(measure: Band | ByWord, answers: Readonly<Record<string, unknown>>): Band | null {
   if (!("by" in measure)) return measure;
   const word = String(answers[measure.by]);
@@ -37,9 +37,9 @@ export function bandOf(measure: Band | ByWord, answers: Readonly<Record<string, 
 }
 
 /**
- * The proportions a landmark's seed picks within its words: each measure somewhere in the band its answers allow,
- * drawn from a stream of its own, so two landmarks Jev answered alike stand differently, each the same on every run,
- * and a new measure never shifts another.
+ * Picks each measure from the build's seed, inside the band its answers allow. Each measure draws from its own forked
+ * stream. Two landmarks with the same answers differ, each is the same on every run, and adding a measure never
+ * shifts another.
  */
 export function landmarkShape<B extends Bands>(bands: B, answers: Readonly<Record<string, unknown>>, ctx: BuildContext): Shape<B> {
   const r = ctx.rand.fork("shape");
@@ -51,10 +51,10 @@ export function landmarkShape<B extends Bands>(bands: B, answers: Readonly<Recor
   return out as Shape<B>;
 }
 
-/** How full on a point at angle `a` round a landmark faces weather blowing from `weather`: 1 full on, 0 sheltered behind. */
+/** How directly a point at angle `a` round a landmark faces weather from angle `weather`: 1 facing it, 0 sheltered. */
 export const facing = (a: number, weather: number): number => (1 + Math.cos(a - weather)) / 2;
 
-/** A piece that only withers as vitality falls, unless `extra` says more. */
+/** Channels for a piece that only withers as vitality falls, plus any `extra` channels. */
 export const still = (pivot: Vec3, wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
 
 export const nonEmpty = (parts: Part[]): Part[] => parts.filter((p) => p.indices.length > 0);
@@ -76,9 +76,9 @@ export function smoothNormals(points: readonly V3[], triangles: readonly (readon
 }
 
 /**
- * A rough stone lying on the ground: a squashed, jittered icosphere, sunk a
- * little and turned by `yaw`. With `grow` set it grows in below that
- * vitality, so what broke above lies at the foot only once it has fallen.
+ * A rough stone on the ground: a squashed, jittered icosphere, sunk a little
+ * and turned by `yaw`. With `ch.grow` set it grows in below that vitality, so
+ * rubble appears at the foot only once the piece above has fallen.
  */
 export function lump(b: PartBuilder, c: Vec3, radii: Vec3, yaw: number, shade: number, ch: Channels, r: Rand): void {
   const blob = icosphere(0);

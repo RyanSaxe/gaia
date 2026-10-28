@@ -1,6 +1,6 @@
-// Shared geometry tools for primitives: vector math, a Part builder that
-// writes every vitality channel per vertex, an icosphere template and a
-// deterministic noise. Pure typed arrays; no Three.js.
+// Geometry helpers for primitives: vector math, a `PartBuilder` that writes
+// every vitality channel per vertex, an icosphere template and deterministic
+// noise. Everything uses plain and typed arrays, without Three.js.
 
 import type { Part, Vec3 } from "@gaia/schema";
 
@@ -52,23 +52,23 @@ export interface Channels {
   readonly wither: number;
   readonly glow: number;
   readonly pivot: Vec3;
-  /** The joint where the piece's bough or stem leaves the trunk or the ground: it sags (`droop`) and bends in the wind about it. `pivot` when absent. */
+  /** The joint where the piece's bough or stem leaves the trunk or the ground. The piece sags (`droop`) and bends in the wind about it. Defaults to `pivot`. */
   readonly bough?: Vec3;
-  /** The joint where the piece's twig leaves its bough: it bends about it in the wind, on top of the bough. `bough` when absent. */
+  /** The joint where the piece's twig leaves its bough. The piece bends about it in the wind, on top of the bough's bend. Defaults to `bough`. */
   readonly twig?: Vec3;
   /** Hue offset in turns, -0.1 to 0.1. Zero when absent. */
   readonly tint?: number;
   /** How far the piece folds toward its pivot at night, 0 to 1. Zero when absent. */
   readonly close?: number;
-  /** How the piece falls about its pivot as vitality drops: axis times radians, then the vitality it starts at. */
+  /** How the piece falls about its pivot as vitality drops: the axis scaled by the angle in radians, then the vitality where the fall starts. */
   readonly fall?: readonly [number, number, number, number];
   /** The vitality below which the piece grows out of its pivot. Zero when absent. */
   readonly grow?: number;
   /** How far the surface rots through into holes as vitality drops, 0 to 1. Zero when absent. */
   readonly rot?: number;
-  /** The grain the surface rots along: across its courses and up them, in pieces, and its kind (`GRAIN`); or that, from where the vertex is. */
+  /** The grain the surface rots along: the vertex's position across and up the courses in pieces, then the kind (`GRAIN`). A function computes it from the vertex position. */
   readonly grain?: Vec3 | ((p: Vec3) => Vec3);
-  /** How the piece turns about its pivot while alive: axis times turns per second. */
+  /** How the piece turns about its pivot at full vitality: the axis scaled by turns per second. */
   readonly spin?: Vec3;
 }
 
@@ -76,9 +76,10 @@ const SOLID: Vec3 = [0, 0, 0];
 const NO_FALL = [0, 0, 0, 0] as const;
 
 /**
- * Every vertex's piece (the connected run of triangles it is in, numbered by
- * first vertex) and that piece's size, the side of a square with half its
- * surface area. A vertex no triangle uses is a piece of its own, of size 0.
+ * Returns each vertex's piece number and that piece's size. A piece is a
+ * connected set of triangles, numbered in order of its first vertex. Its size
+ * is the side of a square with half its surface area. A vertex no triangle
+ * uses is its own piece, of size 0.
  */
 function piecesOf(pos: readonly number[], idx: readonly number[]): Float32Array {
   const n = pos.length / 3;
@@ -123,7 +124,7 @@ function piecesOf(pos: readonly number[], idx: readonly number[]): Float32Array 
   return out;
 }
 
-/** Accumulates vertices with every channel, then freezes into a Part. */
+/** Collects vertices with every channel, then builds a `Part` from them. */
 export class PartBuilder {
   readonly #pos: number[] = [];
   readonly #nrm: number[] = [];
@@ -143,7 +144,7 @@ export class PartBuilder {
   readonly #rot: number[] = [];
   readonly #spin: number[] = [];
   readonly #grain: number[] = [];
-  /** Which optional channels some vertex wrote, so a part without them carries none. */
+  /** The optional channels that at least one vertex set. `part` leaves out the rest. */
   readonly #uses = { fall: false, grow: false, rot: false, spin: false, grain: false };
   readonly #idx: number[] = [];
 
@@ -160,7 +161,7 @@ export class PartBuilder {
     return this.#idx.length / 3;
   }
 
-  /** Adds a vertex; `cut` places it on a leaf card (see `CUT`), and solid surfaces omit it. */
+  /** Adds a vertex. `cut` places it on a leaf card (see `CUT`). Solid surfaces omit it. */
   vertex(p: Vec3, n: Vec3, shade: number, c: Channels, cut: Vec3 = SOLID): number {
     this.#pos.push(p[0], p[1], p[2]);
     this.#cut.push(cut[0], cut[1], cut[2]);
@@ -227,10 +228,10 @@ export class PartBuilder {
   }
 }
 
-/** A leaf card's cut, with the card's own seed (0 to 1) in its fraction. */
+/** A leaf card's cut value: the `CUT` form plus the card's own seed (0 to 1) in the fraction. */
 export const cutOf = (form: number, seed: number): number => form + 0.999 * clamp(seed, 0, 1);
 
-/** One vertex of a leaf card: where it is, its place on the card, its normal and shade. */
+/** One vertex of a leaf card: position, coordinates on the card, normal and shade. */
 export interface CardPoint {
   readonly p: V3;
   readonly across: number;
@@ -305,13 +306,14 @@ export function icosphere(subdivisions: number): SphereTemplate {
   return template;
 }
 
-/** Smooth, deterministic 3D value noise in roughly [-1, 1]. */
+/** A deterministic hash of a lattice point and seed, in [0, 1]. */
 function hash3(x: number, y: number, z: number, seed: number): number {
   let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 1274126177) ^ Math.imul(seed, 2246822519);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
 }
 
+/** Smooth, deterministic 3D value noise in [-1, 1]. */
 export function noise3(x: number, y: number, z: number, seed = 0): number {
   const xi = Math.floor(x);
   const yi = Math.floor(y);
@@ -347,15 +349,16 @@ export function fbm3(x: number, y: number, z: number, seed = 0, octaves = 3): nu
 }
 
 /**
- * The vitality span over which a piece collapses once below its `loss`, the
- * realizer's `CHANNEL_MATH.lossBand`: a piece that rests on another must
- * finish going within it before what holds it starts.
+ * The vitality span over which a piece collapses once vitality falls below its
+ * `loss`. It equals `CHANNEL_MATH.lossBand` in @gaia/realize. A piece that
+ * rests on another must finish collapsing within this span before the piece
+ * under it starts.
  */
 export const LOSS_BAND = 0.08;
 
 /**
- * A threshold for `loss` drawn so decline is gradual across many pieces:
- * few pieces go early, most hold on until vitality is low.
- * Fraction lost at vitality v is about 1 - (v / top)^(2/3).
+ * Turns a uniform draw `u` into a `loss` threshold, so decline is gradual
+ * across many pieces. Few pieces go early, and most stay until vitality is
+ * low. The fraction lost at vitality v is about 1 - (v / top)^(2/3).
  */
 export const lossThreshold = (u: number, top: number, floor = 0.02): number => floor + (top - floor) * Math.pow(u, 1.5);

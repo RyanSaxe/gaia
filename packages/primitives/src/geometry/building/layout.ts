@@ -1,14 +1,14 @@
-// A building's plan: its massing (the volumes it is put together from and
-// the roof over each), then where its door and windows go. Every volume is a
-// `Mass`; joined masses overlap where they meet, so the walls one hides
-// never show and every roof meets the walls under it.
+// Lays out a building's plan: its massing (the volumes and the roof over
+// each), then where its door and windows go. Each volume is a `Mass`. Joined
+// masses overlap by `OVERLAP`, so hidden walls never show and every roof meets
+// the walls under it.
 
 import type { BuildContext, BuildingPlan, Mass, Opening, Resolved, RoofForm } from "@gaia/schema";
 import type { cottagePlanParams } from "../../structure.ts";
 import { clamp } from "../kit.ts";
 import { type Wall, chimneyEnd, hidden, massOf, on, peakOf, placeOf, sameWall, shownWalls, topAt, wallTop, wallsOf } from "./frame.ts";
 
-/** Floor to floor, meters. */
+/** Floor-to-floor height in meters. */
 const STOREY = 2.3;
 /** The most windows a building has, however many walls it shows. */
 const MAX_WINDOWS = 14;
@@ -24,7 +24,7 @@ interface Massing {
   readonly form: RoofForm;
 }
 
-/** A mass with its roof's rise from the pitch: a gable's over half its span, a lean-to's over all of it, a turret's cone steeper. */
+/** A mass with its roof's rise: the pitch over half the span, 0.9 of that for a lean-to, and 0.95 of the width for a turret's cone. */
 function massAt(g: Massing, m: Omit<Mass, "rise" | "fall" | "ends"> & { fall?: 1 | -1; ends?: readonly [boolean, boolean] }): Mass {
   const halfSpan = (m.ridge === "x" ? m.depth : m.width) / 2;
   const rise = m.roof === "cone" ? m.width * 0.95 : m.roof === "lean-to" ? g.pitch * halfSpan * 0.9 : g.pitch * halfSpan;
@@ -32,10 +32,10 @@ function massAt(g: Massing, m: Omit<Mass, "rise" | "fall" | "ends"> & { fall?: 1
 }
 
 /**
- * A wing joined to a face of `host` (its outward normal `face`), `t` along
- * the face from -1 (flush with one end) to 1 (flush with the other), `wide`
- * along the face and reaching `out` from it. Its ridge runs out from the
- * face, so its gable looks outward.
+ * A wing joined to the face of `host` whose outward normal is `face`. `t`
+ * places it along the face, from -1 (flush with one end) to 1 (flush with the
+ * other). It is `wide` along the face and reaches `out` from it. Its ridge
+ * runs out from the face, so its gable faces outward.
  */
 function wing(g: Massing, host: Mass, face: Face, t: number, wide: number, out: number, storeys: number, roof: RoofForm): Mass {
   const alongX = face[1] !== 0;
@@ -68,7 +68,7 @@ function leanTo(g: Massing, host: Mass, face: Face, t: number, wide: number, out
   return { ...w, ridge: face[1] !== 0 ? "x" : "z", wallHeight, rise: Math.max(0.5, rise), fall: (face[0] + face[1]) as 1 | -1 };
 }
 
-/** True when a new mass would run into any but `host`, so attachments never pile into each other. */
+/** Whether `m` overlaps any mass other than `host`. Attachments check it so they never run into each other. */
 const clashes = (masses: readonly Mass[], m: Mass, host: number): boolean =>
   masses.some((o, i) => i !== host && Math.abs(o.x - m.x) < (o.width + m.width) / 2 - 0.2 && Math.abs(o.z - m.z) < ((o.round ? o.width : o.depth) + (m.round ? m.width : m.depth)) / 2 - 0.2);
 
@@ -93,7 +93,7 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   const span = alongX ? D : W;
   const forwardWing = (t: number): Mass => wing(g, main, [0, 1], t, clamp(0.68 * D, 3.2, 4.6), 0.55 * D + 1.3, lower(storeys), g.form);
   const sideWing = (s: number, t: number): Mass => wing(g, main, [s, 0], t, clamp(0.66 * D * 0.8, 3.2, 4.4), 0.55 * W + 1.2, lower(storeys), g.form);
-  /** A block in line with the main body's ridge, joined at one end: the host keeps that end unhipped too. */
+  /** A block in line with the main body's ridge, joined at one end. The host's roof is not hipped at that end. */
   const inLine = (host: number, face: Face, share: number, n: number): Mass => {
     const h = masses[host] as Mass;
     const end = face[0] + face[1] > 0 ? 1 : 0;
@@ -108,7 +108,7 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
       entry = 1;
     } else masses.push(sideWing(1, -0.3), sideWing(-1, -0.3));
   } else if (p.massing === "a long range") {
-    // Each block a little narrower than the last, so even at one eave line the ridges step down.
+    // Each block is a little narrower than the last, so the ridges step down even when the eaves line up.
     masses.push(inLine(0, alongX ? [side, 0] : [0, -1], 0.84, lower(storeys)));
     masses.push(inLine(1, alongX ? [side, 0] : [0, -1], 0.82, lower((masses[1] as Mass).storeys)));
   } else if (p.massing === "a cluster") {
@@ -156,7 +156,7 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   const front = (i: number): Wall => wallsOf(plan).find((w) => w.mass === i && w.n[2] > 0.99) as Wall;
   const doorH = (m: Mass): number => Math.min(1.95, m.wallHeight - 0.32);
   let doorWall = front(entry);
-  // Off center on a long front, away from a wing that juts forward beside it.
+  // The door is off center on a long front, away from a forward wing beside it.
   const lean = entry === 0 && alongX && p.massing !== "a single block" ? -side : side;
   const leaning = doorWall.length / 2 + (alongX && entry === 0 ? lean * doorWall.length * (p.massing === "a single block" ? 0.12 : 0.16) : 0);
   /** The spot on a wall nearest `from` at which the whole door shows, clear of every other mass. */
@@ -165,7 +165,7 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
     return Array.from({ length: 8 * Math.ceil(w.length) + 1 }, (_, k) => from + (k % 2 === 1 ? -lean : lean) * Math.ceil(k / 2) * 0.25).find(shows);
   };
   let doorAt = seat(doorWall, leaning);
-  // Where a turret or a wing leaves no room on that front, the door opens from another front that has it.
+  // When a turret or wing leaves no room on that front, the door goes on another front that has room.
   for (const w of wallsOf(plan)) {
     if (doorAt !== undefined) break;
     if (w.n[2] < 0.99 || w.mass === entry) continue;
@@ -179,7 +179,7 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   const entryMass = plan.masses[entry] as Mass;
   const t = clamp((doorAt - doorWall.length / 2) / Math.max(0.01, doorWall.length / 2 - 1.15), -1, 1);
   const porch = { ...wing(g, entryMass, [0, 1], t, 2.3, 1.75, 1, g.form === "half-hip" ? "gable" : g.form), wallHeight: 2.3 };
-  // A porch stands only where nothing else does.
+  // A porch is added only where it overlaps no other mass.
   const porched = extras.has("porch") && !clashes(plan.masses, porch, entry);
   if (porched) {
     plan = { ...plan, masses: [...plan.masses, porch] };
@@ -194,7 +194,7 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   const winW = 0.78 + 0.14 * r.next();
   const winH = 0.98 + 0.12 * r.next();
   plan = { ...plan, openings };
-  // The chimney's gable stays blank, so its stack has a whole wall to climb.
+  // The chimney's gable gets no windows, so the stack has the whole wall.
   const blank = chimneyEnd(plan);
   const mainAxis: readonly [number, number] = alongX ? [1, 0] : [0, 1];
   const doorOnly = [...openings];
@@ -216,14 +216,14 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
     };
     for (const w of shownWalls(at)) {
       const m = massOf(at, w);
-      // A porch has only its door; the main body's chimney gable stays blank.
+      // A porch has only its door, and the main body's chimney gable has no windows.
       if (porched && w.mass === entry) continue;
       if (w.mass === 0 && blank !== 0 && (w.n[0] * mainAxis[0] + w.n[2] * mainAxis[1]) * blank > 0.99) continue;
       for (let k = 0; k < m.storeys; k++) {
         const y = at.floor + 0.86 + k * STOREY;
         const scale = k === 0 ? 1 : 0.85;
         if (m.round) {
-          // A turret's narrow windows, on every other face, looking out above the roofs.
+          // A turret's narrow windows go on every other face. The top storey's sit 0.2 m higher, above the roofs.
           const round = Math.round(Math.atan2(w.n[0], w.n[2]) / (Math.PI / 4));
           if ((round + k) % 2 === 0) add(w, w.length / 2, y + (k === m.storeys - 1 ? 0.2 : 0), 0.62);
           continue;
@@ -237,14 +237,14 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
     }
     return openings;
   };
-  // A big house thins its windows out, so it keeps its budget.
+  // A big house widens its window spacing, up to three times, to stay within `MAX_WINDOWS`.
   let spacing = 3.4 - 0.85 * (p.windows - 1);
   let all = windowsAt(spacing);
   for (let k = 0; k < 3 && all.length - 1 > MAX_WINDOWS; k++) {
     spacing *= (all.length - 1) / MAX_WINDOWS;
     all = windowsAt(spacing);
   }
-  // However many walls it shows, the windows that look toward the walk are kept first, low ones before high.
+  // Of the windows over `MAX_WINDOWS`, those facing the walk are kept first, low ones before high.
   const [door, ...windows] = all;
   const kept = windows.map((o, k) => ({ o, k })).sort((a, b) => b.o.normal[2] - a.o.normal[2] || a.o.position[1] - b.o.position[1] || a.k - b.k).slice(0, MAX_WINDOWS).sort((a, b) => a.k - b.k).map(({ o }) => o);
   return { ...plan, openings: door === undefined ? kept : [door, ...kept] };

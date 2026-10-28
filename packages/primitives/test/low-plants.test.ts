@@ -1,7 +1,7 @@
-// Ferns and mushrooms, the lowest drifts, decline as plants do: a fern's
-// fronds brown from their tips and fold down to lie low over the soil, and a
-// ring, huddle or scatter of mushrooms stands at its natural size, its caps
-// dropping as it fails while a few hold on, slumped, to the end.
+// Checks how ferns and mushrooms decline. A fern's fronds brown from their
+// tips and fold down low over the soil. A ring, cluster or scatter of
+// mushrooms has real sizes, and its caps drop as vitality falls while a few
+// stay, slumped, down to vitality 0.
 
 import { describe, expect, it } from "vitest";
 import { type Built, type Field, Library, type Part, rand } from "@gaia/schema";
@@ -87,7 +87,7 @@ describe("mushrooms@1", () => {
       const thresholds = Array.from(cap.channels.loss);
       expect(thresholds.some((x) => x > 0), grouping).toBe(true);
       expect(thresholds.some((x) => x === 0), grouping).toBe(true);
-      // The caps that hold on sit lower at the end than in health.
+      // The caps that never drop sit lower at vitality 0 than at 1.
       const holding = thresholds.map((x, i) => (x === 0 ? i : -1)).filter((i) => i >= 0);
       const healthy = applyVitality(cap, 1).positions;
       const ruined = applyVitality(cap, 0).positions;

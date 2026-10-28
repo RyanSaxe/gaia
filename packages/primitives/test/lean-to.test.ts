@@ -1,6 +1,6 @@
-// A lean-to's slope caves in about its high edge as the building fails, and
-// the rafters and purlin under it go down with it: none is left standing out
-// level where the slope was.
+// Checks that a lean-to's slope caves in about its high edge as vitality
+// falls, and the rafters and purlin under it go down with it, so none is left
+// sticking out level where the slope was.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type BuildingPlan, type Built, rand } from "@gaia/schema";
@@ -27,7 +27,7 @@ describe("a lean-to", () => {
         const timber = (build(roof, params, seed, plan) as Built).parts.find((p) => p.swatch === "timber");
         if (timber === undefined) throw new Error("no timber");
         const posed = applyVitality(timber, 0.1).positions;
-        // The lean-to's slope falls across its span (`b`), toward `fall`; its outer half lies away from the wall it leans on.
+        // The lean-to's slope falls across its span (`b`), toward `fall`. Its outer half lies away from the wall it leans on.
         const alongX = lean.ridge === "x";
         const halfSpan = (alongX ? lean.depth : lean.width) / 2;
         for (let v = 0; v < timber.shade.length; v++) {
@@ -36,7 +36,7 @@ describe("a lean-to", () => {
           const a = alongX ? x - lean.x : z - lean.z;
           const b = alongX ? z - lean.z : x - lean.x;
           const halfLength = (alongX ? lean.width : lean.depth) / 2;
-          // A rafter that is lost shrinks back onto its head instead; every one that stays goes down with the slope.
+          // A rafter that is lost shrinks back onto its head instead. Every one that stays goes down with the slope.
           if (Math.abs(a) > halfLength || lean.fall * b < 0.3 * halfSpan || (timber.channels.loss[v] ?? 0) > 0) continue;
           checked++;
           expect(y - (posed[v * 3 + 1] as number), `${shape}, seed ${seed}, a timber ${(lean.fall * b).toFixed(2)} m out from the lean-to's middle`).toBeGreaterThan(0.2);

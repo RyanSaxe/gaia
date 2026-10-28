@@ -1,9 +1,7 @@
-// What a trail is built from where the ground alone will not do: a small
-// footbridge or a line of stepping stones across a stream, stones set along
-// a tread's edges, and a little cairn where ways meet. Spans and positions come from the terrain, so these
-// are pure builders a trail's route calls, not primitives Jev picks.
-// Each writes vitality channels: a footbridge's planks go missing, its rails
-// sag, hang from one post and fall into the stream, and stone weathers grey.
+// Builds trail structures: a footbridge or stepping stones across a stream,
+// edging stones along a tread, and a cairn where trails meet. The terrain
+// supplies spans and positions, so these are pure builders that a trail's
+// route calls, not primitives Jev picks.
 
 import type { Built, Part, Rand, Vec3 } from "@gaia/schema";
 import { rand } from "@gaia/schema";
@@ -12,35 +10,34 @@ import { UP, beam, box, log, quad, tri } from "./blocks.ts";
 
 const nonEmpty = (parts: Part[]): Part[] => parts.filter((p) => p.indices.length > 0);
 
-/** Half a plank's thickness, meters: the deck's top stands this far above the planks' middles. */
+/** Half a plank's thickness in meters. The deck's top is this far above the planks' centers. */
 const PLANK_HALF = 0.035;
 
-/** Where a footbridge's deck is: its half width, and its top at `u` meters along the span from the middle, above the bank it rests on. */
+/** A footbridge deck's half width, and its top at `u` meters from mid-span, measured above the bank it rests on. */
 export interface FootbridgeDeck {
   readonly halfWidth: number;
   topAt(u: number): number;
 }
 
-/** The deck of a footbridge `span` long and `width` wide, arching a little: its planks are laid on it, and a walk stands on it. */
+/** The slightly arched deck of a footbridge `span` long and `width` wide. The planks lie on it, and so does the walkable surface. */
 export function footbridgeDeck(span: number, width: number): FootbridgeDeck {
   const arch = 0.2 + span * 0.035;
   const lift = 0.12;
   return { halfWidth: Math.max(1.3, width) / 2, topAt: (u) => lift + arch * (1 - Math.pow((2 * u) / span, 2)) + PLANK_HALF };
 }
 
-/** How many planks a footbridge `span` long lays across it: each 0.24 m wide, with a gap of 2.5 cm. */
+/** The plank count for a footbridge `span` long, with planks 0.24 m wide and 2.5 cm gaps. */
 const plankCount = (span: number): number => Math.max(4, Math.floor(span / (0.24 + 0.025)));
 
-/** The vitality below which the plank `x` along a span is gone, the soonest at mid-span, where the deck bears the most; it takes the plank's first draw. */
+/** The vitality below which the plank at `x` is gone. Planks near mid-span, which bear the most, go soonest. It uses the plank's first draw from `pr`. */
 const plankLoss = (pr: Rand, x: number, span: number): number => 0.7 * Math.pow(pr.next(), 1.7) * (0.75 + 0.25 * (1 - Math.abs((2 * x) / span)));
 
-/** The widest gap in a deck a person steps across, meters: two planks; a wider one stops the walk. */
+/** The widest deck gap in meters that a person steps across, about two planks. A wider gap ends the walkable deck. */
 const STRIDE_GAP = 0.6;
 
 /**
- * The vitality below which the footbridge `span` long built from `seed` can no longer be walked across: a run of
- * planks not wholly there, going or gone (`LOSS_BAND`), wider than a stride (`STRIDE_GAP`) has opened somewhere
- * along its deck.
+ * The vitality below which the footbridge `span` long built from `seed` can no longer be crossed. Below it, a run of
+ * planks that are going or gone (within `LOSS_BAND`) spans more than `STRIDE_GAP` somewhere along the deck.
  */
 export function footbridgeHolds(span: number, seed: number): number {
   const count = plankCount(span);
@@ -54,8 +51,8 @@ export function footbridgeHolds(span: number, seed: number): number {
 
 /**
  * A plank footbridge along local +x, `span` long from bank to bank and
- * `width` wide, its deck arching a little. The deck is walkable. The origin
- * is the middle of the span at the higher bank's ground.
+ * `width` wide, with a slightly arched deck. The deck is walkable. The origin
+ * is mid-span at the higher bank's ground level.
  */
 export function buildFootbridge(span: number, width: number, seed: number): Built {
   const r = rand(seed);
@@ -68,8 +65,8 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
   const yAt = (x: number): number => top.topAt(x) - PLANK_HALF;
   const still = (pivot: Vec3, wither: number, extra: Partial<Channels> = {}): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
 
-  // Planks across the span. They go missing as vitality falls (`plankLoss`): about one in ten by 0.5 and most by 0.13.
-  // The deck keeps its line, and the walk crosses on it until a gap wider than a stride opens (`footbridgeHolds`).
+  // Planks across the span. They go missing as vitality falls (`plankLoss`), about one in ten by 0.5 and most by 0.13.
+  // The walkable deck keeps its line until a gap wider than a stride opens (`footbridgeHolds`).
   const count = plankCount(span);
   for (let k = 0; k < count; k++) {
     const x = -span / 2 + (k + 0.5) * (span / count);
@@ -98,8 +95,8 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
       beam(frame, [x0, yAt(x0) - 0.12, side * (w / 2 - 0.12)], [x1, yAt(x1) - 0.12, side * (w / 2 - 0.12)], 0.18, 0.14, UP, 0.36, still([0, 0, 0], 0.75));
     }
   }
-  // Posts and a log rail on each side. As the bridge fails, each rail sags off its far post, then hangs from the post
-  // nearer the bank, swung down and out over the water, and at last falls into the stream; the posts stand.
+  // Posts and a log rail on each side. As vitality falls, each rail sags off its far post, then hangs from the post
+  // nearer the bank, swung down and out over the water, and finally falls into the stream. The posts never go.
   const posts = Math.max(2, Math.round(span / 2.2) + 1);
   for (const side of [-1, 1]) {
     const z = side * (w / 2 + 0.04);
@@ -116,7 +113,7 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
       const b = tops[k + 1] as V3;
       const rr = r.fork(`rail${side}-${k}`);
       const [hold, free] = Math.abs(a[0]) >= Math.abs(b[0]) ? [a, b] : [b, a];
-      // About the post it hangs from, so its free end swings down and outward, clear of the deck.
+      // The rail turns about the post it hangs from, so its free end swings down and outward, clear of the deck.
       const axis = normalize([0, -side * 0.3, -1]);
       const swing = Math.sign(free[0] - hold[0]) * 1.25;
       const hangs = 0.12 + 0.45 * Math.pow(rr.next(), 1.3);
@@ -134,8 +131,8 @@ export function buildFootbridge(span: number, width: number, seed: number): Buil
 }
 
 /**
- * Flat stones in a line along local +x across `span` meters of water, their
- * tops a hand above the surface at y = 0 and their feet in the bed. Walkable.
+ * Walkable flat stones in a line along local +x across `span` meters of
+ * water, their tops a hand above the surface at y = 0 and their feet in the bed.
  */
 export function buildSteppingStones(span: number, seed: number): Built {
   const r = rand(seed);
@@ -194,9 +191,9 @@ export function buildEdgingStones(stones: readonly { x: number; y: number; z: nu
 }
 
 /**
- * A little waymarker cairn where ways meet: a few flat stones, each bedded on
- * the one below and smaller than it, about knee high, its foot sunk in the
- * ground at y = 0. Nothing in it falls; its stone weathers grey in decline.
+ * A small waymarker cairn where trails meet: a few flat stones, each smaller
+ * than the one it rests on, about knee high, with its foot sunk below y = 0.
+ * Nothing in it falls. Its stone weathers grey as vitality falls.
  */
 export function buildCairn(seed: number): Built {
   const r = rand(seed);
@@ -209,7 +206,7 @@ export function buildCairn(seed: number): Built {
   for (let k = 0; k < count; k++) {
     const sr = r.fork(`stone${k}`);
     const tall = radius * (0.42 + sr.next() * 0.18);
-    // Each stone rests on the one below: its foot a little inside that one's top.
+    // Each stone's foot sits a little inside the top of the stone below.
     column(out, x, z, radius, y + tall, k === 0 ? -0.18 : y - tall * 0.25, 0.46 + 0.16 * sr.next(), sr.next() * Math.PI, 0.75 + 0.25 * sr.next(), {
       loss: 0,
       droop: 0,

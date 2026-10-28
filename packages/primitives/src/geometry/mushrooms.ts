@@ -1,11 +1,8 @@
-// Mushrooms: stalks under caps in the palette's cap swatch, grown in a ring,
-// a huddle or a scatter of little groups, young buttons among them. A cap
-// has real thickness: a rounded lip at its margin and ridged gills beneath,
-// rising to the stalk. Caps are a little uneven and mottled, and no two caps
-// meet. As vitality falls a cap greys and slumps, tipping toward one side
-// about a hinge under its rim; then many drop, shrinking down to the ground
-// beside their stalk, and the stalk shrivels after. A few hold on, grey and
-// slumped, to the end. Gills under each cap glow faintly.
+// Builds mushrooms: stalks under caps in the palette's cap swatch, grown in a
+// ring, a cluster or scattered groups, with young buttons among them. Each cap
+// has a rounded lip and faintly glowing ridged gills, and no two caps touch.
+// As vitality falls a cap greys and slumps about a hinge under its rim, then
+// all but the `STUBBORN` share drop beside their stalks and the stalks shrivel.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { mushroomParams } from "../wildflowers.ts";
@@ -18,14 +15,14 @@ interface Mushroom {
   readonly foot: V3;
   /** Height of the cap's crown over the ground. */
   readonly height: number;
-  /** The way it leans and, failing, tips: level, unit. */
+  /** The horizontal unit direction it leans in, and tips toward as vitality falls. */
   readonly lean: V3;
   /** How far it leans that way, radians. */
   readonly tilt: number;
   /** The cap's radius and its crown's height over the rim, meters. */
   readonly radius: number;
   readonly crown: number;
-  /** A young button at another's foot: it grows a plainer cap. */
+  /** A young button at another mushroom's foot, with a plainer cap. */
   readonly young: boolean;
   readonly r: Rand;
 }
@@ -45,12 +42,12 @@ const FORM: Record<CapShape, { readonly radius: number; readonly crown: number; 
   flat: { radius: 0.42, crown: 0.19, stalk: 0.16, girth: [1.55, 1.2, 0.98, 0.9, 0.84, 0.8] },
   pointed: { radius: 0.22, crown: 0.46, stalk: 0.17, girth: [1.12, 1.06, 1, 0.95, 0.9, 0.86] },
 };
-/** Where up the stalk each ring of its girth stands. */
+/** Each girth ring's height up the stalk, as a share of its length. */
 const STALK_RINGS = [0, 0.07, 0.25, 0.55, 0.82, 1];
 const STALK_SIDES = 7;
 /** How deep a stalk's foot sits in the soil, meters. */
 const FOOT = -0.008;
-/** The share of mushrooms that never drop their caps: they stand slumped and grey to the end. */
+/** The share of mushrooms that never drop their caps. They stay slumped and grey down to vitality 0. */
 const STUBBORN = 0.35;
 
 export function buildMushrooms(p: Resolved<typeof mushroomParams>, ctx: BuildContext): Built {
@@ -68,11 +65,11 @@ export function buildMushrooms(p: Resolved<typeof mushroomParams>, ctx: BuildCon
 /** The widest a stalk is, as a share of its cap's radius (`FORM`'s stalk times its widest girth), for keeping caps clear of it. */
 const STALK_SHARE = 0.35;
 
-/** Where a mushroom's cap sits: the middle of its rim, and the way the cap faces. */
+/** The center of a mushroom's cap rim, and the cap's facing axis. */
 function capOf(m: Mushroom): { rim: V3; axis: V3 } {
   const lean = Math.tan(m.tilt);
   const up = m.height - m.crown;
-  // The stalk curves up toward its cap, so the cap faces the sky more than the stalk's lean.
+  // The stalk curves up toward its cap, so the cap tilts less than the stalk leans.
   return { rim: addScaled(addScaled(m.foot, [0, 1, 0], up), m.lean, up * lean), axis: normalize(add([0, 1, 0], scale(m.lean, lean * 0.35))) };
 }
 
@@ -83,7 +80,7 @@ function meets(a: Mushroom, b: Mushroom): boolean {
   const across = Math.hypot(ca[0] - cb[0], ca[2] - cb[2]);
   const overlap = ca[1] - 0.2 * a.crown < cb[1] + b.crown && cb[1] - 0.2 * b.crown < ca[1] + a.crown;
   if (overlap && across < (a.radius + b.radius) * 1.04) return true;
-  // b's stalk where a's cap stands, if a's cap is below b's.
+  // When a's cap is below b's, check b's stalk at the height of a's cap.
   if (ca[1] + a.crown > cb[1]) return false;
   const k = clamp((ca[1] - b.foot[1]) / Math.max(cb[1] - b.foot[1], 1e-3), 0, 1);
   const sx = b.foot[0] + (cb[0] - b.foot[0]) * k;
@@ -116,11 +113,11 @@ function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): 
       const a = r.next() * Math.PI * 2;
       const d = k === 0 ? 0 : (0.03 + 0.1 * Math.sqrt(r.next())) * (0.6 + tallest);
       const edge = d / (0.13 * (0.6 + tallest));
-      // Small caps of much a size, the outer ones leaning out and a little lower, so they crowd in tiers.
+      // Small caps of similar size. The outer ones lean out and sit a little lower, so the cluster forms tiers.
       spot(Math.cos(a) * d, Math.sin(a) * d, tallest * (1 - 0.25 * edge) * r.range(0.8, 1.05), k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)), k === 0 ? 0.04 : 0.2 + 0.25 * edge, r.range(0.55, 0.75));
     }
   } else {
-    // Little groups dotted about, each of one to three (slender caps two to four), keeping their distance.
+    // Small groups spaced apart, each of one to three mushrooms, or two to four with pointed caps.
     const groups = shape === "pointed" ? 6 + Math.floor(r.next() * 3) : 4 + Math.floor(r.next() * 3);
     const reach = 0.7 + 1.1 * tallest;
     const centers: [number, number][] = [];
@@ -141,10 +138,10 @@ function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): 
       }
     }
   }
-  // The tallest stands as tall as asked.
+  // Scale every mushroom so the tallest is `tallest`.
   const most = Math.max(...wants.map((m) => m.height));
   const sized = wants.map((m) => ({ ...m, height: (m.height * tallest) / most, radius: (m.radius * tallest) / most, crown: (m.crown * tallest) / most }));
-  // Young buttons at the feet of a few.
+  // Young buttons at the feet of the first third.
   for (const m of sized.slice(0, Math.ceil(sized.length / 3))) {
     const a = m.r.next() * Math.PI * 2;
     const d = m.radius * 1.4;
@@ -154,7 +151,7 @@ function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): 
   return settle(sized);
 }
 
-/** Stands the tallest first; each one after leans further out, stands lower or grows a smaller cap until its cap meets no other cap or stalk, or is left out. */
+/** Places the tallest first. Each later one leans further out, gets shorter or gets a smaller cap until its cap meets no other cap or stalk, or it is left out. */
 function settle(wants: readonly Mushroom[]): Mushroom[] {
   const placed: Mushroom[] = [];
   for (const want of [...wants].sort((a, b) => b.height - a.height)) {
@@ -174,9 +171,9 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   const { rim, axis: capAxis } = capOf(m);
   // The cap sits a little askew on its stalk.
   const axis = normalize(add(capAxis, [m.r.range(-0.1, 0.1), 0, m.r.range(-0.1, 0.1)]));
-  // At their natural size sixteen sides already read round from where a person stands.
+  // At real size, sixteen sides look round from a person's eye height.
   const sides = m.young ? 10 : 16;
-  // Failing, the cap slumps about a hinge under its rim on the far side, and drops beside the stalk.
+  // As vitality falls, the cap slumps about a hinge under its rim on the far side, then drops beside the stalk.
   const hinge = addScaled(rim, m.lean, -0.5 * radius);
   const fallTo = addScaled(m.foot, m.lean, radius * 0.9);
   const stubborn = m.r.next() < STUBBORN;
@@ -198,7 +195,7 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
     return addScaled(add(rim, out), axis, (eta + wave * Math.sin(a * waves + phase) * rho * rho * rho) * crown);
   };
   const radialAt = (a: number): V3 => add(scale(u, Math.cos(a)), scale(v, Math.sin(a)));
-  // Mottled: the cap's own shade wanders in soft blotches, darker toward its lip.
+  // Noise mottles the cap's shade in soft blotches.
   const mottle = (p: V3): number => tone + 0.14 * noise3(p[0] * (3 / radius), p[1] * (3 / radius), p[2] * (3 / radius), seed + 7);
   const hue = (p: V3): number => tint + 0.012 * noise3(p[0] * (2 / radius), p[1] * (2 / radius), p[2] * (2 / radius), seed + 11);
   const profile = PROFILES[shape];
@@ -214,7 +211,7 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   const apexAt = around(0, 1, 0);
   const apex = caps.vertex(apexAt, axis, capShade(0, apexAt), { ...capCh, tint: hue(apexAt) });
   const rows: number[] = [];
-  /** Where each of the cap's vertices stands, by profile row and side, so spots lie on its facets. */
+  /** Each cap vertex position by profile row and side, so spots can lie on the cap's facets. */
   const at: V3[][] = [Array.from({ length: sides }, () => apexAt)];
   for (let i = 1; i < profile.length; i++) {
     const [rho, eta] = profile[i] as readonly [number, number];
@@ -230,7 +227,7 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   }
   for (let j = 0; j < sides; j++) caps.triangle(apex, (rows[0] as number) + j, (rows[0] as number) + ((j + 1) % sides));
   for (let k = 0; k + 1 < rows.length; k++) band(caps, rows[k] as number, rows[k + 1] as number, sides);
-  // Spots in the palette's spot swatch, shaded as the cap beneath them: white on a fly agaric, the cap's own color elsewhere.
+  // Spots in the palette's spot swatch, shaded like the cap beneath them. `SPOTS` in palettes.ts makes them white on silver-birch caps and the cap color elsewhere.
   if (shape !== "pointed") {
     const count = 8 + Math.floor(m.r.next() * 6);
     for (let k = 0; k < count; k++) {
@@ -240,7 +237,7 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
       const [r0] = profile[i - 1] as readonly [number, number];
       const [r1] = profile[i] as readonly [number, number];
       const along = (rho - r0) / (r1 - r0);
-      // On the cap's own facets, between the four vertices round it, so no spot stands proud of the cap's outline.
+      // Each spot lies on a cap facet, placed from the four vertices round it, so no spot sticks out past the cap's outline.
       const turn = (a / (Math.PI * 2)) * sides;
       const j0 = Math.floor(turn) % sides;
       const j1 = (j0 + 1) % sides;
@@ -250,7 +247,7 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
         return add(scale(row[j0] as V3, 1 - f), scale(row[j1] as V3, f));
       };
       const onCap = add(scale(rowAt(i - 1), 1 - along), scale(rowAt(i), along));
-      // Lit and shaded exactly as the cap beneath, so only the swatch tells a spot from its cap.
+      // The spot uses the cap's interpolated normal, so only the swatch color tells a spot from its cap.
       const n = normalize(add(scale(normalOf(i - 1, a), 1 - along), scale(normalOf(i, a), along)));
       const center = addScaled(onCap, n, 0.004 * radius);
       const [su, sv] = basis(n);
@@ -265,8 +262,8 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
       for (let j = 0; j < 6; j++) spots.triangle(hub, hub + 1 + j, hub + 1 + ((j + 1) % 6));
     }
   }
-  // The gills beneath, ridged, rising from the lip to the stalk, in the stalk's pale flesh.
-  // A small cap still stands on a stalk thick enough to carry it.
+  // Ridged gills under the cap, rising from the lip to the stalk, in the stalk's swatch.
+  // The stalk's top radius is at least 0.028 of the mushroom's height, so a small cap's stalk looks thick enough to carry it.
   const stalkTop = Math.max(radius * form.stalk, 0.028 * m.height);
   const [lastR, lastE] = profile[profile.length - 1] as readonly [number, number];
   const gillCh = { ...capCh, wither: 0.85, glow: 0.12, tint: tint * 0.5 };
@@ -280,12 +277,12 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
     }
   }
   for (let k = 0; k + 1 < under.length; k++) band(flesh, under[k] as number, under[k + 1] as number, sides);
-  // The stalk: swollen at its foot, stained by the soil, bowed a little, up into the cap.
+  // The stalk: swollen at its foot, darkened by the soil, bowed a little, and running up into the cap.
   const stalkCh = { loss: stubborn ? 0 : clamp(capLoss * 0.5, 0.02, 0.3), droop: 0, wither: 0.7, glow: 0, pivot: m.foot, bough: m.foot, tint: tint * 0.4 };
   const into = addScaled(rim, axis, (lastE + 0.36) * crown);
   const side = normalize(cross([0, 1, 0], m.lean));
   const bow = m.r.range(-0.04, 0.04) * m.height;
-  // It leaves its foot leaning out and turns up under its cap: out quickly low down, straight up near the top.
+  // The stalk leaves its foot leaning out and turns up under its cap. It moves out quickly low down and runs straight up near the top.
   const rise: V3 = [0, into[1] - m.foot[1], 0];
   const reach: V3 = [into[0] - m.foot[0], 0, into[2] - m.foot[2]];
   const stalkRows: number[] = [];
@@ -303,7 +300,7 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
     }
   });
   for (let k = 0; k + 1 < stalkRows.length; k++) band(flesh, stalkRows[k + 1] as number, stalkRows[k] as number, STALK_SIDES);
-  // Most grown domed and flat caps leave a skirt hanging round the stalk under them, as fly agarics and parasols do.
+  // 75% of grown domed and flat mushrooms get a skirt round the stalk under the cap, like fly agarics and parasols.
   if (shape !== "pointed" && !m.young && m.r.next() < 0.75) {
     const t = 0.8;
     const c = add(add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))), scale(side, Math.sin(2 * Math.PI * t) * bow));
