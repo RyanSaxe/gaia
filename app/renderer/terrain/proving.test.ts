@@ -7,7 +7,7 @@ import { type BuildingSite, type Extent, TERRAIN, type Terrain, bakeTerrain, ext
 import { type Stood, areaVitality, groundVitality, missingFrom, sweep } from "@gaia/world";
 import { openedWorld, provingWorld } from "./code-world.ts";
 import { COMPOSED_FORMS, COMPOSING, FORMS, WATERS } from "./looks.ts";
-import { type Stand, type StandBuilding, groundSites, landmarkBase, needsBank, ownerVitality, standWorld, understoryVitality } from "./stand.ts";
+import { type Placed, type BuildingToPlace, groundSites, landmarkBase, needsBank, ownerVitality, placeWorld, understoryVitality } from "./place.ts";
 import { judged } from "virtual:proving-ground";
 
 const doc = provingWorld();
@@ -33,7 +33,7 @@ const clearOfEdges = (x: number, z: number): boolean => {
   return AROUND.every(([dx, dz]) => ownerOf(x + dx, z + dz) === owner);
 };
 /** The ground's vitality field as the page builds it: each sample's owner, weighted by each owner's vitality. */
-const own = ownershipOf(groundSites(code.stand), doc.world, doc.world.size + TERRAIN.skirt * 2);
+const own = ownershipOf(groundSites(code.layout), doc.world, doc.world.size + TERRAIN.skirt * 2);
 const tables = ownerVitality(doc.world, (path) => doc.world.patches.find((p) => p.path === path)?.vitality ?? 1);
 const groundField = vitalityOver(own, tables.ground);
 const waterField = vitalityOver(own, tables.area);
@@ -138,8 +138,8 @@ describe("the proving ground", () => {
 
   describe("stood as the page stands it", () => {
     let terrain: Terrain;
-    let stood: Stand;
-    let requests: StandBuilding[];
+    let placed: Placed;
+    let requests: BuildingToPlace[];
     // Baking and placing the 560 m world takes about 10 s in one Node thread, longer while other work shares the machine.
     beforeAll(() => {
       // The same buildings, landmarks and trail styles, with the same seeds.
@@ -152,20 +152,20 @@ describe("the proving ground", () => {
           const feature = built.slots.get("feature")?.output as Built | undefined;
           return { name: b.facts.name, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(feature), ...(needsBank(b.blueprint, buildingLib) ? { wheel: turningExtent(feature) } : {}) };
         });
-      stood = standWorld(terrain, {
+      placed = placeWorld(terrain, {
         buildings: requests,
         landmarks: code.landmarks.map((l) => ({
           tree: l.blueprint.slots.form?.use === "great-tree@1",
           base: landmarkBase(realize(l.blueprint, landmark, landmarkLib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })),
         })),
         trees: { bases: code.plants.trees.map(() => 0.5), crowns: code.plants.trees.map(() => 4) },
-        code: code.stand,
+        code: code.layout,
       });
     }, 120_000);
 
     it("stands each building whose wheel needs running water on its stream's bank, its wheel in the water and its floor dry", () => {
-      expect(stood.dry).toEqual([]);
-      const banked = requests.flatMap((b, i) => (b.wheel !== undefined ? [{ b, site: stood.sites[i] as BuildingSite }] : []));
+      expect(placed.dry).toEqual([]);
+      const banked = requests.flatMap((b, i) => (b.wheel !== undefined ? [{ b, site: placed.sites[i] as BuildingSite }] : []));
       expect(banked.length).toBeGreaterThan(2);
       for (const { b, site } of banked) {
         expect("wall" in site, b.name).toBe(true);
@@ -184,7 +184,7 @@ describe("the proving ground", () => {
     });
 
     it("crosses its streams on footbridges and stepping stones, and has cairns where ways meet, thriving and in ruin", () => {
-      const net = stood.network;
+      const net = placed.network;
       const place = (id: string): number => endVitality.get(id) ?? 1;
       const crossings = net.ways.flatMap((w, i) => w.crossings.map(() => ({ kind: w.style.crossing, vitality: wayVitalityAt(net, i, 0.5, place) })));
       for (const kind of ["footbridge", "stepping-stones"] as const) expect(crossings.some((c) => c.kind === kind), kind).toBe(true);
@@ -204,10 +204,10 @@ describe("the proving ground", () => {
     });
 
     it("stands every definition, file and entity the layout lays out, as a tree, a stone, a bush, flowers or one of the world's things, each on its own file's patch, however crowded its ground, and nothing else", () => {
-      expect(stood.symbols.length).toBe(doc.world.symbols.length + doc.world.plants.length);
-      const trees = new Map(stood.trees.map((t) => [t.symbol, t]));
+      expect(placed.symbols.length).toBe(doc.world.symbols.length + doc.world.plants.length);
+      const trees = new Map(placed.trees.map((t) => [t.symbol, t]));
       expect(trees.size).toBeGreaterThan(0);
-      stood.symbols.forEach((i, k) => {
+      placed.symbols.forEach((i, k) => {
         const s = doc.world.symbols[k] ?? doc.world.plants[k - doc.world.symbols.length]!;
         const id = "id" in s ? s.id : s.path;
         const raised = COMPOSED_FORMS[s.form] !== undefined;
@@ -219,14 +219,14 @@ describe("the proving ground", () => {
           expect(doc.world.things.some((t) => t.path === id), id).toBe(true);
           return;
         }
-        const p = tree ? trees.get(k)! : stood.placements[i]!;
+        const p = tree ? trees.get(k)! : placed.placements[i]!;
         if (s.file !== undefined) expect(placeAt(doc.world, p.x, p.z).file?.path, id).toBe(s.file);
       });
       // Every stone, bush or flowers represents code.
-      expect(stood.placements.length).toBe(stood.symbols.filter((i) => i >= 0).length);
+      expect(placed.placements.length).toBe(placed.symbols.filter((i) => i >= 0).length);
       // A file's or definition's building or landmark is on that file's patch, except a building whose wheel needs
       // running water, which is on its area's stream bank.
-      const sited = [...code.buildings.map((b, i) => ({ path: b.facts.path, at: stood.sites[i]! })), ...stood.landmarks.map((l) => ({ path: l.id, at: l.site }))];
+      const sited = [...code.buildings.map((b, i) => ({ path: b.facts.path, at: placed.sites[i]! })), ...placed.landmarks.map((l) => ({ path: l.id, at: l.site }))];
       const banked = new Set(requests.flatMap((b, i) => (b.wheel !== undefined ? [code.buildings[i]!.facts.path] : [])));
       for (const t of doc.world.things.filter((x) => x.file !== undefined && !banked.has(x.path))) {
         const at = sited.find((x) => x.path === t.path)?.at;
@@ -236,10 +236,10 @@ describe("the proving ground", () => {
     });
 
     it("shows each stone, bush and drift of flowers at the vitality of what it stands for", () => {
-      const shown = understoryVitality(stood, (k) => code.stand.symbols[k]!.vitality);
-      expect(shown.length).toBe(stood.placements.length);
-      stood.symbols.forEach((i, k) => {
-        if (i >= 0) expect(shown[i]).toBeCloseTo(code.stand.symbols[k]!.vitality, 5);
+      const shown = understoryVitality(placed, (k) => code.layout.symbols[k]!.vitality);
+      expect(shown.length).toBe(placed.placements.length);
+      placed.symbols.forEach((i, k) => {
+        if (i >= 0) expect(shown[i]).toBeCloseTo(code.layout.symbols[k]!.vitality, 5);
       });
     });
   });

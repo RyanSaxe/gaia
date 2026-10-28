@@ -1,6 +1,6 @@
 // Places the world's buildings, one for each entity, file or definition that
 // appears as a building, built from the blueprint Jev composed for it. The
-// bake thread finds the sites and levels the pads (`standWorld`), and each
+// bake thread finds the sites and levels the pads (`placeWorld`), and each
 // tile's buildings draw together as one batch (`createPlantBatch`), one call
 // per material. Their walls and features block the walk and clear the grass,
 // and each has a signboard at the end of its walk naming what it represents.
@@ -13,7 +13,7 @@ import { type BuildingSite, type Capsule, type Extent, extentOf, turningExtent }
 import type * as THREE from "three";
 import { type BuildAsk, made } from "./made.ts";
 import type { BuildingOf, Represented } from "./represent.ts";
-import { type StandBuilding, blockedBy, buildingClearings, needsBank, signOf, standOf } from "./stand.ts";
+import { type BuildingToPlace, blockedBy, buildingClearings, needsBank, signOf, readingSpotOf } from "./place.ts";
 
 export interface Building {
   readonly entity: BuildingOf;
@@ -54,7 +54,7 @@ export interface Spot {
 export interface Settlement {
   readonly buildings: readonly Building[];
   /** What the bake thread needs to site each building, in order. */
-  requests(): StandBuilding[];
+  requests(): BuildingToPlace[];
   /** Places each building on the site a bake found for it, in order. */
   seat(sites: readonly BuildingSite[]): void;
   /** Whether a wall or a feature lies within `margin` meters of (x, z). */
@@ -64,7 +64,7 @@ export interface Settlement {
   /** Where a building's signboard goes, facing anyone coming up its walk. */
   signOf(b: Building): Spot;
   /** Where a person stops to read the sign and look at the building. */
-  standOf(b: Building): { x: number; z: number };
+  readingSpotOf(b: Building): { x: number; z: number };
   /** The batches of the placed buildings, one per tile. */
   views(): PlantBatch[];
   /**
@@ -163,7 +163,7 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
     blocked: (x, z, margin) => buildings.some((b) => blockedBy(b, b.site, x, z, margin)),
     clearings: () => buildings.flatMap((b) => buildingClearings(b, b.site)),
     signOf: (b) => signOf(b.plan, b.site),
-    standOf: (b) => standOf(b.plan, b.site),
+    readingSpotOf: (b) => readingSpotOf(b.plan, b.site),
     views: () => [...batches.values()].map((t) => t.batch),
     stand(held, scene, tileOf) {
       const want = new Map<string, Building[]>();

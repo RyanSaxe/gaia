@@ -6,7 +6,7 @@
 // plan below, or into `--out DIR`. They are never committed. The lab, the app
 // and the tests generate them from this plan as they build
 // (tools/proving-ground.ts). The lab lays the world out with the real
-// `layoutWorld`, `standWorld` and bake (`?world=proving`), so it shows what
+// `layoutWorld`, `placeWorld` and bake (`?world=proving`), so it shows what
 // any codebase would get.
 //
 // The plan contains, by construction:

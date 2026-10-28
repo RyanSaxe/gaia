@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { openedWorld, provingWorld } from "./code-world.ts";
 import { plantAsk } from "./made.ts";
-import { AS_THING } from "./stand.ts";
+import { AS_THING } from "./place.ts";
 
 describe("one build for each blueprint", () => {
   const doc = provingWorld();
@@ -10,7 +10,7 @@ describe("one build for each blueprint", () => {
 
   it("stands each tree, bush, stone and flowers as its own blueprint's build: things answered alike share one, and no two blueprints do", () => {
     let small = 0;
-    code.stand.symbols.forEach((sym, k) => {
+    code.layout.symbols.forEach((sym, k) => {
       if (sym.rule === AS_THING) return;
       small++;
       const builds = code.plants[sym.rule as keyof typeof code.plants];

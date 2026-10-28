@@ -1,7 +1,7 @@
 // Places everything on a freshly baked world from plain data: each building's
 // site and leveled pad, the landmarks' sites, the trails leveled into the
 // ground, and the code's trees, stones, bushes and flowers clear of all of
-// these. It records how it leveled the lattice (`Stand.edits`), so a tile
+// these. It records how it leveled the lattice (`Placed.edits`), so a tile
 // baked alone is leveled the same. It uses no Three.js or DOM, because the
 // bake worker runs it, and the same terrain and request give the same result
 // on any thread.
@@ -11,7 +11,7 @@ import { areaVitality } from "@gaia/world";
 import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, groundSlope, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, waterDepthAt } from "@gaia/terrain";
 
 /** A building to site: its plan, what is beside it, the name its trails use, and its wheel if it needs a stream's bank. */
-export interface StandBuilding {
+export interface BuildingToPlace {
   readonly name: string;
   readonly plan: BuildingPlan;
   readonly beside: Extent | null;
@@ -29,34 +29,34 @@ export function needsBank(blueprint: Blueprint, lib: Library): boolean {
 }
 
 /** A landmark's ground radius in meters, and whether it is a great tree, whose crown other trees keep clear of. */
-export interface StandLandmark {
+export interface LandmarkToPlace {
   readonly base: number;
   readonly tree: boolean;
 }
 
 /** A building's or landmark's lot from the layout: the ground reserved for it, with its entity's path as `id`. */
-export interface StandLot extends Circle {
+export interface LayoutLot extends Circle {
   readonly id: string;
 }
 
 /** One file's patch: its center and radius. */
-export type StandPatch = Circle;
+export type LayoutPatch = Circle;
 
-/** The `rule` of a symbol that appears as a building or landmark, one of the world's things. `standWorld` skips these symbols. */
+/** The `rule` of a symbol that appears as a building or landmark, one of the world's things. `placeWorld` skips these symbols. */
 export const AS_THING = "thing";
 
 /** A definition, file or entity that appears as a tree or an understory blueprint, or, with `AS_THING`, as one of the world's things. */
-export interface StandSymbol {
+export interface LayoutSymbol {
   readonly x: number;
   readonly z: number;
   /** Its plant group and build index in that group (`OpenedWorld.plants`), or `AS_THING` for a building or landmark. */
   readonly rule: string;
   readonly variant: number;
-  /** Its footprint radius at scale 1 in meters, and its scale. `standWorld` sizes a tree's footprint from its crown instead. */
+  /** Its footprint radius at scale 1 in meters, and its scale. `placeWorld` sizes a tree's footprint from its crown instead. */
   readonly radius: number;
   readonly scale: number;
   readonly vitality: number;
-  /** Its file's patch, by index into `StandCode.patches`. It is never placed off that patch. */
+  /** Its file's patch, by index into `CodeLayout.patches`. It is never placed off that patch. */
   readonly patch?: number;
 }
 
@@ -65,35 +65,35 @@ export interface StandSymbol {
  * and landmark on its entity's lot, each definition on its file's patch as a
  * tree or understory, and the trails Jev chose between entities.
  */
-export interface StandCode {
+export interface CodeLayout {
   /** Each building's lot, in the order of `buildings`. */
-  readonly lots: readonly StandLot[];
+  readonly lots: readonly LayoutLot[];
   /** Each landmark that represents a thing: its index in `landmarks` and its lot. */
-  readonly landmarks: readonly { readonly landmark: number; readonly lot: StandLot }[];
+  readonly landmarks: readonly { readonly landmark: number; readonly lot: LayoutLot }[];
   /** Each entity that appears as neither a building nor a landmark, by path. Its trails end at its lot's center. */
-  readonly places?: readonly StandLot[];
-  readonly patches: readonly StandPatch[];
+  readonly places?: readonly LayoutLot[];
+  readonly patches: readonly LayoutPatch[];
   /**
    * The land's cells. `patch` is the cell's patch index, or -1 for a lot, and a definition goes only on its own patch's
    * cells. `area` indexes the world's areas, the directory the cell's ground belongs to.
    */
   readonly cells: readonly (LandSite & { readonly patch: number; readonly area: number })[];
-  readonly symbols: readonly StandSymbol[];
+  readonly symbols: readonly LayoutSymbol[];
   /** Trails between lots by id, each with the route Jev composed for it, most wanted first. */
   readonly trails: readonly { readonly from: string; readonly to: string; readonly want: number; readonly style: RouteSpec }[];
 }
 
-export interface StandRequest {
-  readonly buildings: readonly StandBuilding[];
-  /** Each landmark Jev composed, in the order `StandCode.landmarks` names them. */
-  readonly landmarks: readonly StandLandmark[];
+export interface PlaceRequest {
+  readonly buildings: readonly BuildingToPlace[];
+  /** Each landmark Jev composed, in the order `CodeLayout.landmarks` names them. */
+  readonly landmarks: readonly LandmarkToPlace[];
   /** Each tree build's trunk and crown radius, by variant. A tree copies its blueprint's single build. */
   readonly trees: { readonly bases: readonly number[]; readonly crowns: readonly number[] };
-  readonly code: StandCode;
+  readonly code: CodeLayout;
 }
 
-/** One tree's position and the build it copies. `index` is its position in `Stand.trees`. */
-export interface StandTree {
+/** One tree's position and the build it copies. `index` is its position in `Placed.trees`. */
+export interface PlacedTree {
   readonly index: number;
   readonly x: number;
   readonly y: number;
@@ -103,24 +103,24 @@ export interface StandTree {
   readonly yaw: number;
   /** The ground's slope under it, dy/dx and dy/dz, passed to its copy (`Placement.slope`). */
   readonly slope: readonly [number, number];
-  /** The symbol it represents, by index into `StandCode.symbols`. */
+  /** The symbol it represents, by index into `CodeLayout.symbols`. */
   readonly symbol: number;
 }
 
 /** A landmark placed on its site. `landmark` indexes the request's landmarks, and `id` is the place its trails name. */
-export interface StandingLandmark {
+export interface PlacedLandmark {
   readonly landmark: number;
   readonly id: string;
   readonly site: LandmarkSite;
 }
 
-export interface Stand {
+export interface Placed {
   /** Each building's site, in the request's order. */
   readonly sites: readonly BuildingSite[];
-  readonly landmarks: readonly StandingLandmark[];
+  readonly landmarks: readonly PlacedLandmark[];
   /** The paths: the ways of tread, the dependency trails that use them, the junctions, and each dropped trail with its reason. */
   readonly network: TrailNetwork;
-  readonly trees: readonly StandTree[];
+  readonly trees: readonly PlacedTree[];
   /** A placement for each symbol that appears as a stone, bush or flowers, and nothing else. */
   readonly placements: readonly Placement[];
   /** Each symbol's index in `placements`, or -1 for a tree or a world thing (`AS_THING`). */
@@ -202,7 +202,7 @@ export function landmarkFeet(built: Pick<Built, "parts">): { readonly x: number;
  * area's index. The ground then shows its file's vitality, or on a lot its
  * area's.
  */
-export function groundSites(code: Pick<StandCode, "cells" | "patches">): OwnedSite[] {
+export function groundSites(code: Pick<CodeLayout, "cells" | "patches">): OwnedSite[] {
   return code.cells.map((c) => ({ x: c.x, z: c.z, ...(c.reach === undefined ? {} : { reach: c.reach }), owner: c.patch >= 0 ? c.patch : code.patches.length + c.area }));
 }
 
@@ -232,13 +232,13 @@ export function ownerVitality(
 }
 
 /**
- * The vitality each placement shows, in the order of `Stand.placements`. It
+ * The vitality each placement shows, in the order of `Placed.placements`. It
  * is the vitality of the symbol it represents (`symbolVitality`, by index in
- * `StandCode.symbols`), so it follows a live change.
+ * `CodeLayout.symbols`), so it follows a live change.
  */
-export function understoryVitality(stand: Pick<Stand, "placements" | "symbols">, symbolVitality: (symbol: number) => number): Float32Array {
-  const shown = new Float32Array(stand.placements.length).fill(1);
-  stand.symbols.forEach((i, k) => {
+export function understoryVitality(placed: Pick<Placed, "placements" | "symbols">, symbolVitality: (symbol: number) => number): Float32Array {
+  const shown = new Float32Array(placed.placements.length).fill(1);
+  placed.symbols.forEach((i, k) => {
     if (i >= 0) shown[i] = symbolVitality(k);
   });
   return shown;
@@ -248,7 +248,7 @@ export function understoryVitality(stand: Pick<Stand, "placements" | "symbols">,
 const doorOf = (plan: BuildingPlan): number => plan.openings.find((o) => o.kind === "door")?.position[0] ?? 0;
 
 /** Where a person stops to read a building's sign and look at it. */
-export function standOf(plan: BuildingPlan, site: BuildingSite): { x: number; z: number } {
+export function readingSpotOf(plan: BuildingPlan, site: BuildingSite): { x: number; z: number } {
   const [x, z] = siteToWorld(site, doorOf(plan) + 0.5, plan.depth / 2 + 6.6);
   return { x, z };
 }
@@ -303,7 +303,7 @@ export function buildingClearings(b: { readonly plan: BuildingPlan; readonly bes
 const SHRINKS = [1, 0.75, 0.55] as const;
 
 /** How far trees keep from a landmark's center. A great tree's crown needs more room. */
-const treeClearance = (lm: StandLandmark): number => lm.base + (lm.tree ? 12 : 5);
+const treeClearance = (lm: LandmarkToPlace): number => lm.base + (lm.tree ? 12 : 5);
 
 /** How far in meters a trail end moved out of water keeps from it, and the farthest it moves to find such ground. */
 const DRY_END = { clearance: 1, reach: 40 } as const;
@@ -328,10 +328,10 @@ function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
  * Places each landmark on its lot and routes the trails Jev chose between
  * the sited buildings and the landmarks, leveled into the ground.
  */
-function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: readonly BuildingSite[]): { landmarks: StandingLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
+function settleCode(t: Terrain, req: PlaceRequest, code: CodeLayout, sites: readonly BuildingSite[]): { landmarks: PlacedLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
   const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite, id: code.lots[i]?.id ?? b.name }));
   const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: houseGround(b) }));
-  const landmarks: StandingLandmark[] = [];
+  const landmarks: PlacedLandmark[] = [];
   const ids: string[] = [];
   for (const { landmark, lot } of code.landmarks) {
     const lm = req.landmarks[landmark];
@@ -347,7 +347,7 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
   // foot or lot in water moves to the nearest dry ground, so no trail begins or ends in water.
   const end = (id: string, toward: { x: number; z: number } | null): TrailEnd | null => {
     const home = homes.find((b) => b.id === id);
-    if (home !== undefined) return { id, ...standOf(home.plan, home.site) };
+    if (home !== undefined) return { id, ...readingSpotOf(home.plan, home.site) };
     const k = ids.indexOf(id);
     const s = landmarks[k];
     if (s === undefined) {
@@ -393,7 +393,7 @@ function settleCode(t: Terrain, req: StandRequest, code: StandCode, sites: reado
 const TRUNK_GAP = 4.5;
 
 /** Places everything on a finished bake, leveling the lattice under the buildings and the trails first. */
-export function standWorld(t: Terrain, req: StandRequest): Stand {
+export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
   const took: Record<string, number> = {};
   let since = performance.now();
   const mark = (step: string): void => {
@@ -408,13 +408,13 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   // A building whose wheel needs running water goes on the bank of its own area's stream, so it is sited before the
   // others while the banks are free.
   const onBank = (i: number): boolean => {
-    const b = req.buildings[i] as StandBuilding;
+    const b = req.buildings[i] as BuildingToPlace;
     return b.wheel !== undefined && b.wheel !== null && b.beside !== null;
   };
   const all = [...req.buildings.keys()];
   const taken: BuildingSite[] = [];
   for (const i of [...all.filter(onBank), ...all.filter((i) => !onBank(i))]) {
-    const b = req.buildings[i] as StandBuilding;
+    const b = req.buildings[i] as BuildingToPlace;
     const lot = code.lots[i] ?? null;
     let site: BuildingSite = findSite(t, b.plan, taken, 30, b.beside, lot, pads);
     if (onBank(i)) {
@@ -431,11 +431,11 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   mark("ways");
 
   // Trees keep off the trails and their cairns, out of the buildings and out from under a landmark.
-  const clear: Occupied[] = [...trailDiscs(network, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as StandLandmark) }))];
+  const clear: Occupied[] = [...trailDiscs(network, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as LandmarkToPlace) }))];
   const blocked = (x: number, z: number): boolean => req.buildings.some((b, k) => blockedBy(b, sites[k] as BuildingSite, x, z, 6)) || clear.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius);
   const { bases, crowns } = req.trees;
   // Every tree represents a definition, file or entity, and is placed with the other symbols below.
-  const trees: StandTree[] = [];
+  const trees: PlacedTree[] = [];
   // No stone, bush or flowers goes in a building, on its walk, on a trail or under a landmark.
   const homes = req.buildings.flatMap((b, k) =>
     buildingClearings(b, sites[k] as BuildingSite).flatMap((c) => {
@@ -458,14 +458,14 @@ export function standWorld(t: Terrain, req: StandRequest): Stand {
   const standing: Placement[] = [];
   /** The crowns of the trees placed so far, which the first pass keeps every other symbol out from under. */
   const crowned: Occupied[] = [];
-  const crownOf = (sym: StandSymbol): number => Math.max(TRUNK_GAP / 2, (crowns[sym.variant] ?? 4) * 0.55);
-  const footprint = (sym: StandSymbol): number => (sym.rule === "trees" ? crownOf(sym) : sym.radius) * sym.scale;
+  const crownOf = (sym: LayoutSymbol): number => Math.max(TRUNK_GAP / 2, (crowns[sym.variant] ?? 4) * 0.55);
+  const footprint = (sym: LayoutSymbol): number => (sym.rule === "trees" ? crownOf(sym) : sym.radius) * sym.scale;
   const syms = code.symbols;
   const cells = code.cells;
   const symbols = syms.map(() => -1);
-  const order = syms.map((_, i) => i).sort((a, b) => footprint(syms[b] as StandSymbol) - footprint(syms[a] as StandSymbol) || a - b);
+  const order = syms.map((_, i) => i).sort((a, b) => footprint(syms[b] as LayoutSymbol) - footprint(syms[a] as LayoutSymbol) || a - b);
   for (const i of order) {
-    const sym = syms[i] as StandSymbol;
+    const sym = syms[i] as LayoutSymbol;
     if (sym.rule === AS_THING) continue;
     const tree = sym.rule === "trees";
     let at: [number, number, number] | null = null;

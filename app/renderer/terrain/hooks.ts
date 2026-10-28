@@ -79,7 +79,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     return tourStops({
       things: [
         ...world.settlement.buildings.map((b) => {
-          const front = world.settlement.standOf(b);
+          const front = world.settlement.readingSpotOf(b);
           const d = Math.hypot(front.x - b.site.x, front.z - b.site.z) || 1;
           return { as: "building" as const, kind: b.kindName, name: b.represented.id || b.represented.name, x: b.site.x, z: b.site.z, vitality: world.thingVitality.get(b.represented.id) ?? 1, reach: Math.hypot(b.plan.width, b.plan.depth) / 2, front: { x: (front.x - b.site.x) / d, z: (front.z - b.site.z) / d } };
         }),
@@ -707,7 +707,7 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       })),
     /** Every building: what it represents, where it is, and its current vitality. */
     buildings: () =>
-      world.settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.triangles, vitality: b.vitality, sign: world.settlement.signOf(b), stand: world.settlement.standOf(b) })),
+      world.settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.triangles, vitality: b.vitality, sign: world.settlement.signOf(b), readingSpot: world.settlement.readingSpotOf(b) })),
     /** Sets building `i`'s vitality, and its sign's. */
     vitality: (i: number, v: number) => {
       const b = world.settlement.buildings[i];

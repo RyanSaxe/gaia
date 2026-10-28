@@ -24,7 +24,7 @@ import { facts as provingFacts, judged as provingJudged } from "virtual:proving-
 import { COMPOSED_FORMS, COMPOSING, WATERS } from "./looks.ts";
 import { type BuildingOf, type Represented, representEntity, representFile } from "./represent.ts";
 import { composedName } from "./settlement.ts";
-import { AS_THING, type StandCode, type StandLot } from "./stand.ts";
+import { AS_THING, type CodeLayout, type LayoutLot } from "./place.ts";
 
 /** The wait screen a world opens behind. It shows opening progress and asks before spending past the limit. */
 export interface Veil {
@@ -45,12 +45,12 @@ export interface OpenedWorld {
   /** The terrain's regions: one per directory with land of its own. */
   readonly spec: WorldSpec;
   readonly files: ReadonlyMap<string, FileFacts>;
-  /** The entity, file or definition each building represents, with the building Jev composed, in the order `standWorld` sites them. */
+  /** The entity, file or definition each building represents, with the building Jev composed, in the order `placeWorld` sites them. */
   readonly buildings: readonly BuildingOf[];
-  /** What each landmark represents: the landmark Jev composed for it, its facts and its page, in the order `standWorld` sites them. */
+  /** What each landmark represents: the landmark Jev composed for it, its facts and its page, in the order `placeWorld` sites them. */
   readonly landmarks: readonly { readonly path: string; readonly blueprint: Blueprint; readonly facts: ThingFacts; readonly vitality: number; readonly represented: Represented }[];
   /**
-   * What each of `stand.symbols` represents, by index: the definitions in `world.symbols` order, then each file and
+   * What each of `layout.symbols` represents, by index: the definitions in `world.symbols` order, then each file and
    * entity that appears as flowers, a stone, a bush or a tree (`world.plants`).
    */
   readonly symbolOf: (i: number) => SymbolOf | undefined;
@@ -61,7 +61,7 @@ export interface OpenedWorld {
   /** Every distinct blueprint of the world's trees, stones, bushes and flowers, by the group that draws them. Each blueprint has one build, copied for every instance. */
   readonly plants: PlantBuilds;
   /** What the bake thread needs to place this world's things, including the trail styles. */
-  readonly stand: StandCode;
+  readonly layout: CodeLayout;
   /** What the understanding pass judged about a folder, a file or a definition, by its path or path#name. */
   readonly thing: (of: string) => JudgedThing | undefined;
   /** How the judging went, in words. */
@@ -268,7 +268,7 @@ function routeOf(trail: { readonly from: string; readonly to: string; readonly r
   return buildSlots(trail.route, link, COMPOSING.lib, { seed: 1, facts: {} }).get("route")?.output as RouteSpec;
 }
 
-/** What one of the stand's symbols represents: its page, its file, which an entity lacks, and its form. */
+/** What one of the layout's symbols represents: its page, its file, which an entity lacks, and its form. */
 export interface SymbolOf {
   readonly represented: Represented;
   readonly file?: string;
@@ -331,10 +331,10 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
   };
   const entities = new Map(facts.entities.map((e) => [e.path, e]));
   const files = new Map(facts.files.map((f) => [f.path, f]));
-  const lot = (t: CodeWorld["things"][number]): StandLot => ({ id: t.path, x: t.x, z: t.z, radius: t.lot * 0.6 });
+  const lot = (t: CodeWorld["things"][number]): LayoutLot => ({ id: t.path, x: t.x, z: t.z, radius: t.lot * 0.6 });
   const houses = world.things.filter((t) => t.as === "building");
   const rises = world.things.filter((t) => t.as === "landmark");
-  // What each of the stand's symbols represents: every definition, then each file and entity that appears as a plant, stone or flowers.
+  // What each of the layout's symbols represents: every definition, then each file and entity that appears as a plant, stone or flowers.
   const symbolOf = (i: number): SymbolOf | undefined => {
     const sym = world.symbols[i];
     if (sym !== undefined) {
@@ -345,7 +345,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     if (own === undefined) return undefined;
     return { represented: representPlant(own, files, entities), ...(own.file === undefined ? {} : { file: own.file }), form: own.form };
   };
-  // Every distinct blueprint of each group, in the order the stand's symbols first use it. Two things with the same blueprint share one entry.
+  // Every distinct blueprint of each group, in the order the layout's symbols first use it. Two things with the same blueprint share one entry.
   const plants: Record<PlantGroup, Blueprint[]> = { trees: [], rocks: [], shrubs: [], flowers: [], mushrooms: [] };
   const variantOf = (group: PlantGroup, blueprint: Blueprint): number => {
     const builds = plants[group];
@@ -354,7 +354,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
   };
   const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
   type Small = { readonly x: number; readonly z: number; readonly form: string; readonly as?: FormKind; readonly blueprint?: Blueprint; readonly lines: number; readonly importance?: number; readonly vitality: number; readonly file?: string };
-  const symbol = (s: Small, who: string): StandCode["symbols"][number] => {
+  const symbol = (s: Small, who: string): CodeLayout["symbols"][number] => {
     // A definition that appears as a building or landmark is one of the world's things and is placed with them.
     if (COMPOSED_FORMS[s.form] !== undefined) return { x: s.x, z: s.z, rule: AS_THING, variant: 0, radius: 0, scale: 0, vitality: s.vitality };
     // Every thing uses the blueprint Jev composed for it. One without a blueprint is an error, never a default form.
@@ -375,7 +375,7 @@ export function openedWorld({ facts, world, summary, judged }: WorldDocument): O
     symbolOf,
     sky,
     wild,
-    stand: {
+    layout: {
       lots: houses.map(lot),
       landmarks: rises.map((t, i) => ({ landmark: i, lot: lot(t) })),
       // An entity that appears as a plant, stone or flowers. Its trails end at its lot's center.

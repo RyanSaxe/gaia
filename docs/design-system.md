@@ -111,7 +111,7 @@ than across holes. Decline should stay legible from a distance.
 | [`terrain/looks.ts`](../app/renderer/terrain/looks.ts) | Available forms, importance ranges and water choices |
 | [`packages/kinds/src`](../packages/kinds/src) | Component roles and stages of composition |
 | [`packages/primitives/src`](../packages/primitives/src) | Geometry, closed parameters and palette selection |
-| [`terrain/stand.ts`](../app/renderer/terrain/stand.ts) | Placement in the world |
+| [`terrain/place.ts`](../app/renderer/terrain/place.ts) | Placement in the world |
 
 ## Wind, gravity and vitality
 

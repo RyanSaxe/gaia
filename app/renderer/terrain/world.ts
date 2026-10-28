@@ -53,7 +53,7 @@ import { type Signs, createSigns } from "./signs.ts";
 import { type Baked, createBaker } from "./baker.ts";
 import { type PageLand, createPageLand } from "./land.ts";
 import { type Standing, createStanding } from "./standing.ts";
-import { AS_THING, type Stand, type StandRequest, type StandingLandmark, landmarkBase, landmarkFeet, ownerVitality, understoryVitality } from "./stand.ts";
+import { AS_THING, type Placed, type PlaceRequest, type PlacedLandmark, landmarkBase, landmarkFeet, ownerVitality, understoryVitality } from "./place.ts";
 import { declineAround, groundVitalityAt, setGroundOwnership, showGroundVitality } from "./vitality.ts";
 import type { Drawn, Pass } from "./measure.ts";
 import { type Copies, FAR_SLOTS, type FarForms, type FarOf, type PassSize, createCopies, createFarForms } from "./woods.ts";
@@ -125,10 +125,10 @@ export interface Subject {
   readonly standsAs: string;
   /** For a tree, bush, stone or flowers, its build's name from its parts (`composedName`). Other things may share it. */
   readonly built?: string;
-  /** Its position. `stand` gives where a person stops to read its sign, which for a tree depends on where they come from. */
+  /** Its position. `readingSpot` gives where a person stops to read its sign, which for a tree depends on where they come from. */
   readonly x: number;
   readonly z: number;
-  readonly stand: (fromX: number, fromZ: number) => { x: number; z: number };
+  readonly readingSpot: (fromX: number, fromZ: number) => { x: number; z: number };
   /** Height in meters, for aiming at it and framing its painting. */
   readonly height: number;
   /** Radius in meters from its center, used for pointer hits and the rim light. */
@@ -345,10 +345,10 @@ export interface Landmark {
 
 /** The placed landmarks and the trail network between every place, from the last bake. */
 export interface Settled {
-  readonly sites: readonly StandingLandmark[];
+  readonly sites: readonly PlacedLandmark[];
   readonly network: TrailNetwork;
   /** Each way's edging stones, set by the bake on the whole land. */
-  readonly edging?: Stand["edging"];
+  readonly edging?: Placed["edging"];
 }
 
 /** A set of plants with far forms, and the stream that loads those forms into the cards' slots. */
@@ -636,7 +636,7 @@ export function createWorld(root: HTMLElement): World {
 
   // ---------- landmarks and trails ----------
   // Each landmark is placed on its lot, and trails join the buildings and
-  // landmarks Jev chose to connect. `standWorld` places them on the bake thread.
+  // landmarks Jev chose to connect. `placeWorld` places them on the bake thread.
   const landmarkLib = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
   /** Builds and measures a landmark. */
   const landmarkOf = (name: string, ask: BuildAsk): Landmark => {
@@ -686,7 +686,7 @@ export function createWorld(root: HTMLElement): World {
     entityOfPlace.clear();
     settlement.buildings.forEach((b, i) => {
       entityOfPlace.set(b.represented.name, b.represented.id);
-      const lot = code?.stand.lots[i];
+      const lot = code?.layout.lots[i];
       if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.id);
     });
     // An entity that appears as a plant, stone or flowers.
@@ -763,7 +763,7 @@ export function createWorld(root: HTMLElement): World {
   const landmarkPool = new Map<string, PlantView>();
   let built: Ways | null = null;
   /** Each placed landmark's key in the view pool: the landmark's key and its index among copies of that landmark. */
-  const poolKeys = (sites: readonly StandingLandmark[]): string[] => {
+  const poolKeys = (sites: readonly PlacedLandmark[]): string[] => {
     const seen = new Map<string, number>();
     return sites.map((s) => {
       const key = landmarks[s.landmark]?.key ?? String(s.landmark);
@@ -781,10 +781,10 @@ export function createWorld(root: HTMLElement): World {
     return view;
   };
   /** Creates the views `sites` needs that the pool lacks, one per `wait`, so placing them later builds nothing. */
-  async function poolLandmarks(sites: readonly StandingLandmark[], wait: () => Promise<void>): Promise<void> {
+  async function poolLandmarks(sites: readonly PlacedLandmark[], wait: () => Promise<void>): Promise<void> {
     for (const [k, key] of poolKeys(sites).entries()) {
       if (landmarkPool.has(key)) continue;
-      poolLandmark((sites[k] as StandingLandmark).landmark, key).object.visible = false;
+      poolLandmark((sites[k] as PlacedLandmark).landmark, key).object.visible = false;
       await wait();
     }
   }
@@ -837,7 +837,7 @@ export function createWorld(root: HTMLElement): World {
   }
   /** Each understory placement's shown vitality, which is that of the thing it represents. */
   function understoryShown(): Float32Array {
-    const own = (k: number): number => thingVitality.get(code?.symbolOf(k)?.represented.id ?? "") ?? code?.stand.symbols[k]?.vitality ?? 1;
+    const own = (k: number): number => thingVitality.get(code?.symbolOf(k)?.represented.id ?? "") ?? code?.layout.symbols[k]?.vitality ?? 1;
     return understoryVitality({ placements: understory.placements(), symbols: symbolPlacements }, own);
   }
   function showUnderstoryVitality(): void {
@@ -984,7 +984,7 @@ export function createWorld(root: HTMLElement): World {
   let forestOf: readonly number[] = [];
   /** The definition, file or entity a tree represents, which gives its file. */
   const treeSymbol = (t: { readonly symbol: number }) => {
-    const own = code?.stand.symbols.length ?? 0;
+    const own = code?.layout.symbols.length ?? 0;
     return code?.symbolOf(t.symbol < own ? t.symbol : (forestOf[t.symbol - own] ?? -1));
   };
   const treeFile = (t: { readonly symbol: number }): string | undefined => treeSymbol(t)?.file;
@@ -1133,10 +1133,10 @@ export function createWorld(root: HTMLElement): World {
   }
 
   /** The request the bake thread places the codebase's world from: plain data for its buildings, landmarks, trails and code things. */
-  const standRequest = (): StandRequest => {
+  const placeRequest = (): PlaceRequest => {
     if (code === null) throw new Error("No world to stand: a codebase's world opens first.");
     // A stone, bush or flowers keeps clear of the rest by its build's widest reach at the ground, which for a fallen log runs along its length.
-    const symbols = code.stand.symbols.map((s) => {
+    const symbols = code.layout.symbols.map((s) => {
       const outline = s.rule === "trees" || s.rule === AS_THING ? undefined : understory.footprint(s.rule, s.variant)?.outline;
       return outline === undefined ? s : { ...s, radius: Math.max(UNDERSTORY_LEAST, ...outline) };
     });
@@ -1146,7 +1146,7 @@ export function createWorld(root: HTMLElement): World {
       buildings: settlement.requests(),
       landmarks: landmarks.map((lm) => ({ base: lm.base, tree: lm.blueprint.slots.form?.use === "great-tree@1" })),
       trees: { bases: variants.map((v) => v.base), crowns: variants.map((v) => v.radius) },
-      code: { ...code.stand, symbols: [...symbols, ...forestOf.map((i) => symbols[i] as (typeof symbols)[number])] },
+      code: { ...code.layout, symbols: [...symbols, ...forestOf.map((i) => symbols[i] as (typeof symbols)[number])] },
     };
   };
   /** Each tile's trees by "ti,tj", which the trees' stander places. */
@@ -1159,7 +1159,7 @@ export function createWorld(root: HTMLElement): World {
     return `${Math.floor((x - frame.origin) / frame.spacing / TILE.size)},${Math.floor((z - frame.origin) / frame.spacing / TILE.size)}`;
   };
   /** Places exactly the trees in `held` as copies of their builds. Each build keeps its instances and only moves its copies. */
-  function standTrees(held: readonly Tree[]): void {
+  function placeTrees(held: readonly Tree[]): void {
     const copyOf = new Map<Tree, number>();
     treeViews = variants.flatMap((_, k) => {
       const mine = held.filter((t) => t.variant === k);
@@ -1181,10 +1181,10 @@ export function createWorld(root: HTMLElement): World {
     treeCopies = trees.map((t) => copyOf.get(t) ?? -1);
   }
   /** Places the bake's trees, the code things that appear as stones, bushes and flowers, and the walker's solids, at the positions the bake thread chose. */
-  function plant(stood: Stand): void {
+  function plant(placed: Placed): void {
     // The bake thread already kept trees off the trails, buildings and landmarks.
     // Each tree represents a definition, file or entity and takes its vitality.
-    trees = stood.trees.map((t) => {
+    trees = placed.trees.map((t) => {
       const sym = treeSymbol(t);
       if (sym === undefined) throw new Error(`Tree ${t.index} stands for nothing in the world's code.`);
       return { ...t, represented: sym.represented };
@@ -1199,9 +1199,9 @@ export function createWorld(root: HTMLElement): World {
     }
     largestTree = trees.reduce((r, t) => Math.max(r, (variants[t.variant] as TreeVariant).radius * t.scale), 0);
     treeCopies = trees.map(() => -1);
-    symbolPlacements = stood.symbols;
+    symbolPlacements = placed.symbols;
     // The stones, bushes and flowers are placed all at once, not by tile. The bake thread kept them out of buildings, off trails and from under landmarks.
-    understory.place(stood.placements);
+    understory.place(placed.placements);
     showUnderstoryVitality();
     buildSolids();
     // The trees, trails, buildings and landmarks are placed again tile by tile around the person (`standing`).
@@ -1277,7 +1277,7 @@ export function createWorld(root: HTMLElement): World {
     largest: () => largestTree,
     tile: (ti, tj) => treesByTile.get(`${ti},${tj}`) ?? [],
     stand(held) {
-      standTrees(held);
+      placeTrees(held);
       buildSolids();
     },
   });
@@ -1328,7 +1328,7 @@ export function createWorld(root: HTMLElement): World {
       standsAs: withArticle(b.kindName),
       x: b.site.x,
       z: b.site.z,
-      stand: () => settlement.standOf(b),
+      readingSpot: () => settlement.readingSpotOf(b),
       height: b.height,
       reach: Math.hypot(b.plan.width, b.plan.depth) / 2,
       stop: STOP_AT.great,
@@ -1349,7 +1349,7 @@ export function createWorld(root: HTMLElement): World {
             height: landmarkViews[i]?.height ?? 6,
             reach: lm.base + 1,
             stop: STOP_AT.great,
-            stand: (fx: number, fz: number) => {
+            readingSpot: (fx: number, fz: number) => {
               const d = Math.hypot(fx - x, fz - z) || 1;
               const off = lm.base + 7;
               return { x: x + ((fx - x) / d) * off, z: z + ((fz - z) / d) * off };
@@ -1370,7 +1370,7 @@ export function createWorld(root: HTMLElement): World {
         reach: crown,
         stop: STOP_AT.small,
         // Stop just outside the crown, so the person sees the tree rather than its leaves.
-        stand: (fx: number, fz: number) => {
+        readingSpot: (fx: number, fz: number) => {
           const d = Math.hypot(fx - x, fz - z) || 1;
           const off = Math.max(3, crown * 0.9 + 1.4);
           return { x: x + ((fx - x) / d) * off, z: z + ((fz - z) / d) * off };
@@ -1395,7 +1395,7 @@ export function createWorld(root: HTMLElement): World {
             height: (understory.footprint(p.rule, p.variant)?.top ?? 0.8) * p.scale,
             reach: p.radius + 0.3,
             stop: STOP_AT.small,
-            stand: (fx: number, fz: number) => {
+            readingSpot: (fx: number, fz: number) => {
               const d = Math.hypot(fx - x, fz - z) || 1;
               const off = p.radius + 2.2;
               return { x: x + ((fx - x) / d) * off, z: z + ((fz - z) / d) * off };
@@ -1405,7 +1405,7 @@ export function createWorld(root: HTMLElement): World {
     const symbolSubjects = symbolEntries.map(([, subject]) => subject);
     subjects = [...buildingSubjects, ...landmarkSubjects, ...treeSubjects, ...symbolSubjects];
     symbolAt = new Map(symbolEntries);
-    // Only a tree without a symbol gets a plaque facing the world's center, and `standWorld` gives every tree a symbol.
+    // Only a tree without a symbol gets a plaque facing the world's center, and `placeWorld` gives every tree a symbol.
     const plaqued = trees.flatMap((tree, i) => (tree.symbol === undefined ? [{ tree, subject: treeSubjects[i] as Subject }] : []));
     signSubjects = [...buildingSubjects, ...landmarkSubjects, ...plaqued.map((p) => p.subject)];
     signs.set([
@@ -1462,7 +1462,7 @@ export function createWorld(root: HTMLElement): World {
   let pending: Subject | null = null;
   /** Walks the person up to a thing and then shows what it represents. Within 2 m of the stopping spot, the person arrives at once. */
   function approach(s: Subject): void {
-    const spot = s.stand(walker.x, walker.z);
+    const spot = s.readingSpot(walker.x, walker.z);
     if (Math.hypot(spot.x - walker.x, spot.z - walker.z) < 2) {
       endWalk();
       arrive(s);
@@ -1497,7 +1497,7 @@ export function createWorld(root: HTMLElement): World {
       const dx = s.x - walker.x;
       const dz = s.z - walker.z;
       const far = Math.hypot(dx, dz);
-      const spot = s.stand(walker.x, walker.z);
+      const spot = s.readingSpot(walker.x, walker.z);
       if (far > Math.hypot(spot.x - s.x, spot.z - s.z) + STOP_AT.slack) continue;
       const dy = heightAt(terrain.lattice, s.x, s.z) + s.height * 0.4 - walker.eye;
       const cos = (dx * fx + dy * fy + dz * fz) / (Math.hypot(dx, dy, dz) || 1);
@@ -1997,7 +1997,7 @@ export function createWorld(root: HTMLElement): World {
    * frames until all of it is in place.
    */
   async function adopt(next: WorldSpec, baked: Baked): Promise<void> {
-    const { stand: stood, ownership } = baked;
+    const { placed, ownership } = baked;
     let since = performance.now();
     const mark = (step: string): void => {
       const now = performance.now();
@@ -2008,8 +2008,8 @@ export function createWorld(root: HTMLElement): World {
     holding++;
     try {
       // First make what the new world needs that was never made, one thing a frame, while the old world still shows.
-      await poolLandmarks(stood.landmarks, nextFrame);
-      await understory.prepare(stood.placements, nextFrame);
+      await poolLandmarks(placed.landmarks, nextFrame);
+      await understory.prepare(placed.placements, nextFrame);
       world = next;
       mark("pool");
       // Load the land around the person before anything is placed on it.
@@ -2018,9 +2018,9 @@ export function createWorld(root: HTMLElement): World {
       // Set the areas and files first, so the furnisher can look up the area and file of each thing it places.
       if (code !== null) places = code.world;
       clearings.fit(terrain);
-      settlement.seat(stood.sites);
-      ways = { sites: stood.landmarks, network: stood.network, edging: stood.edging };
-      allDecks = decksOf(stood.network.ways);
+      settlement.seat(placed.sites);
+      ways = { sites: placed.landmarks, network: placed.network, edging: placed.edging };
+      allDecks = decksOf(placed.network.ways);
       holdDecks();
       placeWays();
       furnished = furnisher?.(stoodWorld()) ?? UNFURNISHED;
@@ -2038,7 +2038,7 @@ export function createWorld(root: HTMLElement): World {
       wildGrowth.update(terrain);
       await nextFrame();
       mark("ground");
-      plant(stood);
+      plant(placed);
       await standing.ready(walker.x, walker.z);
       mark("plant");
       await nextFrame();
@@ -2082,14 +2082,14 @@ export function createWorld(root: HTMLElement): World {
     const mine = ++asked;
     const t0 = performance.now();
     reportStage("baking", { size: next.size });
-    const baked = await baker.bake(next, standRequest());
+    const baked = await baker.bake(next, placeRequest());
     if (mine !== asked) {
       // A newer world was requested, so end this bake's finishing thread, whose world nothing will use.
       baked.whole.terminate();
       return false;
     }
     bakeMs = performance.now() - t0;
-    openingSteps = { ...baked.stand.took };
+    openingSteps = { ...baked.placed.took };
     reportStage("baked", { size: next.size, bakeMs: Math.round(bakeMs) });
     await adopt(next, baked);
     reportStage("stood", { size: next.size, trees: trees.length });
@@ -2295,7 +2295,7 @@ export function createWorld(root: HTMLElement): World {
     // A spot on or beside a building lands where a person reads its sign, facing the building.
     const house = settlement.buildings.find((b) => Math.hypot(b.site.x - x, b.site.z - z) < Math.max(b.plan.width, b.plan.depth) * 0.5 + 4);
     if (house !== undefined) {
-      const at = settlement.standOf(house);
+      const at = settlement.readingSpotOf(house);
       if (waterDepthAt(terrain, at.x, at.z) <= LAND.wade && clearanceAt(solids, at.x, at.z) >= LAND.clear * 0.5) return { x: at.x, z: at.z, yaw: Math.atan2(-(house.site.x - at.x), -(house.site.z - at.z)) };
     }
     const asked = placeAt(places, x, z).area;
@@ -2367,7 +2367,7 @@ export function createWorld(root: HTMLElement): World {
   /** The far-place painting in progress, which the next one waits for. */
   let painting: Promise<void> = Promise.resolve();
   /** A painting's subject: its position, height, radius, and where to stand to see it. */
-  type Seen = Pick<Subject, "x" | "z" | "height" | "reach" | "stand">;
+  type Seen = Pick<Subject, "x" | "z" | "height" | "reach" | "readingSpot">;
   /**
    * What represents `id`: the thing itself, or for a file without a tree its
    * tallest definition, or for a file with nothing placed on it, such as a
@@ -2388,7 +2388,7 @@ export function createWorld(root: HTMLElement): World {
       z,
       height: PATCH_SEEN.height,
       reach,
-      stand: (fx, fz) => {
+      readingSpot: (fx, fz) => {
         const d = Math.hypot(fx - x, fz - z) || 1;
         return { x: x + ((fx - x) / d) * (reach + 3), z: z + ((fz - z) / d) * (reach + 3) };
       },
@@ -2408,8 +2408,8 @@ export function createWorld(root: HTMLElement): World {
    * must be clear too.
    */
   function viewpointOf(s: Seen, distance: number, eye: number, aim: number, half: number, wide: boolean): { x: number; z: number } {
-    const fixed = s.stand(s.x + 1, s.z);
-    const other = s.stand(s.x - 1, s.z);
+    const fixed = s.readingSpot(s.x + 1, s.z);
+    const other = s.readingSpot(s.x - 1, s.z);
     const sun = light.uSunDirection.value;
     // The frontispiece is always painted from the sunlit side, since a building's sign side may be in shadow.
     const signed = !wide && fixed.x === other.x && fixed.z === other.z;
