@@ -8,12 +8,11 @@
 //! request picks none. Every word, level, weight and pick is in
 //! `engine/vocab/understanding.toml`.
 
-use super::calls::{Call, Ctx, Question, Unit};
+use super::calls::{Call, Ctx, Question, Unit, vocab_version};
 use super::tokens::tokens;
 use crate::graph::model::{CodeGraph, DefNode, DirNode, FileNode, Node};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
-use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::OnceLock;
 
@@ -85,12 +84,7 @@ fn vocab() -> &'static Vocab {
 }
 
 fn version(code: u32) -> String {
-    let hash: String = Sha256::digest(VOCAB.as_bytes())
-        .iter()
-        .take(4)
-        .map(|b| format!("{b:02x}"))
-        .collect();
-    format!("{hash}-{code}")
+    vocab_version(VOCAB, code)
 }
 
 fn qualified(id: &str) -> &str {

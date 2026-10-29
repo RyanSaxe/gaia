@@ -1405,13 +1405,11 @@ export function createWorld(root: HTMLElement): World {
     const symbolSubjects = symbolEntries.map(([, subject]) => subject);
     subjects = [...buildingSubjects, ...landmarkSubjects, ...treeSubjects, ...symbolSubjects];
     symbolAt = new Map(symbolEntries);
-    // Only a tree without a symbol gets a plaque facing the world's center, and `placeWorld` gives every tree a symbol.
-    const plaqued = trees.flatMap((tree, i) => (tree.symbol === undefined ? [{ tree, subject: treeSubjects[i] as Subject }] : []));
-    signSubjects = [...buildingSubjects, ...landmarkSubjects, ...plaqued.map((p) => p.subject)];
+    signSubjects = [...buildingSubjects, ...landmarkSubjects];
     signs.set([
       ...settlement.buildings.map((b) => {
         const at = settlement.signOf(b);
-        return { ...at, y: heightAt(terrain.lattice, at.x, at.z), scale: 1, name: b.represented.name, note: b.represented.what, vitality: b.represented.vitality };
+        return { ...at, y: heightAt(terrain.lattice, at.x, at.z), name: b.represented.name, note: b.represented.what, vitality: b.represented.vitality };
       }),
       ...landmarkSubjects.map((l, i) => {
         const view = landmarkViews[i];
@@ -1420,15 +1418,7 @@ export function createWorld(root: HTMLElement): World {
         const r = (lm?.base ?? 2) + 3;
         const x = l.x + Math.sin(yaw) * r + Math.cos(yaw) * 1.6;
         const z = l.z + Math.cos(yaw) * r - Math.sin(yaw) * 1.6;
-        return { x, y: heightAt(terrain.lattice, x, z), z, yaw, scale: 1, name: l.represented.name, note: l.represented.what, vitality: l.represented.vitality };
-      }),
-      ...plaqued.map(({ tree }) => {
-        const { x, z } = tree;
-        const base = (variants[tree.variant] as TreeVariant).base * tree.scale;
-        const d = Math.hypot(x, z) || 1;
-        const px = x - (x / d) * (base + 0.75);
-        const pz = z - (z / d) * (base + 0.75);
-        return { x: px, y: heightAt(terrain.lattice, px, pz) - 0.05, z: pz, yaw: Math.atan2(-x, -z), scale: 0.42, name: tree.represented.name, note: "", vitality: tree.represented.vitality };
+        return { x, y: heightAt(terrain.lattice, x, z), z, yaw, name: l.represented.name, note: l.represented.what, vitality: l.represented.vitality };
       }),
     ]);
   }

@@ -62,11 +62,10 @@ export const FLUTTERS: ReadonlySet<string> = new Set(["leaf", "bloom", "eye"]);
 
 /**
  * Cuts that never turn on their own, only with their twig and bough. A fir's
- * needles and frond center are too stiff to flutter. A willow's strand is too
- * long to turn as one leaf, because its rows would turn by different angles
- * and pull apart.
+ * needles are too stiff to flutter. A willow's strand is too long to turn as
+ * one leaf, because its rows would turn by different angles and pull apart.
  */
-export const STIFF: ReadonlySet<number> = new Set([CUT.needles, CUT.core, CUT.strand]);
+export const STIFF: ReadonlySet<number> = new Set([CUT.needles, CUT.strand]);
 
 /** A seeded phase in radians from a joint's place, so neighboring boughs never swing in step. */
 export function jointPhase(x: number, y: number, z: number, seed: number): number {

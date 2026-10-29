@@ -1,5 +1,5 @@
 // Fits every name painted in the world to its board: a building's signboard,
-// a tree's plaque, a fingerpost's arm or a boundary stone. A name goes on one
+// a fingerpost's arm or a boundary stone. A name goes on one
 // line as large as the board allows, then breaks onto two lines where a
 // person would break it, then widens a board that can grow, and only then
 // shrinks its letters further, so no name is ever cut off.
