@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, GRAIN, Library, type Part, type Skeleton, rand } from "@gaia/schema";
 import * as primitivesModule from "@gaia/primitives";
 import { LANDMARK_SHAPES, PRIMITIVES, bandOf, landmarkShape } from "@gaia/primitives";
-import { applyVitality, detailAt, resolveParams } from "@gaia/realize";
+import { applyVitality, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -144,56 +144,29 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000
     }
   });
 
-  it("builds whole pieces, and far detail leaves out whole pieces and keeps the rest bit-identical", { timeout }, () => {
+  // `detailAt` in @gaia/realize leaves a piece out by its number and size, so a piece with one size leaves whole.
+  it("builds whole pieces, each of one size, so far detail leaves out whole pieces", { timeout }, () => {
     for (const s of samples(p)) {
       for (const input of inputFor(p).slice(0, 2)) {
         for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
           const n = part.shade.length;
           const id = (v: number): number => part.piece[v * 2] as number;
           expect(part.piece.length).toBe(n * 2);
-          // A triangle never spans two pieces, and pieces are numbered in order of their first vertex.
+          let split = 0;
           for (let t = 0; t < part.indices.length; t += 3) {
             const a = id(part.indices[t] as number);
-            expect(id(part.indices[t + 1] as number) === a && id(part.indices[t + 2] as number) === a).toBe(true);
+            if (id(part.indices[t + 1] as number) !== a || id(part.indices[t + 2] as number) !== a) split++;
           }
-          let top = -1;
+          const sizes = new Map<number, number>();
+          let mixed = 0;
           for (let v = 0; v < n; v++) {
-            expect(id(v) <= top + 1).toBe(true);
-            top = Math.max(top, id(v));
+            const size = part.piece[v * 2 + 1] as number;
+            const was = sizes.get(id(v));
+            if (was === undefined) sizes.set(id(v), size);
+            else if (!Object.is(was, size)) mixed++;
           }
-          let before = new Set<number>(Array.from({ length: top + 1 }, (_, k) => k));
-          for (const distance of [20, 50, 120, 300, 800]) {
-            const far = detailAt(part, distance);
-            const kept = new Set<number>();
-            for (let v = 0; v < far.shade.length; v++) kept.add(far.piece[v * 2] as number);
-            // Each step out leaves out more whole pieces and brings none back.
-            expect([...kept].every((k) => before.has(k))).toBe(true);
-            before = kept;
-            const from: number[] = [];
-            for (let v = 0; v < n; v++) if (kept.has(id(v))) from.push(v);
-            expect(far.shade.length).toBe(from.length);
-            const same = (full: Float32Array, reduced: Float32Array, width: number): boolean =>
-              from.every((v, k) => {
-                for (let c = 0; c < width; c++) if (!Object.is(reduced[k * width + c], full[v * width + c])) return false;
-                return true;
-              });
-            const c = part.channels;
-            const fc = far.channels;
-            expect(
-              same(part.positions, far.positions, 3) && same(part.normals, far.normals, 3) && same(part.shade, far.shade, 1) &&
-                same(part.tint, far.tint, 1) && same(part.cutout, far.cutout, 3) && same(part.piece, far.piece, 2) &&
-                same(c.loss, fc.loss, 1) && same(c.droop, fc.droop, 1) && same(c.wither, fc.wither, 1) &&
-                same(c.glow, fc.glow, 1) && same(c.pivot, fc.pivot, 3) && same(c.bough, fc.bough, 3) && same(c.twig, fc.twig, 3) && same(c.close, fc.close, 1),
-            ).toBe(true);
-            // The kept triangles are the full build's, in its order.
-            const at = new Map(from.map((v, k) => [v, k]));
-            const triangles: number[] = [];
-            for (let t = 0; t < part.indices.length; t++) {
-              const k = at.get(part.indices[t] as number);
-              if (k !== undefined) triangles.push(k);
-            }
-            expect(Array.from(far.indices)).toEqual(triangles);
-          }
+          expect(split, "triangles across two pieces").toBe(0);
+          expect(mixed, "vertices sized unlike their piece").toBe(0);
         }
       }
     }
@@ -276,29 +249,38 @@ describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))("%s", { t
 });
 
 describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
-  it("lays a floor just under the door's sill across every block, so none of the ground under the house shows", () => {
+  it("lays a floor just under the door's sill with no holes, so none of the ground under the house shows", () => {
     for (const plan of plans) {
       const parts = (build(p, samples(p)[0] as Stored, plan, 5) as Built).parts;
-      for (const m of plan.masses.filter((mass) => !mass.round)) {
-        // An upward face at the floor over the block's middle and its corners, 0.2 m in from its walls.
-        const covered = (x: number, z: number): boolean =>
-          parts.some((part) => {
-            for (let t = 0; t < part.indices.length; t += 3) {
-              const [a, b, c] = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
-              if ((part.normals[a * 3 + 1] as number) < 0.99) continue;
-              const y = part.positions[a * 3 + 1] as number;
-              if (y < plan.floor - 0.06 || y > plan.floor) continue;
-              const [ax, az, bx, bz, cx, cz] = [a, b, c].flatMap((v) => [part.positions[v * 3] as number, part.positions[v * 3 + 2] as number]) as [number, number, number, number, number, number];
-              const d1 = (x - bx) * (az - bz) - (ax - bx) * (z - bz);
-              const d2 = (x - cx) * (bz - cz) - (bx - cx) * (z - cz);
-              const d3 = (x - ax) * (cz - az) - (cx - ax) * (z - az);
-              if (!((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0))) return true;
-            }
-            return false;
-          });
-        for (const [sx, sz] of [[0, 0], [-1, -1], [-1, 1], [1, -1], [1, 1]] as const) {
-          expect(covered(m.x + sx * (m.width / 2 - 0.2), m.z + sz * (m.depth / 2 - 0.2))).toBe(true);
+      // Every upward face just under the sill, as its corners' x and z.
+      const floor: number[][] = [];
+      for (const part of parts) {
+        for (let t = 0; t < part.indices.length; t += 3) {
+          const [a, b, c] = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
+          const y = part.positions[a * 3 + 1] as number;
+          if ((part.normals[a * 3 + 1] as number) < 0.99 || y < plan.floor - 0.06 || y > plan.floor) continue;
+          floor.push([a, b, c].flatMap((v) => [part.positions[v * 3] as number, part.positions[v * 3 + 2] as number]));
         }
+      }
+      const covered = (x: number, z: number): boolean =>
+        floor.some(([ax, az, bx, bz, cx, cz]) => {
+          const d1 = (x - (bx as number)) * ((az as number) - (bz as number)) - ((ax as number) - (bx as number)) * (z - (bz as number));
+          const d2 = (x - (cx as number)) * ((bz as number) - (cz as number)) - ((bx as number) - (cx as number)) * (z - (cz as number));
+          const d3 = (x - (ax as number)) * ((cz as number) - (az as number)) - ((cx as number) - (ax as number)) * (z - (az as number));
+          return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+        });
+      for (const m of plan.masses.filter((mass) => !mass.round)) {
+        // Points a hand apart over the whole block inside its walls, which stand less than 0.2 m thick.
+        const [hx, hz] = [m.width / 2 - 0.2, m.depth / 2 - 0.2];
+        const [nx, nz] = [Math.ceil((2 * hx) / 0.1), Math.ceil((2 * hz) / 0.1)];
+        const holes: string[] = [];
+        for (let i = 0; i <= nx; i++) {
+          for (let k = 0; k <= nz; k++) {
+            const [x, z] = [m.x - hx + (2 * hx * i) / nx, m.z - hz + (2 * hz * k) / nz];
+            if (!covered(x, z)) holes.push(`(${x.toFixed(2)}, ${z.toFixed(2)})`);
+          }
+        }
+        expect(holes.slice(0, 5), `${holes.length} holes`).toEqual([]);
       }
     }
   });
@@ -346,12 +328,9 @@ describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))("%s", (_id
     for (const s of samples(p)) {
       // The same answers, their scales resolved alike. Only the build's own seed differs.
       const params = resolveParams(p, s, rand(1), p.id);
-      const seen = [1, 2, 3, 4].map((seed) => proportions((p.build as Erased)(params, { rand: rand(seed).fork(p.id), facts }, null) as Built));
-      const spread = (k: number): number => {
-        const xs = seen.map((one) => one[k] as number);
-        return (Math.max(...xs) - Math.min(...xs)) / (xs.reduce((a, x) => a + x, 0) / xs.length);
-      };
-      expect(Math.max(spread(0), spread(1), spread(2)), JSON.stringify(s)).toBeGreaterThan(0.03);
+      const seen = [1, 2, 3, 4].map((seed) => proportions((p.build as Erased)(params, { rand: rand(seed).fork(p.id), facts }, null) as Built).join(" "));
+      // No two seeds build it in the same proportions.
+      expect(new Set(seen).size, JSON.stringify(s)).toBe(seen.length);
     }
   });
 

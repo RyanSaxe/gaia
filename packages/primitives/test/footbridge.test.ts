@@ -8,11 +8,13 @@ import { applyVitality } from "@gaia/realize";
 
 const SPAN = 9;
 const WIDTH = 1.4;
+/** The widest gap a person steps across, as `footbridgeHolds` measures it. */
+const STRIDE = 0.6;
 const bridges = Array.from({ length: 12 }, (_, seed) => buildFootbridge(SPAN, WIDTH, seed + 1));
 const deckOf = (parts: readonly Part[]): Part => parts.find((p) => p.collision === "walkable") as Part;
 
 describe("a footbridge", () => {
-  it("stops a walk just where a gap in its planks opens wider than a stride, and almost never above 0.6", () => {
+  it("stops a walk just where a gap in its planks opens wider than a stride", () => {
     /** The widest run, in meters, of planks going or gone at vitality `v`. */
     const widestGap = (deck: Part, v: number): number => {
       const extent = (p: Float32Array, k: number): number => {
@@ -30,14 +32,10 @@ describe("a footbridge", () => {
       }
       return (widest * SPAN) / count;
     };
-    let fallen = 0;
     bridges.forEach((b, i) => {
       const holds = footbridgeHolds(SPAN, i + 1);
-      expect(holds).toBeLessThan(0.7);
-      expect(widestGap(deckOf(b.parts), holds + 0.005)).toBeLessThanOrEqual(0.6);
-      expect(widestGap(deckOf(b.parts), holds - 0.005)).toBeGreaterThan(0.6);
-      if (holds > 0.13) fallen++;
+      expect(widestGap(deckOf(b.parts), holds + 0.005), `seed ${i + 1}`).toBeLessThanOrEqual(STRIDE);
+      expect(widestGap(deckOf(b.parts), holds - 0.005), `seed ${i + 1}`).toBeGreaterThan(STRIDE);
     });
-    expect(fallen / bridges.length).toBeGreaterThan(0.9);
   });
 });

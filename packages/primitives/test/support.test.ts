@@ -1,6 +1,7 @@
 // Every landmark and building is built at `VITALITIES` and
 // `BUILDING_VITALITIES`, where no piece may stand on nothing and a falling
-// piece must come to rest. Every plant is built at `FLORA_VITALITIES` in still
+// piece must come to rest. Moss on every rock body moves with it at
+// `VITALITIES`, so it never hangs in the air. Every plant is built at `FLORA_VITALITIES` in still
 // air and a strong gust, where every leaf, flower and twig must stay on what it
 // grows on, and every plant and wildflower drift must keep its shape in the
 // gust. A new primitive in these roles is covered once it is in `PRIMITIVES`.
@@ -8,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, type Field, Library, type Part, rand } from "@gaia/schema";
 import { PRIMITIVES } from "@gaia/primitives";
-import { FLUTTERS, type WindState, applyVitality, gustAt, resolveParams, unsupportedAt } from "@gaia/realize";
+import { FLUTTERS, SUPPORT, type WindState, applyVitality, gustAt, resolveParams, unsupportedAt } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -78,6 +79,65 @@ describe("buildings", () => {
     }
     expect(BUILDING_VITALITIES.flatMap((v) => describeFloaters(parts, v, false))).toEqual([]);
   }, 20_000);
+});
+
+const distance = (a: Float32Array, i: number, b: Float32Array, j: number): number =>
+  Math.hypot((a[i * 3] as number) - (b[j * 3] as number), (a[i * 3 + 1] as number) - (b[j * 3 + 1] as number), (a[i * 3 + 2] as number) - (b[j * 3 + 2] as number));
+
+/**
+ * Each vertex of `skin` paired with the vertex of `host` it grows from: the
+ * nearest, as built, of those that turn about the same pivot and so move as it
+ * does. A vertex that moves unlike everything under it has no root.
+ */
+function rootsOf(skin: Part, host: readonly Part[]): ({ part: number; vertex: number } | undefined)[] {
+  const pivot = (q: Part, i: number): string => Array.from(q.channels.pivot.subarray(i * 3, i * 3 + 3)).join();
+  const turning = new Map<string, { part: number; vertex: number }[]>();
+  host.forEach((q, part) => {
+    for (let vertex = 0; vertex < q.shade.length; vertex++) {
+      const key = pivot(q, vertex);
+      const same = turning.get(key);
+      if (same === undefined) turning.set(key, [{ part, vertex }]);
+      else same.push({ part, vertex });
+    }
+  });
+  return Array.from({ length: skin.shade.length }, (_, i) => {
+    let best: { part: number; vertex: number } | undefined;
+    let nearest = Infinity;
+    for (const r of turning.get(pivot(skin, i)) ?? []) {
+      const d = distance(skin.positions, i, (host[r.part] as Part).positions, r.vertex);
+      if (d < nearest) [best, nearest] = [r, d];
+    }
+    return best;
+  });
+}
+
+describe.each(lib.forRole("Rock").map((p) => [p.id, p] as const))("%s", (_id, rock) => {
+  it.each(lib.forRole("Overgrowth").map((o) => [o.id, o] as const))("carries %s with it as it declines, so it never hangs in the air", (_o, overgrowth) => {
+    const pulled: string[] = [];
+    samples(rock).forEach((s, i) => {
+      const body = build(rock, s, null, 5 + i) as Built;
+      const host = body.parts as Part[];
+      samples(overgrowth).forEach((os, j) => {
+        for (const skin of (build(overgrowth, os, body, 9 + j) as Built).parts as Part[]) {
+          const roots = rootsOf(skin, host);
+          const rootless = roots.filter((r) => r === undefined).length;
+          if (rootless > 0) pulled.push(`sample ${i}, overgrowth ${j}: ${rootless} vertices move unlike anything under them`);
+          // As built, each vertex lies a little off its root. It may come closer as both decline, but no farther than surfaces that touch.
+          for (const v of VITALITIES) {
+            const grown = applyVitality(skin, v).positions;
+            const under = host.map((q) => applyVitality(q, v).positions);
+            let widest = 0;
+            roots.forEach((r, k) => {
+              if (r === undefined) return;
+              widest = Math.max(widest, distance(grown, k, under[r.part] as Float32Array, r.vertex) - distance(skin.positions, k, (host[r.part] as Part).positions, r.vertex));
+            });
+            if (widest > SUPPORT.glue) pulled.push(`sample ${i}, overgrowth ${j}: ${widest.toFixed(3)} m off what it grows on at vitality ${v}`);
+          }
+        }
+      });
+    });
+    expect(pulled).toEqual([]);
+  });
 });
 
 /**
