@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { type BuildingPlan, Library, blueprintOf, rand } from "@gaia/schema";
-import { BIOME_PRIMITIVES, PRIMITIVES, RELIEF_PRIMITIVES, ROCK_ARCH_FORMS, ROCK_ARCH_SHAPE, ROTUNDA_SHAPE, landmarkShape, rockArch, rotunda, standingStones } from "@gaia/primitives";
-import { structure } from "@gaia/kinds";
-import { buildSlots } from "@gaia/realize";
+import { type BuildingPlan, type Built, Library, type Part, blueprintOf, rand, seedOf } from "@gaia/schema";
+import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, LANDMARK_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
+import { landmark, structure } from "@gaia/kinds";
+import { realize } from "@gaia/realize";
+import { randomSlots } from "@gaia/world/testing";
 import {
+  BODY_BAND,
   BODY_RADIUS,
   type Deck,
+  type Floor,
   EYE_HEIGHT,
   type Stride,
   NO_SOLIDS,
@@ -22,6 +25,8 @@ import {
   groundHeightAt,
   landHalf,
   clearanceAt,
+  deckAt,
+  extentOf,
   footingAt,
   fordBeside,
   heightAt,
@@ -232,102 +237,199 @@ describe("solids", () => {
   });
 });
 
-describe("solid pieces of a built thing", () => {
-  const ring = (lintels: boolean, centre: "nothing" | "a tall king stone") =>
-    standingStones.build({ arrangement: "ring", count: 9, height: 5.2, lintels, centre, facets: 0.55 }, { rand: rand(5), facts: {} }, null);
-  const at = { x: dry.x - 12, y: heightAt(t.lattice, dry.x - 12, dry.z - 32), z: dry.z - 32, yaw: 0.4 };
-
-  it("stops a walker at each standing stone, never at a lintel overhead, and leaves a ring's open middle free", () => {
-    const open = piecesShapes(ring(true, "nothing").parts, at);
-    expect(open.length).toBe(piecesShapes(ring(false, "nothing").parts, at).length);
-    expect(open.length).toBeGreaterThanOrEqual(9);
-    const solids = solidsOf(open);
-    expect(clearanceAt(solids, at.x, at.z)).toBeGreaterThan(BODY_RADIUS);
-    // A tap from outside the ring walks between the stones to its center.
-    const walk = tapWalk(solids, { x: at.x + 16, z: at.z + 3 }, { x: at.x, z: at.z });
-    for (const p of walk.path) expect(clearanceAt(solids, p.x, p.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
-    expect(walk.state).toBe("arrived");
-    // A king stone at the center blocks it.
-    expect(clearanceAt(solidsOf(piecesShapes(ring(true, "a tall king stone").parts, at)), at.x, at.z)).toBeLessThan(0);
-  });
-
-  it("lets a walker pass under a rock arch along the way through it, between the feet that stop it", () => {
-    for (const form of ["a doorway", "a gate", "a great span"] as const) {
-      const answers = { form, thickness: 1.35, stone: 1 } as const;
-      const arch = rockArch.build(answers, { rand: rand(5), facts: {} }, null);
-      const solids = solidsOf(piecesShapes(arch.parts, at));
-      // The way runs along the arch's own z, which the world turns toward its trail, (sin yaw, cos yaw) in world space.
-      const [wx, wz] = [Math.sin(at.yaw), Math.cos(at.yaw)];
-      const walk = tapWalk(solids, { x: at.x - wx * 16, z: at.z - wz * 16 }, { x: at.x + wx * 16, z: at.z + wz * 16 });
-      expect(walk.state, form).toBe("arrived");
-      // The walk goes straight through under the span, never around a foot.
-      for (const q of walk.path) expect(Math.abs((q.x - at.x) * wz - (q.z - at.z) * wx), form).toBeLessThan(1);
-      // Each foot, on either side of the opening, stops a walker.
-      const foot = landmarkShape(ROCK_ARCH_SHAPE, answers, { rand: rand(5), facts: {} }).half + ROCK_ARCH_FORMS[form].ring * 1.35 * 0.6;
-      for (const side of [-1, 1]) expect(clearanceAt(solids, at.x + side * wz * foot, at.z - side * wx * foot), form).toBeLessThan(0);
+describe("every opening is walkable", () => {
+  /** The room a spot needs to count as open: a body, and the clearance a planned walk keeps from what stops it. */
+  const ROOM = BODY_RADIUS + WALK_TO.clearance;
+  /** The tallest rise a person climbs in one stride, as up a flight of steps, in meters. */
+  const STEP = 0.4;
+  /** Meters between the spots checked for room to stand. */
+  const CELL = 0.25;
+  /** The sample world's land made level, so a built thing's base is the ground all around it. */
+  const flat: Terrain = { ...t, lattice: { ...t.lattice, heights: t.lattice.heights.slice().fill(heightAt(t.lattice, dry.x, dry.z)) } };
+  /**
+   * Walks with the keys along `way`, a line of points close together, always heading for the point a little ahead,
+   * until the body stands on its end or is wedged. Returns each frame's place.
+   */
+  const keysAlong = (solids: Solids, way: readonly Walker[]): Walker[] => {
+    const path = [way[0]!];
+    const end = way[way.length - 1]!;
+    for (let i = 0, k = 0; i < 60 * 60; i++) {
+      const at = path[path.length - 1]!;
+      if (Math.hypot(end.x - at.x, end.z - at.z) <= BODY_RADIUS) break;
+      while (k < way.length - 1 && Math.hypot(way[k]!.x - at.x, way[k]!.z - at.z) < WALK_TO.lookAhead) k++;
+      const next = walkStep(flat, solids, at, { dx: way[k]!.x - at.x, dz: way[k]!.z - at.z, speed: WALK_TO.pace }, dt);
+      if (Math.hypot(next.x - at.x, next.z - at.z) < WALK_TO.stall * WALK_TO.pace * dt) break;
+      path.push(next);
     }
-  });
+    return path;
+  };
 
-  it("carries a walker up a rotunda's steps to stand among its columns, which stop it", () => {
-    const answers = { columns: "eight", roof: "a high dome", steps: 5 } as const;
-    const temple = rotunda.build(answers, { rand: rand(5), facts: {} }, null);
-    // The ring radius its seed set, and how far its top step reaches past it.
-    const { ring, margin } = landmarkShape(ROTUNDA_SHAPE, answers, { rand: rand(5), facts: {} });
-    const floor = floorOf(temple.parts, at);
-    if (floor === null) throw new Error("A rotunda has a floor.");
-    const solids = solidsOf(piecesShapes(temple.parts, at));
-    // In from 16 m in front, along the rotunda's own z, through the gap between two columns that faces the way in.
-    const [wx, wz] = [Math.sin(at.yaw), Math.cos(at.yaw)];
-    const walk = tapWalk(solids, { x: at.x + wx * 16, z: at.z + wz * 16 }, { x: at.x, z: at.z });
-    expect(walk.state).toBe("arrived");
-    for (const q of walk.path) expect(clearanceAt(solids, q.x, q.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
-    // The walk ends on the floor inside, five steps up, and climbs no more than a step at a time on the way.
-    const middle = footingAt(t, [floor], at.x, at.z);
-    expect(middle.deck).toBe(true);
-    expect(middle.ground).toBeCloseTo(at.y + 5 * 0.34, 2);
-    let last = -Infinity;
-    for (let d = 14; d >= 0; d -= 0.1) {
-      const here = footingAt(t, [floor], at.x + wx * d, at.z + wz * d);
-      if (here.deck && last > -Infinity) expect(here.ground - last).toBeLessThan(0.36);
-      if (here.deck) last = here.ground;
+  /**
+   * Points a fifth of a meter apart or closer, as x, z pairs in a built thing's own frame, on everything a person
+   * would bump into there within their height above the ground or floor beneath: each face shown at full vitality,
+   * except the walkable ones a person stands on.
+   */
+  function inTheWay(parts: readonly Part[], floor: Floor | null): number[] {
+    const out: number[] = [];
+    for (const part of parts) {
+      if (part.collision === "walkable") continue;
+      const p = part.positions;
+      for (let k = 0; k < part.indices.length; k += 3) {
+        const vs = [part.indices[k]!, part.indices[k + 1]!, part.indices[k + 2]!] as const;
+        // A piece that grows in only as the thing declines, such as fallen stone, is not there at full vitality.
+        if (vs.some((v) => (part.channels.grow?.[v] ?? 0) > 0)) continue;
+        const corner = (v: number): readonly [number, number, number] => [p[v * 3]!, p[v * 3 + 1]!, p[v * 3 + 2]!];
+        const [a, b, c] = [corner(vs[0]), corner(vs[1]), corner(vs[2])];
+        const under = floor === null ? 0 : Math.max(0, deckAt([floor], (a[0] + b[0] + c[0]) / 3, (a[2] + b[2] + c[2]) / 3));
+        const n = Math.max(1, Math.ceil(Math.max(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]), Math.hypot(b[0] - c[0], b[1] - c[1], b[2] - c[2]), Math.hypot(c[0] - a[0], c[1] - a[1], c[2] - a[2])) / 0.2));
+        for (let i = 0; i <= n; i++) {
+          for (let j = 0; i + j <= n; j++) {
+            const [u, v, w] = [i / n, j / n, 1 - (i + j) / n];
+            const y = a[1] * u + b[1] * v + c[1] * w;
+            if (y >= under + BODY_BAND.from && y <= under + BODY_BAND.to) out.push(a[0] * u + b[0] * v + c[0] * w, a[2] * u + b[2] * v + c[2] * w);
+          }
+        }
+      }
     }
-    // Inside the top step, the paving's joints never drop a walk to the ground below it.
-    for (let d = ring + margin - 0.3; d >= 0; d -= 0.05) expect(footingAt(t, [floor], at.x + wx * d, at.z + wz * d).deck, `${d.toFixed(2)} m in`).toBe(true);
-    // A column in the ring stops a walker.
-    const a = Math.PI / 2 + Math.PI / 8;
-    const [lx, lz] = [Math.cos(a) * ring, Math.sin(a) * ring];
-    expect(clearanceAt(solids, at.x + lx * Math.cos(at.yaw) + lz * wx, at.z - lx * Math.sin(at.yaw) + lz * wz)).toBeLessThan(0);
-  });
-});
+    return out;
+  }
 
-describe("a building's walls", () => {
-  it("lets a walker into the open corner of an L-shaped building, and never through a wall", () => {
-    const house = blueprintOf("structure", {
-      footprint: {
-        use: "cottage-plan@1",
-        params: { massing: "an L", shape: "snug", size: "modest", storeys: "two storeys", heights: "stepped", roof: "gabled", roofline: "tall and steep", attachments: [], windows: "several", base: "raised up steps", character: "gently settled" },
-      },
-      body: { use: "timber-frame@1", params: { framing: "posts and rails", plaster: "hand-laid" } },
-      roof: { use: "tiles@1", params: { covering: "pantiles", overhang: "sheltering", chimney: "gable" } },
-      openings: { use: "casements@1", params: { panes: "four panes", shutters: false, door: "plank" } },
-      palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
+  /**
+   * The openings of a built thing, in its own frame: every spot inside its outline on the ground where a body has
+   * room to stand clear of all it shows, a meter apart, each with the shortest way in to it from the open land around
+   * the thing over such spots.
+   */
+  function openingsOf(points: readonly number[]): Walker[][] {
+    let reach = 0;
+    const near = new Map<string, number[]>();
+    for (let k = 0; k < points.length; k += 2) {
+      const [x, z] = [points[k]!, points[k + 1]!];
+      reach = Math.max(reach, Math.hypot(x, z));
+      const key = `${Math.floor(x)},${Math.floor(z)}`;
+      const list = near.get(key);
+      if (list === undefined) near.set(key, [x, z]);
+      else list.push(x, z);
+    }
+    const roomAt = (x: number, z: number): boolean => {
+      for (let i = Math.floor(x - ROOM); i <= Math.floor(x + ROOM); i++) {
+        for (let j = Math.floor(z - ROOM); j <= Math.floor(z + ROOM); j++) {
+          const list = near.get(`${i},${j}`) ?? [];
+          for (let k = 0; k < list.length; k += 2) if (Math.hypot(list[k]! - x, list[k + 1]! - z) < ROOM) return false;
+        }
+      }
+      return true;
+    };
+    const outline = solidsOf([{ points }]);
+    const side = Math.ceil((reach + 3) / CELL);
+    const n = side * 2 + 1;
+    const at = (i: number): Walker => ({ x: ((i % n) - side) * CELL, z: (Math.floor(i / n) - side) * CELL });
+    // Out from the open land around the thing, one spot with room after another.
+    const from = new Int32Array(n * n).fill(-2);
+    const queue: number[] = [];
+    for (let i = 0; i < n * n; i++) {
+      const [u, v] = [i % n, Math.floor(i / n)];
+      if (u === 0 || v === 0 || u === n - 1 || v === n - 1) {
+        from[i] = -1;
+        queue.push(i);
+      }
+    }
+    for (let head = 0; head < queue.length; head++) {
+      const i = queue[head]!;
+      const [u, v] = [i % n, Math.floor(i / n)];
+      for (const [du, dv] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const [nu, nv] = [u + du, v + dv];
+        const k = nv * n + nu;
+        if (nu < 0 || nv < 0 || nu >= n || nv >= n || from[k] !== -2) continue;
+        const spot = at(k);
+        if (!roomAt(spot.x, spot.z)) continue;
+        from[k] = i;
+        queue.push(k);
+      }
+    }
+    const step = Math.round(1 / CELL);
+    const ways: Walker[][] = [];
+    from.forEach((f, i) => {
+      if (f === -2 || (i % n) % step !== 0 || Math.floor(i / n) % step !== 0 || clearanceAt(outline, at(i).x, at(i).z) >= 0) return;
+      const way: Walker[] = [];
+      for (let k = i; k >= 0; k = from[k]!) way.unshift(at(k));
+      ways.push(way);
     });
-    const plan = buildSlots(house, structure, new Library(PRIMITIVES), { seed: 1, facts: { size: 1, floors: 1, reach: 0 } }).get("footprint")?.output as BuildingPlan;
-    const site = { x: dry.x - 40, z: dry.z, yaw: 0.3, level: 0 };
-    const solids = solidsOf(wallsShape(plan, site));
-    // Every mass is solid at its center.
-    for (const m of plan.masses) {
-      const [x, z] = siteToWorld(site, m.x, m.z);
-      expect(clearanceAt(solids, x, z)).toBeLessThan(0);
+    return ways;
+  }
+
+  // Builds a landmark for every option of every field of every landmark primitive, and twenty-four buildings drawn from
+  // everything Jev can compose, then walks to each of about 1,500 openings and every door. It takes a few seconds
+  // alone, more when other work shares the machine.
+  it("lets a person walk into every landmark's openings, up its steps and under its spans, and reach every building's door from outside", { timeout: 120_000 }, () => {
+    const landmarks = new Library([...LANDMARK_PRIMITIVES, ...FLORA_PRIMITIVES]);
+    const draws = rand(seedOf("every opening"));
+    const centre = { x: dry.x - 12, z: dry.z - 32 };
+    let openings = 0;
+    let raised = 0;
+    for (const form of LANDMARK_PRIMITIVES) {
+      const fields = Object.entries(form.params);
+      const count = Math.max(2, ...fields.map(([, f]) => (f.type === "choice" ? Object.keys(f.options).length : f.type === "scale" ? f.levels.length : 2)));
+      for (let k = 0; k < count; k++) {
+        // Each option of each field in turn, and each level of each scale.
+        const params: Record<string, string | boolean> = {};
+        fields.forEach(([name, f], i) => {
+          if (f.type === "choice") params[name] = Object.keys(f.options)[k % Object.keys(f.options).length]!;
+          else if (f.type === "scale") params[name] = f.levels[(k + i) % f.levels.length]!.words;
+          else if (f.type === "flag") params[name] = (k + i) % 2 === 0;
+        });
+        const blueprint = blueprintOf(landmark.id, { ...randomSlots(landmark, landmarks, () => draws.next()), form: { use: form.id, params } });
+        const built = realize(blueprint, landmark, landmarks, { seed: seedOf(`every opening ${form.id} ${k}`), facts: { scale: 0.85 + 0.4 * draws.next() } });
+        const name = `${form.id} ${JSON.stringify(params)}`;
+        const at = { ...centre, y: heightAt(flat.lattice, centre.x, centre.z), yaw: k * 1.3 };
+        const [c, s] = [Math.cos(at.yaw), Math.sin(at.yaw)];
+        const world = (p: Walker): Walker => ({ x: at.x + p.x * c + p.z * s, z: at.z - p.x * s + p.z * c });
+        const solids = solidsOf(piecesShapes(built.parts, at));
+        const floor = floorOf(built.parts, at);
+        const own = floorOf(built.parts, { x: 0, y: 0, z: 0, yaw: 0 });
+        for (const way of openingsOf(inTheWay(built.parts, own))) {
+          openings++;
+          const spot = way[way.length - 1]!;
+          const where = `${name} at ${spot.x}, ${spot.z}`;
+          // Walked in with the keys from outside, along the way its open ground leaves.
+          const path = keysAlong(solids, way.map(world));
+          const end = path[path.length - 1]!;
+          expect(Math.hypot(end.x - world(spot).x, end.z - world(spot).z), where).toBeLessThanOrEqual(BODY_RADIUS);
+          if (floor === null) continue;
+          // Up steps a stride at a time, never dropping through the floor, to stand on it where it is raised.
+          const ground = path.map((q) => footingAt(flat, [floor], q.x, q.z).ground);
+          for (let i = 1; i < ground.length; i++) expect(Math.abs(ground[i]! - ground[i - 1]!), where).toBeLessThan(STEP);
+          if (own === null || deckAt([own], spot.x, spot.z) <= 0.05) continue;
+          raised++;
+          expect(footingAt(flat, [floor], end.x, end.z).deck, where).toBe(true);
+        }
+      }
     }
-    // Some corner of the whole footprint lies outside every mass: the L's open corner, where a body fits.
-    const inset = BODY_RADIUS + 0.3;
-    const corners = [-1, 1].flatMap((sx) => [-1, 1].map((sz) => [sx * (plan.width / 2 - inset), sz * (plan.depth / 2 - inset)] as const));
-    const open = corners.filter(([lx, lz]) => plan.masses.every((m) => Math.abs(lx - m.x) > m.width / 2 || Math.abs(lz - m.z) > m.depth / 2));
-    expect(open.length).toBeGreaterThan(0);
-    for (const [lx, lz] of open) {
-      const [x, z] = siteToWorld(site, lx, lz);
-      expect(clearanceAt(solids, x, z)).toBeGreaterThan(BODY_RADIUS);
+    expect(openings).toBeGreaterThan(0);
+    expect(raised).toBeGreaterThan(0);
+
+    const buildings = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
+    for (let i = 0; i < 24; i++) {
+      const blueprint = blueprintOf(structure.id, randomSlots(structure, buildings, () => draws.next()));
+      const built = realize(blueprint, structure, buildings, { seed: seedOf(`every door ${i}`), facts: { size: 1, floors: 1 } });
+      const plan = built.slots.get("footprint")?.output as BuildingPlan;
+      const name = JSON.stringify(blueprint.slots);
+      const site = { x: dry.x - 40, z: dry.z, yaw: i * 0.9, level: heightAt(t.lattice, dry.x - 40, dry.z) };
+      // What stops a walker, as the world builds it: the walls and what stands beside them, such as a mill wheel.
+      const e = extentOf(built.slots.get("feature")?.output as Built | undefined);
+      const beside: SolidShape[] = e === null ? [] : [{ points: [[e.x0, e.z0], [e.x1, e.z0], [e.x1, e.z1], [e.x0, e.z1]].flatMap(([lx, lz]) => siteToWorld(site, lx!, lz!)) }];
+      const solids = solidsOf([...wallsShape(plan, site), ...beside]);
+      // A building is solid: every mass stops a walker.
+      for (const m of plan.masses) expect(clearanceAt(solids, ...siteToWorld(site, m.x, m.z)), name).toBeLessThan(0);
+      const doors = plan.openings.filter((o) => o.kind === "door");
+      expect(doors.length, name).toBeGreaterThan(0);
+      for (const door of doors) {
+        // A body fits on the doorstep, with no wing in front of it, and a walk from out in front of it arrives there.
+        const spot = siteToWorld(site, door.position[0] + door.normal[0] * (BODY_RADIUS + 0.1), door.position[2] + door.normal[2] * (BODY_RADIUS + 0.1));
+        const from = siteToWorld(site, door.position[0] + door.normal[0] * 20, door.position[2] + door.normal[2] * 20);
+        expect(clearanceAt(solids, ...spot), name).toBeGreaterThanOrEqual(BODY_RADIUS);
+        const walk = tapWalk(solids, { x: from[0], z: from[1] }, { x: spot[0], z: spot[1] });
+        expect(Math.hypot(walk.at.x - spot[0], walk.at.z - spot[1]), name).toBeLessThanOrEqual(WALK_TO.reach);
+      }
     }
   });
 });
