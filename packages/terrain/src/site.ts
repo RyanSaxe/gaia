@@ -156,15 +156,20 @@ function ringSpots(lot: Circle, r0: number, r1: number): Spot[] {
   return spots;
 }
 
+/** Whether a point is on the ground a building or landmark stands for, such as its file's patch. */
+export type OwnGround = (x: number, z: number) => boolean;
+
 /**
  * Finds a building site. Without a lot, it is the gentlest dry spot near the
  * middle reach of a stream, with its door facing the water, or without
  * streams the gentlest dry spot inside the world. On a lot laid out for it
  * (`within`), it is the gentlest dry spot on the lot, or the nearest past it.
- * A site keeps `apart` meters from every `taken` site, at most 12 m on a lot,
- * where its yard also stays off every `laid` yard. Its yard covers `beside`.
+ * With the building's own ground (`own`), such as its file's patch, it takes
+ * the nearest spot on that ground first. A site keeps `apart` meters from
+ * every `taken` site, at most 12 m on a lot, where its yard also stays off
+ * every `laid` yard. Its yard covers `beside`.
  */
-export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly BuildingSite[] = [], apart = 30, beside: Extent | null = null, within: Circle | null = null, laid: readonly PadEdit[] = []): BuildingSite {
+export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly BuildingSite[] = [], apart = 30, beside: Extent | null = null, within: Circle | null = null, laid: readonly PadEdit[] = [], own: OwnGround | null = null): BuildingSite {
   const half = t.spec.size / 2 - BUILDING_MARGIN;
   const everywhere = (): Spot[] => {
     const spots: Spot[] = [];
@@ -177,12 +182,16 @@ export function findSite(t: Terrain, plan: BuildingPlan, taken: readonly Buildin
     // a laid one.
     const middle: BuildingSite = { x: within.x, z: within.z, yaw: Math.atan2(-within.x, -within.z), level: heightAt(t.lattice, within.x, within.z) };
     const clear = !laid.some((p) => yardsMeet(p, { site: middle, yard: yardOf(plan, beside) }));
-    const onLot = gentlest(t, plan, ringSpots(within, 0, within.radius), taken, Math.min(apart, 12), beside, half, laid) ?? (inWater(t, plan, middle) || !clear ? null : middle);
+    const mine = (spots: Spot[]): Spot[] => (own === null ? spots : spots.filter((c) => own(c.x, c.z)));
+    const onLot = gentlest(t, plan, mine(ringSpots(within, 0, within.radius)), taken, Math.min(apart, 12), beside, half, laid) ?? (inWater(t, plan, middle) || !clear || (own !== null && !own(middle.x, middle.z)) ? null : middle);
     if (onLot !== null) return onLot;
-    // Otherwise take the gentlest dry spot in the nearest band of ground past the lot, then anywhere.
-    for (let r = within.radius + 2; r <= within.radius + 60; r += 12) {
-      const past = gentlest(t, plan, ringSpots(within, r, r + 10), taken, Math.min(apart, 12), beside, half, laid);
-      if (past !== null) return past;
+    // Otherwise take the gentlest dry spot in the nearest band of its own ground past the lot, then of any ground, then
+    // anywhere.
+    for (const keep of own === null ? [mine] : [mine, (spots: Spot[]) => spots]) {
+      for (let r = within.radius + 2; r <= within.radius + 60; r += 12) {
+        const past = gentlest(t, plan, keep(ringSpots(within, r, r + 10)), taken, Math.min(apart, 12), beside, half, laid);
+        if (past !== null) return past;
+      }
     }
     return gentlest(t, plan, everywhere(), taken, Math.min(apart, 12), beside, half, laid) ?? middle;
   }

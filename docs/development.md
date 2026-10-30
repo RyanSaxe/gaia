@@ -185,7 +185,7 @@ pnpm exec tsx tools/cargo.ts clippy --all-targets -- -D warnings
 `pnpm check` runs TypeScript, ESLint and Vitest. CI runs these and the Rust
 checks on Linux, Windows and macOS. On macOS it also opens the showcase in the
 app with `pnpm app-opens`, and runs the probe's draw and walk tests in the
-showcase ([`check.yml`](../.github/workflows/check.yml)).
+showcase and the proving ground ([`check.yml`](../.github/workflows/check.yml)).
 
 `pnpm app-opens` opens the showcase in the real app, as a person starts Gaia:
 Electron's main process, the world service and the engine binary, with Jev

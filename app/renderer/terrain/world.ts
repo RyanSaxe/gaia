@@ -25,7 +25,7 @@ import {
   followVitality,
   type SceneLight,
 } from "@gaia/render";
-import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, type Floor, floorOf, type Footbed, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type Station, type LastSpot, withinLand, piecesShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, hurryFor, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, wallsShape, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
+import { type Capsule, clearanceAt, groundDecline, regionAt as dominantRegion, frameOf, TILE, LAND_ASPECT, type Deck, decksOf, deckShape, type Floor, floorOf, type Footbed, EYE_HEIGHT, footingAt, GAIT, groundHeightAt, heightAt, type Intent, NO_SOLIDS, NO_TRAILS, openingSpot, TRAILS, outlineShape, returnTo, type Station, type LastSpot, withinLand, piecesShapes, placeShapes, buildingShapes, type Place, placeAt, planWalk, regionWeights, siteToWorld, type Solids, type SolidShape, solidsOf, standAt, steerAlong, type Steered, type Steering, steering, steerPress, steerRelease, steerStep, stride, type Stride, acrossWay, carry, planTrip, TRAVEL, type Travel, hurryFor, wadingAt, fordBeside, travelFrom, travelPoint, travelStep, type Trip, trailWay, type Walker, type WalkKey, type Terrain, TERRAIN, type TrailNetwork, type Walk, WALK_TO, waterDepthAt, type Way, wayAhead, WILDS, type WorldPlaces, type WorldSpec } from "@gaia/terrain";
 import { type Sky, createSky } from "../world/environment.ts";
 import { type CaptureBounds, type Pixels, createCapture } from "./capture.ts";
 import { onTap, tapSlop } from "../tap.ts";
@@ -341,6 +341,8 @@ export interface Landmark {
   readonly built: Realized;
   readonly base: number;
   readonly feet: ReturnType<typeof landmarkFeet>;
+  /** What stops a walker at it, in its own frame (`piecesShapes`), placed with it as the solids are built. */
+  readonly pieces: readonly SolidShape[];
 }
 
 /** The placed landmarks and the trail network between every place, from the last bake. */
@@ -625,7 +627,7 @@ export function createWorld(root: HTMLElement): World {
   let allDecks: readonly Deck[] = [];
   let decks: readonly Footbed[] = [];
   let broken: readonly Deck[] = [];
-  /** The placed landmarks' floors, which a walker stands on like an intact deck. */
+  /** The placed landmarks' and buildings' floors, which a walker stands on like an intact deck. */
   let floors: readonly Floor[] = [];
   let places: WorldPlaces = { name: "", size: world.size, areas: [], patches: [], cells: [] };
   let furnisher: ((baked: BakedWorld) => Furnishing) | null = null;
@@ -641,7 +643,7 @@ export function createWorld(root: HTMLElement): World {
   /** Builds and measures a landmark. */
   const landmarkOf = (name: string, ask: BuildAsk): Landmark => {
     const built = made(ask, landmarkLib);
-    return { key: `${ask.blueprint.id}:${ask.seed}`, name, blueprint: ask.blueprint, built, base: landmarkBase(built), feet: landmarkFeet(built) };
+    return { key: `${ask.blueprint.id}:${ask.seed}`, name, blueprint: ask.blueprint, built, base: landmarkBase(built), feet: landmarkFeet(built), pieces: piecesShapes(built.parts, { x: 0, y: 0, z: 0, yaw: 0 }) };
   };
   /** The landmarks of the world shown, each as Jev composed it. */
   let landmarks: Landmark[] = [];
@@ -1240,18 +1242,15 @@ export function createWorld(root: HTMLElement): World {
       const lm = landmarks[s.landmark];
       if (view === undefined || lm === undefined) return [];
       const p = view.object.position;
-      return piecesShapes(lm.built.parts, { x: p.x, y: p.y, z: p.z, yaw: view.object.rotation.y });
+      return placeShapes(lm.pieces, { x: p.x, z: p.z, yaw: view.object.rotation.y });
     });
-    // Each building's walls, and what is beside it, such as a mill wheel in its pit.
-    const buildings = settlement.buildings.flatMap((b): SolidShape[] => {
-      const e = b.beside;
-      const beside = e === null ? [] : [{ points: [[e.x0, e.z0], [e.x1, e.z0], [e.x1, e.z1], [e.x0, e.z1]].flatMap(([lx, lz]) => siteToWorld(b.site, lx as number, lz as number)) }];
-      return [...wallsShape(b.plan, b.site), ...beside];
-    });
+    // Each building's walls, every solid piece it shows past them, and what is beside it, such as a mill wheel in its pit.
+    const buildings = settlement.buildings.flatMap((b) => buildingShapes(b.plan, b.pieces, b.beside, b.site));
     bodies = [...trunks, ...components, ...landmarkSolids, ...buildings];
     gatherSolids();
-    // A landmark's walkable parts support a walker instead of blocking it, such as a rotunda's steps and the floor inside.
-    floors = ways.sites.flatMap((s, i) => {
+    // A landmark's or a building's walkable parts support a walker instead of blocking it, such as a rotunda's steps and
+    // the floor inside, or the steps up to a door.
+    const landmarkFloors = ways.sites.flatMap((s, i) => {
       const view = landmarkViews[i];
       const lm = landmarks[s.landmark];
       if (view === undefined || lm === undefined) return [];
@@ -1259,6 +1258,11 @@ export function createWorld(root: HTMLElement): World {
       const floor = floorOf(lm.built.parts, { x: p.x, y: p.y, z: p.z, yaw: view.object.rotation.y });
       return floor === null ? [] : [floor];
     });
+    const buildingFloors = settlement.buildings.flatMap((b) => {
+      const floor = floorOf(b.walkable, { x: b.site.x, y: b.site.level, z: b.site.z, yaw: b.site.yaw });
+      return floor === null ? [] : [floor];
+    });
+    floors = [...landmarkFloors, ...buildingFloors];
     holdDecks();
   }
   /** Rebuilds what blocks a walker now: the bodies, the furnishing while it is solid, and each broken footbridge. */

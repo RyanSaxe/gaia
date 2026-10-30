@@ -6,7 +6,7 @@
 import type { BuildContext, BuildingPlan, Mass, Opening, Resolved, RoofForm } from "@gaia/schema";
 import type { cottagePlanParams } from "../../structure.ts";
 import { clamp } from "../kit.ts";
-import { type Wall, chimneyEnd, hidden, massOf, on, peakOf, placeOf, sameWall, shownWalls, topAt, wallTop, wallsOf } from "./frame.ts";
+import { DEEPEST_EAVE, DOOR_HEADROOM, type Wall, chimneyEnd, hidden, massOf, on, peakOf, placeOf, sameWall, shownWalls, topAt, wallTop, wallsOf } from "./frame.ts";
 
 /** Floor-to-floor height in meters. */
 const STOREY = 2.3;
@@ -16,6 +16,11 @@ const MAX_WINDOWS = 14;
 const OVERLAP = 0.45;
 
 const wallFor = (storeys: number): number => 2.45 + (storeys - 1) * STOREY;
+/** A door's height, meters, and the least wall above it to the eaves. */
+const DOOR_HEIGHT = 1.95;
+const DOOR_LINTEL = 0.32;
+/** The most a settled roof's eave dips below its wall top, meters (`thatchSlab` and `tileSlab` in roofs.ts). */
+const EAVE_DIP = 0.16;
 
 type Face = readonly [number, number];
 
@@ -78,9 +83,16 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   const storeys = clamp(Math.round(p.storeys - 0.01 + ((ctx.facts.floors ?? 1) - 1) * 0.6), 1, 3);
   const lower = (n: number): number => (p.heights === "stepped" ? Math.max(1, n - 1) : n);
   const g: Massing = { pitch: Math.tan((p.roofline * Math.PI) / 180), form: p.roof === "hipped" ? "hip" : p.roof === "half-hipped" ? "half-hip" : "gable" };
+  // A door goes in the main body's front. Where that front is an eave side whose eave, under the deepest roof, could
+  // come down in front of the door, as on a gabled or half-hipped house of one storey, the house turns a gable end to
+  // the front, so the door stands under the gable. A hipped house has no gable end, and its roof lifts its eave over
+  // the door instead (`roofs.ts`).
+  const eaveOverDoor = wallFor(storeys) - g.pitch * DEEPEST_EAVE - EAVE_DIP < Math.min(DOOR_HEIGHT, wallFor(storeys) - DOOR_LINTEL) + DOOR_HEADROOM;
+  const turned = p.shape !== "gable-fronted" && g.form !== "hip" && eaveOverDoor;
   const [w0, d0] = p.shape === "long" ? [7.8, 5.4] : p.shape === "snug" ? [6.2, 5.3] : [5.2, 7.2];
-  const ridge = p.shape === "gable-fronted" ? "z" : "x";
-  const main = massAt(g, { x: 0, z: 0, width: w0 * size * (0.96 + 0.08 * r.next()), depth: d0 * size * (0.96 + 0.08 * r.next()), round: false, wallHeight: wallFor(storeys), storeys, ridge, roof: g.form });
+  const ridge = p.shape === "gable-fronted" || turned ? "z" : "x";
+  const [mainW, mainD] = turned ? [d0, w0] : [w0, d0];
+  const main = massAt(g, { x: 0, z: 0, width: mainW * size * (0.96 + 0.08 * r.next()), depth: mainD * size * (0.96 + 0.08 * r.next()), round: false, wallHeight: wallFor(storeys), storeys, ridge, roof: g.form });
   const W = main.width;
   const D = main.depth;
   const side: 1 | -1 = r.next() < 0.5 ? -1 : 1;
@@ -154,7 +166,7 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   // ---------- the door, and a porch over it ----------
   const openings: Opening[] = [];
   const front = (i: number): Wall => wallsOf(plan).find((w) => w.mass === i && w.n[2] > 0.99) as Wall;
-  const doorH = (m: Mass): number => Math.min(1.95, m.wallHeight - 0.32);
+  const doorH = (m: Mass): number => Math.min(DOOR_HEIGHT, m.wallHeight - DOOR_LINTEL);
   let doorWall = front(entry);
   // The door is off center on a long front, away from a forward wing beside it.
   const lean = entry === 0 && alongX && p.massing !== "a single block" ? -side : side;
@@ -178,7 +190,8 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   doorAt ??= clamp(leaning, 0.7, doorWall.length - 0.7);
   const entryMass = plan.masses[entry] as Mass;
   const t = clamp((doorAt - doorWall.length / 2) / Math.max(0.01, doorWall.length / 2 - 1.15), -1, 1);
-  const porch = { ...wing(g, entryMass, [0, 1], t, 2.3, 1.75, 1, g.form === "half-hip" ? "gable" : g.form), wallHeight: 2.3 };
+  // A porch is always gabled, so its front is a gable over the door and no eave comes down across it.
+  const porch = { ...wing(g, entryMass, [0, 1], t, 2.3, 1.75, 1, "gable"), wallHeight: 2.3 };
   // A porch is added only where it overlaps no other mass.
   const porched = extras.has("porch") && !clashes(plan.masses, porch, entry);
   if (porched) {

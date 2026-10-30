@@ -7,6 +7,7 @@ import { primitive, t } from "@gaia/schema";
 import { buildTower, buildWaterwheel } from "./geometry/building/features.ts";
 import { buildBell, buildDovecote, buildForge, buildGranary, buildWell } from "./geometry/building/yard.ts";
 import { buildGarden } from "./geometry/building/garden.ts";
+import { OVERHANGS, THATCH_THICKNESS } from "./geometry/building/frame.ts";
 import { layOutCottage } from "./geometry/building/layout.ts";
 import { buildCasements } from "./geometry/building/openings.ts";
 import { buildThatch, buildTiles } from "./geometry/building/roofs.ts";
@@ -114,14 +115,10 @@ export const chimneyField = t.choice("Where the chimney stands", {
   none: "No chimney",
 });
 
-export const overhangField = t.scale("How far the roof reaches past the walls", {
-  "neat and close": 0.3,
-  sheltering: 0.6,
-  "deep and low": 0.9,
-});
+export const overhangField = t.scale("How far the roof reaches past the walls", OVERHANGS);
 
 export const thatchParams = {
-  thickness: t.scale("How thick the thatch is", { trim: 0.28, plump: 0.42, "deep and soft": 0.58 }),
+  thickness: t.scale("How thick the thatch is", THATCH_THICKNESS),
   overhang: overhangField,
   chimney: chimneyField,
 };

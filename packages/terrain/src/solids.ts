@@ -5,7 +5,9 @@
 // radius.
 
 import type { BuildingPlan, Part } from "@gaia/schema";
-import { type BuildingSite, siteToWorld } from "./site.ts";
+import { FLOOR_CELL, deckAt, floorOf } from "./gait.ts";
+import { BODY_RADIUS } from "./walk.ts";
+import { type BuildingSite, type Extent, siteToWorld } from "./site.ts";
 
 /** One solid's ground outline in world meters. */
 export type SolidShape =
@@ -125,34 +127,163 @@ export function wallsShape(plan: BuildingPlan, site: BuildingSite): SolidShape[]
   });
 }
 
+/** Shapes drawn in a thing's own frame, placed on its site as Three places it. */
+export function placeShapes(shapes: readonly SolidShape[], site: Pick<BuildingSite, "x" | "z" | "yaw">): SolidShape[] {
+  const at = { ...site, level: 0 };
+  return shapes.map((shape) => {
+    if (!("points" in shape)) {
+      const [x, z] = siteToWorld(at, shape.x, shape.z);
+      return { x, z, radius: shape.radius };
+    }
+    const points: number[] = [];
+    for (let i = 0; i + 1 < shape.points.length; i += 2) points.push(...siteToWorld(at, shape.points[i] as number, shape.points[i + 1] as number));
+    return { points };
+  });
+}
+
+/** How far past a building's walls, in meters, a solid piece must reach to block anything the walls do not. */
+const PAST_WALLS = 1e-3;
+
+/** The outlines of the solid pieces a building shows past its walls, in its own frame, for `buildingShapes`. */
+export function buildingPieces(plan: BuildingPlan, parts: readonly Part[]): SolidShape[] {
+  const walls = solidsOf(wallsShape(plan, { x: 0, z: 0, yaw: 0, level: 0 }));
+  return piecesShapes(parts, { x: 0, y: 0, z: 0, yaw: 0 }).filter((shape) => {
+    if (!("points" in shape)) return true;
+    for (let i = 0; i + 1 < shape.points.length; i += 2) if (clearanceAt(walls, shape.points[i] as number, shape.points[i + 1] as number) > PAST_WALLS) return true;
+    return false;
+  });
+}
+
+/**
+ * What stops a walker at a building on its site: each mass's walls, every solid piece the building shows past them
+ * (`buildingPieces`), and the ground `beside` it, such as a mill wheel's pit.
+ */
+export function buildingShapes(plan: BuildingPlan, pieces: readonly SolidShape[], beside: Extent | null, site: BuildingSite): SolidShape[] {
+  const box: SolidShape[] = beside === null ? [] : [{ points: [[beside.x0, beside.z0], [beside.x1, beside.z0], [beside.x1, beside.z1], [beside.x0, beside.z1]].flatMap(([lx, lz]) => siteToWorld(site, lx as number, lz as number)) }];
+  return [...wallsShape(plan, site), ...placeShapes(pieces, site), ...box];
+}
+
 /** The height band in meters above a thing's base that a walker's body occupies, from just above the ground to the top of the head. */
 export const BODY_BAND = { from: 0.1, to: 1.8 } as const;
 
 /**
+ * Clips a convex polygon, `stride` numbers to a corner, to the side of `edge` along coordinate `axis` that `keep`
+ * names: at or above it for 1, at or below it for -1.
+ */
+function clip(poly: readonly number[], stride: number, axis: number, edge: number, keep: 1 | -1): number[] {
+  const out: number[] = [];
+  const n = poly.length / stride;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const a = poly[i * stride + axis] as number;
+    const b = poly[j * stride + axis] as number;
+    const inA = (a - edge) * keep >= 0;
+    if (inA) for (let k = 0; k < stride; k++) out.push(poly[i * stride + k] as number);
+    if (inA !== (b - edge) * keep >= 0) {
+      const u = (edge - a) / (b - a);
+      for (let k = 0; k < stride; k++) out.push((poly[i * stride + k] as number) + ((poly[j * stride + k] as number) - (poly[i * stride + k] as number)) * u);
+    }
+  }
+  return out;
+}
+
+/** Clips a convex polygon, `stride` numbers to a corner, to the rectangle from (x0, z0) to (x1, z1) on coordinates 0 and `zAxis`. */
+const clipRect = (poly: readonly number[], stride: number, zAxis: number, x0: number, x1: number, z0: number, z1: number): number[] =>
+  clip(clip(clip(clip(poly, stride, 0, x0, 1), stride, 0, x1, -1), stride, zAxis, z0, 1), stride, zAxis, z1, -1);
+
+/**
  * The solids of a built thing placed at (x, y, z) and turned by `yaw` as Three
- * turns it: each solid piece's outline within `BODY_BAND`. A piece wholly
- * above or below that band blocks nothing, so a walker passes under a lintel
- * and through a doorway between two stones. A piece that only grows in as the
- * thing declines, such as fallen stone, blocks nothing either.
+ * turns it: the outline of its solid parts wherever they pass through a
+ * walker's body, from `BODY_BAND.from` above the thing's base to `BODY_BAND.to`
+ * above the ground or the walkable floor there (`floorOf`), such as a step a
+ * walker climbs. A beam that slants through that band blocks along its length
+ * even with its ends above and below it. A part wholly above or below the
+ * band blocks nothing, so a walker passes under a lintel and through a doorway
+ * between two stones. A piece that only grows in as the thing declines, such
+ * as fallen stone, blocks nothing either.
+ *
+ * The outline is one convex shape for each square of the thing's own frame
+ * that holds some of it. A square's diagonal is a body's width, so a shape
+ * never closes a gap that a body fits through, and a ring, an eave or a bough
+ * blocks along itself and never across the ground it bounds.
  */
 export function piecesShapes(parts: readonly Part[], at: { readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }): SolidShape[] {
+  const side = BODY_RADIUS * Math.SQRT2;
+  const floor = floorOf(parts, { x: 0, y: 0, z: 0, yaw: 0 });
+  const highest = floor === null ? 0 : Math.max(0, ...floor.tops);
+  /** The outlines on the ground, as x, z pairs, of a triangle of x, y, z triples wherever it is within the band. */
+  const inBand = (tri: readonly number[]): number[][] => {
+    const above = clip(tri, 3, 1, BODY_BAND.from, 1);
+    if (above.length === 0) return [];
+    let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
+    for (let i = 0; i < above.length; i += 3) {
+      x0 = Math.min(x0, above[i] as number);
+      x1 = Math.max(x1, above[i] as number);
+      z0 = Math.min(z0, above[i + 2] as number);
+      z1 = Math.max(z1, above[i + 2] as number);
+    }
+    const flat = (poly: readonly number[]): number[] => {
+      const out: number[] = [];
+      for (let i = 0; i < poly.length; i += 3) out.push(poly[i] as number, poly[i + 2] as number);
+      return out;
+    };
+    const over = floor !== null && highest > 0 && x1 >= floor.x0 && z1 >= floor.z0 && x0 <= floor.x0 + floor.cols * FLOOR_CELL && z0 <= floor.z0 + floor.rows * FLOOR_CELL;
+    if (!over) return [flat(clip(above, 3, 1, BODY_BAND.to, -1))];
+    // Over a floor, the band's top follows the floor, cell by cell.
+    const out: number[][] = [];
+    for (let i = Math.floor((x0 - floor.x0) / FLOOR_CELL); i <= Math.floor((x1 - floor.x0) / FLOOR_CELL); i++) {
+      for (let j = Math.floor((z0 - floor.z0) / FLOOR_CELL); j <= Math.floor((z1 - floor.z0) / FLOOR_CELL); j++) {
+        const cx = floor.x0 + i * FLOOR_CELL;
+        const cz = floor.z0 + j * FLOOR_CELL;
+        const cell = clipRect(above, 3, 2, cx, cx + FLOOR_CELL, cz, cz + FLOOR_CELL);
+        if (cell.length === 0) continue;
+        const top = Math.max(0, deckAt([floor], cx + FLOOR_CELL / 2, cz + FLOOR_CELL / 2));
+        out.push(flat(clip(cell, 3, 1, top + BODY_BAND.to, -1)));
+      }
+    }
+    return out;
+  };
+  /** The outline in each square, as x, z pairs in the thing's own frame. */
+  const squares = new Map<number, number[]>();
+  const add = (poly: readonly number[]): void => {
+    let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
+    for (let i = 0; i < poly.length; i += 2) {
+      x0 = Math.min(x0, poly[i] as number);
+      x1 = Math.max(x1, poly[i] as number);
+      z0 = Math.min(z0, poly[i + 1] as number);
+      z1 = Math.max(z1, poly[i + 1] as number);
+    }
+    for (let i = Math.floor(x0 / side); i <= Math.floor(x1 / side); i++) {
+      for (let j = Math.floor(z0 / side); j <= Math.floor(z1 / side); j++) {
+        const whole = x0 >= i * side && x1 <= (i + 1) * side && z0 >= j * side && z1 <= (j + 1) * side;
+        const cut = whole ? poly : clipRect(poly, 2, 1, i * side, (i + 1) * side, j * side, (j + 1) * side);
+        if (cut.length === 0) continue;
+        const key = (i + 32768) * 65536 + (j + 32768);
+        const square = squares.get(key);
+        if (square === undefined) squares.set(key, cut.slice());
+        else for (const v of cut) square.push(v);
+      }
+    }
+  };
+  for (const part of parts) {
+    if (part.collision !== "solid") continue;
+    const p = part.positions;
+    const grows = (v: number): boolean => (part.channels.grow?.[v] ?? 0) > 0;
+    for (let t = 0; t + 2 < part.indices.length; t += 3) {
+      const vs = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
+      if (vs.some(grows)) continue;
+      const ys = vs.map((v) => p[v * 3 + 1] as number);
+      if (Math.max(...ys) < BODY_BAND.from || Math.min(...ys) > highest + BODY_BAND.to) continue;
+      for (const poly of inBand(vs.flatMap((v) => [p[v * 3] as number, p[v * 3 + 1] as number, p[v * 3 + 2] as number]))) if (poly.length > 0) add(poly);
+    }
+  }
   const c = Math.cos(at.yaw);
   const s = Math.sin(at.yaw);
   const shapes: SolidShape[] = [];
-  for (const part of parts) {
-    if (part.collision !== "solid") continue;
-    const byPiece = new Map<number, number[]>();
-    for (let v = 0; v * 3 < part.positions.length; v++) {
-      const y = part.positions[v * 3 + 1] as number;
-      if (y < BODY_BAND.from || y > BODY_BAND.to || (part.channels.grow?.[v] ?? 0) > 0) continue;
-      const lx = part.positions[v * 3] as number;
-      const lz = part.positions[v * 3 + 2] as number;
-      const piece = part.piece[v * 2] as number;
-      let points = byPiece.get(piece);
-      if (points === undefined) byPiece.set(piece, (points = []));
-      points.push(at.x + lx * c + lz * s, at.z - lx * s + lz * c);
-    }
-    for (const points of byPiece.values()) shapes.push({ points });
+  for (const local of squares.values()) {
+    const points: number[] = [];
+    for (let i = 0; i + 1 < local.length; i += 2) points.push(at.x + (local[i] as number) * c + (local[i + 1] as number) * s, at.z - (local[i] as number) * s + (local[i + 1] as number) * c);
+    shapes.push({ points });
   }
   return shapes;
 }

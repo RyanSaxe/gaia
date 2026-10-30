@@ -15,6 +15,8 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
   const frame = new PartBuilder("timber", "solid");
   const trim = new PartBuilder("trim", "solid");
   const stone = new PartBuilder("masonry", "solid");
+  // The door's steps are walkable, so a person climbs them to the door.
+  const stairs = new PartBuilder("masonry", "walkable");
   for (const o of plan.openings) {
     const { wall: w, s } = placeOf(plan, o);
     const y = o.position[1];
@@ -138,10 +140,10 @@ export function buildCasements(p: Resolved<typeof casementsParams>, ctx: BuildCo
         const top = plan.floor - i * rise;
         const out = 0.36 * (i + 1);
         const sc = on(w, s, (top - 0.4) / 2, out / 2);
-        box(stone, sc, axes, [hw + 0.22 - i * 0.02 + 0.03 * wr.next(), (top + 0.4) / 2, out / 2], 0.56 + 0.08 * wr.next(), still(sc, 0.5), { bottom: true });
+        box(stairs, sc, axes, [hw + 0.22 - i * 0.02 + 0.03 * wr.next(), (top + 0.4) / 2, out / 2], 0.56 + 0.08 * wr.next(), still(sc, 0.5), { bottom: true });
       }
     }
   }
-  return { parts: [glass.part(), frame.part(), trim.part(), stone.part()].filter((part) => part.indices.length > 0), anchors: [] };
+  return { parts: [glass.part(), frame.part(), trim.part(), stone.part(), stairs.part()].filter((part) => part.indices.length > 0), anchors: [] };
 }
 
