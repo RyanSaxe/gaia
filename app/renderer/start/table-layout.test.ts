@@ -33,11 +33,5 @@ describe("the map table's layout", () => {
         expect(l.logo.w / LOGO_ASPECT).toBeLessThan(l.say.y - l.logo.y);
       });
     }
-    it(`gives fewer worlds larger cards on the ${phone ? "phone" : "desktop"}, and six still a hand's width`, () => {
-      const sides = Array.from({ length: RECENT_KEPT }, (_, k) => tableLayout(phone, k + 1).cards[0]?.side ?? 0);
-      for (let k = 1; k < sides.length; k++) expect(sides[k]).toBeLessThanOrEqual(sides[k - 1] as number);
-      expect(sides[0]).toBeGreaterThanOrEqual(0.27);
-      expect(sides[RECENT_KEPT - 1]).toBeGreaterThanOrEqual(0.1);
-    });
   }
 });

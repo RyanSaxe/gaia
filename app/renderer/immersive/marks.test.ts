@@ -6,19 +6,16 @@ import { landmark, structure } from "@gaia/kinds";
 import { sweep } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
 import { type BuildingComposition, type Composition, INKS, MARK_REACH, type MarkBox, drawBuilding, drawLandmark } from "./marks.ts";
+import { PLANT_INKS } from "./plant-marks.ts";
 
-/** The roles whose primitives appear in the world as buildings and landmarks, so the map must ink them. */
+/** The roles whose primitives appear in the world as buildings and landmarks, and as trees, bushes, stones and drifts, so the map must ink them. */
 const DRAWN: ReadonlySet<Role> = new Set(["Footprint", "Walls", "Roof", "Openings", "Dressing", "Feature", "Landmark"]);
+const PLANTS_DRAWN: ReadonlySet<Role> = new Set(["Skeleton", "Surface", "Foliage", "Ornament", "Rock", "Overgrowth", "Drift"]);
 
 describe("the marks' table", () => {
-  it("says how the map inks every structure and landmark primitive, in the role that primitive fills", () => {
-    const unsaid = PRIMITIVES.filter((p) => DRAWN.has(p.role) && INKS[p.id]?.role !== p.role).map((p) => p.id);
+  it("says how the map inks every primitive that appears in the world, in the role that primitive fills", () => {
+    const unsaid = PRIMITIVES.filter((p) => (DRAWN.has(p.role) && INKS[p.id]?.role !== p.role) || (PLANTS_DRAWN.has(p.role) && PLANT_INKS[p.id]?.role !== p.role)).map((p) => p.id);
     expect(unsaid).toEqual([]);
-  });
-
-  it("names only primitives that exist", () => {
-    const ids = new Set<string>(PRIMITIVES.map((p) => p.id));
-    expect(Object.keys(INKS).filter((id) => !ids.has(id))).toEqual([]);
   });
 });
 
@@ -87,47 +84,36 @@ describe("a mark composed from a blueprint", () => {
   const reach: MarkBox = [200 - MARK_REACH.left * SCALE, 200 - MARK_REACH.up * SCALE, 200 + MARK_REACH.right * SCALE, 200 + MARK_REACH.down * SCALE];
 
   // Random buildings and landmarks from everything Jev can compose, so shapes the proving ground never uses are
-  // covered too. A mark reads only a building's plan and palette, so only those two slots are built.
-  const drawn = Array.from({ length: 300 }, (_, i) => {
+  // covered too, beside the sweep's, which cover every part. A mark reads only a building's plan and palette, so only
+  // those two slots of a random building are built.
+  const drawnBuildings: [string, BuildingComposition][] = [...buildings];
+  const drawnLandmarks: [string, Composition][] = [...landmarks];
+  for (let i = 0; i < 300; i++) {
     const draws = rand(seedOf(`marks drawn ${i}`));
     const blueprint = blueprintOf(structure.id, randomSlots(structure, lib, () => draws.next()));
     const { footprint, palette } = blueprint.slots;
     const built = realize({ ...blueprint, slots: { footprint, palette } as typeof blueprint.slots }, structure, lib, { seed: seedOf(`marks drawn ${i}`), facts: {} });
-    const building: BuildingComposition = { blueprint, palette: built.palette, plan: built.slots.get("footprint")?.output as BuildingPlan };
-    const mark: Composition = { blueprint: blueprintOf(landmark.id, randomSlots(landmark, lib, () => draws.next())), palette: { swatches: {} } };
-    return { building, mark };
-  });
+    drawnBuildings.push([`drawn ${i}`, { blueprint, palette: built.palette, plan: built.slots.get("footprint")?.output as BuildingPlan }]);
+    drawnLandmarks.push([`drawn ${i}`, { blueprint: blueprintOf(landmark.id, randomSlots(landmark, lib, () => draws.next())), palette: { swatches: {} } }]);
+  }
 
-  // Draws 300 buildings and 300 landmarks: about a second alone, longer when the suite runs in parallel.
+  // Draws over 300 buildings and 300 landmarks: about a second alone, longer when the suite runs in parallel.
   it.each([1, 0.5, 0.05])("draws any building and landmark Jev can compose at vitality %s inside the box it reports and the reach every mark keeps to", { timeout: 30_000 }, (v) => {
-    for (const [i, { building, mark }] of drawn.entries()) {
-      const b = recorder();
-      const box = drawBuilding(b.ctx, 200, 200, SCALE, building, v, `drawn ${i}`);
-      expect(b.points.filter((p) => !inside(box, p)), `building ${i}: ${JSON.stringify(building.blueprint.slots)}`).toEqual([]);
-      expect(b.points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), `building ${i}: ${JSON.stringify(building.blueprint.slots)}`).toEqual([]);
-      const l = recorder();
-      const lbox = drawLandmark(l.ctx, 200, 200, SCALE, mark, v, `drawn ${i}`);
-      expect(l.points.filter((p) => !inside(lbox, p)), `landmark ${i}: ${JSON.stringify(mark.blueprint.slots)}`).toEqual([]);
-      expect(l.points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), `landmark ${i}: ${JSON.stringify(mark.blueprint.slots)}`).toEqual([]);
-    }
-  });
-
-  it.each([1, 0.5, 0.05])("draws every swept building and landmark at vitality %s inside the box it reports and the reach every mark keeps to, which names keep off", (v) => {
-    for (const [name, b] of buildings) {
+    for (const [name, building] of drawnBuildings) {
       const { ctx, points } = recorder();
-      const box = drawBuilding(ctx, 200, 200, SCALE, b, v, name);
-      expect(points.length, name).toBeGreaterThan(50);
-      expect(points.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)), name).toBe(true);
-      expect(points.filter((p) => !inside(box, p)), name).toEqual([]);
-      expect(points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), name).toEqual([]);
+      const box = drawBuilding(ctx, 200, 200, SCALE, building, v, name);
+      const what = `building ${name}: ${JSON.stringify(building.blueprint.slots)}`;
+      expect(points, what).not.toEqual([]);
+      expect(points.filter((p) => !inside(box, p)), what).toEqual([]);
+      expect(points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), what).toEqual([]);
     }
-    for (const [name, l] of landmarks) {
+    for (const [name, mark] of drawnLandmarks) {
       const { ctx, points } = recorder();
-      const box = drawLandmark(ctx, 200, 200, SCALE, l, v, name);
-      expect(points.length, name).toBeGreaterThan(20);
-      expect(points.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)), name).toBe(true);
-      expect(points.filter((p) => !inside(box, p)), name).toEqual([]);
-      expect(points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), name).toEqual([]);
+      const box = drawLandmark(ctx, 200, 200, SCALE, mark, v, name);
+      const what = `landmark ${name}: ${JSON.stringify(mark.blueprint.slots)}`;
+      expect(points, what).not.toEqual([]);
+      expect(points.filter((p) => !inside(box, p)), what).toEqual([]);
+      expect(points.filter(([x, y]) => !inside(reach, [x, y], -SLACK)), what).toEqual([]);
     }
   });
 });

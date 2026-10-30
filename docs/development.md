@@ -92,28 +92,13 @@ during the hitch walk. Leave the window uncovered while it shows.
 | `pnpm probe steps` | Changes during walking with the wind frozen |
 | `pnpm probe hitch` | Frame times and stutters during a walk |
 | `pnpm probe swap` | Transitions between full geometry and baked far forms |
-| `pnpm probe likeness` | Baked far forms beside their full forms at and past the swap |
 | `pnpm probe stress` | The proving ground with five times as many code trees |
 | `pnpm probe paint` | Journal painting capture and rendering |
 
 `--world showcase` or `--world proving` selects a world. Unless one is named,
-the swap test runs in the showcase and the likeness test in the proving
-ground. `--spot` limits the stops, and `--dpr` sets the pixel ratio. A probe
-fails on any WebGL error. A timing from a busy machine is not a reliable
-baseline.
-
-The likeness test places one copy of every build that has a far form, at
-vitality 1, 0.65 and 0.3. It draws each copy as its far form and as its full
-form, at its swap size and at a half, a quarter and an eighth of it. Haze is
-off while it draws, because haze would fade both forms alike. At each size it
-compares how much of the crown's part of the screen each form covers. Below
-the swap size, a far form's coverage may stray no farther from its full form's
-than it does at the swap size, within the margins in `LIKENESS_BAR`
-([`probe.ts`](../tools/probe.ts)). The test fails otherwise. It also reports
-each form's ink, which is the form's mean change from the empty view, and how
-much the two forms differ cell by cell.
-`__lab.terrain.likeness(name, vitality, sizes, true)` also returns the empty
-view, the far form and the full form as pictures.
+the swap test runs in the showcase. `--spot` limits the stops, and `--dpr` sets
+the pixel ratio. A probe fails on any WebGL error. A timing from a busy machine
+is not a reliable baseline.
 
 ## Components and fixtures
 

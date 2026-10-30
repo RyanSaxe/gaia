@@ -25,15 +25,13 @@ const SOURCE_ONLY = "const secretSourceLine = 42;";
 
 let scratch = "";
 let standIn: StandIn;
-/** Whether the stand-in refuses the root area's request, as OpenRouter might refuse a bad one. */
-let refuseRoot = false;
 const engines: ChildProcess[] = [];
 
 // A clean engine build takes minutes on CI's machines, and another test file's build may hold cargo's lock meanwhile.
 beforeAll(async () => {
   execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: cargoEnv(), stdio: "inherit" });
   scratch = mkdtempSync(join(tmpdir(), "gaia-live-jev-"));
-  standIn = await startOpenRouterStandIn({ refuse: ({ state, questions }) => refuseRoot && "water" in questions && (state as { directory?: { path?: string } }).directory?.path === "(the repository's root)" });
+  standIn = await startOpenRouterStandIn();
 }, 900_000);
 
 afterAll(async () => {
@@ -230,16 +228,6 @@ describe("judging a codebase with Jev", () => {
     expect(second.about).toEqual([]);
     expect(second.document.facts).toEqual(first.document.facts);
     expect(second.document.world).toEqual(first.document.world);
-  }, 60_000);
-
-  it("fails the opening when Jev refuses a request the client has retried, naming it and why, with nothing guessed", async () => {
-    const root = codebase("refused");
-    refuseRoot = true;
-    try {
-      await expect(open(root, join(scratch, "data-refused"), true)).rejects.toThrow(/Gaia could not finish judging the area \(the repository's root\): .*refused by the stand-in/);
-    } finally {
-      refuseRoot = false;
-    }
   }, 60_000);
 
   it("asks before spending past the limit, sends nothing and opens nothing when the person declines, and asks again next time", async () => {

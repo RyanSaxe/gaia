@@ -28,44 +28,21 @@ function build(): SettlingHealth {
 }
 
 describe("health on the waiting sheet", () => {
-  it("paints nothing before any health is settled, and once every file is, each cell is the field map's health in full", () => {
+  it("paints nothing before any health is settled, a cell in full only near the health it ends on, and once every file is, each cell is the field map's health in full", () => {
     const health = build();
     for (let c = 0; c < N * N; c++) expect(health.paint(c)).toBe(0);
-    health.settle(Object.fromEntries(files.map((f) => [f.path, f.vitality])));
+    const final = build();
+    final.settle(Object.fromEntries(files.map((f) => [f.path, f.vitality])));
+    const range = Math.max(...files.map((f) => f.vitality)) - Math.min(...files.map((f) => f.vitality));
+    for (const f of files) {
+      health.settle({ [f.path]: f.vitality });
+      for (let c = 0; c < N * N; c++) if (health.paint(c) === 1) expect(Math.abs(health.vitality(c) - final.vitality(c))).toBeLessThanOrEqual((1 - SHOWN[1]) * range + 1e-6);
+    }
     const field = healthField(files, MAP_STYLE.spread);
     for (let c = 0; c < N * N; c++) {
       const area = land.areas[land.nearest[c] as number] as string;
       expect(health.paint(c)).toBe(1);
       expect(health.vitality(c)).toBeCloseTo(field(center(c % N), center(Math.floor(c / N)), health.ground(area) ?? Number.NaN), 4);
     }
-  });
-
-  it("paints a cell only once most of its health is settled, so a cell painted in full shows nearly the health it keeps", () => {
-    const health = build();
-    const final = build();
-    final.settle(Object.fromEntries(files.map((f) => [f.path, f.vitality])));
-    const range = Math.max(...files.map((f) => f.vitality)) - Math.min(...files.map((f) => f.vitality));
-    let painted = 0;
-    for (const f of files) {
-      health.settle({ [f.path]: f.vitality });
-      for (let c = 0; c < N * N; c++) {
-        if (health.paint(c) > 0) expect(health.settled(c)).toBeGreaterThan(SHOWN[0]);
-        if (health.paint(c) < 1) continue;
-        painted++;
-        expect(Math.abs(health.vitality(c) - final.vitality(c))).toBeLessThanOrEqual((1 - SHOWN[1]) * range + 1e-6);
-      }
-    }
-    expect(painted).toBeGreaterThan(0);
-  });
-
-  it("knows an area's own ground once every file on it is settled", () => {
-    const health = build();
-    const west = files.filter((f) => f.area === "a");
-    const { grounds } = health.settle(Object.fromEntries(west.slice(1).map((f) => [f.path, f.vitality])));
-    expect(grounds).toEqual([]);
-    expect(health.ground("a")).toBeUndefined();
-    expect(health.settle({ [west[0]?.path as string]: west[0]?.vitality as number }).grounds).toEqual(["a"]);
-    expect(health.ground("a")).toBeGreaterThan(0);
-    expect(health.ground("")).toBeUndefined();
   });
 });

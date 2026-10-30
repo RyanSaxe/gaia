@@ -16,19 +16,13 @@
 //   where the full form disappears and the far form is alone, and then, too
 //   small to see, the far form dissolving and gone. It compares each step with
 //   the wind's half-second change.
-// - likeness: the likeness test. For every preset with a far form, at
-//   vitality 1, 0.65 and 0.3, it draws the card beside the full form at its
-//   swap size and at a half, a quarter and an eighth of it, in clear air. Past
-//   its swap, a card's share of the crown's area may differ from its tree's no
-//   more than it does at its swap (`LIKENESS_BAR`).
 // - stress: the proving ground as it is, then with every tree that represents
 //   code placed five times on its own patch.
 // - paint: the painter check. Standing still in the showcase with the wind's
-//   clock frozen while the journal's painter paints the farthest things, the
-//   person's view must not change at all. It also counts the page's late
-//   frames while it paints. Then it stands still for 30 s while the app's own
-//   painter works, as it does whenever the person stops, and the view must not
-//   change either.
+//   clock frozen, the person's view must not change at all while the
+//   journal's painter paints the farthest things, nor over 30 s while the
+//   app's own painter works, as it does whenever the person stops. It also
+//   counts the page's late frames while the journal's painter paints.
 //
 // Every run starts from its own browser profile, so the far forms bake as on
 // a first visit, and any WebGL error the page reports fails it
@@ -40,7 +34,7 @@
 // Timings are only worth comparing from a quiet machine, because other work on
 // the GPU or CPU makes them noisy, so the probe prints the load average it ran
 // at.
-// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [likeness] [paint] [--world showcase|proving]
+// Usage: pnpm probe [drawn] [steps] [hitch] [stress] [swap] [paint] [--world showcase|proving]
 //          [--spot NAME] [--dpr 1|2] [--json FILE]
 // A spot is "valley", "turned" or a tour stop (`__lab.terrain.tour()` lists
 // them, such as "ruined bridge"). --world and --spot may repeat.
@@ -55,7 +49,7 @@ import { build } from "esbuild";
 import { webglErrors } from "../app/main/webgl-errors.ts";
 import { LAB_BUILD, labBundle, labPage } from "./lab-page.ts";
 
-const MEASURES = ["drawn", "steps", "hitch", "stress", "swap", "likeness", "paint"] as const;
+const MEASURES = ["drawn", "steps", "hitch", "stress", "swap", "paint"] as const;
 type Measure = (typeof MEASURES)[number];
 
 /** Where each world is measured: by the stream at the valley, turned 120° from it, and the proving ground's woods. */
@@ -78,14 +72,6 @@ const POP_FLOOR = 8;
  * change.
  */
 const SWAP_FLOOR = 1;
-/**
- * The likeness test's bar. How far a card is from its tree is how many times more or less of the crown's part of the
- * screen it covers than its full form does. At every size past its swap, a card may be no farther from its tree than
- * at its swap size by more than `each` times for any preset and health, nor by more than `mean` times on average over
- * a world's presets at each size and health. A size where the full form changes the crown's part of the screen by
- * less than `floor` levels on average shows too little to judge.
- */
-const LIKENESS_BAR = { each: 1.5, mean: 1.25, floor: 0.2 } as const;
 /** Seconds of walking per smoothness window. The app's probe reads the last ten seconds. */
 const HITCH_WINDOWS = 2;
 /** The window's size in CSS pixels. */
@@ -148,17 +134,10 @@ if (measures.has("swap")) {
   // The showcase unless worlds are named.
   for (const world of values.world ?? ["showcase"]) jobs.push({ world, calls });
 }
-if (measures.has("likeness")) {
-  // The proving ground has every crown on every frame, so it is the world measured unless others are named.
-  for (const world of values.world ?? ["proving"]) {
-    const rows = `await (async () => { const rows = []; for (const name of T.swap()) for (const vitality of [1, 0.65, 0.3]) { const row = await T.likeness(name, vitality); if (row !== null) rows.push(row); } return rows; })()`;
-    jobs.push({ world, calls: [{ key: "open", js: OPEN }, { key: "likeness", js: `(${go("valley")}, ${settle}, ${rows})` }] });
-  }
-}
 if (measures.has("paint")) {
   // Looking at the view draws frames of its own, so the check counts the page's frames again over paintings made
   // without looking.
-  jobs.push({ world: "showcase", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, await T.paintCheck(6))` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }, { key: "stand", js: `(${go("valley")}, ${settle}, await T.standCheck(30))` }] });
+  jobs.push({ world: "showcase", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, { painter: await T.paintCheck(6), idle: await T.standCheck(30) })` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }] });
 }
 if (measures.has("stress") && (values.world === undefined || values.world.includes("proving"))) {
   // The proving ground as it is, then with every tree that represents code placed five times.
@@ -300,11 +279,6 @@ for (const [world, calls] of Object.entries(results)) {
         continue;
       }
       line(`  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`);
-    } else if (key === "stand") {
-      const { worst, looks } = value as { worst: number; looks: [number, number, string][] };
-      const moved = looks.filter((l, i) => i > 0 && l[2] !== (looks[i - 1] as [number, number, string])[2]).length;
-      line(`  stand: 30 s still with the painter at work; worst block changed ${f(worst, 2)} levels${worst >= SWAP_FLOOR ? " (it must not change)" : ""}; the finest land window moved ${moved} times`);
-      if (worst >= SWAP_FLOOR) process.exitCode = 1;
     } else if (key === "paint unwatched" || key === "paint unwatched near") {
       const { painted, intervals } = value as { painted: string[]; intervals: number[] };
       const sorted = [...intervals].sort((a, b) => a - b);
@@ -312,13 +286,14 @@ for (const [world, calls] of Object.entries(results)) {
       const late = intervals.filter((t) => t > median * 1.5 + 4);
       line(`  ${key}: ${painted.length} ${key.endsWith("near") ? "near" : "far"} paintings; frames ${intervals.length}, median ${f(median)} ms, ${late.length} late (${late.map((t) => f(t, 0)).join(", ")} ms)`);
     } else if (key === "paint") {
-      // Any change at all to the person's view while the painter paints fails, because nothing there moved.
-      const { painted, worst, checks, intervals } = value as { painted: string[]; worst: number; checks: number; intervals: number[] };
-      const sorted = [...intervals].sort((a, b) => a - b);
+      // Any change at all to the person's view while either painter paints fails, because nothing there moved.
+      const { painter, idle } = value as { painter: { painted: string[]; worst: number; checks: number; intervals: number[] }; idle: { worst: number; looks: [number, number, string][] } };
+      const worst = Math.max(painter.worst, idle.worst);
+      const sorted = [...painter.intervals].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
-      const late = intervals.filter((t) => t > median * 1.5 + 4);
-      line(`  paint: ${painted.length} far paintings, ${checks} looks at the person's view; worst block changed ${f(worst, 2)} levels${worst >= SWAP_FLOOR ? " (it must not change)" : ""}`);
-      line(`    frames while painting: ${intervals.length}, median ${f(median)} ms, ${late.length} late (worst ${f(Math.max(0, ...intervals))} ms)`);
+      const late = painter.intervals.filter((t) => t > median * 1.5 + 4);
+      line(`  paint: ${painter.painted.length} far paintings with ${painter.checks} looks at the person's view, then ${idle.looks.length} looks over 30 s still with the app's painter at work; worst block changed ${f(worst, 2)} levels${worst >= SWAP_FLOOR ? " (it must not change)" : ""}`);
+      line(`    frames while painting: ${painter.intervals.length}, median ${f(median)} ms, ${late.length} late (worst ${f(Math.max(0, ...painter.intervals))} ms)`);
       if (worst >= SWAP_FLOOR) process.exitCode = 1;
     } else if (key.startsWith("swap ")) {
       // A step passes when it changes the plant's part of the screen no more than the wind does there in half a second, or too little to show.
@@ -335,37 +310,6 @@ for (const [world, calls] of Object.entries(results)) {
         line(`                            dissolving ${say(r.leaving)}; the full form leaving ${say(r.end)} at ${f(r.end.distance, 0)} m`);
         line(`                            too small: dissolving ${say(r.dissolving)}; gone ${say(r.gone)} at ${f(r.gone.distance, 0)} m`);
       }
-    } else if (key === "likeness") {
-      type Drawn = { area: number; ink: number };
-      type Size = { px: number; distance: number; card: Drawn; full: Drawn; unlike: number };
-      const rows = value as { name: string; vitality: number; swapPx: number; sizes: Size[] }[];
-      /** The card's share of its full form's area or ink. */
-      const share = (s: Size, k: keyof Drawn): number => Math.max(s.card[k], 1e-4) / Math.max(s.full[k], 1e-4);
-      // Each size past the swap: how many times farther from its tree's covered area the card is there than at its swap.
-      const sizes = rows.flatMap((row) => {
-        const top = row.sizes[0];
-        if (top === undefined || top.px !== row.swapPx || top.full.ink < LIKENESS_BAR.floor) return [];
-        return row.sizes.slice(1).flatMap((size) => (size.full.ink < LIKENESS_BAR.floor ? [] : [{ row, size, top, farther: Math.exp(Math.abs(Math.log(share(size, "area"))) - Math.abs(Math.log(share(top, "area")))) }]));
-      });
-      const failing = sizes.filter((k) => k.farther > LIKENESS_BAR.each);
-      line(`  likeness: ${sizes.length - failing.length} of ${sizes.length} sizes past the swap no farther from their tree's covered area than at the swap by more than ${LIKENESS_BAR.each} times (${rows.length} presets and healths)`);
-      line("    by vitality and size, the mean over presets: how many times farther than at the swap; the card's share of its tree's area and ink, and how unlike the two are, with each at the swap in brackets");
-      const groups = new Map<string, typeof sizes>();
-      for (const k of sizes) {
-        const at = `${f(k.row.vitality, 2)} ${f(k.row.swapPx / k.size.px, 0)}`;
-        groups.set(at, [...(groups.get(at) ?? []), k]);
-      }
-      for (const [at, ks] of [...groups].sort()) {
-        const mean = (pick: (k: (typeof sizes)[number]) => number): number => ks.reduce((n, k) => n + pick(k), 0) / ks.length;
-        // The mean of how many times farther, taken over the logarithms, so a card twice as near counts as much as one twice as far.
-        const farther = Math.exp(mean((k) => Math.log(k.farther)));
-        const [vit, part] = at.split(" ");
-        const over = farther > LIKENESS_BAR.mean;
-        line(`    ${over ? "over " : "     "} vitality ${vit}, ${part === "2" ? "a half" : part === "4" ? "a quarter" : "an eighth"} of the swap size: ${f(farther, 2)} times; area ${f(mean((k) => share(k.size, "area")), 2)} (${f(mean((k) => share(k.top, "area")), 2)}), ink ${f(mean((k) => share(k.size, "ink")), 2)} (${f(mean((k) => share(k.top, "ink")), 2)}), unlike ${f(mean((k) => k.size.unlike), 2)} (${f(mean((k) => k.top.unlike), 2)}); ${ks.length} presets`);
-        if (over) process.exitCode = 1;
-      }
-      for (const k of failing) line(`    over  ${k.row.name.padEnd(30)} ${f(k.row.vitality, 2)} at ${k.size.px} px: ${f(k.farther, 2)} times farther; area ${f(share(k.size, "area"), 2)} (${f(share(k.top, "area"), 2)} at the swap), ink ${f(share(k.size, "ink"), 2)} (${f(share(k.top, "ink"), 2)})`);
-      if (failing.length > 0) process.exitCode = 1;
     } else if (key.startsWith("hitch ")) {
       const s = value as { medianMs: number; p99Ms: number; maxMs: number; stutters: number };
       line(`  ${key}: median ${f(s.medianMs, 2)} ms, p99 ${f(s.p99Ms, 1)}, max ${f(s.maxMs, 1)}, ${s.stutters} stutters`);

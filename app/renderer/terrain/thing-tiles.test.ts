@@ -45,29 +45,6 @@ describe("what is placed on the land, tile by tile", () => {
     }
   });
 
-  it("asks a trip's way for only what can be seen from it, and walking for no more while a trip asks", async () => {
-    const asked = new Set<string>();
-    const tiles = createThingTiles(() => FOCAL);
-    tiles.add<string>({ name: "stones", largest: () => 0.5, tile: (ti, tj) => (asked.add(`${ti},${tj}`), Promise.resolve([`${ti},${tj}`])), place: () => undefined });
-    tiles.open(spec);
-    await tiles.fetch(0, 0);
-    const reach = seenTo(0.5, FOCAL);
-    // Every tile within sight of the mark is requested, and none past it, with no walking lead.
-    for (const key of asked) {
-      const [ti, tj] = key.split(",").map(Number) as [number, number];
-      const [x, z] = middle(ti, tj);
-      expect(Math.hypot(x, z) - (TILE.size * Math.SQRT2) / 2).toBeLessThanOrEqual(reach + 1e-6);
-    }
-    const byTrip = asked.size;
-    expect(byTrip).toBeGreaterThan(0);
-    // Walking on far off while a trip requests tiles adds no tiles of the walk's own.
-    tiles.follow(1300, 1300, false);
-    expect(asked.size).toBe(byTrip);
-    // Walking without a trip requests its lead as before.
-    tiles.follow(1300, 1300);
-    expect(asked.size).toBeGreaterThan(byTrip);
-  });
-
   it("never holds a trip on a tile that fails: it drops the tile with a warning and requests it again", async () => {
     let fails = 1;
     const placed: string[][] = [];

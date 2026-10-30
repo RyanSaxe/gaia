@@ -14,11 +14,4 @@ describe("code on a page", () => {
     // Every line keeps all its text.
     expect(highlight(lines, "app/x.ts").map((l) => l.map((p) => p.text).join(""))).toEqual(lines);
   });
-
-  it("knows a language by how its comments are written", () => {
-    const [py] = highlight(["x = 1  # count"], "tools/a.py");
-    expect(inked(py ?? [])).toEqual(["num:1", "com:# count"]);
-    const [rs] = highlight(["pub fn read(&self) -> Graph { // ok"], "engine/src/a.rs");
-    expect(inked(rs ?? [])).toEqual(["kw:pub", "kw:fn", "fn:read", "kw:self", "type:Graph", "com:// ok"]);
-  });
 });

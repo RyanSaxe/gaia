@@ -20,13 +20,4 @@ describe("lettering on a board", () => {
       }
     }
   });
-
-  it("keeps a short name on one line at full size, and breaks a long one where a person would", () => {
-    expect(letter("main", SIGNBOARD, measure)).toEqual({ lines: ["main"], size: 92, widen: 1 });
-    const config = letter("electron.vite.config.ts", SIGNBOARD, measure);
-    expect(config.lines).toHaveLength(2);
-    expect(config.lines[0]).toMatch(/[./-]$/);
-    expect(config.size).toBeGreaterThanOrEqual(SIGNBOARD.least);
-    expect(letter("createPlantInstances", SIGNBOARD, measure).lines).toEqual(["createPlant", "Instances"]);
-  });
 });

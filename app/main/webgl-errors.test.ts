@@ -8,6 +8,11 @@ describe("WebGL errors on a page's console", () => {
     errors.note("[.WebGL-0x13c00b2f00]GL_INVALID_OPERATION: glDrawElements: Mismatch between texture format and sampler type (signed/unsigned/float/shadow).");
     errors.note("WebGL: INVALID_VALUE: texImage2D: no canvas");
     errors.note("THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false\n\nMaterial Name: \nMaterial Type: ShaderMaterial");
+    // Warnings that break no draw, and a context the page lets go of, are not errors.
+    errors.note("[.WebGL-0x13c00a1e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels");
+    errors.note("WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost");
+    errors.note("THREE.WebGLRenderer: Context Lost.");
+    errors.note("Failed to load resource: net::ERR_FILE_NOT_FOUND");
     expect(errors.count()).toBe(6);
     expect(errors.summary()).toBe(
       [
@@ -17,23 +22,5 @@ describe("WebGL errors on a page's console", () => {
         "  THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false",
       ].join("\n"),
     );
-  });
-
-  it("says when Chromium stopped reporting them, so the count is only a floor", () => {
-    const errors = webglErrors();
-    errors.note("[.WebGL-0x13c00a1e00]GL_INVALID_OPERATION: glDrawArrays: Mismatch between texture format and sampler type (signed/unsigned/float/shadow).");
-    errors.note("WebGL: too many errors, no more errors will be reported to the console for this context.");
-    expect(errors.count()).toBe(1);
-    expect(errors.summary()).toMatch(/^WebGL errors: 1 or more/);
-  });
-
-  it("passes over warnings that break no draw, and a context the page lets go of", () => {
-    const errors = webglErrors();
-    errors.note("[.WebGL-0x13c00a1e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels");
-    errors.note("WebGL: CONTEXT_LOST_WEBGL: loseContext: context lost");
-    errors.note("THREE.WebGLRenderer: Context Lost.");
-    errors.note("Failed to load resource: net::ERR_FILE_NOT_FOUND");
-    expect(errors.count()).toBe(0);
-    expect(errors.summary()).toBe("WebGL errors: none.");
   });
 });

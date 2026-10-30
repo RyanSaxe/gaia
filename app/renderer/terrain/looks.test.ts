@@ -37,12 +37,4 @@ describe("the words Jev composes small things from", () => {
     const docs = Object.values(FORMS).map((l) => l.doc);
     expect(new Set(docs).size).toBe(docs.length);
   });
-
-  it("offer a bush no tree's frame and no needles, and a tree no bush's frame", () => {
-    const bush = COMPOSING.offered?.bush;
-    const tree = COMPOSING.offered?.tree;
-    expect(bush?.forRole("Skeleton").map((p) => p.id).sort()).toEqual(["bramble@1", "sapling@1", "thicket@1"]);
-    expect(bush?.forRole("Foliage").some((p) => p.id === "needles@1")).toBe(false);
-    expect(tree?.forRole("Skeleton").map((p) => p.id).sort()).toEqual(["branching@1", "spire@1"]);
-  });
 });

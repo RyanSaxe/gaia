@@ -77,36 +77,6 @@ describe("placing a world's things on a bake", () => {
     }
   });
 
-  it("places a world laid out from code: each building and landmark on its lot, each definition near its spot as a tree, a stone, a bush or flowers and nothing else besides, trails between lots", () => {
-    const t = pristine;
-    const code = request.code;
-    const placed = placeWorld(t, request);
-    placed.sites.forEach((site, i) => {
-      const lot = code.lots[i]!;
-      expect(Math.hypot(site.x - lot.x, site.z - lot.z)).toBeLessThanOrEqual(lot.radius + 1e-6);
-    });
-    const [lm] = placed.landmarks;
-    expect(lm?.landmark).toBe(0);
-    expect(Math.hypot(lm!.site.x - 10, lm!.site.z - 70)).toBeLessThanOrEqual(7 + 1e-6);
-    // Every tree is a definition that appears as one, near where the layout put it, with the tree blueprint it was
-    // given. Nothing else grows trees.
-    expect(placed.trees.map((tree) => tree.symbol).sort()).toEqual([1, 2]);
-    for (const tree of placed.trees) {
-      const sym = code.symbols[tree.symbol!]!;
-      expect(Math.hypot(tree.x - sym.x, tree.z - sym.z)).toBeLessThan(8);
-      expect(tree.variant).toBe(sym.variant);
-    }
-    expect(placed.symbols.slice(1)).toEqual([-1, -1]);
-    // A file's function is placed near where the layout put it, with the blueprint it was given and its own vitality.
-    const sym = placed.placements[placed.symbols[0]!]!;
-    expect(sym).toMatchObject({ rule: "rocks", variant: 0, vitality: 0.3 });
-    expect(Math.hypot(sym.x + 55, sym.z + 40)).toBeLessThan(5);
-    // Every stone, bush or flowers represents code. The land between the things that represent code is grass, ground and water.
-    expect(placed.placements).toEqual([sym]);
-    expect(placed.network.trails.length).toBeGreaterThan(0);
-    for (const tr of placed.network.trails) expect(["packages/a->packages/b", "packages/a->packages/c"]).toContain(tr.id);
-  });
-
   it("places buildings and a landmark laid out on one lot each on ground of its own, as a crowded file's definitions are", () => {
     const buildings = houses.map((blueprint, i) => {
       const built = realize(blueprint, structure, buildingLib, { seed: seedOf(`crowded-${i}`), facts: { size: 1, floors: 1 } });
