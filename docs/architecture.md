@@ -179,6 +179,12 @@ seeded from the part's path and moves to the centroid of the part's cells,
 which makes the parts round. The weight is solved so the part's area matches
 its share.
 
+Placing the world stands each building and landmark on its own ground: its
+file's patch, or its entity's lot. It takes the spot nearest the thing's plot
+there that is dry, level enough and clear of the others
+([`place.ts`](../app/renderer/terrain/place.ts)). A building whose wheel
+needs running water stands on its area's stream bank instead.
+
 Most edits leave the land unchanged. Every file's and folder's ground rounds
 up to the next rung of a scale whose rungs are 25% apart, and the land's size
 follows the rung of the whole code's ground. An edit that moves no ground

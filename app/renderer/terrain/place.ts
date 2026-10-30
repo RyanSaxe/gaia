@@ -8,7 +8,7 @@
 
 import { type Blueprint, type BuildingPlan, type Built, type Library, type RouteSpec, seedOf } from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, groundSlope, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, waterDepthAt } from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, groundSlope, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnGround, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, waterDepthAt } from "@gaia/terrain";
 
 /** A building to site: its plan, what is beside it, the name its trails use, and its wheel if it needs a stream's bank. */
 export interface BuildingToPlace {
@@ -133,6 +133,12 @@ export interface Placed {
   readonly took: Readonly<Record<string, number>>;
   /** The names of buildings that need running water but found no stream bank. No test world has one. */
   readonly dry: readonly string[];
+  /**
+   * The lot ids of buildings and landmarks whose own ground, their file's patch or entity's lot, has no spot the
+   * placement rules accept, so they stand on the nearest ground that has one. A building with a wheel on a stream bank
+   * is not among them.
+   */
+  readonly offGround: readonly string[];
 }
 
 /**
@@ -325,19 +331,35 @@ function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
 }
 
 /**
+ * The ground a building or landmark stands for, by its lot: the ground of the file's patch or the entity's lot its
+ * lot's center is on, as `placeAt` reads it.
+ */
+function ownGround(code: Pick<CodeLayout, "cells" | "patches">): (lot: Circle) => OwnGround {
+  const sites = groundSites(code);
+  const ownerAt = (x: number, z: number): number | undefined => sites[siteAt(sites, x, z)]?.owner;
+  return (lot) => {
+    const mine = ownerAt(lot.x, lot.z);
+    return (x, z) => ownerAt(x, z) === mine;
+  };
+}
+
+/**
  * Places each landmark on its lot and routes the trails Jev chose between
  * the sited buildings and the landmarks, leveled into the ground.
  */
-function settleCode(t: Terrain, req: PlaceRequest, code: CodeLayout, sites: readonly BuildingSite[]): { landmarks: PlacedLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
+function settleCode(t: Terrain, req: PlaceRequest, code: CodeLayout, sites: readonly BuildingSite[], offGround: string[]): { landmarks: PlacedLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
   const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite, id: code.lots[i]?.id ?? b.name }));
   const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: houseGround(b) }));
+  const own = ownGround(code);
   const landmarks: PlacedLandmark[] = [];
   const ids: string[] = [];
   for (const { landmark, lot } of code.landmarks) {
     const lm = req.landmarks[landmark];
     if (lm === undefined) continue;
-    const site = findLandmarkSite(t, 0, landmarkGround(lm.base), avoid, lot);
+    const mine = own(lot);
+    const site = findLandmarkSite(t, 0, landmarkGround(lm.base), avoid, lot, mine);
     if (site === null) continue;
+    if (!mine(site.x, site.z)) offGround.push(lot.id);
     landmarks.push({ landmark, id: lot.id, site });
     ids.push(lot.id);
     avoid.push({ x: site.x, z: site.z, radius: landmarkGround(lm.base) });
@@ -402,9 +424,11 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
     since = now;
   };
   const code = req.code;
+  const own = ownGround(code);
   const sites: BuildingSite[] = [];
   const pads: PadEdit[] = [];
   const dry: string[] = [];
+  const offGround: string[] = [];
   // A building whose wheel needs running water goes on the bank of its own area's stream, so it is sited before the
   // others while the banks are free.
   const onBank = (i: number): boolean => {
@@ -416,18 +440,19 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
   for (const i of [...all.filter(onBank), ...all.filter((i) => !onBank(i))]) {
     const b = req.buildings[i] as BuildingToPlace;
     const lot = code.lots[i] ?? null;
-    let site: BuildingSite = findSite(t, b.plan, taken, 30, b.beside, lot, pads);
+    const mine = lot === null ? null : own(lot);
+    let site: BuildingSite = findSite(t, b.plan, taken, 30, b.beside, lot, pads, mine);
     if (onBank(i)) {
       const bank = findBankSite(t, b.plan, b.beside as Extent, b.wheel as Extent, regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z), taken, lot, pads);
       if (bank === null) dry.push(b.name);
       else site = bank;
-    }
+    } else if (lot !== null && mine !== null && !mine(site.x, site.z)) offGround.push(lot.id);
     pads.push(levelPad(t, b.plan, site, b.beside));
     taken.push(site);
     sites[i] = site;
   }
   mark("sites");
-  const { landmarks, network, ways } = settleCode(t, req, code, sites);
+  const { landmarks, network, ways } = settleCode(t, req, code, sites, offGround);
   mark("ways");
 
   // Trees keep off the trails and their cairns, out of the buildings and out from under a landmark.
@@ -514,5 +539,5 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
   mark("symbols");
   const edging = network.ways.map((way) => edgeStones(t, way, seedOf(`${way.id}/edging`)));
   mark("edging");
-  return { sites, landmarks, network, trees, placements, symbols, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took, dry };
+  return { sites, landmarks, network, trees, placements, symbols, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took, dry, offGround };
 }

@@ -6,7 +6,7 @@
 
 import { type Lattice, heightAt, slopeAt, worldOf, worldOfZ } from "./lattice.ts";
 import type { Occupied } from "./placement.ts";
-import type { Circle } from "./site.ts";
+import type { Circle, OwnGround } from "./site.ts";
 import { isWet } from "./plants.ts";
 import type { Terrain } from "./world.ts";
 import { withinLand } from "./edge.ts";
@@ -47,13 +47,8 @@ export const LANDMARK_SITE = {
   blend: 8,
 } as const;
 
-/**
- * The most prominent gentle, dry spot in a region for a landmark of
- * footprint `radius`, clear of `avoid`. On a lot (`within`), it is the most
- * prominent such spot on the lot, with fallbacks so it always returns a site.
- * Without a lot, it returns null when the region has no room.
- */
-export function findLandmarkSite(t: Terrain, region: number, radius: number, avoid: readonly Occupied[], within: Circle | null = null): LandmarkSite | null {
+/** The most prominent gentle, dry spot for a landmark of footprint `radius` clear of `avoid`: in `region`, or on a lot (`within`), on ground `own` holds when it is given. */
+function prominentSpot(t: Terrain, region: number, radius: number, avoid: readonly Occupied[], within: Circle | null, own: OwnGround | null): { x: number; z: number; score: number } | null {
   const l = t.lattice;
   const half = t.spec.size / 2 - LANDMARK_SITE.margin - radius;
   const center = within ?? t.spec.regions[region];
@@ -67,6 +62,7 @@ export function findLandmarkSite(t: Terrain, region: number, radius: number, avo
       const iz = Math.round((z - l.origin) / l.spacing);
       // On a lot, any region's land counts.
       if (within !== null ? Math.hypot(x - within.x, z - within.z) > within.radius : t.region[iz * l.n + ix] !== region) continue;
+      if (own !== null && !own(x, z)) continue;
       if (!withinLand(t.spec, x, z, LANDMARK_SITE.margin + radius)) continue;
       if (avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius)) continue;
       let steep = slopeAt(l, x, z);
@@ -86,6 +82,25 @@ export function findLandmarkSite(t: Terrain, region: number, radius: number, avo
       if (best === null || score > best.score) best = { x, z, score };
     }
   }
+  return best;
+}
+
+/**
+ * The most prominent gentle, dry spot in a region for a landmark of
+ * footprint `radius`, clear of `avoid`. On a lot (`within`), it is the most
+ * prominent such spot on the lot, with fallbacks so it always returns a site.
+ * With the landmark's own ground (`own`), such as its file's patch, it first
+ * takes the most prominent such spot on that ground, nearest the lot.
+ * Without a lot, it returns null when the region has no room.
+ */
+export function findLandmarkSite(t: Terrain, region: number, radius: number, avoid: readonly Occupied[], within: Circle | null = null, own: OwnGround | null = null): LandmarkSite | null {
+  if (within !== null && own !== null) {
+    for (let r = within.radius; r <= within.radius + 60; r += 6) {
+      const mine = prominentSpot(t, region, radius, avoid, { ...within, radius: r }, own);
+      if (mine !== null) return { x: mine.x, z: mine.z, y: levelDisc(t, mine.x, mine.z, radius), radius, region };
+    }
+  }
+  const best = prominentSpot(t, region, radius, avoid, within, null);
   if (best !== null) return { x: best.x, z: best.z, y: levelDisc(t, best.x, best.z, radius), radius, region };
   if (within === null) return null;
   // With no such spot on the lot, use the lot's center unless something already occupies it. Then retry on the lot

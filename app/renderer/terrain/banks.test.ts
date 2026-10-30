@@ -146,15 +146,13 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
       // Every stone, bush or flowers represents code.
       expect(placed.placements.length, root).toBe(placed.symbols.filter((i) => i >= 0).length);
       // A file's or definition's building or landmark is on that file's patch, except a building whose wheel needs
-      // running water, which is on its area's stream bank. Placing moves some of the showcases' buildings and
-      // landmarks off their file's patch, so only the proving ground holds this today.
-      if (root === "showcase" || root === "showcase-fixed") {
-        expect(astray, root).toEqual([]);
-        continue;
-      }
+      // running water, which is on its area's stream bank, and a landmark whose patch has no spot the placement rules
+      // accept (`Placed.offGround`). Every building fits its own patch.
       const sited = [...code.buildings.map((b, i) => ({ path: b.facts.path, at: placed.sites[i]! })), ...placed.landmarks.map((l) => ({ path: l.id, at: l.site }))];
       const banked = new Set(buildings.flatMap((b, i) => (b.wheel !== undefined ? [code.buildings[i]!.facts.path] : [])));
-      for (const t of world.things.filter((x) => x.file !== undefined && !banked.has(x.path))) {
+      const off = new Set(placed.offGround);
+      expect(code.buildings.filter((b) => off.has(b.facts.path)).map((b) => b.facts.path), root).toEqual([]);
+      for (const t of world.things.filter((x) => x.file !== undefined && !banked.has(x.path) && !off.has(x.path))) {
         const at = sited.find((x) => x.path === t.path)?.at;
         const on = at === undefined ? undefined : placeAt(world, at.x, at.z).file?.path;
         if (on !== t.file) astray.push(`${t.path} (${t.as}) on ${on ?? "no file"}`);
