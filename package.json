@@ -26,6 +26,7 @@
     "proving": "tsx tools/proving.ts",
     "showcase": "tsx tools/showcase.ts",
     "probe": "tsx tools/probe.ts",
+    "app-opens": "tsx tools/app-opens.ts",
     "bench": "tsx tools/bench.ts"
   },
   "devDependencies": {

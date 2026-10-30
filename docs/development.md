@@ -89,31 +89,25 @@ during the hitch walk. Leave the window uncovered while it shows.
 | Probe | Measures |
 | --- | --- |
 | `pnpm probe drawn` | Frame time, draw calls and triangles by kind and pass |
-| `pnpm probe steps` | Changes during walking with the wind frozen |
+| `pnpm probe steps` | Changes during walking with the wind frozen, failing on a pop |
 | `pnpm probe hitch` | Frame times and stutters during a walk |
-| `pnpm probe swap` | Transitions between full geometry and baked far forms |
-| `pnpm probe likeness` | Baked far forms beside their full forms at and past the swap |
+| `pnpm probe swap` | Transitions between full geometry and baked far forms, failing on a pop |
 | `pnpm probe stress` | The proving ground with five times as many code trees |
 | `pnpm probe paint` | Journal painting capture and rendering |
 
 `--world showcase` or `--world proving` selects a world. Unless one is named,
-the swap test runs in the showcase and the likeness test in the proving
-ground. `--spot` limits the stops, and `--dpr` sets the pixel ratio. A probe
-fails on any WebGL error. A timing from a busy machine is not a reliable
-baseline.
+the swap test runs in the showcase. `--spot` limits the stops, and `--dpr` sets
+the pixel ratio. A probe fails on any WebGL error. A timing from a busy machine
+is not a reliable baseline.
 
-The likeness test places one copy of every build that has a far form, at
-vitality 1, 0.65 and 0.3. It draws each copy as its far form and as its full
-form, at its swap size and at a half, a quarter and an eighth of it. Haze is
-off while it draws, because haze would fade both forms alike. At each size it
-compares how much of the crown's part of the screen each form covers. Below
-the swap size, a far form's coverage may stray no farther from its full form's
-than it does at the swap size, within the margins in `LIKENESS_BAR`
-([`probe.ts`](../tools/probe.ts)). The test fails otherwise. It also reports
-each form's ink, which is the form's mean change from the empty view, and how
-much the two forms differ cell by cell.
-`__lab.terrain.likeness(name, vitality, sizes, true)` also returns the empty
-view, the far form and the full form as pictures.
+A pop is a step that changes more than the wind does in half a second, and
+enough to see. The walk test steps the detail toward the woods with the wind's
+clock frozen and compares each step's worst block with the wind's change along
+the walk. The swap test draws one copy of each plant alone against the sky as
+it changes form, and compares each step with the wind's change over the plant.
+Either test fails the run on any pop. A change below its floor in
+[`probe.ts`](../tools/probe.ts) (`POP_FLOOR`, `SWAP_FLOOR`) is too small to see
+and never counts.
 
 ## Components and fixtures
 
@@ -189,7 +183,14 @@ pnpm exec tsx tools/cargo.ts clippy --all-targets -- -D warnings
 ```
 
 `pnpm check` runs TypeScript, ESLint and Vitest. CI runs these and the Rust
-checks on Linux, Windows and macOS, plus an Electron rendering probe on macOS.
+checks on Linux, Windows and macOS. On macOS it also opens the showcase in the
+app with `pnpm app-opens`, and runs the probe's draw and walk tests in the
+showcase ([`check.yml`](../.github/workflows/check.yml)).
+
+`pnpm app-opens` opens the showcase in the real app, as a person starts Gaia:
+Electron's main process, the world service and the engine binary, with Jev
+off. It fails unless the world opens, the engine connects, and nothing reports
+an error ([`app-opens.ts`](../tools/app-opens.ts)).
 
 The pre-commit hook checks types, lints changed TypeScript and JavaScript
 files, and runs clippy when Rust changes. It runs no tests. Run relevant tests

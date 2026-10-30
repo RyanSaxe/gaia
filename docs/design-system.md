@@ -302,9 +302,7 @@ texel, and a sharp edge would cut them away (`CARD` in
 covers more of the plant, and a twig, strand or needle finer than a texel
 covers only part of one. The card draws that partial coverage as it is,
 without sharpening, so its outer twigs thin with distance as the full form's
-do rather than vanish. The [likeness probe](development.md#visual-verification)
-compares each far form with its full form at a half, a quarter and an eighth
-of its swap size.
+do rather than vanish.
 
 A far form declines with its tree. The bake renders the plant healthy and
 records how much of each texel it covers at several vitalities down to 0

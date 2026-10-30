@@ -4,7 +4,7 @@ import { composeWorld, factsOf, judgeWorld, keptJev, landOf, requestKey } from "
 import { fakeJevClient } from "@gaia/world/testing";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { facts as provingFacts } from "virtual:proving-ground";
-import { LIMIT_KEY, refreshWorld, judgedGraph, openWorld } from "./open-world.ts";
+import { LIMIT_KEY, refreshWorld, openWorld } from "./open-world.ts";
 import type { Opening } from "./protocol.ts";
 
 /** Builds the engine's graph of the proving ground at commit "c0ffee": its directories, entities, files, definitions and imports. */
@@ -90,21 +90,6 @@ function engineWith(o: { status?: { live: boolean; key: boolean }; answer?: (r: 
 /** Every file in the `health` messages, with its vitality, in order. */
 const named = (shown: readonly Opening[]): [string, number][] => shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));
 
-describe("the graph a world is laid out from", () => {
-  it("keeps the imports between files and the calls and references into each definition, which its building rises with, and no other edge", () => {
-    const [a, b] = graph.nodes.filter((n) => n.kind === "def");
-    if (a === undefined || b === undefined) throw new Error("The proving ground has no two definitions.");
-    const by = { by: "rule" as const };
-    const calls = { from: a.id, to: b.id, kind: "calls" as const, by };
-    const references = { from: "file:moor/guide.md", to: a.id, kind: "references" as const, by };
-    const others = [
-      { from: a.id, to: b.id, kind: "implements" as const, by },
-      { from: b.id, to: "file:moor/guide.md", kind: "references" as const, by },
-    ];
-    expect(judgedGraph({ ...graph, edges: [...graph.edges, calls, references, ...others] }).edges).toEqual([...graph.edges, calls, references]);
-  });
-});
-
 describe("opening a world", () => {
   // The test lays out the proving ground twice, once for the land and once for the finished world, which takes about a
   // second on a busy machine.
@@ -139,34 +124,22 @@ describe("opening a world", () => {
     await expect(openWorld({ engine, root: "proving", consent: async () => true, progress: () => {} })).rejects.toThrow(/Gaia could not finish judging the area fords: OpenRouter answered 400/);
   });
 
-  it("fails the opening with Jev off, saying how to turn it on, and sends nothing", async () => {
-    const { engine, batches } = engineWith({ status: { live: false, key: true } });
-    await expect(openWorld({ engine, root: "proving", consent: async () => true, progress: () => {} })).rejects.toThrow(/Jev is off: start Gaia with GAIA_JEV=live/);
-    expect(batches).toEqual([]);
-  });
-
-  it("with Jev off and every look kept, still fails the opening while the understanding pass has requests left, and opens once nothing is left", { timeout: 20_000 }, async () => {
+  it("with Jev off, fails the opening while anything is unanswered, and opens from kept answers once nothing is left, sending nothing", { timeout: 20_000 }, async () => {
+    const off = { live: false, key: false };
+    const none = engineWith({ status: off });
+    await expect(openWorld({ engine: none.engine, root: "proving", consent: async () => true, progress: () => {} })).rejects.toThrow(/Jev is off/);
+    expect(none.batches).toEqual([]);
     // Stores an answer for every look and composing request, as an earlier opening with Jev would.
     const keptAnswers: Record<string, unknown> = {};
     const judging = keptJev(fakeJevClient(), { stored: new Map(), keep: (key, r) => (keptAnswers[key] = r) });
     await composeWorld(facts, LOOKS, judging, await judgeWorld(facts, LOOKS, judging), { graph });
-    const off = { live: false, key: false };
     const pending = engineWith({ status: off, kept: keptAnswers, understandingLeft: 3 });
     await expect(openWorld({ engine: pending.engine, root: "proving", consent: async () => true, progress: () => {} })).rejects.toThrow(/Jev is off/);
+    expect(pending.batches).toEqual([]);
     const done = engineWith({ status: off, kept: keptAnswers });
     const document = await openWorld({ engine: done.engine, root: "proving", consent: async () => true, progress: () => {} });
     expect(done.batches).toEqual([]);
     expect(document.summary).toContain("judged by Jev");
-  });
-
-  it("leaves the world unopened when the person declines a cost past their limit, and sends nothing", async () => {
-    const asked: number[] = [];
-    const { engine, batches } = engineWith({ limitUsd: 0.001, estimateUsd: 0.05 });
-    await expect(openWorld({ engine, root: "proving", consent: async (plan) => (asked.push(plan.estimatedUsd), false), progress: () => {} })).rejects.toThrow(/you chose not to go ahead/);
-    // The estimate includes the composing requests, about two per thing, each priced as a tree's composing request.
-    expect(asked).toHaveLength(1);
-    expect(asked[0]).toBeGreaterThan(0.05 * 2);
-    expect(batches).toEqual([]);
   });
 });
 

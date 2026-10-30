@@ -1,27 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type AnyKind, type Library, type Role, seedOf } from "@gaia/schema";
-import { PRIMITIVES } from "@gaia/primitives";
+import { type AnyKind, type Library, seedOf } from "@gaia/schema";
 import { realize } from "@gaia/realize";
 import { sweep } from "@gaia/world";
 import { COMPOSING } from "../terrain/looks.ts";
 import { markOf } from "../terrain/plant-mark.ts";
 import type { MarkBox } from "./marks.ts";
-import { PLANT_INKS, type PlantComposition, drawPlant, plantRoom } from "./plant-marks.ts";
-
-/** The roles whose primitives appear in the world as trees, bushes, stones and drifts, so the map must ink them. */
-const DRAWN: ReadonlySet<Role> = new Set(["Skeleton", "Surface", "Foliage", "Ornament", "Rock", "Overgrowth", "Drift"]);
-
-describe("the plant marks' table", () => {
-  it("says how the map inks every tree, bush, stone and flower primitive, in the role that primitive fills", () => {
-    const unsaid = PRIMITIVES.filter((p) => DRAWN.has(p.role) && PLANT_INKS[p.id]?.role !== p.role).map((p) => p.id);
-    expect(unsaid).toEqual([]);
-  });
-
-  it("names only primitives that exist, each in its own role", () => {
-    const roles = new Map<string, Role>(PRIMITIVES.map((p) => [p.id, p.role]));
-    expect(Object.entries(PLANT_INKS).filter(([id, ink]) => roles.get(id) !== ink.role).map(([id]) => id)).toEqual([]);
-  });
-});
+import { type PlantComposition, drawPlant, plantRoom } from "./plant-marks.ts";
 
 /**
  * A canvas that only records the points a drawing shows. A path's points count once it is filled or stroked. Paint

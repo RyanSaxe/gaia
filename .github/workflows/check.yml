@@ -39,10 +39,17 @@ jobs:
       - run: pnpm check
       - run: cargo test --quiet
       - run: cargo clippy --all-targets --quiet -- -D warnings
+      # The real app opens the showcase with the engine built above: about two minutes.
+      - if: runner.os == 'macOS'
+        run: pnpm app-opens
 
-  # The probe at one spot of the showcase, from its fixtures, in Electron on
-  # a fresh profile: it fails on any WebGL error, such as a far bake whose
-  # every draw WebGL rejects.
+  # The probe in the showcase, from its fixtures, in Electron on a fresh
+  # profile: it fails on any WebGL error, such as a far bake whose every draw
+  # WebGL rejects, and on a pop in the walk test from either spot. Opening the
+  # world takes about nine minutes here, and the walks two more. The swap test
+  # stays out: on these runners the frame where a full form gives way to its
+  # far form changes a few plants by about one level, at the test's floor, so
+  # it passes or fails from run to run.
   probe:
     runs-on: macos-latest
     timeout-minutes: 30
@@ -54,7 +61,7 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm probe drawn --world showcase --spot valley --dpr 1
+      - run: pnpm probe drawn steps --world showcase --dpr 1
 
   # Branch protection requires this stable name as the platform matrix changes.
   required-check:

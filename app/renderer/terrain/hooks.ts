@@ -6,7 +6,7 @@
 // user-facing code calls them.
 
 import * as THREE from "three";
-import { AIR, type Realized } from "@gaia/realize";
+import type { Realized } from "@gaia/realize";
 import type { Blueprint } from "@gaia/schema";
 import { settleVitality } from "@gaia/render";
 import { clearanceAt, fordBeside, footingAt, frameOf, groundHeightAt, heightAt, junctionVitality, placeAt, planTrip, stanceAt, standAt, lastSpotAt, type LastSpot, type Stride, TRAVEL, trailWay, travelFrom, travelStep, wadingAt, WALK_TO, walkStep, type Walker, waterDepthAt, wayVitalityAt, wayWear } from "@gaia/terrain";
@@ -29,30 +29,9 @@ interface SwapStep {
   readonly wind: Change;
   readonly distance: number;
 }
-/**
- * Likeness test thresholds. A form covers a pixel when it changes one of the pixel's channels from the empty view by
- * more than `covered` 8-bit levels. The test compares the two forms in square cells `cells` times smaller than the
- * crown's span and at least `least` pixels across.
- */
-const LIKENESS = { covered: 6, cells: 8, least: 2 } as const;
-/** How one form draws over the crown's part of the screen. `area` is the share covered, and `ink` is the mean change from the empty view in 8-bit levels. */
-interface FormDrawn {
-  readonly area: number;
-  readonly ink: number;
-}
-/** One size of the likeness test: the crown's span and distance, how each form draws, and how much the card differs from the full form. */
-interface LikenessSize {
-  readonly px: number;
-  readonly distance: number;
-  readonly card: FormDrawn;
-  readonly full: FormDrawn;
-  readonly unlike: number;
-  readonly pictures?: { readonly empty: string; readonly card: string; readonly full: string };
-}
-
 /** Returns every hook of `window.__lab.terrain`, which read and drive `world`. */
 export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>> {
-  /** The single copy the swap and likeness tests show for each preset, keyed by `FarOf` because tree and bush forms are numbered separately. */
+  /** The single copy the swap test shows for each preset, keyed by `FarOf` because tree and bush forms are numbered separately. */
   const swapCopies = new Map<FarOf, Copies>();
 
   /** The region of the lattice sample nearest (x, z). */
@@ -139,17 +118,17 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     try {
       for (let k = 0; (k + 1) * step <= meters; k++) {
         world.walkTo(start.x + dx * k * step, start.z + dz * k * step, start.yaw, start.pitch);
-        world.frozen = t;
         world.detailPin = { x: world.walker.x, z: world.walker.z };
-        const here = grabFrame();
         if (k % windEvery === 0) {
           const moment = t + (k / windEvery) * 1.7;
           world.frozen = moment;
           const before = grabFrame();
           world.frozen = moment + 0.5;
           wind.push(frameChange(before, grabFrame()).worst);
-          world.frozen = t;
         }
+        // The step's own frames come after the wind's, so the wind's moments never reach the step's change.
+        world.frozen = t;
+        const here = grabFrame();
         world.detailPin = { x: world.walker.x + dx * step, z: world.walker.z + dz * step };
         const on = frameChange(here, grabFrame());
         steps.push([k * step, on.mean, on.worst]);
@@ -368,8 +347,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
    * The last two measure at least a 64-pixel block around the copy, as the
    * walk test does, since the crown spans only a few pixels. Each step is
    * compared with the wind's half-second change at the same spot, over the
-   * plant's part of the screen. The grass and every other plant with a far
-   * form are hidden while the test runs. A plant still too large to dissolve
+   * plant's part of the screen. Only the sky, the copy and its far form draw
+   * while the test runs, so no land or other plant stands in front of the
+   * copy or moves behind it. A plant still too large to dissolve
    * where the air already hides it stays drawn and changes nothing. Returns
    * null when there is no such preset.
    */
@@ -399,9 +379,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const going = (g: number): number => GONE.start - g * (GONE.start - GONE.end);
     const others = world.instanced().filter((o) => o.far !== undefined);
     const hidden = others.map((o) => o.object.visible);
-    const grassShown = world.grass.mesh.visible;
     for (const o of others) o.object.visible = false;
-    world.grass.mesh.visible = false;
+    const alone = new Set<THREE.Object3D>([world.sky.mesh, copy.object, set.forms.cards.object]);
+    const shown = world.scene.children.map((o) => o.visible);
+    for (const o of world.scene.children) if (!alone.has(o)) o.visible = false;
     world.swapping = copy;
     const was = world.frozen;
     const t = world.light.uTime.value;
@@ -449,167 +430,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     } finally {
       release();
       world.swapping = null;
-      copy.object.visible = false;
       others.forEach((o, i) => (o.object.visible = hidden[i] ?? true));
-      world.grass.mesh.visible = grassShown;
-      world.detailPin = null;
-      world.frozen = was;
-    }
-  }
-
-  /**
-   * The likeness test: whether a far form looks like its full form wherever
-   * it draws, not only where they swap. One copy of preset `name` at
-   * `vitality` is placed alone straight ahead of the eye, with its form held
-   * in a slot, at each crown span in `sizes`, in device pixels. The default
-   * sizes are `swapPx` and a half, a quarter and an eighth of it, keeping
-   * those above `GONE.start`. With the wind's clock frozen, each size draws
-   * three ways: empty, the card alone and the full form alone. Only the sky
-   * is behind the copy, and the air is clear (`uClearAir`), because both
-   * forms pass through the same air, which would hide what they share. A size
-   * whose crown lies past `AIR.dissolveEnd` draws in neither form and is
-   * skipped. Each size reports, over the crown's part of the screen, each
-   * form's covered `area` and `ink`, and `unlike`: the mean difference
-   * between the two forms in cells of an eighth of the crown, divided by the
-   * full form's own difference from the empty view. With `pictures`, it also
-   * returns the three views of the crown as PNG data URLs. Returns null when
-   * there is no such preset.
-   */
-  async function likenessTest(name: string, vitality: number, sizes?: readonly number[], pictures = false): Promise<{ name: string; vitality: number; swapPx: number; sizes: LikenessSize[] } | null> {
-    const preset = farPresets().find((f) => f.name === name);
-    if (preset === undefined) return null;
-    const set = [world.treeSet, world.bushSet].find((s) => s.forms === preset.far.forms);
-    if (set === undefined) throw new Error(`The likeness test's ${name} belongs to no set of far forms.`);
-    const release = await set.stream.hold(preset.far.form);
-    const forms = preset.far.forms;
-    const form = preset.far.form;
-    const slot = forms.slotOf(form);
-    const swapPx = FAR.swapPx * (preset.far.share ?? 1);
-    const gl = world.renderer.getContext();
-    const width = gl.drawingBufferWidth;
-    const height = gl.drawingBufferHeight;
-    const focal = height / 2 / Math.tan(THREE.MathUtils.degToRad(world.camera.fov) / 2);
-    let copy = swapCopies.get(preset.far);
-    if (copy === undefined) {
-      copy = createCopies(preset.plant(), world.light, [], preset.far);
-      world.scene.add(copy.object);
-      swapCopies.set(preset.far, copy);
-    }
-    const copies = copy;
-    const crown = copies.crown;
-    const dx = -Math.sin(world.walker.yaw);
-    const dz = -Math.cos(world.walker.yaw);
-    const eye = world.camera.position.clone();
-    // Leave only the sky behind the copy, so nothing else hides it at any distance.
-    const keep = new Set<THREE.Object3D>([world.sky.mesh, copies.object, world.treeSet.forms.cards.object, world.bushSet.forms.cards.object]);
-    const hidden = [...world.scene.children.filter((o) => o.visible && !keep.has(o) && !(o as THREE.Light).isLight), ...world.instanced().flatMap((o) => (o.object.visible && o !== copies ? [o.object] : []))];
-    for (const o of hidden) o.visible = false;
-    world.swapping = copies;
-    const was = world.frozen;
-    world.frozen = world.light.uTime.value;
-    world.detailPin = { x: eye.x, z: eye.z };
-    world.light.uClearAir.value = 1;
-    const picture = (pixels: Uint8Array, [x0, y0, x1, y1]: readonly [number, number, number, number]): string => {
-      const out = document.createElement("canvas");
-      out.width = x1 - x0;
-      out.height = y1 - y0;
-      const ctx = out.getContext("2d") as CanvasRenderingContext2D;
-      const image = ctx.createImageData(out.width, out.height);
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          const from = (y * width + x) * 4;
-          image.data.set([pixels[from] as number, pixels[from + 1] as number, pixels[from + 2] as number, 255], ((y1 - 1 - y) * out.width + (x - x0)) * 4);
-        }
-      }
-      ctx.putImageData(image, 0, 0);
-      return out.toDataURL("image/png");
-    };
-    const measure = (px: number): LikenessSize | null => {
-      const distance = (2 * crown.radius * focal) / px;
-      if (distance - crown.radius >= AIR.dissolveEnd) return null;
-      copies.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
-      copies.setVitality(vitality);
-      settleVitality();
-      const corners = [-1, 1].flatMap((sx) => [-1, 1].flatMap((sy) => [-1, 1].map((sz) => new THREE.Vector3(eye.x + dx * distance + sx * crown.radius, eye.y + sy * crown.radius, eye.z + dz * distance + sz * crown.radius).project(world.camera))));
-      const xs = corners.map((c) => ((c.x + 1) / 2) * width);
-      const ys = corners.map((c) => ((c.y + 1) / 2) * height);
-      const rect = [Math.max(0, Math.floor(Math.min(...xs)) - 2), Math.max(0, Math.floor(Math.min(...ys)) - 2), Math.min(width, Math.ceil(Math.max(...xs)) + 2), Math.min(height, Math.ceil(Math.max(...ys)) + 2)] as const;
-      copies.object.visible = false;
-      const empty = grabFrame(3);
-      copies.object.visible = true;
-      // Draw the card alone by raising the form's swap size well above this span for now, so the full form stops drawing.
-      forms.set(form, slot, Math.max(swapPx, px * FAR.leave * 1.25));
-      const card = grabFrame(3);
-      forms.set(form, slot, swapPx);
-      copies.detail = "full";
-      const full = grabFrame(3);
-      copies.detail = "auto";
-      const [x0, y0, x1, y1] = rect;
-      const drawn = (pixels: Uint8Array): FormDrawn => {
-        let covered = 0;
-        let ink = 0;
-        for (let y = y0; y < y1; y++) {
-          for (let x = x0; x < x1; x++) {
-            const i = (y * width + x) * 4;
-            const r = Math.abs((pixels[i] as number) - (empty[i] as number));
-            const g = Math.abs((pixels[i + 1] as number) - (empty[i + 1] as number));
-            const b = Math.abs((pixels[i + 2] as number) - (empty[i + 2] as number));
-            if (Math.max(r, g, b) > LIKENESS.covered) covered++;
-            ink += (r + g + b) / 3;
-          }
-        }
-        const area = (x1 - x0) * (y1 - y0);
-        return { area: +(covered / area).toFixed(4), ink: +(ink / area).toFixed(3) };
-      };
-      const side = Math.max(LIKENESS.least, Math.round(px / LIKENESS.cells));
-      const cols = Math.ceil((x1 - x0) / side);
-      /** Each cell's summed red, green and blue, and its pixel count. */
-      const cells = (pixels: Uint8Array): Float64Array => {
-        const sums = new Float64Array(cols * Math.ceil((y1 - y0) / side) * 4);
-        for (let y = y0; y < y1; y++) {
-          for (let x = x0; x < x1; x++) {
-            const k = (Math.floor((y - y0) / side) * cols + Math.floor((x - x0) / side)) * 4;
-            const i = (y * width + x) * 4;
-            for (let c = 0; c < 3; c++) sums[k + c] = (sums[k + c] as number) + (pixels[i + c] as number);
-            sums[k + 3] = (sums[k + 3] as number) + 1;
-          }
-        }
-        return sums;
-      };
-      /** The mean difference of two pictures' cells, in 8-bit levels. */
-      const apart = (a: Float64Array, b: Float64Array): number => {
-        let sum = 0;
-        let n = 0;
-        for (let k = 0; k < a.length; k += 4) {
-          const count = a[k + 3] as number;
-          if (count === 0) continue;
-          sum += (Math.abs((a[k] as number) - (b[k] as number)) + Math.abs((a[k + 1] as number) - (b[k + 1] as number)) + Math.abs((a[k + 2] as number) - (b[k + 2] as number))) / 3 / count;
-          n++;
-        }
-        return n === 0 ? 0 : sum / n;
-      };
-      const [e, c, f] = [cells(empty), cells(card), cells(full)];
-      const tree = apart(f, e);
-      return {
-        px,
-        distance: +distance.toFixed(1),
-        card: drawn(card),
-        full: drawn(full),
-        unlike: +(tree > 0 ? apart(c, f) / tree : 0).toFixed(3),
-        ...(pictures ? { pictures: { empty: picture(empty, rect), card: picture(card, rect), full: picture(full, rect) } } : {}),
-      };
-    };
-    try {
-      const spans = sizes ?? [1, 2, 4, 8].map((k) => swapPx / k).filter((px) => px > GONE.start);
-      return { name, vitality, swapPx, sizes: spans.flatMap((px) => measure(px) ?? []) };
-    } finally {
-      release();
-      forms.set(form, slot, swapPx);
-      copies.detail = "auto";
-      world.light.uClearAir.value = 0;
-      world.swapping = null;
-      copies.object.visible = false;
-      for (const o of hidden) o.visible = true;
+      world.scene.children.forEach((o, i) => (o.visible = shown[i] ?? true));
+      copy.object.visible = false;
       world.detailPin = null;
       world.frozen = was;
     }
@@ -998,8 +821,6 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     },
     /** The swap test (`swapTest`) for preset `name` at `vitality`. With no name, returns every tree and bush preset's name. */
     swap: (name?: string, vitality = 1) => (name === undefined ? farPresets().map((p) => p.name) : swapTest(name, vitality)),
-    /** The likeness test (`likenessTest`) for preset `name` at `vitality`, at each crown span in `sizes` or the default ones. */
-    likeness: (name: string, vitality = 1, sizes?: readonly number[], pictures = false) => likenessTest(name, vitality, sizes, pictures),
     /** Resolves once the bushes' far forms, which load after the loading screen closes, have loaded and both sets have settled. */
     farReady: () => world.bushesBaked,
     /** Resolves once both far sets have settled at the person's current spot, with no form loading or fading. */
