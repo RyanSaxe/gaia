@@ -15,11 +15,8 @@ function texelOf(matrix: THREE.Matrix4, p: THREE.Vector3): [number, number] {
 }
 
 describe("the sun's shadow map", () => {
-  for (const [hour, direction] of [
-    ["the midday sun", new THREE.Vector3(0.45, 0.85, 0.3)],
-    ["a low evening sun", new THREE.Vector3(-0.8, 0.2, 0.55)],
-  ] as const) {
-    it(`keeps its texels on the same spots of land as its box follows a walk, under ${hour}`, () => {
+  it("keeps its texels on the same spots of land as its box follows a walk, under a midday or a low evening sun", () => {
+    for (const direction of [new THREE.Vector3(0.45, 0.85, 0.3), new THREE.Vector3(-0.8, 0.2, 0.55)]) {
       const light = createSceneLight();
       light.uSunIntensity.value = 1;
       light.uSunDirection.value.copy(direction).normalize();
@@ -38,14 +35,20 @@ describe("the sun's shadow map", () => {
         expect(Math.abs(v - v0 - Math.round(v - v0))).toBeLessThan(1e-3);
       }
       shadow.dispose();
-    });
-  }
+    }
+  });
 
-  it("is a depth map that compares and uploads even before the sun's pass exists, so no draw that reads it fails", () => {
-    // Until a texture is marked for upload, with its version above 0, three binds a color placeholder in its place.
-    const map = createSceneLight().uShadowMap.value;
-    expect(map).toBeInstanceOf(THREE.DepthTexture);
-    expect((map as THREE.DepthTexture).compareFunction).not.toBeNull();
-    expect(map?.version).toBeGreaterThan(0);
+  it("gives every draw a depth map it can compare against before the sun's pass exists, so none fails", () => {
+    // The shaders sample the map with a shadow sampler. Until the sun's pass makes its own, the light holds a map of
+    // the same kind, marked for upload, because three binds a color placeholder in place of a texture never uploaded
+    // and a shadow sampler cannot read one.
+    const light = createSceneLight();
+    const before = light.uShadowMap.value;
+    const shadow = createSunShadow(light, SIZE);
+    const made = light.uShadowMap.value as THREE.DepthTexture;
+    expect(before).toBeInstanceOf(THREE.DepthTexture);
+    expect((before as THREE.DepthTexture).compareFunction).toBe(made.compareFunction);
+    expect(before?.version).toBeGreaterThan(0);
+    shadow.dispose();
   });
 });

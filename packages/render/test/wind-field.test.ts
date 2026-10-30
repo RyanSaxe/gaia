@@ -36,11 +36,8 @@ describe("WIND_FIELD_GLSL", () => {
   const moments = Array.from({ length: 400 }, (_, i) => i * 7.31);
   const spots = [[0, 0], [37, -12], [-260, 410], [512, 180], [-90, -333]] as const;
 
-  it("blows the same gusts as gustAt, everywhere and at every moment", () => {
+  it("blows the same gusts as gustAt, everywhere and at every moment, turning with windDirAt by the scene light's clock", () => {
     for (const [x, z] of spots) for (const t of moments) expect(gust({ x, y: z }, t)).toBeCloseTo(gustAt(x, z, t), 3);
-  });
-
-  it("turns with windDirAt, by the scene light's clock", () => {
     const light = createSceneLight();
     for (const t of moments) {
       light.uTime.value = t;

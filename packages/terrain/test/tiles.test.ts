@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { COVER_TAPS, type Terrain, type TerrainPlan, bakeTerrain, bakeTile, landformsOf, planTerrain } from "@gaia/terrain";
+import { COVER_TAPS, type OwnedSite, type Terrain, type TerrainPlan, bakeTerrain, bakeTile, composeRows, finishTerrain, landformsOf, latticeOf, ownershipGrid, ownershipOf, ownershipRows, planOf } from "@gaia/terrain";
 import { randomWorld, sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
-// Baked once for the file: the sample world and two random draws, each whole and as a plan.
-const worlds = [sampleWorld(), randomWorld(lib, 7003), randomWorld(lib, 7011)].map((spec) => ({
-  whole: bakeTerrain(spec, lib),
-  plan: planTerrain(spec, landformsOf(spec, lib)),
-}));
+// Baked once for the file: the sample world and two random draws, each whole, with the plan the app reads from the
+// whole bake to bake a tile alone.
+const worlds = [sampleWorld(), randomWorld(lib, 7003), randomWorld(lib, 7011)].map((spec) => {
+  const whole = bakeTerrain(spec, lib);
+  return { whole, plan: planOf(whole) };
+});
 /** Small tiles, so a test covers many edges between them cheaply. */
 const SIZE = 64;
 
@@ -55,15 +56,7 @@ function sameAsWhole(plan: TerrainPlan, whole: Terrain, x0: number, z0: number):
 }
 
 describe("land baked in tiles", () => {
-  it("plans the same fit and water as a bake of the whole world, without composing it all", () => {
-    for (const { whole, plan } of worlds) {
-      expect(plan.fit).toBe(whole.fit);
-      expect(plan.streams).toEqual(whole.streams);
-      expect(plan.ponds.map((p) => p.pond)).toEqual(whole.ponds);
-    }
-  });
-
-  it("bakes each tile alone, sample for sample, as a bake of the whole world holds it", () => {
+  it("bakes each tile alone, and the world and its ground's owners in bands on any number of threads, sample for sample as a bake of the whole world holds them", () => {
     let water = 0;
     for (const { whole, plan } of worlds) {
       water += whole.streams.length + whole.ponds.length;
@@ -71,6 +64,27 @@ describe("land baked in tiles", () => {
     }
     // The worlds checked have water, so the tiles must cut it too.
     expect(water).toBeGreaterThan(2);
-    // Composes a few dozen small tiles with their margins. It takes a couple of seconds when other work shares the machine.
-  }, 20_000);
+    // Bands composed apart, in any order, finish into the same world.
+    const { whole } = worlds[0]!;
+    const w = whole.spec;
+    const landforms = landformsOf(w, lib);
+    const { n } = latticeOf(w);
+    const cuts = [0, 97, 98, 250, n];
+    const banded = finishTerrain(w, landforms, cuts.slice(1).map((z1, i) => composeRows(w, landforms, cuts[i]!, z1)).reverse());
+    for (const key of ["waterLevel", "shore", "region", "coverRegions", "coverShares"] as const) expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
+    expect(bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights))).toBe(true);
+    expect(banded.streams).toEqual(whole.streams);
+    // Who owns the ground, computed in rows apart as the bake's threads do, is who owns it computed whole.
+    const size = 300;
+    const sites: OwnedSite[] = [];
+    for (let x = -144; x <= 144; x += 16) for (let z = -144; z <= 144; z += 16) sites.push({ x, z, owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1 });
+    const own = ownershipOf(sites, { size }, size + 80);
+    const grid = ownershipGrid(size + 80);
+    const top = ownershipRows(sites, { size }, grid, 0, 40);
+    const rest = ownershipRows(sites, { size }, grid, 40, grid.n);
+    expect([...top.owners, ...rest.owners]).toEqual([...own.owners]);
+    expect([...top.shares, ...rest.shares]).toEqual([...own.shares]);
+    // Composes a few dozen small tiles with their margins, and a world in bands. It takes a few seconds alone, and has
+    // taken over twenty when the whole suite shares a busy machine.
+  }, 60_000);
 });

@@ -16,17 +16,14 @@ describe("a change in vitality easing in", () => {
     return out;
   };
 
-  it("moves toward the vitality given and never past it, and where it was never ahead of what it shows", () => {
+  it("spreads a jump over seconds: no frame moves what the shader averages between by more than a hundredth of it", () => {
     const { shown, was } = jump();
+    // It moves toward the vitality given and never past it, and where it was is never ahead of what it shows.
     for (let k = 1; k < shown.length; k++) {
       expect(shown[k]).toBeGreaterThanOrEqual(shown[k - 1] as number);
       expect(shown[k]).toBeLessThanOrEqual(1);
       expect(was[k]).toBeLessThanOrEqual(shown[k] as number);
     }
-  });
-
-  it("spreads a jump over seconds: no frame moves what the shader averages between by more than a hundredth of it", () => {
-    const { shown, was } = jump();
     const middle = shown.map((s, k) => (s + (was[k] as number)) / 2);
     for (let k = 1; k < middle.length; k++) expect((middle[k] as number) - (middle[k - 1] as number)).toBeLessThan(0.01);
     // Half a lag in, it has not yet moved even halfway.
