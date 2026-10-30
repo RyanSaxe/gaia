@@ -146,12 +146,7 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
       // Every stone, bush or flowers represents code.
       expect(placed.placements.length, root).toBe(placed.symbols.filter((i) => i >= 0).length);
       // A file's or definition's building or landmark is on that file's patch, except a building whose wheel needs
-      // running water, which is on its area's stream bank. Placing moves some of the showcases' buildings and
-      // landmarks off their file's patch, so only the proving ground holds this today.
-      if (root === "showcase" || root === "showcase-fixed") {
-        expect(astray, root).toEqual([]);
-        continue;
-      }
+      // running water, which is on its area's stream bank.
       const sited = [...code.buildings.map((b, i) => ({ path: b.facts.path, at: placed.sites[i]! })), ...placed.landmarks.map((l) => ({ path: l.id, at: l.site }))];
       const banked = new Set(buildings.flatMap((b, i) => (b.wheel !== undefined ? [code.buildings[i]!.facts.path] : [])));
       for (const t of world.things.filter((x) => x.file !== undefined && !banked.has(x.path))) {
