@@ -39,6 +39,9 @@ jobs:
       - run: pnpm check
       - run: cargo test --quiet
       - run: cargo clippy --all-targets --quiet -- -D warnings
+      # The real app opens the showcase with the engine built above: about two minutes.
+      - if: runner.os == 'macOS'
+        run: pnpm app-opens
 
   # The probe in the showcase, from its fixtures, in Electron on a fresh
   # profile: it fails on any WebGL error, such as a far bake whose every draw
