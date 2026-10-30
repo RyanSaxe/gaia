@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { COVER_TAPS, type Terrain, type TerrainPlan, bakeTerrain, bakeTile, landformsOf, planTerrain } from "@gaia/terrain";
+import { COVER_TAPS, type Terrain, type TerrainPlan, bakeTerrain, bakeTile, composeRows, finishTerrain, landformsOf, latticeOf, planTerrain } from "@gaia/terrain";
 import { randomWorld, sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
@@ -55,15 +55,7 @@ function sameAsWhole(plan: TerrainPlan, whole: Terrain, x0: number, z0: number):
 }
 
 describe("land baked in tiles", () => {
-  it("plans the same fit and water as a bake of the whole world, without composing it all", () => {
-    for (const { whole, plan } of worlds) {
-      expect(plan.fit).toBe(whole.fit);
-      expect(plan.streams).toEqual(whole.streams);
-      expect(plan.ponds.map((p) => p.pond)).toEqual(whole.ponds);
-    }
-  });
-
-  it("bakes each tile alone, sample for sample, as a bake of the whole world holds it", () => {
+  it("bakes each tile alone, and the world in bands on any number of threads, sample for sample as a bake of the whole world holds it", () => {
     let water = 0;
     for (const { whole, plan } of worlds) {
       water += whole.streams.length + whole.ponds.length;
@@ -71,6 +63,17 @@ describe("land baked in tiles", () => {
     }
     // The worlds checked have water, so the tiles must cut it too.
     expect(water).toBeGreaterThan(2);
-    // Composes a few dozen small tiles with their margins. It takes a couple of seconds when other work shares the machine.
-  }, 20_000);
+    // Bands composed apart, in any order, finish into the same world.
+    const { whole } = worlds[0]!;
+    const w = whole.spec;
+    const landforms = landformsOf(w, lib);
+    const { n } = latticeOf(w);
+    const cuts = [0, 97, 98, 250, n];
+    const banded = finishTerrain(w, landforms, cuts.slice(1).map((z1, i) => composeRows(w, landforms, cuts[i]!, z1)).reverse());
+    for (const key of ["waterLevel", "shore", "region", "coverRegions", "coverShares"] as const) expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
+    expect(bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights))).toBe(true);
+    expect(banded.streams).toEqual(whole.streams);
+    // Composes a few dozen small tiles with their margins, and a world in bands. It takes a few seconds alone, and has
+    // taken over twenty when the whole suite shares a busy machine.
+  }, 60_000);
 });

@@ -15,11 +15,8 @@ function texelOf(matrix: THREE.Matrix4, p: THREE.Vector3): [number, number] {
 }
 
 describe("the sun's shadow map", () => {
-  for (const [hour, direction] of [
-    ["the midday sun", new THREE.Vector3(0.45, 0.85, 0.3)],
-    ["a low evening sun", new THREE.Vector3(-0.8, 0.2, 0.55)],
-  ] as const) {
-    it(`keeps its texels on the same spots of land as its box follows a walk, under ${hour}`, () => {
+  it("keeps its texels on the same spots of land as its box follows a walk, under a midday or a low evening sun", () => {
+    for (const direction of [new THREE.Vector3(0.45, 0.85, 0.3), new THREE.Vector3(-0.8, 0.2, 0.55)]) {
       const light = createSceneLight();
       light.uSunIntensity.value = 1;
       light.uSunDirection.value.copy(direction).normalize();
@@ -38,8 +35,8 @@ describe("the sun's shadow map", () => {
         expect(Math.abs(v - v0 - Math.round(v - v0))).toBeLessThan(1e-3);
       }
       shadow.dispose();
-    });
-  }
+    }
+  });
 
   it("is a depth map that compares and uploads even before the sun's pass exists, so no draw that reads it fails", () => {
     // Until a texture is marked for upload, with its version above 0, three binds a color placeholder in its place.

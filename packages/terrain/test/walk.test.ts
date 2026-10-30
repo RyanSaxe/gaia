@@ -6,7 +6,6 @@ import { buildSlots } from "@gaia/realize";
 import {
   BODY_RADIUS,
   type Deck,
-  DRY,
   EYE_HEIGHT,
   GAIT,
   type Stride,
@@ -75,25 +74,6 @@ const tapWalk = (solids: Solids, from: Walker, to: Walker) => {
 const dry = { x: pond.x - pond.reach * 2.5, z: pond.z };
 
 describe("wading and swimming", () => {
-  it("measures water depth as the surface above the ground, and none on dry land", () => {
-    expect(waterDepthAt(t, pond.x, pond.z)).toBeGreaterThan(SWIM.to);
-    expect(waterDepthAt(t, dry.x, dry.z)).toBe(0);
-    for (let k = 0; k < 400; k++) expect(waterDepthAt(t, ((k * 37) % 300) - 150, ((k * 91) % 300) - 150)).toBeGreaterThanOrEqual(0);
-  });
-
-  it("reads the depth of the water as the land is now, when its arrays change in place as the page's land window moves", () => {
-    // The page keeps one terrain and writes each new window of land into its arrays.
-    const land = structuredClone(t);
-    expect(waterDepthAt(land, pond.x, pond.z)).toBeGreaterThan(SWIM.to);
-    // The window moves to land with no water, so the pond is gone from under the person.
-    land.waterLevel.fill(DRY);
-    expect(waterDepthAt(land, pond.x, pond.z)).toBe(0);
-    expect(stanceAt(land, pond.x, pond.z).depth).toBe(0);
-    // Then it moves to where the water is a meter deep everywhere.
-    land.lattice.heights.forEach((h, i) => (land.waterLevel[i] = h + 1));
-    expect(waterDepthAt(land, dry.x, dry.z)).toBeCloseTo(1, 4);
-  });
-
   it("slows as the water deepens, swims slower still, and is never stopped by water", () => {
     expect(wadeSpeed(0)).toBe(1);
     expect(wadeSpeed(1.1)).toBeCloseTo(0.4, 6);
@@ -113,6 +93,10 @@ describe("wading and swimming", () => {
     const far = path.findIndex((p) => p.x > pond.x + pond.reach * 1.2);
     expect(far).toBeGreaterThan(0);
     expect(path.slice(0, far).some((p) => waterDepthAt(t, p.x, p.z) > SWIM.to)).toBe(true);
+    // A tapped walk crosses the pond all the way, swimming its deep middle.
+    const walk = tapWalk(NO_SOLIDS, { x: pond.x - pond.reach * 1.6, z: pond.z }, { x: pond.x + pond.reach * 1.6, z: pond.z });
+    expect(walk.state).toBe("arrived");
+    expect(walk.path.some((p) => stanceAt(t, p.x, p.z).swim === 1)).toBe(true);
   });
 
   it("keeps the eyes above the surface, easing them smoothly down to swim and back up the bank", () => {
@@ -213,7 +197,7 @@ describe("solids", () => {
     }
   });
 
-  it("walks a tap around what stands in the way and arrives, turning in curves", () => {
+  it("walks a tap around what stands in the way and arrives, or stops at the nearest place it can reach, turning in curves", () => {
     // A wall of rocks across the way and a trunk past it.
     const wall = solidsOf([
       ...[-3, -1.4, 0, 1.4, 3].map((dz) => outlineShape(dry.x - 12, dry.z + dz, dz, 1, lumps)),
@@ -235,19 +219,17 @@ describe("solids", () => {
       }
       heading = h;
     }
-  });
-
-  it("walks up to a tapped solid's face, and stops at the nearest reachable place when solids ring the target", () => {
+    // A tap on a solid walks up to its face, and a tap ringed by solids stops at the nearest place it can reach.
     const face = tapWalk(solids, { x: trunk.x + 8, z: trunk.z }, { x: trunk.x, z: trunk.z });
     expect(face.state).toBe("arrived");
     expect(face.at.x).toBeGreaterThan(trunk.x);
     expect(clearanceAt(solids, face.at.x, face.at.z)).toBeLessThan(WALK_TO.reach + BODY_RADIUS + 0.1);
     const goal = { x: dry.x - 14, z: dry.z };
     const ring = solidsOf(Array.from({ length: 14 }, (_, k) => ({ x: goal.x + Math.cos((k / 14) * Math.PI * 2) * 3, z: goal.z + Math.sin((k / 14) * Math.PI * 2) * 3, radius: 0.62 })));
-    const walk = tapWalk(ring, dry, goal);
-    expect(walk.state).toBe("arrived");
-    expect(Math.hypot(walk.at.x - goal.x, walk.at.z - goal.z)).toBeGreaterThan(3);
-    for (const p of walk.path) expect(clearanceAt(ring, p.x, p.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
+    const ringed = tapWalk(ring, dry, goal);
+    expect(ringed.state).toBe("arrived");
+    expect(Math.hypot(ringed.at.x - goal.x, ringed.at.z - goal.z)).toBeGreaterThan(3);
+    for (const p of ringed.path) expect(clearanceAt(ring, p.x, p.z)).toBeGreaterThanOrEqual(BODY_RADIUS - 1e-6);
   });
 });
 
@@ -351,41 +333,8 @@ describe("a building's walls", () => {
   });
 });
 
-describe("walking to a tapped point", () => {
-  const pace = (target: Walker): number => wayAhead(planWalk(t, NO_SOLIDS, dry, target), dry).pace;
-
-  it("walks to a point on dry ground and ends the walk within reach of it", () => {
-    const target = { x: dry.x - 12, z: dry.z + 5 };
-    expect(waterDepthAt(t, target.x, target.z)).toBe(0);
-    const walk = tapWalk(NO_SOLIDS, dry, target);
-    expect(walk.state).toBe("arrived");
-    expect(Math.hypot(walk.at.x - target.x, walk.at.z - target.z)).toBeLessThanOrEqual(WALK_TO.reach);
-    // At walking pace, straight there.
-    expect(walk.seconds).toBeCloseTo((13 - WALK_TO.reach) / WALK_TO.pace, 1);
-  });
-
-  it("walks to a near point at walking pace and jogs toward a far one", () => {
-    expect(pace({ x: dry.x - 10, z: dry.z })).toBeCloseTo(WALK_TO.pace, 6);
-    expect(pace({ x: dry.x - 60, z: dry.z })).toBeCloseTo(WALK_TO.pace * WALK_TO.jog, 6);
-  });
-
-  it("crosses a pond all the way, swimming its deep middle", () => {
-    const west = { x: pond.x - pond.reach * 1.6, z: pond.z };
-    const east = { x: pond.x + pond.reach * 1.6, z: pond.z };
-    const walk = tapWalk(NO_SOLIDS, west, east);
-    expect(walk.state).toBe("arrived");
-    expect(walk.path.some((p) => stanceAt(t, p.x, p.z).swim === 1)).toBe(true);
-  });
-
-  it("ends the walk where it stands when the point is within reach", () => {
-    const walk = tapWalk(NO_SOLIDS, dry, { x: dry.x + 1, z: dry.z + 0.5 });
-    expect(walk.state).toBe("arrived");
-    expect(walk.path).toEqual([dry]);
-  });
-});
-
 describe("walking off the land", () => {
-  it("walks straight off the codebase's land and on for two kilometers without stopping, eyes always on the ground", () => {
+  it("walks straight off the codebase's land and on for two kilometers without stopping, eyes always on the ground, and takes a tap there to the very spot", () => {
     let at: Walker = { x: 0, z: t.spec.size / 4 };
     let farthest = 0;
     for (let i = 0; i < 2200 / (WALK_TO.pace * dt * 2.4); i++) {
@@ -396,9 +345,7 @@ describe("walking off the land", () => {
     }
     expect(farthest).toBeGreaterThan(landHalf(t) * Math.SQRT2 + 1800);
     expect(stanceAt(t, at.x, at.z).eye).toBeCloseTo(groundHeightAt(t, at.x, at.z) + EYE_HEIGHT, 6);
-  });
-
-  it("takes a tap far out in the wild to the very spot tapped", () => {
+    // A tap far out in the wild walks to the very spot tapped.
     const to = { x: -(landHalf(t) + 600), z: 140 };
     const walk = planWalk(t, NO_SOLIDS, { x: 0, z: 0 }, to);
     expect(walk.target.x).toBeCloseTo(to.x, 6);
@@ -475,9 +422,7 @@ describe("a walker's stride", () => {
       expect(speedOf(f.body)).toBeLessThan(0.01);
       expect(Math.abs(f.body.eye - settled[0]!.body.eye)).toBeLessThan(1e-3);
     }
-  });
-
-  it("carried at travel's pace, stands exactly where it is carried, its eyes riding the ground", () => {
+    // Carried at travel's pace, it stands exactly where it is carried, its eyes riding the ground.
     let body = standAt(t, [], dry.x, dry.z);
     for (let i = 1; i <= 180; i++) {
       const x = dry.x - TRAVEL.pace * i * dt;

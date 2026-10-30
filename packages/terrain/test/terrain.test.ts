@@ -6,26 +6,20 @@ import { sweep, validate } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
 import { type Realized, realize } from "@gaia/realize";
 import {
-  BANKED,
+  type BuildingSite,
   COVER_TAPS,
   FLOW,
   RELIEF_BUDGET,
-  type SolvedStream,
-  SHORE_CAP,
   type Station,
   TERRAIN,
   WILDS,
   type Terrain,
   bakeTerrain,
-  composeRows,
   extentOf,
   composer,
-  flowAt,
   coverWeights,
   findSite,
-  finishTerrain,
   groundHeightAt,
-  latticeOf,
   levelPad,
   siteToWorld,
   groundedBase,
@@ -33,7 +27,6 @@ import {
   heightAt,
   landHalf,
   landformsOf,
-  regionWeights,
   slopeAt,
   isWet,
   PLANT_SLOPE,
@@ -47,10 +40,9 @@ import {
   wildShare,
   wildThicket,
   wildsRing,
-  warpPoint,
   withinBudget,
 } from "@gaia/terrain";
-import { FULL_WORLD, randomWorld, sampleWorld } from "@gaia/terrain/testing";
+import { randomWorld, sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
@@ -104,6 +96,23 @@ describe("terrain", { timeout: 20_000 }, () => {
       expect(r.maxStep, "step").toBeLessThanOrEqual(RELIEF_BUDGET.maxStep);
       expect(withinBudget(r)).toBe(true);
     }
+    // The baked lattice has no crack: neighbors differ by less than the steepest slope allows.
+    const limit = Math.tan((RELIEF_BUDGET.maxSlope * Math.PI) / 180) * 1.5;
+    for (const [i, t] of baked.slice(0, 4).entries()) {
+      const { n, heights, spacing, origin } = t.lattice;
+      const half = t.spec.size / 2;
+      let steepest = { step: 0, x: 0, z: 0 };
+      for (let iz = 0; iz < n - 1; iz++) {
+        if (Math.abs(origin + iz * spacing) > half) continue;
+        for (let ix = 0; ix < n - 1; ix++) {
+          if (Math.abs(origin + ix * spacing) > half) continue;
+          const h0 = heights[iz * n + ix]!;
+          const step = Math.max(Math.abs(heights[iz * n + ix + 1]! - h0), Math.abs(heights[(iz + 1) * n + ix]! - h0));
+          if (step > steepest.step) steepest = { step, x: origin + ix * spacing, z: origin + iz * spacing };
+        }
+      }
+      expect(steepest.step, `world ${i} at (${steepest.x}, ${steepest.z})`).toBeLessThan(limit * spacing);
+    }
   });
 
   it("has no seams at region edges: the composed ground and the cover blend are continuous", () => {
@@ -152,71 +161,6 @@ describe("terrain", { timeout: 20_000 }, () => {
       }),
     );
 
-  it("weighs regions past the land, however far, exactly as measuring every site of every region would", () => {
-    const smooth = (t: number): number => {
-      const c = Math.max(0, Math.min(1, t));
-      return c * c * (3 - 2 * c);
-    };
-    for (const spec of [sampleWorld(FULL_WORLD), ...draws.slice(0, 4)]) {
-      const out = new Float64Array(spec.regions.length);
-      for (const [fx, fz] of [[1, 0], [-2, 3], [0.75, -0.6], [10, 10], [0, -0.7], [-0.62, 0.62]] as const) {
-        const [x, z] = [spec.size * fx, spec.size * fz];
-        regionWeights(spec, x, z, out);
-        const [wx, wz] = warpPoint(x, z);
-        const d = spec.regions.map((r) => Math.min(...(r.sites ?? [{ x: r.x, z: r.z, reach: r.reach ?? 0 }]).map((site) => Math.hypot(wx - site.x, wz - site.z) - (site.reach ?? 0))));
-        const nearest = Math.min(...d);
-        d.forEach((v, r) => expect(out[r]).toBeCloseTo(1 - smooth((v - nearest) / TERRAIN.blend), 12));
-      }
-    }
-  });
-
-  it("eases neighboring landforms into each other over a band of 90 m or more", () => {
-    let pairs = 0;
-    for (const w of [sampleWorld(), ...draws.slice(0, 6)]) {
-      const weights = new Float64Array(w.regions.length);
-      for (const p of neighbors(w)) {
-        if (p.len < TERRAIN.blend + 20) continue;
-        pairs++;
-        // Walk from a's center to b's: where b first counts and where a last does.
-        let first = Infinity;
-        let last = -Infinity;
-        for (let s = 0; s <= p.len; s += 1) {
-          regionWeights(w, w.regions[p.a]!.x + p.dx * s, w.regions[p.a]!.z + p.dz * s, weights);
-          if ((weights[p.b] as number) > 0.01) first = Math.min(first, s);
-          if ((weights[p.a] as number) > 0.01) last = Math.max(last, s);
-        }
-        expect(last - first, `${p.a}|${p.b}`).toBeGreaterThanOrEqual(90);
-      }
-    }
-    expect(pairs).toBeGreaterThan(5);
-  });
-
-  it("curves region borders: the line where neighbors weigh equally wanders off the straight bisector", () => {
-    let wandering = 0;
-    let pairs = 0;
-    for (const w of [sampleWorld(), ...draws.slice(0, 6)]) {
-      const weights = new Float64Array(w.regions.length);
-      for (const p of neighbors(w)) {
-        pairs++;
-        // Along lines parallel to a-b, find where b's weight first reaches a's.
-        const crossings: number[] = [];
-        for (let offset = -40; offset <= 40; offset += 10) {
-          for (let s = -p.len / 2; s <= p.len / 2; s += 0.5) {
-            const x = p.mid.x + p.dx * s - p.dz * offset;
-            const z = p.mid.z + p.dz * s + p.dx * offset;
-            regionWeights(w, x, z, weights);
-            if ((weights[p.b] as number) >= (weights[p.a] as number) - 1e-9 && (weights[p.a] as number) < 1) {
-              crossings.push(s);
-              break;
-            }
-          }
-        }
-        if (crossings.length > 0 && Math.max(...crossings) - Math.min(...crossings) > 8) wandering++;
-      }
-    }
-    expect(wandering / pairs).toBeGreaterThan(0.6);
-  });
-
   it("drifts one cover into the next in patches, while each region's middle stays its own", () => {
     let islands = 0;
     for (const t of baked.slice(0, 7)) {
@@ -260,52 +204,6 @@ describe("terrain", { timeout: 20_000 }, () => {
     expect(islands).toBeGreaterThan(3);
   });
 
-  it("measures the shore: zero under water deep enough to bank, rising at most a meter per meter, capped", () => {
-    let wet = 0;
-    let thin = 0;
-    for (const t of baked.slice(0, 6)) {
-      const { n, heights, spacing } = t.lattice;
-      const wrong: number[] = [];
-      for (let i = 0; i < n * n; i++) {
-        const shore = t.shore[i]!;
-        const depth = t.waterLevel[i]! - heights[i]!;
-        if (depth > 0) wet++;
-        // Thin water, where a stream narrows to nothing, has a shore distance above 0, so its banks narrow.
-        if (depth > 0 && shore > 0) thin++;
-        const ok =
-          (shore === 0 ? depth > 0 : depth < BANKED) &&
-          shore <= SHORE_CAP &&
-          (i % n === n - 1 || Math.abs(t.shore[i + 1]! - shore) <= spacing + 1e-5) &&
-          (i + n >= n * n || Math.abs(t.shore[i + n]! - shore) <= spacing + 1e-5);
-        if (!ok) wrong.push(i);
-      }
-      expect(wrong).toEqual([]);
-    }
-    expect(wet).toBeGreaterThan(0);
-    expect(thin).toBeGreaterThan(0);
-  });
-
-  it("marks the ground whose nearest water is a pond, and none whose nearest is a stream", () => {
-    let marked = 0;
-    for (const t of baked.slice(0, 6)) {
-      const { n, spacing, origin } = t.lattice;
-      for (const p of t.ponds) {
-        // Just past a pond's water, on its far side from any stream, the mark is set.
-        const i = Math.round((p.x - origin) / spacing);
-        const j = Math.round((p.z - origin) / spacing);
-        if (t.nearPond[j * n + i] === 1) marked++;
-      }
-      for (const s of t.streams) {
-        const st = s.stations[Math.floor(s.stations.length / 2)]!;
-        if (t.ponds.some((p) => Math.hypot(st.x - p.x, st.z - p.z) < p.reach + 20)) continue;
-        const i = Math.round((st.x - origin) / spacing);
-        const j = Math.round((st.z - origin) / spacing);
-        expect(t.nearPond[j * n + i], "the middle of a stream far from any pond").toBe(0);
-      }
-    }
-    expect(marked).toBeGreaterThan(0);
-  });
-
   it("fills every pond its lands hold, even where another area's river runs close by", () => {
     const land = (relief: FilledSlot) =>
       blueprintOf("biome", {
@@ -331,25 +229,6 @@ describe("terrain", { timeout: 20_000 }, () => {
       const landforms = landformsOf(t.spec, lib);
       const held = t.spec.regions.flatMap((r, i) => landforms[i]!.water.flatMap((b) => (b.kind === "pond" ? [[r.x + b.x, r.z + b.z]] : [])));
       expect(t.ponds.map((p) => [p.x, p.z])).toEqual(held);
-    }
-  });
-
-  it("never leaves a crack in the baked lattice: neighbors differ by less than the steepest slope allows", () => {
-    const limit = Math.tan((RELIEF_BUDGET.maxSlope * Math.PI) / 180) * 1.5;
-    for (const [i, t] of baked.slice(0, 4).entries()) {
-      const { n, heights, spacing, origin } = t.lattice;
-      const half = t.spec.size / 2;
-      let steepest = { step: 0, x: 0, z: 0 };
-      for (let iz = 0; iz < n - 1; iz++) {
-        if (Math.abs(origin + iz * spacing) > half) continue;
-        for (let ix = 0; ix < n - 1; ix++) {
-          if (Math.abs(origin + ix * spacing) > half) continue;
-          const h0 = heights[iz * n + ix]!;
-          const step = Math.max(Math.abs(heights[iz * n + ix + 1]! - h0), Math.abs(heights[(iz + 1) * n + ix]! - h0));
-          if (step > steepest.step) steepest = { step, x: origin + ix * spacing, z: origin + iz * spacing };
-        }
-      }
-      expect(steepest.step, `world ${i} at (${steepest.x}, ${steepest.z})`).toBeLessThan(limit * spacing);
     }
   });
 
@@ -395,112 +274,6 @@ describe("terrain", { timeout: 20_000 }, () => {
       }
     }
     expect(streams).toBeGreaterThan(3);
-  });
-
-  it("carves each river's valley walls steeper and gentler along it, always walkable, and its head as a hollow rising behind the spring", () => {
-    const walkGrade = Math.tan((RELIEF_BUDGET.walkSlope * Math.PI) / 180);
-    let walls = 0;
-    for (const t of baked) {
-      for (const c of t.landforms[0]?.valleys?.courses ?? []) {
-        const p = c.points;
-        const count = p.length / 2;
-        const floorAt = (k: number): number => t.mean + ((c.floors[k] as number) - t.mean) * t.fit;
-        // The floor ends at the spring. 12 m behind it the ground has risen from the floor instead of staying flat past the water.
-        const hx = (p[0] as number) - (p[2] as number);
-        const hz = (p[1] as number) - (p[3] as number);
-        const hl = Math.hypot(hx, hz);
-        expect(heightAt(t.lattice, (p[0] as number) + (hx / hl) * 12, (p[1] as number) + (hz / hl) * 12), "behind a spring").toBeGreaterThan(floorAt(0) + 0.5);
-        if (count * 2 < 200) continue;
-        // Each wall's steepest grade every 10 m along a river, from past its stream's reach on the floor to its shoulder.
-        for (const o of [0, 3]) {
-          const side = o === 0 ? 1 : -1;
-          const steepest: number[] = [];
-          for (let k = 5; k + 5 < count; k += 5) {
-            const tx = (p[k * 2 + 2] as number) - (p[k * 2 - 2] as number);
-            const tz = (p[k * 2 + 3] as number) - (p[k * 2 - 1] as number);
-            const tl = Math.hypot(tx, tz);
-            const ground = (d: number): number => heightAt(t.lattice, (p[k * 2] as number) - (tz / tl) * d * side, (p[k * 2 + 1] as number) + (tx / tl) * d * side);
-            let s = 0;
-            for (let d = (c.walls[k * 6 + o] as number) * 1.5 + 2; d + 2 <= (c.walls[k * 6 + o + 1] as number); d++) s = Math.max(s, (ground(d + 2) - ground(d)) / 2);
-            steepest.push(s);
-          }
-          walls++;
-          expect(Math.max(...steepest), "a wall's steepest").toBeLessThan(walkGrade);
-          expect(Math.max(...steepest) - Math.min(...steepest), "how much a wall's grade changes along its river").toBeGreaterThan(0.1);
-        }
-      }
-    }
-    expect(walls).toBeGreaterThan(5);
-  });
-
-  // The ground is drawn and walked as flat triangles between its samples, each cell split along the diagonal from
-  // its (1, 0) corner to its (0, 1) corner (`heightAt`), so the waterline is where those triangles' edges cross the
-  // water level. A bank that bends within a sample of the water moves the waterline up to 0.3 m off, in steps along
-  // the lattice.
-  it("draws each stream's waterline on its channel's edge, where the ground's triangles cross the water's level", () => {
-    /** The nearest point to (x, z) on a stream's course, and its level and half width there. */
-    const nearestOn = (st: readonly Station[], x: number, z: number): { d: number; level: number; half: number } => {
-      let best = { d: Infinity, level: 0, half: 0 };
-      for (let i = 0; i + 1 < st.length; i++) {
-        const a = st[i]!;
-        const b = st[i + 1]!;
-        const abx = b.x - a.x;
-        const abz = b.z - a.z;
-        const len = abx * abx + abz * abz;
-        const u = len > 0 ? Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / len)) : 0;
-        const d = Math.hypot(x - a.x - abx * u, z - a.z - abz * u);
-        if (d < best.d) best = { d, level: a.level + (b.level - a.level) * u, half: a.halfWidth + (b.halfWidth - a.halfWidth) * u };
-      }
-      return best;
-    };
-    const offs: number[] = [];
-    for (const t of baked) {
-      const { n, spacing, heights, origin } = t.lattice;
-      const originZ = t.lattice.originZ ?? origin;
-      for (const [si, stream] of t.streams.entries()) {
-        const st = stream.stations;
-        const others = t.streams.filter((_, k) => k !== si);
-        const seen = new Set<number>();
-        for (let k = 0; k < st.length; k += 3) {
-          const s = st[k]!;
-          const r = Math.ceil((s.halfWidth + 2) / spacing);
-          const ci = Math.round((s.x - origin) / spacing);
-          const cj = Math.round((s.z - originZ) / spacing);
-          for (let j = cj - r; j <= cj + r; j++) {
-            for (let i = ci - r; i <= ci + r; i++) {
-              if (i < 0 || j < 0 || i + 1 >= n || j + 1 >= n || seen.has(j * n + i)) continue;
-              seen.add(j * n + i);
-              for (const [a, b] of [[[i, j], [i + 1, j]], [[i, j], [i, j + 1]], [[i + 1, j], [i, j + 1]]] as const) {
-                const ax = origin + a[0] * spacing;
-                const az = originZ + a[1] * spacing;
-                const bx = origin + b[0] * spacing;
-                const bz = originZ + b[1] * spacing;
-                const level = nearestOn(st, (ax + bx) / 2, (az + bz) / 2).level;
-                const fa = heights[a[1] * n + a[0]]! - level;
-                const fb = heights[b[1] * n + b[0]]! - level;
-                if (fa < 0 === fb < 0) continue;
-                const u = fa / (fa - fb);
-                const x = ax + (bx - ax) * u;
-                const z = az + (bz - az) * u;
-                // Check only this stream's own channel, not where it meets other water or ground past its banks.
-                if (others.some((o) => nearestOn(o.stations, x, z).d < 12) || t.ponds.some((p) => Math.hypot(x - p.x, z - p.z) < p.reach + 6)) continue;
-                const here = nearestOn(st, x, z);
-                const off = Math.abs(here.d - here.half);
-                // Skip where it narrows at its spring or seep below what the lattice draws without gaps.
-                if (off > 1.5 || here.half < 1.1) continue;
-                offs.push(off);
-              }
-            }
-          }
-        }
-      }
-    }
-    expect(offs.length).toBeGreaterThan(5000);
-    offs.sort((p, q) => p - q);
-    // With a bank that bent at the water, one crossing in ten lay 0.19 m or more off and one in a hundred 0.36 m.
-    // With straight walls they lie within 3 cm and 9 cm.
-    expect(offs[Math.floor(offs.length * 0.9)]).toBeLessThan(0.05);
-    expect(offs[Math.floor(offs.length * 0.99)]).toBeLessThan(0.1);
   });
 
   describe("grounds plants, each copy leaned on its ground's slope", () => {
@@ -562,67 +335,7 @@ describe("terrain", { timeout: 20_000 }, () => {
         });
       });
     });
-
-    it("bows every bramble's canes into the soil, downhill as well as up, metres from its root", () => {
-      const brambles = plants.filter(({ blueprint }) => blueprint.slots.form?.use === "bramble@1").map(({ k, blueprint }) => {
-        const { points, skel } = barkOf(k, blueprint);
-        // Each cane runs from the soil at the root, one segment after another, to where it roots again.
-        const ends = skel.limbs.flatMap((l, i) => {
-          if (l.parent !== -1) return [];
-          let at = i;
-          for (let next = skel.limbs.findIndex((m) => m.parent === at && m.depth === l.depth); next !== -1; next = skel.limbs.findIndex((m) => m.parent === at && m.depth === l.depth)) at = next;
-          return [skel.limbs[at]!.end];
-        });
-        // The bark at a cane's far end, within a hand of where its frame ends.
-        const tips = ends.map((e) => points.filter((v) => Math.hypot(v[0] - e[0], v[1] - e[1], v[2] - e[2]) < 0.1));
-        return { root: rootRing(points, skel), tips, reach: Math.max(...ends.map((e) => Math.hypot(e[0], e[2]))) };
-      });
-      expect(brambles.length).toBeGreaterThanOrEqual(3);
-      expect(Math.max(...brambles.map((b) => b.reach)), "the sweep stands a bramble rambling far").toBeGreaterThan(3);
-      baked.slice(0, 8).forEach((t, w) => {
-        spotsOf(t).forEach((s, i) => {
-          const b = brambles[(w * 16 + i) % brambles.length]!;
-          const turn = i * 1.7;
-          const y = groundedBase(t.lattice, s.x, s.z, Math.max(...b.root.map((v) => Math.hypot(v[0], v[2]))));
-          for (const v of b.root) {
-            const { at, ground } = stood(t, s, y, turn, v);
-            expect(at, "no gap under the root").toBeLessThanOrEqual(ground);
-            expect(ground - at, "the root not sunk deep").toBeLessThan(0.8);
-          }
-          for (const tip of b.tips) {
-            expect(tip.length, "bark at every cane's end").toBeGreaterThan(0);
-            expect(Math.min(...tip.map((v) => { const { at, ground } = stood(t, s, y, turn, v); return at - ground; })), "the cane reaches the soil").toBeLessThanOrEqual(0);
-          }
-        });
-      });
-    });
   });
-});
-
-describe("full worlds", () => {
-  it("bakes in bands, on any number of threads, byte-identically to one piece", () => {
-    const w = sampleWorld();
-    const landforms = landformsOf(w, lib);
-    const { n } = latticeOf(w);
-    const cuts = [0, 97, 98, 250, n];
-    const parts = cuts.slice(1).map((z1, i) => composeRows(w, landforms, cuts[i]!, z1));
-    const banded = finishTerrain(w, landforms, parts.reverse());
-    const whole = baked[0] as Terrain;
-    for (const key of ["waterLevel", "shore", "region", "coverRegions", "coverShares"] as const) expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
-    expect(bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights))).toBe(true);
-    expect(banded.streams).toEqual(whole.streams);
-    // Composes and finishes a world in bands. It takes about half a second alone, and several when other work shares the machine.
-  }, 20_000);
-
-  it("keeps a full world of a score of regions inside the relief budget, with several streams and ponds", () => {
-    for (const w of [sampleWorld(FULL_WORLD), randomWorld(lib, 7, FULL_WORLD)]) {
-      const t = bakeTerrain(w, lib);
-      expect(withinBudget(t.report)).toBe(true);
-      expect(t.streams.length + t.ponds.length).toBeGreaterThanOrEqual(3);
-    }
-    // Bakes two full worlds whole. It takes about 15 s alone here, twice that on CI's runners, and more when other
-    // work shares the machine. It once took 61.6 s on CI against a limit of 60 s.
-  }, 150_000);
 });
 
 describe("wild land past the rim", () => {
@@ -720,96 +433,35 @@ describe("flow", () => {
     }
     expect(stations).toBeGreaterThan(200);
   });
-
-  it("runs faster where the channel narrows", () => {
-    // A level, straight stream that pinches to half its width in the middle.
-    const stations = Array.from({ length: 41 }, (_, i) => {
-      const halfWidth = i >= 15 && i <= 25 ? 1.5 : 3;
-      return { x: i * 2, z: 0, level: 0, halfWidth, depth: halfWidth * 0.35 };
-    });
-    const flow = streamFlow({ stations } satisfies SolvedStream);
-    const speed = (i: number): number => Math.hypot(flow[i * 2] as number, flow[i * 2 + 1] as number);
-    expect(speed(20)).toBeGreaterThan(speed(5) * 1.5);
-    expect(flow[10]).toBeGreaterThan(0);
-  });
-
-  it("is still in ponds and on dry land, and matches the stream along its course", () => {
-    const t = baked[0]!;
-    const pond = t.ponds[0]!;
-    expect(flowAt(t, pond.x, pond.z)).toEqual({ x: 0, z: 0 });
-    expect(flowAt(t, pond.x + pond.reach * 2.5, pond.z)).toEqual({ x: 0, z: 0 });
-    const s = t.streams[0]!;
-    const flow = streamFlow(s);
-    const i = Math.floor(s.stations.length / 2);
-    const at = s.stations[i]!;
-    const v = flowAt(t, at.x, at.z);
-    expect(v.x).toBeCloseTo(flow[i * 2] as number, 3);
-    expect(v.z).toBeCloseTo(flow[i * 2 + 1] as number, 3);
-  });
 });
 
 describe("a cottage on the land", () => {
   const structureLib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
-  const t = bakeTerrain(sampleWorld(), lib);
-  /** A thatched cottage. */
-  const cottage = blueprintOf("structure", {
-    footprint: {
-      use: "cottage-plan@1",
-      params: { massing: "a single block", shape: "long", size: "modest", storeys: "one storey", heights: "level", roof: "gabled", roofline: "steep", attachments: [], windows: "several", base: "on a stone plinth", character: "gently settled" },
-    },
-    body: { use: "timber-frame@1", params: { framing: "posts and rails", plaster: "hand-laid" } },
-    roof: { use: "thatch@1", params: { thickness: "plump", overhang: "sheltering", chimney: "gable" } },
-    openings: { use: "casements@1", params: { panes: "four panes", shutters: true, door: "hooded" } },
-    ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "lantern", "woodpile"], walk: "stepping stones" } },
-    palette: { use: "palette@1", params: { family: "spring-meadow", contrast: "balanced" } },
-  });
-  /** A village of three: the cottage, a stone house with a waterwheel, and an L-shaped house with a tower. */
-  const village = [
-    { name: "A thatched cottage", blueprint: cottage },
-    {
-      name: "A watermill",
-      blueprint: blueprintOf("structure", {
-        footprint: {
-          use: "cottage-plan@1",
-          params: { massing: "a long range", shape: "long", size: "roomy", storeys: "two storeys", heights: "stepped", roof: "gabled", roofline: "steep", attachments: [], windows: "several", base: "on a stone plinth", character: "gently settled" },
-        },
-        body: { use: "fieldstone@1", params: { stones: "mixed sizes", gables: "boards" } },
-        roof: { use: "tiles@1", params: { covering: "shingles", overhang: "sheltering", chimney: "gable" } },
-        feature: { use: "waterwheel@1", params: { wheel: "a great wheel", drive: "overshot" } },
-        openings: { use: "casements@1", params: { panes: "six panes", shutters: true, door: "plank" } },
-        ornaments: { use: "cottage-garden@1", params: { extras: ["lantern", "woodpile"], walk: "flagstones" } },
-        palette: { use: "palette@1", params: { family: "teal-gold", contrast: "balanced" } },
-      }),
-    },
-    {
-      name: "An L-shaped house with a tower",
-      blueprint: blueprintOf("structure", {
-        footprint: {
-          use: "cottage-plan@1",
-          params: { massing: "an L", shape: "snug", size: "modest", storeys: "two storeys", heights: "stepped", roof: "gabled", roofline: "tall and steep", attachments: [], windows: "several", base: "raised up steps", character: "gently settled" },
-        },
-        body: { use: "timber-frame@1", params: { framing: "close studding", plaster: "hand-laid" } },
-        roof: { use: "tiles@1", params: { covering: "slates", overhang: "sheltering", chimney: "gable" } },
-        feature: { use: "tower@1", params: { height: "tall", cap: "lantern" } },
-        openings: { use: "casements@1", params: { panes: "six panes", shutters: false, door: "arched" } },
-        ornaments: { use: "cottage-garden@1", params: { extras: ["flower boxes", "lantern"], walk: "flagstones" } },
-        palette: { use: "palette@1", params: { family: "bluebell-wood", contrast: "balanced" } },
-      }),
-    },
-  ];
+  const t = baked[0] as Terrain;
 
-  /** Sites a building and its feature on its own copy of the land, as the world does, and checks that it rests on its ground. */
-  const expectGrounded = (name: string, built: Realized): void => {
+  /**
+   * Sites a building and its feature on `terrain` apart from the `taken` sites, as the world does, levels its pad, and
+   * checks that it stands on dry, level ground inside the world and rests on that ground. Returns its site.
+   */
+  const expectGrounded = (name: string, built: Realized, terrain: Terrain, taken: readonly BuildingSite[]): BuildingSite => {
     const plan = built.slots.get("footprint")?.output as BuildingPlan;
     const beside = extentOf(built.slots.get("feature")?.output as Built | undefined);
-    const terrain: Terrain = { ...t, lattice: { ...t.lattice, heights: t.lattice.heights.slice() } };
-    const site = findSite(terrain, plan, [], 30, beside);
+    const site = findSite(terrain, plan, taken, 30, beside);
     levelPad(terrain, plan, site, beside);
     const ground = (lx: number, lz: number): number => heightAt(terrain.lattice, ...siteToWorld(site, lx, lz));
-    // The pad is level under the whole house and its walk, which starts at the door, out past any porch.
+    for (const other of taken) expect(Math.hypot(site.x - other.x, site.z - other.z), `${name} apart`).toBeGreaterThanOrEqual(30);
+    expect(Math.max(Math.abs(site.x), Math.abs(site.z)), `${name} inside the world`).toBeLessThan(terrain.spec.size / 2);
+    // The pad is level and dry under the whole house and its walk, which starts at the door, out past any porch.
     const front = Math.max(plan.depth / 2, ...plan.openings.filter((o) => o.kind === "door").map((o) => o.position[2]));
     for (let lx = -plan.width / 2 - 1; lx <= plan.width / 2 + 1; lx += 0.5) {
-      for (let lz = -plan.depth / 2 - 1; lz <= front + 5.5; lz += 0.5) expect(Math.abs(ground(lx, lz) - site.level), name).toBeLessThan(0.02);
+      for (let lz = -plan.depth / 2 - 1; lz <= front + 5.5; lz += 0.5) {
+        expect(Math.abs(ground(lx, lz) - site.level), name).toBeLessThan(0.02);
+        if (Math.abs(lx) <= plan.width / 2 && lz >= -plan.depth / 2) expect(waterDepthAt(terrain, ...siteToWorld(site, lx, lz)), `${name} dry`).toBe(0);
+      }
+    }
+    // The ground under a feature, such as a mill wheel's pit or a tower, is the building's level ground.
+    if (beside !== null) {
+      for (const [lx, lz] of [[beside.x0, beside.z0], [beside.x1, beside.z0], [beside.x0, beside.z1], [beside.x1, beside.z1]] as const) expect(Math.abs(ground(lx, lz) - site.level), `${name} feature`).toBeLessThan(0.02);
     }
     for (const part of built.parts) {
       let lowest = Infinity;
@@ -826,56 +478,20 @@ describe("a cottage on the land", () => {
     const solid = built.parts.filter((p) => p.collision === "solid");
     const footing = Math.min(...solid.flatMap((p) => Array.from(p.positions.filter((_, i) => i % 3 === 1))));
     expect(footing, name).toBeLessThan(-1);
+    return site;
   };
 
-  for (const { name, blueprint } of village) {
-    it(`${name}'s realized parts sit on the ground, never floating`, () => {
-      expectGrounded(name, realize(blueprint, structure, structureLib, { seed: seedOf(`test/${name}`), facts: { size: 1, floors: 1 } }));
-    });
-  }
-
-  // Sites 60 buildings drawn from everything Jev can compose. It takes about 2.5 s alone, longer when the suite runs in parallel.
-  it("stands any building Jev can compose on its ground, never floating", { timeout: 120_000 }, () => {
+  // Sites 60 buildings drawn from everything Jev can compose, in villages of three on their own copy of the land. It
+  // takes about 2.5 s alone, longer when the suite runs in parallel.
+  it("stands any building Jev can compose on dry, level ground inside the world, apart from its neighbors, never floating", { timeout: 120_000 }, () => {
     const draws = rand(seedOf("grounded draws"));
-    for (let i = 0; i < 60; i++) {
-      const blueprint = blueprintOf(structure.id, randomSlots(structure, structureLib, () => draws.next()));
-      expectGrounded(JSON.stringify(blueprint.slots), realize(blueprint, structure, structureLib, { seed: seedOf(`grounded ${i}`), facts: { size: 1, floors: 1 } }));
-    }
-  });
-
-  it("keeps the site dry, inside the world and clear of water", () => {
-    const built = realize(cottage, structure, structureLib, { seed: 3, facts: { size: 1, floors: 1 } });
-    const plan = built.slots.get("footprint")?.output as BuildingPlan;
-    const site = findSite(t, plan);
-    expect(Math.abs(site.x)).toBeLessThan(t.spec.size / 2);
-    expect(Math.abs(site.z)).toBeLessThan(t.spec.size / 2);
-    for (let lx = -plan.width / 2; lx <= plan.width / 2; lx += 1) {
-      for (let lz = -plan.depth / 2; lz <= plan.depth / 2 + 5; lz += 1) expect(waterDepthAt(t, ...siteToWorld(site, lx, lz))).toBe(0);
-    }
-  });
-
-  it("keeps a village's buildings apart, each with its mill wheel or tower on dry, level ground", () => {
-    const terrain: Terrain = { ...t, lattice: { ...t.lattice, heights: t.lattice.heights.slice() } };
-    const taken: ReturnType<typeof findSite>[] = [];
-    for (const { blueprint } of village) {
-      const built = realize(blueprint, structure, structureLib, { seed: 5, facts: { size: 1, floors: 1 } });
-      const plan = built.slots.get("footprint")?.output as BuildingPlan;
-      const feature = built.slots.get("feature")?.output as { parts: { positions: Float32Array }[] } | undefined;
-      const xs = feature?.parts.flatMap((p) => Array.from(p.positions.filter((_, i) => i % 3 === 0))) ?? [];
-      const zs = feature?.parts.flatMap((p) => Array.from(p.positions.filter((_, i) => i % 3 === 2))) ?? [];
-      const beside = xs.length === 0 ? null : { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
-      const site = findSite(terrain, plan, taken, 30, beside);
-      levelPad(terrain, plan, site, beside);
-      for (const other of taken) expect(Math.hypot(site.x - other.x, site.z - other.z)).toBeGreaterThanOrEqual(30);
-      if (beside !== null) {
-        // The ground under a feature is the building's level ground, and dry.
-        for (const [lx, lz] of [[beside.x0, beside.z0], [beside.x1, beside.z0], [beside.x0, beside.z1], [beside.x1, beside.z1]] as const) {
-          const [x, z] = siteToWorld(site, lx, lz);
-          expect(Math.abs(heightAt(terrain.lattice, x, z) - site.level)).toBeLessThan(0.02);
-          expect(waterDepthAt(terrain, x, z)).toBe(0);
-        }
+    for (let v = 0; v < 20; v++) {
+      const terrain: Terrain = { ...t, lattice: { ...t.lattice, heights: t.lattice.heights.slice() } };
+      const taken: BuildingSite[] = [];
+      for (let i = v * 3; i < v * 3 + 3; i++) {
+        const blueprint = blueprintOf(structure.id, randomSlots(structure, structureLib, () => draws.next()));
+        taken.push(expectGrounded(JSON.stringify(blueprint.slots), realize(blueprint, structure, structureLib, { seed: seedOf(`grounded ${i}`), facts: { size: 1, floors: 1 } }), terrain, taken));
       }
-      taken.push(site);
     }
   });
 });

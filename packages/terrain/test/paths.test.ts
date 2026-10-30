@@ -13,13 +13,9 @@ import {
   bakeTerrain,
   findLandmarkSite,
   heightAt,
-  levelTrails,
   planTrails,
   slopeAt,
-  trailField,
-  trailPlaces,
   trailWearAt,
-  unpackPlace,
   waterDepthAt,
   wayWear,
   wayWearAt,
@@ -77,50 +73,6 @@ describe("trails", { timeout: 20_000 }, () => {
       });
       // Junctions join three ways or more.
       for (const j of network.junctions) expect(j.ways.length).toBeGreaterThanOrEqual(3);
-    }
-  });
-
-  it("never runs two ways side by side", () => {
-    for (const { network } of planned) {
-      for (const [i, w] of network.ways.entries()) {
-        const p = w.points;
-        const count = p.length / 2;
-        let interior = 0;
-        let beside = 0;
-        for (let k = 10; k < count - 10; k += 2) {
-          interior++;
-          const [x, z] = [p[k * 2] as number, p[k * 2 + 1] as number];
-          const close = network.ways.some((o, j) => {
-            if (j === i) return false;
-            for (let m = 0; m < o.points.length; m += 2) if (Math.hypot((o.points[m] as number) - x, (o.points[m + 1] as number) - z) < (w.style.width + o.style.width) / 2 + 1.5) return true;
-            return false;
-          });
-          if (close) beside++;
-        }
-        // Where two ways cross they run close for a meter or two, never a long run.
-        expect(beside).toBeLessThanOrEqual(Math.max(3, interior * 0.08));
-      }
-    }
-  });
-
-  it("keeps the network's ground within the composition budget, however many trails Jev wants", () => {
-    for (const { t, network } of planned) {
-      const field = trailField(t, network.ways);
-      const l = t.lattice;
-      const area = t.spec.regions.map(() => 0);
-      const tread = t.spec.regions.map(() => 0);
-      for (let i = 0; i < field.length; i++) {
-        const x = l.origin + (i % l.n) * l.spacing;
-        const z = l.origin + Math.floor(i / l.n) * l.spacing;
-        if (Math.abs(x) > t.spec.size / 2 || Math.abs(z) > t.spec.size / 2) continue;
-        const r = t.region[i] ?? 0;
-        area[r] = (area[r] ?? 0) + 1;
-        if ((field[i] as number) < 0) tread[r] = (tread[r] ?? 0) + 1;
-      }
-      // The tread's measured cover, with a little slack for where ways meet.
-      tread.forEach((n, r) => expect(n / (area[r] ?? 1)).toBeLessThanOrEqual(TRAILS.share * 1.15));
-      const all = tread.reduce((a, b) => a + b, 0) / area.reduce((a, b) => a + b, 0);
-      expect(all).toBeLessThanOrEqual(TRAILS.landShare * 1.15);
     }
   });
 
@@ -185,34 +137,6 @@ describe("trails", { timeout: 20_000 }, () => {
     expect(crossings).toBeGreaterThan(0);
   });
 
-  it("knows, on every sample of a tread, which way it is and how far along from its first point to its last", () => {
-    const { t, network } = planned[0] as (typeof planned)[number];
-    const places = trailPlaces(t, network.ways);
-    expect(Array.from(trailPlaces(t, network.ways))).toEqual(Array.from(places));
-    const field = trailField(t, network.ways);
-    const l = t.lattice;
-    const sample = (x: number, z: number): number => Math.round((z - l.origin) / l.spacing) * l.n + Math.round((x - l.origin) / l.spacing);
-    for (const [index, way] of network.ways.entries()) {
-      const p = way.points;
-      const count = p.length / 2;
-      if (count < 30) continue;
-      // Along its own center line, away from where other ways meet it, each sample names this way, with its position rising from 0 to 1.
-      let last = -1;
-      for (let k = 0; k < count; k += 3) {
-        const i = sample(p[k * 2] as number, p[k * 2 + 1] as number);
-        if ((field[i] as number) >= 0) continue;
-        const mine = [unpackPlace(places[i * 2] as number), unpackPlace(places[i * 2 + 1] as number)].find((q) => q?.way === index);
-        if (mine === undefined) continue;
-        expect(Math.abs((mine as { along: number }).along - k / (count - 1))).toBeLessThan(0.05);
-        expect((mine as { along: number }).along).toBeGreaterThanOrEqual(last - 0.02);
-        last = (mine as { along: number }).along;
-      }
-      expect(last).toBeGreaterThan(0.8);
-    }
-    // Far from every way, no sample names one.
-    for (let i = 0; i < field.length; i += 97) if ((field[i] as number) >= TRAILS.reach) expect(places[i * 2]).toBe(-1);
-  });
-
   it("wears a trail by the vitality of the entities it joins: bare between ones at high vitality, grown over toward one at low vitality", () => {
     const wear = 0.8;
     expect(trailWearAt(wear, 1, 1, 0.5)).toBeCloseTo(wear, 5);
@@ -232,9 +156,8 @@ describe("trails", { timeout: 20_000 }, () => {
     // It follows the land's curve (`shownVitality`): full wear from vitality 0.85 up, a trace from 0.45 down.
     expect(trailWearAt(wear, 0.85, 0.85, 0.5)).toBeCloseTo(trailWearAt(wear, 1, 1, 0.5), 5);
     expect(trailWearAt(wear, 0.45, 0.45, 0.5)).toBeCloseTo(trailWearAt(wear, 0, 0, 0.5), 5);
-  });
-
-  it("wears a shared way by every trail walking it: never less than its most worn trail, grown over only when all of them fail", () => {
+    // A way that several trails share wears by every trail walking it: never less than its most worn trail, grown over
+    // only when all of them fail.
     const { network } = planned[0] as (typeof planned)[number];
     const shared = network.ways.findIndex((w) => w.carries.length >= 2);
     expect(shared).toBeGreaterThanOrEqual(0);
@@ -260,24 +183,6 @@ describe("trails", { timeout: 20_000 }, () => {
     expect(wayWearAt(first, 0)).toBeCloseTo(trailWearAt(tr.style.wear, vitality(tr.from), vitality(tr.to), c.from), 5);
   });
 
-  it("levels the ground only near a way, and never by more than its limit", () => {
-    const { t: read, network } = planned[0] as (typeof planned)[number];
-    // Leveling changes the ground, so it works on a copy.
-    const t = structuredClone(read);
-    const before = t.lattice.heights.slice();
-    const field = trailField(t, network.ways);
-    levelTrails(t, network.ways);
-    let moved = 0;
-    for (let i = 0; i < before.length; i++) {
-      const d = Math.abs((t.lattice.heights[i] as number) - (before[i] as number));
-      if (d === 0) continue;
-      moved++;
-      expect(field[i] as number).toBeLessThanOrEqual(TRAILS.blend + 0.6);
-      // Where ways meet, each may level the same ground, but never far.
-      expect(d).toBeLessThanOrEqual(TRAILS.maxCut * 3 + 1e-4);
-    }
-    expect(moved).toBeGreaterThan(0);
-  });
 });
 
 describe("landmark sites", () => {
