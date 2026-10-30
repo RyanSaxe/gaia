@@ -6,6 +6,17 @@
 import type { BuildingPlan, Mass, Opening, Vec3 } from "@gaia/schema";
 import { type Channels, type V3, clamp, fbm3 } from "../kit.ts";
 
+/** How far a roof reaches past its walls, meters, by the words Jev chooses (`overhangField`). */
+export const OVERHANGS = { "neat and close": 0.3, sheltering: 0.6, "deep and low": 0.9 } as const;
+/** How thick a thatched roof is, meters, by the words Jev chooses. */
+export const THATCH_THICKNESS = { trim: 0.28, plump: 0.42, "deep and soft": 0.58 } as const;
+/** How far a thatch's rolled eave reaches past its overhang, as a share of its thickness. */
+export const THATCH_LIP = 0.3;
+/** The farthest any roof's eave reaches past its wall, meters: the deepest overhang under the thickest thatch. */
+export const DEEPEST_EAVE = Math.max(...Object.values(OVERHANGS)) + Math.max(...Object.values(THATCH_THICKNESS)) * THATCH_LIP;
+/** How far above a door's top an eave in front of it must stay, meters. A lower eave lifts into a small gable over the door. */
+export const DOOR_HEADROOM = 0.3;
+
 /** One wall seen from outside: its left end at ground level, the direction to its right end, and its outward normal. */
 export interface Wall {
   readonly o: V3;

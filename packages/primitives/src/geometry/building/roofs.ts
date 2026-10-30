@@ -5,11 +5,11 @@
 // a lean-to caves in about its high edge, and the chimney topples and its
 // smoke stops.
 
-import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Rand, type Resolved } from "@gaia/schema";
+import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Opening, type Rand, type Resolved } from "@gaia/schema";
 import type { thatchParams, tilesParams } from "../../structure.ts";
 import { type Channels, PartBuilder, type V3, addScaled, clamp, cross, fbm3, normalize } from "../kit.ts";
 import { UP, beam, box, log } from "../blocks.ts";
-import { type Ruin, chimneyEnd, hipDrop, hipSlope, ruinAt, ruinOf, spanOf, still, wallTop } from "./frame.ts";
+import { DOOR_HEADROOM, THATCH_LIP, type Ruin, chimneyEnd, hipDrop, hipSlope, ruinAt, ruinOf, spanOf, still, wallTop } from "./frame.ts";
 import { lump } from "./ruin.ts";
 
 interface ProfilePoint {
@@ -78,6 +78,8 @@ function caveIn(f: RoofFrame, r: Rand): Partial<Channels> {
 
 /** A slope's covering as built: how far it reaches across the span, where it runs along the ridge, and how it caves in. */
 interface Slab {
+  /** How far the slope lifts a point of its frame, over a door its eave would come down in front of (`doorGable`). */
+  readonly lift: (p: V3) => number;
   readonly reach: number;
   readonly a0: number;
   readonly a1: number;
@@ -319,7 +321,7 @@ export function smoke(b: PartBuilder, at: V3, r: Rand): void {
  * piece of covering may last. Every point of it sags and falls just as the
  * covering over it does, so the covering never lifts off it.
  */
-function rafters(b: PartBuilder, debris: PartBuilder, f: RoofFrame, ruin: Ruin, { reach, a0, a1, fall }: Slab, r: Rand): void {
+function rafters(b: PartBuilder, debris: PartBuilder, f: RoofFrame, ruin: Ruin, { reach, a0, a1, fall, lift }: Slab, r: Rand): void {
   const under = undersideOf(f);
   const lean = f.m.roof === "lean-to";
   const hipped = (a: number): boolean => (f.m.roof === "hip" || f.m.roof === "half-hip") && f.m.ends[a < 0 ? 0 : 1];
@@ -328,7 +330,10 @@ function rafters(b: PartBuilder, debris: PartBuilder, f: RoofFrame, ruin: Ruin, 
   const hipA = (bv: number): number => start + (slopeOf(f) * Math.abs(bv)) / hipSlope(f.m);
   const hipB = (a: number): number => ((Math.abs(a) - start) * hipSlope(f.m)) / slopeOf(f);
   // A point of the frame just under the covering, on a slope or on a hipped end.
-  const at = (a: number, bv: number): V3 => roofPoint(f, a, bv, under(bv) - hipOf(f, a, bv).drop - 0.09);
+  const at = (a: number, bv: number): V3 => {
+    const p = roofPoint(f, a, bv, under(bv) - hipOf(f, a, bv).drop - 0.09);
+    return [p[0], p[1] + lift(p), p[2]];
+  };
   // Every timber sags and falls just as the covering over it does, point for point.
   const frame = new Following(b, (p) => {
     const { a, b: bv } = roofCoordsOf(f, p);
@@ -467,13 +472,52 @@ class Following extends PartBuilder {
 /** A thatch bundle's width along the ridge, in meters. The straw rots a bundle at a time. */
 const BUNDLE = 0.22;
 /** A tile's width round a cone, in meters. A cone rots a tile at a time. */
+/**
+ * Where a slope's eave would come down in front of a door, lower than `DOOR_HEADROOM` over its top, the slope lifts it
+ * into a small gable over the door: at least that high over the door's top, peaking half a meter higher over its
+ * middle, and easing back into the eave a little past either side. `place` builds the slope's points unlifted. Returns
+ * how far to lift a point of the slope, 0 away from such a door.
+ */
+function doorGable(plan: BuildingPlan, profile: readonly ProfilePoint[], a0: number, a1: number, place: (a: number, pt: ProfilePoint, normal: readonly [number, number]) => V3): (p: V3) => number {
+  const toDoor = (d: Opening, p: V3): { out: number; along: number } => {
+    const dx = p[0] - d.position[0];
+    const dz = p[2] - d.position[2];
+    return { out: dx * d.normal[0] + dz * d.normal[2], along: Math.abs(dx * d.normal[2] - dz * d.normal[0]) };
+  };
+  const top = (d: Opening): number => d.position[1] + d.height;
+  const low = (d: Opening): number => {
+    let y = Infinity;
+    for (let a = a0; a <= a1 + 1e-6; a += 0.1) {
+      for (const pt of profile) {
+        const p = place(a, pt, [0, 0]);
+        const { out, along } = toDoor(d, p);
+        if (out > 0 && out < 1.5 && along < d.width / 2 + 0.2) y = Math.min(y, p[1]);
+      }
+    }
+    return y;
+  };
+  const doors = plan.openings.filter((o) => o.kind === "door" && low(o) < top(o) + DOOR_HEADROOM);
+  if (doors.length === 0) return () => 0;
+  return (p) => {
+    let up = 0;
+    for (const d of doors) {
+      const { out, along } = toDoor(d, p);
+      const fade = along < 1 ? 1 : Math.max(0, 1 - (along - 1) / 0.3);
+      const ramp = clamp((out + 1.2) / 1.2, 0, 1);
+      const target = top(d) + DOOR_HEADROOM + 0.5 * Math.max(0, 1 - along);
+      up = Math.max(up, Math.max(0, target - p[1]) * fade * ramp);
+    }
+    return up;
+  };
+}
+
 export const TILE = 0.27;
 
 function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolved<typeof thatchParams>, ruin: Ruin, seed: number, r: Rand, budget: number): Slab {
   const k = slopeOf(f);
   const secant = Math.sqrt(1 + k * k);
   const T = p.thickness;
-  const reach = f.halfSpan + p.overhang + T * 0.3;
+  const reach = f.halfSpan + p.overhang + T * THATCH_LIP;
   const under = undersideOf(f);
   const surface = (b: number): number => under(b) + T * secant;
   const lip = T * 0.22;
@@ -510,7 +554,7 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
   const segments = Math.max(6, Math.min(Math.round((a1 - a0) / 0.45), Math.floor(budget / (2 * profile.length))));
   const fall = caveIn(f, r);
   const cut = turretCut(plan, f.m);
-  const place = (a: number, pt: ProfilePoint, [nb, ny]: readonly [number, number]): V3 => {
+  const flat = (a: number, pt: ProfilePoint, [nb, ny]: readonly [number, number]): V3 => {
     const bump = pt.top === true ? 0.035 * fbm3(a * 0.9, pt.b * 0.9, pt.y * 0.5, seed, 2) : 0;
     const end = Math.max(0, Math.abs(a) - f.halfLength) / overGable;
     // Gable ends round down a little. A hipped end drops the whole slab to its eave, so its cut end would stand across
@@ -521,6 +565,11 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
     // A settled roof dips mid-ridge, and hipped ends fall away.
     const dip = plan.settle * 0.14 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + round + hipOf(f, a, pt.b).drop;
     return cut(roofPoint(f, a, pt.b + nb * bump, pt.y + ny * bump - dip));
+  };
+  const lift = doorGable(plan, profile, a0, a1, flat);
+  const place = (a: number, pt: ProfilePoint, normal: readonly [number, number]): V3 => {
+    const p = flat(a, pt, normal);
+    return [p[0], p[1] + lift(p), p[2]];
   };
   extrudeRoof(
     roof,
@@ -553,7 +602,7 @@ function thatchSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Reso
     },
     (a, pt, n0) => (pt.top === true ? (hipOf(f, a, pt.b).n ?? n0) : n0),
   );
-  return { reach, a0, a1, fall };
+  return { reach, a0, a1, fall, lift };
 }
 
 function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolved<typeof tilesParams>, ruin: Ruin, seed: number, r: Rand, budget: number): Slab {
@@ -600,10 +649,15 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
   const segments = Math.max(8, Math.min(wanted, Math.floor(budget / (2 * profile.length))));
   const fall = caveIn(f, r);
   const cut = turretCut(plan, f.m);
-  const place = (a: number, pt: ProfilePoint, [nb, ny]: readonly [number, number]): V3 => {
+  const flat = (a: number, pt: ProfilePoint, [nb, ny]: readonly [number, number]): V3 => {
     const wave = p.covering === "pantiles" && pt.top === true && Math.abs(pt.b) > 0.3 ? 0.045 * Math.abs(Math.sin((Math.PI * a) / tileW)) : 0;
     const dip = plan.settle * 0.12 * Math.sin(Math.PI * clamp((a - a0) / (a1 - a0), 0, 1)) + hipOf(f, a, pt.b).drop;
     return cut(roofPoint(f, a, pt.b + nb * wave, pt.y + ny * wave - dip));
+  };
+  const lift = doorGable(plan, profile, a0, a1, flat);
+  const place = (a: number, pt: ProfilePoint, normal: readonly [number, number]): V3 => {
+    const q = flat(a, pt, normal);
+    return [q[0], q[1] + lift(q), q[2]];
   };
   extrudeRoof(
     roof,
@@ -640,7 +694,7 @@ function tileSlab(roof: PartBuilder, plan: BuildingPlan, f: RoofFrame, p: Resolv
     },
     (a, pt, n0) => (pt.top === true ? (hipOf(f, a, pt.b).n ?? n0) : n0),
   );
-  return { reach, a0, a1, fall };
+  return { reach, a0, a1, fall, lift };
 }
 
 /**
@@ -745,8 +799,7 @@ function roofs(plan: BuildingPlan, r: Rand, slab: (roof: PartBuilder, f: RoofFra
       return;
     }
     const f = roofFrame(plan, m);
-    const { reach, a0, a1, fall } = slab(roof, f, ruin, seed + i * 31, mr, (ROOF_TRIANGLES * (lengths[i] ?? 0)) / total);
-    rafters(bare, roof, f, ruin, { reach, a0, a1, fall }, mr.fork("rafters"));
+    rafters(bare, roof, f, ruin, slab(roof, f, ruin, seed + i * 31, mr, (ROOF_TRIANGLES * (lengths[i] ?? 0)) / total), mr.fork("rafters"));
   });
   const vent = chimney(stack, plan, roofFrame(plan, plan.masses[0] as Mass), wanted, r.fork("chimney"));
   if (vent !== null) smoke(puffs, vent, r.fork("smoke"));
