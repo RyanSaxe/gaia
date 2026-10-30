@@ -166,13 +166,16 @@ const EDGE = 0.3;
  * or on another supported piece, with both at that vitality. It rests on a
  * piece below it across a gap no wider than `SUPPORT.gap`, touches one within
  * `SUPPORT.glue` from any side, or is let into one, with a point just behind
- * its nearest face. Leaf cards cling within `SUPPORT.cling`, or hang from
- * their stalk, which means a pivot on the card within `SUPPORT.cling` of the
- * piece it grows on. Smoke is not counted. With `wind`, every piece is where
- * that moment's wind bends it (`swayAt`). A piece that has fully fallen over
- * its hinge must also rest away from it, on the ground or on a standing piece,
- * and not lie sunk into the ground. With `moving: false`, only fully shown
- * pieces count, as when vitality has settled between thresholds.
+ * the nearest face of one of its meshes. A piece's meshes are its runs of
+ * joined triangles, such as each limb's bark on a bough, so a stalk let into a
+ * limb is inside it even where a twig's sunken start lies nearer. Leaf cards
+ * cling within `SUPPORT.cling`, or hang from their stalk, which means a pivot
+ * on the card within `SUPPORT.cling` of the piece it grows on. Smoke is not
+ * counted. With `wind`, every piece is where that moment's wind bends it
+ * (`swayAt`). A piece that has fully fallen over its hinge must also rest away
+ * from it, on the ground or on a standing piece, and not lie sunk into the
+ * ground. With `moving: false`, only fully shown pieces count, as when
+ * vitality has settled between thresholds.
  */
 export function unsupportedAt(parts: readonly Part[], v: number, options: { readonly moving?: boolean; readonly wind?: WindState } = {}): Unsupported[] {
   const moving = options.moving ?? true;
@@ -183,11 +186,15 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     total += p.shade.length;
   }
   const unions = new Unions(total);
+  /** Vertices joined by triangles alone: each mesh of a piece. */
+  const meshes = new Unions(total);
   parts.forEach((part, pi) => {
     const base = offsets[pi] as number;
     for (let t = 0; t < part.indices.length; t += 3) {
-      unions.join(base + (part.indices[t] as number), base + (part.indices[t + 1] as number));
-      unions.join(base + (part.indices[t] as number), base + (part.indices[t + 2] as number));
+      for (const u of [unions, meshes]) {
+        u.join(base + (part.indices[t] as number), base + (part.indices[t + 1] as number));
+        u.join(base + (part.indices[t] as number), base + (part.indices[t + 2] as number));
+      }
     }
     const first = new Map<number, number>();
     for (let i = 0; i < part.shade.length; i++) {
@@ -283,6 +290,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
   // the normals the part was built with, so a point behind it is inside.
   const tris: number[] = [];
   const triBody: number[] = [];
+  const triMesh: number[] = [];
   const triOut: number[] = [];
   const at = (arr: ArrayLike<number>, g: number, c: number): number => arr[g * 3 + c] as number;
   const crossOf = (arr: ArrayLike<number>, a: number, b: number, c: number): [number, number, number] => {
@@ -298,6 +306,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       if (!shown(bodies[b] as Body)) continue;
       for (const g of [base + ia, base + ib, base + ic]) tris.push(pos[g * 3] as number, pos[g * 3 + 1] as number, pos[g * 3 + 2] as number);
       triBody.push(b);
+      triMesh.push(meshes.find(base + ia));
       const was = crossOf(part.positions, ia, ib, ic);
       const n = part.normals;
       const agree = was[0] * (at(n, ia, 0) + at(n, ib, 0) + at(n, ic, 0)) + was[1] * (at(n, ia, 1) + at(n, ib, 1) + at(n, ic, 1)) + was[2] * (at(n, ia, 2) + at(n, ib, 2) + at(n, ic, 2));
@@ -387,7 +396,8 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       }
     }
   }
-  // The nearest face of each piece near a probe: parallel lists, reused.
+  // The nearest face of each mesh near a probe, and its piece: parallel lists, reused.
+  const nm: number[] = [];
   const nb: number[] = [];
   const nt: number[] = [];
   const nd: number[] = [];
@@ -400,6 +410,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     const px = probes[q * 3] as number, py = probes[q * 3 + 1] as number, pz = probes[q * 3 + 2] as number;
     const list = cells.get(cellKey(Math.floor(px / CELL), Math.floor(py / CELL), Math.floor(pz / CELL)));
     if (list === undefined) continue;
+    nm.length = 0;
     nb.length = 0;
     for (const t of list) {
       const other = triBody[t] as number;
@@ -409,9 +420,11 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       closest(px, py, pz, triPos, t * 9, near);
       const d = Math.hypot(px - (near[0] as number), py - (near[1] as number), pz - (near[2] as number));
       if (d > SUPPORT.within) continue;
-      const k = nb.indexOf(other);
+      const mesh = triMesh[t] as number;
+      const k = nm.indexOf(mesh);
       if (k >= 0 && (nd[k] as number) <= d) continue;
-      const at = k >= 0 ? k : nb.length;
+      const at = k >= 0 ? k : nm.length;
+      nm[at] = mesh;
       nb[at] = other;
       nt[at] = t;
       nd[at] = d;
@@ -425,7 +438,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       const d = nd[k] as number;
       const x = nx[k] as number, y = ny[k] as number, z = nz[k] as number;
       const dx = px - x, dy = py - y, dz = pz - z;
-      // Behind the nearest face is inside the other piece: a beam let into a post.
+      // Behind the nearest face of a mesh is inside the other piece: a beam let into a post.
       const inside = d > 1e-9 && dx * (triOut[t * 3] as number) + dy * (triOut[t * 3 + 1] as number) + dz * (triOut[t * 3 + 2] as number) < 0;
       // A card clings to what it grows on, and supports nothing itself.
       const card = (bodies[other] as Body).card;
