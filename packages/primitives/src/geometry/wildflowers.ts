@@ -1,11 +1,13 @@
 // Builds wildflower drifts: one species per drift, with stems densest at the
 // center and thinning toward a ragged edge. Petals fold toward their head at
 // night. As vitality falls they droop, fade to straw and drop, from the
-// drift's edge inward, and stems last longer.
+// drift's edge inward, and stems last longer. Each head shrinks toward a
+// point on its stem and is gone before its stem starts to fall, so no flower
+// is left in the air.
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { driftParams } from "../wildflowers.ts";
-import { PartBuilder, type V3, add, addScaled, basis, clamp, cross, lossThreshold, normalize, scale, sub } from "./kit.ts";
+import { LOSS_BAND, PartBuilder, type V3, add, addScaled, basis, clamp, cross, lossThreshold, normalize, scale, sub } from "./kit.ts";
 
 export type Species = "daisies" | "cups" | "bells" | "spikes";
 
@@ -40,6 +42,9 @@ const HEAD_TRIANGLES: Readonly<Record<Species, { readonly full: number; readonly
   spikes: { full: 92, light: 46 },
 };
 
+/** The lowest `loss` of a stem. A head rests on its stem, so its `loss` is at least `LOSS_BAND` above its stem's. */
+const STEM_LOSS = 0.02;
+
 /** How far each species closes at night. Open faces fold tight, and bells and spikes barely change. */
 const CLOSE: Record<Species, number> = { daisies: 1, cups: 0.9, bells: 0.3, spikes: 0.25 };
 
@@ -53,7 +58,7 @@ export function buildDrift(species: Species, p: Resolved<typeof driftParams>, ct
   // A drift over budget keeps its flowers and draws every head light, then places fewer flowers if still over.
   const { flowers, light } = layout(p, r.fork("layout"), s, (want) => want * (STEM_TRIANGLES + heads.full) > DRIFT_TRIANGLES, Math.floor(DRIFT_TRIANGLES / (STEM_TRIANGLES + heads.light)));
   for (const f of flowers) {
-    const headLoss = clamp(lossThreshold(f.r.next(), 0.78) + 0.12 * f.edge, 0.02, 0.85);
+    const headLoss = clamp(lossThreshold(f.r.next(), 0.78) + 0.12 * f.edge, STEM_LOSS + LOSS_BAND, 0.85);
     const tint = f.r.range(-0.06, 0.06);
     emitStem(stems, f, headLoss, species === "bells");
     // The head sags and sways with its stem about the stem's foot (`bough`).
@@ -115,9 +120,12 @@ interface HeadLook {
   readonly tint: number;
 }
 
-/** A slim three-sided stem bending gently toward its head, and two strap leaves at its foot. */
+/**
+ * A slim three-sided stem bending gently toward its head, and two strap leaves at its foot. The stem starts to fall
+ * only once its head has gone.
+ */
 function emitStem(out: PartBuilder, f: Flower, headLoss: number, arching: boolean): void {
-  const ch = { loss: clamp(headLoss * 0.45, 0.02, 0.5), droop: 0.35, wither: 0.8, glow: 0, pivot: f.base, tint: 0 };
+  const ch = { loss: clamp(Math.min(headLoss * 0.45, headLoss - LOSS_BAND), STEM_LOSS, 0.5), droop: 0.35, wither: 0.8, glow: 0, pivot: f.base, tint: 0 };
   const radius = 0.006 + 0.006 * f.height;
   const mid = addScaled(f.base, f.lean, (f.height + 0.08) * 0.55);
   const path: V3[] = [f.base, arching ? add(mid, scale([f.lean[0], 0, f.lean[2]], 0.6)) : mid, f.top];
@@ -240,7 +248,7 @@ const SIDES = 5;
 /** A bell's shoulder, mouth and flared lip rings, each as distance down the axis, width and flare. A light bell has no shoulder. */
 const BELL_RINGS = [[0.25, 0.6, 0], [1, 1, 0], [1.25, 1.35, 0.4]] as const;
 
-/** An arching stem hung with nodding bells on one side, like a bluebell. */
+/** An arching stem hung with nodding bells on one side, like a bluebell. Each bell hangs from, and shrinks toward, the stem's tip. */
 function emitBells(petals: PartBuilder, f: Flower, look: HeadLook, light: boolean): void {
   const count = 3 + Math.floor(f.r.next() * 3);
   const away = normalize([f.lean[0] + 1e-3, 0, f.lean[2]]);
@@ -250,7 +258,7 @@ function emitBells(petals: PartBuilder, f: Flower, look: HeadLook, light: boolea
     const hang = addScaled(addScaled(f.top, away, size * (0.6 + 2.2 * t)), [0, 1, 0], -f.height * 0.22 * t - size * 0.8);
     const axis = normalize(add([0, -1, 0], scale(away, 0.55)));
     const [u, v] = basis(axis);
-    const ch = { ...look, pivot: hang, loss: clamp(look.loss + 0.05 * k, 0.02, 0.9) };
+    const ch = { ...look, pivot: f.top, loss: clamp(look.loss + 0.05 * k, 0.02, 0.9) };
     const top = petals.vertex(addScaled(hang, axis, -size * 0.4), scale(axis, -1), 0.6, ch);
     const rings: number[] = [];
     for (const [along, rad, flare] of light ? BELL_RINGS.slice(1) : BELL_RINGS) {
