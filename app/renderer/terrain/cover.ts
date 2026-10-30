@@ -42,7 +42,7 @@ ${CLEARING_GLSL}
 ${VITALITY_GLSL}
 attribute vec4 aBlade; // x, z as a share of the blade's patch, rotation, height
 attribute vec4 aSeed; // tint, flower, keep, cover pick
-attribute vec2 aThin; // where in the thinning band the blade narrows away, 0 to 1; its reach
+attribute vec3 aThin; // where in its tier's thinning band the blade narrows away, 0 to 1; its reach; where its tier starts to thin
 attribute vec3 aBloom; // where a flower's vertex lies: round its bloom's rim, or on its stem (z 0)
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -90,7 +90,7 @@ void main() {
   // narrowed to nothing, and most of the rest lie outside the view. Such a
   // blade skips the work below and collapses outside the view, so it costs
   // a few instructions and draws exactly the nothing it drew before.
-  float from = reach * mix(0.5, 0.8, aThin.x);
+  float from = mix(aThin.z, reach * 0.8, aThin.x);
   float far = length(xz - uCenter.xz);
   if (far >= from + reach * 0.2) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
@@ -116,9 +116,9 @@ void main() {
 
   // A blade's height never changes with distance, so it never grows out of
   // the ground. Toward its reach the field thins continuously: each blade
-  // narrows to nothing across its own seeded band, which starts between 50%
-  // and 80% of its reach and runs a fifth of the reach, so no blade ever
-  // appears or vanishes between one step and the next. On steep risers and
+  // narrows to nothing across its own seeded band, which starts between where
+  // its tier starts to thin and 80% of its reach and runs a fifth of the
+  // reach, so no blade ever appears or vanishes between one step and the next. On steep risers and
   // over the sand toward the water blades thin whole, by their fixed spot on
   // the ground, so walking never changes which of them stand.
   float r2 = fract(aSeed.x * 7.13 + aSeed.z * 3.71);
@@ -313,13 +313,16 @@ export interface Grass {
 }
 
 /**
- * Blade tiers by reach. A quarter of the blades reach only 14 m and about
- * another third reach 30 m, so the grass is densest close by, where each
- * blade can be seen.
+ * Blade tiers by reach, each thinning from `inner` out to its reach. Two in
+ * five blades reach only 20 m and a quarter reach 30 m, so the grass is
+ * densest close by, where each blade can be seen. The rest reach the grass's
+ * radius and thin from half of it. The nearest tier holds most of the
+ * near field's blades, so it thins over 13 m: across a step of walking the
+ * field there loses too little to show, even in still air.
  */
 const TIERS = [
-  { share: 0.25, reach: 14 },
-  { share: 0.32, reach: 30 },
+  { share: 0.4, inner: 7, reach: 20 },
+  { share: 0.25, inner: 15, reach: 30 },
 ] as const;
 
 /**
@@ -328,7 +331,7 @@ const TIERS = [
  * every distance. Toward its reach each blade narrows smoothly to nothing over
  * its own seeded band, so none appears or vanishes as the viewer moves.
  */
-export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, under: Clearings, count = 150000, radius = 60): Grass {
+export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, under: Clearings, count = 190000, radius = 60): Grass {
   // One blade, one unit wide and tall: five rows and a soft tip. The vertex
   // shader gives it its cover's outline, lean and arc. A flower draws the
   // same vertices as a stem from its first two rows, and a bloom. The stem's
@@ -363,19 +366,19 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   geometry.setAttribute("aBloom", new THREE.Float32BufferAttribute(bloom, 3));
   const data = new Float32Array(count * 4);
   const seeds = new Float32Array(count * 4);
-  const thin = new Float32Array(count * 2);
+  const thin = new Float32Array(count * 3);
   let seed = 1234567;
   const next = (): number => {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 4294967296;
   };
-  const reachOf = (i: number): number => {
+  const tierOf = (i: number): { readonly inner: number; readonly reach: number } => {
     let edge = 0;
     for (const tier of TIERS) {
       edge += tier.share * count;
-      if (i < edge) return tier.reach;
+      if (i < edge) return tier;
     }
-    return radius;
+    return { inner: radius / 2, reach: radius };
   };
   for (let i = 0; i < count; i++) {
     data[i * 4] = next();
@@ -383,12 +386,14 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
     data[i * 4 + 2] = next() * Math.PI * 2;
     data[i * 4 + 3] = 0.6 + next() * 0.7;
     for (let k = 0; k < 4; k++) seeds[i * 4 + k] = next();
-    thin[i * 2] = next();
-    thin[i * 2 + 1] = reachOf(i);
+    const tier = tierOf(i);
+    thin[i * 3] = next();
+    thin[i * 3 + 1] = tier.reach;
+    thin[i * 3 + 2] = tier.inner;
   }
   geometry.setAttribute("aBlade", new THREE.InstancedBufferAttribute(data, 4));
   geometry.setAttribute("aSeed", new THREE.InstancedBufferAttribute(seeds, 4));
-  geometry.setAttribute("aThin", new THREE.InstancedBufferAttribute(thin, 2));
+  geometry.setAttribute("aThin", new THREE.InstancedBufferAttribute(thin, 3));
   geometry.instanceCount = count;
   const center = { value: new THREE.Vector3() };
   const frustumPlanes = { value: Array.from({ length: 5 }, () => new THREE.Vector4()) };
