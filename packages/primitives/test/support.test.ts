@@ -2,11 +2,12 @@
 // `BUILDING_VITALITIES`, where no piece may stand on nothing and a falling
 // piece must come to rest. Every rock body is built at `VITALITIES` with each
 // overgrowth on it, where no piece of either may stand on nothing and the
-// overgrowth must move with the body. Every plant is built at
-// `FLORA_VITALITIES` in still air and a strong gust, where every leaf, flower
-// and twig must stay on what it grows on, and every plant and wildflower drift
-// must keep its shape in the gust. A new primitive in these roles is covered
-// once it is in `PRIMITIVES`.
+// overgrowth must move with the body. Every drift is built at `VITALITIES`,
+// where no piece may stand on nothing, so every flower stays on its stem as it
+// declines. Every plant is built at `FLORA_VITALITIES` in still air and a
+// strong gust, where every leaf, flower and twig must stay on what it grows
+// on, and every plant and wildflower drift must keep its shape in the gust. A
+// new primitive in these roles is covered once it is in `PRIMITIVES`.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, type Field, Library, type Part, rand } from "@gaia/schema";
@@ -17,6 +18,12 @@ const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
 /** Vitalities from 0.62 down to 0.06, each inside some pieces' collapse band. */
 const VITALITIES = [0.62, 0.45, 0.3, 0.2, 0.12, 0.06];
+/**
+ * A drift of flowers has up to 300, each declining at its own vitality, so a
+ * flower left in the air may show in only a few drifts, as one did at seeds 1
+ * to 14. Such a drift is built from each of these seeds.
+ */
+const FLOWER_SEEDS = Array.from({ length: 16 }, (_, k) => k + 1);
 /** Buildings are many times larger, so they are checked at fewer vitalities. */
 const BUILDING_VITALITIES = [0.45, 0.2, 0.06];
 /** A building is its plan and one primitive in each of these roles. */
@@ -146,6 +153,18 @@ describe.each(lib.forRole("Rock").map((p) => [p.id, p] as const))("%s", (_id, ro
     });
     expect(pulled).toEqual([]);
   });
+});
+
+describe.each(lib.forRole("Drift").map((p) => [p.id, p] as const))("%s", (_id, p) => {
+  // A drift of flowers is checked from 16 seeds: up to 30 s alone, and two minutes on a machine running other work.
+  it.each(samples(p).map((s, i) => [i, s] as const))("leaves no piece on nothing at any vitality, whole or partway gone (sample %i)", (i, s) => {
+    const flowers = (build(p, s, null, 5 + i) as Built).parts.some((q) => q.swatch === "bloom");
+    const floaters = (flowers ? FLOWER_SEEDS : [5 + i]).flatMap((seed) => {
+      const parts = (build(p, s, null, seed) as Built).parts as Part[];
+      return VITALITIES.flatMap((v) => describeFloaters(parts, v).map((f) => `seed ${seed}: ${f}`));
+    });
+    expect(floaters).toEqual([]);
+  }, 180_000);
 });
 
 /**
