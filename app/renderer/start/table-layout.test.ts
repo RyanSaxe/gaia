@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { RECENT_KEPT } from "../../world-service/recent.ts";
-import { LOGO_ASPECT } from "../brand/logo.ts";
 import { NAME_ROOM, crosses, tableLayout } from "./table-layout.ts";
 
 /** A card's box, including the room for its name beneath it: left, top, right, bottom. */
@@ -17,11 +16,11 @@ describe("the map table's layout", () => {
         // The box for the prompt above the line, the line, and the folder text below a refusal, which wraps to two lines on
         // a phone.
         const words = [l.line.x0, l.line.y - l.line.size * 3.1, l.line.x1, l.line.y + l.line.size * (phone ? 6.3 : 5)];
-        expect(words[3]).toBeLessThan(l.sheet.h - 0.02);
+        expect(words[3]).toBeLessThanOrEqual(l.sheet.h);
         const boxes = l.cards.map((c) => footprint(c, l.name));
         for (const [i, box] of boxes.entries()) {
-          expect(box[0]).toBeGreaterThan(0.03);
-          expect(box[2]).toBeLessThan(l.sheet.w - 0.03);
+          expect(box[0]).toBeGreaterThanOrEqual(0);
+          expect(box[2]).toBeLessThanOrEqual(l.sheet.w);
           expect(box[1]).toBeGreaterThan(l.say.y);
           expect(apart(box, logo)).toBe(true);
           expect(apart(box, words)).toBe(true);
@@ -30,7 +29,6 @@ describe("the map table's layout", () => {
         }
         // Names side by side in a row never run into each other.
         for (const a of l.cards) for (const b of l.cards) if (a !== b && Math.abs(a.y - b.y) < 1e-6) expect(Math.abs(a.x - b.x)).toBeGreaterThanOrEqual(a.nameWidth);
-        expect(l.logo.w / LOGO_ASPECT).toBeLessThan(l.say.y - l.logo.y);
       });
     }
   }

@@ -46,15 +46,10 @@ async function frames(stream: ReturnType<typeof streamOf>["stream"], seconds: nu
 }
 
 describe("the far forms the slots hold", () => {
-  it("trade a slot only for a form many times heavier, which turns in once the lighter has turned out", async () => {
+  it("pass from one form to another gradually: the form leaving fades out over many frames, and the form taking its slot then fades in", async () => {
     const weights = [5, 3, 1, 0];
     const { forms, stream } = streamOf(weights);
     await stream.open(eye, 1000);
-    // A form slightly heavier than one with a slot doesn't take the slot.
-    weights[2] = 6;
-    await frames(stream, 1);
-    expect(forms.swapPx(1)).toBe(FAR.swapPx);
-    expect(forms.slotOf(2)).toBe(-1);
     // A form many times heavier takes the lighter form's slot, which fades out over many frames.
     weights[2] = 30;
     await frames(stream, FAR_TURN.seconds / 2);

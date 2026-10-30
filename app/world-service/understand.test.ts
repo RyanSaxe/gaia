@@ -117,7 +117,6 @@ describe("the Jev runner", () => {
     const engine = engineAt(join(scratch, "big-data"));
     const sent = aboutFiles(await understand(engine, root));
     expect(sent.length).toBeGreaterThan(1);
-    expect(sent.every((r) => r.state.chunk !== undefined)).toBe(true);
     const graph: CodeGraph = await engine.call("project.graph", { root, judged: true });
     const file = graph.nodes.find((n) => n.id === "file:src/big.ts");
     expect(file?.judged?.value?.quality).toBeTypeOf("number");

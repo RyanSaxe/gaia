@@ -61,19 +61,24 @@ describe("the piece, streamed a chunk at a time", () => {
     return started.filter((s) => s.name.startsWith("bed"));
   }
 
-  it("plays each chunk's own music, one straight after another, round the piece and back to its start", () => {
-    const bed = bedOver(110);
-    expect(bed.slice(0, 9).map((s) => s.name)).toEqual(["bed:0", "bed:1", "bed:2", "bed:3", "bed:4", "bed:5", "bed:6", "bed:7", "bed:0"]);
+  /** Where in the piece a start plays from, in seconds: its chunk's place in the piece and how far into the chunk it begins. */
+  const from = (s: Started): number => Number(s.name.split(":")[1]) * CHUNK.seconds + s.offset - CHUNK.margin;
+  const piece = CHUNK.count * CHUNK.seconds;
+  /** Each start plays the piece where the music's clock stands, and begins as the one before it ends. */
+  function expectSeamless(bed: readonly Started[], joinAt: number): void {
+    expect(bed[0]?.at).toBeCloseTo(joinAt, 9);
     for (const [k, s] of bed.entries()) {
-      expect(s.offset).toBeCloseTo(CHUNK.margin, 9);
-      expect(s.at).toBeCloseTo(k * CHUNK.seconds, 9);
-      expect(s.duration).toBeCloseTo(CHUNK.seconds, 9);
+      const behind = (((from(s) - s.at) % piece) + piece) % piece;
+      expect(Math.min(behind, piece - behind), `start ${k}`).toBeLessThan(1e-6);
+      const next = bed[k + 1];
+      if (next !== undefined) expect(next.at, `start ${k + 1}`).toBeCloseTo(s.at + s.duration, 9);
     }
-    // A part that joins late starts partway into the chunk the other parts are playing.
-    const [first, second] = bedOver(30, 20);
-    expect(first?.name).toBe("bed:1");
-    expect(first?.at).toBeCloseTo(20, 9);
-    expect(first?.offset).toBeCloseTo(CHUNK.margin + 20 - CHUNK.seconds, 9);
-    expect(second?.at).toBeCloseTo(2 * CHUNK.seconds, 9);
+  }
+
+  it("plays on without a gap, a skip or a part out of time, round the piece and back to its start, and a part that joins late in time with the rest", () => {
+    const bed = bedOver(110);
+    expectSeamless(bed, 0);
+    expect(bed.some((s, k) => k > 0 && from(s) < from(bed[k - 1] as Started)), "the piece comes round to its start").toBe(true);
+    expectSeamless(bedOver(30, 20), 20);
   });
 });

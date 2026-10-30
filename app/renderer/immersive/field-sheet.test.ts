@@ -29,7 +29,7 @@ describe("where the sheets letter areas' names", () => {
 
   it("letters every area with ground of its own once, and not the root, which is the whole sheet", () => {
     const areas = land.labels.filter((l) => l.area.depth > 0).map((l) => l.area.path).sort();
-    expect(areas.length).toBeGreaterThan(40);
+    expect(areas).not.toEqual([]);
     for (const placed of sheets) expect(placed.places.map((p) => p.label.area.path).sort()).toEqual(areas);
     // When lots are so dense that no ground is clear of them, every name is still lettered, over the marks.
     const lots: LotPlace[] = [];

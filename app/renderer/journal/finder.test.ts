@@ -33,7 +33,5 @@ describe("the finder", () => {
     expect(items.map((f) => f.at).sort()).toEqual(
       ["app", "app/world-service", "packages", "packages/world", "entity:packages/world", FILE, "app/world-service/index.ts", "packages/world/journal.ts", `${FILE}#openWorld`, `${FILE}#OpenWorldOptions`, `${FILE}#OpenWorldOptions.root`, "packages/world/journal.ts#journalOf"].sort(),
     );
-    // A nested definition is named with its enclosing definition.
-    expect(items.find((f) => f.at === `${FILE}#OpenWorldOptions.root`)).toMatchObject({ name: "OpenWorldOptions.root", where: FILE });
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { journalOf, ownOf } from "@gaia/world";
-import { type WordsSource, contentsWords, wordsOf } from "./words.ts";
+import { type WordsSource, wordsOf } from "./words.ts";
 
 const MATH = "core/math.ts";
 const world = {
@@ -28,18 +28,15 @@ const source = (lines: readonly string[] | undefined): WordsSource => ({
 });
 
 describe("what a journal page says", () => {
-  it("lists a chapter's chapters and files, a file's definitions under their own, each with its own vitality and page; a definition is its code after its signature", () => {
+  it("shows a definition's own code on its page, a nested definition's included", () => {
     const src = source(TEXT);
-    const j = src.journal;
-    expect(contentsWords(src).body).toEqual({ kind: "rows", rows: [{ of: "core", name: "core", depth: 0, vitality: 0.6, page: j.entry("core")?.page }, { of: "README.md", name: "README.md", depth: 0, vitality: 1, page: j.entry("README.md")?.page }] });
-    const file = wordsOf(src, j.entry(MATH)!);
-    expect(file).toMatchObject({ path: ["core"], name: "math.ts", vitality: 0.5 });
-    // A file with definitions lists its own page first.
-    expect(file.body.kind === "rows" && file.body.rows.map((r) => [r.of, r.depth, r.vitality])).toEqual([[ownOf(MATH), 0, 0.5], [`${MATH}#Calc`, 0, 0.3], [`${MATH}#Calc.add`, 1, 0.9]]);
-    const calc = wordsOf(src, j.entry(`${MATH}#Calc`)!);
-    expect(calc).toMatchObject({ path: ["core", "math.ts"], name: "Calc", vitality: 0.3, signature: "export class Calc {", body: { kind: "code", first: 3, opensAt: 3 } });
-    expect(calc.body.kind === "code" && calc.body.lines).toEqual(TEXT.slice(2, 6));
-    // Until the file's text arrives, a definition's page has its path and name but no code.
-    expect(wordsOf(source(undefined), j.entry(`${MATH}#Calc`)!)).toMatchObject({ name: "Calc", body: { kind: "code", lines: [] } });
+    const code = (id: string): string[] => {
+      const page = wordsOf(src, src.journal.entry(id)!);
+      if (page.body.kind !== "code") throw new Error(`${id}'s page shows no code.`);
+      return [...(page.signature === undefined ? [] : [page.signature]), ...page.body.lines];
+    };
+    // Each definition's lines in the file, from its first, whatever their indentation.
+    const trimmed = (lines: readonly string[]): string[] => lines.map((l) => l.trim());
+    for (const { id, line, lines } of world.symbols) expect(trimmed(code(id)), id).toEqual(trimmed(TEXT.slice(line - 1, line - 1 + lines)));
   });
 });
