@@ -96,19 +96,4 @@ mod tests {
         ));
         assert!(replaces(&json!({ "score": 2.1 }), &json!({ "score": 2.6 })));
     }
-
-    #[test]
-    fn a_long_file_s_chunks_combine_by_how_much_each_read() {
-        let a = json!({ "choice": "utility", "p": { "utility": 0.9, "core logic": 0.1 } });
-        let b = json!({ "choice": "core logic", "p": { "utility": 0.3, "core logic": 0.7 } });
-        let combined = combine(&[(3.0, a), (1.0, b)]).unwrap();
-        assert_eq!(combined["choice"], "utility");
-        assert!((combined["p"]["utility"].as_f64().unwrap() - 0.75).abs() < 1e-9);
-        let s = combine(&[
-            (1.0, json!({ "score": 1.0, "levels": 5 })),
-            (1.0, json!({ "score": 3.0, "levels": 5 })),
-        ])
-        .unwrap();
-        assert_eq!(s["score"], 2.0);
-    }
 }

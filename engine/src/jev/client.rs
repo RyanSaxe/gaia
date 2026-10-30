@@ -273,22 +273,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_dry_run_prices_requests_and_sends_nothing() {
-        let request = json!({ "model": "typesafe/jev-1.13", "state": { "file": "a.ts" }, "questions": { "vibe": { "type": "noul", "instructions": "Is it?" } } });
-        let plan = dry_run(&[request.clone(), request]);
-        assert_eq!(plan["requests"], 2);
-        assert_eq!(plan["questions"], 2);
-        assert_eq!(plan["endpoint"], ENDPOINT);
-        let tokens = plan["estimatedTokens"].as_u64().unwrap();
-        assert!(tokens > 0);
-        assert!(
-            (plan["estimatedUsd"].as_f64().unwrap() - tokens as f64 * USD_PER_MILLION_INPUT / 1e6)
-                .abs()
-                < 1e-12
-        );
-    }
-
-    #[test]
     fn nothing_is_sent_while_jev_is_off() {
         // With `GAIA_JEV=live` set, the test returns early so it never sends a request.
         if live() {

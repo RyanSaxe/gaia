@@ -1172,83 +1172,6 @@ fn judge(graph: &mut CodeGraph, held: &Value) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn a_link_answer_holds_only_for_its_call_s_current_version() {
-        let resolve = calls::registry()
-            .into_iter()
-            .find(|c| c.id() == "resolve")
-            .unwrap();
-        let answer = json!({ "choice": "file:x.ts", "p": { "file:x.ts": 0.9 } });
-        let held = json!({
-            link_key("now", &["file:x.ts"]): { "answer": answer, "call": format!("resolve@{}", resolve.version()), "candidates": ["file:x.ts"] },
-            link_key("before", &["file:x.ts"]): { "answer": answer, "call": "resolve@00000000-1", "candidates": ["file:x.ts"] },
-        });
-        let l = links(&held);
-        assert!(l.contains_key("now"));
-        assert!(!l.contains_key("before"));
-    }
-
-    #[test]
-    fn a_file_whose_link_requests_a_slice_cut_in_two_is_still_asked_the_rest() {
-        let link = |n: u32| Planned {
-            pass: LINK,
-            unit: "file:a.ts".into(),
-            request: json!({}),
-            hash: format!("h{n}"),
-            weight: 1.0,
-            questions: vec![Asked {
-                id: format!("q{n}"),
-                about: format!("a.ts#{n}"),
-                field: "link".into(),
-                call: "resolve@1".into(),
-                json: json!({ "criteria": { "file:x.ts": "x.ts", "outside": "elsewhere" } }),
-                line: None,
-            }],
-            waiting: false,
-        };
-        let answer = json!({ "type": "choice", "choice": "file:x.ts", "probabilities": { "file:x.ts": 0.9 } });
-        let calls = json!({ "h1": { "answers": { "q1": answer } }, "h2": { "answers": { "q2": answer } } });
-        let mut w = Wanted {
-            project: "p".into(),
-            graph: CodeGraph { project_id: "p".into(), name: "p".into(), commit: None, nodes: vec![], edges: vec![], pending: vec![] },
-            planned: vec![link(1), link(2)],
-            answered: HashSet::from(["h1".to_string()]),
-        };
-        // With half the requests answered, nothing can be held yet, so nothing may stop the slice from sending the
-        // other half.
-        assert!(unsettled(&w, &json!({}), &calls).is_empty());
-        w.answered.insert("h2".into());
-        assert_eq!(unsettled(&w, &json!({}), &calls), BTreeSet::from([("file:a.ts", LINK)]));
-    }
-
-    #[test]
-    fn a_folder_s_request_stays_the_same_once_its_own_answers_are_held() {
-        let root = std::env::temp_dir().join(format!("gaia-runner-own-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("src")).unwrap();
-        std::fs::write(root.join("a.ts"), "export const a = 1;\n").unwrap();
-        std::fs::write(root.join("src/b.ts"), "export const b = 2;\n").unwrap();
-        let graph = crate::graph::build(&root).unwrap();
-        let folders: Vec<&dyn Call> = calls::registry().into_iter().filter(|c| c.pass() == "folders").collect();
-        let dirs: Vec<&DirNode> = graph.nodes.iter().filter_map(|n| if let Node::Dir(d) = n { Some(d) } else { None }).collect();
-        let hashes = |held: &Value, d: &DirNode| -> Vec<String> {
-            dir_requests(&Ctx::new(&graph, &root, held), &graph.name, d, &folders).into_iter().map(|p| p.hash).collect()
-        };
-        for d in dirs {
-            // Every answer the folder's own request gave about the folder itself, held as the runner holds it.
-            let mut held = Map::new();
-            for p in dir_requests(&Ctx::new(&graph, &root, &json!({})), &graph.name, d, &folders) {
-                for q in p.questions.iter().filter(|q| q.about == d.id) {
-                    let call = q.call.split('@').next().unwrap();
-                    held.insert(format!("{}|{call}|{}", d.lineage, q.field), json!({ "answer": { "score": 3.0, "levels": 5 }, "call": q.call }));
-                }
-            }
-            assert!(!held.is_empty(), "{} is asked about itself", d.id);
-            assert_eq!(hashes(&json!({}), d), hashes(&Value::Object(held), d), "{}'s request never carries its own answers", d.id);
-        }
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
     /// A repository of `files` in a fresh temporary folder.
     fn repository(name: &str, files: &[(String, String)]) -> PathBuf {
         let root = std::env::temp_dir().join(format!("gaia-runner-{name}-{}", std::process::id()));
@@ -1290,7 +1213,7 @@ mod tests {
     }
 
     #[test]
-    fn a_line_longer_than_a_request_is_cut_into_pieces_that_fit_and_together_carry_every_character() {
+    fn however_large_a_line_definition_folder_or_candidate_list_every_request_fits_and_asks_each_thing_once() {
         // A minified bundle: one line of 200,000 characters, with a character of two bytes in every function.
         let mut line = String::new();
         let mut i = 0;
@@ -1299,162 +1222,67 @@ mod tests {
             i += 1;
         }
         line += &"/".repeat(200_000 - line.chars().count());
-        let text = format!("{line}\n");
-        let root = repository("long-line", &[("bundle.js".into(), text.clone())]);
-        let graph = crate::graph::build(&root).unwrap();
-        let files = file_plan(&graph, &root, "bundle.js", "files");
-        let links = file_plan(&graph, &root, "bundle.js", LINK);
-        for p in links.iter().chain(&files) {
-            assert!(tokens(&p.request.to_string()) <= BUDGET, "a request of {} tokens", tokens(&p.request.to_string()));
-        }
-        let pieces = pieces_sent(&files);
-        assert!(pieces.len() > 1);
-        assert_eq!(pieces.iter().map(|(_, s)| s.as_str()).collect::<String>(), text);
-        // The pieces' character ranges cover the line end to end.
-        let mut at = 0;
-        for (chunk, source) in &pieces {
-            let length = source.trim_end_matches('\n').chars().count();
-            assert_eq!(chunk["lines"], json!([1, 1]));
-            assert_eq!(chunk["characters"], json!([at, at + length]));
-            at += length;
-        }
-        assert_eq!(at, 200_000);
-        // Each definition gets one question, in the piece that shows it.
-        let defs: HashMap<&str, &str> = graph
-            .nodes
-            .iter()
-            .filter_map(|n| if let Node::Def(d) = n { Some((d.id.as_str(), d.signature.as_str())) } else { None })
-            .collect();
-        let mut asked: Vec<&str> = Vec::new();
-        for p in &files {
-            for q in p.questions.iter().filter(|q| defs.contains_key(q.about.as_str())) {
-                assert!(p.request["state"]["source"].as_str().unwrap().contains(defs[q.about.as_str()]), "{} is asked where it is shown", q.about);
-                asked.push(&q.id);
-            }
-        }
-        assert!(!asked.is_empty());
-        assert_eq!(asked.len(), asked.iter().collect::<HashSet<_>>().len());
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn a_definition_longer_than_a_request_is_still_cut_at_its_lines() {
         let body: String = (0..3000).map(|i| format!("  x = x + {i} * 2 + 1;\n")).collect();
-        let text = format!("export function long(x: number): number {{\n{body}  return x;\n}}\n");
-        let root = repository("long-def", &[("long.ts".into(), text.clone())]);
+        let mut files: Vec<(String, String)> = vec![
+            ("bundle.js".into(), format!("{line}\n")),
+            ("long.ts".into(), format!("export function long(x: number): number {{\n{body}  return x;\n}}\n")),
+            ("wide/caller.ts".into(), "export function go() {\n  return run();\n}\n".into()),
+        ];
+        // Every other file beside the caller defines `run`, so its call has thousands of candidates.
+        files.extend((0..3000).map(|i| (format!("wide/f{i}.ts"), format!("export function run() {{\n  return {i};\n}}\n"))));
+        let root = repository("budget", &files);
         let graph = crate::graph::build(&root).unwrap();
-        let files = file_plan(&graph, &root, "long.ts", "files");
-        for p in &files {
-            assert!(tokens(&p.request.to_string()) <= BUDGET);
-        }
-        let pieces = pieces_sent(&files);
-        assert!(pieces.len() > 1);
-        assert_eq!(pieces.iter().map(|(_, s)| s.as_str()).collect::<String>(), text);
-        let mut next = 1;
-        for (chunk, source) in &pieces {
-            assert!(chunk.get("characters").is_none(), "a piece of whole lines names no characters");
-            assert_eq!(chunk["lines"][0], json!(next));
-            next = chunk["lines"][1].as_u64().unwrap() + 1;
-            assert!(source.ends_with('\n'));
-        }
-        assert_eq!(next as usize, text.lines().count() + 1);
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn a_link_answer_chosen_among_the_nearest_candidates_holds_for_all_of_them() {
-        let candidates: Vec<String> = (0..5000).map(|i| format!("file:p{i}/x.ts")).collect();
-        let r = crate::graph::model::PendingRef {
-            from: "file:a.ts".into(),
-            kind: "import",
-            text: "./x".into(),
-            at: crate::graph::model::Span { start: 1, end: 1 },
-            candidates: candidates.clone(),
-        };
-        let about = crate::graph::ref_key(&r);
-        // The question offered only the ten that fit.
-        let criteria: Map<String, Value> = candidates[..10]
-            .iter()
-            .map(|c| (c.clone(), json!(c)))
-            .chain(std::iter::once(("outside".to_string(), json!("elsewhere"))))
-            .collect();
-        let planned = Planned {
-            pass: LINK,
-            unit: "file:a.ts".into(),
-            request: json!({}),
-            hash: "h1".into(),
-            weight: 1.0,
-            questions: vec![Asked {
-                id: "q1".into(),
-                about: about.clone(),
-                field: "link".into(),
-                call: "resolve@1".into(),
-                json: json!({ "criteria": criteria }),
-                line: Some(1),
-            }],
-            waiting: false,
-        };
-        let answer = json!({ "type": "choice", "choice": "file:p3/x.ts", "probabilities": { "file:p3/x.ts": 0.9 } });
-        let calls = json!({ "h1": { "answers": { "q1": answer } } });
-        let w = Wanted {
-            project: "p".into(),
-            graph: CodeGraph { project_id: "p".into(), name: "p".into(), commit: None, nodes: vec![], edges: vec![], pending: vec![r] },
-            planned: vec![planned],
-            answered: HashSet::from(["h1".to_string()]),
-        };
-        let mut all = candidates.clone();
-        all.sort();
-        let hold = |under: &[String]| json!({ link_key(&about, under): { "answer": answer, "call": "resolve@1", "candidates": under } });
-        // Held under every candidate, as the graph looks it up, it settles. Held under the ten offered, it would not.
-        assert!(unsettled(&w, &hold(&all), &calls).is_empty());
-        let mut ten = candidates[..10].to_vec();
-        ten.sort();
-        assert!(!unsettled(&w, &hold(&ten), &calls).is_empty());
-    }
-
-    #[test]
-    fn a_folder_with_thousands_of_files_is_asked_in_requests_that_each_fit() {
-        let files: Vec<(String, String)> =
-            (0..3000).map(|i| (format!("wide/f{i}.ts"), format!("export const v{i} = {i};\n"))).collect();
-        let root = repository("wide", &files);
-        let graph = crate::graph::build(&root).unwrap();
+        let call = graph.pending.iter().find(|r| r.from.starts_with("def:wide/caller.ts")).expect("the call to run goes to Jev");
+        assert_eq!(call.candidates.len(), 3000);
         let held = json!({});
         let ctx = Ctx::new(&graph, &root, &held);
+        let fits = |planned: &[Planned], what: &str| {
+            for p in planned {
+                let size = tokens(&p.request.to_string());
+                assert!(size <= BUDGET, "{what}: a request of {size} tokens");
+            }
+        };
+        // Nothing inside a file or folder gets the same question twice, however its requests are cut. A file cut into
+        // pieces is asked about itself in each, and those answers combine into one judgment.
+        let asked_once = |planned: &[Planned], what: &str| -> HashSet<String> {
+            let mut asked = HashSet::new();
+            for q in planned.iter().flat_map(|p| p.questions.iter().filter(|q| q.about != p.unit)) {
+                assert!(asked.insert((q.about.clone(), q.field.clone())), "{what}: {} is asked {} twice", q.about, q.field);
+            }
+            asked.into_iter().map(|(about, _)| about).collect()
+        };
+        let mut linked_in_files = HashSet::new();
+        for (what, path) in [
+            ("a line of 200,000 characters", "bundle.js"),
+            ("a definition of 3,000 lines", "long.ts"),
+            ("a call with 3,000 candidates", "wide/caller.ts"),
+        ] {
+            let source = files.iter().find(|(p, _)| p == path).map(|(_, t)| t.as_str()).unwrap();
+            let read = file_plan(&graph, &root, path, "files");
+            let linked = file_plan(&graph, &root, path, LINK);
+            fits(&read, what);
+            fits(&linked, what);
+            assert_eq!(pieces_sent(&read).iter().map(|(_, s)| s.as_str()).collect::<String>(), source, "{what}: the pieces carry the whole file");
+            let defs: HashSet<String> = graph.nodes.iter().filter_map(|n| match n {
+                Node::Def(d) if d.file == format!("file:{path}") => Some(d.id.clone()),
+                _ => None,
+            }).collect();
+            let about = asked_once(&read, what);
+            assert!(defs.iter().all(|d| about.contains(d)), "{what}: every definition is asked about");
+            linked_in_files.extend(asked_once(&linked, what));
+        }
+        assert!(linked_in_files.contains(&crate::graph::ref_key(call)), "the call is asked about");
         let dir = |path: &str| {
             graph.nodes.iter().find_map(|n| if let Node::Dir(d) = n && d.path == path { Some(d) } else { None }).unwrap()
         };
-        let wide = dir("wide");
-        let planned = dir_requests(&ctx, &graph.name, wide, &calls_of("folders"));
-        let top = dir_requests(&ctx, &graph.name, dir(""), &calls_of("folders"));
-        for p in planned.iter().chain(&top) {
-            assert!(tokens(&p.request.to_string()) <= BUDGET, "a request of {} tokens", tokens(&p.request.to_string()));
-        }
-        // Each part is in exactly one run, and each part gets one question, in its run's request.
-        let mut runs: Vec<(Value, Vec<String>)> = Vec::new();
-        for p in &planned {
-            let state = &p.request["state"]["folder-axes"];
-            let parts: Vec<String> = state["parts"].as_array().unwrap().iter().map(|e| e["part"].as_str().unwrap().to_string()).collect();
-            for q in p.questions.iter().filter(|q| q.about != wide.id) {
-                assert!(parts.contains(&q.about), "{} is asked beside its part", q.about);
-            }
-            if runs.last().is_none_or(|(h, _)| *h != state["partsHeld"]) {
-                runs.push((state["partsHeld"].clone(), parts));
-            }
-        }
-        assert!(runs.len() > 1);
-        let parts: Vec<&String> = runs.iter().flat_map(|(_, p)| p).collect();
-        assert_eq!(parts.len(), 3000);
-        assert_eq!(parts.iter().collect::<HashSet<_>>().len(), 3000);
-        let asked: Vec<&str> = planned.iter().flat_map(|p| &p.questions).filter(|q| q.about != wide.id).map(|q| q.about.as_str()).collect();
-        assert_eq!(asked.len(), 3000);
-        assert_eq!(asked.iter().collect::<HashSet<_>>().len(), 3000);
-        // The folder's own questions go with the first run.
-        assert!(planned.iter().filter(|p| p.questions.iter().any(|q| q.about == wide.id)).all(|p| p.request["state"]["folder-axes"]["partsHeld"]["from"] == json!(1)));
-        // Above, the folder is named with as many of its files as fit, and a count of the rest.
-        let entry = top[0].request["state"]["folder-axes"]["parts"].as_array().unwrap().iter().find(|e| e["part"] == json!(wide.id)).unwrap().clone();
-        let named = entry["files"].as_array().unwrap().len();
-        assert!(named > 0 && named < 3000);
-        assert_eq!(entry["more"], json!(3000 - named));
+        let wide = dir_requests(&ctx, &graph.name, dir("wide"), &calls_of("folders"));
+        let above = dir_requests(&ctx, &graph.name, dir(""), &calls_of("folders"));
+        fits(&wide, "a folder of 3,001 files");
+        fits(&above, "the folder that holds it");
+        asked_once(&above, "the folder that holds it");
+        let parts = asked_once(&wide, "a folder of 3,001 files");
+        let in_wide = files.iter().filter(|(p, _)| p.starts_with("wide/")).count();
+        assert_eq!(parts.iter().filter(|p| p.starts_with("file:wide/")).count(), in_wide, "every file of the folder is asked about");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

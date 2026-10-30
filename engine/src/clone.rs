@@ -440,5 +440,8 @@ mod tests {
             folder_in(Path::new("/data"), "BurntSushi", "RipGrep"),
             Path::new("/data/clones/burntsushi/ripgrep")
         );
+        // Both methods that reach GitHub refuse an address before they run git.
+        assert_eq!(locate("https://gitlab.com/a/b").unwrap(), json!({ "found": false, "why": "address" }));
+        assert_eq!(clone("git@github.com:a/b.git").unwrap(), json!({ "cloned": false, "why": "address" }));
     }
 }

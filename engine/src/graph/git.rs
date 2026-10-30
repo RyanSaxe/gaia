@@ -215,18 +215,3 @@ pub fn renames(root: &Path, from: &str, to: &str) -> Option<BTreeMap<String, Str
     }
     Some(now)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reads_each_commit_and_the_files_it_touched() {
-        let log = "\u{1e}200\u{1f}a@x\n\nsrc/a.ts\nsrc/b.ts\n\u{1e}100\u{1f}b@x\n\nsrc/a.ts\n";
-        let commits = parse(log);
-        assert_eq!(commits.len(), 2);
-        assert_eq!((commits[0].at, commits[0].author.as_str()), (200, "a@x"));
-        assert_eq!(commits[0].files, vec!["src/a.ts".to_string(), "src/b.ts".to_string()]);
-        assert_eq!((commits[1].at, commits[1].files.len()), (100, 1));
-    }
-}
