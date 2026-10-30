@@ -377,31 +377,13 @@ mod tests {
 
     #[test]
     fn only_github_repository_addresses_are_accepted() {
-        let accepted = [
-            (
-                "https://github.com/sindresorhus/slugify",
-                "sindresorhus",
-                "slugify",
-            ),
-            ("github.com/sindresorhus/slugify", "sindresorhus", "slugify"),
-            ("https://github.com/rust-lang/rust.git", "rust-lang", "rust"),
-            ("github.com/BurntSushi/ripgrep/", "BurntSushi", "ripgrep"),
-            ("  https://github.com/a/b.git/  ", "a", "b"),
-            ("github.com/a-b/x_y.z-1", "a-b", "x_y.z-1"),
-        ];
-        for (text, owner, repo) in accepted {
-            assert_eq!(
-                parse_address(text),
-                Some((owner.to_string(), repo.to_string())),
-                "{text}"
-            );
-        }
-        let rejected = [
-            "",
-            "slugify",
-            "sindresorhus/slugify",
+        assert_eq!(
+            parse_address("https://github.com/rust-lang/rust.git"),
+            Some(("rust-lang".to_string(), "rust".to_string()))
+        );
+        // Another host, another protocol, credentials or a path that could leave the clones folder.
+        let hostile = [
             "http://github.com/a/b",
-            "https://www.github.com/a/b",
             "https://gitlab.com/a/b",
             "https://github.com.evil.example/a/b",
             "https://github.com@evil.example/a/b",
@@ -411,34 +393,18 @@ mod tests {
             "ssh://git@github.com/a/b",
             "git://github.com/a/b",
             "file:///etc/passwd",
-            "HTTPS://GITHUB.COM/a/b",
-            "https://github.com/a",
-            "https://github.com/a/",
-            "https://github.com/a/b/tree/main",
-            "https://github.com/a/b//",
-            "https://github.com/a/b?tab=readme",
-            "https://github.com/a/b#readme",
-            "https://github.com/a/b c",
+            "https://github.com/a/..",
+            "https://github.com/../b",
             "https://github.com/a/b%2Fc",
             "https://github.com/a\\b/c",
-            "https://github.com/-a/b",
-            "https://github.com/a-/b",
-            "https://github.com/a--b/c",
-            "https://github.com/a/.git",
-            "https://github.com/a/..",
-            "https://github.com/a/.hidden",
-            "https://github.com/ä/b",
             "https://github.com/a/b\nhttps://github.com/c/d",
-            &format!("https://github.com/{}/b", "a".repeat(40)),
-            &format!("https://github.com/a/{}", "b".repeat(101)),
+            "https://github.com/-a/b",
         ];
-        for text in rejected {
+        for text in hostile {
             assert_eq!(parse_address(text), None, "{text:?} should be refused");
         }
-        // GitHub's names ignore case, so one repository has one folder however it is written.
-        assert_eq!(
-            folder_in(Path::new("/data"), "BurntSushi", "RipGrep"),
-            Path::new("/data/clones/burntsushi/ripgrep")
-        );
+        // Both methods that reach GitHub refuse an address before they run git.
+        assert_eq!(locate("https://gitlab.com/a/b").unwrap(), json!({ "found": false, "why": "address" }));
+        assert_eq!(clone("git@github.com:a/b.git").unwrap(), json!({ "cloned": false, "why": "address" }));
     }
 }

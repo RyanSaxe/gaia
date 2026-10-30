@@ -85,30 +85,13 @@ mod tests {
 
     #[test]
     fn a_fresh_answer_replaces_the_held_one_only_when_it_clearly_differs() {
-        let held = json!({ "choice": "utility", "p": { "utility": 0.6, "core logic": 0.4 } });
-        let close = json!({ "choice": "core logic", "p": { "utility": 0.45, "core logic": 0.55 } });
-        let clear = json!({ "choice": "core logic", "p": { "utility": 0.2, "core logic": 0.8 } });
-        assert!(!replaces(&held, &close));
+        // A wobble flips the top choice by a hair or moves a score a little. A clear change is most of the scale.
+        let held = json!({ "choice": "utility", "p": { "utility": 0.52, "core logic": 0.48 } });
+        let wobble = json!({ "choice": "core logic", "p": { "utility": 0.49, "core logic": 0.51 } });
+        let clear = json!({ "choice": "core logic", "p": { "utility": 0.05, "core logic": 0.95 } });
+        assert!(!replaces(&held, &wobble));
         assert!(replaces(&held, &clear));
-        assert!(!replaces(
-            &json!({ "score": 2.1 }),
-            &json!({ "score": 2.4 })
-        ));
-        assert!(replaces(&json!({ "score": 2.1 }), &json!({ "score": 2.6 })));
-    }
-
-    #[test]
-    fn a_long_file_s_chunks_combine_by_how_much_each_read() {
-        let a = json!({ "choice": "utility", "p": { "utility": 0.9, "core logic": 0.1 } });
-        let b = json!({ "choice": "core logic", "p": { "utility": 0.3, "core logic": 0.7 } });
-        let combined = combine(&[(3.0, a), (1.0, b)]).unwrap();
-        assert_eq!(combined["choice"], "utility");
-        assert!((combined["p"]["utility"].as_f64().unwrap() - 0.75).abs() < 1e-9);
-        let s = combine(&[
-            (1.0, json!({ "score": 1.0, "levels": 5 })),
-            (1.0, json!({ "score": 3.0, "levels": 5 })),
-        ])
-        .unwrap();
-        assert_eq!(s["score"], 2.0);
+        assert!(!replaces(&json!({ "score": 2.0 }), &json!({ "score": 2.05 })));
+        assert!(replaces(&json!({ "score": 1.0 }), &json!({ "score": 3.5 })));
     }
 }

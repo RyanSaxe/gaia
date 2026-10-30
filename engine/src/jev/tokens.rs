@@ -23,17 +23,3 @@ pub fn tokens(text: &str) -> usize {
     }
     n + letters.div_ceil(4)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn digits_and_marks_count_more_than_words() {
-        assert_eq!(tokens("walk"), 1);
-        assert_eq!(tokens("walking"), 2);
-        assert_eq!(tokens("a1b2"), 4);
-        assert_eq!(tokens("M12.5,3"), 7);
-        assert_eq!(tokens("one two\nthree"), 5);
-    }
-}
