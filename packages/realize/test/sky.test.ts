@@ -32,7 +32,6 @@ const STEP = 1 / 255;
 
 describe("the horizon", () => {
   it("meets far land with the sky in no seam: the land fades into exactly the sky behind it, in no step, and the sky has no line", () => {
-    expect(KEY_HOURS).toHaveLength(8);
     const eye: Vec3 = [0, 1.6, 0];
     for (const { name, look } of looks) {
       for (const a of bearings) {
@@ -51,14 +50,16 @@ describe("the horizon", () => {
         const above = skyColorAt(look, [Math.sin(a), 0.003, Math.cos(a)]);
         expect(apart(below, above), name).toBeLessThan(STEP);
       }
-      // The land fades with distance in no visible step. The walk samples every half meter, so a step shows up as
-      // one, while the fade's steady slope through low mist near the eye, about two levels in 255 per meter, does not.
+      // The land fades with distance in no visible step. However fast the fade, a smooth one changes at a steady
+      // rate from one meter to the next, while a step adds its whole height to one meter's change.
       const ground: Rgb = [0.3, 0.6, 0.2];
-      let last = aerialAt(look, ground, eye, [1, 0, 0]);
-      for (let d = 1.5; d <= AIR.dissolveEnd; d += 0.5) {
-        const next = aerialAt(look, ground, eye, [d, 0, 0]);
-        expect(apart(next, last), `${name} at ${d} m`).toBeLessThan(2 * STEP);
-        last = next;
+      const at = (d: number): Rgb => aerialAt(look, ground, eye, [d, 0, 0]);
+      let [before, here] = [at(1), at(2)];
+      for (let d = 3; d <= AIR.dissolveEnd; d += 1) {
+        const next = at(d);
+        const bend = next.map((v, c) => Math.abs(v - 2 * (here[c] as number) + (before[c] as number)));
+        expect(Math.max(...bend), `${name} at ${d - 1} m`).toBeLessThan(STEP);
+        [before, here] = [here, next];
       }
     }
   });

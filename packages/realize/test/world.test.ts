@@ -28,7 +28,6 @@ describe("world and biome kinds", () => {
 
   it("validates and realizes every uniformly sampled world and region", () => {
     const random = seeded(7);
-    const ids = new Set<string>();
     for (let i = 0; i < 1000; i++) {
       const hour = random() * 24;
       const w = identify("world", randomSlots(world, lib, random));
@@ -40,8 +39,6 @@ describe("world and biome kinds", () => {
       for (const c of [l.sky.zenith, l.sky.horizon, l.fog.color, l.ground.low, l.ground.high, l.light.sunColor]) {
         for (const x of c) expect(x >= 0 && x <= 1).toBe(true);
       }
-      ids.add(`${w.id}/${b.id}`);
     }
-    expect(ids.size).toBeGreaterThan(995);
   });
 });

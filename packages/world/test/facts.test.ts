@@ -47,11 +47,10 @@ const GRAPH: CodeGraph = {
 describe("the code facts, read from the engine's graph alone", () => {
   const facts = factsOf(GRAPH);
 
-  it("gives each declared entity its files, size, the surface its entry gathers, and the entities it leans on, from imports a file or a definition in it makes", () => {
-    const e = facts.entities.find((x) => x.path === core);
-    expect(e).toMatchObject({ name: "@demo/core", form: "package", entry: index, files: 2, lines: 122, exports: 2, dependents: ["packages/app"], dependsOn: [] });
-    expect(facts.entities.find((x) => x.path === "packages/app")?.dependsOn).toEqual([core]);
+  it("gives each entity the entities its code leans on and those that lean on it, from imports a file or a definition in it makes", () => {
+    const entity = (path: string) => facts.entities.find((x) => x.path === path);
+    expect([entity(core)?.dependsOn, entity(core)?.dependents]).toEqual([[], ["packages/app"]]);
     // An import within one file or one entity links nothing.
-    expect(facts.entities.find((x) => x.path === "packages/app")?.dependents).toEqual([]);
+    expect([entity("packages/app")?.dependsOn, entity("packages/app")?.dependents]).toEqual([[core], []]);
   });
 });

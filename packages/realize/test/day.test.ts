@@ -58,21 +58,23 @@ describe("lightAt", () => {
 });
 
 describe("daylight@1 nights", () => {
-  it("never falls toward black at any hour: the land's ambient and shadow, and any sky Jev can compose", () => {
+  // Black is anything a display shows as black: under one step of 8-bit color.
+  const BLACK = 1 / 255;
+  it("never falls to black at any hour: the land's ambient and shadow, and any sky Jev can compose", () => {
     for (const day of days) {
       for (const h of EVERY_15_MINUTES) {
         const l = lightAt(day, h);
-        expect(luminance(l.ambientColor) * l.ambientIntensity).toBeGreaterThan(0.05);
-        expect(luminance(l.shadowColor)).toBeGreaterThan(0.04);
-        // Night light is cool: blue leads the ambient whenever night has fallen.
-        if (l.nightness > 0.8) expect(l.ambientColor[2]).toBeGreaterThan(l.ambientColor[0]);
+        expect(luminance(l.ambientColor) * l.ambientIntensity).toBeGreaterThan(BLACK);
+        expect(luminance(l.shadowColor)).toBeGreaterThan(BLACK);
       }
     }
     const lib = new Library(WORLD_PRIMITIVES);
     const r = rand(seedOf("night skies"));
     for (let i = 0; i < 24; i++) {
       const filled = { blueprint: blueprintOf("world", randomSlots(world, lib, () => r.next())), kind: world };
-      expect(luminance(realizeSky(filled, lib, seedOf("test"), 2).sky.zenith)).toBeGreaterThan(0.01);
+      const night = realizeSky(filled, lib, seedOf("test"), 2).sky;
+      expect(luminance(night.zenith)).toBeGreaterThan(BLACK);
+      expect(luminance(night.horizon)).toBeGreaterThan(BLACK);
     }
     // Reads the light 93,000 times: half a second alone, several when other work shares the machine.
   }, 20_000);

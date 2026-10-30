@@ -22,18 +22,26 @@ function buffersOf(part: Part): Buffer[] {
 }
 
 describe("realize", () => {
-  it("gives byte-identical buffers and the same look for the same blueprints and seed", () => {
-    for (const [blueprint, k] of [...trees.map((b) => [b, tree] as const), ...bushes.map((b) => [b, bush] as const)]) {
-      const a = realize(blueprint, k, lib, { seed: seedOf("src/app.ts"), facts });
-      const b = realize(blueprint, k, lib, { seed: seedOf("src/app.ts"), facts });
-      expect(a.parts.length).toBe(b.parts.length);
+  // Builds 34 plants, some near the tree budget: about a second alone, several when the suite runs in parallel.
+  it("gives byte-identical buffers and the same look for the same blueprints and seed", { timeout: 30_000 }, () => {
+    // One plant for each frame and crown uses every part a tree or bush can have. The second pass builds them in
+    // the other order, so anything one build leaves behind for the next shows as a difference.
+    const onePerPair = (bps: readonly Blueprint[]): Blueprint[] => [...new Map(bps.map((b) => [`${b.slots.form?.use} ${b.slots.crown?.use}`, b])).values()];
+    const plants = [...onePerPair(trees).map((b) => [b, tree] as const), ...onePerPair(bushes).map((b) => [b, bush] as const)];
+    const build = ([blueprint, k]: (typeof plants)[number]) => realize(blueprint, k, lib, { seed: seedOf("src/app.ts"), facts });
+    const first = plants.map(build);
+    const again = [...plants].reverse().map(build).reverse();
+    first.forEach((a, n) => {
+      const b = again[n]!;
+      const name = named(plants[n]![0]);
+      expect(b.parts.length, name).toBe(a.parts.length);
       a.parts.forEach((part, i) => {
-        const other = b.parts[i] as Part;
-        buffersOf(part).forEach((buf, k) => expect(buf.equals(buffersOf(other)[k] as Buffer)).toBe(true));
+        const other = buffersOf(b.parts[i] as Part);
+        buffersOf(part).forEach((buf, k) => expect(buf.equals(other[k] as Buffer), name).toBe(true));
       });
-      expect(a.motion).toEqual(b.motion);
-      expect(a.palette).toEqual(b.palette);
-    }
+      expect(b.motion, name).toEqual(a.motion);
+      expect(b.palette, name).toEqual(a.palette);
+    });
     const lands = new Library([...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...RELIEF_PRIMITIVES]);
     const r = rand(seedOf("same looks"));
     for (let i = 0; i < 6; i++) {
