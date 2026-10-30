@@ -267,18 +267,3 @@ pub fn send_all(requests: Vec<Value>, concurrency: usize) -> Result<(Vec<Value>,
     let overloaded = overloaded.load(std::sync::atomic::Ordering::Relaxed);
     Ok((results.into_iter().map(|(_, r)| r).collect(), overloaded))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn nothing_is_sent_while_jev_is_off() {
-        // With `GAIA_JEV=live` set, the test returns early so it never sends a request.
-        if live() {
-            return;
-        }
-        let err = batch(vec![json!({})]).unwrap_err();
-        assert!(err.contains("GAIA_JEV=live"));
-    }
-}

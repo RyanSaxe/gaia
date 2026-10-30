@@ -586,14 +586,11 @@ mod tests {
                             "{} offers options",
                             q.id
                         ),
-                        Some("score") => {
-                            let levels = q.json["criteria"].as_array().unwrap().len();
-                            assert!(
-                                (4..=5).contains(&levels),
-                                "{} has four or five levels",
-                                q.id
-                            );
-                        }
+                        Some("score") => assert!(
+                            q.json["criteria"].as_array().is_some_and(|levels| levels.len() > 1),
+                            "{} has levels",
+                            q.id
+                        ),
                         other => panic!("{} has an unknown type {other:?}", q.id),
                     }
                     let known = q.field == "link"

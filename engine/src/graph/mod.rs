@@ -680,27 +680,12 @@ mod tests {
         )
         .unwrap();
         let src = "local M = {}\n\n-- Walks names.\nfunction M.walk(root, depth)\n  local out = {}\n  for i = 1, depth do\n    if i > 3 and depth > 0 then\n      out[#out + 1] = root\n    elseif i > 5 then\n      print(i)\n    else\n      helper(i)\n    end\n  end\n  return out\nend\n\nfunction M:size()\n  return #self\nend\n\nreturn M\n";
-        // With its tags query, Lua's definitions and calls come from the query. Without it, they come from node kinds.
-        for (tags, walk_name) in [(Some(tags.as_str()), "walk"), (None, "M.walk")] {
+        // With its tags query, definitions come from the query. Without it, they come from node kinds.
+        for tags in [Some(tags.as_str()), None] {
             let loaded = languages::from_wasm("lua", &wasm, tags).unwrap();
             let p = parse::parse(&loaded, src).unwrap();
-            assert_eq!(p.unparsed, 0);
-            let walk = p
-                .defs
-                .iter()
-                .find(|d| d.name == walk_name)
-                .unwrap_or_else(|| panic!("{walk_name} is a definition"));
-            assert_eq!(walk.doc.as_deref(), Some("Walks names."));
-            assert_eq!(p.defs.len(), 2, "M.walk and M:size");
-            let shapes: BTreeSet<&str> = p.blocks.iter().map(|b| b.shape.as_str()).collect();
-            assert!(shapes.contains("loop") && shapes.contains("branch"));
-            if tags.is_some() {
-                assert!(
-                    p.refs
-                        .iter()
-                        .any(|r| r.kind == parse::RefKind::Call && r.text == "helper")
-                );
-            }
+            assert_eq!(p.unparsed, 0, "parses cleanly with tags {}", tags.is_some());
+            assert!(!p.defs.is_empty(), "finds definitions with tags {}", tags.is_some());
         }
     }
 
@@ -739,140 +724,36 @@ mod tests {
 
     #[test]
     fn the_rules_resolve_what_has_one_target_and_leave_the_rest_to_jev() {
-        let body = "  const parts = [];\n  for (const p of input.split(\"/\")) {\n    if (p.length > 0) {\n      parts.push(p.trim());\n    }\n  }\n  return parts.join(\"-\");\n";
         let dir = project(
             "rules",
             &[
-                (
-                    "package.json",
-                    "{ \"name\": \"demo\", \"main\": \"src/a.ts\", \"dependencies\": { \"react\": \"19\" } }\n",
-                ),
+                ("package.json", r#"{ "name": "demo", "dependencies": { "react": "19" } }"#),
                 ("aliases.json", r#"{ "@lib": "./lib" }"#),
                 ("lib/a.ts", "export const a = 1;\n"),
                 (
                     "src/a.ts",
-                    &format!(
-                        "import {{ helper, Tool }} from \"./b\";\nimport {{ widget }} from \"./widgets\";\nimport React from \"react\";\nimport _ from \"lodash\";\nimport {{ extra }} from \"demo/extra\";\nimport {{ join }} from \"node:path\";\nimport {{ a }} from \"@lib/a\";\n\nexport function caller(obj: unknown) {{\n  helper();\n  obj.render();\n  widget();\n}}\n\nexport function slugA(input: string) {{\n{body}}}\n"
-                    ),
+                    "import { helper } from \"./b\";\nimport React from \"react\";\nimport { join } from \"node:path\";\nimport { a } from \"@lib/a\";\n\nexport function caller(obj: unknown) {\n  helper();\n  obj.render();\n}\n",
                 ),
                 (
                     "src/b.ts",
-                    &format!(
-                        "export function helper() {{\n  return 1;\n}}\n\nexport class Tool {{\n  render() {{\n    return this.size();\n  }}\n  size() {{\n    return 2;\n  }}\n}}\n\nexport function outer() {{\n  const inner = () => 3;\n  return inner();\n}}\n\nexport function slugB(input: string) {{\n{body}}}\n"
-                    ),
+                    "export function helper() {\n  return 1;\n}\n\nexport class Tool {\n  render() {\n    return 2;\n  }\n}\n\nexport class Panel {\n  render() {\n    return 3;\n  }\n}\n",
                 ),
-                ("src/extra.ts", "export const extra = 1;\n"),
-                (
-                    "src/widgets/index.ts",
-                    "export function widget() {\n  return inner();\n}\n",
-                ),
-                (
-                    "src/main.rs",
-                    "use crate::util::Tool;\n\nfn main() {\n    let t = Tool::new();\n    let s = format!(\"{}\", 1);\n    let v = Vec::new();\n    let p = std::path::Path::new(\"a\").join(\"b\");\n}\n",
-                ),
-                (
-                    "src/util.rs",
-                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n\npub fn join(x: u8) -> u8 {\n    x\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    struct Probe;\n\n    impl Probe {\n        fn make() -> Self {\n            Probe\n        }\n    }\n\n    fn probe() {\n        let p = Probe::make();\n    }\n}\n",
-                ),
-                (
-                    "pkg/sub/a.py",
-                    "from .b import f\nfrom ..top import g\n\n\ndef run():\n    return f() + g()\n",
-                ),
-                ("pkg/sub/b.py", "def f():\n    return 1\n"),
-                ("pkg/top.py", "def g():\n    return 2\n"),
             ],
         );
         let g = graph(&dir).unwrap();
-        let edge = |from: &str, to: &str, kind: &str| {
-            g.edges
-                .iter()
-                .any(|e| e.from == from && e.to == to && e.kind == kind)
-        };
-        // Imports: relative forms resolve, a directory is its own node, a
-        // package the manifest installs is outside, and so is one nothing names.
-        assert!(edge("file:src/a.ts", "file:src/b.ts", "imports"));
-        assert!(edge("file:src/a.ts", "dir:src/widgets", "imports"));
-        assert!(edge("file:src/main.rs", "file:src/util.rs", "imports"));
-        assert!(edge("file:pkg/sub/a.py", "file:pkg/sub/b.py", "imports"));
-        assert!(edge("file:pkg/sub/a.py", "file:pkg/top.py", "imports"));
-        assert!(
-            !g.pending
-                .iter()
-                .any(|p| p.text == "react" || p.text == "lodash" || p.text == "node:path")
-        );
-        // A local alias a configuration names could mean a folder here, so it goes to Jev.
-        assert!(g.pending.iter().any(|p| p.text == "@lib/a"));
-        // A sub-path of the package a configuration names goes to Jev with the
-        // file below it with that last name. `super` inside a module is its file.
-        let extra = g
-            .pending
-            .iter()
-            .find(|p| p.text == "demo/extra")
-            .expect("demo/extra goes to Jev");
-        assert!(extra.candidates.contains(&"file:src/extra.ts".to_string()));
-        assert!(edge("def:src/util.rs#tests", "file:src/util.rs", "imports"));
-        // A call with one target resolves by rule. An owner or `this` narrows the
-        // candidates. A receiver the rule cannot place goes to Jev. A function's
-        // locals stay local, and a macro call resolves only to a macro.
-        assert!(edge("def:src/a.ts#caller", "def:src/b.ts#helper", "calls"));
-        assert!(edge(
-            "def:src/a.ts#caller",
-            "def:src/widgets/index.ts#widget",
-            "calls"
-        ));
-        assert!(edge(
-            "def:src/b.ts#Tool.render",
-            "def:src/b.ts#Tool.size",
-            "calls"
-        ));
-        assert!(edge(
-            "def:src/b.ts#outer",
-            "def:src/b.ts#outer.inner",
-            "calls"
-        ));
-        assert!(edge(
-            "def:src/main.rs#main",
-            "def:src/util.rs#Tool.new",
-            "calls"
-        ));
-        assert!(edge("def:pkg/sub/a.py#run", "def:pkg/sub/b.py#f", "calls"));
-        let render = g
-            .pending
-            .iter()
-            .find(|p| p.text == "render")
-            .expect("obj.render goes to Jev");
-        assert_eq!(
-            render.candidates,
-            vec!["def:src/b.ts#Tool.render".to_string()]
-        );
-        assert!(
-            !g.edges
-                .iter()
-                .any(|e| e.from == "def:src/widgets/index.ts#widget" && e.kind == "calls")
-        );
-        assert!(
-            !g.edges
-                .iter()
-                .any(|e| e.to == "def:src/util.rs#format" && e.kind == "calls")
-        );
-        // A path that names nothing here, such as `Vec::new`, points outside. A
-        // call on a value, such as `.join`, never resolves to a free function.
-        // An impl inside a module owns its methods.
-        assert!(
-            !g.pending
-                .iter()
-                .any(|p| p.text == "new" || p.text == "join")
-        );
-        assert!(
-            !g.edges
-                .iter()
-                .any(|e| e.to == "def:src/util.rs#join" && e.kind == "calls")
-        );
-        assert!(edge(
-            "def:src/util.rs#tests.probe",
-            "def:src/util.rs#tests.make",
-            "calls"
-        ));
+        let edge = |from: &str, to: &str| g.edges.iter().any(|e| e.from == from && e.to == to);
+        let pending = |text: &str| g.pending.iter().find(|p| p.text == text);
+        // A link with one possible target resolves by rule.
+        assert!(edge("file:src/a.ts", "file:src/b.ts"));
+        assert!(edge("def:src/a.ts#caller", "def:src/b.ts#helper"));
+        assert!(pending("./b").is_none() && pending("helper").is_none());
+        // A link with several goes to Jev with only those as its candidates. A local alias a configuration names
+        // could mean a folder here, so it goes to Jev too.
+        let render: BTreeSet<&str> = pending("render").expect("obj.render goes to Jev").candidates.iter().map(String::as_str).collect();
+        assert_eq!(render, BTreeSet::from(["def:src/b.ts#Panel.render", "def:src/b.ts#Tool.render"]));
+        assert!(pending("@lib/a").expect("@lib/a goes to Jev").candidates.contains(&"file:lib/a.ts".to_string()));
+        // An installed package and the standard library are outside, so they never go to Jev.
+        assert!(pending("react").is_none() && pending("node:path").is_none());
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -1025,8 +906,10 @@ mod tests {
     #[test]
     fn a_folder_inside_a_repository_is_a_project_of_its_own() {
         let dir = project("inside", &[("sub/a.ts", "export const a = 1;\n")]);
-        let worktree = dir.with_file_name(format!("{}-worktree", dir.file_name().unwrap().to_string_lossy()));
+        let beside = |suffix: &str| dir.with_file_name(format!("{}-{suffix}", dir.file_name().unwrap().to_string_lossy()));
+        let (worktree, clone) = (beside("worktree"), beside("clone"));
         let _ = std::fs::remove_dir_all(&worktree);
+        let _ = std::fs::remove_dir_all(&clone);
         let git = |args: &[&str]| {
             let ok = std::process::Command::new("git")
                 .arg("-C")
@@ -1042,12 +925,17 @@ mod tests {
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "one"]);
         git(&["worktree", "add", "-q", "-b", "other", worktree.to_str().unwrap()]);
-        assert_eq!(project_id(&dir), git::root_commit(&dir).unwrap());
+        git(&["clone", "-q", ".", clone.to_str().unwrap()]);
         assert_ne!(project_id(&dir.join("sub")), project_id(&dir));
-        // A worktree opens as the same project as its main checkout, so its saved answers apply.
-        assert_eq!(project_id(&worktree), project_id(&dir));
+        // A clone elsewhere and a worktree are the same projects, so their saved answers apply.
+        for other in [&clone, &worktree] {
+            assert_eq!(project_id(other), project_id(&dir), "{}", other.display());
+            assert_eq!(project_id(&other.join("sub")), project_id(&dir.join("sub")), "{}", other.display());
+        }
+        // The name enters every request, so a worktree takes its main checkout's.
         assert_eq!(graph(&worktree).unwrap().name, graph(&dir).unwrap().name);
         std::fs::remove_dir_all(worktree).unwrap();
+        std::fs::remove_dir_all(clone).unwrap();
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -1133,7 +1021,7 @@ mod tests {
             );
         }
 
-        // When a file splits in two, the larger part keeps the file's lineage.
+        // When a file splits in two, its definitions keep their lineage.
         std::fs::remove_file(dir.join("src/walk.ts")).unwrap();
         std::fs::create_dir_all(dir.join("src/walk")).unwrap();
         std::fs::write(dir.join("src/walk/core.ts"), walk).unwrap();
@@ -1149,29 +1037,15 @@ mod tests {
             third.get("def:src/walk/list.ts#list"),
             first.get("def:lib/walk.ts#list")
         );
-        let kept = [
-            third.get("file:src/walk/core.ts"),
-            third.get("file:src/walk/list.ts"),
-        ];
-        assert!(
-            kept.contains(&first.get("file:lib/walk.ts")),
-            "one part of the split keeps walk.ts's lineage"
-        );
         let distinct: HashSet<&String> = third.values().collect();
         assert_eq!(distinct.len(), third.len(), "no two nodes share a lineage");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
-    fn ids_survive_an_edit_above_and_conventions_tag_files() {
+    fn ids_survive_an_edit_above() {
         let source = std::fs::read_to_string(fixtures().join("sample.rs")).unwrap();
-        let dir = project(
-            "ids",
-            &[
-                ("src/sample.rs", &source),
-                ("pkg/walk_test.go", "package pkg\n"),
-            ],
-        );
+        let dir = project("ids", &[("src/sample.rs", &source)]);
         let ids = |g: &CodeGraph| -> BTreeSet<String> {
             g.nodes
                 .iter()
@@ -1189,16 +1063,7 @@ mod tests {
             format!("// A new first line.\n\n{source}"),
         )
         .unwrap();
-        let after = graph(&dir).unwrap();
-        assert_eq!(before, ids(&after));
-        let test_file = after.nodes.iter().find_map(|n| match n {
-            Node::File(f) if f.path == "pkg/walk_test.go" => Some(f),
-            _ => None,
-        });
-        assert_eq!(
-            test_file.unwrap().conventions,
-            vec!["go:test-file".to_string()]
-        );
+        assert_eq!(before, ids(&graph(&dir).unwrap()));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

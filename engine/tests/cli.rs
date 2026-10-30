@@ -151,6 +151,18 @@ fn an_endpoint_override_must_be_local_so_the_key_only_goes_to_openrouter() {
 }
 
 #[test]
+fn nothing_is_sent_while_jev_is_off() {
+    // The endpoint is a closed local port, so even an engine that tried to send would reach nothing.
+    let request = serde_json::json!({ "model": "typesafe/jev-1.13", "state": {}, "questions": {} });
+    let refused = rpc(
+        &[("GAIA_JEV_ENDPOINT", "http://127.0.0.1:9/api/alpha/decisions")],
+        &[serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "jev.batch", "params": { "requests": [request] } })],
+    );
+    assert!(refused[0]["result"].is_null(), "the batch is refused whole, not sent and failed");
+    assert!(refused[0]["error"]["message"].as_str().unwrap().contains("GAIA_JEV=live"));
+}
+
+#[test]
 fn the_journal_reads_a_file_as_the_world_s_commit_holds_it() {
     let root = std::env::temp_dir().join(format!("gaia-cli-source-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&root);
