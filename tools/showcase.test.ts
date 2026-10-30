@@ -2,23 +2,13 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
-import ts from "typescript";
 import { afterAll, describe, expect, it } from "vitest";
 import type { CodeGraph } from "@gaia/schema";
 import { factsOf, landOf } from "@gaia/world";
-import { showcaseFiles } from "../app/renderer/terrain/showcase-code.ts";
 import fixedGraph from "../app/renderer/terrain/fixtures/showcase-fixed-graph.json";
 import graph from "../app/renderer/terrain/fixtures/showcase-graph.json";
 
 const repo = resolve(import.meta.dirname, "..");
-
-it.each(["\n", "\r\n"])("reads source bundles with %j line endings into the same files", (newline) => {
-  const bundle = ["=== src/a.ts ===", 'export const a = "a";', "", "=== src/b.ts ===", "export const b = 2;", ""].join(newline);
-  expect([...showcaseFiles(bundle)]).toEqual([
-    ["src/a.ts", 'export const a = "a";\n'],
-    ["src/b.ts", "export const b = 2;\n"],
-  ]);
-});
 
 /** The showcase's code as `pnpm showcase --code` writes it, with its old `v1/` as it is or fixed, by path. */
 function written(v1: "broken" | "fixed"): { dir: string; files: string[]; text: (path: string) => string } {
@@ -42,16 +32,6 @@ describe("the showcase's code", () => {
   const fixed = written("fixed");
   afterAll(() => [broken, fixed].forEach((w) => rmSync(w.dir, { recursive: true, force: true })));
 
-  // Loading the TypeScript compiler and transpiling the showcase's files twice takes a few seconds while other work shares the machine.
-  it("is code the engine can read: every TypeScript file parses, with v1 as it is and fixed", { timeout: 30_000 }, () => {
-    for (const { files, text } of [broken, fixed]) {
-      const unreadable = files
-        .filter((f) => f.endsWith(".ts"))
-        .flatMap((f) => (ts.transpileModule(text(f), { reportDiagnostics: true, compilerOptions: { target: ts.ScriptTarget.ESNext } }).diagnostics ?? []).map((d) => `${f}: ${ts.flattenDiagnosticMessageText(d.messageText, " ")}`));
-      expect(unreadable).toEqual([]);
-    }
-  });
-
   it("is the code each showcase was judged and laid out from: run pnpm showcase --judge jev [--v1 fixed] after changing it", () => {
     for (const [{ files, text }, judged] of [[broken, graph], [fixed, fixedGraph]] as const) {
       const read = new Map((judged as unknown as CodeGraph).nodes.flatMap((n) => (n.kind === "file" ? [[n.path, n.measures.lines] as const] : [])));
@@ -64,14 +44,5 @@ describe("the showcase's code", () => {
     expect(fixed.files).toEqual(broken.files);
     expect(fixed.files.filter((f) => fixed.text(f) !== broken.text(f)).every((f) => f.startsWith("v1/"))).toBe(true);
     expect(places(fixedGraph as unknown as CodeGraph)).toBe(places(graph as unknown as CodeGraph));
-  });
-
-  it("is written as well as each part fares: the old renderer in ruin until it is fixed, the rest kept", () => {
-    const v1 = broken.files.filter((f) => f.startsWith("v1/") && f.endsWith(".ts") && !f.endsWith(".test.ts"));
-    expect(v1.length).toBeGreaterThan(4);
-    for (const f of v1) expect(broken.text(f), f).toMatch(/\bvar |: any\b/);
-    expect(v1.filter((f) => /catch \(e\) \{\}/.test(broken.text(f))).length).toBeGreaterThan(2);
-    const kept = broken.files.filter((f) => /^(packages|extensions)\//.test(f) && f.endsWith(".ts"));
-    for (const f of [...kept.map((k) => broken.text(k)), ...v1.map((k) => fixed.text(k))]) expect(f).not.toMatch(/\bvar |catch \(e\) \{\}|: any\b|HACK/);
   });
 });

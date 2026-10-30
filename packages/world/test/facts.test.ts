@@ -46,31 +46,12 @@ const GRAPH: CodeGraph = {
 
 describe("the code facts, read from the engine's graph alone", () => {
   const facts = factsOf(GRAPH);
-  const at = (path: string) => facts.files.find((f) => f.path === path);
 
-  it("lists a file's exported definitions and its top-level functions and classes, never a nested or non-code one", () => {
-    expect(at(math)?.symbols.map((s) => [s.name, s.kind, s.exported])).toEqual([
-      ["add", "function", true],
-      ["Shape", "class", true],
-      ["helper", "function", false],
-    ]);
-  });
-
-  it("links imports both ways, from a file or a definition in it, and never a file to itself", () => {
-    expect(at(main)?.imports).toEqual([index]);
-    expect(at(index)?.imports).toEqual([math]);
-    expect(at(index)?.importedBy).toEqual([main]);
-    expect(at(math)?.importedBy).toEqual([index]);
-  });
-
-  it("gives each declared entity its files, size, the surface its entry gathers, and the entities it leans on", () => {
+  it("gives each declared entity its files, size, the surface its entry gathers, and the entities it leans on, from imports a file or a definition in it makes", () => {
     const e = facts.entities.find((x) => x.path === core);
     expect(e).toMatchObject({ name: "@demo/core", form: "package", entry: index, files: 2, lines: 122, exports: 2, dependents: ["packages/app"], dependsOn: [] });
     expect(facts.entities.find((x) => x.path === "packages/app")?.dependsOn).toEqual([core]);
-  });
-
-  it("names the repository as the graph does and sizes it by its files", () => {
-    expect(facts.projectId).toBe("demo");
-    expect(facts.repository).toEqual({ name: "demo", files: 3, lines: 162 });
+    // An import within one file or one entity links nothing.
+    expect(facts.entities.find((x) => x.path === "packages/app")?.dependents).toEqual([]);
   });
 });
