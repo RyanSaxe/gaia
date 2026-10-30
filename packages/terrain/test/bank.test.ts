@@ -3,7 +3,7 @@ import { type BuildingPlan, type Built, Library, blueprintOf } from "@gaia/schem
 import { BIOME_PRIMITIVES, FLORA_PRIMITIVES, RELIEF_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { realize } from "@gaia/realize";
-import { BANK_SITE, bakeTerrain, extentOf, findBankSite, heightAt, levelPad, siteToWorld, turningExtent, waterDepthAt } from "@gaia/terrain";
+import { BANK_SITE, type WorldSpec, bakeTerrain, extentOf, findBankSite, heightAt, levelPad, siteToWorld, turningExtent, waterDepthAt } from "@gaia/terrain";
 import { randomWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
@@ -46,16 +46,22 @@ const wheel = (() => {
 })();
 
 describe("a building whose wheel needs running water", () => {
-  // Bakes fifty small worlds and searches their banks. It takes about a minute alone, more when other work shares the machine.
+  /** Whether a region's land runs water: a valley with a stream that is not a dry bed. */
+  const running = (r: WorldSpec["regions"][number]): boolean => {
+    const relief = r.biome.slots.relief;
+    const stream = (relief?.params as { stream?: string } | undefined)?.stream;
+    return relief?.use === "valley@1" && stream !== undefined && stream !== "dry bed";
+  };
+  // Of fifty random worlds, bakes only the score or so with running water and searches their banks. It takes well under
+  // a minute alone, more when other work shares the machine.
   it("finds a bank in every region given running water, in fifty random worlds, its house dry and its wheel in the stream", () => {
     let regions = 0;
     for (let seed = 9000; seed < 9050; seed++) {
       const spec = randomWorld(lib, seed);
+      if (!spec.regions.some(running)) continue;
       const t = bakeTerrain(spec, lib);
       spec.regions.forEach((r, ri) => {
-        const relief = r.biome.slots.relief;
-        const stream = (relief?.params as { stream?: string } | undefined)?.stream;
-        if (relief?.use !== "valley@1" || stream === undefined || stream === "dry bed") return;
+        if (!running(r)) return;
         regions++;
         const site = findBankSite(t, plan, beside, turning, ri);
         expect(site, `world ${seed}, region ${r.id}`).not.toBeNull();

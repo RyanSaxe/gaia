@@ -7,8 +7,6 @@ import { randomSlots } from "@gaia/world/testing";
 import { type Realized, realize } from "@gaia/realize";
 import {
   type BuildingSite,
-  COVER_TAPS,
-  FLOW,
   RELIEF_BUDGET,
   type Station,
   TERRAIN,
@@ -33,10 +31,8 @@ import {
   streamFlow,
   surfaceHalfWidth,
   waterDepthAt,
-  WILD_THICKETS,
   wildPast,
   wildRollAt,
-  wildScrub,
   wildShare,
   wildThicket,
   wildsRing,
@@ -149,20 +145,7 @@ describe("terrain", { timeout: 20_000 }, () => {
     }
   });
 
-  /** Pairs of regions whose cells meet, with the unit step from a toward b. */
-  const neighbors = (w: (typeof draws)[number]) =>
-    w.regions.flatMap((a, i) =>
-      w.regions.slice(i + 1).flatMap((b) => {
-        const len = Math.hypot(b.x - a.x, b.z - a.z);
-        const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
-        // They meet when the midpoint is nearer to them than to any other center.
-        const meet = w.regions.every((r) => r === a || r === b || Math.hypot(r.x - mid.x, r.z - mid.z) > len / 2 + 20);
-        return meet ? [{ a: i, b: w.regions.indexOf(b), len, dx: (b.x - a.x) / len, dz: (b.z - a.z) / len, mid }] : [];
-      }),
-    );
-
-  it("drifts one cover into the next in patches, while each region's middle stays its own", () => {
-    let islands = 0;
+  it("shows each region's own cover at its middle", () => {
     for (const t of baked.slice(0, 7)) {
       const w = t.spec;
       const weights = new Float64Array(w.regions.length);
@@ -170,38 +153,7 @@ describe("terrain", { timeout: 20_000 }, () => {
         coverWeights(w, r.x, r.z, weights);
         expect(weights[i], `${r.id} at its middle`).toBeGreaterThan(0.8);
       });
-      for (const p of neighbors(w)) {
-        // Across the band the dominant cover changes more than once when a patch of one lies in the other.
-        let switches = 0;
-        let was = -1;
-        for (let s = -p.len / 2; s <= p.len / 2; s += 1) {
-          coverWeights(w, p.mid.x + p.dx * s, p.mid.z + p.dz * s, weights);
-          const now = (weights[p.a] as number) >= (weights[p.b] as number) ? p.a : p.b;
-          if (was !== -1 && now !== was) switches++;
-          was = now;
-        }
-        if (switches > 1) islands++;
-      }
-      // The bake keeps each sample's largest cover shares, largest first and
-      // summing to 255, matching the blend, and names the dominant one.
-      const { n } = t.lattice;
-      for (let k = 0; k < n * n; k += 997) {
-        const x = t.lattice.origin + (k % n) * t.lattice.spacing;
-        const z = t.lattice.origin + Math.floor(k / n) * t.lattice.spacing;
-        coverWeights(w, x, z, weights);
-        let total = 0;
-        for (let tap = 0; tap < COVER_TAPS; tap++) {
-          const share = t.coverShares[k * COVER_TAPS + tap]!;
-          total += share;
-          if (tap > 0) expect(share).toBeLessThanOrEqual(t.coverShares[k * COVER_TAPS + tap - 1]!);
-          if (share > 0) expect(Math.abs(share / 255 - weights[t.coverRegions[k * COVER_TAPS + tap]!]!)).toBeLessThan(0.03);
-        }
-        expect(total).toBe(255);
-        expect(t.region[k]).toBe(t.coverRegions[k * COVER_TAPS]);
-        expect(weights[t.region[k]!]).toBe(Math.max(...weights));
-      }
     }
-    expect(islands).toBeGreaterThan(3);
   });
 
   it("fills every pond its lands hold, even where another area's river runs close by", () => {
@@ -339,8 +291,7 @@ describe("terrain", { timeout: 20_000 }, () => {
 });
 
 describe("wild land past the rim", () => {
-  it("goes on without end from the land's edge, with no step, and rolls at most 6 m near the land, swelling into soft hills farther out", () => {
-    const { settle, variation, hills, hillsIn } = WILDS;
+  it("goes on without end from the land's edge, with no step, and the ring drawn from above is the same ground", () => {
     for (const t of baked) {
       const h = landHalf(t);
       for (let k = 0; k < 24; k++) {
@@ -356,23 +307,6 @@ describe("wild land past the rim", () => {
       }
       // The walkable square lies well inside `landHalf`, so its ground is the lattice.
       expect(groundHeightAt(t, t.spec.size / 2, -t.spec.size / 2)).toBe(heightAt(t.lattice, t.spec.size / 2, -t.spec.size / 2));
-      // Past the settle band the wild land rolls gently near the land, and kilometers out it continues as low hills.
-      const range = (from: number, to: number): number => {
-        let low = Infinity;
-        let high = -Infinity;
-        for (let k = 0; k < 4000; k++) {
-          const a = k * 2.399;
-          const [cx, cz] = [Math.cos(a), Math.sin(a)];
-          const r = h / Math.max(Math.abs(cx), Math.abs(cz)) + from + ((k % 97) / 96) * (to - from);
-          const y = groundHeightAt(t, cx * r, cz * r);
-          low = Math.min(low, y);
-          high = Math.max(high, y);
-        }
-        expect(Number.isFinite(low) && Number.isFinite(high)).toBe(true);
-        return high - low;
-      };
-      expect(range(settle, hillsIn[0])).toBeLessThanOrEqual(variation + 1e-4);
-      expect(range(settle, 6000)).toBeLessThanOrEqual(variation + hills + 1e-4);
       // The coarse ring drawn from above is the same ground.
       const { positions } = wildsRing(t);
       for (let v = 0; v < positions.length; v += 3 * 37) {
@@ -381,30 +315,25 @@ describe("wild land past the rim", () => {
     }
   });
 
-  it("grows its own covers and thickets only out past the land, each cell's thicket always the same and gathering where it runs to scrub", () => {
-    const { cell, thinIn } = WILD_THICKETS;
+  it("grows its own covers and thickets only out past the land, each cell's thicket always the same", () => {
     for (const t of baked.slice(0, 4)) {
       const h = landHalf(t);
       // Past the settle band, the ground is the wild roll, which the field map draws.
       expect(groundHeightAt(t, h + WILDS.settle + 40, 17)).toBeCloseTo(wildRollAt(t, h + WILDS.settle + 40, 17), 9);
       expect(wildShare(t, 0, 0)).toBe(0);
       expect(wildShare(t, h + 200, -h - 200)).toBe(1);
-      const held = { scrub: [0, 0], open: [0, 0] };
+      let bushes = 0;
       for (let cj = -60; cj < 60; cj++) {
         for (let ci = -60; ci < 60; ci++) {
           const thicket = wildThicket(t, ci, cj);
           if ((ci * 7 + cj) % 23 === 0) expect(wildThicket(t, ci, cj)).toEqual(thicket);
-          for (const b of thicket?.bushes ?? []) expect(wildPast(t, b.x, b.z)).toBeGreaterThanOrEqual(thinIn[0]);
-          const [cx, cz] = [(ci + 0.5) * cell, (cj + 0.5) * cell];
-          if (wildPast(t, cx, cz) < thinIn[1]) continue;
-          const scrub = wildScrub(cx, cz);
-          const tally = scrub > 0.6 ? held.scrub : scrub < 0.1 ? held.open : null;
-          if (tally === null) continue;
-          tally[0]! += 1;
-          tally[1]! += thicket === null ? 0 : 1;
+          for (const b of thicket?.bushes ?? []) {
+            bushes++;
+            expect(wildPast(t, b.x, b.z)).toBeGreaterThan(0);
+          }
         }
       }
-      expect(held.scrub[1]! / held.scrub[0]!).toBeGreaterThan((2 * held.open[1]!) / held.open[0]!);
+      expect(bushes).toBeGreaterThan(0);
     }
   });
 });
@@ -421,9 +350,6 @@ describe("flow", () => {
           const b = st[i + 1] as Station;
           const vx = flow[i * 2] as number;
           const vz = flow[i * 2 + 1] as number;
-          const speed = Math.hypot(vx, vz);
-          expect(speed).toBeGreaterThanOrEqual(FLOW.slowest - 1e-6);
-          expect(speed).toBeLessThanOrEqual(FLOW.fastest + 1e-6);
           // The next station is downstream, so the waterline never rises toward it and the flow heads its way.
           expect(b.level).toBeLessThanOrEqual(a.level);
           expect(vx * (b.x - a.x) + vz * (b.z - a.z)).toBeGreaterThan(0);

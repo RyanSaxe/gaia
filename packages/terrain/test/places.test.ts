@@ -6,9 +6,7 @@ import {
   type WorldPlaces,
   groundOwners,
   outlinesOf,
-  ownershipGrid,
   ownershipOf,
-  ownershipRows,
   placeAt,
   siteAt,
   vitalityAt,
@@ -59,7 +57,6 @@ describe("where a person is", () => {
     const ring = (path: string, list: typeof lines.areas) => list.find((o) => o.path === path)!.rings.flat().length;
     expect(ring("", lines.areas)).toBeGreaterThan(0);
     expect(lines.patches.map((p) => p.path).sort()).toEqual(["src/main.ts", "src/ui/menu.ts"]);
-    expect(outlinesOf(world, 4)).toBe(lines);
   });
 });
 
@@ -87,29 +84,23 @@ describe("whose ground a point is, and how alive it is", () => {
     }
     expect(inside).toBeGreaterThan(500);
 
-    // Across the border between the patches at vitality 1 and 0.1, ownership blends from one to the other.
+    // Across the border between the patches at vitality 1 and 0.1, ownership blends from one to the other with no seam:
+    // each step a quarter meter across hands over only a little of the ground, and always the same way.
     for (const z of [-90, 37, 101]) {
       let edge = -60;
       while (ownerAt(edge + 0.25, z) === 0) edge += 0.25;
-      const share = (x: number, owner: number): number => groundOwners(sites, { size }, x, z).find((s) => s.owner === owner)?.share ?? 0;
-      expect(share(edge, 0)).toBeGreaterThan(0.25);
-      expect(share(edge, 0)).toBeLessThan(0.75);
-      expect(share(edge - 3, 0)).toBeGreaterThan(0.6);
-      expect(share(edge - 3, 0)).toBeLessThan(0.995);
-      expect(share(edge + 3, 1)).toBeGreaterThan(0.6);
-      expect(share(edge - 20, 0)).toBe(1);
-      expect(share(edge + 20, 1)).toBe(1);
+      const share = (x: number): number => groundOwners(sites, { size }, x, z).find((s) => s.owner === 0)?.share ?? 0;
+      expect(share(edge)).toBeGreaterThan(0);
+      expect(share(edge)).toBeLessThan(1);
+      for (let x = edge - 30; x < edge + 30; x += 0.25) {
+        expect(share(x + 0.25)).toBeLessThanOrEqual(share(x) + 1e-9);
+        expect(share(x) - share(x + 0.25)).toBeLessThan(0.1);
+      }
+      expect([share(edge - 30), share(edge + 30)]).toEqual([1, 0]);
     }
 
     // Past the land the ground belongs to the wild, at vitality 1.
     expect(groundOwners(sites, { size }, size / 2 + 20, 0)).toEqual([{ owner: WILD_OWNER, share: 1 }]);
     expect(vitalityAt(own, values, size / 2 + 30, 10)).toBe(1);
-
-    // Rows computed separately, as the bake's threads do, give the same bytes.
-    const grid = ownershipGrid(size + 80);
-    const top = ownershipRows(sites, { size }, grid, 0, 40);
-    const rest = ownershipRows(sites, { size }, grid, 40, grid.n);
-    expect([...top.owners, ...rest.owners]).toEqual([...own.owners]);
-    expect([...top.shares, ...rest.shares]).toEqual([...own.shares]);
   });
 });

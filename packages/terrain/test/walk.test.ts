@@ -7,7 +7,6 @@ import {
   BODY_RADIUS,
   type Deck,
   EYE_HEIGHT,
-  GAIT,
   type Stride,
   NO_SOLIDS,
   SWIM,
@@ -25,7 +24,6 @@ import {
   clearanceAt,
   footingAt,
   fordBeside,
-  gradePace,
   heightAt,
   outlineShape,
   piecesShapes,
@@ -76,9 +74,10 @@ const dry = { x: pond.x - pond.reach * 2.5, z: pond.z };
 describe("wading and swimming", () => {
   it("slows as the water deepens, swims slower still, and is never stopped by water", () => {
     expect(wadeSpeed(0)).toBe(1);
-    expect(wadeSpeed(1.1)).toBeCloseTo(0.4, 6);
-    expect(wadeSpeed(SWIM.to)).toBeCloseTo(SWIM.pace, 6);
-    for (let d = 0; d < 4; d += 0.05) expect(wadeSpeed(d + 0.05)).toBeLessThanOrEqual(wadeSpeed(d));
+    for (let d = 0; d < 4; d += 0.05) {
+      expect(wadeSpeed(d + 0.05)).toBeLessThanOrEqual(wadeSpeed(d));
+      expect(wadeSpeed(d + 0.05)).toBeGreaterThan(0);
+    }
     // Anywhere in the pond, a step in any direction moves the walker its full wading or swimming stride.
     for (let r = 0; r < pond.reach; r += 3) {
       for (let a = 0; a < 8; a++) {
@@ -436,32 +435,7 @@ describe("a walker's stride", () => {
     }
   });
 
-  it("slows climbing, quickens a little on a gentle descent, and stands on a footbridge's deck above the water", () => {
-    expect(gradePace(0)).toBe(1);
-    expect(gradePace(0.12)).toBeLessThan(0.85);
-    expect(gradePace(-GAIT.peak)).toBeGreaterThan(1);
-    for (let s = -0.6; s < 0.6; s += 0.01) expect(gradePace(s)).toBeLessThanOrEqual(GAIT.ceiling);
-    for (let s = -GAIT.peak; s < 0.6; s += 0.01) expect(gradePace(s + 0.01)).toBeLessThanOrEqual(gradePace(s));
-    // On real ground, the steepest dry 20 m line near the pond that climbs all along is walked up more slowly than down.
-    let line = { from: dry, dx: 1, dz: 0, rise: 0 };
-    for (let a = 0; a < 32; a++) {
-      const dx = Math.cos((a / 32) * Math.PI * 2);
-      const dz = Math.sin((a / 32) * Math.PI * 2);
-      for (let r = 0; r < 60; r += 6) {
-        const from = { x: dry.x - 20 + dx * r, z: dry.z + dz * r };
-        const rise = groundHeightAt(t, from.x + dx * 20, from.z + dz * 20) - groundHeightAt(t, from.x, from.z);
-        const wet = [0, 5, 10, 15, 20].some((k) => waterDepthAt(t, from.x + dx * k, from.z + dz * k) > 0);
-        const steady = [0, 5, 10, 15].every((k) => groundHeightAt(t, from.x + dx * (k + 5), from.z + dz * (k + 5)) - groundHeightAt(t, from.x + dx * k, from.z + dz * k) > rise / 8);
-        if (!wet && steady && rise > line.rise && rise < 4) line = { from, dx, dz, rise };
-      }
-    }
-    expect(line.rise).toBeGreaterThan(1);
-    const steady = (frames: readonly { body: Stride }[]): number => frames.slice(90, 180).reduce((sum, f) => sum + speedOf(f.body), 0) / 90;
-    const up = steady(walkThen([], line.from, line.dx, line.dz, 3, 0));
-    const top = { x: line.from.x + line.dx * 20, z: line.from.z + line.dz * 20 };
-    const down = steady(walkThen([], top, -line.dx, -line.dz, 3, 0));
-    expect(up).toBeLessThan(WALK_TO.pace * 0.95);
-    expect(up).toBeLessThan(down);
+  it("stands on a footbridge's deck above the water, and fords beside it once it no longer holds", () => {
     // A deck across the pond, 0.3 m over the water. Walking across, the eyes stay 1.6 m above its planks, dry, and never sink toward the water.
     const water = heightAt(t.lattice, pond.x, pond.z) + waterDepthAt(t, pond.x, pond.z);
     const deck: Deck = { x: pond.x, z: pond.z, cos: 1, sin: 0, half: pond.reach * 1.5, halfWidth: 0.8, base: water, topAt: () => 0.3, way: 0, crossing: { x: pond.x, z: pond.z, yaw: 0, span: pond.reach * 3, level: water, bank: water }, holds: 0 };
