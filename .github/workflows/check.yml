@@ -43,16 +43,17 @@ jobs:
       - if: runner.os == 'macOS'
         run: pnpm app-opens
 
-  # The probe in the showcase, from its fixtures, in Electron on a fresh
-  # profile: it fails on any WebGL error, such as a far bake whose every draw
-  # WebGL rejects, and on a pop in the walk test from either spot. Opening the
-  # world takes about nine minutes here, and the walks two more. The swap test
-  # stays out: on these runners the frame where a full form gives way to its
-  # far form changes a few plants by about one level, at the test's floor, so
-  # it passes or fails from run to run.
+  # The probe in the showcase and the proving ground, from their fixtures, in
+  # Electron on a fresh profile: it fails on any WebGL error, such as a far
+  # bake whose every draw WebGL rejects, and on a pop in the walk test from
+  # any of their spots. Opening each world takes about ten minutes here, and
+  # the walks a minute or two more. The swap test stays out: on these runners
+  # the frame where a full form gives way to its far form changes a few plants
+  # by about one level, at the test's floor, so it passes or fails from run to
+  # run.
   probe:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -61,7 +62,7 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm probe drawn steps --world showcase --dpr 1
+      - run: pnpm probe drawn steps --dpr 1
 
   # Branch protection requires this stable name as the platform matrix changes.
   required-check:
