@@ -2,14 +2,15 @@
 // appears as a building, built from the blueprint Jev composed for it. The
 // bake thread finds the sites and levels the pads (`placeWorld`), and each
 // tile's buildings draw together as one batch (`createPlantBatch`), one call
-// per material. Their walls and features block the walk and clear the grass,
+// per material. Their walls and every solid piece they show block the walk,
+// their steps carry it up to the door, their walls and features clear the grass,
 // and each has a signboard at the end of its walk naming what it represents.
 
-import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, seedOf } from "@gaia/schema";
+import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, type Part, seedOf } from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
 import { type PlantBatch, type SceneLight, createPlantBatch } from "@gaia/render";
-import { type BuildingSite, type Capsule, type Extent, extentOf, turningExtent } from "@gaia/terrain";
+import { type BuildingSite, type Capsule, type Extent, type SolidShape, buildingPieces, extentOf, turningExtent } from "@gaia/terrain";
 import type * as THREE from "three";
 import { type BuildAsk, made } from "./made.ts";
 import type { BuildingOf, Represented } from "./represent.ts";
@@ -37,6 +38,10 @@ export interface Building {
   readonly plan: BuildingPlan;
   /** What is beside the house, such as a mill wheel, in the house's frame. */
   readonly beside: Extent | null;
+  /** The solid pieces it shows past its walls, in its own frame (`buildingPieces`). */
+  readonly pieces: readonly SolidShape[];
+  /** Its walkable parts, such as the steps up to its door, which a walker stands on. */
+  readonly walkable: readonly Part[];
   /** The extent of its turning feature, such as a mill's wheel, in the house's frame. */
   readonly wheel: Extent | null;
   /** Whether its feature is turned by running water, as a waterwheel is. */
@@ -142,6 +147,8 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
       palette: built.palette,
       plan: built.slots.get("footprint")?.output as BuildingPlan,
       beside: extentOf(built.slots.get("feature")?.output as Built | undefined),
+      pieces: buildingPieces(built.slots.get("footprint")?.output as BuildingPlan, built.parts),
+      walkable: built.parts.filter((p) => p.collision === "walkable"),
       wheel: turningExtent(built.slots.get("feature")?.output as Built | undefined),
       byWater: needsBank(entity.blueprint, lib),
       site: { x: 0, z: 0, yaw: 0, level: 0 },
