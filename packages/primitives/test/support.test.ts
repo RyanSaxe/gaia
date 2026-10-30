@@ -1,10 +1,12 @@
 // Every landmark and building is built at `VITALITIES` and
 // `BUILDING_VITALITIES`, where no piece may stand on nothing and a falling
-// piece must come to rest. Moss on every rock body moves with it at
-// `VITALITIES`, so it never hangs in the air. Every plant is built at `FLORA_VITALITIES` in still
-// air and a strong gust, where every leaf, flower and twig must stay on what it
-// grows on, and every plant and wildflower drift must keep its shape in the
-// gust. A new primitive in these roles is covered once it is in `PRIMITIVES`.
+// piece must come to rest. Every rock body is built at `VITALITIES` with each
+// overgrowth on it, where no piece of either may stand on nothing and the
+// overgrowth must move with the body. Every plant is built at
+// `FLORA_VITALITIES` in still air and a strong gust, where every leaf, flower
+// and twig must stay on what it grows on, and every plant and wildflower drift
+// must keep its shape in the gust. A new primitive in these roles is covered
+// once it is in `PRIMITIVES`.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, type Field, Library, type Part, rand } from "@gaia/schema";
@@ -112,6 +114,12 @@ function rootsOf(skin: Part, host: readonly Part[]): ({ part: number; vertex: nu
 }
 
 describe.each(lib.forRole("Rock").map((p) => [p.id, p] as const))("%s", (_id, rock) => {
+  it.each(samples(rock).map((s, i) => [i, s] as const))("leaves no piece of it or what grows on it on nothing at any vitality (sample %i)", (i, s) => {
+    const body = build(rock, s, null, 5 + i) as Built;
+    const grown = lib.forRole("Overgrowth").flatMap((o) => samples(o).map((os, j) => [...body.parts, ...(build(o, os, body, 9 + j) as Built).parts] as Part[]));
+    expect(grown.flatMap((parts) => VITALITIES.flatMap((v) => describeFloaters(parts, v)))).toEqual([]);
+  }, 20_000);
+
   it.each(lib.forRole("Overgrowth").map((o) => [o.id, o] as const))("carries %s with it as it declines, so it never hangs in the air", (_o, overgrowth) => {
     const pulled: string[] = [];
     samples(rock).forEach((s, i) => {
