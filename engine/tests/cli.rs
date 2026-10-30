@@ -63,6 +63,21 @@ fn rpc(env: &[(&str, &str)], requests: &[serde_json::Value]) -> Vec<serde_json::
         .collect()
 }
 
+/// A fresh folder holding a `curl` that runs `script` in place of the real one, and the `PATH` that puts it first.
+/// It needs a Unix shell, so the tests that use it run only on Unix.
+#[cfg(unix)]
+fn stand_in_curl(name: &str, script: &str) -> (std::path::PathBuf, String) {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("gaia-curl-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let curl = dir.join("curl");
+    std::fs::write(&curl, format!("#!/bin/sh\n{script}")).unwrap();
+    std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap_or_default());
+    (dir, path)
+}
+
 #[test]
 fn the_store_keeps_each_project_s_records_across_runs() {
     let dir = std::env::temp_dir().join(format!("gaia-store-test-{}", std::process::id()));
@@ -160,6 +175,42 @@ fn nothing_is_sent_while_jev_is_off() {
     );
     assert!(refused[0]["result"].is_null(), "the batch is refused whole, not sent and failed");
     assert!(refused[0]["error"]["message"].as_str().unwrap().contains("GAIA_JEV=live"));
+}
+
+#[cfg(unix)]
+#[test]
+fn the_openrouter_key_reaches_curl_only_through_its_input_and_never_comes_back_over_rpc() {
+    const KEY: &str = "sk-or-v1-gaia-test-key-5f0c2a";
+    // The stand-in keeps what curl would be given, then answers as OpenRouter does, so nothing leaves the machine.
+    let (dir, path) = stand_in_curl(
+        "key",
+        r#"here=$(dirname "$0")
+printf '%s\n' "$@" > "$here/args"
+env > "$here/env"
+cat > "$here/input"
+printf '%s\n200' '{"answers":{},"model":"typesafe/jev-1.13","usage":{"cost":0,"input_tokens":1}}'
+"#,
+    );
+    let request = serde_json::json!({ "model": "typesafe/jev-1.13", "state": {}, "questions": {} });
+    let call = |id: u32, method: &str, params: serde_json::Value| serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
+    let answers = rpc(
+        &[("GAIA_JEV", "live"), ("OPENROUTER_API_KEY", KEY), ("PATH", &path)],
+        &[
+            call(1, "jev.status", serde_json::json!({})),
+            call(2, "jev.estimate", serde_json::json!({ "requests": [request] })),
+            call(3, "jev.batch", serde_json::json!({ "requests": [request] })),
+        ],
+    );
+    assert_eq!(answers[2]["result"]["responses"][0]["model"], "typesafe/jev-1.13", "the batch went through the stand-in");
+    let seen = |file: &str| std::fs::read_to_string(dir.join(file)).unwrap();
+    let (args, env) = (seen("args"), seen("env"));
+    assert!(seen("input").contains(KEY), "curl gets the key on its input");
+    assert!(args.contains("https://openrouter.ai/") && !args.contains(KEY), "curl's arguments, which any process can list, never hold the key: {args}");
+    assert!(env.contains("GAIA_JEV=live") && !env.contains(KEY), "nor does curl's environment");
+    for answer in &answers {
+        assert!(!answer.to_string().contains(KEY), "an answer over RPC carries the key: {answer}");
+    }
+    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
