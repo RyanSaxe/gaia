@@ -118,17 +118,17 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     try {
       for (let k = 0; (k + 1) * step <= meters; k++) {
         world.walkTo(start.x + dx * k * step, start.z + dz * k * step, start.yaw, start.pitch);
-        world.frozen = t;
         world.detailPin = { x: world.walker.x, z: world.walker.z };
-        const here = grabFrame();
         if (k % windEvery === 0) {
           const moment = t + (k / windEvery) * 1.7;
           world.frozen = moment;
           const before = grabFrame();
           world.frozen = moment + 0.5;
           wind.push(frameChange(before, grabFrame()).worst);
-          world.frozen = t;
         }
+        // The step's own frames come after the wind's, so the wind's moments never reach the step's change.
+        world.frozen = t;
+        const here = grabFrame();
         world.detailPin = { x: world.walker.x + dx * step, z: world.walker.z + dz * step };
         const on = frameChange(here, grabFrame());
         steps.push([k * step, on.mean, on.worst]);
@@ -347,8 +347,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
    * The last two measure at least a 64-pixel block around the copy, as the
    * walk test does, since the crown spans only a few pixels. Each step is
    * compared with the wind's half-second change at the same spot, over the
-   * plant's part of the screen. The grass and every other plant with a far
-   * form are hidden while the test runs. A plant still too large to dissolve
+   * plant's part of the screen. Only the sky, the copy and its far form draw
+   * while the test runs, so no land or other plant stands in front of the
+   * copy or moves behind it. A plant still too large to dissolve
    * where the air already hides it stays drawn and changes nothing. Returns
    * null when there is no such preset.
    */
@@ -378,9 +379,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const going = (g: number): number => GONE.start - g * (GONE.start - GONE.end);
     const others = world.instanced().filter((o) => o.far !== undefined);
     const hidden = others.map((o) => o.object.visible);
-    const grassShown = world.grass.mesh.visible;
     for (const o of others) o.object.visible = false;
-    world.grass.mesh.visible = false;
+    const alone = new Set<THREE.Object3D>([world.sky.mesh, copy.object, set.forms.cards.object]);
+    const shown = world.scene.children.map((o) => o.visible);
+    for (const o of world.scene.children) if (!alone.has(o)) o.visible = false;
     world.swapping = copy;
     const was = world.frozen;
     const t = world.light.uTime.value;
@@ -428,9 +430,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     } finally {
       release();
       world.swapping = null;
-      copy.object.visible = false;
       others.forEach((o, i) => (o.object.visible = hidden[i] ?? true));
-      world.grass.mesh.visible = grassShown;
+      world.scene.children.forEach((o, i) => (o.visible = shown[i] ?? true));
+      copy.object.visible = false;
       world.detailPin = null;
       world.frozen = was;
     }

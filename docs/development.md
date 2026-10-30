@@ -89,9 +89,9 @@ during the hitch walk. Leave the window uncovered while it shows.
 | Probe | Measures |
 | --- | --- |
 | `pnpm probe drawn` | Frame time, draw calls and triangles by kind and pass |
-| `pnpm probe steps` | Changes during walking with the wind frozen |
+| `pnpm probe steps` | Changes during walking with the wind frozen, failing on a pop |
 | `pnpm probe hitch` | Frame times and stutters during a walk |
-| `pnpm probe swap` | Transitions between full geometry and baked far forms |
+| `pnpm probe swap` | Transitions between full geometry and baked far forms, failing on a pop |
 | `pnpm probe stress` | The proving ground with five times as many code trees |
 | `pnpm probe paint` | Journal painting capture and rendering |
 
@@ -99,6 +99,15 @@ during the hitch walk. Leave the window uncovered while it shows.
 the swap test runs in the showcase. `--spot` limits the stops, and `--dpr` sets
 the pixel ratio. A probe fails on any WebGL error. A timing from a busy machine
 is not a reliable baseline.
+
+A pop is a step that changes more than the wind does in half a second, and
+enough to see. The walk test steps the detail toward the woods with the wind's
+clock frozen and compares each step's worst block with the wind's change along
+the walk. The swap test draws one copy of each plant alone against the sky as
+it changes form, and compares each step with the wind's change over the plant.
+Either test fails the run on any pop. A change below its floor in
+[`probe.ts`](../tools/probe.ts) (`POP_FLOOR`, `SWAP_FLOOR`) is too small to see
+and never counts.
 
 ## Components and fixtures
 
@@ -174,7 +183,8 @@ pnpm exec tsx tools/cargo.ts clippy --all-targets -- -D warnings
 ```
 
 `pnpm check` runs TypeScript, ESLint and Vitest. CI runs these and the Rust
-checks on Linux, Windows and macOS, plus an Electron rendering probe on macOS.
+checks on Linux, Windows and macOS. On macOS it also runs the probe's draw and
+walk tests in the showcase ([`check.yml`](../.github/workflows/check.yml)).
 
 The pre-commit hook checks types, lints changed TypeScript and JavaScript
 files, and runs clippy when Rust changes. It runs no tests. Run relevant tests

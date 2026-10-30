@@ -7,7 +7,8 @@
 //   and pass (the sun's shadow, the water's mirror and the view).
 // - steps: the walk test. It walks toward the woods with the wind's clock
 //   frozen and measures what each step changes in the detail drawn, against
-//   the wind's own change over half a second. A step above the wind is a pop.
+//   the wind's own change over half a second. A step above the wind, and
+//   enough to see (`POP_FLOOR`), is a pop, and any pop fails the run.
 // - hitch: the app's smoothness probe over a real walk.
 // - swap: the swap test. For every preset with a far form (trees, bushes,
 //   rocks and drifts of flowers) at vitality 1, 0.5 and 0.15, by day and at
@@ -15,7 +16,8 @@
 //   the full one, drawing whole, the full form dissolving under it, the frame
 //   where the full form disappears and the far form is alone, and then, too
 //   small to see, the far form dissolving and gone. It compares each step with
-//   the wind's half-second change.
+//   the wind's half-second change there, and a step above it that shows
+//   (`SWAP_FLOOR`) is a pop, which fails the run.
 // - stress: the proving ground as it is, then with every tree that represents
 //   code placed five times on its own patch.
 // - paint: the painter check. Standing still in the showcase with the wind's
@@ -279,6 +281,7 @@ for (const [world, calls] of Object.entries(results)) {
         continue;
       }
       line(`  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`);
+      if (pops.length > 0) process.exitCode = 1;
     } else if (key === "paint unwatched" || key === "paint unwatched near") {
       const { painted, intervals } = value as { painted: string[]; intervals: number[] };
       const sorted = [...intervals].sort((a, b) => a - b);
@@ -303,7 +306,14 @@ for (const [world, calls] of Object.entries(results)) {
       const over = (s: Step): boolean => s.change.worst > SWAP_FLOOR && (s.change.worst > s.wind.worst || s.change.mean > s.wind.mean);
       const failing = (r: (typeof rows)[number]): boolean => STEPS.some((k) => over(r[k]));
       const failed = rows.filter(failing);
+      // A test where the wind moved no plant at any step never saw one, so it proves nothing.
+      if (!rows.some((r) => STEPS.some((k) => r[k].wind.worst > 0))) {
+        line(`  ${key}: the wind moved no plant at any step, so the test saw none and proves nothing`);
+        process.exitCode = 1;
+        continue;
+      }
       line(`  ${key}: ${rows.length - failed.length} of ${rows.length} presets and healths under the wind or a level (mean / worst block over the plant, the step against the wind)`);
+      if (failed.length > 0) process.exitCode = 1;
       const say = (s: Step): string => `${f(s.change.mean, 2)} / ${f(s.change.worst)} against ${f(s.wind.mean, 2)} / ${f(s.wind.worst)}`;
       for (const r of rows) {
         line(`    ${failing(r) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; whole ${say(r.whole)}`);
