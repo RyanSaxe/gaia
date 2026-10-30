@@ -178,7 +178,8 @@ export function layOutCottage(p: Resolved<typeof cottagePlanParams>, ctx: BuildC
   doorAt ??= clamp(leaning, 0.7, doorWall.length - 0.7);
   const entryMass = plan.masses[entry] as Mass;
   const t = clamp((doorAt - doorWall.length / 2) / Math.max(0.01, doorWall.length / 2 - 1.15), -1, 1);
-  const porch = { ...wing(g, entryMass, [0, 1], t, 2.3, 1.75, 1, g.form === "half-hip" ? "gable" : g.form), wallHeight: 2.3 };
+  // A porch is always gabled, so its front is a gable over the door and no eave comes down across it.
+  const porch = { ...wing(g, entryMass, [0, 1], t, 2.3, 1.75, 1, "gable"), wallHeight: 2.3 };
   // A porch is added only where it overlaps no other mass.
   const porched = extras.has("porch") && !clashes(plan.masses, porch, entry);
   if (porched) {
