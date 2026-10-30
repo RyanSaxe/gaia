@@ -19,7 +19,7 @@ import { createPaintings, paintKept } from "../journal/paintings.ts";
 import { browserPaintings } from "../journal/painting-store.ts";
 import { createSourceText } from "../journal/source.ts";
 import { carriedSource } from "../terrain/code-world.ts";
-import type { WordsSource } from "../journal/words.ts";
+import { type WordsSource, pageVitality, thingIdOf } from "../journal/words.ts";
 import { createFieldMap, drawLand } from "./field-map.ts";
 import { MARKER_LAYER, createMarkers } from "./markers.ts";
 import { createMinimap } from "./minimap.ts";
@@ -212,11 +212,6 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     paintings.near([...paintable].filter((t) => by(t) < NEAR.reach).sort((a, b) => by(a) - by(b)).slice(0, NEAR.count).map((t) => t.id));
   }, NEAR.every);
   /**
-   * Maps a page id to the id of its thing in the world. `entity:<path>` maps to the entity's path, `own:<file>` to the
-   * file, and any other id to itself.
-   */
-  const thingIdOf = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of.startsWith("own:") ? of.slice("own:".length) : of);
-  /**
    * The journal's map canvases by area, drawn once per field map paper: the whole land ("") for the endpapers and one
    * per folder. While the paper repaints after a vitality change, `mapOf` returns the map drawn from the previous paper.
    */
@@ -395,10 +390,7 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   function readVitality(): void {
     const code = world.code();
     if (code !== null) {
-      const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
-      // Each patch, definition and entity's own vitality. A definition uses its own value, whatever its form.
-      const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.symbols.map((d) => [d.id, d.vitality] as const), ...code.things.map((t) => [entityOf(t.path), t.vitality] as const)]);
-      words = { journal: journalOf(code, ROOM), world: code, vitality: (of) => own.get(of) ?? own.get(thingIdOf(of)) ?? pooled.get(of) ?? 1, lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(thingIdOf(of)) };
+      words = { journal: journalOf(code, ROOM), world: code, vitality: pageVitality(code), lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(thingIdOf(of)) };
     }
     // A directory's vitality pools its files and subdirectories, weighted by patch area, as the map's wash does.
     const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
