@@ -252,3 +252,48 @@ fn the_journal_reads_a_file_as_the_world_s_commit_holds_it() {
     assert_eq!(answers[2]["result"]["lines"], serde_json::json!(null));
     std::fs::remove_dir_all(&root).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn a_downloaded_grammar_whose_bytes_differ_from_its_pinned_hash_is_refused() {
+    let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/wasm");
+    let pinned = std::fs::read(fixtures.join("tree-sitter-lua.wasm")).unwrap();
+    // An empty custom section appended: a grammar that still loads and parses, but not the bytes the table pins.
+    let mut altered = pinned.clone();
+    altered.extend_from_slice(&[0, 5, 4, b'g', b'a', b'i', b'a']);
+    // The stand-in downloads the grammar from `served` and the tags query from the fixture, so nothing leaves the machine.
+    let (dir, path) = stand_in_curl(
+        "grammar",
+        &format!(
+            r#"while [ $# -gt 1 ]; do
+  [ "$1" = --output ] && out=$2
+  shift
+done
+case "$1" in
+  *.wasm) cp "$(dirname "$0")/served" "$out" ;;
+  *) cp '{}' "$out" ;;
+esac
+"#,
+            fixtures.join("lua-tags.scm").display()
+        ),
+    );
+    let data = dir.join("data");
+    let root = dir.join("project");
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("walk.lua"), "local function walk(root)\n  return root\nend\n\nreturn walk\n").unwrap();
+    let graph = || {
+        let call = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "project.graph", "params": { "root": root } });
+        rpc(&[("GAIA_DATA_DIR", data.to_str().unwrap()), ("PATH", &path)], &[call]).remove(0)
+    };
+    let definitions = |graph: &serde_json::Value| graph["result"]["nodes"].as_array().unwrap().iter().filter(|n| n["kind"] == "def").count();
+    let kept = || std::fs::read_dir(data.join("grammars")).map_or(0, |entries| entries.count());
+
+    std::fs::write(dir.join("served"), &altered).unwrap();
+    assert_eq!(definitions(&graph()), 0, "a grammar that does not match its hash never parses");
+    assert_eq!(kept(), 0, "and is never kept for a later run");
+    // The pinned bytes, served the same way, are accepted, kept and parse.
+    std::fs::write(dir.join("served"), &pinned).unwrap();
+    assert!(definitions(&graph()) > 0);
+    assert!(kept() > 0);
+    std::fs::remove_dir_all(dir).unwrap();
+}
