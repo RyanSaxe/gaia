@@ -950,9 +950,12 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     // Its page lifts a little under the pointer, and a drag can start here.
     const page = side === "right" ? right : cover;
     // Only where there is a spread that way. The first spread's left edge and the last one's right stay flat (`layEdges`).
+    // Only once the cover has swung past upright: the margins come as the book starts to open, often under the pointer
+    // that opened it, and a right-hand page lifted under the shut cover rises through it, its map showing over the cover.
     m.addEventListener("pointerenter", () => {
-      if (turns(side) && !turning) page.classList.add("lift");
-      if (turns(side) && !turning) sway();
+      if (!turns(side) || turning || angleOf(cover) > -90) return;
+      page.classList.add("lift");
+      sway();
     });
     m.addEventListener("pointerleave", () => page.classList.remove("lift"));
     m.addEventListener("pointerdown", (e) => {
