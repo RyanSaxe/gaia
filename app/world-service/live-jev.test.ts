@@ -11,11 +11,17 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type StandIn, startOpenRouterStandIn } from "../../tools/openrouter-stand-in.ts";
-import type { JevRequest } from "@gaia/schema";
+import { type BuildingPlan, type Built, type JevRequest, seedOf } from "@gaia/schema";
+import { landmark, structure } from "@gaia/kinds";
+import { realize } from "@gaia/realize";
+import { OPENING, amongCode, bakeTerrain, clearOfCode, extentOf, openingSpot, waterDepthAt } from "@gaia/terrain";
 import { cargoEnv } from "../../tools/cargo-env.ts";
+import { openedWorld } from "../renderer/terrain/code-world.ts";
+import { COMPOSING } from "../renderer/terrain/looks.ts";
+import { landmarkBase, placeWorld } from "../renderer/terrain/place.ts";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld, setSpendLimit } from "./open-world.ts";
-import type { ConsentPlan } from "./protocol.ts";
+import type { ConsentPlan, WorldDocument } from "./protocol.ts";
 
 const REPO = resolve(import.meta.dirname, "../..");
 const ENGINE = join(REPO, "target", "debug", process.platform === "win32" ? "gaia-engine.exe" : "gaia-engine");
@@ -175,5 +181,55 @@ describe("judging a codebase with Jev", () => {
     const shown = third.asked[0]?.requests ?? 0;
     expect(third.sent.length).toBeGreaterThanOrEqual(shown / 2);
     expect(third.sent.length).toBeLessThanOrEqual(2 * shown);
+  }, 60_000);
+});
+
+describe("opening an unusual codebase", () => {
+  /** A folder holding `files`, made a Git repository. */
+  function repository(name: string, files: Record<string, string>): string {
+    const root = join(scratch, name);
+    mkdirSync(root, { recursive: true });
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+    execFileSync("git", ["init", "--quiet"], { cwd: root });
+    return root;
+  }
+
+  /** Lays the world out, bakes and places it as the page does, and checks that the person first stands among the code on dry ground. */
+  function expectWalkable(document: WorldDocument, files: readonly string[]): void {
+    expect(document.world.patches.map((p) => p.path).sort()).toEqual([...files].sort());
+    const code = openedWorld(document);
+    const terrain = bakeTerrain(code.spec, COMPOSING.lib);
+    placeWorld(terrain, {
+      buildings: code.buildings.map((b) => {
+        const built = realize(b.blueprint, structure, COMPOSING.lib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts: Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)])) });
+        return { name: b.facts.path, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
+      }),
+      landmarks: code.landmarks.map((l) => ({ tree: false, base: landmarkBase(realize(l.blueprint, landmark, COMPOSING.lib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })) })),
+      trees: { bases: code.naturalBuilds.trees.map(() => 0.5), crowns: code.naturalBuilds.trees.map(() => 4) },
+      code: code.layout,
+    });
+    const at = openingSpot(terrain, document.world);
+    expect(amongCode(document.world, at.x, at.z)).toBe(true);
+    expect(waterDepthAt(terrain, at.x, at.z)).toBeLessThanOrEqual(OPENING.dry);
+    expect(clearOfCode(document.world, at.x, at.z)).toBe(true);
+  }
+
+  it("fails to open an empty repository, saying it has no files to make a world from, and sends nothing", async () => {
+    const before = standIn.received.length;
+    await expect(open(repository("empty", {}), join(scratch, "data-empty"), true)).rejects.toThrow(/empty has no files Gaia can read/);
+    expect(standIn.received.length).toBe(before);
+  }, 60_000);
+
+  // Each opens on the real engine, then bakes its small land whole, in a few seconds.
+  it.each([
+    ["a single file", { "main.py": "def main():\n    return 1\n" }],
+    ["no packages", { "src/a.ts": "export function a(): number {\n  return 1;\n}\n", "src/b/c.ts": 'import { a } from "../a.ts";\nexport const c = a();\n', "README.md": "# Loose files\n" }],
+    ["no definitions", { "README.md": "# Notes\n\nJust words.\n", "docs/guide.md": "# Guide\n", "data/config.json": '{ "a": 1 }\n' }],
+  ])("opens a repository with %s into a world a person can walk", async (what, files) => {
+    const { document } = await open(repository(what.replaceAll(" ", "-"), files), join(scratch, `data-${what.replaceAll(" ", "-")}`), true);
+    expectWalkable(document, Object.keys(files));
   }, 60_000);
 });
