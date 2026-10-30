@@ -152,8 +152,14 @@ and cross water on bridges or stepping stones. A coverage budget limits trails
 so open ground remains.
 
 Walking follows the ground, intact bridge decks and the walkable steps and
-floors of landmarks, such as a rotunda's. Solids stop or deflect a walk, and
-water allows wading and swimming. A broken bridge can stop a walk and send the
+floors of landmarks and buildings, such as a rotunda's or the steps up to a
+door. Every solid part of a building or landmark stops or deflects a walk
+wherever it passes through a person's height above the ground or step under
+it ([`piecesShapes`](../packages/terrain/src/solids.ts)), as trunks and rocks
+do. Every door can be reached: no eave comes down in front of one. A porch is
+always gabled, a one-storey gabled or half-hipped house turns a gable end to
+the front for its door, and a hipped roof lifts its eave into a small gable
+over a door it would otherwise cover. Water allows wading and swimming. A broken bridge can stop a walk and send the
 person to ford beside it. Grass and understory clear the footprints of
 structures, landmarks, rocks and paths. Under every bush, on the land or in
 the wild, grass is cleared from about half the bush's outline at the ground

@@ -394,11 +394,16 @@ describe("a cottage on the land", () => {
       for (let i = 0; i < part.positions.length; i += 3) {
         const above = site.level + (part.positions[i + 1] as number) - ground(part.positions[i] as number, part.positions[i + 2] as number);
         lowest = Math.min(lowest, above);
-        // Stepping stones show above the ground and lie on it.
-        if (part.collision === "walkable" && (part.positions[i + 1] as number) > 0) expect(above, `${name} ${part.swatch} stone`).toBeLessThan(0.08);
       }
       // Each part either reaches into the ground or rests on the stone base at floor level, so nothing hangs between.
       expect(lowest <= 0 || lowest >= plan.floor - 0.12, `${name} ${part.swatch} lowest ${lowest.toFixed(3)}`).toBe(true);
+    }
+    // The garden walk's stones show above the ground and lie on it.
+    for (const part of ((built.slots.get("ornaments")?.output as Built | undefined)?.parts ?? []).filter((p) => p.collision === "walkable")) {
+      for (let i = 0; i < part.positions.length; i += 3) {
+        if ((part.positions[i + 1] as number) <= 0) continue;
+        expect(site.level + (part.positions[i + 1] as number) - ground(part.positions[i] as number, part.positions[i + 2] as number), `${name} ${part.swatch} stone`).toBeLessThan(0.08);
+      }
     }
     // The walls' foundation reaches well below the ground, so a slope never shows a gap.
     const solid = built.parts.filter((p) => p.collision === "solid");
