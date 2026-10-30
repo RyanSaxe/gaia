@@ -175,9 +175,11 @@ const EDGE = 0.3;
  * (`swayAt`). A piece that has fully fallen over its hinge must also rest away
  * from it, on the ground or on a standing piece, and not lie sunk into the
  * ground. With `moving: false`, only fully shown pieces count, as when
- * vitality has settled between thresholds.
+ * vitality has settled between thresholds. The pieces of the parts in
+ * `hanging`, such as a plant's blossoms and fruit, hang from the rest and
+ * carry nothing, so one resting only on another is unsupported.
  */
-export function unsupportedAt(parts: readonly Part[], v: number, options: { readonly moving?: boolean; readonly wind?: WindState } = {}): Unsupported[] {
+export function unsupportedAt(parts: readonly Part[], v: number, options: { readonly moving?: boolean; readonly wind?: WindState; readonly hanging?: ReadonlySet<number> } = {}): Unsupported[] {
   const moving = options.moving ?? true;
   const offsets: number[] = [];
   let total = 0;
@@ -222,6 +224,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     vertex: number;
     weightless: boolean;
     card: boolean;
+    hangs: boolean;
     /** Where the piece's pivot is now, and how far it is from the piece as built. A card's stalk is on the card. */
     stalk: [number, number, number];
     stalkGap: number;
@@ -245,7 +248,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
       if (b === undefined) {
         b = bodies.length;
         index.set(root, b);
-        bodies.push({ keepLo: 1, keepHi: 0, fallen: -1, lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity], restLow: Infinity, pivot: [part.channels.pivot[i * 3] as number, part.channels.pivot[i * 3 + 1] as number, part.channels.pivot[i * 3 + 2] as number], reach: 0, part: pi, vertex: i, weightless: WEIGHTLESS.has(part.swatch), card: true, stalk: [stalks[i * 3] as number, stalks[i * 3 + 1] as number, stalks[i * 3 + 2] as number], stalkGap: Infinity });
+        bodies.push({ keepLo: 1, keepHi: 0, fallen: -1, lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity], restLow: Infinity, pivot: [part.channels.pivot[i * 3] as number, part.channels.pivot[i * 3 + 1] as number, part.channels.pivot[i * 3 + 2] as number], reach: 0, part: pi, vertex: i, weightless: WEIGHTLESS.has(part.swatch), card: true, hangs: options.hanging?.has(pi) ?? false, stalk: [stalks[i * 3] as number, stalks[i * 3 + 1] as number, stalks[i * 3 + 2] as number], stalkGap: Infinity });
       }
       bodyOf[g] = b;
       const body = bodies[b] as Body;
@@ -327,12 +330,14 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
   }
   // Only solid triangles are hashed. A card never rests on a card, and a
   // card's own probes and stalk find what it clings to, so every probe checks
-  // only solid triangles. Fewer contacts can only report more floating pieces,
-  // never hide one.
+  // only solid triangles. A hanging piece carries nothing, so its triangles are
+  // left out too. Fewer contacts can only report more floating pieces, never
+  // hide one.
   const cells = new Map<number, number[]>();
   const cellKey = (x: number, y: number, z: number): number => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) | 0;
   for (let t = 0; t < triBody.length; t++) {
-    if ((bodies[triBody[t] as number] as Body).card) continue;
+    const body = bodies[triBody[t] as number] as Body;
+    if (body.card || body.hangs) continue;
     const o = t * 9;
     let lx = Infinity, ly = Infinity, lz = Infinity, hx = -Infinity, hy = -Infinity, hz = -Infinity;
     for (let k = 0; k < 3; k++) {
@@ -365,6 +370,7 @@ export function unsupportedAt(parts: readonly Part[], v: number, options: { read
     else s.add(b);
   };
   const onRest = (top: number, under: number, x: number, y: number, z: number): void => {
+    if ((bodies[under] as Body).hangs) return;
     link(restsOn, top, under);
     const body = bodies[top] as Body;
     const d = Math.hypot(x - body.pivot[0], y - body.pivot[1], z - body.pivot[2]);

@@ -6,12 +6,13 @@
 // where no piece may stand on nothing, so every flower stays on its stem as it
 // declines. Every plant is built at `FLORA_VITALITIES` in still air and a
 // strong gust, where every leaf, flower and twig must stay on what it grows
-// on, and every plant and wildflower drift must keep its shape in the gust. A
-// new primitive in these roles is covered once it is in `PRIMITIVES`.
+// on, every blossom and fruit hangs from the plant itself and never from
+// another, and every plant and wildflower drift must keep its shape in the
+// gust. A new primitive in these roles is covered once it is in `PRIMITIVES`.
 
 import { describe, expect, it } from "vitest";
 import { type AnyPrimitive, type Built, type BuildingPlan, type Field, Library, type Part, rand } from "@gaia/schema";
-import { PRIMITIVES } from "@gaia/primitives";
+import { BUSH_PRIMITIVES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
 import { FLUTTERS, SUPPORT, type WindState, applyVitality, gustAt, resolveParams, unsupportedAt } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
@@ -222,17 +223,22 @@ describe("plants", () => {
   const blooms = lib.forRole("Ornament");
   // Each crown on frames of every kind, with bark under it and each bloom in turn on it, cycling their words.
   const cases = lib.forRole("Foliage").flatMap((crown) => samples(crown).map((s, i) => [crown.id, i, crown, s] as const));
-  const plantOf = (crown: AnyPrimitive, s: Stored, i: number): Part[] => {
+  /** A plant's parts, its blossoms or fruit last, and which parts those are: they hang from the plant and carry nothing. */
+  const plantOf = (crown: AnyPrimitive, s: Stored, i: number): { parts: Part[]; hanging: Set<number> } => {
     const frame = skeletons[(i * 5 + crown.id.length) % skeletons.length];
     const built = build(crown, s, frame, 9 + i) as Built;
     const bloom = blooms[i % blooms.length] as AnyPrimitive;
-    const flowers = build(bloom, samples(bloom)[i % 3] as Stored, built.anchors, 4 + i) as Built;
-    return [...((build(bark, samples(bark)[i % 3] as Stored, frame, 3) as Built).parts as Part[]), ...(built.parts as Part[]), ...(flowers.parts as Part[])];
+    const flowers = (build(bloom, samples(bloom)[i % 3] as Stored, built.anchors, 4 + i) as Built).parts as Part[];
+    const parts = [...((build(bark, samples(bark)[i % 3] as Stored, frame, 3) as Built).parts as Part[]), ...(built.parts as Part[]), ...flowers];
+    return { parts, hanging: new Set(flowers.map((_, k) => parts.length - flowers.length + k)) };
   };
   it.each(cases)("%s carries every leaf, flower and twig at any vitality, in still air and a gust (sample %i)", (_id, i, crown, s) => {
-    const parts = plantOf(crown, s, i);
+    const { parts, hanging } = plantOf(crown, s, i);
     const height = Math.max(...parts.map((p) => p.positions.reduce((m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m), 0.3)));
-    const floaters = FLORA_VITALITIES.flatMap((v) => [...describeFloaters(parts, v), ...unsupportedAt(parts, v, { wind: { ...GUST, height } }).map((u) => `${parts[u.part]?.swatch} ${u.why} in the gust at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`)]);
+    const floaters = FLORA_VITALITIES.flatMap((v) => [
+      ...unsupportedAt(parts, v, { hanging }).map((u) => `${parts[u.part]?.swatch} ${u.why} at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`),
+      ...unsupportedAt(parts, v, { hanging, wind: { ...GUST, height } }).map((u) => `${parts[u.part]?.swatch} ${u.why} in the gust at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`),
+    ]);
     expect(floaters).toEqual([]);
     expect(parts.reduce((n, p) => n + p.indices.length / 3, 0)).toBeLessThanOrEqual(PLANT_BUDGET);
     // A full crown of clumps on a tall spire takes about 35 s alone, and other work shares the machine.
@@ -245,9 +251,39 @@ describe("plants", () => {
     // A great tree carries up to 80,000 triangles and is checked six ways: up to a minute alone.
   }, 240_000);
   it.each(cases)("%s keeps its shape in the gust: no triangle stretches, splits or folds (sample %i)", (_id, i, crown, s) => {
-    const parts = plantOf(crown, s, i);
+    const { parts } = plantOf(crown, s, i);
     const height = Math.max(...parts.map((p) => p.positions.reduce((m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m), 0.3)));
     expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height })))).toEqual([]);
+  }, 60_000);
+  // A crown that grows no twigs of its own, such as hanging strands, hangs its blossoms and fruit straight from the
+  // frame's limbs. A pod hung where a twig's sunken start lies inside its limb showed on only a few plants, so each
+  // such crown is checked on every sample of every frame it grows on, with every sample of each bloom. Its leaves are
+  // cards, which hold nothing up, so only the bark is kept, which keeps the check quick.
+  const isCard = (part: Part): boolean => part.cutout.every((x, k) => k % 3 !== 2 || x >= 1);
+  const framesOf = (crown: AnyPrimitive): AnyPrimitive[] =>
+    [TREE_PRIMITIVES, BUSH_PRIMITIVES].flatMap((kind) => (kind.some((q) => q.id === crown.id) ? kind.filter((q) => q.role === "Skeleton") : []));
+  const onLimbs = lib.forRole("Foliage").flatMap((crown) =>
+    framesOf(crown)
+      .filter((framer) => ((build(crown, samples(crown)[0] as Stored, build(framer, samples(framer)[0] as Stored, null, 21), 9) as Built).parts as Part[]).every(isCard))
+      .map((framer) => [crown.id, framer.id, crown, framer] as const),
+  );
+  it.each(onLimbs)("%s on %s hangs every blossom and fruit from the frame's limbs, never from another", (_c, _f, crown, framer) => {
+    const loose: string[] = [];
+    samples(framer).forEach((fs, i) => {
+      const frame = build(framer, fs, null, 21 + i);
+      const built = build(crown, samples(crown)[i % samples(crown).length] as Stored, frame, 9 + i) as Built;
+      const plant = (build(bark, samples(bark)[i % 3] as Stored, frame, 3) as Built).parts as Part[];
+      for (const bloom of blooms) {
+        samples(bloom).forEach((bs, k) => {
+          const flowers = (build(bloom, bs, built.anchors, 4 + i + k) as Built).parts as Part[];
+          const parts = [...plant, ...flowers];
+          const hanging = new Set(flowers.map((_, j) => plant.length + j));
+          for (const u of unsupportedAt(parts, 1, { hanging })) loose.push(`${bloom.id} ${JSON.stringify(bs)} on frame sample ${i}: ${parts[u.part]?.swatch} at (${u.at.map((c) => c.toFixed(2)).join(", ")})`);
+        });
+      }
+    });
+    expect(loose).toEqual([]);
+    // Builds every frame sample with each of six blooms: a few seconds alone, more on a busy machine.
   }, 60_000);
   it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))("a great tree keeps its shape in the gust (sample %i)", (i, s) => {
     const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built).parts as Part[];
