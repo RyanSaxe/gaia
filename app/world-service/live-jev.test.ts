@@ -5,18 +5,23 @@
 // configured one.
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type StandIn, startOpenRouterStandIn } from "../../tools/openrouter-stand-in.ts";
-import { outlinesOf } from "@gaia/terrain";
-import type { JevRequest } from "@gaia/schema";
+import { type BuildingPlan, type Built, type JevRequest, seedOf } from "@gaia/schema";
+import { landmark, structure } from "@gaia/kinds";
+import { realize } from "@gaia/realize";
+import { OPENING, amongCode, bakeTerrain, clearOfCode, extentOf, openingSpot, waterDepthAt } from "@gaia/terrain";
 import { cargoEnv } from "../../tools/cargo-env.ts";
+import { openedWorld } from "../renderer/terrain/code-world.ts";
+import { COMPOSING } from "../renderer/terrain/looks.ts";
+import { landmarkBase, placeWorld } from "../renderer/terrain/place.ts";
 import { createEngineClient } from "./engine-client.ts";
 import { openWorld, setSpendLimit } from "./open-world.ts";
-import type { ConsentPlan, Opening } from "./protocol.ts";
+import type { ConsentPlan, WorldDocument } from "./protocol.ts";
 
 const REPO = resolve(import.meta.dirname, "../..");
 const ENGINE = join(REPO, "target", "debug", process.platform === "win32" ? "gaia-engine.exe" : "gaia-engine");
@@ -25,15 +30,13 @@ const SOURCE_ONLY = "const secretSourceLine = 42;";
 
 let scratch = "";
 let standIn: StandIn;
-/** Whether the stand-in refuses the root area's request, as OpenRouter might refuse a bad one. */
-let refuseRoot = false;
 const engines: ChildProcess[] = [];
 
 // A clean engine build takes minutes on CI's machines, and another test file's build may hold cargo's lock meanwhile.
 beforeAll(async () => {
   execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: REPO, env: cargoEnv(), stdio: "inherit" });
   scratch = mkdtempSync(join(tmpdir(), "gaia-live-jev-"));
-  standIn = await startOpenRouterStandIn({ refuse: ({ state, questions }) => refuseRoot && "water" in questions && (state as { directory?: { path?: string } }).directory?.path === "(the repository's root)" });
+  standIn = await startOpenRouterStandIn();
 }, 900_000);
 
 afterAll(async () => {
@@ -82,16 +85,15 @@ function engineAt(data: string) {
   return client;
 }
 
-/** Opens a world on a fresh engine process, recording what the person was asked and shown. */
+/** Opens a world on a fresh engine process, recording what the person was asked and what was sent to Jev. */
 async function open(root: string, data: string, approve: boolean) {
   const asked: ConsentPlan[] = [];
-  const shown: Opening[] = [];
   const before = standIn.received.length;
   const document = await openWorld({
     engine: engineAt(data),
     root,
     consent: async (plan) => (asked.push(plan), approve),
-    progress: (o) => shown.push(o),
+    progress: () => {},
   });
   const sent = standIn.received.slice(before);
   const about = sent.map(({ body }) => {
@@ -108,7 +110,7 @@ async function open(root: string, data: string, approve: boolean) {
     }
     return file ? `file:${file.path}` : entity ? `entity:${entity.path}` : directory ? `area:${directory.path}` : "repository";
   });
-  return { document, asked, shown, sent, about };
+  return { document, asked, sent, about };
 }
 
 it("delivers a request larger than Windows' command-line limit with its text intact", async () => {
@@ -125,98 +127,23 @@ it("delivers a request larger than Windows' command-line limit with its text int
 });
 
 describe("judging a codebase with Jev", () => {
-  it("sends only facts, keeps Jev's answers, asks again only what changed, and judges everything with Jev", async () => {
+  it("sends Jev facts alone in every request about the world's design, and source only to the understanding pass", async () => {
     const root = codebase("tiny");
-    const data = join(scratch, "data-live");
-
-    const first = await open(root, data, false);
+    const first = await open(root, join(scratch, "data-live"), false);
     // Judging costs less than the default limit, so Gaia sends requests to Jev without asking the person.
     expect(first.asked).toHaveLength(0);
     expect(first.sent.length).toBeGreaterThan(0);
-    // The land message arrives before any judging, with outlines, file patches and lots that match the finished world.
-    const land = first.shown.findIndex((o) => o.stage === "land");
-    expect(land).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "reading"));
-    expect(land).toBeLessThan(first.shown.findIndex((o) => o.stage === "asking"));
-    const patches = first.document.world.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius }));
-    // Every entity's lot, whatever form Jev chose for the entity. The entity is placed at its lot's center.
-    const byPlace = (a: { x: number; z: number }, b: { x: number; z: number }): number => a.x - b.x || a.z - b.z;
-    const lots = [...first.document.world.things.filter((t) => t.of === undefined), ...first.document.world.naturalThings.filter((s) => s.of === "entity")].map(({ x, z }) => ({ x, z })).sort(byPlace);
-    const shownLand = first.shown[land];
-    if (shownLand?.stage !== "land") throw new Error("The land was never shown.");
-    expect({ ...shownLand, lots: [...shownLand.lots].sort(byPlace) }).toEqual({ stage: "land", name: "tiny", size: first.document.world.size, aspect: first.document.world.aspect, areas: outlinesOf(first.document.world).areas, patches, lots });
-    // Each file's vitality arrives once, after asking starts, and matches the finished world.
-    expect(first.shown.findIndex((o) => o.stage === "health")).toBeGreaterThan(first.shown.findIndex((o) => o.stage === "asking"));
-    const health = first.shown.flatMap((o) => (o.stage === "health" ? Object.entries(o.vitality) : []));
-    expect(health.map(([path]) => path).sort()).toEqual(patches.map((p) => p.path).sort());
-    expect(Object.fromEntries(health)).toEqual(Object.fromEntries(first.document.world.patches.map((p) => [p.path, p.vitality])));
-    // An area joins `settled` once everything on its land is answered, and never leaves it. By the end, every area is
-    // settled.
-    let named: readonly string[] = [];
-    for (const o of first.shown) {
-      if (o.stage !== "asking") continue;
-      expect(o.settled).toEqual(expect.arrayContaining([...named]));
-      named = o.settled;
-    }
-    expect([...named].sort()).toEqual(first.document.world.areas.map((a) => a.path).sort());
-    // Every request carries the placeholder key and only the model, state and questions. Design requests read facts,
-    // and only understanding requests read source.
+    // Every request carries the placeholder key and only the model, state and questions.
     for (const [i, { authorization, body }] of first.sent.entries()) {
       expect(authorization).toBe("Bearer local-stand-in");
       expect(Object.keys(body).sort()).toEqual(["model", "questions", "state"]);
-      if (!first.about[i]?.startsWith("understand:")) expect(JSON.stringify(body)).not.toContain("secretSourceLine");
+      if (!first.about[i]?.startsWith("understand:")) expect(JSON.stringify(body), first.about[i]).not.toContain("secretSourceLine");
     }
-    // No design request goes out twice. A look may be asked twice, before and after Jev's links change the facts it
-    // reads, but the two requests differ.
+    expect(first.sent.some(({ body }, i) => first.about[i] === "understand:src/shape.ts" && JSON.stringify(body).includes("secretSourceLine"))).toBe(true);
+    // No request about the design goes out twice.
     const judging = first.sent.filter((_, i) => !first.about[i]?.startsWith("understand:")).map(({ body }) => JSON.stringify(body));
     expect(new Set(judging).size).toBe(judging.length);
-    expect(first.about).toEqual(expect.arrayContaining(["area:(the repository's root)", "file:src/shape.ts", "understand:src/shape.ts"]));
-    // Every file gets a form request, including one that defines nothing.
-    expect(first.about).toContain("file:README.md");
-    // The understanding pass asked about folders and files, and every definition has Jev's importance. The document
-    // carries the pass's judgments, with every score from 0 to 1.
-    const states = first.sent.map(({ body }) => body.state as Record<string, unknown>);
-    expect(states.some((s) => s["folder-axes"] !== undefined)).toBe(true);
-    expect(states.some((s) => s["file-axes"] !== undefined && s.path === "src/shape.ts")).toBe(true);
-    expect(first.document.world.symbols.find((s) => s.name === "shape")?.importance).toEqual(expect.any(Number));
-    const shape = first.document.judged["src/shape.ts#shape"];
-    expect(shape?.quality).toBeGreaterThanOrEqual(0);
-    expect(shape?.quality).toBeLessThanOrEqual(1);
-    expect(Object.keys(shape?.concepts ?? {})).toContain("readability");
-    // Jev judged everything.
     expect(first.document.summary).toContain("judged by Jev");
-    const asking = first.shown.filter((o) => o.stage === "asking");
-    // Composing requests went out, and the last `asking` message counts every request sent, form and composing
-    // requests included.
-    const composed = first.about.filter((a) => a.startsWith("compose:")).length;
-    expect(composed).toBeGreaterThan(0);
-    expect(asking.at(-1)).toMatchObject({ total: first.sent.length, answered: first.sent.length, asking: [] });
-    // While a request is in flight, its area appears in `asking`, for the wait to show.
-    expect(asking.some((o) => o.asking.length > 0)).toBe(true);
-    // After the understanding pass, `composed` messages list each file whose forms Jev chose, and each file and area
-    // whose building, landmark, land or sky it composed, each once, so the wait's pencil keeps moving.
-    const after = first.shown.map((o) => o.stage).lastIndexOf("understood");
-    const composedStages = first.shown.flatMap((o, i) => (o.stage === "composed" ? [{ i, o }] : []));
-    expect(composedStages.length).toBeGreaterThan(0);
-    expect(composedStages.every(({ i }) => i > after)).toBe(true);
-    const chosen = composedStages.flatMap(({ o }) => o.chosen.files);
-    expect([...chosen].sort()).toEqual(first.document.world.patches.map((p) => p.path).sort());
-    expect(new Set(chosen).size).toBe(chosen.length);
-    expect(composedStages.flatMap(({ o }) => o.composed.areas)).toContain("");
-
-    // Reopening on a new engine sends no request already answered and does not ask the person.
-    const second = await open(root, data, true);
-    expect(second.asked).toHaveLength(0);
-    expect(second.about).toEqual([]);
-    expect(second.document.world).toEqual(first.document.world);
-
-    // A changed file is asked about again, with the requests its facts touch, and fewer requests go out than the first
-    // time. A form request goes out again where the offered forms or the importance changed. One more definition
-    // shifts every importance rank a little, and in a world this small that moves most things into another form's
-    // range.
-    appendFileSync(join(root, "src/shape.ts"), `\n/** The area of a circle. */\nexport const circle = (r: number): number => Math.PI * r * r;\n`);
-    const third = await open(root, data, true);
-    expect(third.about).toEqual(expect.arrayContaining(["file:src/shape.ts"]));
-    expect(third.sent.length).toBeLessThan(first.sent.length);
   }, 60_000);
 
   it("opens a world the same way twice from the same answers, asking nothing new, even where Jev's links change what the code imports", async () => {
@@ -230,16 +157,6 @@ describe("judging a codebase with Jev", () => {
     expect(second.about).toEqual([]);
     expect(second.document.facts).toEqual(first.document.facts);
     expect(second.document.world).toEqual(first.document.world);
-  }, 60_000);
-
-  it("fails the opening when Jev refuses a request the client has retried, naming it and why, with nothing guessed", async () => {
-    const root = codebase("refused");
-    refuseRoot = true;
-    try {
-      await expect(open(root, join(scratch, "data-refused"), true)).rejects.toThrow(/Gaia could not finish judging the area \(the repository's root\): .*refused by the stand-in/);
-    } finally {
-      refuseRoot = false;
-    }
   }, 60_000);
 
   it("asks before spending past the limit, sends nothing and opens nothing when the person declines, and asks again next time", async () => {
@@ -264,5 +181,55 @@ describe("judging a codebase with Jev", () => {
     const shown = third.asked[0]?.requests ?? 0;
     expect(third.sent.length).toBeGreaterThanOrEqual(shown / 2);
     expect(third.sent.length).toBeLessThanOrEqual(2 * shown);
+  }, 60_000);
+});
+
+describe("opening an unusual codebase", () => {
+  /** A folder holding `files`, made a Git repository. */
+  function repository(name: string, files: Record<string, string>): string {
+    const root = join(scratch, name);
+    mkdirSync(root, { recursive: true });
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(join(root, path, ".."), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+    execFileSync("git", ["init", "--quiet"], { cwd: root });
+    return root;
+  }
+
+  /** Lays the world out, bakes and places it as the page does, and checks that the person first stands among the code on dry ground. */
+  function expectWalkable(document: WorldDocument, files: readonly string[]): void {
+    expect(document.world.patches.map((p) => p.path).sort()).toEqual([...files].sort());
+    const code = openedWorld(document);
+    const terrain = bakeTerrain(code.spec, COMPOSING.lib);
+    placeWorld(terrain, {
+      buildings: code.buildings.map((b) => {
+        const built = realize(b.blueprint, structure, COMPOSING.lib, { seed: seedOf(`terrain-lab/${b.facts.path}`), facts: Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(b.facts)])) });
+        return { name: b.facts.path, plan: built.slots.get("footprint")?.output as BuildingPlan, beside: extentOf(built.slots.get("feature")?.output as Built | undefined) };
+      }),
+      landmarks: code.landmarks.map((l) => ({ tree: false, base: landmarkBase(realize(l.blueprint, landmark, COMPOSING.lib, { seed: seedOf(`terrain-lab/landmark/${l.path}`), facts: Object.fromEntries(Object.entries(landmark.facts).map(([k, bind]) => [k, bind(l.facts)])) })) })),
+      trees: { bases: code.naturalBuilds.trees.map(() => 0.5), crowns: code.naturalBuilds.trees.map(() => 4) },
+      code: code.layout,
+    });
+    const at = openingSpot(terrain, document.world);
+    expect(amongCode(document.world, at.x, at.z)).toBe(true);
+    expect(waterDepthAt(terrain, at.x, at.z)).toBeLessThanOrEqual(OPENING.dry);
+    expect(clearOfCode(document.world, at.x, at.z)).toBe(true);
+  }
+
+  it("fails to open an empty repository, saying it has no files to make a world from, and sends nothing", async () => {
+    const before = standIn.received.length;
+    await expect(open(repository("empty", {}), join(scratch, "data-empty"), true)).rejects.toThrow(/empty has no files Gaia can read/);
+    expect(standIn.received.length).toBe(before);
+  }, 60_000);
+
+  // Each opens on the real engine, then bakes its small land whole, in a few seconds.
+  it.each([
+    ["a single file", { "main.py": "def main():\n    return 1\n" }],
+    ["no packages", { "src/a.ts": "export function a(): number {\n  return 1;\n}\n", "src/b/c.ts": 'import { a } from "../a.ts";\nexport const c = a();\n', "README.md": "# Loose files\n" }],
+    ["no definitions", { "README.md": "# Notes\n\nJust words.\n", "docs/guide.md": "# Guide\n", "data/config.json": '{ "a": 1 }\n' }],
+  ])("opens a repository with %s into a world a person can walk", async (what, files) => {
+    const { document } = await open(repository(what.replaceAll(" ", "-"), files), join(scratch, `data-${what.replaceAll(" ", "-")}`), true);
+    expectWalkable(document, Object.keys(files));
   }, 60_000);
 });

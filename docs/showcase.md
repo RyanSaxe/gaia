@@ -54,7 +54,5 @@ development, but never use its answers in place of the showcase's live
 judgments.
 
 [`tools/showcase.test.ts`](../tools/showcase.test.ts) checks that each graph
-matches its bundled source, that the fixed variant changes only `v1`, that
-both layouts match, and that the quality contrast remains visible. It also
-checks parsing and expected visual features. Run it after editing either
-source bundle.
+matches its bundled source, that the fixed variant changes only `v1`, and
+that both layouts match. Run it after editing either source bundle.

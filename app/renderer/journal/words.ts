@@ -4,8 +4,26 @@
 // draws whatever words it gets, so a new kind of page needs no change to the
 // book.
 
-import type { CodeSymbol, Journal, JournalEntry } from "@gaia/world";
+import { type CodeSymbol, type CodeWorld, type Journal, type JournalEntry, areaVitality, entityOf } from "@gaia/world";
 import type { JudgedThing } from "../../world-service/protocol.ts";
+
+/**
+ * Maps a page id to the id of its thing in the world. `entity:<path>` maps to the entity's path, `own:<file>` to the
+ * file, and any other id to itself.
+ */
+export const thingIdOf = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of.startsWith("own:") ? of.slice("own:".length) : of);
+
+/**
+ * The vitality each page shows: a file's, a definition's or an entity's own, and a folder's pooled from every file
+ * under it, weighted by patch area, as the map's wash pools them. A definition or an entity shows its own, whatever its
+ * form, a plant or stone as much as a building.
+ */
+export function pageVitality(code: CodeWorld): (of: string) => number {
+  const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
+  const entities = [...code.things, ...code.naturalThings.filter((s) => s.of === "entity")];
+  const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.symbols.map((d) => [d.id, d.vitality] as const), ...entities.map((e) => [entityOf(e.path), e.vitality] as const)]);
+  return (of) => own.get(of) ?? own.get(thingIdOf(of)) ?? pooled.get(of) ?? 1;
+}
 
 /**
  * A block Jev picked in a definition's lines: the one key to understanding it,

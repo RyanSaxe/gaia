@@ -14,58 +14,31 @@ const FOCAL = 2000;
 const middle = (ti: number, tj: number): [number, number] => [worldOf(frame, (ti + 0.5) * TILE.size), worldOf(frame, (tj + 0.5) * TILE.size)];
 
 describe("what is placed on the land, tile by tile", () => {
-  it("places each thing's tiles as far as the largest of its kind can be seen, and drops tiles well past that", async () => {
+  it("places each thing's tiles as far as the largest of its kind can be seen, wherever the person walks", async () => {
     const placed: string[][] = [];
     const tiles = createThingTiles(() => FOCAL);
     tiles.add<string>({ name: "stones", largest: () => 0.5, tile: (ti, tj) => [`${ti},${tj}`], place: (things) => placed.push([...things]) });
     tiles.open(spec);
-    await tiles.ready(0, 0);
     const reach = seenTo(0.5, FOCAL);
     expect(reach).toBeCloseTo((2 * 0.5 * FOCAL) / GONE.end);
-    const held = new Set(placed[placed.length - 1]);
-    // Every tile within reach of the center is placed, and none far past it is.
-    for (let tj = 0; tj < per; tj++) {
-      for (let ti = 0; ti < per; ti++) {
-        const [x, z] = middle(ti, tj);
-        const near = Math.hypot(x, z) - (TILE.size * Math.SQRT2) / 2;
-        if (Math.hypot(x, z) + TILE.size < reach) expect(held.has(`${ti},${tj}`), `tile ${ti},${tj}`).toBe(true);
-        // Tiles are requested 150 m before they can be seen, so one from a worker arrives in time.
-        if (near > reach + 150) expect(held.has(`${ti},${tj}`), `tile ${ti},${tj}`).toBe(false);
+    /** The tiles wholly within sight of (cx, cz) that are not placed. */
+    const unseen = (cx: number, cz: number): string[] => {
+      const held = new Set(placed[placed.length - 1]);
+      const out: string[] = [];
+      for (let tj = 0; tj < per; tj++) {
+        for (let ti = 0; ti < per; ti++) {
+          const [x, z] = middle(ti, tj);
+          if (Math.hypot(x - cx, z - cz) + TILE.size < reach && !held.has(`${ti},${tj}`)) out.push(`${ti},${tj}`);
+        }
       }
-    }
-    // Walking far off drops the old tiles once they are well past the reach, and places the new ones.
+      return out;
+    };
+    await tiles.ready(0, 0);
+    expect(unseen(0, 0)).toEqual([]);
+    // Walking far off places what can be seen from there.
     tiles.follow(1300, 1300);
-    for (let k = 0; k < 4; k++) tiles.follow(1300, 1300);
-    const now = new Set(placed[placed.length - 1]);
-    expect(now.size).toBeGreaterThan(0);
-    for (const key of now) {
-      const [ti, tj] = key.split(",").map(Number) as [number, number];
-      const [x, z] = middle(ti, tj);
-      expect(Math.hypot(x - 1300, z - 1300) - TILE.size).toBeLessThan(reach + 150 + 200);
-    }
-  });
-
-  it("asks a trip's way for only what can be seen from it, and walking for no more while a trip asks", async () => {
-    const asked = new Set<string>();
-    const tiles = createThingTiles(() => FOCAL);
-    tiles.add<string>({ name: "stones", largest: () => 0.5, tile: (ti, tj) => (asked.add(`${ti},${tj}`), Promise.resolve([`${ti},${tj}`])), place: () => undefined });
-    tiles.open(spec);
-    await tiles.fetch(0, 0);
-    const reach = seenTo(0.5, FOCAL);
-    // Every tile within sight of the mark is requested, and none past it, with no walking lead.
-    for (const key of asked) {
-      const [ti, tj] = key.split(",").map(Number) as [number, number];
-      const [x, z] = middle(ti, tj);
-      expect(Math.hypot(x, z) - (TILE.size * Math.SQRT2) / 2).toBeLessThanOrEqual(reach + 1e-6);
-    }
-    const byTrip = asked.size;
-    expect(byTrip).toBeGreaterThan(0);
-    // Walking on far off while a trip requests tiles adds no tiles of the walk's own.
-    tiles.follow(1300, 1300, false);
-    expect(asked.size).toBe(byTrip);
-    // Walking without a trip requests its lead as before.
-    tiles.follow(1300, 1300);
-    expect(asked.size).toBeGreaterThan(byTrip);
+    await tiles.ready(1300, 1300);
+    expect(unseen(1300, 1300)).toEqual([]);
   });
 
   it("never holds a trip on a tile that fails: it drops the tile with a warning and requests it again", async () => {

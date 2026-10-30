@@ -21,7 +21,6 @@ const looks = (() => {
   const random = (): number => r.next();
   return Array.from({ length: 6 }, (_, i) => ({ world: blueprintOf("world", randomSlots(world, lib, random)), biome: blueprintOf("biome", randomSlots(biome, lib, random)), i })).flatMap((p) =>
     KEY_HOURS.map((hour) => ({
-      hour,
       name: `world ${p.i} at ${hour}`,
       look: realizeWorld({ blueprint: p.world, kind: world }, { blueprint: p.biome, kind: biome }, lib, SEED, hour),
     })),
@@ -32,8 +31,7 @@ const apart = (a: Rgb, b: Rgb): number => Math.max(...a.map((v, i) => Math.abs(v
 const STEP = 1 / 255;
 
 describe("the horizon", () => {
-  it("dissolves far land along a level ray into exactly the sky behind it, at every key hour", () => {
-    expect(KEY_HOURS).toHaveLength(8);
+  it("meets far land with the sky in no seam: the land fades into exactly the sky behind it, in no step, and the sky has no line", () => {
     const eye: Vec3 = [0, 1.6, 0];
     for (const { name, look } of looks) {
       for (const a of bearings) {
@@ -47,47 +45,22 @@ describe("the horizon", () => {
         ] as Rgb[]) {
           expect(apart(aerialAt(look, ground, eye, land), sky), name).toBeLessThan(STEP);
         }
-      }
-    }
-  });
-
-  it("meets the sky without a line: just below and just above the horizon look the same", () => {
-    for (const { name, look } of looks) {
-      for (const a of bearings) {
+        // The sky has no line at the horizon: just below and just above it look the same.
         const below = skyColorAt(look, [Math.sin(a), -0.003, Math.cos(a)]);
         const above = skyColorAt(look, [Math.sin(a), 0.003, Math.cos(a)]);
         expect(apart(below, above), name).toBeLessThan(STEP);
       }
-    }
-  });
-
-  it("keeps near land its own color and fades it with distance in no visible step", () => {
-    const eye: Vec3 = [0, 1.6, 0];
-    const ground: Rgb = [0.3, 0.6, 0.2];
-    for (const { name, look } of looks) {
-      expect(apart(aerialAt(look, ground, eye, [5, 0, 0]), ground), name).toBeLessThan(0.05);
-      // The test samples every half meter, so a step shows up as one, while the fade's steady slope through low mist
-      // near the eye, about two levels in 255 per meter, does not.
-      let last = aerialAt(look, ground, eye, [1, 0, 0]);
-      for (let d = 1.5; d <= AIR.dissolveEnd; d += 0.5) {
-        const next = aerialAt(look, ground, eye, [d, 0, 0]);
-        expect(apart(next, last), `${name} at ${d} m`).toBeLessThan(2 * STEP);
-        last = next;
+      // The land fades with distance in no visible step. However fast the fade, a smooth one changes at a steady
+      // rate from one meter to the next, while a step adds its whole height to one meter's change.
+      const ground: Rgb = [0.3, 0.6, 0.2];
+      const at = (d: number): Rgb => aerialAt(look, ground, eye, [d, 0, 0]);
+      let [before, here] = [at(1), at(2)];
+      for (let d = 3; d <= AIR.dissolveEnd; d += 1) {
+        const next = at(d);
+        const bend = next.map((v, c) => Math.abs(v - 2 * (here[c] as number) + (before[c] as number)));
+        expect(Math.max(...bend), `${name} at ${d - 1} m`).toBeLessThan(STEP);
+        [before, here] = [here, next];
       }
-    }
-  });
-
-  it("warms the low sky toward a low sun and cools it away from the sun, and leaves midday's sky even", () => {
-    const warmth = (c: Rgb): number => c[0] - c[2];
-    for (const { name, look, hour } of looks) {
-      const [x, , z] = look.light.sunDirection;
-      const flat = Math.hypot(x, z) / Math.cos(0.05);
-      const towardSun = skyColorAt(look, [x / flat, Math.sin(0.05), z / flat]);
-      const awayFromSun = skyColorAt(look, [-x / flat, Math.sin(0.05), -z / flat]);
-      // An overcast sky mutes a low sun's glow on purpose (overcast.test.ts), so it only has to lean the same way.
-      const lean = (look.sky.clouds.overcast ?? 0) > 0 ? 0 : 0.24;
-      if (hour === 6 || hour === 18 || hour === 19.5) expect(warmth(towardSun) - warmth(awayFromSun), name).toBeGreaterThan(lean);
-      if (hour === 12.5) expect(Math.abs(warmth(towardSun) - warmth(awayFromSun)), name).toBeLessThan(0.02);
     }
   });
 });

@@ -152,6 +152,8 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   let facts = factsOf(graph);
   const project = facts.projectId;
   const name = facts.repository.name;
+  // A world is made of a codebase's files, so a folder with none has none to show.
+  if (facts.files.length === 0) throw new Error(`${name} has no files Gaia can read, so there is no world to make from it.`);
   const land = landOf(facts, graph);
   progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
   // `understanding.plan` counts the understanding requests the world needs: the imports and calls only Jev can resolve,

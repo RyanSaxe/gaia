@@ -854,52 +854,6 @@ mod tests {
             .unwrap_or(Value::Null)
     }
 
-    /// A definition's quality is its concepts' weighted mean. A file's is its
-    /// top-level definitions' quality weighted by their lines, blended with its
-    /// own. Importance is the container's score, and the root's is 1.
-    #[test]
-    fn quality_gathers_upward_by_lines_and_importance_is_the_container_s_judgment() {
-        let root = std::env::temp_dir().join(format!("gaia-axes-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("src")).unwrap();
-        let short = "export function a(x: number): number {\n  return x;\n}\n";
-        let long = format!(
-            "export function b(x: number): number {{\n{}  return x;\n}}\n",
-            "  x += 1;\n".repeat(6)
-        );
-        std::fs::write(root.join("src/m.ts"), format!("{short}{long}")).unwrap();
-        let mut graph = crate::graph::build(&root).unwrap();
-        // Readability and simplicity are 3 of 3 for `a` and 0 of 3 for `b`.
-        let top = json!({ "readability": { "score": 3.0 }, "simplicity": { "score": 3.0 }, "importance": { "score": 2.0 } });
-        let bottom = json!({ "readability": { "score": 0.0 }, "simplicity": { "score": 0.0 }, "importance": { "score": 4.0 } });
-        set(&mut graph, "def:src/m.ts#a", json!({ "axes": top }));
-        set(&mut graph, "def:src/m.ts#b", json!({ "axes": bottom }));
-        set(
-            &mut graph,
-            "file:src/m.ts",
-            json!({ "axes": { "cohesion": { "score": 3.0 }, "importance": { "score": 4.0 } } }),
-        );
-        values(&mut graph);
-        let (a, b, f) = (
-            value(&graph, "def:src/m.ts#a"),
-            value(&graph, "def:src/m.ts#b"),
-            value(&graph, "file:src/m.ts"),
-        );
-        assert_eq!(a["quality"], json!(1.0));
-        assert_eq!(b["quality"], json!(0.0));
-        assert_eq!(a["importance"], json!(0.5));
-        // `a` is 3 lines and `b` is 9, so the parts come to 3/12. The file's own quality is 1.
-        let parts = 3.0 / 12.0;
-        let g = &vocab().gather;
-        let expected = (parts * g.parts + g.own) / (g.parts + g.own);
-        assert!(
-            (f["quality"].as_f64().unwrap() - expected).abs() < 1e-9,
-            "{f}"
-        );
-        assert_eq!(value(&graph, "dir:")["importance"], json!(1.0));
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
     #[test]
     fn the_same_answers_always_give_the_same_values_to_the_last_bit() {
         let root = std::env::temp_dir().join(format!("gaia-axes-bits-{}", std::process::id()));

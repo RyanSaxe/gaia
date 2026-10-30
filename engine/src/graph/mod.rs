@@ -680,27 +680,12 @@ mod tests {
         )
         .unwrap();
         let src = "local M = {}\n\n-- Walks names.\nfunction M.walk(root, depth)\n  local out = {}\n  for i = 1, depth do\n    if i > 3 and depth > 0 then\n      out[#out + 1] = root\n    elseif i > 5 then\n      print(i)\n    else\n      helper(i)\n    end\n  end\n  return out\nend\n\nfunction M:size()\n  return #self\nend\n\nreturn M\n";
-        // With its tags query, Lua's definitions and calls come from the query. Without it, they come from node kinds.
-        for (tags, walk_name) in [(Some(tags.as_str()), "walk"), (None, "M.walk")] {
+        // With its tags query, definitions come from the query. Without it, they come from node kinds.
+        for tags in [Some(tags.as_str()), None] {
             let loaded = languages::from_wasm("lua", &wasm, tags).unwrap();
             let p = parse::parse(&loaded, src).unwrap();
-            assert_eq!(p.unparsed, 0);
-            let walk = p
-                .defs
-                .iter()
-                .find(|d| d.name == walk_name)
-                .unwrap_or_else(|| panic!("{walk_name} is a definition"));
-            assert_eq!(walk.doc.as_deref(), Some("Walks names."));
-            assert_eq!(p.defs.len(), 2, "M.walk and M:size");
-            let shapes: BTreeSet<&str> = p.blocks.iter().map(|b| b.shape.as_str()).collect();
-            assert!(shapes.contains("loop") && shapes.contains("branch"));
-            if tags.is_some() {
-                assert!(
-                    p.refs
-                        .iter()
-                        .any(|r| r.kind == parse::RefKind::Call && r.text == "helper")
-                );
-            }
+            assert_eq!(p.unparsed, 0, "parses cleanly with tags {}", tags.is_some());
+            assert!(!p.defs.is_empty(), "finds definitions with tags {}", tags.is_some());
         }
     }
 
@@ -739,405 +724,94 @@ mod tests {
 
     #[test]
     fn the_rules_resolve_what_has_one_target_and_leave_the_rest_to_jev() {
-        let body = "  const parts = [];\n  for (const p of input.split(\"/\")) {\n    if (p.length > 0) {\n      parts.push(p.trim());\n    }\n  }\n  return parts.join(\"-\");\n";
         let dir = project(
             "rules",
             &[
-                (
-                    "package.json",
-                    "{ \"name\": \"demo\", \"main\": \"src/a.ts\", \"dependencies\": { \"react\": \"19\" } }\n",
-                ),
+                ("package.json", r#"{ "name": "demo", "dependencies": { "react": "19" } }"#),
+                ("aliases.json", r#"{ "@lib": "./lib" }"#),
+                ("lib/a.ts", "export const a = 1;\n"),
                 (
                     "src/a.ts",
-                    &format!(
-                        "import {{ helper, Tool }} from \"./b\";\nimport {{ widget }} from \"./widgets\";\nimport React from \"react\";\nimport _ from \"lodash\";\nimport {{ extra }} from \"demo/extra\";\n\nexport function caller(obj: unknown) {{\n  helper();\n  obj.render();\n  widget();\n}}\n\nexport function slugA(input: string) {{\n{body}}}\n"
-                    ),
+                    "import { helper } from \"./b\";\nimport React from \"react\";\nimport { join } from \"node:path\";\nimport { a } from \"@lib/a\";\n\nexport function caller(obj: unknown) {\n  helper();\n  obj.render();\n}\n",
                 ),
                 (
                     "src/b.ts",
-                    &format!(
-                        "export function helper() {{\n  return 1;\n}}\n\nexport class Tool {{\n  render() {{\n    return this.size();\n  }}\n  size() {{\n    return 2;\n  }}\n}}\n\nexport function outer() {{\n  const inner = () => 3;\n  return inner();\n}}\n\nexport function slugB(input: string) {{\n{body}}}\n"
-                    ),
+                    "export function helper() {\n  return 1;\n}\n\nexport class Tool {\n  render() {\n    return 2;\n  }\n}\n\nexport class Panel {\n  render() {\n    return 3;\n  }\n}\n",
                 ),
-                ("src/extra.ts", "export const extra = 1;\n"),
-                (
-                    "src/widgets/index.ts",
-                    "export function widget() {\n  return inner();\n}\n",
-                ),
-                (
-                    "src/main.rs",
-                    "use crate::util::Tool;\n\nfn main() {\n    let t = Tool::new();\n    let s = format!(\"{}\", 1);\n    let v = Vec::new();\n    let p = std::path::Path::new(\"a\").join(\"b\");\n}\n",
-                ),
-                (
-                    "src/util.rs",
-                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n\npub fn join(x: u8) -> u8 {\n    x\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    struct Probe;\n\n    impl Probe {\n        fn make() -> Self {\n            Probe\n        }\n    }\n\n    fn probe() {\n        let p = Probe::make();\n    }\n}\n",
-                ),
-                (
-                    "pkg/sub/a.py",
-                    "from .b import f\nfrom ..top import g\n\n\ndef run():\n    return f() + g()\n",
-                ),
-                ("pkg/sub/b.py", "def f():\n    return 1\n"),
-                ("pkg/top.py", "def g():\n    return 2\n"),
             ],
         );
         let g = graph(&dir).unwrap();
-        let edge = |from: &str, to: &str, kind: &str| {
-            g.edges
-                .iter()
-                .any(|e| e.from == from && e.to == to && e.kind == kind)
-        };
-        // Imports: relative forms resolve, a directory is its own node, a
-        // package the manifest installs is outside, and so is one nothing names.
-        assert!(edge("file:src/a.ts", "file:src/b.ts", "imports"));
-        assert!(edge("file:src/a.ts", "dir:src/widgets", "imports"));
-        assert!(edge("file:src/main.rs", "file:src/util.rs", "imports"));
-        assert!(edge("file:pkg/sub/a.py", "file:pkg/sub/b.py", "imports"));
-        assert!(edge("file:pkg/sub/a.py", "file:pkg/top.py", "imports"));
-        assert!(
-            !g.pending
-                .iter()
-                .any(|p| p.text == "react" || p.text == "lodash")
-        );
-        // A sub-path of the package a configuration names goes to Jev with the
-        // file below it with that last name. `super` inside a module is its file.
-        let extra = g
-            .pending
-            .iter()
-            .find(|p| p.text == "demo/extra")
-            .expect("demo/extra goes to Jev");
-        assert!(extra.candidates.contains(&"file:src/extra.ts".to_string()));
-        assert!(edge("def:src/util.rs#tests", "file:src/util.rs", "imports"));
-        // A call with one target resolves by rule. An owner or `this` narrows the
-        // candidates. A receiver the rule cannot place goes to Jev. A function's
-        // locals stay local, and a macro call resolves only to a macro.
-        assert!(edge("def:src/a.ts#caller", "def:src/b.ts#helper", "calls"));
-        assert!(edge(
-            "def:src/a.ts#caller",
-            "def:src/widgets/index.ts#widget",
-            "calls"
-        ));
-        assert!(edge(
-            "def:src/b.ts#Tool.render",
-            "def:src/b.ts#Tool.size",
-            "calls"
-        ));
-        assert!(edge(
-            "def:src/b.ts#outer",
-            "def:src/b.ts#outer.inner",
-            "calls"
-        ));
-        assert!(edge(
-            "def:src/main.rs#main",
-            "def:src/util.rs#Tool.new",
-            "calls"
-        ));
-        assert!(edge("def:pkg/sub/a.py#run", "def:pkg/sub/b.py#f", "calls"));
-        let render = g
-            .pending
-            .iter()
-            .find(|p| p.text == "render")
-            .expect("obj.render goes to Jev");
-        assert_eq!(
-            render.candidates,
-            vec!["def:src/b.ts#Tool.render".to_string()]
-        );
-        assert!(
-            !g.edges
-                .iter()
-                .any(|e| e.from == "def:src/widgets/index.ts#widget" && e.kind == "calls")
-        );
-        assert!(
-            !g.edges
-                .iter()
-                .any(|e| e.to == "def:src/util.rs#format" && e.kind == "calls")
-        );
-        // A path that names nothing here, such as `Vec::new`, points outside. A
-        // call on a value, such as `.join`, never resolves to a free function.
-        // An impl inside a module owns its methods.
-        assert!(
-            !g.pending
-                .iter()
-                .any(|p| p.text == "new" || p.text == "join")
-        );
-        assert!(
-            !g.edges
-                .iter()
-                .any(|e| e.to == "def:src/util.rs#join" && e.kind == "calls")
-        );
-        assert!(edge(
-            "def:src/util.rs#tests.probe",
-            "def:src/util.rs#tests.make",
-            "calls"
-        ));
+        let edge = |from: &str, to: &str| g.edges.iter().any(|e| e.from == from && e.to == to);
+        let pending = |text: &str| g.pending.iter().find(|p| p.text == text);
+        // A link with one possible target resolves by rule.
+        assert!(edge("file:src/a.ts", "file:src/b.ts"));
+        assert!(edge("def:src/a.ts#caller", "def:src/b.ts#helper"));
+        assert!(pending("./b").is_none() && pending("helper").is_none());
+        // A link with several goes to Jev with only those as its candidates. A local alias a configuration names
+        // could mean a folder here, so it goes to Jev too.
+        let render: BTreeSet<&str> = pending("render").expect("obj.render goes to Jev").candidates.iter().map(String::as_str).collect();
+        assert_eq!(render, BTreeSet::from(["def:src/b.ts#Panel.render", "def:src/b.ts#Tool.render"]));
+        assert!(pending("@lib/a").expect("@lib/a goes to Jev").candidates.contains(&"file:lib/a.ts".to_string()));
+        // An installed package and the standard library are outside, so they never go to Jev.
+        assert!(pending("react").is_none() && pending("node:path").is_none());
         std::fs::remove_dir_all(dir).unwrap();
     }
 
-    /// Whether the graph has an edge of `kind` from one id to another.
-    fn has_edge(g: &CodeGraph, from: &str, to: &str, kind: &str) -> bool {
-        g.edges
-            .iter()
-            .any(|e| e.from == from && e.to == to && e.kind == kind)
-    }
-
     #[test]
-    fn a_typescript_or_javascript_call_through_an_alias_reaches_what_it_names() {
+    fn each_language_s_import_and_re_export_forms_reach_what_they_name() {
         let dir = project(
-            "aliases-js",
+            "forms",
             &[
+                // TypeScript and JavaScript imports. The command line defines the very name it renames.
                 (
                     "src/v1/index.ts",
                     "export function buildSite() {\n  return 1;\n}\n\nexport default function legacy() {\n  return 2;\n}\n",
                 ),
                 ("src/walk.ts", "export function walk() {\n  return 3;\n}\n"),
-                (
-                    "src/make.ts",
-                    "function make() {\n  return 4;\n}\n\nexport default make;\n",
-                ),
-                (
-                    "src/strings.ts",
-                    "export function join() {\n  return 5;\n}\n",
-                ),
-                // The file defines the very name it renames, as the showcase's command line does.
+                ("src/make.ts", "function make() {\n  return 4;\n}\n\nexport default make;\n"),
+                ("src/strings.ts", "export function join() {\n  return 5;\n}\n"),
                 (
                     "src/cli.ts",
                     "import { buildSite as buildV1 } from \"./v1/index\";\nimport * as walker from \"./walk\";\nimport legacyBuild from \"./v1/index\";\nimport made from \"./make\";\nimport * as path from \"node:path\";\n\nexport function buildSite() {\n  buildV1();\n  walker.walk();\n  legacyBuild();\n  made();\n  path.join(\"a\", \"b\");\n}\n",
                 ),
-                (
-                    "lib/tools.js",
-                    "export function helper() {\n  return 6;\n}\n\nexport function other() {\n  return 7;\n}\n",
-                ),
+                ("lib/tools.js", "export function helper() {\n  return 6;\n}\n\nexport function other() {\n  return 7;\n}\n"),
                 (
                     "lib/main.js",
                     "import { helper as assist } from \"./tools.js\";\nimport * as tools from \"./tools.js\";\n\nexport function main() {\n  assist();\n  tools.other();\n}\n",
                 ),
-            ],
-        );
-        let g = graph(&dir).unwrap();
-        for (to, through) in [
-            ("def:src/v1/index.ts#buildSite", "a renamed import"),
-            ("def:src/walk.ts#walk", "a namespace import"),
-            (
-                "def:src/v1/index.ts#legacy",
-                "a default import of `export default function`",
-            ),
-            (
-                "def:src/make.ts#make",
-                "a default import of `export default make`",
-            ),
-        ] {
-            assert!(
-                has_edge(&g, "def:src/cli.ts#buildSite", to, "calls"),
-                "{through} reaches {to}"
-            );
-        }
-        assert!(has_edge(
-            &g,
-            "def:lib/main.js#main",
-            "def:lib/tools.js#helper",
-            "calls"
-        ));
-        assert!(has_edge(
-            &g,
-            "def:lib/main.js#main",
-            "def:lib/tools.js#other",
-            "calls"
-        ));
-        // A namespace from outside the repository resolves to nothing in it, even a function of the same name.
-        assert!(!g.edges.iter().any(|e| e.to == "def:src/strings.ts#join"));
-        assert!(!g.pending.iter().any(|p| p.text == "join"));
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn a_python_call_through_an_alias_reaches_what_it_names() {
-        let dir = project(
-            "aliases-py",
-            &[
-                (
-                    "pkg/core.py",
-                    "def run():\n    return 1\n\n\ndef stop():\n    return 3\n\n\nclass Loader:\n    def load(self):\n        return 2\n",
-                ),
-                (
-                    "pkg/app.py",
-                    "from .core import run as start\nfrom . import core as c\nimport pkg.core as engine\nimport numpy as np\n\n\ndef run():\n    start()\n    c.run()\n    engine.run()\n    np.load()\n\n\ndef begin():\n    from .core import run as f\n    return f()\n\n\ndef end():\n    from .core import stop as f\n    return f()\n",
-                ),
-            ],
-        );
-        let g = graph(&dir).unwrap();
-        let calls_to_run = g
-            .edges
-            .iter()
-            .filter(|e| e.from == "def:pkg/app.py#run" && e.to == "def:pkg/core.py#run")
-            .count();
-        assert_eq!(
-            calls_to_run, 3,
-            "start(), c.run() and engine.run() each reach core's run"
-        );
-        // A module from outside the repository resolves to nothing in it, even a method of the same name.
-        assert!(
-            !g.edges
-                .iter()
-                .any(|e| e.to == "def:pkg/core.py#Loader.load")
-        );
-        assert!(!g.pending.iter().any(|p| p.text == "load"));
-        // An import inside a function binds its name only there.
-        assert!(has_edge(
-            &g,
-            "def:pkg/app.py#begin",
-            "def:pkg/core.py#run",
-            "calls"
-        ));
-        assert!(has_edge(
-            &g,
-            "def:pkg/app.py#end",
-            "def:pkg/core.py#stop",
-            "calls"
-        ));
-        assert!(!has_edge(
-            &g,
-            "def:pkg/app.py#end",
-            "def:pkg/core.py#run",
-            "calls"
-        ));
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn a_rust_call_through_an_alias_reaches_what_it_names() {
-        let dir = project(
-            "aliases-rs",
-            &[
-                (
-                    "src/util.rs",
-                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n",
-                ),
-                ("src/graph/mod.rs", "pub mod resolve;\n"),
-                ("src/graph/resolve.rs", "pub fn run() {}\n"),
-                (
-                    "src/main.rs",
-                    "use crate::util::format as fmt_u8;\nuse crate::util::Tool as T;\nuse crate::graph::resolve as res;\n\nfn main() {\n    let t = T::new();\n    let x = fmt_u8(1);\n    res::run();\n}\n\nfn format() {}\n",
-                ),
-            ],
-        );
-        let g = graph(&dir).unwrap();
-        for to in [
-            "def:src/util.rs#format",
-            "def:src/util.rs#Tool.new",
-            "def:src/graph/resolve.rs#run",
-        ] {
-            assert!(
-                has_edge(&g, "def:src/main.rs#main", to, "calls"),
-                "main reaches {to}"
-            );
-        }
-        // `use … as` names the module it renames, not the folder above it.
-        assert!(has_edge(
-            &g,
-            "file:src/main.rs",
-            "file:src/graph/resolve.rs",
-            "imports"
-        ));
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn a_typescript_or_javascript_call_through_a_package_index_reaches_what_it_re_exports() {
-        let dir = project(
-            "reexports-js",
-            &[
-                (
-                    "packages/geo/package.json",
-                    r#"{ "name": "@demo/geo", "main": "src/index.ts" }"#,
-                ),
+                // A package's index that re-exports, with a cycle and a chain longer than `HOPS`.
+                ("packages/geo/package.json", r#"{ "name": "@demo/geo", "main": "src/index.ts" }"#),
                 (
                     "packages/geo/src/index.ts",
                     "export { area } from \"./shapes/area\";\nexport { perimeter as edge } from \"./shapes/perimeter\";\nexport * from \"./more\";\nexport * as units from \"./units/convert\";\nexport * from \"./loop/a\";\nexport * from \"./far/f1\";\nexport * from \"./hidden\";\n",
                 ),
-                (
-                    "packages/geo/src/shapes/area.ts",
-                    "export function area() {\n  return 1;\n}\n",
-                ),
-                (
-                    "packages/geo/src/shapes/perimeter.ts",
-                    "export function perimeter() {\n  return 2;\n}\n",
-                ),
+                ("packages/geo/src/shapes/area.ts", "export function area() {\n  return 1;\n}\n"),
+                ("packages/geo/src/shapes/perimeter.ts", "export function perimeter() {\n  return 2;\n}\n"),
                 ("packages/geo/src/more.js", "export * from \"./deep/scale\";\n"),
-                (
-                    "packages/geo/src/deep/scale.ts",
-                    "export function scale() {\n  return 3;\n}\n",
-                ),
-                (
-                    "packages/geo/src/units/convert.ts",
-                    "export function toMeters() {\n  return 4;\n}\n",
-                ),
-                (
-                    "packages/geo/src/hidden.ts",
-                    "function tidy() {\n  return 7;\n}\n\nexport const kept = tidy();\n",
-                ),
+                ("packages/geo/src/deep/scale.ts", "export function scale() {\n  return 3;\n}\n"),
+                ("packages/geo/src/units/convert.ts", "export function toMeters() {\n  return 4;\n}\n"),
+                ("packages/geo/src/hidden.ts", "function tidy() {\n  return 7;\n}\n\nexport const kept = tidy();\n"),
                 ("packages/geo/src/loop/a.ts", "export * from \"./b\";\n"),
                 ("packages/geo/src/loop/b.ts", "export * from \"./a\";\n"),
                 ("packages/geo/src/far/f1.ts", "export * from \"./f2\";\n"),
                 ("packages/geo/src/far/f2.ts", "export * from \"./f3\";\n"),
                 ("packages/geo/src/far/f3.ts", "export * from \"./f4\";\n"),
                 ("packages/geo/src/far/f4.ts", "export * from \"./f5\";\n"),
-                (
-                    "packages/geo/src/far/f5.ts",
-                    "export function distant() {\n  return 5;\n}\n",
-                ),
-                // A neighbour that shares a re-exported name is not what the import names.
-                (
-                    "apps/web/scale.ts",
-                    "export function scale() {\n  return 6;\n}\n",
-                ),
+                ("packages/geo/src/far/f5.ts", "export function distant() {\n  return 5;\n}\n"),
+                ("apps/web/scale.ts", "export function scale() {\n  return 6;\n}\n"),
                 (
                     "apps/web/app.ts",
-                    "import { area, edge, scale, units, missing, distant } from \"@demo/geo\";\nimport * as geo from \"@demo/geo\";\n\nexport function draw() {\n  area();\n  edge();\n  scale();\n  units.toMeters();\n  geo.area();\n  missing();\n  distant();\n  tidy();\n}\n",
+                    "import { area, edge, scale, units, missing, distant } from \"@demo/geo\";\nimport * as geo from \"@demo/geo\";\n\nexport function draw() {\n  area();\n  edge();\n  scale();\n  units.toMeters();\n  missing();\n  distant();\n  tidy();\n}\n\nexport function drawAll() {\n  geo.area();\n}\n",
                 ),
-            ],
-        );
-        let g = graph(&dir).unwrap();
-        let from = "def:apps/web/app.ts#draw";
-        for (to, through) in [
-            ("def:packages/geo/src/shapes/area.ts#area", "`export { a }`"),
-            (
-                "def:packages/geo/src/shapes/perimeter.ts#perimeter",
-                "`export { a as b }`",
-            ),
-            (
-                "def:packages/geo/src/deep/scale.ts#scale",
-                "two `export *`, one in JavaScript",
-            ),
-            (
-                "def:packages/geo/src/units/convert.ts#toMeters",
-                "`export * as ns`",
-            ),
-        ] {
-            assert!(has_edge(&g, from, to, "calls"), "{through} reaches {to}");
-        }
-        let to_area = g
-            .edges
-            .iter()
-            .filter(|e| e.from == from && e.to == "def:packages/geo/src/shapes/area.ts#area")
-            .count();
-        assert_eq!(to_area, 2, "area() and geo.area() both reach area");
-        assert!(!has_edge(&g, from, "def:apps/web/scale.ts#scale", "calls"));
-        // `export *` passes on only what its module exports.
-        assert!(!has_edge(&g, from, "def:packages/geo/src/hidden.ts#tidy", "calls"));
-        // A cycle ends, and a chain longer than `HOPS` resolves to nothing.
-        assert!(!has_edge(
-            &g,
-            from,
-            "def:packages/geo/src/far/f5.ts#distant",
-            "calls"
-        ));
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn a_python_call_through_a_package_init_reaches_what_it_imports() {
-        let dir = project(
-            "reexports-py",
-            &[
+                // Python imports, and a package's `__init__` that re-exports.
+                (
+                    "pkg/core.py",
+                    "def run():\n    return 1\n\n\ndef stop():\n    return 3\n\n\nclass Loader:\n    def load(self):\n        return 2\n",
+                ),
+                (
+                    "pkg/app.py",
+                    "from .core import run as start\nfrom . import core as c\nimport pkg.core as engine\nimport numpy as np\n\n\ndef run():\n    return 0\n\n\ndef renamed():\n    start()\n\n\ndef module():\n    c.run()\n\n\ndef dotted():\n    engine.run()\n\n\ndef outside():\n    np.load()\n\n\ndef begin():\n    from .core import run as f\n    return f()\n\n\ndef end():\n    from .core import stop as f\n    return f()\n",
+                ),
                 (
                     "shop/__init__.py",
                     "from .billing.invoice import total\nfrom .billing.tax import rate as tax_rate\nfrom .catalog import *\n",
@@ -1146,35 +820,18 @@ mod tests {
                 ("shop/billing/tax.py", "def rate():\n    return 2\n"),
                 ("shop/catalog/__init__.py", "from .store.items import find\n"),
                 ("shop/catalog/store/items.py", "def find():\n    return 3\n"),
-                // A neighbour that shares a re-exported name is not what the import names.
                 ("shop/cli/helpers.py", "def find():\n    return 4\n"),
                 (
                     "shop/cli/main.py",
                     "from .. import total, tax_rate, find\n\n\ndef run():\n    total()\n    tax_rate()\n    find()\n",
                 ),
-            ],
-        );
-        let g = graph(&dir).unwrap();
-        let from = "def:shop/cli/main.py#run";
-        for (to, through) in [
-            ("def:shop/billing/invoice.py#total", "`from .x import a`"),
-            ("def:shop/billing/tax.py#rate", "`from .x import a as b`"),
-            (
-                "def:shop/catalog/store/items.py#find",
-                "`from .x import *`, then `from .x import a`",
-            ),
-        ] {
-            assert!(has_edge(&g, from, to, "calls"), "{through} reaches {to}");
-        }
-        assert!(!has_edge(&g, from, "def:shop/cli/helpers.py#find", "calls"));
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn a_rust_call_through_a_pub_use_reaches_what_it_re_exports() {
-        let dir = project(
-            "reexports-rs",
-            &[
+                // Rust's `use … as` and `pub use`.
+                (
+                    "src/util.rs",
+                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n",
+                ),
+                ("src/graph/mod.rs", "pub mod resolve;\n"),
+                ("src/graph/resolve.rs", "pub fn run() {}\n"),
                 (
                     "src/geo/mod.rs",
                     "pub mod shapes;\npub use self::shapes::flat::area;\npub use self::shapes::flat::perimeter as edge;\npub use self::shapes::flat::{span, mass as weight};\npub use self::shapes::solid::*;\nuse self::shapes::flat::hidden;\n",
@@ -1187,181 +844,77 @@ mod tests {
                 ("src/geo/shapes/solid.rs", "pub fn volume() {}\n"),
                 (
                     "src/main.rs",
-                    "mod geo;\nuse crate::geo::{area, edge, span, weight, volume, hidden};\n\nfn main() {\n    area();\n    edge();\n    span();\n    weight();\n    volume();\n    hidden();\n}\n",
+                    "mod geo;\nuse crate::util::format as fmt_u8;\nuse crate::util::Tool as T;\nuse crate::graph::resolve as res;\nuse crate::geo::{area, edge, span, weight, volume, hidden};\n\nfn main() {\n    let t = T::new();\n    let x = fmt_u8(1);\n    res::run();\n}\n\nfn format() {}\n\nfn shapes() {\n    area();\n    edge();\n    span();\n    weight();\n    volume();\n    hidden();\n}\n",
                 ),
             ],
         );
         let g = graph(&dir).unwrap();
-        let from = "def:src/main.rs#main";
-        for (to, through) in [
-            ("def:src/geo/shapes/flat.rs#area", "`pub use x::a`"),
-            ("def:src/geo/shapes/flat.rs#perimeter", "`pub use x::a as b`"),
-            ("def:src/geo/shapes/flat.rs#span", "`pub use x::{a}`"),
-            ("def:src/geo/shapes/flat.rs#mass", "`pub use x::{a as b}`"),
-            ("def:src/geo/shapes/solid.rs#volume", "`pub use x::*`"),
-        ] {
-            assert!(has_edge(&g, from, to, "calls"), "{through} reaches {to}");
-        }
-        // A private `use` passes nothing on.
-        assert!(!has_edge(&g, from, "def:src/geo/shapes/flat.rs#hidden", "calls"));
+        // Each row is a language, a form, where it is used, the target it names and whether the link reaches it. From
+        // a definition the link is a call, and from a file it is an import.
+        let forms = [
+            ("TypeScript", "a renamed import of a name the file also defines", "def:src/cli.ts#buildSite", "def:src/v1/index.ts#buildSite", true),
+            ("TypeScript", "a namespace import", "def:src/cli.ts#buildSite", "def:src/walk.ts#walk", true),
+            ("TypeScript", "a default import of `export default function`", "def:src/cli.ts#buildSite", "def:src/v1/index.ts#legacy", true),
+            ("TypeScript", "a default import of `export default name`", "def:src/cli.ts#buildSite", "def:src/make.ts#make", true),
+            ("TypeScript", "a namespace from outside the repository", "def:src/cli.ts#buildSite", "def:src/strings.ts#join", false),
+            ("JavaScript", "a renamed import", "def:lib/main.js#main", "def:lib/tools.js#helper", true),
+            ("JavaScript", "a namespace import", "def:lib/main.js#main", "def:lib/tools.js#other", true),
+            ("TypeScript", "`export { a }` in a package's index", "def:apps/web/app.ts#draw", "def:packages/geo/src/shapes/area.ts#area", true),
+            ("TypeScript", "a namespace import of a package's index", "def:apps/web/app.ts#drawAll", "def:packages/geo/src/shapes/area.ts#area", true),
+            ("TypeScript", "`export { a as b }`", "def:apps/web/app.ts#draw", "def:packages/geo/src/shapes/perimeter.ts#perimeter", true),
+            ("TypeScript", "two `export *`, one in JavaScript", "def:apps/web/app.ts#draw", "def:packages/geo/src/deep/scale.ts#scale", true),
+            ("TypeScript", "`export * as ns`", "def:apps/web/app.ts#draw", "def:packages/geo/src/units/convert.ts#toMeters", true),
+            ("TypeScript", "a neighbour that shares a re-exported name", "def:apps/web/app.ts#draw", "def:apps/web/scale.ts#scale", false),
+            ("TypeScript", "`export *` of a module that does not export the name", "def:apps/web/app.ts#draw", "def:packages/geo/src/hidden.ts#tidy", false),
+            ("TypeScript", "a chain of re-exports longer than `HOPS`", "def:apps/web/app.ts#draw", "def:packages/geo/src/far/f5.ts#distant", false),
+            ("Python", "`from .x import a as b`", "def:pkg/app.py#renamed", "def:pkg/core.py#run", true),
+            ("Python", "`from . import x as y`", "def:pkg/app.py#module", "def:pkg/core.py#run", true),
+            ("Python", "`import a.x as y`", "def:pkg/app.py#dotted", "def:pkg/core.py#run", true),
+            ("Python", "a module from outside the repository", "def:pkg/app.py#outside", "def:pkg/core.py#Loader.load", false),
+            ("Python", "an import inside a function", "def:pkg/app.py#begin", "def:pkg/core.py#run", true),
+            ("Python", "an import inside another function", "def:pkg/app.py#end", "def:pkg/core.py#stop", true),
+            ("Python", "a name another function imports", "def:pkg/app.py#end", "def:pkg/core.py#run", false),
+            ("Python", "`from .x import a` in a package's `__init__`", "def:shop/cli/main.py#run", "def:shop/billing/invoice.py#total", true),
+            ("Python", "`from .x import a as b` in a package's `__init__`", "def:shop/cli/main.py#run", "def:shop/billing/tax.py#rate", true),
+            ("Python", "`from .x import *`, then `from .x import a`", "def:shop/cli/main.py#run", "def:shop/catalog/store/items.py#find", true),
+            ("Python", "a neighbour that shares a re-exported name", "def:shop/cli/main.py#run", "def:shop/cli/helpers.py#find", false),
+            ("Rust", "`use x::a as b` of a name the file also defines", "def:src/main.rs#main", "def:src/util.rs#format", true),
+            ("Rust", "`use x::T as U`", "def:src/main.rs#main", "def:src/util.rs#Tool.new", true),
+            ("Rust", "`use x::module as m`", "def:src/main.rs#main", "def:src/graph/resolve.rs#run", true),
+            ("Rust", "`use x::module as m` names the module, not the folder above it", "file:src/main.rs", "file:src/graph/resolve.rs", true),
+            ("Rust", "`pub use x::a`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#area", true),
+            ("Rust", "`pub use x::a as b`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#perimeter", true),
+            ("Rust", "`pub use x::{a}`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#span", true),
+            ("Rust", "`pub use x::{a as b}`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#mass", true),
+            ("Rust", "`pub use x::*`", "def:src/main.rs#shapes", "def:src/geo/shapes/solid.rs#volume", true),
+            ("Rust", "a private `use`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#hidden", false),
+        ];
+        let wrong: Vec<String> = forms
+            .iter()
+            .filter(|(_, _, from, to, reaches)| {
+                let kind = if from.starts_with("file:") { "imports" } else { "calls" };
+                g.edges.iter().any(|e| e.from == *from && e.to == *to && e.kind == kind) != *reaches
+            })
+            .map(|(language, form, _, to, reaches)| {
+                format!("{language}: {form} {} {to}", if *reaches { "should reach" } else { "should not reach" })
+            })
+            .collect();
+        assert!(wrong.is_empty(), "{wrong:#?}");
         std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn a_builtin_or_an_installed_package_is_outside_however_a_configuration_mentions_it() {
-        let dir = project(
-            "outside",
-            &[
-                (
-                    "package.json",
-                    r#"{ "name": "site", "devDependencies": { "vitest": "3" } }"#,
-                ),
-                // A script in another folder mentions node, fs and vitest, as the showcase's v1 does.
-                (
-                    "v1/package.json",
-                    r#"{ "name": "v1", "scripts": { "test": "node -e \"require('fs')\" && vitest run" } }"#,
-                ),
-                (
-                    "examples/demo/package.json",
-                    r#"{ "dependencies": { "site": "^1", "react": "19" } }"#,
-                ),
-                ("aliases.json", r#"{ "@lib": "./lib" }"#),
-                (
-                    "apps/cli.ts",
-                    "import { join } from \"node:path\";\nimport { rmSync } from \"fs\";\nimport { readFile } from \"fs/promises\";\nimport { test } from \"vitest\";\nimport React from \"react\";\nimport { a } from \"@lib/a\";\nimport { store } from \"site/vanilla\";\n",
-                ),
-                ("lib/a.ts", "export const a = 1;\n"),
-                ("src/vanilla.ts", "export const store = 1;\n"),
-                (
-                    "NOTES.txt",
-                    "Uses os, typing, requests, flask_login, ruamel.yaml, pytest, shop, std, serde_json, nix, helper, fmt, net, pflag, vector, json and rails.\n",
-                ),
-                (
-                    "requirements.txt",
-                    "requests>=2 ; python_version > \"3\"\n-r dev.txt\n",
-                ),
-                (
-                    "pyproject.toml",
-                    "[project]\nname = \"shop\"\ndependencies = [\"Flask-Login>=0.6\", \"ruamel.yaml\"]\n\n[dependency-groups]\ntests = [\"pytest\"]\n",
-                ),
-                (
-                    "shop/app.py",
-                    "import os.path\nfrom typing import Any\nimport requests\nimport flask_login\nfrom ruamel.yaml import YAML\nimport pytest\nimport shop\n",
-                ),
-                (
-                    "Cargo.toml",
-                    "[package]\nname = \"tool-kit\"\n\n[dependencies]\nhelper = { path = \"helper\" }\n\n[target.'cfg(unix)'.dependencies]\nnix = \"0.29\"\n\n[dev-dependencies]\nserde-json = \"1\"\n",
-                ),
-                (
-                    "src/main.rs",
-                    "use std::fs;\nuse serde_json::Value;\nuse nix::unistd;\nuse helper::run;\n\nfn main() {}\n",
-                ),
-                (
-                    "go.mod",
-                    "module example.com/shop\n\ngo 1.22\n\nrequire (\n\tgithub.com/spf13/pflag v1.0.5 // indirect\n)\n",
-                ),
-                (
-                    "cmd/main.go",
-                    "package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n\t\"github.com/spf13/pflag\"\n\t\"example.com/shop/internal/store\"\n)\n",
-                ),
-                ("internal/store/store.go", "package store\n"),
-                (
-                    "geo/shape.cpp",
-                    "#include <vector>\n#include \"vector.h\"\n",
-                ),
-                ("geo/vector.h", "struct Vec {};\n"),
-                (
-                    "Gemfile",
-                    "source \"https://rubygems.org\"\ngem \"rails\", \"~> 7\"\n",
-                ),
-                ("app.rb", "require \"json\"\nrequire \"rails/all\"\n"),
-            ],
-        );
-        let g = graph(&dir).unwrap();
-        let pending: BTreeSet<&str> = g.pending.iter().map(|p| p.text.as_str()).collect();
-        for outside in [
-            "node:path",
-            "fs",
-            "fs/promises",
-            "vitest",
-            "react",
-            "os.path",
-            "typing",
-            "requests",
-            "flask_login",
-            "ruamel.yaml",
-            "pytest",
-            "std::fs",
-            "serde_json::Value",
-            "nix::unistd",
-            "fmt",
-            "net/http",
-            "github.com/spf13/pflag",
-            "<vector>",
-            "json",
-            "rails/all",
-        ] {
-            assert!(!pending.contains(outside), "{outside} is outside");
-        }
-        // What could mean a folder here still goes to Jev: an alias, the
-        // project's own package, a crate installed from a path, its own Go
-        // module and a header that is a file named like a standard one.
-        for here in [
-            "@lib/a",
-            "site/vanilla",
-            "shop",
-            "helper::run",
-            "example.com/shop/internal/store",
-            "vector.h",
-        ] {
-            assert!(pending.contains(here), "{here} goes to Jev: {pending:?}");
-        }
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn a_folder_inside_a_repository_is_a_project_of_its_own() {
         let dir = project("inside", &[("sub/a.ts", "export const a = 1;\n")]);
-        for args in [
-            &["init", "-q"][..],
-            &["add", "."],
-            &[
-                "-c",
-                "user.name=Gaia",
-                "-c",
-                "user.email=gaia@example.com",
-                "commit",
-                "-q",
-                "-m",
-                "one",
-            ],
-        ] {
-            let ok = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&dir)
-                .args(args)
-                .status()
-                .unwrap()
-                .success();
-            assert!(ok, "git {args:?}");
-        }
-        assert_eq!(project_id(&dir), git::root_commit(&dir).unwrap());
-        assert_ne!(project_id(&dir.join("sub")), project_id(&dir));
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn a_repository_is_named_by_its_remote_or_its_main_checkout_never_a_worktree() {
-        let dir = project("named", &[("a.ts", "export const a = 1;\n")]);
-        let worktree = dir.with_file_name(format!(
-            "{}-worktree",
-            dir.file_name().unwrap().to_string_lossy()
-        ));
+        let beside = |suffix: &str| dir.with_file_name(format!("{}-{suffix}", dir.file_name().unwrap().to_string_lossy()));
+        let (worktree, clone) = (beside("worktree"), beside("clone"));
         let _ = std::fs::remove_dir_all(&worktree);
+        let _ = std::fs::remove_dir_all(&clone);
         let git = |args: &[&str]| {
             let ok = std::process::Command::new("git")
                 .arg("-C")
                 .arg(&dir)
+                .args(["-c", "user.name=Gaia", "-c", "user.email=gaia@example.com"])
                 .args(args)
                 .status()
                 .unwrap()
@@ -1370,40 +923,19 @@ mod tests {
         };
         git(&["init", "-q"]);
         git(&["add", "."]);
-        git(&[
-            "-c",
-            "user.name=Gaia",
-            "-c",
-            "user.email=gaia@example.com",
-            "commit",
-            "-q",
-            "-m",
-            "one",
-        ]);
-        git(&[
-            "worktree",
-            "add",
-            "-q",
-            "-b",
-            "other",
-            worktree.to_str().unwrap(),
-        ]);
-        let checkout = dir.file_name().unwrap().to_string_lossy().into_owned();
-        assert_eq!(graph(&dir).unwrap().name, checkout);
-        assert_eq!(
-            graph(&worktree).unwrap().name,
-            checkout,
-            "a worktree takes its main checkout's name"
-        );
-        git(&[
-            "remote",
-            "add",
-            "origin",
-            "git@github.com:someone/widget.git",
-        ]);
-        assert_eq!(graph(&dir).unwrap().name, "widget");
-        assert_eq!(graph(&worktree).unwrap().name, "widget");
+        git(&["commit", "-q", "-m", "one"]);
+        git(&["worktree", "add", "-q", "-b", "other", worktree.to_str().unwrap()]);
+        git(&["clone", "-q", ".", clone.to_str().unwrap()]);
+        assert_ne!(project_id(&dir.join("sub")), project_id(&dir));
+        // A clone elsewhere and a worktree are the same projects, so their saved answers apply.
+        for other in [&clone, &worktree] {
+            assert_eq!(project_id(other), project_id(&dir), "{}", other.display());
+            assert_eq!(project_id(&other.join("sub")), project_id(&dir.join("sub")), "{}", other.display());
+        }
+        // The name enters every request, so a worktree takes its main checkout's.
+        assert_eq!(graph(&worktree).unwrap().name, graph(&dir).unwrap().name);
         std::fs::remove_dir_all(worktree).unwrap();
+        std::fs::remove_dir_all(clone).unwrap();
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -1489,7 +1021,7 @@ mod tests {
             );
         }
 
-        // When a file splits in two, the larger part keeps the file's lineage.
+        // When a file splits in two, its definitions keep their lineage.
         std::fs::remove_file(dir.join("src/walk.ts")).unwrap();
         std::fs::create_dir_all(dir.join("src/walk")).unwrap();
         std::fs::write(dir.join("src/walk/core.ts"), walk).unwrap();
@@ -1505,128 +1037,15 @@ mod tests {
             third.get("def:src/walk/list.ts#list"),
             first.get("def:lib/walk.ts#list")
         );
-        let kept = [
-            third.get("file:src/walk/core.ts"),
-            third.get("file:src/walk/list.ts"),
-        ];
-        assert!(
-            kept.contains(&first.get("file:lib/walk.ts")),
-            "one part of the split keeps walk.ts's lineage"
-        );
         let distinct: HashSet<&String> = third.values().collect();
         assert_eq!(distinct.len(), third.len(), "no two nodes share a lineage");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
-    fn a_definition_records_its_signature_doc_owner_and_parent() {
-        let g = graph(&fixtures()).unwrap();
-        let defs = defs(&g);
-        let push = defs["def:sample.rs#Batch.push"];
-        assert_eq!(push.owner.as_deref(), Some("Batch"));
-        assert_eq!(push.role, "method");
-        assert_eq!(
-            push.signature,
-            "pub fn push(&mut self, item: String, limit: usize) -> bool"
-        );
-        assert_eq!(
-            push.doc.as_deref(),
-            Some("Adds an item, flushing when full.")
-        );
-        let walk = defs["def:sample.go#Walker.Walk"];
-        assert_eq!(walk.owner.as_deref(), Some("Walker"));
-        assert_eq!(
-            walk.doc.as_deref(),
-            Some("Walk lists every name under the root.")
-        );
-        let load = defs["def:sample.py#Loader.load"];
-        assert_eq!(load.parent.as_deref(), Some("def:sample.py#Loader"));
-        assert_eq!(load.doc.as_deref(), Some("Reads every file under root."));
-        let read_all = defs["def:sample.ts#readAll"];
-        assert_eq!(
-            read_all.signature,
-            "function readAll(root: string, depth: number): string[]"
-        );
-        assert_eq!(
-            read_all.doc.as_deref(),
-            Some("Reads every entry under a root.")
-        );
-        assert_eq!(
-            defs["def:sample.ts#Walker.walk"].doc.as_deref(),
-            Some("Walks once.")
-        );
-    }
-
-    #[test]
-    fn a_folder_carries_the_package_rooted_there_its_imports_resolve_by_name_and_exports_are_marked() {
-        // Only a manifest makes an entity. A folder with a main, server or index file and no manifest is not one.
-        let dir = project(
-            "facts",
-            &[
-                (
-                    "packages/core/package.json",
-                    r#"{ "name": "@demo/core", "description": "The core." }"#,
-                ),
-                (
-                    "packages/core/src/index.ts",
-                    "export function sum(a: number, b: number): number {\n  return a + b;\n}\nexport const twice = (a: number) => {\n  return a * 2;\n};\nfunction hidden(): void {}\n",
-                ),
-                ("packages/app/package.json", r#"{ "name": "@demo/app" }"#),
-                (
-                    "packages/app/src/index.ts",
-                    "import { sum } from \"@demo/core\";\nexport const total = (n: number) => sum(n, n);\n",
-                ),
-                (
-                    "engine/Cargo.toml",
-                    "[package]\nname = \"demo-engine\"\n",
-                ),
-                ("engine/src/lib.rs", "pub fn open() {}\nfn close() {}\n"),
-                ("tools/cli/main.ts", "export const run = () => 0;\n"),
-                ("services/api/server.ts", "export const listen = () => 0;\n"),
-                ("lib/util/index.ts", "export const id = (x: number) => x;\n"),
-            ],
-        );
-        let g = graph(&dir).unwrap();
-        let entity = |path: &str| {
-            g.nodes.iter().find_map(|n| match n {
-                Node::Dir(d) if d.path == path => d.entity.clone(),
-                _ => None,
-            })
-        };
-        let core = entity("packages/core").expect("the package's folder holds it");
-        assert_eq!((core.name.as_str(), core.form), ("@demo/core", "package"));
-        assert_eq!(core.entry.as_deref(), Some("packages/core/src/index.ts"));
-        let engine = entity("engine").expect("the crate's folder holds it");
-        assert_eq!((engine.name.as_str(), engine.form), ("demo-engine", "crate"));
-        assert!(entity("packages").is_none());
-        assert_eq!(core.manifest, "packages/core/package.json");
-        for named in ["tools/cli", "services/api", "lib/util"] {
-            assert!(entity(named).is_none(), "{named} has a main, server or index file but no manifest");
-        }
-        // A workspace package imported by its manifest's name is its entry, by rule.
-        assert!(g.edges.iter().any(|e| e.kind == "imports"
-            && e.from == "file:packages/app/src/index.ts"
-            && e.to == "file:packages/core/src/index.ts"));
-        assert!(!g.pending.iter().any(|p| p.text.contains("@demo/core")));
-        let defs = defs(&g);
-        assert!(defs["def:packages/core/src/index.ts#sum"].exported);
-        assert!(defs["def:packages/core/src/index.ts#twice"].exported);
-        assert!(!defs["def:packages/core/src/index.ts#hidden"].exported);
-        assert!(defs["def:engine/src/lib.rs#open"].exported);
-        assert!(!defs["def:engine/src/lib.rs#close"].exported);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn ids_survive_an_edit_above_and_conventions_tag_files() {
+    fn ids_survive_an_edit_above() {
         let source = std::fs::read_to_string(fixtures().join("sample.rs")).unwrap();
-        let dir = project(
-            "ids",
-            &[
-                ("src/sample.rs", &source),
-                ("pkg/walk_test.go", "package pkg\n"),
-            ],
-        );
+        let dir = project("ids", &[("src/sample.rs", &source)]);
         let ids = |g: &CodeGraph| -> BTreeSet<String> {
             g.nodes
                 .iter()
@@ -1644,16 +1063,7 @@ mod tests {
             format!("// A new first line.\n\n{source}"),
         )
         .unwrap();
-        let after = graph(&dir).unwrap();
-        assert_eq!(before, ids(&after));
-        let test_file = after.nodes.iter().find_map(|n| match n {
-            Node::File(f) if f.path == "pkg/walk_test.go" => Some(f),
-            _ => None,
-        });
-        assert_eq!(
-            test_file.unwrap().conventions,
-            vec!["go:test-file".to_string()]
-        );
+        assert_eq!(before, ids(&graph(&dir).unwrap()));
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

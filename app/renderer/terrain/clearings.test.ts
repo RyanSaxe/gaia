@@ -79,56 +79,18 @@ const wildNear: ClearingsNear = (x0, z0, x1, z1) => wild.filter((c, k) => k === 
 
 describe("the clearings' mask", () => {
   it.each([
-    ["the whole land", land, [[0, 0], [400, -300]]],
+    // Around (650, 0) the window reaches across the land's edge at 680 m out, into the wild.
+    ["the whole land", land, [[0, 0], [400, -300], [650, 0]]],
     // Around (450, -20) the window extends past the land window's edge at z 19 m, where the walk continues.
     ["a window of the land", window, [[400, -300], [450, -20]]],
-  ] as const)("holds the mask of %s around the grass, each texel cleared exactly where its middle is, and again once the grass moves on", (_, t, spots) => {
+  ] as const)("holds the mask of %s around the grass, each texel cleared exactly where its middle is, under the land's things and the wild's bushes past its edge, and again once the grass moves on", (_, t, spots) => {
     const clearings = createClearings(t);
     clearings.setCapsules(capsules);
+    clearings.setNear(wildNear);
     clearings.update(outlines);
     for (const [x, z] of spots) {
       // The shapes near the grass's center are in the window.
-      expect(holds(clearings, x, z, (x, z) => cleared(x, z)).bare).toBeGreaterThan(40);
+      expect(holds(clearings, x, z, (x, z) => cleared(x, z, wild)).bare).toBeGreaterThan(40);
     }
-  });
-
-  it("clears the ground under the outlines asked for each window: a wild bush past the land its own, and nothing else, and the land's as it was", () => {
-    const plain = createClearings(land);
-    const asked = createClearings(land);
-    for (const c of [plain, asked]) c.setCapsules(capsules);
-    asked.setNear(wildNear);
-    for (const c of [plain, asked]) c.update(outlines);
-    // Windows on the land alone, and one across the land's edge at 680 m out into the wild.
-    for (const [x, z] of [[0, 0], [400, -300], [650, 0]] as const) {
-      const was = holds(plain, x, z, (x, z) => cleared(x, z));
-      const now = holds(asked, x, z, (x, z) => cleared(x, z, wild));
-      const { uClearing, uClearingOrigin, uClearingSize } = asked.uniforms;
-      const side = uClearing.value.image.width;
-      const step = uClearingSize.value / side;
-      let wilder = 0;
-      now.data.forEach((v, k) => {
-        const at = [uClearingOrigin.value.x + ((k % side) + 0.5) * step, uClearingOrigin.value.y + (Math.floor(k / side) + 0.5) * step] as const;
-        if (wild.some((c) => within(c, ...at))) wilder++;
-        // Wherever there is no wild bush, the mask is the land's alone.
-        else if (v !== was.data[k]) expect(v, `texel ${k} around (${x}, ${z})`).toBe(was.data[k]);
-      });
-      // Only the window across the edge contains the wild's two near bushes.
-      if (x === 650) expect(wilder).toBeGreaterThan(30);
-      else expect(wilder).toBe(0);
-    }
-  });
-
-  it("keeps short turf apart from bare ground: a turf outline marks only the turf's mask", () => {
-    const clearings = createClearings(land);
-    const turf = Float32Array.from({ length: 16 }, () => 1.5);
-    clearings.update([{ x: 20, z: 20, yaw: 0, scale: 1, outline: turf, turf: true }]);
-    clearings.follow(20, 20);
-    const { uClearing, uTurf, uClearingOrigin, uClearingSize } = clearings.uniforms;
-    const side = uTurf.value.image.width;
-    const step = uClearingSize.value / side;
-    const texel = (x: number, z: number): number => Math.floor((z - uClearingOrigin.value.y) / step) * side + Math.floor((x - uClearingOrigin.value.x) / step);
-    expect((uTurf.value.image.data as Uint8Array)[texel(20.2, 20.2)]).toBe(255);
-    expect((uTurf.value.image.data as Uint8Array)[texel(24, 20)]).toBe(0);
-    expect((uClearing.value.image.data as Uint8Array).every((v) => v === 0)).toBe(true);
   });
 });

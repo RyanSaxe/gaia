@@ -295,6 +295,8 @@ mod tests {
         git(&["init", "-q"]);
         std::fs::write(root.join(".gitignore"), "ignored.ts\n").unwrap();
         std::fs::write(root.join("a.ts"), "export const a = 1;\n").unwrap();
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("sub/b.ts"), "export const b = 2;\n").unwrap();
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "one"]);
         // A submodule is only a pointer to another project's commit.
@@ -309,35 +311,19 @@ mod tests {
         let snapshot = Snapshot::of(&root);
         assert_eq!(snapshot.commit(), Some(head.as_str()));
         let paths: Vec<String> = snapshot.files().into_iter().map(|w| w.path).collect();
-        assert_eq!(paths, vec![".gitignore".to_string(), "a.ts".to_string()]);
+        assert_eq!(paths, vec![".gitignore".to_string(), "a.ts".to_string(), "sub/b.ts".to_string()]);
         assert_eq!(snapshot.text("a.ts").as_deref(), Some("export const a = 1;\n"));
         assert_eq!(snapshot.text("new.ts"), None);
         assert_eq!(snapshot.text("ignored.ts"), None);
         assert_eq!(snapshot.text("../a.ts"), None);
         // The graph records which commit it read.
         assert_eq!(crate::graph::build(&root).unwrap().commit, Some(head));
-        std::fs::remove_dir_all(&root).unwrap();
-    }
-
-    #[test]
-    fn a_folder_inside_a_repository_is_read_from_its_own_part_of_the_commit() {
-        let (root, git) = repo("inside");
-        git(&["init", "-q"]);
-        std::fs::create_dir_all(root.join("sub/src")).unwrap();
-        std::fs::write(root.join("top.ts"), "export const t = 1;\n").unwrap();
-        std::fs::write(root.join("sub/src/b.ts"), "export const b = 2;\n").unwrap();
-        git(&["add", "."]);
-        git(&["commit", "-q", "-m", "one"]);
-        let snapshot = Snapshot::of(&root.join("sub"));
-        let paths: Vec<String> = snapshot.files().into_iter().map(|w| w.path).collect();
-        assert_eq!(paths, vec!["src/b.ts".to_string()]);
-        assert_eq!(snapshot.text("src/b.ts").as_deref(), Some("export const b = 2;\n"));
-        // A folder with nothing committed reads from the disk.
-        std::fs::create_dir_all(root.join("fresh")).unwrap();
-        std::fs::write(root.join("fresh/c.ts"), "export const c = 3;\n").unwrap();
-        let fresh = Snapshot::of(&root.join("fresh"));
-        assert_eq!(fresh.commit(), None);
-        assert_eq!(fresh.text("c.ts").as_deref(), Some("export const c = 3;\n"));
+        // A folder opened inside the repository reads its own part of the commit, and nothing above it.
+        let sub = Snapshot::of(&root.join("sub"));
+        let paths: Vec<String> = sub.files().into_iter().map(|w| w.path).collect();
+        assert_eq!(paths, vec!["b.ts".to_string()]);
+        assert_eq!(sub.text("b.ts").as_deref(), Some("export const b = 2;\n"));
+        assert_eq!(sub.text("../a.ts"), None);
         std::fs::remove_dir_all(&root).unwrap();
     }
 
@@ -348,6 +334,12 @@ mod tests {
         std::fs::write(root.join(".gitignore"), "ignored.ts\n").unwrap();
         std::fs::write(root.join("a.ts"), "export const a = 1;\n").unwrap();
         std::fs::write(root.join("ignored.ts"), "export const i = 4;\n").unwrap();
+        // A worktree's .git is a file that points at its repository. A nested repository's .git is a folder.
+        std::fs::create_dir_all(root.join(".claude/worktrees/agent")).unwrap();
+        std::fs::write(root.join(".claude/worktrees/agent/.git"), "gitdir: /elsewhere\n").unwrap();
+        std::fs::write(root.join(".claude/worktrees/agent/a.ts"), "export const a = 1;\n").unwrap();
+        std::fs::create_dir_all(root.join("vendor/lib/.git")).unwrap();
+        std::fs::write(root.join("vendor/lib/b.ts"), "export const b = 2;\n").unwrap();
         let snapshot = Snapshot::of(&root);
         assert_eq!(snapshot.commit(), None);
         let paths: Vec<String> = snapshot.files().into_iter().map(|w| w.path).collect();
@@ -355,21 +347,4 @@ mod tests {
         std::fs::remove_dir_all(&root).unwrap();
     }
 
-    #[test]
-    fn a_folder_that_is_a_checkout_of_its_own_is_another_project() {
-        let root = std::env::temp_dir().join(format!("gaia-walk-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(root.join("src")).unwrap();
-        std::fs::create_dir_all(root.join(".claude/worktrees/agent/src")).unwrap();
-        std::fs::create_dir_all(root.join("vendor/lib")).unwrap();
-        std::fs::write(root.join("src/a.ts"), "export const a = 1;\n").unwrap();
-        // A worktree's .git is a file that points at its repository. A nested repository's .git is a folder.
-        std::fs::write(root.join(".claude/worktrees/agent/.git"), "gitdir: /elsewhere\n").unwrap();
-        std::fs::write(root.join(".claude/worktrees/agent/src/a.ts"), "export const a = 1;\n").unwrap();
-        std::fs::create_dir_all(root.join("vendor/lib/.git")).unwrap();
-        std::fs::write(root.join("vendor/lib/b.ts"), "export const b = 2;\n").unwrap();
-        let paths: Vec<String> = Snapshot::of(&root).files().into_iter().map(|w| w.path).collect();
-        assert_eq!(paths, vec!["src/a.ts".to_string()]);
-        std::fs::remove_dir_all(&root).unwrap();
-    }
 }
