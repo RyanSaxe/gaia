@@ -1,4 +1,4 @@
-// Exports Gaia's mark (docs/design-system.md, "Gaia's mark"): the lowercase name with "ai" in green, printed on the start
+// Exports Gaia's mark (docs/concepts/design-system.md, "Gaia's mark"): the lowercase name with "ai" in green, printed on the start
 // page's sheet and the slip, and the icon, a G cut through a dark green page onto Gaia's world, used only outside the
 // world (`paint.ts`). `pnpm brand` paints these images at their displayed sizes for a 2x screen, along with the macOS
 // app icon (app/build/icon.icns).

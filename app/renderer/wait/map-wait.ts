@@ -1,4 +1,4 @@
-// Draws the field map on the wait's sheet as a world opens (docs/design-system.md,
+// Draws the field map on the wait's sheet as a world opens (docs/concepts/design-system.md,
 // "The field sheet"). Each stroke shows a step that has already happened: pencil
 // hatching for each stage of Jev's work, a vitality wash as each file settles
 // (`settling.ts`), area names, building and landmark marks, then the relief,

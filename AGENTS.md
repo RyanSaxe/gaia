@@ -4,9 +4,9 @@ Gaia turns a codebase into a world you can walk through. The Rust engine
 analyzes code, and Jev answers typed questions. Pure packages turn the answers
 into terrain and geometry, and Electron renders the result.
 
-Read [architecture](docs/architecture.md) before changing boundaries or data
-flow, and [design](docs/design-system.md) before changing visuals or interaction.
-[Development](docs/development.md) covers commands, fixtures and verification.
+Read [architecture](docs/concepts/architecture.md) before changing boundaries or data
+flow, and [design](docs/concepts/design-system.md) before changing visuals or interaction.
+[Development](docs/guides/development.md) covers commands, fixtures and verification.
 
 ## Contracts
 

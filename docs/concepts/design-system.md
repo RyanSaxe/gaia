@@ -5,7 +5,11 @@ reference is the painterly light, readable silhouettes and natural forms of
 Breath of the Wild. Code health shows throughout that landscape, and details
 about the code appear on paper the person chooses to open.
 
-![Blueprints establish form. Vitality and time animate shared rendering. The world and the paper show the same facts.](images/design-system.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../images/design-system-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="../images/design-system-light.svg">
+  <img alt="Blueprints establish form. Vitality and time animate shared rendering. The world and the paper show the same facts." src="../images/design-system-light.svg">
+</picture>
 
 ## Shared visual rules
 
@@ -43,10 +47,10 @@ so distant land meets the horizon without a visible seam.
 
 | Source | Owns |
 | --- | --- |
-| [`primitives/src/palettes.ts`](../packages/primitives/src/palettes.ts) | Palette families and swatches |
-| [`realize/src/day.ts`](../packages/realize/src/day.ts) | Time and lighting interpolation |
-| [`render/src/light.ts`](../packages/render/src/light.ts) | Shared lighting, atmosphere and lantern shading |
-| [`realize/src/sky.ts`](../packages/realize/src/sky.ts) | Sky reference model |
+| [`primitives/src/palettes.ts`](../../packages/primitives/src/palettes.ts) | Palette families and swatches |
+| [`realize/src/day.ts`](../../packages/realize/src/day.ts) | Time and lighting interpolation |
+| [`render/src/light.ts`](../../packages/render/src/light.ts) | Shared lighting, atmosphere and lantern shading |
+| [`realize/src/sky.ts`](../../packages/realize/src/sky.ts) | Sky reference model |
 
 ## Form and composition
 
@@ -99,7 +103,7 @@ and six columns stay wider apart than any eight. The seed also chooses the
 side a landmark's weather comes from. On that side its columns topple first,
 its tower breaks lowest, its stones lean away and its mill's cap tilts. Each
 primitive's ranges are in its shape table, such as `ROTUNDA_SHAPE` in
-[`rotunda.ts`](../packages/primitives/src/geometry/landmark/rotunda.ts).
+[`rotunda.ts`](../../packages/primitives/src/geometry/landmark/rotunda.ts).
 
 Ruin follows structural support. Coverings fail with or before their frames,
 and upper masonry cannot outlast the blocks supporting it. Detached pieces
@@ -108,10 +112,10 @@ than across holes. Decline should stay legible from a distance.
 
 | Source | Owns |
 | --- | --- |
-| [`terrain/looks.ts`](../app/renderer/terrain/looks.ts) | Available forms, importance ranges and water choices |
-| [`packages/kinds/src`](../packages/kinds/src) | Component roles and stages of composition |
-| [`packages/primitives/src`](../packages/primitives/src) | Geometry, closed parameters and palette selection |
-| [`terrain/place.ts`](../app/renderer/terrain/place.ts) | Placement in the world |
+| [`terrain/looks.ts`](../../app/renderer/terrain/looks.ts) | Available forms, importance ranges and water choices |
+| [`packages/kinds/src`](../../packages/kinds/src) | Component roles and stages of composition |
+| [`packages/primitives/src`](../../packages/primitives/src) | Geometry, closed parameters and palette selection |
+| [`terrain/place.ts`](../../app/renderer/terrain/place.ts) | Placement in the world |
 
 ## Wind, gravity and vitality
 
@@ -132,12 +136,12 @@ at an abrupt seam.
 
 | Source | Owns |
 | --- | --- |
-| [`schema/src/ports.ts`](../packages/schema/src/ports.ts) | Geometry and vitality channels |
-| [`realize/src/sway.ts`](../packages/realize/src/sway.ts) | CPU motion reference and joint behavior |
-| [`realize/src/wind-field.ts`](../packages/realize/src/wind-field.ts) | Wind field and gusts |
-| [`render/src/plant.ts`](../packages/render/src/plant.ts) | Shared component shading and decline |
-| [`terrain/src/vitality.ts`](../packages/terrain/src/vitality.ts) | Ground health and decline |
-| [`terrain/vitality.ts`](../app/renderer/terrain/vitality.ts) | Shared ground, grass and water shader rules |
+| [`schema/src/ports.ts`](../../packages/schema/src/ports.ts) | Geometry and vitality channels |
+| [`realize/src/sway.ts`](../../packages/realize/src/sway.ts) | CPU motion reference and joint behavior |
+| [`realize/src/wind-field.ts`](../../packages/realize/src/wind-field.ts) | Wind field and gusts |
+| [`render/src/plant.ts`](../../packages/render/src/plant.ts) | Shared component shading and decline |
+| [`terrain/src/vitality.ts`](../../packages/terrain/src/vitality.ts) | Ground health and decline |
+| [`terrain/vitality.ts`](../../app/renderer/terrain/vitality.ts) | Shared ground, grass and water shader rules |
 
 ## Terrain, walking and travel
 
@@ -155,7 +159,7 @@ Walking follows the ground, intact bridge decks and the walkable steps and
 floors of landmarks and buildings, such as a rotunda's or the steps up to a
 door. Every solid part of a building or landmark stops or deflects a walk
 wherever it passes through a person's height above the ground or step under
-it ([`piecesShapes`](../packages/terrain/src/solids.ts)), as trunks and rocks
+it ([`piecesShapes`](../../packages/terrain/src/solids.ts)), as trunks and rocks
 do. Every door can be reached: no eave comes down in front of one. A porch is
 always gabled, a one-storey gabled or half-hipped house turns a gable end to
 the front for its door, and a hipped roof lifts its eave into a small gable
@@ -164,7 +168,7 @@ person to ford beside it. Grass and understory clear the footprints of
 structures, landmarks, rocks and paths. Under every bush, on the land or in
 the wild, grass is cleared from about half the bush's outline at the ground
 (`SHRUB_CLEARS` in
-[`understory.ts`](../app/renderer/terrain/understory.ts)), as grass grows
+[`understory.ts`](../../app/renderer/terrain/understory.ts)), as grass grows
 thin under a real shrub's canopy. The grass round the bush's edge stays tall.
 Mushrooms stand at their natural size, so the grass round a drift of them is
 only short turf with a ragged edge, which keeps them visible.
@@ -180,9 +184,9 @@ during a trip, travel can speed up behind the paper. The book closes after the
 destination is ready. A place without a route is reached by a covered jump.
 
 Movement constants live in `GAIT`, `STEER` and `TRAVEL` in
-[`gait.ts`](../packages/terrain/src/gait.ts),
-[`steer.ts`](../packages/terrain/src/steer.ts) and
-[`travel.ts`](../packages/terrain/src/travel.ts). Keep their values in code so
+[`gait.ts`](../../packages/terrain/src/gait.ts),
+[`steer.ts`](../../packages/terrain/src/steer.ts) and
+[`travel.ts`](../../packages/terrain/src/travel.ts). Keep their values in code so
 changes do not leave a second specification behind.
 
 ## Sound
@@ -210,10 +214,10 @@ itself.
 
 | Source | Owns |
 | --- | --- |
-| [`sound/hearing.ts`](../app/renderer/sound/hearing.ts) | What is heard where, as levels, sides and tone |
-| [`sound/music.ts`](../app/renderer/sound/music.ts) | How the score plays |
-| [`sound/levels.ts`](../app/renderer/sound/levels.ts) | The slip's music and world levels |
-| [`sound/assets/CREDITS.md`](../app/renderer/sound/assets/CREDITS.md) | Each recording's source and licence |
+| [`sound/hearing.ts`](../../app/renderer/sound/hearing.ts) | What is heard where, as levels, sides and tone |
+| [`sound/music.ts`](../../app/renderer/sound/music.ts) | How the score plays |
+| [`sound/levels.ts`](../../app/renderer/sound/levels.ts) | The slip's music and world levels |
+| [`sound/assets/CREDITS.md`](../../app/renderer/sound/assets/CREDITS.md) | Each recording's source and licence |
 
 ## Journal and interaction
 
@@ -240,10 +244,10 @@ subject.
 
 | Source | Owns |
 | --- | --- |
-| [`immersive/view.ts`](../app/renderer/immersive/view.ts) | World selection, journal integration and help |
-| [`journal/book.ts`](../app/renderer/journal/book.ts) | Opening, page turns, tabs and ribbon |
-| [`journal/pages.ts`](../app/renderer/journal/pages.ts) | Page structure and navigation |
-| [`journal/painter.ts`](../app/renderer/journal/painter.ts) | Brushwork from world captures |
+| [`immersive/view.ts`](../../app/renderer/immersive/view.ts) | World selection, journal integration and help |
+| [`journal/book.ts`](../../app/renderer/journal/book.ts) | Opening, page turns, tabs and ribbon |
+| [`journal/pages.ts`](../../app/renderer/journal/pages.ts) | Page structure and navigation |
+| [`journal/painter.ts`](../../app/renderer/journal/painter.ts) | Brushwork from world captures |
 
 ## The field sheet
 
@@ -266,12 +270,12 @@ that layout and painter to show completed analysis and design work. It never
 paints invented progress, and never shows provisional judgments as final
 health.
 
-[`map-styles.ts`](../app/renderer/immersive/map-styles.ts) defines shared paper
-and map styles. [`marks.ts`](../app/renderer/immersive/marks.ts) draws composed
+[`map-styles.ts`](../../app/renderer/immersive/map-styles.ts) defines shared paper
+and map styles. [`marks.ts`](../../app/renderer/immersive/marks.ts) draws composed
 buildings and landmarks, and
-[`plant-marks.ts`](../app/renderer/immersive/plant-marks.ts) draws composed
-plants and stones. [`map-names.ts`](../app/renderer/immersive/map-names.ts)
-places names, and [`wait/map-wait.ts`](../app/renderer/wait/map-wait.ts) draws
+[`plant-marks.ts`](../../app/renderer/immersive/plant-marks.ts) draws composed
+plants and stones. [`map-names.ts`](../../app/renderer/immersive/map-names.ts)
+places names, and [`wait/map-wait.ts`](../../app/renderer/wait/map-wait.ts) draws
 progress.
 
 ## Start page and Gaia's mark
@@ -285,13 +289,13 @@ opens.
 Gaia's mark combines a G cut through a green page with the lowercase name, its
 "ai" in green. The journal uses the same title face without turning arbitrary
 letters in project names green.
-[`brand/paint.ts`](../app/renderer/brand/paint.ts) and
-[`brand/logo.ts`](../app/renderer/brand/logo.ts) build the mark.
+[`brand/paint.ts`](../../app/renderer/brand/paint.ts) and
+[`brand/logo.ts`](../../app/renderer/brand/logo.ts) build the mark.
 
 ## Detail at a distance
 
 A tree switches to its far form when its crown's span on screen shrinks to
-its swap size (`FAR.swapPx` in [`woods.ts`](../app/renderer/terrain/woods.ts)).
+its swap size (`FAR.swapPx` in [`woods.ts`](../../app/renderer/terrain/woods.ts)).
 The far form is baked from the same component and shaders as the full form. The
 transition keeps coverage and silhouette, then dissolves fine detail under the
 far form. While both draw, the far form's card lies just in front of its full
@@ -304,7 +308,7 @@ A far form keeps its tree's outline as it shrinks below its swap size. At the
 swap size, the card sharpens its edge to match the full form's. It sharpens
 less the barer its tree, because a bare tree is mostly twigs finer than a
 texel, and a sharp edge would cut them away (`CARD` in
-[`far.ts`](../packages/render/src/far.ts)). Below the swap size, each texel
+[`far.ts`](../../packages/render/src/far.ts)). Below the swap size, each texel
 covers more of the plant, and a twig, strand or needle finer than a texel
 covers only part of one. The card draws that partial coverage as it is,
 without sharpening, so its outer twigs thin with distance as the full form's
@@ -312,7 +316,7 @@ do rather than vanish.
 
 A far form declines with its tree. The bake renders the plant healthy and
 records how much of each texel it covers at several vitalities down to 0
-(`SLICES` in [`far.ts`](../packages/render/src/far.ts)). A copy then covers
+(`SLICES` in [`far.ts`](../../packages/render/src/far.ts)). A copy then covers
 only what its tree still has at the copy's vitality, down to vitality 0 for
 the poorest code. A piece that is gone by vitality 0 keeps its healthy color
 while it shows, rather than darkening. A declining tree's boughs sag about
@@ -330,5 +334,5 @@ far-form slot draws its full form, never a coarser card. A build that gains or
 loses a slot moves its swap size over many frames rather than changing a tree
 at once. Each slot holds a form's views at every mip level a card reads before
 the tree is too small to see, and its droop field (`farSlotBytes`). Use the
-[walking and swap probes](development.md#visual-verification) to check that a
+[walking and swap probes](../guides/development.md#visual-verification) to check that a
 performance change preserves the view.
