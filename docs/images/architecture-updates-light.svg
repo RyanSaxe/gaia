@@ -26,8 +26,8 @@
   <path class="edge" d="M520 226H590"/>
   <path class="green-edge" d="M740 218H790V132H840"/>
   <path class="blue-edge" d="M740 238H790V336H840"/>
-  <text class="note" x="756" y="191">same</text>
-  <text class="note" x="756" y="263">changed</text>
+  <text class="note" x="782" y="124" text-anchor="end">same</text>
+  <text class="note" x="782" y="360" text-anchor="end">changed</text>
 
   <rect class="node" x="45" y="181" width="185" height="90" rx="12"/>
   <text class="label" x="64" y="207">GIT COMMIT</text>
@@ -40,8 +40,8 @@
   <text class="sub" x="319" y="258">graph · judgments · layout</text>
 
   <path d="M665 150L740 226L665 302L590 226Z" fill="#fff" stroke="#cfd7ce" stroke-width="1.5"/>
-  <text class="name" x="624" y="222">Same</text>
-  <text class="sub" x="614" y="244">layout?</text>
+  <text class="name" x="665" y="222" text-anchor="middle">Same</text>
+  <text class="sub" x="665" y="244" text-anchor="middle">layout?</text>
 
   <rect class="node green" x="840" y="80" width="315" height="105" rx="12"/>
   <text class="label" x="862" y="106">LAYOUT UNCHANGED</text>

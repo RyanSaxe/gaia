@@ -13,7 +13,7 @@ import { inWilds } from "./wilds.ts";
 import { DRY, type Terrain } from "./world.ts";
 
 const DEG = Math.PI / 180;
-/** Travel constants. The design rationale is in docs/design-system.md#terrain-walking-and-travel. */
+/** Travel constants. The design rationale is in docs/concepts/design-system.md#terrain-walking-and-travel. */
 export const TRAVEL = {
   /** Speed in meters per second along a straight way, about five times walking pace. */
   pace: 20,

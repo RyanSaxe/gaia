@@ -33,13 +33,13 @@ environment.
 
 ## Cost and consent
 
-The [README](../README.md#get-started) gives rough costs for first openings and
+The [README](../../README.md#get-started) gives rough costs for first openings and
 updates. Gaia estimates request cost before sending, prints usage in the
 terminal and reuses saved answers when requests are unchanged. Composing the
 world's things depends on Jev's first answers, so the estimate prices it at
 about two requests for each thing in the world. Estimates are approximate. The
 connector's rate and token estimate are defined in
-[`engine/src/jev/client.rs`](../engine/src/jev/client.rs).
+[`engine/src/jev/client.rs`](../../engine/src/jev/client.rs).
 
 There is no default spend limit. To set one, close Gaia and set the
 `settings.jev-spend-limit` entry in `<userData>/projects/app/store.json`:
@@ -54,7 +54,7 @@ exceeds the limit, the waiting screen asks **Go ahead** or **Not now**.
 
 The engine's understanding requests include source code and neighboring
 signatures. World design requests use derived facts and descriptions. See
-[the two Jev paths](architecture.md#the-two-jev-paths) for their boundaries.
+[the two Jev paths](../concepts/architecture.md#the-two-jev-paths) for their boundaries.
 
 ## Saved answers
 

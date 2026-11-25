@@ -195,7 +195,7 @@ const ASKS_PROVING = typeof location !== "undefined" && new URLSearchParams(loca
 /**
  * The showcase the page requests, if any. The showcase is the made-up
  * codebase the film walks through, judged by Jev and bundled as a snapshot
- * with its source (`docs/showcase.md`), so it opens the same with or without
+ * with its source (`docs/reference/showcase.md`), so it opens the same with or without
  * an engine. `?world=showcase` has its old `v1/` as it is, and
  * `?world=showcase-fixed` is the same land with `v1/` fixed.
  */

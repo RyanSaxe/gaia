@@ -1,4 +1,4 @@
-// Paints Gaia's mark (docs/design-system.md, "Gaia's mark"): a G cut through a dark green page onto a rendered view of
+// Paints Gaia's mark (docs/concepts/design-system.md, "Gaia's mark"): a G cut through a dark green page onto a rendered view of
 // Gaia's village at 17:30, beside the lowercase name with "ai" in the meadow's green. The view is a stored image, so
 // the mark does not change when the world's layout changes. The letters are Fraunces (OFL.txt), a heavy soft cut for
 // the G and a lighter one for the name, and `pnpm brand` (tools/brand.ts) paints the app's images at their displayed

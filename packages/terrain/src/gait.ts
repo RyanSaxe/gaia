@@ -13,7 +13,7 @@ import { type Intent, type Stance, WALK_TO, moveBy, stanceAt, wadeSpeed } from "
 import { groundHeightAt } from "./wilds.ts";
 import type { Terrain } from "./world.ts";
 
-/** Gait constants. The design rationale is in docs/design-system.md#terrain-walking-and-travel. */
+/** Gait constants. The design rationale is in docs/concepts/design-system.md#terrain-walking-and-travel. */
 export const GAIT = {
   /** Seconds to reach 95% of a new pace when speeding up (`start`) and slowing down (`stop`). Fast as in games, but never a one-frame jump. */
   start: 0.15,

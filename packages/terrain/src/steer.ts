@@ -7,7 +7,7 @@
 export type WalkKey = "ahead" | "left" | "right" | "back" | "shift";
 
 const DEG = Math.PI / 180;
-/** Steering constants. The design rationale is in docs/design-system.md#terrain-walking-and-travel. */
+/** Steering constants. The design rationale is in docs/concepts/design-system.md#terrain-walking-and-travel. */
 export const STEER = {
   /** Turn rate in radians per second for both nudges and held keys, with no easing. */
   rate: 60 * DEG,

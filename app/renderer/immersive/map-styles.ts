@@ -1,5 +1,5 @@
 // The field sheet's style for the field map, minimap, journal maps and loading
-// screen (docs/design-system.md, "The field sheet"). On the map, color shows
+// screen (docs/concepts/design-system.md, "The field sheet"). On the map, color shows
 // vitality and nothing else: every area starts from one green (`landWash`),
 // and each file's vitality spreads over the ground around it (`healthField`)
 // in the colors of `healthColor`. Callers pass shown vitality (`shownVitality`

@@ -11,7 +11,7 @@ https://github.com/user-attachments/assets/55116856-4b34-4a41-861d-c1e5e2b5b237
 ## Get started
 
 You need Node 26, pnpm 10, Git, curl, stable Rust from rustup, and an
-[OpenRouter key](docs/connect-jev.md) for Jev, which judges your code.
+[OpenRouter key](docs/getting-started/connect-jev.md) for Jev, which judges your code.
 
 Install dependencies, set `OPENROUTER_API_KEY` to your key and `GAIA_JEV` to
 `live` in your environment, then start Gaia:
@@ -47,11 +47,15 @@ Choose a spot on the map, then tap its mark to travel there.
 
 ## How it works
 
-![Gaia's data flow from repository through code analysis and world design to the renderer](docs/images/architecture-data-flow.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture-data-flow-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/architecture-data-flow-light.svg">
+  <img alt="Gaia's data flow from repository through code analysis and world design to the renderer" src="docs/images/architecture-data-flow-light.svg">
+</picture>
 
 Jev handles two separate tasks: analyzing code for scores and links, and
 answering typed design questions about the world's parts and appearance.
-The [architecture guide](docs/architecture.md) explains the data and package
+The [architecture guide](docs/concepts/architecture.md) explains the data and package
 boundaries.
 
 After a commit, Gaia updates vitality for things that still stand. If the
@@ -61,8 +65,9 @@ layout changes, the current world keeps its shape until you reopen it.
 
 ## Documentation
 
-- [Connecting Jev](docs/connect-jev.md) covers the key, the cost and spend limits.
-- [Architecture](docs/architecture.md) shows how the engine, the world service and the renderer fit together.
-- [World design](docs/design-system.md) describes shared visual and interaction rules.
-- [Development](docs/development.md) covers commands, test worlds and verification.
-- [The showcase](docs/showcase.md) and [the proving ground](docs/proving-ground.md) are the two made-up codebases Gaia is filmed and tested in.
+- [Documentation index](docs/README.md): map of all getting-started, concept, guide, and reference pages.
+- [Connecting Jev](docs/getting-started/connect-jev.md): OpenRouter key setup, cost estimates, spend limits, and the local stand-in.
+- [Architecture](docs/concepts/architecture.md): how the Rust engine, world service, pure packages, and Electron renderer fit together.
+- [World design](docs/concepts/design-system.md): shared visual, sound, journal, map, and distance-detail rules.
+- [Development](docs/guides/development.md): commands, the standalone lab, visual probes, and adding primitives.
+- [The showcase](docs/reference/showcase.md) and [the proving ground](docs/reference/proving-ground.md): the two synthetic codebases Gaia is filmed and tested in.

@@ -1,4 +1,4 @@
-// Inks the wild past the land on bare paper (docs/design-system.md, "The field
+// Inks the wild past the land on bare paper (docs/concepts/design-system.md, "The field
 // sheet"). Color on the sheet shows vitality and the wild represents no code,
 // so the wild gets only ink, drawn from the same `@gaia/terrain` functions the
 // world grows it from, so the map and the world agree.

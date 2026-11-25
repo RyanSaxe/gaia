@@ -1,4 +1,4 @@
-// Paints the field sheet's watercolor washes (docs/design-system.md, "The
+// Paints the field sheet's watercolor washes (docs/concepts/design-system.md, "The
 // field sheet"). The field map paints the whole land at once (`field-map.ts`),
 // and the loading screen paints each part as its vitality arrives (`wait/`).
 // Both paint with `layWash` on a sheet `PAPER` pixels square, then blend it

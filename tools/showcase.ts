@@ -1,5 +1,5 @@
 // Writes or judges the synthetic showcase and its repaired variant. Source,
-// graphs and saved answers are bundled for offline use, as docs/showcase.md
+// graphs and saved answers are bundled for offline use, as docs/reference/showcase.md
 // describes.
 // Keep variants in separate stores so held judgments do not cross between them.
 // Usage: pnpm showcase --code DIR [--v1 fixed]

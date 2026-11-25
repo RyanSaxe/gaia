@@ -1,7 +1,7 @@
 // `pnpm shots` photographs every kind of thing in the proving ground where it
 // is placed, so a primitive is judged in the light and land of its world. The
 // proving ground contains every feature a world can show
-// (`docs/proving-ground.md`). Each stop of its tour, with one stop for each
+// (`docs/reference/proving-ground.md`). Each stop of its tour, with one stop for each
 // kind of building and landmark and one thing of each tree, bush, stone and
 // flower build, is shot at vitality 1, 0.65 and 0.3 at 15:30, and at 1 at
 // 22:00. The first stop is shot again under each sky in the sweep
