@@ -105,7 +105,7 @@ export function labBundle(result: Pick<BuildResult, "outputFiles">): LabBundle {
 export function labPage(bundle: LabBundle): string {
   const page = readFileSync(resolve(renderer, "index.html"), "utf8");
   // The page's CSP allows only 'self', which an inline bundle is not.
-  const csp = /<meta http-equiv="Content-Security-Policy"[^>]*>\n/;
+  const csp = /[ \t]*<meta\s+http-equiv="Content-Security-Policy"[^>]*>\n/;
   const entry = '<script type="module" src="./main.ts"></script>';
   if (!csp.test(page) || !page.includes(entry)) {
     throw new Error(

@@ -314,7 +314,11 @@ fn build_nodes(input: &NodeInputs<'_>) -> (Vec<Node>, Vec<Vec<String>>) {
             hash: f.hash.clone(),
             binary: f.text.is_none(),
             unparsed: p.as_ref().map_or(0, |p| p.unparsed),
-            conventions: spec.map(|s| s.conventions_of(&f.path)).unwrap_or_default(),
+            conventions: if let Some(s) = spec {
+                s.conventions_of(&f.path)
+            } else {
+                Vec::new()
+            },
         }));
         let Some(p) = p else { continue };
 
@@ -434,11 +438,11 @@ fn apply_lineages(nodes: &mut [Node], keeper: &dyn lineage::Keeper, input: &Line
             .map(|(k, f)| lineage::File {
                 path: &f.path,
                 lines: input.file_lines[k],
-                fingerprint: f
-                    .text
-                    .as_deref()
-                    .map(parse::fingerprint)
-                    .unwrap_or_default(),
+                fingerprint: if let Some(text) = f.text.as_deref() {
+                    parse::fingerprint(text)
+                } else {
+                    Vec::new()
+                },
             })
             .collect(),
         defs: input

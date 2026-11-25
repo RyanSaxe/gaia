@@ -248,12 +248,7 @@ impl<'a> Paths<'a> {
         };
         let tail = segments.join("/");
         let mut out = Vec::new();
-        for p in self
-            .by_last
-            .get(*last)
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-        {
+        for p in self.by_last.get(*last).into_iter().flatten() {
             let (bare, id) = match p.strip_suffix('/') {
                 Some(d) => (d.to_string(), format!("dir:{d}")),
                 None => (stem(p).to_string(), format!("file:{p}")),
@@ -447,7 +442,7 @@ impl Rules<'_> {
         let here = dir_of(unit.path);
 
         // Relative forms resolve from the place their prefix names.
-        for r in spec.map(|s| s.relative.as_slice()).unwrap_or_default() {
+        for r in spec.into_iter().flat_map(|s| &s.relative) {
             if let Some(o) = self.resolve_relative(k, &s, here, &ext, in_module, r) {
                 return o;
             }
@@ -826,13 +821,7 @@ impl<'a> CallResolver<'a> {
     fn new(units: &'a [Unit<'a>], imports: ImportIndex<'a>) -> Self {
         let mut by_name: HashMap<&'a str, Vec<(usize, usize)>> = HashMap::new();
         for (k, u) in units.iter().enumerate() {
-            for (i, d) in u
-                .parse
-                .map(|p| p.defs.as_slice())
-                .unwrap_or_default()
-                .iter()
-                .enumerate()
-            {
+            for (i, d) in u.parse.into_iter().flat_map(|p| &p.defs).enumerate() {
                 by_name.entry(d.name.as_str()).or_default().push((k, i));
             }
         }
@@ -919,8 +908,10 @@ impl<'a> CallResolver<'a> {
             .defined
             .into_iter()
             .flat_map(|(f, n)| {
-                let defs = self.by_name.get(n).map(Vec::as_slice).unwrap_or_default();
-                defs.iter()
+                self.by_name
+                    .get(n)
+                    .into_iter()
+                    .flatten()
                     .copied()
                     .filter(move |&(kk, i)| kk == f && is_own_export(self.units, kk, i))
             })
@@ -972,16 +963,14 @@ impl<'a> CallResolver<'a> {
         within: Option<&Vec<usize>>,
         reexported: &[(usize, usize)],
     ) -> Vec<(usize, usize)> {
-        let mut all: Vec<(usize, usize)> = self
-            .by_name
-            .get(name)
-            .map(|v| {
-                v.iter()
-                    .copied()
-                    .filter(|(kk, _)| within.is_none_or(|w| w.contains(kk)))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let mut all: Vec<(usize, usize)> = if let Some(v) = self.by_name.get(name) {
+            v.iter()
+                .copied()
+                .filter(|(kk, _)| within.is_none_or(|w| w.contains(kk)))
+                .collect()
+        } else {
+            Vec::new()
+        };
         for d in reexported {
             if !all.contains(d) {
                 all.push(*d);

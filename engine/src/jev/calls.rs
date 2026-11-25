@@ -200,10 +200,12 @@ impl<'a> Ctx<'a> {
 
     /// A file's definitions as an outline: their signatures, in source order.
     pub fn outline(&self, file: &str) -> Vec<Value> {
-        self.defs_of
-            .get(file)
-            .map(|defs| defs.iter().map(|d| json!({ "name": d.name, "role": d.role, "lines": [d.span.start, d.span.end], "signature": d.signature })).collect())
-            .unwrap_or_default()
+        let Some(defs) = self.defs_of.get(file) else {
+            return Vec::new();
+        };
+        defs.iter()
+            .map(|d| json!({ "name": d.name, "role": d.role, "lines": [d.span.start, d.span.end], "signature": d.signature }))
+            .collect()
     }
 
     /// A file's text from the snapshot, by its path.
@@ -249,10 +251,11 @@ pub(super) fn vocab_version(vocab: &str, code: u32) -> String {
 /// file, so a change to one call's words keeps the other calls' answers.
 fn section_version(vocab: &str, section: &str, code: u32) -> String {
     let table: toml::Table = toml::from_str(vocab).unwrap_or_default();
-    let words = table
-        .get(section)
-        .map(ToString::to_string)
-        .unwrap_or_default();
+    let words = if let Some(v) = table.get(section) {
+        v.to_string()
+    } else {
+        String::new()
+    };
     version_of(&words, code)
 }
 
