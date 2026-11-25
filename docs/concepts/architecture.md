@@ -99,10 +99,10 @@ primitives and their typed settings. `world` plans and composes blueprints.
 `terrain` shapes the land, places things on it and moves the person across it.
 `realize` turns blueprints into parts, and `render` draws them.
 
-The world, terrain, kinds, primitives and realize packages are pure: no DOM,
-clock, filesystem, `Math.random` or Three.js. `eslint.config.js` enforces their
-import and purity rules. The app connects those packages to Electron, workers
-and the renderer.
+The world, terrain, kinds, primitives and realize packages stay pure: no DOM,
+clock, filesystem, `Math.random` or Three.js. Keeping those layers pure ensures
+world composition and geometry remain deterministic and independent of the
+runtime. The app connects them to Electron, workers and the renderer.
 
 ## Composing a component
 
