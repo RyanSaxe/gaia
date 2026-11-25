@@ -33,8 +33,13 @@ export const structure = kind({
       on: "footprint",
       ask: "its windows and door show how open and welcoming the code it represents feels: many for code that feels open to everyone, few for code that feels closed and private.",
     }),
-    ornaments: slot("Dressing", { on: "footprint", ask: "the small things around it show how cared for and lived in the code it represents feels." }),
-    palette: slot("Palette", { ask: "its colors show the mood of the code it represents and how it fits with its land." }),
+    ornaments: slot("Dressing", {
+      on: "footprint",
+      ask: "the small things around it show how cared for and lived in the code it represents feels.",
+    }),
+    palette: slot("Palette", {
+      ask: "its colors show the mood of the code it represents and how it fits with its land.",
+    }),
   },
   stages: [
     ["footprint", "body", "roof", "feature", "palette"],

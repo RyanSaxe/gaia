@@ -21,23 +21,52 @@ const BUILT_INS = {
 
 /** One GLSL function of WIND_FIELD_GLSL as a JavaScript function, with the chunk's constants in scope. */
 function glslFunction(name: string): (...args: unknown[]) => unknown {
-  const fn = new RegExp(`\\n\\w+ ${name}\\(([^)]*)\\) \\{\\n([\\s\\S]*?)\\n\\}`).exec(WIND_FIELD_GLSL);
-  const mean = /const vec2 WIND_MEAN = vec2\(([^,]+), ([^)]+)\);/.exec(WIND_FIELD_GLSL);
-  if (fn === null || mean === null) throw new Error(`no ${name} in WIND_FIELD_GLSL`);
-  const params = (fn[1] as string).split(",").map((p) => p.trim().split(/\s+/)[1] as string);
-  const body = (fn[2] as string).replace(/\b(?:float|vec2) (\w+) =/g, "const $1 =").replace(/\b(sin|cos|abs|floor|pow)\(/g, "Math.$1(");
-  const run = new Function("WIND_MEAN", ...Object.keys(BUILT_INS), ...params, body);
-  const constants = [BUILT_INS.vec2(Number(mean[1]), Number(mean[2])), ...Object.values(BUILT_INS)];
+  const fn = new RegExp(
+    `\\n\\w+ ${name}\\(([^)]*)\\) \\{\\n([\\s\\S]*?)\\n\\}`,
+  ).exec(WIND_FIELD_GLSL);
+  const mean = /const vec2 WIND_MEAN = vec2\(([^,]+), ([^)]+)\);/.exec(
+    WIND_FIELD_GLSL,
+  );
+  if (fn === null || mean === null) {
+    throw new Error(`no ${name} in WIND_FIELD_GLSL`);
+  }
+  const params = (fn[1] as string)
+    .split(",")
+    .map((p) => p.trim().split(/\s+/)[1] as string);
+  const body = (fn[2] as string)
+    .replace(/\b(?:float|vec2) (\w+) =/g, "const $1 =")
+    .replace(/\b(sin|cos|abs|floor|pow)\(/g, "Math.$1(");
+  // oxlint-disable-next-line typescript/no-implied-eval -- test compiles WIND_FIELD_GLSL float math to JS to verify CPU/GPU parity without a GPU
+  const run = new Function(
+    "WIND_MEAN",
+    ...Object.keys(BUILT_INS),
+    ...params,
+    body,
+  );
+  const constants = [
+    BUILT_INS.vec2(Number(mean[1]), Number(mean[2])),
+    ...Object.values(BUILT_INS),
+  ];
   return (...args) => run(...constants, ...args);
 }
 
 describe("WIND_FIELD_GLSL", () => {
   const gust = glslFunction("gustAt");
   const moments = Array.from({ length: 400 }, (_, i) => i * 7.31);
-  const spots = [[0, 0], [37, -12], [-260, 410], [512, 180], [-90, -333]] as const;
+  const spots = [
+    [0, 0],
+    [37, -12],
+    [-260, 410],
+    [512, 180],
+    [-90, -333],
+  ] as const;
 
   it("blows the same gusts as gustAt, everywhere and at every moment, turning with windDirAt by the scene light's clock", () => {
-    for (const [x, z] of spots) for (const t of moments) expect(gust({ x, y: z }, t)).toBeCloseTo(gustAt(x, z, t), 3);
+    for (const [x, z] of spots) {
+      for (const t of moments) {
+        expect(gust({ x, y: z }, t)).toBeCloseTo(gustAt(x, z, t), 3);
+      }
+    }
     const light = createSceneLight();
     for (const t of moments) {
       light.uTime.value = t;

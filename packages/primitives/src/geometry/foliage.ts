@@ -3,8 +3,26 @@
 // with its bough and drops in place as vitality falls. Limbs and twigs never
 // go, so a tree at low vitality is bare twigs, and only pods glow.
 
-import { type Anchor, type BuildContext, type Built, CUT, type Limb, type Part, type Rand, type Resolved, type Skeleton, type Vec3 } from "@gaia/schema";
-import type { barkParams, blossomsParams, fruitParams, leafClumpsParams, leafStrandsParams, needlesParams } from "../flora.ts";
+import {
+  type Anchor,
+  type BuildContext,
+  type Built,
+  CUT,
+  type Limb,
+  type Part,
+  type Rand,
+  type Resolved,
+  type Skeleton,
+  type Vec3,
+} from "@gaia/schema";
+import type {
+  barkParams,
+  blossomsParams,
+  fruitParams,
+  leafClumpsParams,
+  leafStrandsParams,
+  needlesParams,
+} from "../flora.ts";
 import {
   type CardPoint,
   type Channels,
@@ -39,14 +57,21 @@ export interface Crown {
 
 export function crownOf(points: readonly Vec3[]): Crown {
   if (points.length === 0) return { center: [0, 1, 0], radius: [1, 1, 1] };
-  let cx = 0, cy = 0, cz = 0;
+  let cx = 0,
+    cy = 0,
+    cz = 0;
   for (const p of points) {
     cx += p[0];
     cy += p[1];
     cz += p[2];
   }
-  const center: V3 = [cx / points.length, cy / points.length, cz / points.length];
-  let rh = 0.5, rv = 0.5;
+  const center: V3 = [
+    cx / points.length,
+    cy / points.length,
+    cz / points.length,
+  ];
+  let rh = 0.5,
+    rv = 0.5;
   for (const p of points) {
     rh = Math.max(rh, Math.hypot(p[0] - center[0], p[2] - center[2]));
     rv = Math.max(rv, Math.abs(p[1] - center[1]));
@@ -56,12 +81,17 @@ export function crownOf(points: readonly Vec3[]): Crown {
 
 /** Where a point sits in the crown: direction outward and depth, 0 at the center, 1 at the rim. */
 function crownPlace(c: Crown, p: Vec3): { out: V3; depth: number } {
-  const q: V3 = [(p[0] - c.center[0]) / c.radius[0], (p[1] - c.center[1]) / c.radius[1], (p[2] - c.center[2]) / c.radius[2]];
+  const q: V3 = [
+    (p[0] - c.center[0]) / c.radius[0],
+    (p[1] - c.center[1]) / c.radius[1],
+    (p[2] - c.center[2]) / c.radius[2],
+  ];
   return { out: normalize(q), depth: length(q) };
 }
 
 /** Blends a surface normal toward the crown's outward direction, so a canopy shades as one soft volume. */
-const blendNormal = (n: Vec3, out: Vec3, k: number): V3 => normalize(lerp(n, out, k));
+const blendNormal = (n: Vec3, out: Vec3, k: number): V3 =>
+  normalize(lerp(n, out, k));
 
 /** Mean distance from each point to its nearest neighbor. */
 function meanNearest(points: readonly Vec3[]): number {
@@ -78,10 +108,12 @@ function meanNearest(points: readonly Vec3[]): number {
   return sum / points.length;
 }
 
-const maxDepthOf = (s: Skeleton): number => s.limbs.reduce((m, l) => Math.max(m, l.depth), 0);
+const maxDepthOf = (s: Skeleton): number =>
+  s.limbs.reduce((m, l) => Math.max(m, l.depth), 0);
 
 /** Whether a frame has one trunk, as a tree does, rather than a shrub's many stems from the soil. */
-export const oneTrunk = (skel: Skeleton): boolean => skel.limbs.filter((l) => l.parent === -1).length === 1;
+export const oneTrunk = (skel: Skeleton): boolean =>
+  skel.limbs.filter((l) => l.parent === -1).length === 1;
 
 /** The minimum tree frame height per unit of the file's scale. At scale 1 a squat broadleaf is 5.7 m tall and a broad fir 7.7 m. */
 const TREE_HEIGHT_PER_SCALE = 5;
@@ -117,17 +149,30 @@ export class Boughs {
     limbs.forEach((l, i) => {
       const up = limbs[l.parent];
       // A trunk rises from the copy's base. A stem rooted beside it is a bough.
-      this.#trunk[i] = l.depth === 0 && (up === undefined ? Math.hypot(l.start[0], l.start[2]) < 0.01 : (this.#trunk[l.parent] ?? false));
+      this.#trunk[i] =
+        l.depth === 0 &&
+        (up === undefined
+          ? Math.hypot(l.start[0], l.start[2]) < 0.01
+          : (this.#trunk[l.parent] ?? false));
     });
     this.#roots = limbs.map((l, i) => {
       let at = i;
-      for (let up = limbs[at]?.parent ?? -1; up >= 0 && !(this.#trunk[up] ?? false); up = limbs[at]?.parent ?? -1) at = up;
+      for (
+        let up = limbs[at]?.parent ?? -1;
+        up >= 0 && !(this.#trunk[up] ?? false);
+        up = limbs[at]?.parent ?? -1
+      ) {
+        at = up;
+      }
       return at;
     });
     limbs.forEach((l, i) => {
       const root = this.#roots[i] ?? i;
       const rs = limbs[root]?.start ?? l.start;
-      this.#reach.set(root, Math.max(this.#reach.get(root) ?? 0.5, length(sub(l.end, rs))));
+      this.#reach.set(
+        root,
+        Math.max(this.#reach.get(root) ?? 0.5, length(sub(l.end, rs))),
+      );
     });
   }
   /** The joint limb `i`'s bough leaves the trunk at, and its droop at `q`. The trunk stands on the copy's base. */
@@ -135,7 +180,11 @@ export class Boughs {
     if (this.#trunk[i] ?? true) return { bough: [0, 0, 0], droop: 0 };
     const root = this.#roots[i] ?? i;
     const bough = this.skel.limbs[root]?.start ?? [0, 0, 0];
-    return { bough, droop: 0.2 * clamp(length(sub(q, bough)) / (this.#reach.get(root) ?? 1), 0, 1) };
+    return {
+      bough,
+      droop:
+        0.2 * clamp(length(sub(q, bough)) / (this.#reach.get(root) ?? 1), 0, 1),
+    };
   }
   /** The limb nearest `q`, by distance to its axis, of those that stand above the soil. */
   limbNear(q: Vec3): number {
@@ -144,7 +193,11 @@ export class Boughs {
     this.skel.limbs.forEach((l, i) => {
       if (!aboveSoil(l)) return;
       const ab = sub(l.end, l.start);
-      const t = clamp(dot(sub(q, l.start), ab) / Math.max(dot(ab, ab), 1e-9), 0, 1);
+      const t = clamp(
+        dot(sub(q, l.start), ab) / Math.max(dot(ab, ab), 1e-9),
+        0,
+        1,
+      );
       const d = length(sub(q, addScaled(l.start, ab, t)));
       if (d < bestD) {
         bestD = d;
@@ -178,21 +231,28 @@ const BUSH_HUNG = 34;
  * hang (34 fruit or pods, or 45 clusters of up to four berries), and
  * `hungFrom` offers them no more twig tips than the rest of the bush can carry.
  */
-const TREE_HUNG = Math.max(FRUIT_TREE_CAP, BLOSSOM_CAP.pods, BLOSSOM_CAP.berries) * HUNG_TRIANGLES;
+const TREE_HUNG =
+  Math.max(FRUIT_TREE_CAP, BLOSSOM_CAP.pods, BLOSSOM_CAP.berries) *
+  HUNG_TRIANGLES;
 const HUNG = {
   tree: { most: TREE_HUNG, least: TREE_HUNG },
-  bush: { most: Math.max(BUSH_HUNG, BLOSSOM_CAP.berries) * HUNG_TRIANGLES, least: 1_500 },
+  bush: {
+    most: Math.max(BUSH_HUNG, BLOSSOM_CAP.berries) * HUNG_TRIANGLES,
+    least: 1_500,
+  },
 } as const;
 
 /** The lowest a leaf may reach above the soil, meters. */
 export const SOIL = 0.005;
 
 /** Whether any part of a limb is above the soil. A limb wholly in it, where a cane roots, carries no leaves. */
-export const aboveSoil = (l: Limb): boolean => Math.max(l.start[1], l.end[1]) > SOIL;
+export const aboveSoil = (l: Limb): boolean =>
+  Math.max(l.start[1], l.end[1]) > SOIL;
 
 /** Whether a frame or crown whose highest point is `top` is a bush's. */
 const isBushHeight = (top: number): boolean => top <= BUSH_TOP;
-const frameTop = (skel: Skeleton): number => skel.limbs.reduce((m, l) => Math.max(m, l.end[1], l.start[1]), 0);
+const frameTop = (skel: Skeleton): number =>
+  skel.limbs.reduce((m, l) => Math.max(m, l.end[1], l.start[1]), 0);
 
 /**
  * The triangles a crown may take on its frame: the plant's budget less the
@@ -204,7 +264,13 @@ const frameTop = (skel: Skeleton): number => skel.limbs.reduce((m, l) => Math.ma
 export function crownRoom(skel: Skeleton, most: number): number {
   const bush = isBushHeight(frameTop(skel));
   const plant = bush ? PLANT_TRIANGLES.bush : PLANT_TRIANGLES.tree;
-  return Math.max(0, Math.min(bush ? BUSH_CROWN_TRIANGLES : most, plant - (bush ? HUNG.bush : HUNG.tree).least - barkTriangles(skel)));
+  return Math.max(
+    0,
+    Math.min(
+      bush ? BUSH_CROWN_TRIANGLES : most,
+      plant - (bush ? HUNG.bush : HUNG.tree).least - barkTriangles(skel),
+    ),
+  );
 }
 
 /**
@@ -213,11 +279,20 @@ export function crownRoom(skel: Skeleton, most: number): number {
  * fir's many whorls under dense needles, a bramble's long canes), as many as
  * the remaining triangles can carry, spread over the crown.
  */
-export function hungFrom(skel: Skeleton, parts: readonly Part[], anchors: Anchor[]): Anchor[] {
+export function hungFrom(
+  skel: Skeleton,
+  parts: readonly Part[],
+  anchors: Anchor[],
+): Anchor[] {
   const bush = isBushHeight(frameTop(skel));
-  const left = (bush ? PLANT_TRIANGLES.bush : PLANT_TRIANGLES.tree) - barkTriangles(skel) - parts.reduce((n, p) => n + p.indices.length / 3, 0);
+  const left =
+    (bush ? PLANT_TRIANGLES.bush : PLANT_TRIANGLES.tree) -
+    barkTriangles(skel) -
+    parts.reduce((n, p) => n + p.indices.length / 3, 0);
   if (left >= (bush ? HUNG.bush : HUNG.tree).most) return anchors;
-  return spread(anchors, Math.max(0, Math.floor(left / HUNG_TRIANGLES))).map((i) => anchors[i] as Anchor);
+  return spread(anchors, Math.max(0, Math.floor(left / HUNG_TRIANGLES))).map(
+    (i) => anchors[i] as Anchor,
+  );
 }
 
 /** Indices of `n` of `points`, in order, spread evenly by taking each time the point farthest from those already taken. */
@@ -225,14 +300,22 @@ function spread(points: readonly Anchor[], n: number): number[] {
   if (points.length <= n) return points.map((_, i) => i);
   if (n <= 0) return [];
   const taken = [0];
-  const gap = points.map((t) => length(sub(t.position, (points[0] as Anchor).position)));
+  const gap = points.map((t) =>
+    length(sub(t.position, (points[0] as Anchor).position)),
+  );
   while (taken.length < n) {
     let far = 0;
     gap.forEach((g, i) => {
       if (g > (gap[far] as number)) far = i;
     });
     taken.push(far);
-    points.forEach((t, i) => (gap[i] = Math.min(gap[i] as number, length(sub(t.position, (points[far] as Anchor).position)))));
+    points.forEach(
+      (t, i) =>
+        (gap[i] = Math.min(
+          gap[i] as number,
+          length(sub(t.position, (points[far] as Anchor).position)),
+        )),
+    );
   }
   return taken.sort((a, b) => a - b);
 }
@@ -244,7 +327,11 @@ function spread(points: readonly Anchor[], n: number): number[] {
  * frame. `fill` is how many more clumps a crown of `n` tip clumps grows along
  * its limbs.
  */
-export function crownTips(tips: readonly Anchor[], most: number, fill: (n: number) => number): number[] {
+export function crownTips(
+  tips: readonly Anchor[],
+  most: number,
+  fill: (n: number) => number,
+): number[] {
   let n = tips.length;
   while (n > 1 && n + fill(n) > most) n--;
   return spread(tips, n);
@@ -289,21 +376,30 @@ interface Lobe {
 export function lobesOf(r: Rand): Lobe[] {
   const count = 3 + Math.floor(r.next() * 3);
   const phase = r.next() * Math.PI * 2;
-  return Array.from({ length: count }, (_, k) => ({ angle: phase + ((k + r.range(-0.22, 0.22)) / count) * Math.PI * 2, strength: r.range(0.7, 1.15) }));
+  return Array.from({ length: count }, (_, k) => ({
+    angle: phase + ((k + r.range(-0.22, 0.22)) / count) * Math.PI * 2,
+    strength: r.range(0.7, 1.15),
+  }));
 }
 
 /** How much of a lobe stands at `theta`: 1 on its ridge, falling to 0 between lobes. */
 function lobeAt(lobes: readonly Lobe[], theta: number, width: number): number {
   let most = 0;
   for (const l of lobes) {
-    const d = Math.atan2(Math.sin(theta - l.angle), Math.cos(theta - l.angle)) / width;
+    const d =
+      Math.atan2(Math.sin(theta - l.angle), Math.cos(theta - l.angle)) / width;
     most = Math.max(most, l.strength * Math.exp(-d * d));
   }
   return most;
 }
 
 /** Builds a trunk's flare. `lift` is how far the lobes reach out at the ground, and `rise` is how high up the trunk the flare climbs, 1 for a tree. */
-export function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: number, rise = 1): Flare {
+export function flareOf(
+  trunkRadius: number,
+  lobes: readonly Lobe[],
+  lift: number,
+  rise = 1,
+): Flare {
   const reach = trunkRadius * 1.2 * rise;
   const fillet = trunkRadius * 0.16;
   // Broad lobes: each spans about a third of the gap to its neighbors on either side.
@@ -311,12 +407,18 @@ export function flareOf(trunkRadius: number, lobes: readonly Lobe[], lift: numbe
   const at = (y: number, theta: number): number => {
     const l = lobeAt(lobes, theta, width);
     const h = Math.max(0, y);
-    return 1 + 0.35 * Math.exp(-h / reach) + 0.25 * Math.exp(-h / fillet) + lift * l * Math.exp(-h / (reach * 1.6));
+    return (
+      1 +
+      0.35 * Math.exp(-h / reach) +
+      0.25 * Math.exp(-h / fillet) +
+      lift * l * Math.exp(-h / (reach * 1.6))
+    );
   };
   return { at, rings: flareRingsOf(trunkRadius) };
 }
 
-const flareRingsOf = (trunkRadius: number): number[] => [...FLARE_RINGS, 5.5].map((k) => k * trunkRadius);
+const flareRingsOf = (trunkRadius: number): number[] =>
+  [...FLARE_RINGS, 5.5].map((k) => k * trunkRadius);
 
 /**
  * The bark's ridges and shade at angle `theta` around a ring centered at
@@ -325,12 +427,30 @@ const flareRingsOf = (trunkRadius: number): number[] => [...FLARE_RINGS, 5.5].ma
  * turn by `twist` (meters along the stem) and the bark darkens toward the
  * soil below `height`. `bump` is in the ring's radii.
  */
-export function barkAt(roughness: number, seed: number, furrows: number, c: Vec3, theta: number, twist: number, height: number): { bump: number; shade: number } {
-  const wobble = fbm3(c[0] * 1.7 + Math.cos(theta), c[1] * 0.8, c[2] * 1.7 + Math.sin(theta), seed, 2);
-  const furrow = 0.5 + 0.5 * Math.sin(theta * furrows + wobble * 3 + twist * 0.6);
+export function barkAt(
+  roughness: number,
+  seed: number,
+  furrows: number,
+  c: Vec3,
+  theta: number,
+  twist: number,
+  height: number,
+): { bump: number; shade: number } {
+  const wobble = fbm3(
+    c[0] * 1.7 + Math.cos(theta),
+    c[1] * 0.8,
+    c[2] * 1.7 + Math.sin(theta),
+    seed,
+    2,
+  );
+  const furrow =
+    0.5 + 0.5 * Math.sin(theta * furrows + wobble * 3 + twist * 0.6);
   const bump = roughness * (0.14 * (furrow - 0.5) + 0.05 * wobble);
   const ground = clamp(height / 1.2, 0, 1);
-  const shade = (0.5 + 0.28 * (1 - roughness * 0.6) + 0.22 * furrow * (0.3 + roughness)) * (0.82 + 0.18 * ground) + 0.06 * wobble;
+  const shade =
+    (0.5 + 0.28 * (1 - roughness * 0.6) + 0.22 * furrow * (0.3 + roughness)) *
+      (0.82 + 0.18 * ground) +
+    0.06 * wobble;
   return { bump, shade: clamp(shade, 0, 1) };
 }
 
@@ -370,12 +490,27 @@ function tubesOf(skel: Skeleton): Tube[] {
   const whip = trunk && trunkRadius < WHIP;
   const tubes: Tube[] = [];
   for (const whole of chainsOf(skel)) {
-    const chain = whole.filter((i) => length(sub((skel.limbs[i] as Limb).end, (skel.limbs[i] as Limb).start)) >= 1e-4);
+    const chain = whole.filter(
+      (i) =>
+        length(
+          sub((skel.limbs[i] as Limb).end, (skel.limbs[i] as Limb).start),
+        ) >= 1e-4,
+    );
     if (chain.length === 0) continue;
     const head = chain[0] as number;
     const first = skel.limbs[head] as Limb;
     const flared = trunk && head === 0 && !whip;
-    const radial = whip ? (first.depth === 0 ? 6 : 4) : flared ? 24 : first.depth === 0 ? 10 : first.startRadius > trunkRadius * 0.3 ? 7 : 5;
+    const radial = whip
+      ? first.depth === 0
+        ? 6
+        : 4
+      : flared
+        ? 24
+        : first.depth === 0
+          ? 10
+          : first.startRadius > trunkRadius * 0.3
+            ? 7
+            : 5;
 
     // The rings along the chain, in one frame carried from ring to ring, so
     // the bark's ridges never jump where one segment meets the next.
@@ -390,34 +525,87 @@ function tubesOf(skel: Skeleton): Tube[] {
       const len = length(sub(limb.end, limb.start));
       const dir = normalize(sub(limb.end, limb.start));
       const after = chain[k + 1];
-      const nextDir = after === undefined ? dir : normalize(sub((skel.limbs[after] as Limb).end, (skel.limbs[after] as Limb).start));
+      const nextDir =
+        after === undefined
+          ? dir
+          : normalize(
+              sub(
+                (skel.limbs[after] as Limb).end,
+                (skel.limbs[after] as Limb).start,
+              ),
+            );
       // A bough sinks into its parent so its joint never shows a gap.
-      const sink = k > 0 || limb.depth === 0 ? 0 : Math.min(limb.startRadius * 1.2, len * 0.3);
+      const sink =
+        k > 0 || limb.depth === 0
+          ? 0
+          : Math.min(limb.startRadius * 1.2, len * 0.3);
       const span = len + sink;
       const start = addScaled(limb.start, dir, -sink);
       // A bough leaving the top of its parent starts as wide as the parent ends.
-      const parent = k === 0 && limb.depth >= 1 ? skel.limbs[limb.parent] : undefined;
-      const atTop = parent !== undefined && length(sub(limb.start, parent.end)) < parent.endRadius * 0.6;
-      const swell = atTop ? Math.max(0, parent.endRadius / limb.startRadius - 1) : 0;
+      const parent =
+        k === 0 && limb.depth >= 1 ? skel.limbs[limb.parent] : undefined;
+      const atTop =
+        parent !== undefined &&
+        length(sub(limb.start, parent.end)) < parent.endRadius * 0.6;
+      const swell = atTop
+        ? Math.max(0, parent.endRadius / limb.startRadius - 1)
+        : 0;
       const swellAt = sink;
-      const swellOf = (along: number): number => (swell <= 0 ? 0 : along <= swellAt ? 1 : Math.exp(-(((along - swellAt) / (limb.startRadius * FORK_REACH)) ** 2)));
-      const radiusAt = (along: number): number => (limb.startRadius + (limb.endRadius - limb.startRadius) * clamp((along - sink) / len, 0, 1)) * (1 + swell * swellOf(along));
-      const count = clamp(Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)), 1, whip ? 2 : limb.depth === 0 ? 6 : 3);
-      let alongs = Array.from({ length: count + 1 }, (_, n) => (n / count) * span);
+      const swellOf = (along: number): number =>
+        swell <= 0
+          ? 0
+          : along <= swellAt
+            ? 1
+            : Math.exp(
+                -(((along - swellAt) / (limb.startRadius * FORK_REACH)) ** 2),
+              );
+      const radiusAt = (along: number): number =>
+        (limb.startRadius +
+          (limb.endRadius - limb.startRadius) *
+            clamp((along - sink) / len, 0, 1)) *
+        (1 + swell * swellOf(along));
+      const count = clamp(
+        Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)),
+        1,
+        whip ? 2 : limb.depth === 0 ? 6 : 3,
+      );
+      let alongs = Array.from(
+        { length: count + 1 },
+        (_, n) => (n / count) * span,
+      );
       if (swell > 0 && limb.startRadius > trunkRadius * 0.2) {
         // Rings across the swelling, so it curves.
-        const extra = [0.6, 1.5].map((w) => swellAt + w * limb.startRadius).filter((a) => a < span * 0.7);
-        alongs = [...alongs, ...extra].sort((a, b) => a - b).filter((a, n, all) => n === 0 || a - (all[n - 1] as number) > limb.startRadius * 0.15);
+        const extra = [0.6, 1.5]
+          .map((w) => swellAt + w * limb.startRadius)
+          .filter((a) => a < span * 0.7);
+        alongs = [...alongs, ...extra]
+          .sort((a, b) => a - b)
+          .filter(
+            (a, n, all) =>
+              n === 0 || a - (all[n - 1] as number) > limb.startRadius * 0.15,
+          );
       }
       if (k === 0 && flared) {
         // Rings close together near the ground, so the flare curves.
-        const extra = flareRings.map((y) => y / Math.max(dir[1], 0.5)).filter((a) => a < span * 0.8);
-        alongs = [...alongs, ...extra].sort((a, b) => a - b).filter((a, n, all) => n === 0 || a - (all[n - 1] as number) > trunkRadius * 0.03);
+        const extra = flareRings
+          .map((y) => y / Math.max(dir[1], 0.5))
+          .filter((a) => a < span * 0.8);
+        alongs = [...alongs, ...extra]
+          .sort((a, b) => a - b)
+          .filter(
+            (a, n, all) =>
+              n === 0 || a - (all[n - 1] as number) > trunkRadius * 0.03,
+          );
       }
       alongs.forEach((along, n) => {
         if (k > 0 && n === 0) return;
         const end = n === alongs.length - 1;
-        push(addScaled(start, dir, along), end ? normalize(add(dir, nextDir)) : dir, radiusAt(along), i);
+        push(
+          addScaled(start, dir, along),
+          end ? normalize(add(dir, nextDir)) : dir,
+          radiusAt(along),
+          i,
+        );
       });
     });
     tubes.push({ chain, radial, rings, flared });
@@ -426,9 +614,17 @@ function tubesOf(skel: Skeleton): Tube[] {
 }
 
 /** How many triangles a frame's bark takes: each tube's sides between its rings, and its rounded tip. */
-export const barkTriangles = (skel: Skeleton): number => tubesOf(skel).reduce((n, t) => n + t.radial * (2 * (t.rings.length - 1) + 1), 0);
+export const barkTriangles = (skel: Skeleton): number =>
+  tubesOf(skel).reduce(
+    (n, t) => n + t.radial * (2 * (t.rings.length - 1) + 1),
+    0,
+  );
 
-export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, skel: Skeleton): Built {
+export function buildBark(
+  p: Resolved<typeof barkParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+): Built {
   const out = new PartBuilder("bark", "solid");
   const r = ctx.rand.fork("bark");
   const seed = Math.floor(r.next() * 1e6);
@@ -436,7 +632,9 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
   const boughs = new Boughs(skel);
   const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
   const children = skel.limbs.map(() => 0);
-  for (const l of skel.limbs) if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
+  for (const l of skel.limbs) {
+    if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
+  }
 
   for (const { chain, radial, rings, flared } of tubesOf(skel)) {
     const head = chain[0] as number;
@@ -450,7 +648,11 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
     // shades as one smooth form. The ridges go on top.
     const smooth = (ring: Ring, theta: number): V3 => {
       const m = flared ? flare.at(ring.center[1], theta) : 1;
-      return addScaled(ring.center, add(scale(ring.u, Math.cos(theta)), scale(ring.v, Math.sin(theta))), ring.radius * m);
+      return addScaled(
+        ring.center,
+        add(scale(ring.u, Math.cos(theta)), scale(ring.v, Math.sin(theta))),
+        ring.radius * m,
+      );
     };
     const step = (Math.PI * 2) / radial;
     const ringStart = out.vertexCount;
@@ -459,14 +661,40 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
       const hi = rings[Math.min(rings.length - 1, k + 1)] as Ring;
       for (let j = 0; j <= radial; j++) {
         const theta = j * step;
-        const outward = add(scale(ring.u, Math.cos(theta)), scale(ring.v, Math.sin(theta)));
-        let n = normalize(cross(sub(smooth(ring, theta + step * 0.5), smooth(ring, theta - step * 0.5)), sub(smooth(hi, theta), smooth(lo, theta))));
+        const outward = add(
+          scale(ring.u, Math.cos(theta)),
+          scale(ring.v, Math.sin(theta)),
+        );
+        let n = normalize(
+          cross(
+            sub(
+              smooth(ring, theta + step * 0.5),
+              smooth(ring, theta - step * 0.5),
+            ),
+            sub(smooth(hi, theta), smooth(lo, theta)),
+          ),
+        );
         if (dot(n, outward) < 0) n = scale(n, -1);
         const c = ring.center;
-        const { bump, shade } = barkAt(p.roughness, seed, furrows, c, theta, c[1], c[1]);
+        const { bump, shade } = barkAt(
+          p.roughness,
+          seed,
+          furrows,
+          c,
+          theta,
+          c[1],
+          c[1],
+        );
         const q = addScaled(smooth(ring, theta), outward, ring.radius * bump);
         const b = boughs.at(ring.limb, q);
-        out.vertex(q, n, shade, { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough });
+        out.vertex(q, n, shade, {
+          loss: 0,
+          droop: b.droop,
+          wither,
+          glow: 0,
+          pivot: b.bough,
+          bough: b.bough,
+        });
       }
     });
     // Wound counter-clockwise seen from outside, so the bark's outer face is its front face.
@@ -485,10 +713,23 @@ export function buildBark(p: Resolved<typeof barkParams>, ctx: BuildContext, ske
     const lastDir = normalize(sub(lastLimb.end, lastLimb.start));
     const last = ringStart + (rings.length - 1) * (radial + 1);
     const forked = (children[end] ?? 0) > 0;
-    const tip = addScaled(lastLimb.end, lastDir, lastLimb.endRadius * (forked ? 0.6 : 0.8));
+    const tip = addScaled(
+      lastLimb.end,
+      lastDir,
+      lastLimb.endRadius * (forked ? 0.6 : 0.8),
+    );
     const b = boughs.at(end, tip);
-    const tipIndex = out.vertex(tip, lastDir, forked ? 0.5 : 0.7, { loss: 0, droop: b.droop, wither, glow: 0, pivot: b.bough, bough: b.bough });
-    for (let j = 0; j < radial; j++) out.triangle(last + j, last + j + 1, tipIndex);
+    const tipIndex = out.vertex(tip, lastDir, forked ? 0.5 : 0.7, {
+      loss: 0,
+      droop: b.droop,
+      wither,
+      glow: 0,
+      pivot: b.bough,
+      bough: b.bough,
+    });
+    for (let j = 0; j < radial; j++) {
+      out.triangle(last + j, last + j + 1, tipIndex);
+    }
   }
 
   return { parts: [out.part()], anchors: skel.tips };
@@ -536,7 +777,12 @@ const CROWN_SHARE = 0.34;
  * and sprays take their bough's joint and droop, and each twig bends about
  * where it leaves the limb.
  */
-export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: BuildContext, skel: Skeleton, guard?: number): Built {
+export function buildLeafClumps(
+  p: Resolved<typeof leafClumpsParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+  guard?: number,
+): Built {
   const r = ctx.rand.fork("clumps");
   const s = leafScale(ctx.facts.scale ?? 1, skel);
   const crown = crownOf(skel.tips.map((t) => t.position));
@@ -544,38 +790,68 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
   const spray = SPRAY_CUTS[p.leaf];
   // Leaves keep near their own size on a great tree. Its sprays grow only with the root of its scale,
   // so each covers s times the area and its clumps need 1/s as many twigs per square meter.
-  const lookOf = (share: number): ClumpLook => ({ twigs: 15 / Math.max(1, s), sprays: 8 * share, half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)), cut: spray.cut, shape: p.shape, ground: 0, low: !oneTrunk(skel) });
-  const shapeScale = p.shape === "plates" ? 1.2 : p.shape === "tufts" ? 0.62 : 1;
+  const lookOf = (share: number): ClumpLook => ({
+    twigs: 15 / Math.max(1, s),
+    sprays: 8 * share,
+    half: 0.25 * spray.card * (s <= 1 ? s : Math.sqrt(s)),
+    cut: spray.cut,
+    shape: p.shape,
+    ground: 0,
+    low: !oneTrunk(skel),
+  });
+  const shapeScale =
+    p.shape === "plates" ? 1.2 : p.shape === "tufts" ? 0.62 : 1;
   // Tufts are smaller than round clumps, so a tufted crown grows enough more of them along its limbs to cover what
   // round clumps would. At a given fullness it hides as much of its frame, with more and smaller tufts.
   const fillOf = (n: number): number => {
     const tips = Math.max(1, n);
     const fill = tips * Math.max(0, p.fullness - 0.35) * 0.9;
-    return Math.round(shapeScale < 1 ? (tips + fill) / (shapeScale * shapeScale) - tips : fill);
+    return Math.round(
+      shapeScale < 1 ? (tips + fill) / (shapeScale * shapeScale) - tips : fill,
+    );
   };
   const roomFor = (most: number): number => guard ?? crownRoom(skel, most);
-  const mostClumps = (look: ClumpLook, budget: number): number => Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
+  const mostClumps = (look: ClumpLook, budget: number): number =>
+    Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
   // A frame with more tips than the crown can give clumps (a fir's whorls) gets fewer, larger clumps, each holding
   // the leaves of the tips it covers on full twigs, so the crown keeps its leaves while the twigs hidden inside its
   // clumps thin. Such a crown fills its frame as a fir's needles would, and gets the same budget.
   const sparse = lookOf(CROWN_SHARE);
-  const merged = crownTips(skel.tips, mostClumps(sparse, roomFor(CLUMP_TRIANGLE_BUDGET)), fillOf).length < skel.tips.length;
+  const merged =
+    crownTips(
+      skel.tips,
+      mostClumps(sparse, roomFor(CLUMP_TRIANGLE_BUDGET)),
+      fillOf,
+    ).length < skel.tips.length;
   const look = merged ? lookOf(1) : sparse;
-  const budget = roomFor(merged ? NEEDLE_TRIANGLE_BUDGET : CLUMP_TRIANGLE_BUDGET);
+  const budget = roomFor(
+    merged ? NEEDLE_TRIANGLE_BUDGET : CLUMP_TRIANGLE_BUDGET,
+  );
   const kept = crownTips(skel.tips, mostClumps(look, budget), fillOf);
   const grow = Math.sqrt(skel.tips.length / Math.max(1, kept.length));
   const tipCount = Math.max(1, kept.length);
   // Clumps scale with how far apart the tips are, so neighbors just overlap at "medium".
   const spacing = meanNearest(skel.tips.map((t) => t.position));
-  const base = Math.min(0.3 * s + 0.6 * spacing, 0.24 * crown.radius[0]) * p.size * shapeScale * (0.72 + 0.38 * p.fullness);
+  const base =
+    Math.min(0.3 * s + 0.6 * spacing, 0.24 * crown.radius[0]) *
+    p.size *
+    shapeScale *
+    (0.72 + 0.38 * p.fullness);
 
   const clumps: Clump[] = [];
   // Keep foliage off the ground and clear of the lower trunk. The trunk forks
   // where its first bough leaves it. A spire's trunk runs to its top, but its
   // lowest whorl leaves far below. Roots leaving at the ground (a great
   // tree's buttresses) are not boughs.
-  const trunkTop = skel.limbs.reduce((m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m), 0);
-  const fork = skel.limbs.reduce((m, l) => (l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m), trunkTop);
+  const trunkTop = skel.limbs.reduce(
+    (m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m),
+    0,
+  );
+  const fork = skel.limbs.reduce(
+    (m, l) =>
+      l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m,
+    trunkTop,
+  );
   // A shrub has no trunk, so its clumps reach the soil, as a leaf mound's do.
   const floor = oneTrunk(skel) ? Math.max(fork * 0.85, 1.2 * s) : 0;
   for (const i of kept) {
@@ -583,42 +859,99 @@ export function buildLeafClumps(p: Resolved<typeof leafClumpsParams>, ctx: Build
     const cr = r.fork(`tip${i}`);
     const radius = base * (0.75 + 0.3 * tip.size) * cr.range(0.85, 1.15) * grow;
     const lift = p.shape === "plates" ? 0.25 : 0.15;
-    const center = add(addScaled(tip.position, tip.normal, radius * 0.35), [0, radius * lift, 0]);
+    const center = add(addScaled(tip.position, tip.normal, radius * 0.35), [
+      0,
+      radius * lift,
+      0,
+    ]);
     center[1] = Math.max(center[1], floor + radius * 0.5);
-    clumps.push({ center, radius, limb: liftedFrom(boughs, center, tip.position, radius, boughs.limbNear(tip.position)), r: cr });
+    clumps.push({
+      center,
+      radius,
+      limb: liftedFrom(
+        boughs,
+        center,
+        tip.position,
+        radius,
+        boughs.limbNear(tip.position),
+      ),
+      r: cr,
+    });
   }
   // Fill the crown's interior so a full canopy looks like one mass.
   const fill = fillOf(tipCount);
-  const inner = skel.limbs.map((l, i) => ({ l, i })).filter(({ l }) => l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l));
+  const inner = skel.limbs
+    .map((l, i) => ({ l, i }))
+    .filter(
+      ({ l }) => l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l),
+    );
   for (let i = 0; i < fill && inner.length > 0; i++) {
     const fr = r.fork(`fill${i}`);
-    const pick = inner[Math.floor(fr.next() * inner.length)] as { l: Limb; i: number };
+    const pick = inner[Math.floor(fr.next() * inner.length)] as {
+      l: Limb;
+      i: number;
+    };
     const at = lerp(pick.l.start, pick.l.end, fr.range(0.3, 1));
     const { out: away } = crownPlace(crown, at);
     const radius = base * fr.range(0.8, 1.1) * grow;
     const center = addScaled(at, away, radius * 0.25);
     center[1] = Math.max(center[1], floor + radius * 0.5);
-    clumps.push({ center, radius, limb: liftedFrom(boughs, center, at, radius, pick.i), r: fr });
+    clumps.push({
+      center,
+      radius,
+      limb: liftedFrom(boughs, center, at, radius, pick.i),
+      r: fr,
+    });
   }
 
   // Every clump stays, so the crown keeps its shape. A crown over budget thins all its twigs evenly.
   let density = 1;
-  const triangles = (): number => clumps.reduce((n, c) => n + twigsOf(look, c.radius, density) * twigTriangles(look), 0);
+  const triangles = (): number =>
+    clumps.reduce(
+      (n, c) => n + twigsOf(look, c.radius, density) * twigTriangles(look),
+      0,
+    );
   while (triangles() > budget && density > 0.05) density -= 0.01;
   // A sapling's crown is too sparse to shade as one canopy, which would leave its lower tiers dark under a bright
   // top. Each clump is lit as its own small volume, so every tier is lit alike.
   const young = s < (ctx.facts.scale ?? 1);
-  const lit = (c: Clump): Crown => (young ? { center: c.center, radius: [c.radius * 1.2, c.radius * 1.2, c.radius * 1.2] } : crown);
-  const grown = emitClumps(clumps, lit, boughs, look, merged ? filled(clumps, lit, boughs, look, density, budget) : density);
-  return { parts: grown.parts, anchors: guard === undefined ? hungFrom(skel, grown.parts, grown.anchors) : grown.anchors };
+  const lit = (c: Clump): Crown =>
+    young
+      ? {
+          center: c.center,
+          radius: [c.radius * 1.2, c.radius * 1.2, c.radius * 1.2],
+        }
+      : crown;
+  const grown = emitClumps(
+    clumps,
+    lit,
+    boughs,
+    look,
+    merged ? filled(clumps, lit, boughs, look, density, budget) : density,
+  );
+  return {
+    parts: grown.parts,
+    anchors:
+      guard === undefined
+        ? hungFrom(skel, grown.parts, grown.anchors)
+        : grown.anchors,
+  };
 }
 
 /** Every clump of a crown, its twigs and leaves, at `density`. */
-export function emitClumps(clumps: readonly Clump[], lit: (c: Clump) => Crown, boughs: Boughs, look: ClumpLook, density: number): { parts: Part[]; anchors: Anchor[] } {
+export function emitClumps(
+  clumps: readonly Clump[],
+  lit: (c: Clump) => Crown,
+  boughs: Boughs,
+  look: ClumpLook,
+  density: number,
+): { parts: Part[]; anchors: Anchor[] } {
   const leaf = new PartBuilder("leaf");
   const twigs = new PartBuilder("bark");
   const anchors: Anchor[] = [];
-  for (const clump of clumps) emitClump(leaf, twigs, anchors, lit(clump), boughs, clump, look, density);
+  for (const clump of clumps) {
+    emitClump(leaf, twigs, anchors, lit(clump), boughs, clump, look, density);
+  }
   return { parts: [twigs.part(), leaf.part()], anchors };
 }
 
@@ -627,8 +960,22 @@ export function emitClumps(clumps: readonly Clump[], lit: (c: Clump) => Crown, b
  * sprays than its estimate where its twigs are short. So it builds a trial of its twigs, measures them, and raises
  * the density to fill the budget without passing it, up to 2, twice its clumps' own twigs.
  */
-export function filled(clumps: readonly Clump[], lit: (c: Clump) => Crown, boughs: Boughs, look: ClumpLook, density: number, budget: number): number {
-  const drawn = (d: number): number => emitClumps(clumps.map((c) => ({ ...c, r: c.r.fork("trial") })), lit, boughs, look, d).parts.reduce((n, p) => n + p.indices.length / 3, 0);
+export function filled(
+  clumps: readonly Clump[],
+  lit: (c: Clump) => Crown,
+  boughs: Boughs,
+  look: ClumpLook,
+  density: number,
+  budget: number,
+): number {
+  const drawn = (d: number): number =>
+    emitClumps(
+      clumps.map((c) => ({ ...c, r: c.r.fork("trial") })),
+      lit,
+      boughs,
+      look,
+      d,
+    ).parts.reduce((n, p) => n + p.indices.length / 3, 0);
   const tried = drawn(density);
   if (tried >= budget * 0.9) return density;
   const thicker = Math.min(2, density * (budget / Math.max(1, tried)) * 0.95);
@@ -641,7 +988,13 @@ export function filled(clumps: readonly Clump[], lit: (c: Clump) => Crown, bough
  * the ground, a low whorl on a spire), when it grows from the limb nearest
  * it instead, so no twig climbs a metre or more from far below to reach it.
  */
-function liftedFrom(boughs: Boughs, center: V3, placed: Vec3, radius: number, limb: number): number {
+function liftedFrom(
+  boughs: Boughs,
+  center: V3,
+  placed: Vec3,
+  radius: number,
+  limb: number,
+): number {
   return center[1] - placed[1] > radius ? boughs.limbNear(center) : limb;
 }
 
@@ -668,26 +1021,45 @@ const LOWEST_SPRAY = 0.35;
  * segments and a fork in one, 12 + 6, and 2 for each spray along it and on
  * its fork (`emitClump`).
  */
-export const twigTriangles = (look: ClumpLook): number => 18 + 2 * (Math.max(2, Math.round(look.sprays)) + Math.max(2, Math.round(look.sprays * 0.5)));
+export const twigTriangles = (look: ClumpLook): number =>
+  18 +
+  2 *
+    (Math.max(2, Math.round(look.sprays)) +
+      Math.max(2, Math.round(look.sprays * 0.5)));
 /** The fewest twigs a clump grows, however thin its crown. Fewer would look like a twig, not a clump. */
 export const FEWEST_TWIGS = 4;
-const twigsOf = (look: ClumpLook, radius: number, density: number): number => Math.max(FEWEST_TWIGS, Math.round(look.twigs * radius * radius * density));
+const twigsOf = (look: ClumpLook, radius: number, density: number): number =>
+  Math.max(FEWEST_TWIGS, Math.round(look.twigs * radius * radius * density));
 
 /**
  * One clump: twigs from its limb to points spread over its surface, a little
  * inside it, each with sprays along it and a fork with sprays of its own.
  * Anchors for flowers and berries sit on the twigs.
  */
-export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[], crown: Crown, boughs: Boughs, clump: Clump, look: ClumpLook, density: number): void {
+export function emitClump(
+  leaf: PartBuilder,
+  bark: PartBuilder,
+  anchors: Anchor[],
+  crown: Crown,
+  boughs: Boughs,
+  clump: Clump,
+  look: ClumpLook,
+  density: number,
+): void {
   const limb = boughs.skel.limbs[clump.limb] as Limb;
   const limbDir = normalize(sub(limb.end, limb.start));
-  const nearEnd = length(sub(limb.end, clump.center)) < length(sub(limb.start, clump.center)) * 1.2;
+  const nearEnd =
+    length(sub(limb.end, clump.center)) <
+    length(sub(limb.start, clump.center)) * 1.2;
   const loss = lossThreshold(clump.r.next(), 0.6);
   const wither = 0.75 + 0.25 * clump.r.next();
   const tint = clump.r.range(-0.08, 0.08);
   const seed = Math.floor(clump.r.next() * 1e6);
   const n = twigsOf(look, clump.radius, density);
-  const r0 = Math.min(limb.endRadius * 0.85, 0.022 * Math.max(0.5, look.half / 0.25));
+  const r0 = Math.min(
+    limb.endRadius * 0.85,
+    0.022 * Math.max(0.5, look.half / 0.25),
+  );
   for (let k = 0; k < n; k++) {
     const tr = clump.r.fork(`twig${k}`);
     // Aim at a point spread evenly over the clump's surface, a little inside it.
@@ -695,27 +1067,63 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
     const ring = Math.sqrt(Math.max(0, 1 - y * y));
     const phi = k * 2.39996 + tr.range(-0.4, 0.4);
     const d = normalize([Math.cos(phi) * ring, y, Math.sin(phi) * ring]);
-    const goal = shellPoint(clump.center, clump.radius * tr.range(0.62, 0.86), look.shape, d, seed).q;
+    const goal = shellPoint(
+      clump.center,
+      clump.radius * tr.range(0.62, 0.86),
+      look.shape,
+      d,
+      seed,
+    ).q;
     goal[1] = Math.max(goal[1], look.ground + look.half);
     // Each twig leaves the limb near the point of it closest to the twig's
     // goal, so a clump that hugs its limb grows short twigs all along it
     // rather than long spokes from one point. It leaves at its own angle and
     // curves out to its goal, rising a little or arching over.
     const ab = sub(limb.end, limb.start);
-    const nearest = dot(sub(goal, limb.start), ab) / Math.max(dot(ab, ab), 1e-9);
-    const root = lerp(limb.start, limb.end, clamp(Math.min(nearest, 1) - tr.range(0, 0.3), nearEnd ? 0.4 : 0.2, 1));
+    const nearest =
+      dot(sub(goal, limb.start), ab) / Math.max(dot(ab, ab), 1e-9);
+    const root = lerp(
+      limb.start,
+      limb.end,
+      clamp(Math.min(nearest, 1) - tr.range(0, 0.3), nearEnd ? 0.4 : 0.2, 1),
+    );
     const span = length(sub(goal, root));
     if (span < 0.05) continue;
     const dir = normalize(sub(goal, root));
     const [wu, wv] = basis(dir);
     const swing = tr.next() * Math.PI * 2;
-    const lean = add(scale(limbDir, tr.range(0.2, 0.7)), add(dir, scale(add(scale(wu, Math.cos(swing)), scale(wv, Math.sin(swing))), tr.range(0.2, 0.55))));
-    const ctrl = add(addScaled(root, normalize(lean), span * tr.range(0.35, 0.55)), [0, tr.range(-0.08, 0.1) * span, 0]);
-    const bez = (t: number): V3 => add(add(scale(root, (1 - t) * (1 - t)), scale(ctrl, 2 * t * (1 - t))), scale(goal, t * t));
-    const carry = (q: Vec3): { bough: Vec3; droop: number } => boughs.at(clump.limb, q);
+    const lean = add(
+      scale(limbDir, tr.range(0.2, 0.7)),
+      add(
+        dir,
+        scale(
+          add(scale(wu, Math.cos(swing)), scale(wv, Math.sin(swing))),
+          tr.range(0.2, 0.55),
+        ),
+      ),
+    );
+    const ctrl = add(
+      addScaled(root, normalize(lean), span * tr.range(0.35, 0.55)),
+      [0, tr.range(-0.08, 0.1) * span, 0],
+    );
+    const bez = (t: number): V3 =>
+      add(
+        add(scale(root, (1 - t) * (1 - t)), scale(ctrl, 2 * t * (1 - t))),
+        scale(goal, t * t),
+      );
+    const carry = (q: Vec3): { bough: Vec3; droop: number } =>
+      boughs.at(clump.limb, q);
     const twigCh = (q: Vec3): Channels => {
       const b = carry(q);
-      return { loss: 0, droop: b.droop, wither: 0.5, glow: 0, pivot: root, bough: b.bough, twig: root };
+      return {
+        loss: 0,
+        droop: b.droop,
+        wither: 0.5,
+        glow: 0,
+        pivot: root,
+        bough: b.bough,
+        twig: root,
+      };
     };
     const line: V3[] = [0, 0.5, 1].map(bez);
     // A short twig carries fewer sprays, so the flowers keep their spacing.
@@ -724,22 +1132,50 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
     const sprays = (on: readonly V3[], count: number, from: number): void => {
       for (let j = 0; j < count; j++) {
         const last = j === count - 1;
-        const t = last ? 1 : from + (0.94 - from) * ((j + tr.range(0.2, 0.8)) / count);
+        const t = last
+          ? 1
+          : from + (0.94 - from) * ((j + tr.range(0.2, 0.8)) / count);
         const { at: at0, dir: tdir } = pointOnPolyline(on, t);
         const out = crownPlace(crown, at0).out;
         const faceUp = normalize(add(UP, normalize(sub(at0, clump.center))));
         const sideDir = normalize(cross(tdir, faceUp));
         const sgn = j % 2 === 0 ? 1 : -1;
         const ang = last ? tr.range(-0.25, 0.25) : tr.range(0.55, 1.1);
-        const sdir = normalize(add(add(scale(tdir, Math.cos(ang)), scale(sideDir, sgn * Math.sin(ang))), scale(out, 0.15)));
+        const sdir = normalize(
+          add(
+            add(
+              scale(tdir, Math.cos(ang)),
+              scale(sideDir, sgn * Math.sin(ang)),
+            ),
+            scale(out, 0.15),
+          ),
+        );
         // Near the soil a spray turns up rather than into it, and on a shrub grows smaller to fit above it.
-        const half = look.low === true ? Math.min(look.half, (at0[1] - look.ground) / 1.2) : look.half;
+        const half =
+          look.low === true
+            ? Math.min(look.half, (at0[1] - look.ground) / 1.2)
+            : look.half;
         // A shrub's spray closer to the soil than a card reaches along itself (2.65 half widths, plus its spread)
         // always turns up.
-        if (at0[1] + sdir[1] * 2.3 * half - half < look.ground || (look.low === true && at0[1] - look.ground < 3.1 * half)) sdir[1] = Math.abs(sdir[1]);
-        if (look.low === true ? half < LOWEST_SPRAY * look.half : at0[1] - 1.2 * look.half < look.ground) continue;
+        if (
+          at0[1] + sdir[1] * 2.3 * half - half < look.ground ||
+          (look.low === true && at0[1] - look.ground < 3.1 * half)
+        ) {
+          sdir[1] = Math.abs(sdir[1]);
+        }
+        if (
+          look.low === true
+            ? half < LOWEST_SPRAY * look.half
+            : at0[1] - 1.2 * look.half < look.ground
+        ) {
+          continue;
+        }
         const b = carry(at0);
-        const depth = clamp(length(sub(at0, clump.center)) / clump.radius, 0, 1);
+        const depth = clamp(
+          length(sub(at0, clump.center)) / clump.radius,
+          0,
+          1,
+        );
         const ch: Channels = {
           loss: clamp(loss + tr.range(-0.08, 0.08), 0.02, 0.9),
           droop: b.droop,
@@ -750,15 +1186,36 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
           twig: root,
           tint: clamp(tint * 0.4 + tr.range(-0.025, 0.025), -0.1, 0.1),
         };
-        emitSpray(leaf, crown, at0, sdir, faceUp, half * tr.range(0.85, 1.15), look.cut, tr, ch, -0.16 * (1 - depth));
+        emitSpray(
+          leaf,
+          crown,
+          at0,
+          sdir,
+          faceUp,
+          half * tr.range(0.85, 1.15),
+          look.cut,
+          tr,
+          ch,
+          -0.16 * (1 - depth),
+        );
       }
     };
     sprays(line, Math.max(2, Math.round(look.sprays * along)), 0.12);
     // A fork: a shorter side twig from partway along, with sprays of its own.
     const t = tr.range(0.4, 0.75);
     const from = bez(t);
-    const side = normalize(add(sub(d, scale(dir, dot(d, dir))), [tr.range(-0.5, 0.5), tr.range(-0.2, 0.4), tr.range(-0.5, 0.5)]));
-    const fgoal = addScaled(from, normalize(add(scale(dir, 0.5), side)), span * tr.range(0.3, 0.45));
+    const side = normalize(
+      add(sub(d, scale(dir, dot(d, dir))), [
+        tr.range(-0.5, 0.5),
+        tr.range(-0.2, 0.4),
+        tr.range(-0.5, 0.5),
+      ]),
+    );
+    const fgoal = addScaled(
+      from,
+      normalize(add(scale(dir, 0.5), side)),
+      span * tr.range(0.3, 0.45),
+    );
     fgoal[1] = Math.max(fgoal[1], look.ground + look.half);
     const fork: V3[] = [from, fgoal];
     emitTwig(bark, fork, r0 * 0.35, r0 * 0.18, twigCh);
@@ -768,17 +1225,33 @@ export function emitClump(leaf: PartBuilder, bark: PartBuilder, anchors: Anchor[
     // points would part from it.
     const at = line[line.length - 1] as V3;
     const b = carry(at);
-    anchors.push({ position: at, normal: normalize(lerp(d, crownPlace(crown, at).out, 0.5)), size: clamp(clump.radius / Math.max(look.half * 3, 1e-3), 0, 1), carry: { bough: b.bough, twig: root, droop: b.droop } });
+    anchors.push({
+      position: at,
+      normal: normalize(lerp(d, crownPlace(crown, at).out, 0.5)),
+      size: clamp(clump.radius / Math.max(look.half * 3, 1e-3), 0, 1),
+      carry: { bough: b.bough, twig: root, droop: b.droop },
+    });
   }
 }
 
 /** A thin tapered twig: a three-sided tube along `pts`, bark-colored, never lost, so a bare tree keeps its twigs. */
-export function emitTwig(bark: PartBuilder, pts: readonly V3[], r0: number, r1: number, ch: (q: Vec3) => Channels): void {
+export function emitTwig(
+  bark: PartBuilder,
+  pts: readonly V3[],
+  r0: number,
+  r1: number,
+  ch: (q: Vec3) => Channels,
+): void {
   const radial = 3;
   const first = bark.vertexCount;
   for (let k = 0; k < pts.length; k++) {
     const t = k / (pts.length - 1);
-    const dir = normalize(sub(pts[Math.min(pts.length - 1, k + 1)] as V3, pts[Math.max(0, k - 1)] as V3));
+    const dir = normalize(
+      sub(
+        pts[Math.min(pts.length - 1, k + 1)] as V3,
+        pts[Math.max(0, k - 1)] as V3,
+      ),
+    );
     const [u, v] = basis(dir);
     const radius = r0 + (r1 - r0) * t;
     for (let j = 0; j <= radial; j++) {
@@ -803,7 +1276,18 @@ export function emitTwig(bark: PartBuilder, pts: readonly V3[], r0: number, r1: 
  * about `face`. Its leaves shade with the crown's blended normal, so the
  * canopy lights as one volume. `shadeShift` darkens sprays deep in a clump.
  */
-export function emitSpray(leaf: PartBuilder, crown: Crown, base: V3, dir: V3, face: V3, half: number, form: number, r: Rand, ch: Channels, shadeShift: number): void {
+export function emitSpray(
+  leaf: PartBuilder,
+  crown: Crown,
+  base: V3,
+  dir: V3,
+  face: V3,
+  half: number,
+  form: number,
+  r: Rand,
+  ch: Channels,
+  shadeShift: number,
+): void {
   const roll = r.range(-0.5, 0.5);
   const flat = normalize(sub(face, scale(dir, dot(face, dir))));
   const across = normalize(rotate(cross(dir, flat), dir, roll));
@@ -814,8 +1298,17 @@ export function emitSpray(leaf: PartBuilder, crown: Crown, base: V3, dir: V3, fa
   const needles = form === CUT.needles;
   const rows = [-1, 1].map((b) =>
     [-1, 1].map((a): CardPoint => {
-      const q = add(addScaled(base, dir, (b + 1) * reach), scale(across, a * half));
-      return { p: q, across: a, along: needles ? (b + 1) / 2 : b, n: blendNormal(n, crownPlace(crown, q).out, 0.6), shade: canopyShade(crown, q, n[1], ch.tint ?? 0) + shadeShift };
+      const q = add(
+        addScaled(base, dir, (b + 1) * reach),
+        scale(across, a * half),
+      );
+      return {
+        p: q,
+        across: a,
+        along: needles ? (b + 1) / 2 : b,
+        n: blendNormal(n, crownPlace(crown, q).out, 0.6),
+        shade: canopyShade(crown, q, n[1], ch.tint ?? 0) + shadeShift,
+      };
     }),
   );
   emitCard(leaf, rows, cutOf(form, r.next()), ch);
@@ -824,28 +1317,55 @@ export function emitSpray(leaf: PartBuilder, crown: Crown, base: V3, dir: V3, fa
 export type ClumpShape = "round" | "plates" | "tufts";
 
 /** A point on a clump's lumpy shell, along unit direction `n`. */
-function shellPoint(center: V3, radius: number, shape: ClumpShape, n: Vec3, seed: number): { q: V3; lump: number } {
+function shellPoint(
+  center: V3,
+  radius: number,
+  shape: ClumpShape,
+  n: Vec3,
+  seed: number,
+): { q: V3; lump: number } {
   const lumpiness = shape === "tufts" ? 0.32 : 0.26;
-  const lump = 1 + lumpiness * fbm3(n[0] * 1.6 + seed * 0.013, n[1] * 1.6, n[2] * 1.6, seed, 3) + 0.08 * Math.max(0, n[1]);
-  let sx = 1, sy = 0.86, sz = 1;
+  const lump =
+    1 +
+    lumpiness *
+      fbm3(n[0] * 1.6 + seed * 0.013, n[1] * 1.6, n[2] * 1.6, seed, 3) +
+    0.08 * Math.max(0, n[1]);
+  let sx = 1,
+    sy = 0.86,
+    sz = 1;
   if (shape === "plates") {
     sx = 1.4;
     sz = 1.4;
     sy = n[1] > 0 ? 0.32 : 0.55;
   }
-  return { q: [center[0] + n[0] * radius * sx * lump, center[1] + n[1] * radius * sy * lump, center[2] + n[2] * radius * sz * lump], lump: (lump - 1) / lumpiness };
+  return {
+    q: [
+      center[0] + n[0] * radius * sx * lump,
+      center[1] + n[1] * radius * sy * lump,
+      center[2] + n[2] * radius * sz * lump,
+    ],
+    lump: (lump - 1) / lumpiness,
+  };
 }
 
 /** Brightness across a canopy: brighter toward its rim and its top, each clump a little different. */
 const canopyShade = (crown: Crown, q: Vec3, ny: number, tint: number): number =>
-  0.3 + 0.45 * clamp((crownPlace(crown, q).depth - 0.35) / 0.75, 0, 1) + 0.14 * ny + 0.5 * tint;
+  0.3 +
+  0.45 * clamp((crownPlace(crown, q).depth - 0.35) / 0.75, 0, 1) +
+  0.14 * ny +
+  0.5 * tint;
 
 // ---------- leaf strands ----------
 
 /** The triangle budget for a crown of leaf strands, or less on a heavy frame (`crownRoom`). The rest of the 40,000-triangle plant budget is for bark and blossoms. */
 export const STRAND_TRIANGLE_BUDGET = 21_000;
 
-export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: BuildContext, skel: Skeleton, guard?: number): Built {
+export function buildLeafStrands(
+  p: Resolved<typeof leafStrandsParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+  guard?: number,
+): Built {
   const budget = guard ?? crownRoom(skel, STRAND_TRIANGLE_BUDGET);
   const out = new PartBuilder("leaf");
   const r = ctx.rand.fork("strands");
@@ -861,7 +1381,11 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   // shrub's stems are short, so strands hang from them too, twice as close,
   // and its curtain is as full as a tree's.
   const shrub = !oneTrunk(skel);
-  const hangs: { at: V3; out: V3; limb: number }[] = skel.tips.map((t) => ({ at: [...t.position] as V3, out: [...t.normal] as V3, limb: boughs.limbNear(t.position) }));
+  const hangs: { at: V3; out: V3; limb: number }[] = skel.tips.map((t) => ({
+    at: [...t.position] as V3,
+    out: [...t.normal] as V3,
+    limb: boughs.limbNear(t.position),
+  }));
   const spacing = (0.3 * g) / (0.5 + p.fullness) / (shrub ? 2 : 1);
   skel.limbs.forEach((limb, i) => {
     if (limb.depth < 1 && !shrub) return;
@@ -870,8 +1394,13 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
     const d = normalize(sub(limb.end, limb.start));
     for (let k = 1; k <= steps; k++) {
       const t = k / (steps + 1);
-      const under = 0.8 * (limb.startRadius + (limb.endRadius - limb.startRadius) * t);
-      hangs.push({ at: add(lerp(limb.start, limb.end, t), [0, -under, 0]), out: d, limb: i });
+      const under =
+        0.8 * (limb.startRadius + (limb.endRadius - limb.startRadius) * t);
+      hangs.push({
+        at: add(lerp(limb.start, limb.end, t), [0, -under, 0]),
+        out: d,
+        limb: i,
+      });
     }
   });
 
@@ -887,30 +1416,77 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
   // A dense frame thins every strand's chance evenly to stay in budget. Each
   // strand is two ribbons of rows 0.3 m apart, and two sprays at its top.
   const kept = 0.45 + 0.55 * p.fullness;
-  const perStrand = (h: { at: V3 }): number => 4 * Math.max(3, Math.ceil(Math.min(p.length * 2.2 * s, Math.max(0.3, h.at[1] - 0.2 * s), room(h)) / (0.3 * g))) + 4;
-  const wanted = hangs.reduce((n, h) => n + (hangsFree(h) ? perStrand(h) : 0), 0) * kept;
+  const perStrand = (h: { at: V3 }): number =>
+    4 *
+      Math.max(
+        3,
+        Math.ceil(
+          Math.min(
+            p.length * 2.2 * s,
+            Math.max(0.3, h.at[1] - 0.2 * s),
+            room(h),
+          ) /
+            (0.3 * g),
+        ),
+      ) +
+    4;
+  const wanted =
+    hangs.reduce((n, h) => n + (hangsFree(h) ? perStrand(h) : 0), 0) * kept;
   const thin = Math.min(1, budget / Math.max(1, wanted));
   hangs.forEach((h, i) => {
     const sr = r.fork(`strand${i}`);
     if (!hangsFree(h) || sr.next() > kept * thin) return;
-    const fall = Math.min(p.length * 2.2 * s * sr.range(0.7, 1.15), Math.max(0.3, h.at[1] - 0.2 * s), room(h));
-    const outward = normalize([h.out[0] + sr.range(-0.3, 0.3), 0, h.out[2] + sr.range(-0.3, 0.3)]);
+    const fall = Math.min(
+      p.length * 2.2 * s * sr.range(0.7, 1.15),
+      Math.max(0.3, h.at[1] - 0.2 * s),
+      room(h),
+    );
+    const outward = normalize([
+      h.out[0] + sr.range(-0.3, 0.3),
+      0,
+      h.out[2] + sr.range(-0.3, 0.3),
+    ]);
     const drift = fall * 0.12 * sr.range(0.5, 1);
     const loss = lossThreshold(sr.next(), 0.55);
     const wither = 0.75 + 0.25 * sr.next();
     const sway = sr.next() * Math.PI * 2;
     const curve = (t: number): V3 => [
-      h.at[0] + outward[0] * drift * Math.sin(t * Math.PI * 0.5) + Math.sin(t * 5 + sway) * 0.04 * s,
+      h.at[0] +
+        outward[0] * drift * Math.sin(t * Math.PI * 0.5) +
+        Math.sin(t * 5 + sway) * 0.04 * s,
       h.at[1] - fall * Math.pow(t, 1.08),
-      h.at[2] + outward[2] * drift * Math.sin(t * Math.PI * 0.5) + Math.cos(t * 5 + sway) * 0.04 * s,
+      h.at[2] +
+        outward[2] * drift * Math.sin(t * Math.PI * 0.5) +
+        Math.cos(t * 5 + sway) * 0.04 * s,
     ];
     // The strand sags with its bough and swings about where it hangs from its limb.
     const b = boughs.at(h.limb, h.at);
-    const hung = { droop: b.droop, glow: 0, pivot: h.at, bough: b.bough, twig: h.at };
+    const hung = {
+      droop: b.droop,
+      glow: 0,
+      pivot: h.at,
+      bough: b.bough,
+      twig: h.at,
+    };
     // Two sprays of leaves at the hang point hide the limb above the curtain.
     for (let k = 0; k < 2; k++) {
-      const d = normalize([sr.range(-1, 1), sr.range(0.1, 0.9), sr.range(-1, 1)]);
-      emitSpray(out, crown, h.at, d, normalize(add(UP, d)), leafLen * 0.8, CUT.cluster, sr, { ...hung, loss: Math.max(0.01, loss + 0.02), wither }, 0.05);
+      const d = normalize([
+        sr.range(-1, 1),
+        sr.range(0.1, 0.9),
+        sr.range(-1, 1),
+      ]);
+      emitSpray(
+        out,
+        crown,
+        h.at,
+        d,
+        normalize(add(UP, d)),
+        leafLen * 0.8,
+        CUT.cluster,
+        sr,
+        { ...hung, loss: Math.max(0.01, loss + 0.02), wither },
+        0.05,
+      );
     }
     // The strand: two crossed ribbons of small leaves, so it looks like a leafy
     // thread from any side. The ribbons narrow toward the bottom, and the lowest
@@ -924,21 +1500,39 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
       for (let k = 0; k <= segments; k++) {
         const t = k / segments;
         const at = curve(t);
-        const along = normalize(sub(curve(Math.min(1, t + 0.05)), curve(Math.max(0, t - 0.05))));
+        const along = normalize(
+          sub(curve(Math.min(1, t + 0.05)), curve(Math.max(0, t - 0.05))),
+        );
         const [u] = basis(along);
         const side = normalize(rotate(u, along, sway + ribbon * Math.PI * 0.5));
         const w = half * (1 - 0.3 * t);
         const place = crownPlace(crown, at);
         const normal = blendNormal(outward, place.out, 0.7);
-        const shade = 0.36 + 0.36 * clamp(place.depth - 0.3, 0, 1) + 0.18 * (1 - t);
-        rows.push([-1, 1].map((a) => ({ p: addScaled(at, side, a * w), across: a, along: (t * fall) / half, n: normal, shade })));
+        const shade =
+          0.36 + 0.36 * clamp(place.depth - 0.3, 0, 1) + 0.18 * (1 - t);
+        rows.push(
+          [-1, 1].map((a) => ({
+            p: addScaled(at, side, a * w),
+            across: a,
+            along: (t * fall) / half,
+            n: normal,
+            shade,
+          })),
+        );
       }
       // Loss and wither vary down the strand, so build it row by row.
       const first = out.vertexCount;
       rows.forEach((row, k) => {
         const t = k / segments;
-        const ch: Channels = { ...hung, loss: Math.max(0.01, loss + 0.14 * t), wither: clamp(wither + 0.15 * t, 0, 1), tint: strandTint };
-        for (const v of row) out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
+        const ch: Channels = {
+          ...hung,
+          loss: Math.max(0.01, loss + 0.14 * t),
+          wither: clamp(wither + 0.15 * t, 0, 1),
+          tint: strandTint,
+        };
+        for (const v of row) {
+          out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
+        }
       });
       for (let k = 0; k < segments; k++) {
         const a = first + k * 2;
@@ -951,12 +1545,32 @@ export function buildLeafStrands(p: Resolved<typeof leafStrandsParams>, ctx: Bui
     if (sr.next() < 0.5 * (g / Math.max(s, 1e-6))) {
       const limb = skel.limbs[h.limb] as Limb;
       const ab = sub(limb.end, limb.start);
-      const on = addScaled(limb.start, ab, clamp(dot(sub(h.at, limb.start), ab) / Math.max(dot(ab, ab), 1e-9), 0, 1));
-      anchors.push({ position: on, normal: outward, size: sr.range(0.6, 1), carry: { bough: b.bough, twig: h.at, droop: boughs.at(h.limb, on).droop } });
+      const on = addScaled(
+        limb.start,
+        ab,
+        clamp(
+          dot(sub(h.at, limb.start), ab) / Math.max(dot(ab, ab), 1e-9),
+          0,
+          1,
+        ),
+      );
+      anchors.push({
+        position: on,
+        normal: outward,
+        size: sr.range(0.6, 1),
+        carry: {
+          bough: b.bough,
+          twig: h.at,
+          droop: boughs.at(h.limb, on).droop,
+        },
+      });
     }
   });
   const parts = [out.part()];
-  return { parts, anchors: guard === undefined ? hungFrom(skel, parts, anchors) : anchors };
+  return {
+    parts,
+    anchors: guard === undefined ? hungFrom(skel, parts, anchors) : anchors,
+  };
 }
 
 // ---------- needles ----------
@@ -967,13 +1581,27 @@ function chainsOf(skel: Skeleton): number[][] {
   const next = new Map<number, number>();
   skel.limbs.forEach((l, i) => {
     const parent = skel.limbs[l.parent];
-    if (parent !== undefined && parent.depth === l.depth && !next.has(l.parent)) next.set(l.parent, i);
+    if (
+      parent !== undefined &&
+      parent.depth === l.depth &&
+      !next.has(l.parent)
+    ) {
+      next.set(l.parent, i);
+    }
   });
   skel.limbs.forEach((l, i) => {
     const parent = skel.limbs[l.parent];
-    if (parent !== undefined && parent.depth === l.depth && next.get(l.parent) === i) return;
+    if (
+      parent !== undefined &&
+      parent.depth === l.depth &&
+      next.get(l.parent) === i
+    ) {
+      return;
+    }
     const chain = [i];
-    for (let at = next.get(i); at !== undefined; at = next.get(at)) chain.push(at);
+    for (let at = next.get(i); at !== undefined; at = next.get(at)) {
+      chain.push(at);
+    }
     chains.push(chain);
   });
   return chains;
@@ -985,7 +1613,11 @@ function chainsOf(skel: Skeleton): number[][] {
  * card hung lower and steeper beneath, and outer branchlets that reach
  * farther and hang lower (in radians), so they drape over the whorl below.
  */
-const FROND = { branchlets: 1.25, lowerTier: 0.7, drape: { reach: 0.6, drop: 0.95 } } as const;
+const FROND = {
+  branchlets: 1.25,
+  lowerTier: 0.7,
+  drape: { reach: 0.6, drop: 0.95 },
+} as const;
 
 /**
  * The triangle budget for a fir's needles. The rest of a plant's 40,000
@@ -995,7 +1627,11 @@ const FROND = { branchlets: 1.25, lowerTier: 0.7, drape: { reach: 0.6, drop: 0.9
  */
 export const NEEDLE_TRIANGLE_BUDGET = 26_000;
 
-export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
+export function buildNeedles(
+  p: Resolved<typeof needlesParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+): Built {
   if (!whorled(skel)) return buildPine(p, ctx, skel);
   let density = 1;
   let built = growNeedles(p, ctx, skel, density);
@@ -1015,7 +1651,13 @@ export function buildNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContex
  * trunk divides.
  */
 function whorled(skel: Skeleton): boolean {
-  const heights = new Set(skel.limbs.flatMap((l) => (l.depth === 1 && skel.limbs[l.parent]?.depth === 0 ? [Math.round(l.start[1] * 10)] : [])));
+  const heights = new Set(
+    skel.limbs.flatMap((l) =>
+      l.depth === 1 && skel.limbs[l.parent]?.depth === 0
+        ? [Math.round(l.start[1] * 10)]
+        : [],
+    ),
+  );
   return heights.size >= 3;
 }
 
@@ -1026,7 +1668,15 @@ function whorled(skel: Skeleton): boolean {
  * `half` a spray's half width at medium needles. `along` is how many tufts a
  * full crown grows along its outer limbs per tuft width of limb.
  */
-const PINE = { spacing: 0.55, least: 0.5, most: 1.1, twigs: 32, sprays: 9, half: 0.17, along: 0.8 } as const;
+const PINE = {
+  spacing: 0.55,
+  least: 0.5,
+  most: 1.1,
+  twigs: 32,
+  sprays: 9,
+  half: 0.17,
+  along: 0.8,
+} as const;
 
 /**
  * Builds a pine's needles. On a frame that forks into long rising limbs, a
@@ -1037,24 +1687,58 @@ const PINE = { spacing: 0.55, least: 0.5, most: 1.1, twigs: 32, sprays: 9, half:
  * fuller needles more twigs and tufts. Each twig bends with its limb, and as
  * vitality falls the needles brown and drop in place.
  */
-function buildPine(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
+function buildPine(
+  p: Resolved<typeof needlesParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+): Built {
   const r = ctx.rand.fork("pine");
   const s = leafScale(ctx.facts.scale ?? 1, skel);
   const crown = crownOf(skel.tips.map((t) => t.position));
   const boughs = new Boughs(skel);
   const longer = Math.sqrt(p.length / 0.9);
   const spacing = meanNearest(skel.tips.map((t) => t.position));
-  const base = clamp(PINE.spacing * spacing, PINE.least * s, PINE.most * s) * longer * (0.8 + 0.3 * p.fullness);
-  const look: ClumpLook = { twigs: (PINE.twigs * (0.6 + 0.5 * p.fullness)) / Math.max(1, s), sprays: PINE.sprays, half: PINE.half * longer * (s <= 1 ? s : Math.sqrt(s)), cut: CUT.needles, shape: "tufts", ground: 0 };
+  const base =
+    clamp(PINE.spacing * spacing, PINE.least * s, PINE.most * s) *
+    longer *
+    (0.8 + 0.3 * p.fullness);
+  const look: ClumpLook = {
+    twigs: (PINE.twigs * (0.6 + 0.5 * p.fullness)) / Math.max(1, s),
+    sprays: PINE.sprays,
+    half: PINE.half * longer * (s <= 1 ? s : Math.sqrt(s)),
+    cut: CUT.needles,
+    shape: "tufts",
+    ground: 0,
+  };
   const budget = crownRoom(skel, NEEDLE_TRIANGLE_BUDGET);
-  const outer = skel.limbs.flatMap((l, i) => (l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l) ? [i] : []));
-  const reach = outer.reduce((n, i) => n + length(sub((skel.limbs[i] as Limb).end, (skel.limbs[i] as Limb).start)), 0);
-  const fill = Math.round((reach / (2 * base)) * PINE.along * Math.max(0, p.fullness - 0.3));
-  const kept = crownTips(skel.tips, Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look))), () => fill);
+  const outer = skel.limbs.flatMap((l, i) =>
+    l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l) ? [i] : [],
+  );
+  const reach = outer.reduce(
+    (n, i) =>
+      n +
+      length(sub((skel.limbs[i] as Limb).end, (skel.limbs[i] as Limb).start)),
+    0,
+  );
+  const fill = Math.round(
+    (reach / (2 * base)) * PINE.along * Math.max(0, p.fullness - 0.3),
+  );
+  const kept = crownTips(
+    skel.tips,
+    Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look))),
+    () => fill,
+  );
   const grow = Math.sqrt(skel.tips.length / Math.max(1, kept.length));
   // Tufts stay clear of the lower trunk, as a leaf crown's clumps do (`buildLeafClumps`).
-  const trunkTop = skel.limbs.reduce((m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m), 0);
-  const fork = skel.limbs.reduce((m, l) => (l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m), trunkTop);
+  const trunkTop = skel.limbs.reduce(
+    (m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m),
+    0,
+  );
+  const fork = skel.limbs.reduce(
+    (m, l) =>
+      l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m,
+    trunkTop,
+  );
   const floor = Math.max(fork * 0.85, 1.2 * s);
   const clumps: Clump[] = kept.map((i) => {
     const tip = skel.tips[i] as Anchor;
@@ -1062,7 +1746,18 @@ function buildPine(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: S
     const radius = base * (0.75 + 0.3 * tip.size) * cr.range(0.85, 1.15) * grow;
     const center = addScaled(tip.position, tip.normal, radius * 0.3);
     center[1] = Math.max(center[1], floor + radius * 0.5);
-    return { center, radius, limb: liftedFrom(boughs, center, tip.position, radius, boughs.limbNear(tip.position)), r: cr };
+    return {
+      center,
+      radius,
+      limb: liftedFrom(
+        boughs,
+        center,
+        tip.position,
+        radius,
+        boughs.limbNear(tip.position),
+      ),
+      r: cr,
+    };
   });
   for (let i = 0; i < fill && outer.length > 0; i++) {
     const fr = r.fork(`fill${i}`);
@@ -1072,19 +1767,43 @@ function buildPine(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: S
     const radius = base * fr.range(0.75, 1) * grow;
     const center = addScaled(at, crownPlace(crown, at).out, radius * 0.25);
     center[1] = Math.max(center[1], floor + radius * 0.5);
-    clumps.push({ center, radius, limb: liftedFrom(boughs, center, at, radius, k), r: fr });
+    clumps.push({
+      center,
+      radius,
+      limb: liftedFrom(boughs, center, at, radius, k),
+      r: fr,
+    });
   }
   // A crown over its budget thins every tuft's twigs evenly.
-  const wanted = clumps.reduce((n, c) => n + twigsOf(look, c.radius, 1) * twigTriangles(look), 0);
-  const grown = emitClumps(clumps, () => crown, boughs, look, Math.min(1, budget / Math.max(1, wanted)));
-  return { parts: grown.parts, anchors: hungFrom(skel, grown.parts, grown.anchors) };
+  const wanted = clumps.reduce(
+    (n, c) => n + twigsOf(look, c.radius, 1) * twigTriangles(look),
+    0,
+  );
+  const grown = emitClumps(
+    clumps,
+    () => crown,
+    boughs,
+    look,
+    Math.min(1, budget / Math.max(1, wanted)),
+  );
+  return {
+    parts: grown.parts,
+    anchors: hungFrom(skel, grown.parts, grown.anchors),
+  };
 }
 
-function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton, density: number): { out: PartBuilder; anchors: Anchor[] } {
+function growNeedles(
+  p: Resolved<typeof needlesParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+  density: number,
+): { out: PartBuilder; anchors: Anchor[] } {
   const out = new PartBuilder("leaf");
   const r = ctx.rand.fork("needles");
   const s = leafScale(ctx.facts.scale ?? 1, skel);
-  const crown = crownOf(skel.limbs.filter((l) => l.depth >= 1).map((l) => l.end));
+  const crown = crownOf(
+    skel.limbs.filter((l) => l.depth >= 1).map((l) => l.end),
+  );
   const chains = chainsOf(skel).map((c) => c.map((i) => skel.limbs[i] as Limb));
   const boughs = new Boughs(skel);
   const top = skel.limbs.reduce((m, l) => Math.max(m, l.end[1]), 0.01);
@@ -1098,17 +1817,38 @@ function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel:
     if (depth === 0) {
       // A tuft along the top of the leader.
       const tipY = last.end[1];
-      emitFrond(out, crown, [lerp(last.start, last.end, 0.1), lerp(last.start, last.end, 0.55), last.end], p.length * 0.32 * s, cr, p, tipY / top, (q) => boughs.at(skel.limbs.indexOf(last), q), density);
+      emitFrond(
+        out,
+        crown,
+        [
+          lerp(last.start, last.end, 0.1),
+          lerp(last.start, last.end, 0.55),
+          last.end,
+        ],
+        p.length * 0.32 * s,
+        cr,
+        p,
+        tipY / top,
+        (q) => boughs.at(skel.limbs.indexOf(last), q),
+        density,
+      );
       return;
     }
     if (depth >= 2 && p.fullness < 0.7) return;
     const points: Vec3[] = [first.start, ...chain.map((l) => l.end)];
     const tip = points[points.length - 1] as Vec3;
-    const width = p.length * (depth === 1 ? 0.5 : 0.36) * s * (0.85 + 0.25 * p.fullness);
-    const carry = (q: Vec3): { bough: Vec3; droop: number } => boughs.at(skel.limbs.indexOf(first), q);
+    const width =
+      p.length * (depth === 1 ? 0.5 : 0.36) * s * (0.85 + 0.25 * p.fullness);
+    const carry = (q: Vec3): { bough: Vec3; droop: number } =>
+      boughs.at(skel.limbs.indexOf(first), q);
     emitFrond(out, crown, points, width, cr, p, tip[1] / top, carry, density);
     const at = carry(tip);
-    anchors.push({ position: tip, normal: normalize(sub(tip, points[points.length - 2] as Vec3)), size: depth === 1 ? 1 : 0.5, carry: { bough: at.bough, twig: at.bough, droop: at.droop } });
+    anchors.push({
+      position: tip,
+      normal: normalize(sub(tip, points[points.length - 2] as Vec3)),
+      size: depth === 1 ? 1 : 0.5,
+      carry: { bough: at.bough, twig: at.bough, droop: at.droop },
+    });
   });
   return { out, anchors };
 }
@@ -1121,7 +1861,12 @@ function growNeedles(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel:
  * juniper dense enough to hide most of its stems takes about twice a leafy
  * bush's triangles.
  */
-const JUNIPER = { tufts: 280, width: 0.085, reach: 0.3, budget: 20_000 } as const;
+const JUNIPER = {
+  tufts: 280,
+  width: 0.085,
+  reach: 0.3,
+  budget: 20_000,
+} as const;
 
 /**
  * Builds a fir's needles on a bush's many stems, as a juniper. Short shoots
@@ -1130,7 +1875,11 @@ const JUNIPER = { tufts: 280, width: 0.085, reach: 0.3, budget: 20_000 } as cons
  * tufts. A fir's fronds are sized for limbs metres long, and on a bush's
  * short stems they hung as a few broad, flat sprays, like a fern's.
  */
-export function buildJuniper(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton): Built {
+export function buildJuniper(
+  p: Resolved<typeof needlesParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+): Built {
   let density = 1;
   let built = growJuniper(p, ctx, skel, density);
   for (let pass = 0; pass < 4; pass++) {
@@ -1139,17 +1888,31 @@ export function buildJuniper(p: Resolved<typeof needlesParams>, ctx: BuildContex
     density *= (0.98 * JUNIPER.budget) / triangles;
     built = growJuniper(p, ctx, skel, density);
   }
-  return { parts: [built.twigs.part(), built.out.part()], anchors: built.anchors };
+  return {
+    parts: [built.twigs.part(), built.out.part()],
+    anchors: built.anchors,
+  };
 }
 
-function growJuniper(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel: Skeleton, density: number): { out: PartBuilder; twigs: PartBuilder; anchors: Anchor[] } {
+function growJuniper(
+  p: Resolved<typeof needlesParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+  density: number,
+): { out: PartBuilder; twigs: PartBuilder; anchors: Anchor[] } {
   const out = new PartBuilder("leaf");
   const twigs = new PartBuilder("bark");
   const r = ctx.rand.fork("juniper");
   const boughs = new Boughs(skel);
   const top = skel.tips.reduce((m, t) => Math.max(m, t.position[1]), 0.3);
-  const reach = skel.tips.reduce((m, t) => Math.max(m, Math.hypot(t.position[0], t.position[2])), 0.3);
-  const crown: Crown = { center: [0, top * 0.45, 0], radius: [reach, top * 0.6, reach] };
+  const reach = skel.tips.reduce(
+    (m, t) => Math.max(m, Math.hypot(t.position[0], t.position[2])),
+    0.3,
+  );
+  const crown: Crown = {
+    center: [0, top * 0.45, 0],
+    radius: [reach, top * 0.6, reach],
+  };
   const grow = Math.sqrt(p.length / 0.9);
   const width = JUNIPER.width * grow * (0.85 + 0.25 * p.fullness);
   const count = Math.round(JUNIPER.tufts * (0.55 + 0.5 * p.fullness));
@@ -1162,33 +1925,73 @@ function growJuniper(p: Resolved<typeof needlesParams>, ctx: BuildContext, skel:
     const phi = k * 2.39996 + tr.range(-0.4, 0.4);
     const d: V3 = [Math.cos(phi) * ring, y, Math.sin(phi) * ring];
     const depth = k % 3 === 2 ? tr.range(0.45, 0.7) : tr.range(0.78, 1.02);
-    const goal: V3 = [crown.center[0] + d[0] * crown.radius[0] * depth, Math.max(0.08, crown.center[1] + d[1] * crown.radius[1] * depth), crown.center[2] + d[2] * crown.radius[2] * depth];
+    const goal: V3 = [
+      crown.center[0] + d[0] * crown.radius[0] * depth,
+      Math.max(0.08, crown.center[1] + d[1] * crown.radius[1] * depth),
+      crown.center[2] + d[2] * crown.radius[2] * depth,
+    ];
     const limb = boughs.limbNear(goal);
     const l = skel.limbs[limb] as Limb;
     const ab = sub(l.end, l.start);
-    const root = addScaled(l.start, ab, clamp(dot(sub(goal, l.start), ab) / Math.max(dot(ab, ab), 1e-9), 0.15, 1));
+    const root = addScaled(
+      l.start,
+      ab,
+      clamp(dot(sub(goal, l.start), ab) / Math.max(dot(ab, ab), 1e-9), 0.15, 1),
+    );
     const span = length(sub(goal, root));
-    const out0 = span > 0.05 ? normalize(sub(goal, root)) : normalize(add(d, [0, 0.3, 0]));
+    const out0 =
+      span > 0.05 ? normalize(sub(goal, root)) : normalize(add(d, [0, 0.3, 0]));
     // The shoot runs bare from its stem to where its tuft begins and on under the tuft, which reaches a little past the dome.
     const tuft = JUNIPER.reach * grow * tr.range(0.8, 1.2);
-    const start = span > tuft * 0.6 ? addScaled(root, out0, span - tuft * 0.6) : root;
+    const start =
+      span > tuft * 0.6 ? addScaled(root, out0, span - tuft * 0.6) : root;
     const tipDir = normalize(addScaled(out0, d, 0.4));
-    const pts: V3[] = [start, addScaled(start, out0, tuft * 0.5), addScaled(addScaled(start, out0, tuft * 0.5), tipDir, tuft * 0.5)];
-    const carry = (q: Vec3): { bough: Vec3; droop: number } => boughs.at(limb, q);
+    const pts: V3[] = [
+      start,
+      addScaled(start, out0, tuft * 0.5),
+      addScaled(addScaled(start, out0, tuft * 0.5), tipDir, tuft * 0.5),
+    ];
+    const carry = (q: Vec3): { bough: Vec3; droop: number } =>
+      boughs.at(limb, q);
     // The shoot sags with its stem by the bark's rule all along it, so what hangs from its tip stays on it.
     emitTwig(twigs, [root, pts[1] as V3, pts[2] as V3], 0.006, 0.002, (q) => {
       const b = carry(q);
-      return { loss: 0, droop: b.droop, wither: 0.5, glow: 0, pivot: root, bough: b.bough };
+      return {
+        loss: 0,
+        droop: b.droop,
+        wither: 0.5,
+        glow: 0,
+        pivot: root,
+        bough: b.bough,
+      };
     });
-    emitFrond(out, crown, pts, width, tr, p, clamp((pts[2] as V3)[1] / top, 0, 1), carry, density);
+    emitFrond(
+      out,
+      crown,
+      pts,
+      width,
+      tr,
+      p,
+      clamp((pts[2] as V3)[1] / top, 0, 1),
+      carry,
+      density,
+    );
     const tip = pts[2] as V3;
     const at = carry(tip);
-    anchors.push({ position: tip, normal: tipDir, size: 0.5, carry: { bough: at.bough, twig: at.bough, droop: at.droop } });
+    anchors.push({
+      position: tip,
+      normal: tipDir,
+      size: 0.5,
+      carry: { bough: at.bough, twig: at.bough, droop: at.droop },
+    });
   }
   return { out, twigs, anchors };
 }
 
-function pointOnPolyline(points: readonly Vec3[], t: number): { at: V3; dir: V3 } {
+function pointOnPolyline(
+  points: readonly Vec3[],
+  t: number,
+): { at: V3; dir: V3 } {
   const segs = points.length - 1;
   const f = clamp(t, 0, 1) * segs;
   const k = Math.min(segs - 1, Math.floor(f));
@@ -1222,13 +2025,23 @@ function emitFrond(
   density: number,
 ): void {
   // Lower sprays shed first, as a dying conifer browns from the bottom up.
-  const loss = clamp(lossThreshold(r.next(), 0.5) + 0.12 * (1 - heightFrac), 0.02, 0.7);
+  const loss = clamp(
+    lossThreshold(r.next(), 0.5) + 0.12 * (1 - heightFrac),
+    0.02,
+    0.7,
+  );
   const wither = 0.7 + 0.3 * r.next();
   const tint = r.range(-0.06, 0.06);
   const lift = 0.12 * (p.fullness < 0.9 ? 1 : 0.5) * heightFrac;
 
   // Each card sags with its bough by the bark's rule where it leaves the limb. A branchlet also bends about that point.
-  const channelsAt = (t: number, edge: number, cardTint: number, from = t, twig = false): Channels => {
+  const channelsAt = (
+    t: number,
+    edge: number,
+    cardTint: number,
+    from = t,
+    twig = false,
+  ): Channels => {
     const at = pointOnPolyline(points, from).at;
     const b = carry(at);
     return {
@@ -1256,11 +2069,30 @@ function emitFrond(
     const up = normalize(cross(side, dir));
     const w = width * 0.62 * (1 - 0.5 * v);
     for (const a of [-1, 0, 1]) {
-      const q = add(at, add(scale(side, a * w * 0.85), scale(up, width * 0.12 - Math.abs(a) * w * 0.5)));
+      const q = add(
+        at,
+        add(
+          scale(side, a * w * 0.85),
+          scale(up, width * 0.12 - Math.abs(a) * w * 0.5),
+        ),
+      );
       const place = crownPlace(crown, q);
-      const normal = blendNormal(normalize(add(up, scale(side, a * 0.6))), place.out, 0.5);
-      const shade = 0.34 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.1 * (1 - Math.abs(a)) + 0.5 * tint + lift;
-      out.vertex(q, normal, shade, channelsAt(t, Math.abs(a), ridgeTint), [a, v, ridgeCut]);
+      const normal = blendNormal(
+        normalize(add(up, scale(side, a * 0.6))),
+        place.out,
+        0.5,
+      );
+      const shade =
+        0.34 +
+        0.42 * clamp(place.depth - 0.25, 0, 1) +
+        0.1 * (1 - Math.abs(a)) +
+        0.5 * tint +
+        lift;
+      out.vertex(q, normal, shade, channelsAt(t, Math.abs(a), ridgeTint), [
+        a,
+        v,
+        ridgeCut,
+      ]);
     }
   }
   for (let k = 0; k < ridgeRows; k++) {
@@ -1272,14 +2104,32 @@ function emitFrond(
   }
 
   // Branchlets, alternating sides, shorter and more drooping toward the tip.
-  const span = points.slice(1).reduce((n, q, i) => n + length(sub(q, points[i] as Vec3)), 0);
-  const count = Math.max(3, Math.round(clamp(span / (width * 0.3), 5, 11) * FROND.branchlets * density));
-  const branchlet = (t: number, sideSign: number, reach: number, drop: number, forward: number): void => {
+  const span = points
+    .slice(1)
+    .reduce((n, q, i) => n + length(sub(q, points[i] as Vec3)), 0);
+  const count = Math.max(
+    3,
+    Math.round(clamp(span / (width * 0.3), 5, 11) * FROND.branchlets * density),
+  );
+  const branchlet = (
+    t: number,
+    sideSign: number,
+    reach: number,
+    drop: number,
+    forward: number,
+  ): void => {
     const { at, dir } = pointOnPolyline(points, t);
     const side = acrossOf(dir);
     const up = normalize(cross(side, dir));
-    const flat = normalize(add(scale(side, sideSign * Math.cos(forward)), scale(dir, Math.sin(forward))));
-    const along = normalize(add(scale(flat, Math.cos(drop)), scale(up, -Math.sin(drop))));
+    const flat = normalize(
+      add(
+        scale(side, sideSign * Math.cos(forward)),
+        scale(dir, Math.sin(forward)),
+      ),
+    );
+    const along = normalize(
+      add(scale(flat, Math.cos(drop)), scale(up, -Math.sin(drop))),
+    );
     // The card's width lies nearly level, rolled a little, creased along its middle.
     const roll = r.range(-0.35, 0.35);
     const wide = normalize(rotate(normalize(cross(up, along)), along, roll));
@@ -1291,11 +2141,39 @@ function emitFrond(
     for (const v of [0, 1]) {
       const base = addScaled(at, along, v * reach);
       for (const a of [-1, 0, 1]) {
-        const q = add(base, add(scale(wide, a * halfWide * (1 - 0.35 * v)), scale(crest, (0.18 - 0.3 * Math.abs(a)) * halfWide)));
+        const q = add(
+          base,
+          add(
+            scale(wide, a * halfWide * (1 - 0.35 * v)),
+            scale(crest, (0.18 - 0.3 * Math.abs(a)) * halfWide),
+          ),
+        );
         const place = crownPlace(crown, q);
-        const normal = blendNormal(normalize(add(crest, scale(wide, a * 0.5))), place.out, 0.5);
-        const shade = 0.28 + 0.42 * clamp(place.depth - 0.25, 0, 1) + 0.12 * Math.max(0, crest[1]) + 0.08 * v + 0.5 * tint + lift;
-        out.vertex(q, normal, shade, channelsAt(Math.min(1, t + 0.1 * v), Math.abs(a) * 0.5 + v * 0.5, cardTint, t, true), [a, v, cut]);
+        const normal = blendNormal(
+          normalize(add(crest, scale(wide, a * 0.5))),
+          place.out,
+          0.5,
+        );
+        const shade =
+          0.28 +
+          0.42 * clamp(place.depth - 0.25, 0, 1) +
+          0.12 * Math.max(0, crest[1]) +
+          0.08 * v +
+          0.5 * tint +
+          lift;
+        out.vertex(
+          q,
+          normal,
+          shade,
+          channelsAt(
+            Math.min(1, t + 0.1 * v),
+            Math.abs(a) * 0.5 + v * 0.5,
+            cardTint,
+            t,
+            true,
+          ),
+          [a, v, cut],
+        );
       }
     }
     for (let j = 0; j < 2; j++) {
@@ -1306,15 +2184,34 @@ function emitFrond(
   };
   for (let k = 0; k < count; k++) {
     for (const sideSign of [-1, 1]) {
-      const t = 0.1 + 0.84 * ((k + (sideSign > 0 ? 0.25 : 0.75)) / count) + r.range(-0.03, 0.03);
+      const t =
+        0.1 +
+        0.84 * ((k + (sideSign > 0 ? 0.25 : 0.75)) / count) +
+        r.range(-0.03, 0.03);
       // The outer branchlets reach farther and hang lower, draping over the whorl below.
       const outer = clamp((t - 0.3) / 0.5, 0, 1);
-      const reach = width * (0.8 - 0.4 * t) * r.range(0.8, 1.15) * (1 + FROND.drape.reach * outer);
+      const reach =
+        width *
+        (0.8 - 0.4 * t) *
+        r.range(0.8, 1.15) *
+        (1 + FROND.drape.reach * outer);
       const forward = r.range(0.6, 0.95);
-      const drop = r.range(0.1, 0.3) + 0.25 * t + 0.2 * (1 - heightFrac) + FROND.drape.drop * outer;
+      const drop =
+        r.range(0.1, 0.3) +
+        0.25 * t +
+        0.2 * (1 - heightFrac) +
+        FROND.drape.drop * outer;
       branchlet(t, sideSign, reach, drop, forward);
       // A second card hung lower and steeper beneath, so the frond is deep rather than one sheet.
-      if (r.next() < FROND.lowerTier) branchlet(clamp(t + 0.04, 0, 1), sideSign, reach * 0.9, drop + 0.8, forward * 0.8);
+      if (r.next() < FROND.lowerTier) {
+        branchlet(
+          clamp(t + 0.04, 0, 1),
+          sideSign,
+          reach * 0.9,
+          drop + 0.8,
+          forward * 0.8,
+        );
+      }
     }
   }
 }
@@ -1326,19 +2223,32 @@ function emitFrond(
  * and limbs. Each hangs from its anchor on a stalk, sags with the bough that
  * carries it and bends with its twig, and drops in place as vitality falls.
  */
-export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildContext, anchors: readonly Anchor[]): Built {
+export function buildBlossoms(
+  p: Resolved<typeof blossomsParams>,
+  ctx: BuildContext,
+  anchors: readonly Anchor[],
+): Built {
   // Berries are the family's dark ripe berry, not its flowers' color.
   const out = new PartBuilder(p.form === "berries" ? "berry" : "bloom");
   const r = ctx.rand.fork("blossoms");
   const s = ctx.facts.scale ?? 1;
   const picker = r.fork("pick");
   // A bush hangs fewer pods than a tree, so they fit beside its frame and leaves. Petals and berries are light, so their caps stay the same.
-  const bush = isBushHeight(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
-  const cap = bush && p.form === "pods" ? Math.min(BUSH_HUNG, BLOSSOM_CAP.pods) : BLOSSOM_CAP[p.form];
+  const bush = isBushHeight(
+    anchors.reduce((m, a) => Math.max(m, a.position[1]), 0),
+  );
+  const cap =
+    bush && p.form === "pods"
+      ? Math.min(BUSH_HUNG, BLOSSOM_CAP.pods)
+      : BLOSSOM_CAP[p.form];
   const want = Math.min(cap, Math.round(anchors.length * p.count));
   // Berries hang among the leaves on the plant's sides and underside first, not on top of it.
   const chosen = anchors
-    .map((a, i) => ({ a, i, key: picker.next() + (p.form === "berries" && a.normal[1] > 0.35 ? 1 : 0) }))
+    .map((a, i) => ({
+      a,
+      i,
+      key: picker.next() + (p.form === "berries" && a.normal[1] > 0.35 ? 1 : 0),
+    }))
     .sort((x, y) => x.key - y.key)
     .slice(0, want)
     .sort((x, y) => x.i - y.i);
@@ -1346,21 +2256,55 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
     const ar = r.fork(`at${i}`);
     const loss = 0.3 + 0.45 * ar.next();
     const size = s * (0.75 + 0.35 * a.size);
-    const carry = { pivot: a.position, bough: a.carry?.bough ?? a.position, twig: a.carry?.twig ?? a.carry?.bough ?? a.position, droop: a.carry?.droop ?? 0 };
+    const carry = {
+      pivot: a.position,
+      bough: a.carry?.bough ?? a.position,
+      twig: a.carry?.twig ?? a.carry?.bough ?? a.position,
+      droop: a.carry?.droop ?? 0,
+    };
     if (p.form === "petals") {
       // A truss of small five-petaled flowers on fine stalks, rooted on the twig and reaching out and a little up.
-      const dir = normalize(add(a.normal, [ar.range(-0.3, 0.3), 0.5, ar.range(-0.3, 0.3)]));
+      const dir = normalize(
+        add(a.normal, [ar.range(-0.3, 0.3), 0.5, ar.range(-0.3, 0.3)]),
+      );
       const [side] = basis(dir);
       const half = 0.16 * size;
       const rows = [-1, 1].map((b) =>
-        [-1, 1].map((x): CardPoint => ({ p: add(addScaled(a.position, dir, (b + 1) * half), scale(side, x * half)), across: x, along: b, n: normalize(add(a.normal, [0, 0.4, 0])), shade: 0.7 })),
+        [-1, 1].map((x): CardPoint => ({
+          p: add(
+            addScaled(a.position, dir, (b + 1) * half),
+            scale(side, x * half),
+          ),
+          across: x,
+          along: b,
+          n: normalize(add(a.normal, [0, 0.4, 0])),
+          shade: 0.7,
+        })),
       );
-      emitCard(out, rows, cutOf(CUT.umbels, ar.next()), { ...carry, loss, wither: 1, glow: 0 });
+      emitCard(out, rows, cutOf(CUT.umbels, ar.next()), {
+        ...carry,
+        loss,
+        wither: 1,
+        glow: 0,
+      });
     } else if (p.form === "pods") {
       const hang = 0.12 * size;
       const center = add(a.position, [0, -hang - 0.12 * size, 0]);
-      emitBall(out, center, [0.065 * size, 0.09 * size, 0.065 * size], 1, { ...carry, loss, wither: 1, glow: 1 }, 0.55);
-      emitStalk(out, a.position, add(center, [0, 0.08 * size, 0]), 0.012 * size, { ...carry, loss, wither: 1, glow: 0 });
+      emitBall(
+        out,
+        center,
+        [0.065 * size, 0.09 * size, 0.065 * size],
+        1,
+        { ...carry, loss, wither: 1, glow: 1 },
+        0.55,
+      );
+      emitStalk(
+        out,
+        a.position,
+        add(center, [0, 0.08 * size, 0]),
+        0.012 * size,
+        { ...carry, loss, wither: 1, glow: 0 },
+      );
     } else {
       // A cluster of two to four berries hanging on a short stalk from the twig.
       const berries = 2 + Math.floor(ar.next() * 3);
@@ -1369,7 +2313,11 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
       emitStalk(out, a.position, hang, 0.008 * size, ch);
       for (let b = 0; b < berries; b++) {
         const rad = 0.028 * size * ar.range(0.8, 1.2);
-        const c = add(hang, [ar.range(-0.04, 0.04) * size, -rad * ar.range(0.4, 1), ar.range(-0.04, 0.04) * size]);
+        const c = add(hang, [
+          ar.range(-0.04, 0.04) * size,
+          -rad * ar.range(0.4, 1),
+          ar.range(-0.04, 0.04) * size,
+        ]);
         emitBall(out, c, [rad, rad, rad], 0, ch, 0.45);
       }
     }
@@ -1386,66 +2334,158 @@ export function buildBlossoms(p: Resolved<typeof blossomsParams>, ctx: BuildCont
  * `treeSize` times as large, so an apple tree is recognizable from a path 20 m
  * away.
  */
-const FRUIT = { radius: 0.06, stalk: 0.035, pear: 1.45, clear: 0.2, bowed: 0.8, treeSize: 1.6 } as const;
+const FRUIT = {
+  radius: 0.06,
+  stalk: 0.035,
+  pear: 1.45,
+  clear: 0.2,
+  bowed: 0.8,
+  treeSize: 1.6,
+} as const;
 
 /**
  * Apples or pears, each hanging on its stalk from a twig's tip under the
  * crown's outer leaves, carried and swung by that twig. As vitality falls a
  * fruit browns, and at its own vitality it drops from its stalk.
  */
-export function buildFruit(p: Resolved<typeof fruitParams>, ctx: BuildContext, anchors: readonly Anchor[]): Built {
+export function buildFruit(
+  p: Resolved<typeof fruitParams>,
+  ctx: BuildContext,
+  anchors: readonly Anchor[],
+): Built {
   const out = new PartBuilder("fruit");
   const r = ctx.rand.fork("fruit");
   const picker = r.fork("pick");
   const pear = p.fruit === "pears";
   const top = pear ? FRUIT.pear : 0.88;
   const crown = crownOf(anchors.map((a) => a.position));
-  const tree = !isBushHeight(anchors.reduce((m, a) => Math.max(m, a.position[1]), 0));
+  const tree = !isBushHeight(
+    anchors.reduce((m, a) => Math.max(m, a.position[1]), 0),
+  );
   const radius = FRUIT.radius * (tree ? FRUIT.treeSize : 1);
   // Fruit hangs only where it clears the soil.
-  const room = anchors.map((a, i) => ({ a, i })).filter(({ a }) => a.position[1] - FRUIT.stalk - (top + 1) * radius * 1.15 > FRUIT.clear);
+  const room = anchors
+    .map((a, i) => ({ a, i }))
+    .filter(
+      ({ a }) =>
+        a.position[1] - FRUIT.stalk - (top + 1) * radius * 1.15 > FRUIT.clear,
+    );
   // A crown bowed with fruit hangs the most its plant may, and a lighter crop that share of it, however many twigs it has.
   const most = tree ? FRUIT_TREE_CAP : BUSH_HUNG;
-  const want = Math.min(Math.round((most * p.crop) / FRUIT.bowed), Math.round(room.length * p.crop));
+  const want = Math.min(
+    Math.round((most * p.crop) / FRUIT.bowed),
+    Math.round(room.length * p.crop),
+  );
   // Fruit shows best on the crown's outside, where it hangs clear of the leaves. Twigs there are picked
   // first, the sides and underside a little before the top, and the crown's inner twigs last.
-  const inner = (a: Anchor): number => (crownPlace(crown, a.position).depth < 0.7 ? 1 : 0);
-  const chosen = room.map((x) => ({ ...x, key: picker.next() + inner(x.a) * 1.5 + (x.a.normal[1] > 0.35 ? 0.5 : 0) })).sort((x, y) => x.key - y.key).slice(0, want).sort((x, y) => x.i - y.i);
+  const inner = (a: Anchor): number =>
+    crownPlace(crown, a.position).depth < 0.7 ? 1 : 0;
+  const chosen = room
+    .map((x) => ({
+      ...x,
+      key: picker.next() + inner(x.a) * 1.5 + (x.a.normal[1] > 0.35 ? 0.5 : 0),
+    }))
+    .sort((x, y) => x.key - y.key)
+    .slice(0, want)
+    .sort((x, y) => x.i - y.i);
   // A pear narrows above its widest point into a neck.
-  const shape = (n: Vec3): V3 => (pear ? [n[0] * (1 - 0.42 * clamp(n[1], 0, 1)), n[1] * (n[1] > 0 ? FRUIT.pear : 1), n[2] * (1 - 0.42 * clamp(n[1], 0, 1))] : [n[0], n[1] * 0.88, n[2]]);
+  const shape = (n: Vec3): V3 =>
+    pear
+      ? [
+          n[0] * (1 - 0.42 * clamp(n[1], 0, 1)),
+          n[1] * (n[1] > 0 ? FRUIT.pear : 1),
+          n[2] * (1 - 0.42 * clamp(n[1], 0, 1)),
+        ]
+      : [n[0], n[1] * 0.88, n[2]];
   for (const { a, i } of chosen) {
     const fr = r.fork(`at${i}`);
     const size = radius * fr.range(0.85, 1.15);
     const drops = 0.2 + 0.45 * fr.next();
     const tint = fr.range(-0.03, 0.03);
-    const carry = { bough: a.carry?.bough ?? a.position, twig: a.carry?.twig ?? a.carry?.bough ?? a.position, droop: a.carry?.droop ?? 0 };
-    const center = add(a.position, [fr.range(-0.01, 0.01), -FRUIT.stalk - top * size, fr.range(-0.01, 0.01)]);
-    const ch: Channels = { ...carry, pivot: a.position, loss: drops, wither: 0.85, glow: 0, tint };
-    emitStalk(out, a.position, add(center, [0, top * size * 0.7, 0]), 0.004, ch);
+    const carry = {
+      bough: a.carry?.bough ?? a.position,
+      twig: a.carry?.twig ?? a.carry?.bough ?? a.position,
+      droop: a.carry?.droop ?? 0,
+    };
+    const center = add(a.position, [
+      fr.range(-0.01, 0.01),
+      -FRUIT.stalk - top * size,
+      fr.range(-0.01, 0.01),
+    ]);
+    const ch: Channels = {
+      ...carry,
+      pivot: a.position,
+      loss: drops,
+      wither: 0.85,
+      glow: 0,
+      tint,
+    };
+    emitStalk(
+      out,
+      a.position,
+      add(center, [0, top * size * 0.7, 0]),
+      0.004,
+      ch,
+    );
     emitFruit(out, center, size, shape, ch, 0.42);
   }
   return { parts: [out.part()], anchors: [] };
 }
 
 /** One fruit: an icosphere shaped by `shape`, lit as a round body and lighter toward the sky. */
-function emitFruit(out: PartBuilder, center: V3, size: number, shape: (n: Vec3) => V3, ch: Channels, shadeBase: number): void {
+function emitFruit(
+  out: PartBuilder,
+  center: V3,
+  size: number,
+  shape: (n: Vec3) => V3,
+  ch: Channels,
+  shadeBase: number,
+): void {
   const sphere = icosphere(1);
   const first = out.vertexCount;
-  for (const n of sphere.points) out.vertex(addScaled(center, shape(n), size), n, shadeBase + 0.45 * (n[1] * 0.5 + 0.5), ch);
-  for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
+  for (const n of sphere.points) {
+    out.vertex(
+      addScaled(center, shape(n), size),
+      n,
+      shadeBase + 0.45 * (n[1] * 0.5 + 0.5),
+      ch,
+    );
+  }
+  for (const [a, b, c] of sphere.triangles) {
+    out.triangle(first + a, first + b, first + c);
+  }
 }
 
-function emitBall(out: PartBuilder, center: V3, radii: V3, subdiv: number, ch: Channels, shadeBase: number): void {
+function emitBall(
+  out: PartBuilder,
+  center: V3,
+  radii: V3,
+  subdiv: number,
+  ch: Channels,
+  shadeBase: number,
+): void {
   const sphere = icosphere(subdiv);
   const first = out.vertexCount;
   for (const n of sphere.points) {
-    const q: V3 = [center[0] + n[0] * radii[0], center[1] + n[1] * radii[1], center[2] + n[2] * radii[2]];
+    const q: V3 = [
+      center[0] + n[0] * radii[0],
+      center[1] + n[1] * radii[1],
+      center[2] + n[2] * radii[2],
+    ];
     out.vertex(q, n, shadeBase + 0.4 * (n[1] * 0.5 + 0.5), ch);
   }
-  for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
+  for (const [a, b, c] of sphere.triangles) {
+    out.triangle(first + a, first + b, first + c);
+  }
 }
 
-function emitStalk(out: PartBuilder, from: Vec3, to: Vec3, radius: number, ch: Channels): void {
+function emitStalk(
+  out: PartBuilder,
+  from: Vec3,
+  to: Vec3,
+  radius: number,
+  ch: Channels,
+): void {
   const dir = normalize(sub(to, from));
   const [u, v] = basis(dir);
   const first = out.vertexCount;

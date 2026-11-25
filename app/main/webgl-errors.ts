@@ -4,7 +4,8 @@
 // context.
 
 /** Matches a GL error from the GPU process, a WebGL validation error, or a shader that three.js failed to compile. */
-const WEBGL_ERROR = /\bGL_INVALID_[A-Z_]+|\bGL_OUT_OF_MEMORY\b|^WebGL: (INVALID_[A-Z_]+|OUT_OF_MEMORY)|^THREE\.WebGLProgram: Shader Error/;
+const WEBGL_ERROR =
+  /\bGL_INVALID_[A-Z_]+|\bGL_OUT_OF_MEMORY\b|^WebGL: (INVALID_[A-Z_]+|OUT_OF_MEMORY)|^THREE\.WebGLProgram: Shader Error/;
 /** The start of the message Chromium logs when it stops reporting a context's errors. */
 const TOO_MANY = "WebGL: too many errors";
 /** How many distinct errors a summary quotes. */
@@ -29,7 +30,9 @@ export function webglErrors(): WebGLErrors {
       count++;
       // Chromium prefixes each message with the context's address, such as `[.WebGL-0x…]`, which differs between pages.
       // Removing it lets the same error match across pages.
-      const text = (message.replace(/^\[\.WebGL-0x[0-9a-f]+\]\s*/, "").split("\n")[0] ?? "").slice(0, 240);
+      const text = (
+        message.replace(/^\[\.WebGL-0x[0-9a-f]+\]\s*/, "").split("\n")[0] ?? ""
+      ).slice(0, 240);
       if (quoted.length < QUOTED && !quoted.includes(text)) quoted.push(text);
     },
     count: () => count,

@@ -5,11 +5,17 @@ import type { ColorShift, Rgb } from "@gaia/schema";
 
 export type Lab = readonly [number, number, number];
 
-const toLinear = (c: number): number => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-const toSrgb = (c: number): number => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
+const toLinear = (c: number): number =>
+  c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+const toSrgb = (c: number): number =>
+  c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055;
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
 
-export const hex = (h: number): Rgb => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
+export const hex = (h: number): Rgb => [
+  ((h >> 16) & 255) / 255,
+  ((h >> 8) & 255) / 255,
+  (h & 255) / 255,
+];
 
 export function toOklab(c: Rgb): Lab {
   const r = toLinear(c[0]);
@@ -49,14 +55,22 @@ export function fromLch(L: number, C: number, h: number): Rgb {
 }
 
 export function mixRgb(x: Rgb, y: Rgb, t: number): Rgb {
-  return [x[0] + (y[0] - x[0]) * t, x[1] + (y[1] - x[1]) * t, x[2] + (y[2] - x[2]) * t];
+  return [
+    x[0] + (y[0] - x[0]) * t,
+    x[1] + (y[1] - x[1]) * t,
+    x[2] + (y[2] - x[2]) * t,
+  ];
 }
 
 /** Mixes in OKLab, so a blend of two colors does not dull toward grey partway. */
 export function mixLab(x: Rgb, y: Rgb, t: number): Rgb {
   const a = toOklab(x);
   const b = toOklab(y);
-  return fromOklab([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+  return fromOklab([
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ]);
 }
 
 /**
@@ -73,6 +87,13 @@ export function shiftColor(c: Rgb, s: ColorShift): Rgb {
   const y = Math.min(1, Math.max(0, (L - 0.32) / 0.3));
   const reach = (1 - x * x * (3 - 2 * x)) * y * y * (3 - 2 * y);
   // The turn fades out below chroma 0.04. A near-grey color's hue is noise, and turning it would add a tint.
-  const turn = Math.max(-s.maxTurn, Math.min(s.maxTurn, d * s.pull)) * reach * Math.min(1, C / 0.04);
-  return fromLch(Math.min(0.97, Math.max(0.05, L + s.lightness)), C * s.chroma, h + turn);
+  const turn =
+    Math.max(-s.maxTurn, Math.min(s.maxTurn, d * s.pull)) *
+    reach *
+    Math.min(1, C / 0.04);
+  return fromLch(
+    Math.min(0.97, Math.max(0.05, L + s.lightness)),
+    C * s.chroma,
+    h + turn,
+  );
 }

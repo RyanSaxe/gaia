@@ -30,7 +30,11 @@ export interface ReliefReport {
 const DEG = 180 / Math.PI;
 
 /** Measures relief over the samples where `include` is true (all when omitted). */
-export function measureRelief(l: Lattice, heights: Float32Array = l.heights, include?: (ix: number, iz: number) => boolean): ReliefReport {
+export function measureRelief(
+  l: Lattice,
+  heights: Float32Array = l.heights,
+  include?: (ix: number, iz: number) => boolean,
+): ReliefReport {
   const { n, spacing } = l;
   let min = Infinity;
   let max = -Infinity;
@@ -59,15 +63,26 @@ export function measureRelief(l: Lattice, heights: Float32Array = l.heights, inc
   }
   // The tallest run of consecutive same-direction steps steeper than `walkSlope`, along rows and columns.
   let maxStep = 0;
-  const run = (start: number, stride: number, count: number, line: number, alongRows: boolean): void => {
+  const run = (
+    start: number,
+    stride: number,
+    count: number,
+    line: number,
+    alongRows: boolean,
+  ): void => {
     let climb = 0;
     let sign = 0;
     for (let k = 0; k + 1 < count; k++) {
-      if (include !== undefined && !(alongRows ? include(k, line) : include(line, k))) {
+      if (
+        include !== undefined &&
+        !(alongRows ? include(k, line) : include(line, k))
+      ) {
         climb = 0;
         continue;
       }
-      const d = (heights[start + (k + 1) * stride] as number) - (heights[start + k * stride] as number);
+      const d =
+        (heights[start + (k + 1) * stride] as number) -
+        (heights[start + k * stride] as number);
       const s = Math.sign(d);
       if (Math.abs(d) / spacing > walkGrade && (s === sign || climb === 0)) {
         climb += Math.abs(d);
@@ -96,5 +111,10 @@ export function measureRelief(l: Lattice, heights: Float32Array = l.heights, inc
 /** True when the report fits the budget, keeping `rangeMargin` meters spare for water to cut into. */
 export function withinBudget(r: ReliefReport, rangeMargin = 0): boolean {
   const b = RELIEF_BUDGET;
-  return r.range <= b.range - rangeMargin && r.maxSlope <= b.maxSlope && r.walkShare >= b.walkShare && r.maxStep <= b.maxStep;
+  return (
+    r.range <= b.range - rangeMargin &&
+    r.maxSlope <= b.maxSlope &&
+    r.walkShare >= b.walkShare &&
+    r.maxStep <= b.maxStep
+  );
 }

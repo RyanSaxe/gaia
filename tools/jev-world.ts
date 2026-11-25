@@ -20,11 +20,31 @@
 //          [--graph graph.json]
 
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import type { CodeGraph, EngineClient, JevClient, JevResponse } from "@gaia/schema";
-import { composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, planForms, planWorldRequests, requestKey } from "@gaia/world";
+import type {
+  CodeGraph,
+  EngineClient,
+  JevClient,
+  JevResponse,
+} from "@gaia/schema";
+import {
+  composeWorld,
+  composingEstimate,
+  factsOf,
+  judgeWorld,
+  keptJev,
+  planForms,
+  planWorldRequests,
+  requestKey,
+} from "@gaia/world";
 import { createEngineClient } from "../app/world-service/engine-client.ts";
 import { engineJev } from "../app/world-service/jev.ts";
 import { LOOKS } from "../app/renderer/terrain/looks.ts";
@@ -45,7 +65,11 @@ const allowed = Number(flag("spend-up-to", "0"));
 const out = resolve(flag("out", SNAPSHOT.answers));
 const ledger = flag("ledger", "");
 const graphFile = resolve(flag("graph", SNAPSHOT.graph));
-if (!existsSync(graphFile)) throw new Error(`No graph snapshot at ${graphFile}: write one with \`GAIA_DATA_DIR=dir pnpm graph-snapshot\`, or pass --graph.`);
+if (!existsSync(graphFile)) {
+  throw new Error(
+    `No graph snapshot at ${graphFile}: write one with \`GAIA_DATA_DIR=dir pnpm graph-snapshot\`, or pass --graph.`,
+  );
+}
 const graph = JSON.parse(readFileSync(graphFile, "utf8")) as CodeGraph;
 const facts = factsOf(graph);
 
@@ -53,44 +77,77 @@ const facts = factsOf(graph);
 interface Kept {
   readonly answers: Record<string, JevResponse>;
 }
-const kept: Kept = existsSync(out) ? (JSON.parse(readFileSync(out, "utf8")) as Kept) : { answers: {} };
+const kept: Kept = existsSync(out)
+  ? (JSON.parse(readFileSync(out, "utf8")) as Kept)
+  : { answers: {} };
 
 let engine: ChildProcess | undefined;
 let closeStandIn: (() => Promise<void>) | undefined;
 function startEngine(env: Record<string, string>): EngineClient {
-  execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env: cargoEnv(), stdio: "inherit" });
-  engine = spawn(engineBinary(repo, "release"), ["rpc"], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "inherit"] });
-  const client = createEngineClient((line) => engine?.stdin?.write(`${line}\n`));
-  if (engine.stdout !== null) createInterface({ input: engine.stdout }).on("line", (line) => client.receive(line));
+  execFileSync(
+    "cargo",
+    ["build", "-p", "gaia-engine", "--release", "--quiet"],
+    { cwd: repo, env: cargoEnv(), stdio: "inherit" },
+  );
+  engine = spawn(engineBinary(repo, "release"), ["rpc"], {
+    env: { ...process.env, ...env },
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+  const client = createEngineClient((line) =>
+    engine?.stdin?.write(`${line}\n`),
+  );
+  if (engine.stdout !== null) {
+    createInterface({ input: engine.stdout }).on("line", (line) =>
+      client.receive(line),
+    );
+  }
   return client;
 }
 
 let client: EngineClient;
 if (judge === "local") {
   const standIn = await startOpenRouterStandIn({ delayMs: 0 });
-  closeStandIn = standIn.close;
-  client = startEngine({ GAIA_JEV: "live", GAIA_JEV_ENDPOINT: standIn.endpoint });
+  closeStandIn = () => standIn.close();
+  client = startEngine({
+    GAIA_JEV: "live",
+    GAIA_JEV_ENDPOINT: standIn.endpoint,
+  });
 } else if (judge === "jev") client = startEngine({});
 else throw new Error(`Unknown judge ${judge}; choose jev or local.`);
 
 const status = await client.call("jev.status", {});
-if (!status.live || !status.key) throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
+if (!status.live || !status.key) {
+  throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
+}
 
 // What this run would send: the look and form requests (`planWorldRequests`, `planForms`) with no kept answer, at
 // most --limit of them.
-const missing = [...planWorldRequests(facts, LOOKS), ...planForms(facts, LOOKS, { graph }).requests].filter((p) => kept.answers[requestKey(p.request)] === undefined);
+const missing = [
+  ...planWorldRequests(facts, LOOKS),
+  ...planForms(facts, LOOKS, { graph }).requests,
+].filter((p) => kept.answers[requestKey(p.request)] === undefined);
 const toSend = missing.slice(0, limit);
-const estimate = await client.call("jev.estimate", { requests: toSend.map((p) => p.request) });
+const estimate = await client.call("jev.estimate", {
+  requests: toSend.map((p) => p.request),
+});
 // Composing depends on those answers. It takes about two requests per thing, each priced as one that composes a tree,
 // counted even if some are kept already, so the estimate is never low.
 const composing = composingEstimate(facts, LOOKS, graph);
-const each = composing === null ? 0 : (await client.call("jev.estimate", { requests: [composing.sample] })).estimatedUsd;
+const each =
+  composing === null
+    ? 0
+    : (await client.call("jev.estimate", { requests: [composing.sample] }))
+        .estimatedUsd;
 const composingUsd = each * (composing?.requests ?? 0);
 const ceiling = (estimate.estimatedUsd + composingUsd) * 2;
-console.error(`${missing.length} of the world's requests are not kept yet; sending ${toSend.length}, about ${estimate.estimatedTokens.toLocaleString("en-US")} tokens, about $${estimate.estimatedUsd.toFixed(4)}, and composing about ${composing?.requests ?? 0} more, about $${composingUsd.toFixed(4)} (allowing twice both).`);
+console.error(
+  `${missing.length} of the world's requests are not kept yet; sending ${toSend.length}, about ${estimate.estimatedTokens.toLocaleString("en-US")} tokens, about $${estimate.estimatedUsd.toFixed(4)}, and composing about ${composing?.requests ?? 0} more, about $${composingUsd.toFixed(4)} (allowing twice both).`,
+);
 if (judge === "jev" && !(allowed >= ceiling)) {
   engine?.kill();
-  throw new Error(`Refusing to spend: pass --spend-up-to ${ceiling.toFixed(4)} or more to ask Jev.`);
+  throw new Error(
+    `Refusing to spend: pass --spend-up-to ${ceiling.toFixed(4)} or more to ask Jev.`,
+  );
 }
 
 // Jev, sending at most --limit requests and never past what was allowed.
@@ -103,7 +160,15 @@ const guarded: JevClient = {
   async ask(request) {
     if (sent >= limit) throw new Error("over --limit");
     // Every request is priced before it is sent, including composing's, which no plan counts ahead.
-    if (judge === "jev" && spent + (await client.call("jev.estimate", { requests: [request] })).estimatedUsd > allowed) throw new Error("over --spend-up-to");
+    if (
+      judge === "jev" &&
+      spent +
+        (await client.call("jev.estimate", { requests: [request] }))
+          .estimatedUsd >
+        allowed
+    ) {
+      throw new Error("over --spend-up-to");
+    }
     sent++;
     const r = await live.ask(request);
     spent += r.costUsd;
@@ -124,7 +189,10 @@ const jev = keptJev(guarded, {
   settled: (key) => asked.add(key),
 });
 try {
-  await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev), { graph, concurrency: estimate.concurrency });
+  await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev), {
+    graph,
+    concurrency: estimate.concurrency,
+  });
 } catch (error) {
   stopped = (error as Error).message;
 } finally {
@@ -133,12 +201,17 @@ try {
 }
 // Once a whole run has sent every request, drop answers to requests the world no longer makes, because their questions
 // or options changed.
-if (stopped === undefined) for (const key of Object.keys(kept.answers)) if (!asked.has(key)) delete kept.answers[key];
+if (stopped === undefined) {
+  for (const key of Object.keys(kept.answers)) {
+    if (!asked.has(key)) delete kept.answers[key];
+  }
+}
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, fixtureJson({ answers: kept.answers }));
 
 ms.sort((a, b) => a - b);
-const at = (q: number): number => ms[Math.min(ms.length - 1, Math.floor(q * ms.length))] ?? 0;
+const at = (q: number): number =>
+  ms[Math.min(ms.length - 1, Math.floor(q * ms.length))] ?? 0;
 const summary = {
   time: new Date().toISOString(),
   what: `jev-world (${judge})`,

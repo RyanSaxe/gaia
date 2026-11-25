@@ -4,21 +4,73 @@
 // limbs above the crown. As vitality falls its leaves thin and drop, its
 // boughs sag and its bark greys to a bare snag.
 
-import type { Anchor, BuildContext, Built, Limb, Resolved, Skeleton } from "@gaia/schema";
+import type {
+  Anchor,
+  BuildContext,
+  Built,
+  Limb,
+  Resolved,
+  Skeleton,
+} from "@gaia/schema";
 import type { greatTreeParams } from "../../landmark.ts";
-import { PartBuilder, type V3, clamp, cross, dot, fbm3, normalize, sub } from "../kit.ts";
+import {
+  PartBuilder,
+  type V3,
+  clamp,
+  cross,
+  dot,
+  fbm3,
+  normalize,
+  sub,
+} from "../kit.ts";
 import { growBranching } from "../skeleton.ts";
-import { CLUMP_TRIANGLE_BUDGET, STRAND_TRIANGLE_BUDGET, buildBark, buildLeafClumps, buildLeafStrands } from "../foliage.ts";
+import {
+  CLUMP_TRIANGLE_BUDGET,
+  STRAND_TRIANGLE_BUDGET,
+  buildBark,
+  buildLeafClumps,
+  buildLeafStrands,
+} from "../foliage.ts";
 
 type TreeParams = Resolved<typeof greatTreeParams>;
 
 /** Each form's frame and crown parameters. */
 const FORMS = {
-  "a spreading oak": { frame: { habit: "spreading", density: 5, spread: 44, stature: 0.95 }, crown: "clumps", leaf: "lobed", shape: "round", bole: 1 },
-  "a tall elm": { frame: { habit: "upright", density: 5, spread: 34, stature: 1.25 }, crown: "clumps", leaf: "oval", shape: "round", bole: 1 },
-  "a great willow": { frame: { habit: "weeping", density: 4, spread: 46, stature: 0.95 }, crown: "strands", leaf: "pointed", shape: "round", bole: 1 },
-  "an umbrella pine": { frame: { habit: "spreading", density: 4, spread: 50, stature: 0.72 }, crown: "clumps", leaf: "pointed", shape: "round", bole: 2.2 },
-  "a dark yew": { frame: { habit: "spreading", density: 5, spread: 52, stature: 0.72 }, crown: "clumps", leaf: "oval", shape: "round", bole: 1 },
+  "a spreading oak": {
+    frame: { habit: "spreading", density: 5, spread: 44, stature: 0.95 },
+    crown: "clumps",
+    leaf: "lobed",
+    shape: "round",
+    bole: 1,
+  },
+  "a tall elm": {
+    frame: { habit: "upright", density: 5, spread: 34, stature: 1.25 },
+    crown: "clumps",
+    leaf: "oval",
+    shape: "round",
+    bole: 1,
+  },
+  "a great willow": {
+    frame: { habit: "weeping", density: 4, spread: 46, stature: 0.95 },
+    crown: "strands",
+    leaf: "pointed",
+    shape: "round",
+    bole: 1,
+  },
+  "an umbrella pine": {
+    frame: { habit: "spreading", density: 4, spread: 50, stature: 0.72 },
+    crown: "clumps",
+    leaf: "pointed",
+    shape: "round",
+    bole: 2.2,
+  },
+  "a dark yew": {
+    frame: { habit: "spreading", density: 5, spread: 52, stature: 0.72 },
+    crown: "clumps",
+    leaf: "oval",
+    shape: "round",
+    bole: 1,
+  },
 } as const;
 
 /**
@@ -28,7 +80,12 @@ const FORMS = {
  * below the crown. Returns the aged frame, its buttresses and the tips that
  * still carry leaves.
  */
-function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => boolean): { skeleton: Skeleton; buttresses: Buttress[]; trunkRadius: number } {
+function aged(
+  skel: Skeleton,
+  age: number,
+  bole: number,
+  broken: (i: number) => boolean,
+): { skeleton: Skeleton; buttresses: Buttress[]; trunkRadius: number } {
   const trunk = skel.limbs.filter((l) => l.depth === 0);
   const fork = trunk.reduce((m, l) => Math.max(m, l.end[1]), 0);
   // With age the fork drops and the trunk thickens.
@@ -37,16 +94,22 @@ function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => 
   // lowers the crown, points of drooping limbs below the fork scale with the
   // trunk instead of dropping with the fork, so they stay above the ground.
   const lower = (q: readonly [number, number, number], trunk = false): V3 => {
-    const moved = trunk || (stretch < 1 && q[1] <= fork) ? q[1] * stretch : q[1] + fork * (stretch - 1);
+    const moved =
+      trunk || (stretch < 1 && q[1] <= fork)
+        ? q[1] * stretch
+        : q[1] + fork * (stretch - 1);
     return [q[0], moved, q[2]];
   };
-  const girth = (l: Limb): number => (l.depth === 0 ? 0.85 + 0.75 * age : l.depth === 1 ? 0.9 + 0.4 * age : 1);
+  const girth = (l: Limb): number =>
+    l.depth === 0 ? 0.85 + 0.75 * age : l.depth === 1 ? 0.9 + 0.4 * age : 1;
   // Great limbs broken off: the first segment stays as a blunt stub and everything it carried is gone.
   const stubs = new Set<number>();
   const gone = new Set<number>();
   skel.limbs.forEach((l, i) => {
     if (gone.has(l.parent) || stubs.has(l.parent)) gone.add(i);
-    else if (l.depth === 1 && skel.limbs[l.parent]?.depth === 0 && broken(i)) stubs.add(i);
+    else if (l.depth === 1 && skel.limbs[l.parent]?.depth === 0 && broken(i)) {
+      stubs.add(i);
+    }
   });
   const removed = (i: number): boolean => gone.has(i);
   const kept = new Map<number, number>();
@@ -58,10 +121,21 @@ function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => 
     let end = lower(l.end, l.depth === 0);
     let endRadius = l.endRadius * girth(l);
     if (stubs.has(i)) {
-      end = [start[0] + (end[0] - start[0]) * 0.5, start[1] + (end[1] - start[1]) * 0.5, start[2] + (end[2] - start[2]) * 0.5];
+      end = [
+        start[0] + (end[0] - start[0]) * 0.5,
+        start[1] + (end[1] - start[1]) * 0.5,
+        start[2] + (end[2] - start[2]) * 0.5,
+      ];
       endRadius = l.startRadius * girth(l) * 0.75;
     }
-    limbs.push({ start, end, startRadius: l.startRadius * girth(l), endRadius, depth: l.depth, parent: l.parent < 0 ? -1 : (kept.get(l.parent) ?? -1) });
+    limbs.push({
+      start,
+      end,
+      startRadius: l.startRadius * girth(l),
+      endRadius,
+      depth: l.depth,
+      parent: l.parent < 0 ? -1 : (kept.get(l.parent) ?? -1),
+    });
   });
   // Buttress roots spread into the ground around an old trunk.
   const base = limbs[0];
@@ -74,7 +148,11 @@ function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => 
       buttresses.push({
         angle: a,
         reach: base.startRadius * (1.5 + 0.9 * age) * size,
-        height: base.startRadius * (1.3 + 0.8 * age) * BUTTRESS.height * (0.85 + 0.3 * Math.cos(k * 2.9)),
+        height:
+          base.startRadius *
+          (1.3 + 0.8 * age) *
+          BUTTRESS.height *
+          (0.85 + 0.3 * Math.cos(k * 2.9)),
         thick: base.startRadius * BUTTRESS.thick,
       });
     }
@@ -83,14 +161,19 @@ function aged(skel: Skeleton, age: number, bole: number, broken: (i: number) => 
   const ends = new Map<string, number>();
   skel.limbs.forEach((l, i) => ends.set(l.end.join(","), i));
   const top = skel.tips.reduce((m, t) => Math.max(m, t.position[1]), 0);
-  const bare = age > 0.6 ? top - (top - fork) * 0.14 * (age - 0.6) * 2.5 : Infinity;
+  const bare =
+    age > 0.6 ? top - (top - fork) * 0.14 * (age - 0.6) * 2.5 : Infinity;
   const tips: Anchor[] = skel.tips.flatMap((t) => {
     const i = ends.get(t.position.join(","));
     if (i !== undefined && (removed(i) || stubs.has(i))) return [];
     if (t.position[1] > bare) return [];
     return [{ ...t, position: lower(t.position) }];
   });
-  return { skeleton: { limbs, tips }, buttresses, trunkRadius: base?.startRadius ?? 0.5 };
+  return {
+    skeleton: { limbs, tips },
+    buttresses,
+    trunkRadius: base?.startRadius ?? 0.5,
+  };
 }
 
 /** A blade-like buttress root, in meters: where it points, how far it runs, how tall it stands at the trunk and how thick it is. */
@@ -114,7 +197,12 @@ const BUTTRESS = { height: 1.6, thick: 0.2, sweep: 1.6 } as const;
  * sweeping down to the ground and its foot sunk below it. It uses the trunk's
  * bark, never goes, and sways with the trunk's base.
  */
-function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, roughness: number, seed: number): Built {
+function buildButtresses(
+  buttresses: readonly Buttress[],
+  trunkRadius: number,
+  roughness: number,
+  seed: number,
+): Built {
   const out = new PartBuilder("bark", "solid");
   const along = 14;
   const around = 12;
@@ -127,7 +215,8 @@ function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, r
       const a = b.angle + 0.16 * Math.sin(t * Math.PI * 1.3 + n * 1.9);
       const dir: V3 = [Math.cos(a), 0, Math.sin(a)];
       const side: V3 = [-dir[2], 0, dir[0]];
-      const dist = trunkRadius * 0.3 + t * Math.max(0, b.reach - trunkRadius * 0.3);
+      const dist =
+        trunkRadius * 0.3 + t * Math.max(0, b.reach - trunkRadius * 0.3);
       const top = b.height * Math.pow(1 - t, BUTTRESS.sweep) + 0.06;
       const bottom = -0.4;
       const half = (top - bottom) / 2;
@@ -141,9 +230,14 @@ function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, r
         const c = Math.cos(th);
         const s = Math.sin(th);
         // Flat-sided, its top edge rounded, a little wider toward the ground.
-        const across = w * Math.sign(c) * Math.pow(Math.abs(c), 0.55) * (1.25 - 0.25 * s);
+        const across =
+          w * Math.sign(c) * Math.pow(Math.abs(c), 0.55) * (1.25 - 0.25 * s);
         const up = mid + half * Math.sign(s) * Math.pow(Math.abs(s), 0.3);
-        row.push([dir[0] * dist + side[0] * across, up, dir[2] * dist + side[2] * across]);
+        row.push([
+          dir[0] * dist + side[0] * across,
+          up,
+          dir[2] * dist + side[2] * across,
+        ]);
       }
       grid.push(row);
     }
@@ -154,16 +248,37 @@ function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, r
       normals.push([]);
       for (let j = 0; j <= around; j++) {
         const q = (grid[i] as V3[])[j] as V3;
-        const du = sub((grid[Math.min(along, i + 1)] as V3[])[j] as V3, (grid[Math.max(0, i - 1)] as V3[])[j] as V3);
-        const dv = sub((grid[i] as V3[])[(j + 1) % around] as V3, (grid[i] as V3[])[(j + around - 1) % around] as V3);
+        const du = sub(
+          (grid[Math.min(along, i + 1)] as V3[])[j] as V3,
+          (grid[Math.max(0, i - 1)] as V3[])[j] as V3,
+        );
+        const dv = sub(
+          (grid[i] as V3[])[(j + 1) % around] as V3,
+          (grid[i] as V3[])[(j + around - 1) % around] as V3,
+        );
         let nrm = normalize(cross(du, dv));
-        if (dot(nrm, sub(q, centers[i] as V3)) < 0) nrm = [-nrm[0], -nrm[1], -nrm[2]];
+        if (dot(nrm, sub(q, centers[i] as V3)) < 0) {
+          nrm = [-nrm[0], -nrm[1], -nrm[2]];
+        }
         (normals[i] as V3[]).push(nrm);
         const wobble = fbm3(q[0] * 1.7, q[1] * 0.8, q[2] * 1.7, seed + n, 2);
-        const furrow = 0.5 + 0.5 * Math.sin(q[1] * 2.4 + wobble * 3 + (i / along) * 6);
+        const furrow =
+          0.5 + 0.5 * Math.sin(q[1] * 2.4 + wobble * 3 + (i / along) * 6);
         const ground = clamp(q[1] / 1.2, 0, 1);
-        const shade = (0.5 + 0.28 * (1 - roughness * 0.6) + 0.22 * furrow * (0.3 + roughness)) * (0.82 + 0.18 * ground) + 0.06 * wobble;
-        out.vertex(q, nrm, clamp(shade, 0, 1), { loss: 0, droop: 0, wither, glow: 0, pivot: root, bough: root });
+        const shade =
+          (0.5 +
+            0.28 * (1 - roughness * 0.6) +
+            0.22 * furrow * (0.3 + roughness)) *
+            (0.82 + 0.18 * ground) +
+          0.06 * wobble;
+        out.vertex(q, nrm, clamp(shade, 0, 1), {
+          loss: 0,
+          droop: 0,
+          wither,
+          glow: 0,
+          pivot: root,
+          bough: root,
+        });
       }
     }
     // Wound counter-clockwise seen from outside, so each quad's face agrees with its corners' normals.
@@ -172,8 +287,16 @@ function buildButtresses(buttresses: readonly Buttress[], trunkRadius: number, r
         const a = first + i * (around + 1) + j;
         const c = a + around + 1;
         const p0 = (grid[i] as V3[])[j] as V3;
-        const face = cross(sub((grid[i] as V3[])[j + 1] as V3, p0), sub((grid[i + 1] as V3[])[j] as V3, p0));
-        const corners = [normals[i]?.[j], normals[i]?.[j + 1], normals[i + 1]?.[j], normals[i + 1]?.[j + 1]] as V3[];
+        const face = cross(
+          sub((grid[i] as V3[])[j + 1] as V3, p0),
+          sub((grid[i + 1] as V3[])[j] as V3, p0),
+        );
+        const corners = [
+          normals[i]?.[j],
+          normals[i]?.[j + 1],
+          normals[i + 1]?.[j],
+          normals[i + 1]?.[j + 1],
+        ] as V3[];
         const facing = corners.reduce((sum, m) => sum + dot(face, m), 0);
         if (facing >= 0) {
           out.triangle(a, a + 1, c);
@@ -206,18 +329,55 @@ export function buildGreatTree(p: TreeParams, ctx: BuildContext): Built {
   const form = FORMS[p.form];
   // A young giant is a little taller, and an ancient one is lower and wider.
   const scale = p.size * (ctx.facts.scale ?? 1) * (1.06 - 0.12 * p.age);
-  const inner: BuildContext = { rand: ctx.rand.fork("great-tree"), facts: { ...ctx.facts, scale } };
-    const grown = growBranching({ ...form.frame, spread: form.frame.spread * (1 + 0.18 * p.age), stature: form.frame.stature * (1.08 - 0.2 * p.age) }, inner);
+  const inner: BuildContext = {
+    rand: ctx.rand.fork("great-tree"),
+    facts: { ...ctx.facts, scale },
+  };
+  const grown = growBranching(
+    {
+      ...form.frame,
+      spread: form.frame.spread * (1 + 0.18 * p.age),
+      stature: form.frame.stature * (1.08 - 0.2 * p.age),
+    },
+    inner,
+  );
   const breaks = inner.rand.fork("broken");
   const odds = clamp((p.age - 0.3) * 0.75, 0, 0.5);
-  const { skeleton, buttresses, trunkRadius } = aged(grown, p.age, form.bole, () => breaks.next() < odds);
+  const { skeleton, buttresses, trunkRadius } = aged(
+    grown,
+    p.age,
+    form.bole,
+    () => breaks.next() < odds,
+  );
   const roughness = clamp(p.bark + 0.25 * p.age, 0, 1);
-  const bark = buildBark({ roughness }, { ...inner, rand: inner.rand.fork("bark") }, skeleton);
-  const roots = buildButtresses(buttresses, trunkRadius, roughness, Math.floor(inner.rand.fork("roots").next() * 1e6));
+  const bark = buildBark(
+    { roughness },
+    { ...inner, rand: inner.rand.fork("bark") },
+    skeleton,
+  );
+  const roots = buildButtresses(
+    buttresses,
+    trunkRadius,
+    roughness,
+    Math.floor(inner.rand.fork("roots").next() * 1e6),
+  );
   const fullness = p.fullness * (1 - 0.18 * p.age);
   const crown =
     form.crown === "strands"
-      ? buildLeafStrands({ length: 2.2, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton, STRAND_TRIANGLE_BUDGET)
-      : buildLeafClumps({ shape: form.shape, leaf: form.leaf, size: 1, fullness }, { ...inner, rand: inner.rand.fork("crown") }, skeleton, CROWN_GUARD);
-  return { parts: [...bark.parts, ...roots.parts, ...crown.parts], anchors: crown.anchors };
+      ? buildLeafStrands(
+          { length: 2.2, fullness },
+          { ...inner, rand: inner.rand.fork("crown") },
+          skeleton,
+          STRAND_TRIANGLE_BUDGET,
+        )
+      : buildLeafClumps(
+          { shape: form.shape, leaf: form.leaf, size: 1, fullness },
+          { ...inner, rand: inner.rand.fork("crown") },
+          skeleton,
+          CROWN_GUARD,
+        );
+  return {
+    parts: [...bark.parts, ...roots.parts, ...crown.parts],
+    anchors: crown.anchors,
+  };
 }

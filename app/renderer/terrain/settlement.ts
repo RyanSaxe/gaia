@@ -6,15 +6,42 @@
 // their steps carry it up to the door, their walls and features clear the grass,
 // and each has a signboard at the end of its walk naming what it represents.
 
-import { type Blueprint, type BuildingPlan, type Built, Library, type Palette, type Part, seedOf } from "@gaia/schema";
+import {
+  type Blueprint,
+  type BuildingPlan,
+  type Built,
+  Library,
+  type Palette,
+  type Part,
+  seedOf,
+} from "@gaia/schema";
 import { FLORA_PRIMITIVES, STRUCTURE_PRIMITIVES } from "@gaia/primitives";
 import { structure } from "@gaia/kinds";
-import { type PlantBatch, type SceneLight, createPlantBatch } from "@gaia/render";
-import { type BuildingSite, type Capsule, type Extent, type SolidShape, buildingPieces, extentOf, turningExtent } from "@gaia/terrain";
+import {
+  type PlantBatch,
+  type SceneLight,
+  createPlantBatch,
+} from "@gaia/render";
+import {
+  type BuildingSite,
+  type Capsule,
+  type Extent,
+  type SolidShape,
+  buildingPieces,
+  extentOf,
+  turningExtent,
+} from "@gaia/terrain";
 import type * as THREE from "three";
 import { type BuildAsk, made } from "./made.ts";
 import type { BuildingOf, Represented } from "./represent.ts";
-import { type BuildingToPlace, blockedBy, buildingClearings, needsBank, signOf, readingSpotOf } from "./place.ts";
+import {
+  type BuildingToPlace,
+  blockedBy,
+  buildingClearings,
+  needsBank,
+  signOf,
+  readingSpotOf,
+} from "./place.ts";
 
 export interface Building {
   readonly entity: BuildingOf;
@@ -77,9 +104,15 @@ export interface Settlement {
    * of a tile whose buildings changed, from the builds made ahead (`makeAhead`) or else in place, and drops the
    * batches of tiles no longer held.
    */
-  place(held: readonly Building[], scene: THREE.Object3D, tileOf: (b: Building) => string): void;
+  place(
+    held: readonly Building[],
+    scene: THREE.Object3D,
+    tileOf: (b: Building) => string,
+  ): void;
   /** The placed building a ray hits first, and the distance along the ray. */
-  pick(raycaster: THREE.Raycaster): { readonly building: Building; readonly distance: number } | undefined;
+  pick(
+    raycaster: THREE.Raycaster,
+  ): { readonly building: Building; readonly distance: number } | undefined;
   /** Sets a building's vitality, whether or not it is placed. */
   setVitality(b: Building, v: number): void;
 }
@@ -87,7 +120,8 @@ export interface Settlement {
 const lib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 
 /** A part's primitive in words: `timber-frame@1` is "timber frame". */
-const wordsOf = (id: string): string => id.replace(/@\d+$/, "").replace(/-/g, " ");
+const wordsOf = (id: string): string =>
+  id.replace(/@\d+$/, "").replace(/-/g, " ");
 
 /**
  * What a composed thing is called, from the parts Jev chose: a building by its walls and its feature ("Fieldstone
@@ -98,14 +132,18 @@ export function composedName(bp: Blueprint): string {
   const named = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
   const frame = bp.slots.form?.use;
   const crown = bp.slots.crown?.use;
-  if (frame !== undefined && crown !== undefined) return named(`${wordsOf(frame)} with ${wordsOf(crown)}`);
+  if (frame !== undefined && crown !== undefined) {
+    return named(`${wordsOf(frame)} with ${wordsOf(crown)}`);
+  }
   const drift = bp.slots.drift?.use;
   if (drift !== undefined) return named(wordsOf(drift));
   const form = bp.slots.form?.use;
   if (form !== undefined) return named(wordsOf(form));
   const walls = bp.slots.body?.use;
   const feature = bp.slots.feature?.use;
-  return named(`${walls === undefined ? "" : `${wordsOf(walls)} `}house${feature === undefined ? "" : ` with a ${wordsOf(feature)}`}`);
+  return named(
+    `${walls === undefined ? "" : `${wordsOf(walls)} `}house${feature === undefined ? "" : ` with a ${wordsOf(feature)}`}`,
+  );
 }
 
 /** Each building, for making ahead. */
@@ -114,11 +152,19 @@ export const settlementBuilds = (entities: readonly BuildingOf[]): BuildAsk[] =>
     kind: "structure",
     blueprint: entity.blueprint,
     seed: seedOf(`terrain-lab/${entity.facts.path}`),
-    facts: Object.fromEntries(Object.entries(structure.facts).map(([k, bind]) => [k, bind(entity.facts)])),
+    facts: Object.fromEntries(
+      Object.entries(structure.facts).map(([k, bind]) => [
+        k,
+        bind(entity.facts),
+      ]),
+    ),
   }));
 
 /** Creates a building for each thing that appears as a building, from the blueprint Jev composed for it. */
-export function createSettlement(light: SceneLight, entities: readonly BuildingOf[]): Settlement {
+export function createSettlement(
+  light: SceneLight,
+  entities: readonly BuildingOf[],
+): Settlement {
   const asks = settlementBuilds(entities);
   const buildings: Building[] = entities.map((entity, i) => {
     const ask = asks[i] as BuildAsk;
@@ -130,7 +176,11 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
     for (const p of built.parts) {
       for (let k = 0; k < p.positions.length; k += 3) {
         height = Math.max(height, p.positions[k + 1] as number);
-        radius = Math.max(radius, Math.abs(p.positions[k] as number), Math.abs(p.positions[k + 2] as number));
+        radius = Math.max(
+          radius,
+          Math.abs(p.positions[k] as number),
+          Math.abs(p.positions[k + 2] as number),
+        );
       }
     }
     return {
@@ -147,45 +197,82 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
       palette: built.palette,
       plan: built.slots.get("footprint")?.output as BuildingPlan,
       beside: extentOf(built.slots.get("feature")?.output as Built | undefined),
-      pieces: buildingPieces(built.slots.get("footprint")?.output as BuildingPlan, built.parts),
+      pieces: buildingPieces(
+        built.slots.get("footprint")?.output as BuildingPlan,
+        built.parts,
+      ),
       walkable: built.parts.filter((p) => p.collision === "walkable"),
-      wheel: turningExtent(built.slots.get("feature")?.output as Built | undefined),
+      wheel: turningExtent(
+        built.slots.get("feature")?.output as Built | undefined,
+      ),
       byWater: needsBank(entity.blueprint, lib),
       site: { x: 0, z: 0, yaw: 0, level: 0 },
     };
   });
 
   /** Each placed tile's batch and its buildings, in the batch's order. */
-  const batches = new Map<string, { readonly members: readonly Building[]; readonly batch: PlantBatch }>();
-  const atSite = (b: Building) => ({ x: b.site.x, y: b.site.level, z: b.site.z, yaw: b.site.yaw });
+  const batches = new Map<
+    string,
+    { readonly members: readonly Building[]; readonly batch: PlantBatch }
+  >();
+  const atSite = (b: Building) => ({
+    x: b.site.x,
+    y: b.site.level,
+    z: b.site.z,
+    yaw: b.site.yaw,
+  });
   return {
     buildings,
-    requests: () => buildings.map((b) => ({ name: b.represented.name, plan: b.plan, beside: b.beside, ...(b.byWater ? { wheel: b.wheel } : {}) })),
+    requests: () =>
+      buildings.map((b) => ({
+        name: b.represented.name,
+        plan: b.plan,
+        beside: b.beside,
+        ...(b.byWater ? { wheel: b.wheel } : {}),
+      })),
     seat(sites) {
       buildings.forEach((b, i) => {
         b.site = sites[i] ?? b.site;
-        if (b.batchSlot !== null) b.batchSlot.batch.move(b.batchSlot.member, atSite(b));
+        if (b.batchSlot !== null) {
+          b.batchSlot.batch.move(b.batchSlot.member, atSite(b));
+        }
       });
     },
-    blocked: (x, z, margin) => buildings.some((b) => blockedBy(b, b.site, x, z, margin)),
+    blocked: (x, z, margin) =>
+      buildings.some((b) => blockedBy(b, b.site, x, z, margin)),
     clearings: () => buildings.flatMap((b) => buildingClearings(b, b.site)),
     signOf: (b) => signOf(b.plan, b.site),
     readingSpotOf: (b) => readingSpotOf(b.plan, b.site),
     views: () => [...batches.values()].map((t) => t.batch),
     place(held, scene, tileOf) {
       const want = new Map<string, Building[]>();
-      for (const b of held) want.set(tileOf(b), [...(want.get(tileOf(b)) ?? []), b]);
+      for (const b of held) {
+        want.set(tileOf(b), [...(want.get(tileOf(b)) ?? []), b]);
+      }
       // Drop the batch of a tile no longer held or whose buildings changed.
-      for (const [key, tile] of [...batches]) {
+      for (const [key, tile] of batches) {
         const next = want.get(key);
-        if (next !== undefined && next.length === tile.members.length && next.every((b) => tile.members.includes(b))) continue;
+        if (
+          next !== undefined &&
+          next.length === tile.members.length &&
+          next.every((b) => tile.members.includes(b))
+        ) {
+          continue;
+        }
         tile.batch.dispose();
         for (const b of tile.members) b.batchSlot = null;
         batches.delete(key);
       }
       for (const [key, members] of want) {
         if (batches.has(key)) continue;
-        const batch = createPlantBatch(members.map((b) => ({ plant: made(b.ask, lib), ...atSite(b), vitality: b.vitality })), light);
+        const batch = createPlantBatch(
+          members.map((b) => ({
+            plant: made(b.ask, lib),
+            ...atSite(b),
+            vitality: b.vitality,
+          })),
+          light,
+        );
         members.forEach((b, member) => (b.batchSlot = { batch, member }));
         scene.add(batch.object);
         batches.set(key, { members, batch });
@@ -196,7 +283,13 @@ export function createSettlement(light: SceneLight, entities: readonly BuildingO
       for (const { members, batch } of batches.values()) {
         const hit = batch.pick(raycaster);
         const building = hit === undefined ? undefined : members[hit.member];
-        if (hit !== undefined && building !== undefined && (best === undefined || hit.distance < best.distance)) best = { building, distance: hit.distance };
+        if (
+          hit !== undefined &&
+          building !== undefined &&
+          (best === undefined || hit.distance < best.distance)
+        ) {
+          best = { building, distance: hit.distance };
+        }
       }
       return best;
     },

@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { type ChoiceField, type DaySpec, Library, type LightSpec, type Rgb, type ScaleField, blueprintOf, rand, resolveScale, seedOf } from "@gaia/schema";
+import {
+  type ChoiceField,
+  type DaySpec,
+  Library,
+  type LightSpec,
+  type Rgb,
+  type ScaleField,
+  blueprintOf,
+  rand,
+  resolveScale,
+  seedOf,
+} from "@gaia/schema";
 import { WORLD_PRIMITIVES, daylight } from "@gaia/primitives";
 import { world } from "@gaia/kinds";
 import { lightAt, realizeSky } from "@gaia/realize";
@@ -8,7 +19,8 @@ import { randomSlots } from "@gaia/world/testing";
 type Erased = (p: unknown) => DaySpec;
 const build = daylight.build as unknown as Erased;
 
-const ends = (s: ScaleField): number[] => s.levels.flatMap((l) => [0, 0.999].map((u) => resolveScale(s, l.words, u)));
+const ends = (s: ScaleField): number[] =>
+  s.levels.flatMap((l) => [0, 0.999].map((u) => resolveScale(s, l.words, u)));
 /** Every sun path daylight@1 allows: each level of its `path` at both ends. */
 const PATHS = ends(daylight.params.path as ScaleField);
 
@@ -17,19 +29,33 @@ const days: DaySpec[] = (() => {
   const f = daylight.params;
   const choices = (c: ChoiceField): string[] => Object.keys(c.options);
   const out: DaySpec[] = [];
-  for (const path of PATHS)
-    for (const warmth of choices(f.warmth as ChoiceField))
-      for (const brush of choices(f.brush as ChoiceField))
-        for (const moon of choices(f.moon as ChoiceField))
-          for (const stars of ends(f.stars as ScaleField)) out.push(build({ path, warmth, brush, moon, stars }));
+  for (const path of PATHS) {
+    for (const warmth of choices(f.warmth as ChoiceField)) {
+      for (const brush of choices(f.brush as ChoiceField)) {
+        for (const moon of choices(f.moon as ChoiceField)) {
+          for (const stars of ends(f.stars as ScaleField)) {
+            out.push(build({ path, warmth, brush, moon, stars }));
+          }
+        }
+      }
+    }
+  }
   return out;
 })();
 
 /** Every number in a light, in a fixed order. */
-const numbers = (l: LightSpec): number[] => Object.values(l).flatMap((v) => (typeof v === "number" ? [v] : [...(v as readonly number[])]));
-const largestDifference = (x: readonly number[], y: readonly number[]): number => Math.max(...x.map((v, i) => Math.abs(v - (y[i] ?? Number.NaN))));
-const largestChange = (a: LightSpec, b: LightSpec): number => largestDifference(numbers(a), numbers(b));
-const luminance = (c: Rgb): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+const numbers = (l: LightSpec): number[] =>
+  Object.values(l).flatMap((v) =>
+    typeof v === "number" ? [v] : [...(v as readonly number[])],
+  );
+const largestDifference = (
+  x: readonly number[],
+  y: readonly number[],
+): number => Math.max(...x.map((v, i) => Math.abs(v - (y[i] ?? Number.NaN))));
+const largestChange = (a: LightSpec, b: LightSpec): number =>
+  largestDifference(numbers(a), numbers(b));
+const luminance = (c: Rgb): number =>
+  0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
 const EVERY_15_MINUTES = Array.from({ length: 96 }, (_, i) => i / 4);
 
 describe("lightAt", () => {
@@ -40,7 +66,9 @@ describe("lightAt", () => {
     const eps = 1e-4;
     for (const day of days) {
       for (const at of [0, 24, ...day.keys.map((k) => k.hour)]) {
-        expect(largestChange(lightAt(day, at - eps), lightAt(day, at + eps))).toBeLessThan(1e-3);
+        expect(
+          largestChange(lightAt(day, at - eps), lightAt(day, at + eps)),
+        ).toBeLessThan(1e-3);
       }
     }
     for (const day of days.filter((_, i) => i % 7 === 0)) {
@@ -64,14 +92,22 @@ describe("daylight@1 nights", () => {
     for (const day of days) {
       for (const h of EVERY_15_MINUTES) {
         const l = lightAt(day, h);
-        expect(luminance(l.ambientColor) * l.ambientIntensity).toBeGreaterThan(BLACK);
+        expect(luminance(l.ambientColor) * l.ambientIntensity).toBeGreaterThan(
+          BLACK,
+        );
         expect(luminance(l.shadowColor)).toBeGreaterThan(BLACK);
       }
     }
     const lib = new Library(WORLD_PRIMITIVES);
     const r = rand(seedOf("night skies"));
     for (let i = 0; i < 24; i++) {
-      const filled = { blueprint: blueprintOf("world", randomSlots(world, lib, () => r.next())), kind: world };
+      const filled = {
+        blueprint: blueprintOf(
+          "world",
+          randomSlots(world, lib, () => r.next()),
+        ),
+        kind: world,
+      };
       const night = realizeSky(filled, lib, seedOf("test"), 2).sky;
       expect(luminance(night.zenith)).toBeGreaterThan(BLACK);
       expect(luminance(night.horizon)).toBeGreaterThan(BLACK);

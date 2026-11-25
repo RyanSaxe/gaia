@@ -38,3 +38,6 @@ tree-sitter-toml-ng = "0.7"
 tree-sitter-yaml = "0.7"
 tree-sitter-kotlin-ng = "1.1"
 sha2 = "0.11.0"
+
+[lints]
+workspace = true

@@ -4,10 +4,54 @@
 // and scrub grows clusters only at its tips. `blossoms@1` adds berries and
 // flowers at the anchors the twigs leave.
 
-import { type Anchor, type BuildContext, type Built, CUT, type Limb, type Resolved, type Skeleton } from "@gaia/schema";
-import type { brambleParams, leafMoundParams, thicketParams } from "../flora.ts";
-import { type Channels, PartBuilder, type V3, add, addScaled, clamp, cross, dot, fbm3, length, lerp, normalize, scale, sub } from "./kit.ts";
-import { Boughs, type Clump, type ClumpLook, type Crown, FEWEST_TWIGS, NEEDLE_TRIANGLE_BUDGET, SOIL, aboveSoil, crownRoom, crownTips, emitClumps, emitSpray, emitTwig, filled, hungFrom, twigTriangles } from "./foliage.ts";
+import {
+  type Anchor,
+  type BuildContext,
+  type Built,
+  CUT,
+  type Limb,
+  type Resolved,
+  type Skeleton,
+} from "@gaia/schema";
+import type {
+  brambleParams,
+  leafMoundParams,
+  thicketParams,
+} from "../flora.ts";
+import {
+  type Channels,
+  PartBuilder,
+  type V3,
+  add,
+  addScaled,
+  clamp,
+  cross,
+  dot,
+  fbm3,
+  length,
+  lerp,
+  normalize,
+  scale,
+  sub,
+} from "./kit.ts";
+import {
+  Boughs,
+  type Clump,
+  type ClumpLook,
+  type Crown,
+  FEWEST_TWIGS,
+  NEEDLE_TRIANGLE_BUDGET,
+  SOIL,
+  aboveSoil,
+  crownRoom,
+  crownTips,
+  emitClumps,
+  emitSpray,
+  emitTwig,
+  filled,
+  hungFrom,
+  twigTriangles,
+} from "./foliage.ts";
 
 const HABITS = {
   mound: { width: 1.25, rise: 0.55, lift: 0.12 },
@@ -18,7 +62,10 @@ const HABITS = {
 const UP: V3 = [0, 1, 0];
 
 /** Stems from the root crown out to tips spread over a dome, plus low tips so leaves reach the ground, or for scrub, a low wiry tangle. */
-export function growThicket(p: Resolved<typeof thicketParams>, ctx: BuildContext): Skeleton {
+export function growThicket(
+  p: Resolved<typeof thicketParams>,
+  ctx: BuildContext,
+): Skeleton {
   if (p.habit === "scrub") return growScrub(p, ctx);
   const habit = HABITS[p.habit];
   const s = ctx.facts.scale ?? 1;
@@ -29,42 +76,97 @@ export function growThicket(p: Resolved<typeof thicketParams>, ctx: BuildContext
   const limbs: Limb[] = [];
   const tips: Anchor[] = [];
   const stemRadius = 0.012 + 0.018 * height;
-  const dome = (az: number, up: number): V3 => [Math.cos(az) * Math.cos(up) * width * 0.5, Math.sin(up) * height * 0.92 + height * 0.08, Math.sin(az) * Math.cos(up) * width * 0.5];
+  const dome = (az: number, up: number): V3 => [
+    Math.cos(az) * Math.cos(up) * width * 0.5,
+    Math.sin(up) * height * 0.92 + height * 0.08,
+    Math.sin(az) * Math.cos(up) * width * 0.5,
+  ];
 
   for (let i = 0; i < stems; i++) {
     const sr = r.fork(`stem${i}`);
     const az = (i / stems) * Math.PI * 2 + sr.range(-0.4, 0.4);
-    const root: V3 = [Math.cos(az) * width * 0.06 * sr.next(), 0, Math.sin(az) * width * 0.06 * sr.next()];
+    const root: V3 = [
+      Math.cos(az) * width * 0.06 * sr.next(),
+      0,
+      Math.sin(az) * width * 0.06 * sr.next(),
+    ];
     // Each stem rises and leans out toward its share of the dome.
     const up = sr.range(0.55, 1.25) * (0.6 + habit.rise * 0.6);
     const reach = dome(az, Math.min(1.45, up));
-    const mid: V3 = [reach[0] * 0.55, reach[1] * (0.55 + habit.lift), reach[2] * 0.55];
+    const mid: V3 = [
+      reach[0] * 0.55,
+      reach[1] * (0.55 + habit.lift),
+      reach[2] * 0.55,
+    ];
     const stem = limbs.length;
-    limbs.push({ start: root, end: mid, startRadius: stemRadius, endRadius: stemRadius * 0.7, depth: 0, parent: -1 });
+    limbs.push({
+      start: root,
+      end: mid,
+      startRadius: stemRadius,
+      endRadius: stemRadius * 0.7,
+      depth: 0,
+      parent: -1,
+    });
     const twigs = 2 + (sr.next() < 0.5 ? 1 : 0);
     for (let k = 0; k < twigs; k++) {
       const tr = sr.fork(`twig${k}`);
       const taz = az + tr.range(-0.7, 0.7);
       const tup = clamp(up + tr.range(-0.45, 0.35), 0.15, 1.5);
       const end = dome(taz, tup);
-      const jitter: V3 = [end[0] * tr.range(0.82, 1), end[1] * tr.range(0.85, 1), end[2] * tr.range(0.82, 1)];
-      limbs.push({ start: mid, end: jitter, startRadius: stemRadius * 0.6, endRadius: stemRadius * 0.3, depth: 1, parent: stem });
-      tips.push({ position: jitter, normal: normalize([jitter[0], jitter[1] - height * 0.35, jitter[2]]), size: 1 });
+      const jitter: V3 = [
+        end[0] * tr.range(0.82, 1),
+        end[1] * tr.range(0.85, 1),
+        end[2] * tr.range(0.82, 1),
+      ];
+      limbs.push({
+        start: mid,
+        end: jitter,
+        startRadius: stemRadius * 0.6,
+        endRadius: stemRadius * 0.3,
+        depth: 1,
+        parent: stem,
+      });
+      tips.push({
+        position: jitter,
+        normal: normalize([jitter[0], jitter[1] - height * 0.35, jitter[2]]),
+        size: 1,
+      });
     }
     // A low shoot, so the mound's skirt reaches the soil.
     const low = dome(az + sr.range(-0.3, 0.3), sr.range(0.08, 0.3));
     const lowEnd: V3 = [low[0] * 0.9, low[1], low[2] * 0.9];
-    limbs.push({ start: root, end: lowEnd, startRadius: stemRadius * 0.55, endRadius: stemRadius * 0.25, depth: 1, parent: stem });
-    tips.push({ position: lowEnd, normal: normalize([lowEnd[0], 0.25, lowEnd[2]]), size: 0.7 });
+    limbs.push({
+      start: root,
+      end: lowEnd,
+      startRadius: stemRadius * 0.55,
+      endRadius: stemRadius * 0.25,
+      depth: 1,
+      parent: stem,
+    });
+    tips.push({
+      position: lowEnd,
+      normal: normalize([lowEnd[0], 0.25, lowEnd[2]]),
+      size: 0.7,
+    });
   }
   // A crown tip on top keeps the mound from denting in its middle.
   tips.push({ position: [0, height, 0], normal: [0, 1, 0], size: 0.9 });
-  limbs.push({ start: [0, 0, 0], end: [0, height * 0.9, 0], startRadius: stemRadius * 0.8, endRadius: stemRadius * 0.3, depth: 1, parent: 0 });
+  limbs.push({
+    start: [0, 0, 0],
+    end: [0, height * 0.9, 0],
+    startRadius: stemRadius * 0.8,
+    endRadius: stemRadius * 0.3,
+    depth: 1,
+    parent: 0,
+  });
   return { limbs, tips };
 }
 
 /** Scrub: low, wiry stems that lean out from the root, fork two or three times and arch over, some twigs running on past the forks. */
-function growScrub(p: Resolved<typeof thicketParams>, ctx: BuildContext): Skeleton {
+function growScrub(
+  p: Resolved<typeof thicketParams>,
+  ctx: BuildContext,
+): Skeleton {
   const r = ctx.rand.fork("scrub");
   const s = ctx.facts.scale ?? 1;
   const height = Math.min(1.2, p.stature * 0.75 * (0.8 + 0.2 * s));
@@ -78,23 +180,68 @@ function growScrub(p: Resolved<typeof thicketParams>, ctx: BuildContext): Skelet
     const az = (i / stems) * Math.PI * 2 + sr.range(-0.5, 0.5);
     const lean = sr.range(0.35, 1.05);
     const len = height * sr.range(0.55, 1);
-    const root: V3 = [Math.cos(az) * width * 0.05 * sr.next(), 0, Math.sin(az) * width * 0.05 * sr.next()];
-    const mid: V3 = [root[0] + Math.cos(az) * Math.sin(lean) * len * 0.5, len * Math.cos(lean) * 0.7 + 0.04, root[2] + Math.sin(az) * Math.sin(lean) * len * 0.5];
+    const root: V3 = [
+      Math.cos(az) * width * 0.05 * sr.next(),
+      0,
+      Math.sin(az) * width * 0.05 * sr.next(),
+    ];
+    const mid: V3 = [
+      root[0] + Math.cos(az) * Math.sin(lean) * len * 0.5,
+      len * Math.cos(lean) * 0.7 + 0.04,
+      root[2] + Math.sin(az) * Math.sin(lean) * len * 0.5,
+    ];
     const stem = limbs.length;
-    limbs.push({ start: root, end: mid, startRadius: radius, endRadius: radius * 0.7, depth: 0, parent: -1 });
+    limbs.push({
+      start: root,
+      end: mid,
+      startRadius: radius,
+      endRadius: radius * 0.7,
+      depth: 0,
+      parent: -1,
+    });
     const forks = 2 + (sr.next() < 0.5 ? 1 : 0);
     for (let k = 0; k < forks; k++) {
       const fr = sr.fork(`fork${k}`);
       const faz = az + fr.range(-0.8, 0.8);
       const flen = len * fr.range(0.45, 0.75);
-      const end: V3 = [mid[0] + Math.cos(faz) * flen, Math.max(0.08, mid[1] + flen * fr.range(-0.15, 0.45)), mid[2] + Math.sin(faz) * flen];
+      const end: V3 = [
+        mid[0] + Math.cos(faz) * flen,
+        Math.max(0.08, mid[1] + flen * fr.range(-0.15, 0.45)),
+        mid[2] + Math.sin(faz) * flen,
+      ];
       const fork = limbs.length;
-      limbs.push({ start: mid, end, startRadius: radius * 0.6, endRadius: radius * 0.3, depth: 1, parent: stem });
-      tips.push({ position: end, normal: normalize([end[0], 0.35, end[2]]), size: fr.range(0.5, 1) });
+      limbs.push({
+        start: mid,
+        end,
+        startRadius: radius * 0.6,
+        endRadius: radius * 0.3,
+        depth: 1,
+        parent: stem,
+      });
+      tips.push({
+        position: end,
+        normal: normalize([end[0], 0.35, end[2]]),
+        size: fr.range(0.5, 1),
+      });
       if (fr.next() < 0.6) {
-        const on: V3 = [end[0] + Math.cos(faz + 0.6) * flen * 0.4, Math.max(0.06, end[1] - flen * 0.15), end[2] + Math.sin(faz + 0.6) * flen * 0.4];
-        limbs.push({ start: lerp(mid, end, 0.6), end: on, startRadius: radius * 0.35, endRadius: radius * 0.2, depth: 2, parent: fork });
-        tips.push({ position: on, normal: normalize([on[0], 0.2, on[2]]), size: 0.6 });
+        const on: V3 = [
+          end[0] + Math.cos(faz + 0.6) * flen * 0.4,
+          Math.max(0.06, end[1] - flen * 0.15),
+          end[2] + Math.sin(faz + 0.6) * flen * 0.4,
+        ];
+        limbs.push({
+          start: lerp(mid, end, 0.6),
+          end: on,
+          startRadius: radius * 0.35,
+          endRadius: radius * 0.2,
+          depth: 2,
+          parent: fork,
+        });
+        tips.push({
+          position: on,
+          normal: normalize([on[0], 0.2, on[2]]),
+          size: 0.6,
+        });
       }
     }
   }
@@ -117,7 +264,10 @@ const ROOTING = 0.45;
  * sideways as it goes, so neighbours cross into a tangle, and short side
  * shoots along its arch carry the leaves and berries.
  */
-export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext): Skeleton {
+export function growBramble(
+  p: Resolved<typeof brambleParams>,
+  ctx: BuildContext,
+): Skeleton {
   const r = ctx.rand.fork("bramble");
   const height = Math.min(1.6, p.stature);
   const canes = Math.max(3, Math.round(p.canes));
@@ -136,14 +286,25 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
     const at = (t: number): V3 => {
       const heading = az + bend * t;
       const out = 0.03 + reach * t;
-      return [Math.cos(heading) * out, apex * Math.sin(Math.PI * Math.pow(t, 0.7)), Math.sin(heading) * out];
+      return [
+        Math.cos(heading) * out,
+        apex * Math.sin(Math.PI * Math.pow(t, 0.7)),
+        Math.sin(heading) * out,
+      ];
     };
     // Each cane rises from the soil on its own, like a shrub's stem, so it is its own bough.
     let parent = -1;
     for (let k = 0; k < SEGMENTS; k++) {
       const t0 = k / SEGMENTS;
       const t1 = (k + 1) / SEGMENTS;
-      limbs.push({ start: at(t0), end: at(t1), startRadius: cane * (1 - 0.6 * t0), endRadius: cane * (1 - 0.6 * t1), depth: 1, parent });
+      limbs.push({
+        start: at(t0),
+        end: at(t1),
+        startRadius: cane * (1 - 0.6 * t0),
+        endRadius: cane * (1 - 0.6 * t1),
+        depth: 1,
+        parent,
+      });
       parent = limbs.length - 1;
       const end = at(t1);
       // Side shoots from the arch, not where the cane runs along the soil.
@@ -151,9 +312,28 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
       const sr = cr.fork(`shoot${k}`);
       const dir = normalize(sub(at(Math.min(1, t1 + 0.05)), end));
       const side = normalize(cross(dir, UP));
-      const shoot = normalize(add(add(scale(side, sr.next() < 0.5 ? -1 : 1), scale(UP, sr.range(0.4, 0.9))), scale(dir, 0.4)));
-      const shootEnd = addScaled(end, shoot, sr.range(0.12, 0.26) * (0.6 + 0.4 * height));
-      limbs.push({ start: end, end: shootEnd, startRadius: cane * 0.28, endRadius: cane * 0.12, depth: 2, parent });
+      const shoot = normalize(
+        add(
+          add(
+            scale(side, sr.next() < 0.5 ? -1 : 1),
+            scale(UP, sr.range(0.4, 0.9)),
+          ),
+          scale(dir, 0.4),
+        ),
+      );
+      const shootEnd = addScaled(
+        end,
+        shoot,
+        sr.range(0.12, 0.26) * (0.6 + 0.4 * height),
+      );
+      limbs.push({
+        start: end,
+        end: shootEnd,
+        startRadius: cane * 0.28,
+        endRadius: cane * 0.12,
+        depth: 2,
+        parent,
+      });
       tips.push({ position: shootEnd, normal: shoot, size: CANE_TIP });
     }
     // The tip where the cane touches down, and the cane continuing into the soil past it like a rooting tip, so it
@@ -161,8 +341,19 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
     const touch = at(1);
     const dive = normalize(add(normalize(sub(touch, at(0.98))), [0, -1, 0]));
     const deep = ROOTING * Math.hypot(touch[0], touch[2]);
-    limbs.push({ start: touch, end: addScaled(touch, dive, deep / Math.max(0.2, -dive[1])), startRadius: cane * 0.4, endRadius: cane * 0.3, depth: 1, parent });
-    tips.push({ position: touch, normal: normalize([touch[0], 0.4, touch[2]]), size: CANE_TIP });
+    limbs.push({
+      start: touch,
+      end: addScaled(touch, dive, deep / Math.max(0.2, -dive[1])),
+      startRadius: cane * 0.4,
+      endRadius: cane * 0.3,
+      depth: 1,
+      parent,
+    });
+    tips.push({
+      position: touch,
+      normal: normalize([touch[0], 0.4, touch[2]]),
+      size: CANE_TIP,
+    });
   }
   return { limbs, tips };
 }
@@ -171,7 +362,13 @@ export function growBramble(p: Resolved<typeof brambleParams>, ctx: BuildContext
  * A feathery shrub's needle sprays, built along twigs as a crown's are: the spray's cut, half width, twigs per square
  * meter of clump, sprays per twig, and sprays per full twig on a mound whose clumps each cover several tips.
  */
-const FEATHERY = { cut: CUT.needles, half: 0.12, twigs: 26, sprays: 5, fullSprays: 8 } as const;
+const FEATHERY = {
+  cut: CUT.needles,
+  half: 0.12,
+  twigs: 26,
+  sprays: 5,
+  fullSprays: 8,
+} as const;
 /** A crowded cluster's half width, by leaf. */
 const CROWDED_HALF = { rounded: 0.108, glossy: 0.095 } as const;
 
@@ -190,7 +387,11 @@ const MOUND = {
   clusters: 1250,
   surface: 5,
   perTwig: 5,
-  layers: [[1, 0.5], [0.8, 0.3], [0.6, 0.2]] as readonly (readonly [number, number])[],
+  layers: [
+    [1, 0.5],
+    [0.8, 0.3],
+    [0.6, 0.2],
+  ] as readonly (readonly [number, number])[],
   rim: 0.85,
   inside: 1.3,
   lumps: 0.3,
@@ -199,7 +400,15 @@ const MOUND = {
   notches: 0.5,
 };
 /** Scrub's tufts: clusters only at its tips, each tuft `radius` wide, with a `bare` share of tips left bare. */
-const TUFTS = { ...MOUND, clusters: 750, perTwig: 4, radius: 0.2, bare: 0.25, strays: 0.05, notches: 0.2 };
+const TUFTS = {
+  ...MOUND,
+  clusters: 750,
+  perTwig: 4,
+  radius: 0.2,
+  bare: 0.25,
+  strays: 0.05,
+  notches: 0.2,
+};
 /** Below this fullness ("in tufts at its tips"), clusters grow only at the frame's tips. */
 const TUFTED = 0.25;
 /** How far a cluster card reaches from its base, as a multiple of its size, along its direction (2 × 1.15 × 1.15) and across it. */
@@ -228,28 +437,46 @@ const FEWEST_CLUSTER_TWIGS = 2;
  * leaves it. As vitality falls the clusters brown and drop in place, leaving
  * bare stems and twigs.
  */
-export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext, skel: Skeleton): Built {
+export function buildLeafMound(
+  p: Resolved<typeof leafMoundParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+): Built {
   if (p.leaves === "feathery") return buildNeedleMound(p, ctx, skel);
   const r = ctx.rand.fork("mound");
   const boughs = new Boughs(skel);
   const { top, reach } = extentOf(skel);
   // The mound's volume, which shades its clusters as one.
-  const mound: Crown = { center: [0, top * 0.45, 0], radius: [reach, top * 0.6, reach] };
+  const mound: Crown = {
+    center: [0, top * 0.45, 0],
+    radius: [reach, top * 0.6, reach],
+  };
   const tufts = p.fullness < TUFTED;
   const look = tufts ? TUFTS : MOUND;
   const half = CROWDED_HALF[p.leaves];
-  const base = clamp(Math.min(reach, top) * 0.45, 0.16, 1) * (0.8 + 0.3 * p.fullness);
+  const base =
+    clamp(Math.min(reach, top) * 0.45, 0.16, 1) * (0.8 + 0.3 * p.fullness);
   // On a tree's frame a mound fills it to the ground, so it gets the same triangle budget as a fir's needles.
   const budget = crownRoom(skel, NEEDLE_TRIANGLE_BUDGET);
   const perTwig = CLUSTER_TWIG + look.perTwig * CLUSTER;
-  const kept = crownTips(skel.tips, Math.floor(budget / (FEWEST_CLUSTER_TWIGS * perTwig)), (n) => fillOf(n, p.fullness, tufts));
+  const kept = crownTips(
+    skel.tips,
+    Math.floor(budget / (FEWEST_CLUSTER_TWIGS * perTwig)),
+    (n) => fillOf(n, p.fullness, tufts),
+  );
   const clumps = clumpsOf(skel, boughs, p, r.fork("clumps"), base, tufts, kept);
   const surface = clumps.reduce((n, c) => n + c.radius * c.radius, 0);
   // A mound larger than a bush's, on a tree's frame, grows the same number of clusters per square meter of clump.
-  const wanted = look.clusters * (0.8 + 0.25 * Math.max(p.fullness, 0.45)) * Math.max(1, surface / MOUND.surface);
+  const wanted =
+    look.clusters *
+    (0.8 + 0.25 * Math.max(p.fullness, 0.45)) *
+    Math.max(1, surface / MOUND.surface);
   // A crowded frame thins every clump's twigs evenly to stay in budget, and grows its clusters larger to cover what
   // the thinned ones would have, so a tree's mound is as full as a bush's, its leaves gathered in larger clusters.
-  const density = Math.min(1, budget / Math.max(1, (wanted / look.perTwig) * perTwig));
+  const density = Math.min(
+    1,
+    budget / Math.max(1, (wanted / look.perTwig) * perTwig),
+  );
   const larger = Math.min(LARGEST_CLUSTERS, 1 / Math.sqrt(density));
   const leaf = new PartBuilder("leaf");
   const twigs = new PartBuilder("bark");
@@ -258,11 +485,21 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
   clumps.forEach((clump, ci) => {
     const cr = r.fork(`clump${ci}`);
     const limb = skel.limbs[clump.limb] as Limb;
-    const count = Math.max(FEWEST_CLUSTER_TWIGS, Math.round(((wanted * clump.radius * clump.radius) / surface / look.perTwig) * density));
+    const count = Math.max(
+      FEWEST_CLUSTER_TWIGS,
+      Math.round(
+        ((wanted * clump.radius * clump.radius) / surface / look.perTwig) *
+          density,
+      ),
+    );
     const tint = cr.range(-0.08, 0.08);
     const seed = Math.floor(cr.next() * 1e6);
-    const lump = (d: V3): number => 1 + look.lumps * fbm3(d[0] * 1.4 + seed * 0.01, d[1] * 1.4, d[2] * 1.4, seed, 3);
-    const notch = (d: V3): number => fbm3(d[0] * 0.9 + 7.3, d[1] * 0.9, d[2] * 0.9, seed + 11, 2);
+    const lump = (d: V3): number =>
+      1 +
+      look.lumps *
+        fbm3(d[0] * 1.4 + seed * 0.01, d[1] * 1.4, d[2] * 1.4, seed, 3);
+    const notch = (d: V3): number =>
+      fbm3(d[0] * 0.9 + 7.3, d[1] * 0.9, d[2] * 0.9, seed + 11, 2);
     for (let k = 0; k < count; k++) {
       const tr = cr.fork(`twig${k}`);
       // Spread over the directions that do not face the soil.
@@ -280,8 +517,14 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
       const stray = tr.next() < look.strays;
       if (stray) depth = tr.range(1.2, 1.45);
       // Only the outer layer is notched, so notches open gaps in the outline, never holes through it.
-      if (depth >= 0.95 && !stray && notch(d) < -1 + 1.2 * look.notches) continue;
-      let goal = addScaled(clump.center, d, clump.radius * depth * lump(d) * tr.range(0.92, 1.05));
+      if (depth >= 0.95 && !stray && notch(d) < -1 + 1.2 * look.notches) {
+        continue;
+      }
+      let goal = addScaled(
+        clump.center,
+        d,
+        clump.radius * depth * lump(d) * tr.range(0.92, 1.05),
+      );
       goal[1] = Math.max(goal[1], half * 1.4);
       const root = onLimb(limb, goal);
       // A goal on the stem itself moves out from it, so the twig still grows from its stem.
@@ -291,39 +534,110 @@ export function buildLeafMound(p: Resolved<typeof leafMoundParams>, ctx: BuildCo
       // A cluster holds many leaves, so a bush must lose clusters steadily for its decline to show.
       // Clusters drop evenly between vitality 0.75 and 0.25, outer ones first, so about three in ten
       // have gone by 0.6 and half by 0.5, and the bush is bare by 0.25.
-      const loss = clamp(DROP.from - (DROP.from - DROP.to) * tr.next() + (depth >= 0.95 ? DROP.rim : -DROP.rim), 0.02, 0.9);
+      const loss = clamp(
+        DROP.from -
+          (DROP.from - DROP.to) * tr.next() +
+          (depth >= 0.95 ? DROP.rim : -DROP.rim),
+        0.02,
+        0.9,
+      );
       const n = stray ? 2 : look.perTwig;
-      const size = half * larger * clump.leaves * (look.inside + (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
-      const ts = Array.from({ length: n }, (_, j) => 0.2 + 0.8 * ((j + tr.range(0.15, 0.85)) / n));
-      const twigCh: Channels = { loss: 0, droop: b.droop, wither: 0.5, glow: 0, pivot: root, bough: b.bough, twig: root };
+      const size =
+        half *
+        larger *
+        clump.leaves *
+        (look.inside +
+          (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
+      const ts = Array.from(
+        { length: n },
+        (_, j) => 0.2 + 0.8 * ((j + tr.range(0.15, 0.85)) / n),
+      );
+      const twigCh: Channels = {
+        loss: 0,
+        droop: b.droop,
+        wither: 0.5,
+        glow: 0,
+        pivot: root,
+        bough: b.bough,
+        twig: root,
+      };
       const tip = Math.max(...ts);
-      emitTwig(twigs, [root, lerp(root, goal, tip)], 0.003, 0.0015, () => twigCh);
+      emitTwig(
+        twigs,
+        [root, lerp(root, goal, tip)],
+        0.003,
+        0.0015,
+        () => twigCh,
+      );
       for (const t of ts) {
         const at = lerp(root, goal, t);
         // A card reaches up to 2.65 of its size along its direction and 1.15 across it. None may dip into the soil.
         if (at[1] - CARD_ACROSS * size < SOIL) continue;
-        const out = normalize([at[0] - clump.center[0], (at[1] - clump.center[1]) * 1.2, at[2] - clump.center[2]]);
-        const jitter: V3 = [tr.range(-1, 1), tr.range(-0.6, 0.6), tr.range(-1, 1)];
+        const out = normalize([
+          at[0] - clump.center[0],
+          (at[1] - clump.center[1]) * 1.2,
+          at[2] - clump.center[2],
+        ]);
+        const jitter: V3 = [
+          tr.range(-1, 1),
+          tr.range(-0.6, 0.6),
+          tr.range(-1, 1),
+        ];
         // Across the clump's surface, a little down its slope, faced out and up.
         const level = cross(out, UP);
-        let downhill = length(level) < 0.15 ? normalize([jitter[0], 0, jitter[2]]) : normalize(cross(level, out));
+        let downhill =
+          length(level) < 0.15
+            ? normalize([jitter[0], 0, jitter[2]])
+            : normalize(cross(level, out));
         if (downhill[1] > 0) downhill = scale(downhill, -1);
-        const dir = normalize(add(add(scale(downhill, 0.5), scale(along, 0.45)), add(scale(out, 0.2), scale(jitter, 0.25))));
-        if (at[1] + Math.min(0, dir[1]) * CARD_ALONG * size - CARD_ACROSS * size < SOIL) dir[1] = Math.abs(dir[1]);
-        const shallow = clamp(length(sub(at, clump.center)) / clump.radius, 0, 1);
-        emitSpray(leaf, mound, at, dir, normalize(addScaled(out, UP, 0.45)), size * tr.range(0.85, 1.15), CUT.crowded, tr, {
-          loss: clamp(loss + tr.range(-0.08, 0.08), 0.02, 0.9),
-          droop: b.droop,
-          wither: clamp(0.95 + tr.range(-0.05, 0.05), 0, 1),
-          glow: 0,
-          pivot: at,
-          bough: b.bough,
-          twig: root,
-          tint: clamp(tint * 0.4 + tr.range(-0.03, 0.03), -0.1, 0.1),
-        }, -0.16 * (1 - shallow));
+        const dir = normalize(
+          add(
+            add(scale(downhill, 0.5), scale(along, 0.45)),
+            add(scale(out, 0.2), scale(jitter, 0.25)),
+          ),
+        );
+        if (
+          at[1] + Math.min(0, dir[1]) * CARD_ALONG * size - CARD_ACROSS * size <
+          SOIL
+        ) {
+          dir[1] = Math.abs(dir[1]);
+        }
+        const shallow = clamp(
+          length(sub(at, clump.center)) / clump.radius,
+          0,
+          1,
+        );
+        emitSpray(
+          leaf,
+          mound,
+          at,
+          dir,
+          normalize(addScaled(out, UP, 0.45)),
+          size * tr.range(0.85, 1.15),
+          CUT.crowded,
+          tr,
+          {
+            loss: clamp(loss + tr.range(-0.08, 0.08), 0.02, 0.9),
+            droop: b.droop,
+            wither: clamp(0.95 + tr.range(-0.05, 0.05), 0, 1),
+            glow: 0,
+            pivot: at,
+            bough: b.bough,
+            twig: root,
+            tint: clamp(tint * 0.4 + tr.range(-0.03, 0.03), -0.1, 0.1),
+          },
+          -0.16 * (1 - shallow),
+        );
       }
       // Flowers and berries hang among the outer clusters.
-      if (depth >= 0.95) anchors.push({ position: lerp(root, goal, Math.min(0.9, tip)), normal: d, size: 1, carry: { bough: b.bough, twig: root, droop: b.droop } });
+      if (depth >= 0.95) {
+        anchors.push({
+          position: lerp(root, goal, Math.min(0.9, tip)),
+          normal: d,
+          size: 1,
+          carry: { bough: b.bough, twig: root, droop: b.droop },
+        });
+      }
     }
   });
   const parts = [twigs.part(), leaf.part()];
@@ -344,7 +658,11 @@ function extentOf(skel: Skeleton): { top: number; reach: number } {
 /** The point of `limb` nearest `q`. */
 function onLimb(limb: Limb, q: V3): V3 {
   const ab = sub(limb.end, limb.start);
-  const t = clamp(dot(sub(q, limb.start), ab) / Math.max(dot(ab, ab), 1e-9), 0, 1);
+  const t = clamp(
+    dot(sub(q, limb.start), ab) / Math.max(dot(ab, ab), 1e-9),
+    0,
+    1,
+  );
   return addScaled(limb.start, ab, t);
 }
 
@@ -354,7 +672,10 @@ function onLimb(limb: Limb, q: V3): V3 {
  * from three quarters of the mound's base size.
  */
 const SMALL_TIP = 0.3;
-const clumpShare = (size: number): number => (size >= SMALL_TIP ? 0.75 + 0.35 * size : (0.75 + 0.35 * SMALL_TIP) * (size / SMALL_TIP));
+const clumpShare = (size: number): number =>
+  size >= SMALL_TIP
+    ? 0.75 + 0.35 * size
+    : (0.75 + 0.35 * SMALL_TIP) * (size / SMALL_TIP);
 /** A small tip's leaves shrink with its clump, but never below this share of a bush's, so a cane's leaves stay leaves. */
 const SMALLEST_LEAVES = 0.65;
 
@@ -362,27 +683,50 @@ const SMALLEST_LEAVES = 0.65;
 interface MoundClump extends Clump {
   readonly leaves: number;
 }
-const leavesOf = (size: number): number => (size >= SMALL_TIP ? 1 : Math.max(SMALLEST_LEAVES, size / SMALL_TIP));
+const leavesOf = (size: number): number =>
+  size >= SMALL_TIP ? 1 : Math.max(SMALLEST_LEAVES, size / SMALL_TIP);
 
 /** How many clumps a mound of `n` tip clumps grows along its stems. None for scrub's tufts. */
-const fillOf = (n: number, fullness: number, tufts: boolean): number => (tufts ? 0 : Math.round(n * Math.max(0, fullness - 0.2) * 1.2));
+const fillOf = (n: number, fullness: number, tufts: boolean): number =>
+  tufts ? 0 : Math.round(n * Math.max(0, fullness - 0.2) * 1.2);
 
 /**
  * Clumps over a bush: one at each kept stem tip (`crownTips`) and more along the stems, of uneven sizes, or for scrub
  * a tuft at most tips. When the frame has more tips than the mound keeps, each clump grows to hold the leaves of the
  * tips it covers.
  */
-function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundParams>, r: BuildContext["rand"], base: number, tufts: boolean, kept: readonly number[]): MoundClump[] {
+function clumpsOf(
+  skel: Skeleton,
+  boughs: Boughs,
+  p: Resolved<typeof leafMoundParams>,
+  r: BuildContext["rand"],
+  base: number,
+  tufts: boolean,
+  kept: readonly number[],
+): MoundClump[] {
   const out: MoundClump[] = [];
   const grow = Math.sqrt(skel.tips.length / Math.max(1, kept.length));
   for (const i of kept) {
     const t = skel.tips[i] as Anchor;
     const cr = r.fork(`tip${i}`);
     if (tufts && cr.next() < TUFTS.bare) continue;
-    const radius = (tufts ? TUFTS.radius : base * clumpShare(t.size)) * cr.range(1 - MOUND.spread, 1 + MOUND.spread) * grow;
-    const center = addScaled(t.position, t.normal, radius * (tufts ? 0.35 : 0.1));
+    const radius =
+      (tufts ? TUFTS.radius : base * clumpShare(t.size)) *
+      cr.range(1 - MOUND.spread, 1 + MOUND.spread) *
+      grow;
+    const center = addScaled(
+      t.position,
+      t.normal,
+      radius * (tufts ? 0.35 : 0.1),
+    );
     center[1] = Math.max(center[1], radius * 0.6);
-    out.push({ center, radius, limb: boughs.limbNear(t.position), r: cr, leaves: tufts ? 1 : leavesOf(t.size) });
+    out.push({
+      center,
+      radius,
+      limb: boughs.limbNear(t.position),
+      r: cr,
+      leaves: tufts ? 1 : leavesOf(t.size),
+    });
   }
   if (tufts) return out;
   const fill = fillOf(kept.length, p.fullness, false);
@@ -393,9 +737,21 @@ function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundPa
     const limb = skel.limbs[k] as Limb;
     const center = lerp(limb.start, limb.end, fr.range(0.5, 1));
     // A clump along a stem is as small as the small tips near it.
-    const near = skel.tips.reduce((best, t) => (length(sub(t.position, center)) < length(sub(best.position, center)) ? t : best), skel.tips[0] as Anchor);
-    const small = near.size < SMALL_TIP ? clumpShare(near.size) / clumpShare(SMALL_TIP) : 1;
-    const radius = base * fr.range(0.8, 1.05) * fr.range(1 - MOUND.spread, 1 + MOUND.spread) * small * grow;
+    const near = skel.tips.reduce(
+      (best, t) =>
+        length(sub(t.position, center)) < length(sub(best.position, center))
+          ? t
+          : best,
+      skel.tips[0] as Anchor,
+    );
+    const small =
+      near.size < SMALL_TIP ? clumpShare(near.size) / clumpShare(SMALL_TIP) : 1;
+    const radius =
+      base *
+      fr.range(0.8, 1.05) *
+      fr.range(1 - MOUND.spread, 1 + MOUND.spread) *
+      small *
+      grow;
     center[1] = Math.max(center[1], radius * 0.6);
     out.push({ center, radius, limb: k, r: fr, leaves: leavesOf(near.size) });
   }
@@ -409,19 +765,38 @@ function clumpsOf(skel: Skeleton, boughs: Boughs, p: Resolved<typeof leafMoundPa
  * sways with its stem and bends about where it leaves it. As vitality falls
  * the needles brown and drop in place, leaving bare twigs.
  */
-function buildNeedleMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext, skel: Skeleton): Built {
+function buildNeedleMound(
+  p: Resolved<typeof leafMoundParams>,
+  ctx: BuildContext,
+  skel: Skeleton,
+): Built {
   const r = ctx.rand.fork("mound");
   const boughs = new Boughs(skel);
   const { top, reach } = extentOf(skel);
-  const mound: Crown = { center: [0, top * 0.45, 0], radius: [reach, top * 0.6, reach] };
-  const base = clamp(Math.min(reach, top) * 0.42, 0.14, 1) * (0.75 + 0.35 * p.fullness);
+  const mound: Crown = {
+    center: [0, top * 0.45, 0],
+    radius: [reach, top * 0.6, reach],
+  };
+  const base =
+    clamp(Math.min(reach, top) * 0.42, 0.14, 1) * (0.75 + 0.35 * p.fullness);
   const budget = crownRoom(skel, NEEDLE_TRIANGLE_BUDGET);
-  const fillFor = (n: number): number => Math.round(n * Math.max(0, p.fullness - 0.25) * 1.4);
-  const lookOf = (sprays: number): ClumpLook => ({ twigs: FEATHERY.twigs * (0.7 + 0.5 * p.fullness), sprays, half: FEATHERY.half * (0.8 + 0.4 * base), cut: FEATHERY.cut, shape: "round", ground: 0.02 });
-  const mostClumps = (look: ClumpLook): number => Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
+  const fillFor = (n: number): number =>
+    Math.round(n * Math.max(0, p.fullness - 0.25) * 1.4);
+  const lookOf = (sprays: number): ClumpLook => ({
+    twigs: FEATHERY.twigs * (0.7 + 0.5 * p.fullness),
+    sprays,
+    half: FEATHERY.half * (0.8 + 0.4 * base),
+    cut: FEATHERY.cut,
+    shape: "round",
+    ground: 0.02,
+  });
+  const mostClumps = (look: ClumpLook): number =>
+    Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
   // A frame with more tips than the mound can give clumps gets fewer, larger clumps, each holding the leaves of the
   // tips it covers on full twigs, so the mound keeps its needles while its hidden twigs thin.
-  const merged = crownTips(skel.tips, mostClumps(lookOf(FEATHERY.sprays)), fillFor).length < skel.tips.length;
+  const merged =
+    crownTips(skel.tips, mostClumps(lookOf(FEATHERY.sprays)), fillFor).length <
+    skel.tips.length;
   const clumpLook = lookOf(merged ? FEATHERY.fullSprays : FEATHERY.sprays);
   const kept = crownTips(skel.tips, mostClumps(clumpLook), fillFor);
   const grow = Math.sqrt(skel.tips.length / Math.max(1, kept.length));
@@ -431,7 +806,12 @@ function buildNeedleMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext
     const rad = base * (0.7 + 0.4 * t.size) * cr.range(0.75, 1.25) * grow;
     const at = addScaled(t.position, t.normal, rad * 0.15);
     at[1] = Math.max(at[1], rad * 0.55);
-    return { center: at, radius: rad, limb: boughs.limbNear(t.position), r: cr };
+    return {
+      center: at,
+      radius: rad,
+      limb: boughs.limbNear(t.position),
+      r: cr,
+    };
   });
   // Fill along the stems, so the mound is full from inside.
   const fill = fillFor(kept.length);
@@ -446,9 +826,26 @@ function buildNeedleMound(p: Resolved<typeof leafMoundParams>, ctx: BuildContext
     clumps.push({ center: at, radius: rad, limb: k, r: fr });
   }
   // A crowded frame thins every clump's twigs evenly to stay in budget.
-  const wanted = clumps.reduce((n, c) => n + Math.max(FEWEST_TWIGS, Math.round(clumpLook.twigs * c.radius * c.radius)), 0) * twigTriangles(clumpLook);
+  const wanted =
+    clumps.reduce(
+      (n, c) =>
+        n +
+        Math.max(
+          FEWEST_TWIGS,
+          Math.round(clumpLook.twigs * c.radius * c.radius),
+        ),
+      0,
+    ) * twigTriangles(clumpLook);
   const estimated = Math.min(1, budget / Math.max(1, wanted));
-  const density = merged ? filled(clumps, () => mound, boughs, clumpLook, estimated, budget) : estimated;
-  const { parts, anchors } = emitClumps(clumps, () => mound, boughs, clumpLook, density);
+  const density = merged
+    ? filled(clumps, () => mound, boughs, clumpLook, estimated, budget)
+    : estimated;
+  const { parts, anchors } = emitClumps(
+    clumps,
+    () => mound,
+    boughs,
+    clumpLook,
+    density,
+  );
   return { parts, anchors: hungFrom(skel, parts, anchors) };
 }

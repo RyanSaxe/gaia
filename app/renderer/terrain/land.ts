@@ -10,9 +10,26 @@
 // of its new window has arrived, so a window never shows half old and half
 // new data.
 
-import { type Lattice, type ReliefReport, type Terrain, type WorldSpec, frameOf, heightAt, knowWildBase, worldOf, worldOfZ } from "@gaia/terrain";
+import {
+  type Lattice,
+  type ReliefReport,
+  type Terrain,
+  type WorldSpec,
+  frameOf,
+  heightAt,
+  knowWildBase,
+  worldOf,
+  worldOfZ,
+} from "@gaia/terrain";
 import type { BakeJob, BakeReply } from "./bake-worker.ts";
-import { CHUNK, type Chunk, type LandSource, chunkPastLand, emptyChunk, latticeIndex } from "./land-chunks.ts";
+import {
+  CHUNK,
+  type Chunk,
+  type LandSource,
+  chunkPastLand,
+  emptyChunk,
+  latticeIndex,
+} from "./land-chunks.ts";
 import BakeWorker from "./bake-worker.ts?worker";
 
 /** Clipmap level sizes. */
@@ -76,7 +93,14 @@ export interface PageLand {
   /** The layer each level reads: its own, or a painting's aside layer while that painting draws. */
   readonly layers: readonly number[];
   /** The land workers' report: jobs waiting on each, and how long each kind took lately. */
-  workers(): { readonly waiting: readonly number[]; readonly whole: boolean; readonly took: Record<string, { readonly n: number; readonly mean: number; readonly max: number }> };
+  workers(): {
+    readonly waiting: readonly number[];
+    readonly whole: boolean;
+    readonly took: Record<
+      string,
+      { readonly n: number; readonly mean: number; readonly max: number }
+    >;
+  };
   /** Called with a level's index each time its window or layer changes, and whether that layer's data is new to the GPU. */
   onMoved: ((k: number, fresh: boolean) => void) | null;
 }
@@ -103,9 +127,15 @@ const levelOf = (): Level => ({
 });
 
 /** Level k's window around (x, z): its first sample in its own grid units, snapped to a chunk step. */
-function windowAt(spacing: number, k: number, x: number, z: number): { x: number; z: number } {
+function windowAt(
+  spacing: number,
+  k: number,
+  x: number,
+  z: number,
+): { x: number; z: number } {
   const unit = spacing * 2 ** k;
-  const snap = (v: number): number => Math.round(v / unit / CLIP.recenter) * CLIP.recenter - CLIP.size / 2;
+  const snap = (v: number): number =>
+    Math.round(v / unit / CLIP.recenter) * CLIP.recenter - CLIP.size / 2;
   return { x: snap(x), z: snap(z) };
 }
 
@@ -126,26 +156,56 @@ function place(chunk: Chunk, ox: number, oz: number, into: Level): void {
   for (let j = 0; j < CHUNK; j++) {
     const from = j * CHUNK;
     const to = (z0 + j) * CLIP.size + x0;
-    into.ground.set(chunk.ground.subarray(from * 4, (from + CHUNK) * 4), to * 4);
+    into.ground.set(
+      chunk.ground.subarray(from * 4, (from + CHUNK) * 4),
+      to * 4,
+    );
     into.region.set(chunk.region.subarray(from, from + CHUNK), to);
     into.nearPond.set(chunk.nearPond.subarray(from, from + CHUNK), to);
-    into.coverRegions.set(chunk.coverRegions.subarray(from * 4, (from + CHUNK) * 4), to * 4);
-    into.coverShares.set(chunk.coverShares.subarray(from * 4, (from + CHUNK) * 4), to * 4);
-    into.trailPlaces.set(chunk.trailPlaces.subarray(from * 2, (from + CHUNK) * 2), to * 2);
+    into.coverRegions.set(
+      chunk.coverRegions.subarray(from * 4, (from + CHUNK) * 4),
+      to * 4,
+    );
+    into.coverShares.set(
+      chunk.coverShares.subarray(from * 4, (from + CHUNK) * 4),
+      to * 4,
+    );
+    into.trailPlaces.set(
+      chunk.trailPlaces.subarray(from * 2, (from + CHUNK) * 2),
+      to * 2,
+    );
   }
 }
 
 /** Copies chunk (cx, cz) from a level's arrays over window (fx, fz) into another's over window (tx, tz). */
-function carry(cx: number, cz: number, from: Level, fx: number, fz: number, to: Level, tx: number, tz: number): void {
+function carry(
+  cx: number,
+  cz: number,
+  from: Level,
+  fx: number,
+  fz: number,
+  to: Level,
+  tx: number,
+  tz: number,
+): void {
   for (let j = 0; j < CHUNK; j++) {
     const a = (cz * CHUNK - fz + j) * CLIP.size + cx * CHUNK - fx;
     const b = (cz * CHUNK - tz + j) * CLIP.size + cx * CHUNK - tx;
     to.ground.set(from.ground.subarray(a * 4, (a + CHUNK) * 4), b * 4);
     to.region.set(from.region.subarray(a, a + CHUNK), b);
     to.nearPond.set(from.nearPond.subarray(a, a + CHUNK), b);
-    to.coverRegions.set(from.coverRegions.subarray(a * 4, (a + CHUNK) * 4), b * 4);
-    to.coverShares.set(from.coverShares.subarray(a * 4, (a + CHUNK) * 4), b * 4);
-    to.trailPlaces.set(from.trailPlaces.subarray(a * 2, (a + CHUNK) * 2), b * 2);
+    to.coverRegions.set(
+      from.coverRegions.subarray(a * 4, (a + CHUNK) * 4),
+      b * 4,
+    );
+    to.coverShares.set(
+      from.coverShares.subarray(a * 4, (a + CHUNK) * 4),
+      b * 4,
+    );
+    to.trailPlaces.set(
+      from.trailPlaces.subarray(a * 2, (a + CHUNK) * 2),
+      b * 2,
+    );
   }
 }
 
@@ -183,7 +243,8 @@ interface Thread {
 function createLandWorkers(threads: number) {
   let nextId = 0;
   /** The world whose source the workers have, and that source, to give a worker that starts later. */
-  let kept: { readonly world: number; readonly source: LandSource } | null = null;
+  let kept: { readonly world: number; readonly source: LandSource } | null =
+    null;
   /** Recent milliseconds from send to reply for each kind of job. */
   const took = new Map<string, number[]>();
   const listen = (worker: Worker): Thread => {
@@ -191,7 +252,12 @@ function createLandWorkers(threads: number) {
     worker.onmessage = (e: MessageEvent<BakeReply>) => {
       const pending = on.jobs.get(e.data.id);
       on.jobs.delete(e.data.id);
-      if (pending?.sent !== undefined) took.set(pending.job.kind, [...(took.get(pending.job.kind) ?? []).slice(-39), performance.now() - pending.sent]);
+      if (pending?.sent !== undefined) {
+        took.set(pending.job.kind, [
+          ...(took.get(pending.job.kind) ?? []).slice(-39),
+          performance.now() - pending.sent,
+        ]);
+      }
       pending?.answer(e.data);
       pump();
     };
@@ -201,7 +267,9 @@ function createLandWorkers(threads: number) {
     };
     return on;
   };
-  const workers = Array.from({ length: threads }, () => listen(new BakeWorker()));
+  const workers = Array.from({ length: threads }, () =>
+    listen(new BakeWorker()),
+  );
   /** A bake's finishing thread while it is kept. Chunks of its world go to it first. */
   let whole: Thread | null = null;
   const send = (on: Thread, pending: Pending): void => {
@@ -217,12 +285,21 @@ function createLandWorkers(threads: number) {
     for (const on of [...(whole === null ? [] : [whole]), ...workers]) {
       while (on.jobs.size < IN_FLIGHT && queue.length > 0) {
         let best = 0;
-        for (let i = 1; i < queue.length; i++) if ((queue[i] as Pending).priority < (queue[best] as Pending).priority) best = i;
+        for (let i = 1; i < queue.length; i++) {
+          if (
+            (queue[i] as Pending).priority < (queue[best] as Pending).priority
+          ) {
+            best = i;
+          }
+        }
         send(on, queue.splice(best, 1)[0] as Pending);
       }
     }
   };
-  const ask = (job: Pending["job"], priority: number): Promise<BakeReply | null> =>
+  const ask = (
+    job: Pending["job"],
+    priority: number,
+  ): Promise<BakeReply | null> =>
     new Promise((answer) => {
       queue.push({ job, answer, priority });
       pump();
@@ -245,14 +322,31 @@ function createLandWorkers(threads: number) {
     if (i >= 0) {
       const fresh = listen(new BakeWorker());
       workers[i] = fresh;
-      if (kept !== null) send(fresh, { job: { kind: "land", ...kept }, answer: () => undefined, priority: JOB_PRIORITY.land });
+      if (kept !== null) {
+        send(fresh, {
+          job: { kind: "land", ...kept },
+          answer: () => undefined,
+          priority: JOB_PRIORITY.land,
+        });
+      }
     }
     end(on, kept?.world);
   };
   return {
     async keep(world: number, source: LandSource): Promise<void> {
       kept = { world, source };
-      await Promise.all([...workers, ...(whole === null ? [] : [whole])].map((on) => new Promise<BakeReply | null>((answer) => send(on, { job: { kind: "land", world, source }, answer, priority: JOB_PRIORITY.land }))));
+      await Promise.all(
+        [...workers, ...(whole === null ? [] : [whole])].map(
+          (on) =>
+            new Promise<BakeReply | null>((answer) =>
+              send(on, {
+                job: { kind: "land", world, source },
+                answer,
+                priority: JOB_PRIORITY.land,
+              }),
+            ),
+        ),
+      );
     },
     /** Adopts a new world's finishing thread, ending the previous one and answering its unanswered jobs with null. */
     adopt(worker: Worker): void {
@@ -262,9 +356,24 @@ function createLandWorkers(threads: number) {
     },
     /** The jobs each thread has yet to answer, and how long each kind took lately, for reports. */
     stats: () => ({
-      waiting: [...workers.map((w) => w.jobs.size), ...(whole === null ? [] : [whole.jobs.size]), queue.length],
+      waiting: [
+        ...workers.map((w) => w.jobs.size),
+        ...(whole === null ? [] : [whole.jobs.size]),
+        queue.length,
+      ],
       whole: whole !== null,
-      took: Object.fromEntries([...took].map(([k, v]) => [k, { n: v.length, mean: Math.round(v.reduce((a, b) => a + b, 0) / Math.max(1, v.length)), max: Math.round(Math.max(0, ...v)) }])),
+      took: Object.fromEntries(
+        [...took].map(([k, v]) => [
+          k,
+          {
+            n: v.length,
+            mean: Math.round(
+              v.reduce((a, b) => a + b, 0) / Math.max(1, v.length),
+            ),
+            max: Math.round(Math.max(0, ...v)),
+          },
+        ]),
+      ),
     }),
     /** Ends the kept finishing thread, freeing the whole world it has. The land workers take its unanswered jobs. */
     drop(): void {
@@ -273,11 +382,19 @@ function createLandWorkers(threads: number) {
       if (was !== null) end(was, kept?.world);
     },
     /** Chunk (cx, cz) of level `k`, at `priority`. Null when world `world` closed before a worker could answer. */
-    async chunk(world: number, k: number, cx: number, cz: number, priority: number = JOB_PRIORITY.land): Promise<Chunk | null> {
+    async chunk(
+      world: number,
+      k: number,
+      cx: number,
+      cz: number,
+      priority: number = JOB_PRIORITY.land,
+    ): Promise<Chunk | null> {
       const reply = await ask({ kind: "chunk", world, k, cx, cz }, priority);
       if (reply === null) return null;
       if (reply.kind === "failed") throw new Error(reply.message);
-      if (reply.kind !== "chunk") throw new Error(`A land worker answered a chunk with "${reply.kind}".`);
+      if (reply.kind !== "chunk") {
+        throw new Error(`A land worker answered a chunk with "${reply.kind}".`);
+      }
       return reply.chunk;
     },
   };
@@ -287,7 +404,9 @@ function createLandWorkers(threads: number) {
 const PLACEHOLDER: WorldSpec = { size: 320, regions: [] };
 
 /** The page's land, baked on `threads` workers of its own. */
-export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hardwareConcurrency || 2) - 2))): PageLand {
+export function createPageLand(
+  threads = Math.max(1, Math.min(2, (navigator.hardwareConcurrency || 2) - 2)),
+): PageLand {
   const { size, levels } = CLIP;
   const workers = createLandWorkers(threads);
   const all = {
@@ -299,21 +418,33 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     trailPlaces: new Float32Array(LAYER * 2 * (levels + CLIP.aside)),
   };
   /** Each layer's samples: the levels' own, then the layers set aside for paintings. */
-  const layered: Level[] = Array.from({ length: levels + CLIP.aside }, (_, k) => ({
-    ground: all.ground.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
-    region: all.region.subarray(k * LAYER, (k + 1) * LAYER),
-    nearPond: all.nearPond.subarray(k * LAYER, (k + 1) * LAYER),
-    coverRegions: all.coverRegions.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
-    coverShares: all.coverShares.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
-    trailPlaces: all.trailPlaces.subarray(k * LAYER * 2, (k + 1) * LAYER * 2),
-  }));
+  const layered: Level[] = Array.from(
+    { length: levels + CLIP.aside },
+    (_, k) => ({
+      ground: all.ground.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
+      region: all.region.subarray(k * LAYER, (k + 1) * LAYER),
+      nearPond: all.nearPond.subarray(k * LAYER, (k + 1) * LAYER),
+      coverRegions: all.coverRegions.subarray(
+        k * LAYER * 4,
+        (k + 1) * LAYER * 4,
+      ),
+      coverShares: all.coverShares.subarray(k * LAYER * 4, (k + 1) * LAYER * 4),
+      trailPlaces: all.trailPlaces.subarray(k * LAYER * 2, (k + 1) * LAYER * 2),
+    }),
+  );
   /** Each level's samples as reads see them: its own layer, except while a painting draws. */
   const store: Level[] = layered.slice(0, levels);
   const layers = Array.from({ length: levels }, (_, k) => k);
   /** Where each level's window starts, or NaN until a world's land is there. */
-  const origins = Array.from({ length: levels }, () => ({ x: Number.NaN, z: Number.NaN }));
+  const origins = Array.from({ length: levels }, () => ({
+    x: Number.NaN,
+    z: Number.NaN,
+  }));
   /** Each level's move in progress, if any. A level moves once at a time, and the next move starts after it finishes. */
-  const moving: (Promise<void> | null)[] = Array.from({ length: levels }, () => null);
+  const moving: (Promise<void> | null)[] = Array.from(
+    { length: levels },
+    () => null,
+  );
   /** The world the levels contain. A chunk baked for an earlier world is dropped. */
   let generation = 0;
   let source: LandSource | null = null;
@@ -329,7 +460,12 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   const shore = new Float32Array(LAYER);
 
   /** Reads one of level k's four channels at (gx, gz) in its grid units, interpolating between samples as the ground texture does. */
-  const sampleLevel = (k: number, channel: number, gx: number, gz: number): number => {
+  const sampleLevel = (
+    k: number,
+    channel: number,
+    gx: number,
+    gz: number,
+  ): number => {
     const data = (store[k] as Level).ground;
     const cx = Math.min(size - 1.000001, Math.max(0, gx));
     const cz = Math.min(size - 1.000001, Math.max(0, gz));
@@ -337,7 +473,8 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     const iz = Math.floor(cz);
     const fx = cx - ix;
     const fz = cz - iz;
-    const at = (i: number, j: number): number => data[((iz + j) * size + ix + i) * 4 + channel] as number;
+    const at = (i: number, j: number): number =>
+      data[((iz + j) * size + ix + i) * 4 + channel] as number;
     const h00 = at(0, 0);
     const h10 = at(1, 0);
     const h01 = at(0, 1);
@@ -345,18 +482,49 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
     if (fx + fz <= 1) return h00 + fx * (h10 - h00) + fz * (h01 - h00);
     return h11 + (1 - fx) * (h01 - h11) + (1 - fz) * (h10 - h11);
   };
-  const lattice: { -readonly [K in keyof Lattice]: Lattice[K] } = { n: size, spacing: 1, origin: 0, originZ: 0, heights };
+  const lattice: { -readonly [K in keyof Lattice]: Lattice[K] } = {
+    n: size,
+    spacing: 1,
+    origin: 0,
+    originZ: 0,
+    heights,
+  };
   /** Reads past level 0's window from the finest coarser level that contains the point. */
   lattice.beyond = (x, z, values) => {
-    const channel = values === heights ? 0 : values === waterLevel ? 1 : values === shore ? 2 : -1;
+    const channel =
+      values === heights
+        ? 0
+        : values === waterLevel
+          ? 1
+          : values === shore
+            ? 2
+            : -1;
     // An array no level stores is read at the window's edge, as a lattice without `beyond` would read it.
-    if (channel < 0) return heightAt({ n: size, spacing: lattice.spacing, origin: lattice.origin, originZ: lattice.originZ ?? lattice.origin, heights }, x, z, values);
+    if (channel < 0) {
+      return heightAt(
+        {
+          n: size,
+          spacing: lattice.spacing,
+          origin: lattice.origin,
+          originZ: lattice.originZ ?? lattice.origin,
+          heights,
+        },
+        x,
+        z,
+        values,
+      );
+    }
     for (let k = 1; k < levels; k++) {
       const o = origins[k] as { x: number; z: number };
       const unit = spacing * 2 ** k;
       const gx = x / unit - o.x;
       const gz = z / unit - o.z;
-      if ((gx >= 0 && gz >= 0 && gx <= size - 1 && gz <= size - 1) || k === levels - 1) return sampleLevel(k, channel, gx, gz);
+      if (
+        (gx >= 0 && gz >= 0 && gx <= size - 1 && gz <= size - 1) ||
+        k === levels - 1
+      ) {
+        return sampleLevel(k, channel, gx, gz);
+      }
     }
     return 0;
   };
@@ -397,23 +565,49 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
    * Fills `into` with level `k`'s window at (ox, oz). It copies the chunks the current window already has and bakes
    * the rest. Resolves once all have arrived.
    */
-  function fill(k: number, ox: number, oz: number, into: Level, mine: number, src: LandSource, priority: number = JOB_PRIORITY.land): Promise<void> {
+  function fill(
+    k: number,
+    ox: number,
+    oz: number,
+    into: Level,
+    mine: number,
+    src: LandSource,
+    priority: number = JOB_PRIORITY.land,
+  ): Promise<void> {
     const from = store[k] as Level;
     const was = origins[k] as { x: number; z: number };
     const per = size / CHUNK;
     // Request the window's center chunks first, nearest the person.
     const order: [number, number][] = [];
-    for (let j = 0; j < per; j++) for (let i = 0; i < per; i++) order.push([i, j]);
-    const middle = (c: [number, number]): number => Math.hypot(c[0] - per / 2 + 0.5, c[1] - per / 2 + 0.5);
+    for (let j = 0; j < per; j++) {
+      for (let i = 0; i < per; i++) order.push([i, j]);
+    }
+    const middle = (c: [number, number]): number =>
+      Math.hypot(c[0] - per / 2 + 0.5, c[1] - per / 2 + 0.5);
     order.sort((a, b) => middle(a) - middle(b));
     const asks: Promise<void>[] = [];
     for (const [i, j] of order) {
       const cx = ox / CHUNK + i;
       const cz = oz / CHUNK + j;
-      const held = cx * CHUNK >= was.x && cz * CHUNK >= was.z && cx * CHUNK + CHUNK <= was.x + size && cz * CHUNK + CHUNK <= was.z + size;
+      const held =
+        cx * CHUNK >= was.x &&
+        cz * CHUNK >= was.z &&
+        cx * CHUNK + CHUNK <= was.x + size &&
+        cz * CHUNK + CHUNK <= was.z + size;
       if (held) carry(cx, cz, from, was.x, was.z, into, ox, oz);
-      else if (chunkPastLand(src.plan, k, cx, cz)) place(emptyChunk(src.plan, k, cx, cz), ox, oz, into);
-      else asks.push(workers.chunk(mine, k, cx, cz, priority).then((c) => (c !== null && mine === generation ? place(c, ox, oz, into) : undefined)));
+      else if (chunkPastLand(src.plan, k, cx, cz)) {
+        place(emptyChunk(src.plan, k, cx, cz), ox, oz, into);
+      } else {
+        asks.push(
+          workers
+            .chunk(mine, k, cx, cz, priority)
+            .then((c) =>
+              c !== null && mine === generation
+                ? place(c, ox, oz, into)
+                : undefined,
+            ),
+        );
+      }
     }
     return Promise.all(asks).then(() => undefined);
   }
@@ -442,7 +636,9 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
   /** Moves level `k` around (x, z) unless it is already there, after any move in progress. Resolves once it contains (x, z). */
   function moveAround(k: number, x: number, z: number): Promise<void> {
     const going = moving[k];
-    if (going !== null && going !== undefined) return going.then(() => moveAround(k, x, z));
+    if (going !== null && going !== undefined) {
+      return going.then(() => moveAround(k, x, z));
+    }
     const at = windowAt(spacing, k, x, z);
     const o = origins[k] as { x: number; z: number };
     if (o.x === at.x && o.z === at.z) return Promise.resolve();
@@ -489,15 +685,21 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
       spacing = frameOf(plan.spec).spacing;
       // Carry nothing of the last world's land into this one.
       for (const o of origins) o.x = o.z = Number.NaN;
-      await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
+      await Promise.all(
+        Array.from({ length: levels }, (_, k) => moveAround(k, x, z)),
+      );
     },
     follow(x, z) {
       if (source === null) return;
-      for (let k = 0; k < levels; k++) if (moving[k] === null) void moveAround(k, x, z);
+      for (let k = 0; k < levels; k++) {
+        if (moving[k] === null) void moveAround(k, x, z);
+      }
     },
     async around(x, z) {
       if (source === null) return;
-      await Promise.all(Array.from({ length: levels }, (_, k) => moveAround(k, x, z)));
+      await Promise.all(
+        Array.from({ length: levels }, (_, k) => moveAround(k, x, z)),
+      );
     },
     async aside(x, z) {
       const mine = generation;
@@ -512,7 +714,17 @@ export function createPageLand(threads = Math.max(1, Math.min(2, (navigator.hard
         const o = origins[k] as { x: number; z: number };
         if (o.x === at.x && o.z === at.z) continue;
         apart.push({ k, ox: at.x, oz: at.z });
-        fills.push(fill(k, at.x, at.z, layered[levels + k] as Level, mine, src, JOB_PRIORITY.aside));
+        fills.push(
+          fill(
+            k,
+            at.x,
+            at.z,
+            layered[levels + k] as Level,
+            mine,
+            src,
+            JOB_PRIORITY.aside,
+          ),
+        );
       }
       await Promise.all(fills);
       if (mine !== generation) return null;

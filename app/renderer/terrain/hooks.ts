@@ -9,7 +9,33 @@ import * as THREE from "three";
 import type { Realized } from "@gaia/realize";
 import type { Blueprint } from "@gaia/schema";
 import { settleVitality } from "@gaia/render";
-import { clearanceAt, fordBeside, footingAt, frameOf, groundHeightAt, heightAt, junctionVitality, placeAt, planTrip, stanceAt, standAt, lastSpotAt, type LastSpot, type Stride, TRAVEL, trailWay, travelFrom, travelStep, wadingAt, WALK_TO, walkStep, type Walker, waterDepthAt, wayVitalityAt, wayWear } from "@gaia/terrain";
+import {
+  clearanceAt,
+  fordBeside,
+  footingAt,
+  frameOf,
+  groundHeightAt,
+  heightAt,
+  junctionVitality,
+  placeAt,
+  planTrip,
+  stanceAt,
+  standAt,
+  lastSpotAt,
+  type LastSpot,
+  type Stride,
+  TRAVEL,
+  trailWay,
+  travelFrom,
+  travelStep,
+  wadingAt,
+  WALK_TO,
+  walkStep,
+  type Walker,
+  waterDepthAt,
+  wayVitalityAt,
+  wayWear,
+} from "@gaia/terrain";
 import { groundVitality, sweep } from "@gaia/world";
 import { contentHash } from "./far-store.ts";
 import { CLIP } from "./land.ts";
@@ -17,9 +43,23 @@ import { COMPOSING } from "./looks.ts";
 import { type Change, pictureChange, tallyFrame } from "./measure.ts";
 import { type TourStop, tourStops } from "./tour.ts";
 import { groundVitalityAt } from "./vitality.ts";
-import { type Copies, type DetailMode, FAR, type FarOf, GONE, createCopies } from "./woods.ts";
+import {
+  type Copies,
+  type DetailMode,
+  FAR,
+  type FarOf,
+  GONE,
+  createCopies,
+} from "./woods.ts";
 import { composedName } from "./settlement.ts";
-import { type FarSet, PAINTING, type Subject, type TreeVariant, type ViewPin, type WorldInside } from "./world.ts";
+import {
+  type FarSet,
+  PAINTING,
+  type Subject,
+  type TreeVariant,
+  type ViewPin,
+  type WorldInside,
+} from "./world.ts";
 
 /** Meters in a step of walking, half a second at walking pace. The walk test uses the same step. */
 const WALK_STEP = 0.7;
@@ -30,7 +70,9 @@ interface SwapStep {
   readonly distance: number;
 }
 /** Returns every hook of `window.__lab.terrain`, which read and drive `world`. */
-export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>> {
+export function worldHooks(
+  world: WorldInside,
+): Readonly<Record<string, unknown>> {
   /** The single copy the swap test shows for each preset, keyed by `FarOf` because tree and bush forms are numbered separately. */
   const swapCopies = new Map<FarOf, Copies>();
 
@@ -39,7 +81,12 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const l = world.terrain.lattice;
     const ix = Math.round((x - l.origin) / l.spacing);
     const iz = Math.round((z - l.origin) / l.spacing);
-    return world.terrain.region[Math.max(0, Math.min(l.n - 1, iz)) * l.n + Math.max(0, Math.min(l.n - 1, ix))] ?? 0;
+    return (
+      world.terrain.region[
+        Math.max(0, Math.min(l.n - 1, iz)) * l.n +
+          Math.max(0, Math.min(l.n - 1, ix))
+      ] ?? 0
+    );
   }
 
   /** The tour stops of the current world, each with where to stand and which way to look (`tourStops`). */
@@ -54,27 +101,74 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     }
     const patches = world.code?.world.patches ?? [];
     const patchOf = new Map(patches.map((p) => [p.path, p]));
-    const own = groundVitality(patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
+    const own = groundVitality(
+      patches.map((p) => ({
+        area: p.area,
+        vitality: p.vitality,
+        size: p.radius * p.radius,
+      })),
+    );
     return tourStops({
       things: [
         ...world.settlement.buildings.map((b) => {
           const front = world.settlement.readingSpotOf(b);
           const d = Math.hypot(front.x - b.site.x, front.z - b.site.z) || 1;
-          return { as: "building" as const, kind: b.kindName, name: b.represented.id || b.represented.name, x: b.site.x, z: b.site.z, vitality: world.thingVitality.get(b.represented.id) ?? 1, reach: Math.hypot(b.plan.width, b.plan.depth) / 2, front: { x: (front.x - b.site.x) / d, z: (front.z - b.site.z) / d } };
+          return {
+            as: "building" as const,
+            kind: b.kindName,
+            name: b.represented.id || b.represented.name,
+            x: b.site.x,
+            z: b.site.z,
+            vitality: world.thingVitality.get(b.represented.id) ?? 1,
+            reach: Math.hypot(b.plan.width, b.plan.depth) / 2,
+            front: { x: (front.x - b.site.x) / d, z: (front.z - b.site.z) / d },
+          };
         }),
         ...world.ways.sites.map((s, i) => {
           const turn = world.landmarkViews[i]?.object.rotation.y ?? 0;
           const entity = world.landmarkEntity(i);
-          return { as: "landmark" as const, kind: world.landmarks[s.landmark]?.name ?? "Landmark", name: entity.id || entity.name, x: s.site.x, z: s.site.z, vitality: world.thingVitality.get(entity.id) ?? 1, reach: world.landmarks[s.landmark]?.base ?? 4, front: { x: Math.sin(turn), z: Math.cos(turn) } };
+          return {
+            as: "landmark" as const,
+            kind: world.landmarks[s.landmark]?.name ?? "Landmark",
+            name: entity.id || entity.name,
+            x: s.site.x,
+            z: s.site.z,
+            vitality: world.thingVitality.get(entity.id) ?? 1,
+            reach: world.landmarks[s.landmark]?.base ?? 4,
+            front: { x: Math.sin(turn), z: Math.cos(turn) },
+          };
         }),
       ],
       network: world.ways.network,
-      wayVitality: (way, along) => wayVitalityAt(world.ways.network, way, along, world.vitalityOfPlace),
-      junctionVitality: (j) => junctionVitality(world.ways.network, j, world.vitalityOfPlace),
-      areas: (world.code?.world.areas ?? []).map((a) => ({ path: a.path, x: a.x, z: a.z, ground: a.ground, depth: a.depth, vitality: own.get(a.path) ?? 1 })),
-      groves: [...groves].map(([path, g]) => ({ path, x: g.x / g.trees, z: g.z / g.trees, trees: g.trees, vitality: patchOf.get(path)?.vitality ?? 1 })),
-      ponds: world.terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-      standable: world.standable,
+      wayVitality: (way, along) =>
+        wayVitalityAt(world.ways.network, way, along, (id) =>
+          world.vitalityOfPlace(id),
+        ),
+      junctionVitality: (j) =>
+        junctionVitality(world.ways.network, j, (id) =>
+          world.vitalityOfPlace(id),
+        ),
+      areas: (world.code?.world.areas ?? []).map((a) => ({
+        path: a.path,
+        x: a.x,
+        z: a.z,
+        ground: a.ground,
+        depth: a.depth,
+        vitality: own.get(a.path) ?? 1,
+      })),
+      groves: [...groves].map(([path, g]) => ({
+        path,
+        x: g.x / g.trees,
+        z: g.z / g.trees,
+        trees: g.trees,
+        vitality: patchOf.get(path)?.vitality ?? 1,
+      })),
+      ponds: world.terrain.ponds.map((p) => ({
+        x: p.x,
+        z: p.z,
+        reach: p.reach,
+      })),
+      standable: (...args) => world.standable(...args),
     });
   }
 
@@ -85,8 +179,18 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const now = performance.now();
     for (let k = 0; k < settle; k++) world.frame(0, now, world.hour);
     const gl = world.renderer.getContext();
-    const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
-    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    const pixels = new Uint8Array(
+      gl.drawingBufferWidth * gl.drawingBufferHeight * 4,
+    );
+    gl.readPixels(
+      0,
+      0,
+      gl.drawingBufferWidth,
+      gl.drawingBufferHeight,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      pixels,
+    );
     return pixels;
   }
 
@@ -107,8 +211,18 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
    * Returns each step's [meters walked, mean, worst block] and the wind's
    * worst blocks.
    */
-  function walkSteps(meters: number, step: number, at = world.light.uTime.value, windEvery = 10): { steps: [number, number, number][]; wind: number[] } {
-    const start = { x: world.walker.x, z: world.walker.z, yaw: world.walker.yaw, pitch: world.walker.pitch };
+  function walkSteps(
+    meters: number,
+    step: number,
+    at = world.light.uTime.value,
+    windEvery = 10,
+  ): { steps: [number, number, number][]; wind: number[] } {
+    const start = {
+      x: world.walker.x,
+      z: world.walker.z,
+      yaw: world.walker.yaw,
+      pitch: world.walker.pitch,
+    };
     const was = world.frozen;
     const t = at;
     const dx = -Math.sin(start.yaw);
@@ -117,7 +231,12 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const wind: number[] = [];
     try {
       for (let k = 0; (k + 1) * step <= meters; k++) {
-        world.walkTo(start.x + dx * k * step, start.z + dz * k * step, start.yaw, start.pitch);
+        world.walkTo(
+          start.x + dx * k * step,
+          start.z + dz * k * step,
+          start.yaw,
+          start.pitch,
+        );
         world.detailPin = { x: world.walker.x, z: world.walker.z };
         if (k % windEvery === 0) {
           const moment = t + (k / windEvery) * 1.7;
@@ -129,7 +248,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         // The step's own frames come after the wind's, so the wind's moments never reach the step's change.
         world.frozen = t;
         const here = grabFrame();
-        world.detailPin = { x: world.walker.x + dx * step, z: world.walker.z + dz * step };
+        world.detailPin = {
+          x: world.walker.x + dx * step,
+          z: world.walker.z + dz * step,
+        };
         const on = frameChange(here, grabFrame());
         steps.push([k * step, on.mean, on.worst]);
       }
@@ -153,7 +275,19 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
    * Frame 0 is the rest frame before the ramp, and later numbers count
    * through the ramp and the hold.
    */
-  function vitalityRamp(set: (v: number) => void, seconds = 6, from = 0.05, to = 0.95, fps = 60, snaps: readonly number[] = [], hold = 0): { steps: [number, number, number][]; wind: number[]; snaps: Record<number, string> } {
+  function vitalityRamp(
+    set: (v: number) => void,
+    seconds = 6,
+    from = 0.05,
+    to = 0.95,
+    fps = 60,
+    snaps: readonly number[] = [],
+    hold = 0,
+  ): {
+    steps: [number, number, number][];
+    wind: number[];
+    snaps: Record<number, string>;
+  } {
     const was = world.frozen;
     const t = world.light.uTime.value;
     const steps: [number, number, number][] = [];
@@ -174,7 +308,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       set(from);
       settleVitality();
       let before = grabFrame();
-      if (snaps.includes(0)) shots[0] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+      if (snaps.includes(0)) {
+        shots[0] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+      }
       const frames = Math.round(seconds * fps);
       for (let k = 1; k <= frames + Math.round(hold * fps); k++) {
         const v = from + ((to - from) * Math.min(k, frames)) / frames;
@@ -182,7 +318,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         // Advance one frame of time so the change eases in. The wind's clock stays frozen.
         world.frame(1 / fps, performance.now(), world.hour);
         const now = grabFrame(1);
-        if (snaps.includes(k)) shots[k] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+        if (snaps.includes(k)) {
+          shots[k] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+        }
         const change = frameChange(before, now);
         steps.push([+v.toFixed(4), change.mean, change.worst]);
         before = now;
@@ -223,13 +361,25 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
    * placed within sight of the person, and the largest gap between
    * `waterDepthAt` and the land's water level (`ghosts`).
    */
-  async function travelTest(x0: number, z0: number, x1: number, z1: number, pace: number, every = 3, cap = 400, pitch = -0.05) {
+  async function travelTest(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    pace: number,
+    every = 3,
+    cap = 400,
+    pitch = -0.05,
+  ) {
     // Start at a landing, since the given point may be inside a thing.
     const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
-    x0 = start.x;
-    z0 = start.z;
-    world.walkTo(x0, z0, 0, pitch);
-    await Promise.all([world.land.around(x0, z0), world.thingTiles.ready(x0, z0)]);
+    const sx = start.x;
+    const sz = start.z;
+    world.walkTo(sx, sz, 0, pitch);
+    await Promise.all([
+      world.land.around(sx, sz),
+      world.thingTiles.ready(sx, sz),
+    ]);
     const at = world.landingNear(x1, z1);
     world.travelPace = pace;
     const started = at !== null && world.travelTo(at, false);
@@ -242,23 +392,56 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     world.frozen = world.light.uTime.value;
     world.driving = true;
     world.thingTiles.late();
-    const checks: [number, number, number, number, number, number, number, number, number][] = [];
+    const checks: [
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+      number,
+    ][] = [];
     /** Each land level's window origin, to find which levels moved since `held`'s view was drawn. */
-    const windows = (): string => world.land.origins.map((o) => `${o.x},${o.z}`).join(" ");
+    const windows = (): string =>
+      world.land.origins.map((o) => `${o.x},${o.z}`).join(" ");
     const work: number[] = [];
     let lead = Infinity;
     let ended = Number.NaN;
-    let held: { pin: ViewPin; image: Uint8Array; s: number; windows: string; mirror: number } | null = null;
+    let held: {
+      pin: ViewPin;
+      image: Uint8Array;
+      s: number;
+      windows: string;
+      mirror: number;
+    } | null = null;
     /** The largest difference in meters between the depth walking reads and the land's water level under the person. */
     let ghosts = 0;
     let last = performance.now();
     try {
-      for (let k = 0; world.trip === t && performance.now() - t.began < cap * 1000; k++) {
+      for (
+        let k = 0;
+        world.trip === t && performance.now() - t.began < cap * 1000;
+        k++
+      ) {
         // Yield so worker replies arrive between frames, as they do in the app.
         await new Promise((r) => setTimeout(r, 0));
         if (held === null && k % every === 0) {
-          const pin = { x: world.walker.x, z: world.walker.z, eye: world.walker.eye, yaw: world.walker.yaw, pitch: world.walker.pitch };
-          held = { pin, image: heldView(pin), s: t.at.s, windows: windows(), mirror: world.water.stats().mirrorLevel };
+          const pin = {
+            x: world.walker.x,
+            z: world.walker.z,
+            eye: world.walker.eye,
+            yaw: world.walker.yaw,
+            pitch: world.walker.pitch,
+          };
+          held = {
+            pin,
+            image: heldView(pin),
+            s: t.at.s,
+            windows: windows(),
+            mirror: world.water.stats().mirrorLevel,
+          };
         }
         const now = performance.now();
         const dt = Math.min(0.1, (now - last) / 1000);
@@ -272,23 +455,64 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         if (t.at.s > 60 && t.at.s < t.plan.length - 60) {
           const spacing = frameOf(world.terrain.spec).spacing;
           const o = world.land.origins[0] as { x: number; z: number };
-          lead = Math.min(lead, world.walker.x - o.x * spacing, (o.x + CLIP.size) * spacing - world.walker.x, world.walker.z - o.z * spacing, (o.z + CLIP.size) * spacing - world.walker.z);
+          lead = Math.min(
+            lead,
+            world.walker.x - o.x * spacing,
+            (o.x + CLIP.size) * spacing - world.walker.x,
+            world.walker.z - o.z * spacing,
+            (o.z + CLIP.size) * spacing - world.walker.z,
+          );
         }
         if (held !== null && (k % every === every - 1 || world.trip !== t)) {
           const change = frameChange(held.image, heldView(held.pin));
           const before = held.windows.split(" ");
           const moved = windows()
             .split(" ")
-            .reduce((bits, w, k) => (w === before[k] ? bits : bits | (1 << k)), 0);
+            .reduce(
+              (bits, w, k) => (w === before[k] ? bits : bits | (1 << k)),
+              0,
+            );
           // The water depth under the person, from the land's own water level. Wading spreads rings.
-          const level = heightAt(world.terrain.lattice, world.walker.x, world.walker.z, world.terrain.waterLevel);
-          const depth = level > -500 ? Math.max(0, level - heightAt(world.terrain.lattice, world.walker.x, world.walker.z)) : 0;
+          const level = heightAt(
+            world.terrain.lattice,
+            world.walker.x,
+            world.walker.z,
+            world.terrain.waterLevel,
+          );
+          const depth =
+            level > -500
+              ? Math.max(
+                  0,
+                  level -
+                    heightAt(
+                      world.terrain.lattice,
+                      world.walker.x,
+                      world.walker.z,
+                    ),
+                )
+              : 0;
           // The water's mirror plane follows the person's eye, not the pinned view's, so record how far it moved between the two draws.
-          const mirrored = +(world.water.stats().mirrorLevel - held.mirror).toFixed(3);
+          const mirrored = +(
+            world.water.stats().mirrorLevel - held.mirror
+          ).toFixed(3);
           // Compare the depth walking reads (`waterDepthAt`) with the depth from the land's water level above.
-          const cached = waterDepthAt(world.terrain, world.walker.x, world.walker.z);
+          const cached = waterDepthAt(
+            world.terrain,
+            world.walker.x,
+            world.walker.z,
+          );
           ghosts = Math.max(ghosts, Math.abs(cached - depth));
-          checks.push([+held.s.toFixed(1), +t.at.v.toFixed(1), +change.mean.toFixed(3), +change.worst.toFixed(2), moved, +depth.toFixed(2), mirrored, Math.round(held.pin.x), Math.round(held.pin.z)]);
+          checks.push([
+            +held.s.toFixed(1),
+            +t.at.v.toFixed(1),
+            +change.mean.toFixed(3),
+            +change.worst.toFixed(2),
+            moved,
+            +depth.toFixed(2),
+            mirrored,
+            Math.round(held.pin.x),
+            Math.round(held.pin.z),
+          ]);
           held = null;
         }
       }
@@ -301,7 +525,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     return {
       pace,
       length: Math.round(t.plan.length),
-      seconds: +(((Number.isNaN(ended) ? performance.now() : ended) - t.began) / 1000).toFixed(1),
+      seconds: +(
+        ((Number.isNaN(ended) ? performance.now() : ended) - t.began) /
+        1000
+      ).toFixed(1),
       setOff: t.setOff === null ? null : Math.round(t.setOff - t.began),
       waited: +t.waited.toFixed(1),
       lead: Math.round(lead),
@@ -313,7 +540,11 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   }
 
   /** Every build with a far form, named from its parts: the world's tree builds, then the understory's and the wild's. */
-  const farPresets = (): readonly { readonly name: string; readonly plant: () => Realized; readonly far: FarOf }[] => {
+  const farPresets = (): readonly {
+    readonly name: string;
+    readonly plant: () => Realized;
+    readonly far: FarOf;
+  }[] => {
     const named = new Map<string, number>();
     const unique = (name: string): string => {
       const n = (named.get(name) ?? 0) + 1;
@@ -321,9 +552,21 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       return n === 1 ? name : `${name} ${n}`;
     };
     return [
-      ...world.treeBlueprints.map((bp, k) => ({ name: unique(composedName(bp)), plant: () => world.treeBuild(k), far: world.treeFar[k] as FarOf })),
-      ...world.understory.farBuilds().map((b) => ({ name: unique(composedName(b.blueprint)), plant: b.plant, far: b.far })),
-      ...world.wildGrowth.farBuilds().map((b) => ({ name: unique(composedName(b.blueprint)), plant: b.plant, far: b.far })),
+      ...world.treeBlueprints.map((bp, k) => ({
+        name: unique(composedName(bp)),
+        plant: () => world.treeBuild(k),
+        far: world.treeFar[k] as FarOf,
+      })),
+      ...world.understory.farBuilds().map((b) => ({
+        name: unique(composedName(b.blueprint)),
+        plant: b.plant,
+        far: b.far,
+      })),
+      ...world.wildGrowth.farBuilds().map((b) => ({
+        name: unique(composedName(b.blueprint)),
+        plant: b.plant,
+        far: b.far,
+      })),
     ];
   };
 
@@ -353,15 +596,34 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
    * where the air already hides it stays drawn and changes nothing. Returns
    * null when there is no such preset.
    */
-  async function swapTest(name: string, vitality: number): Promise<{ middle: SwapStep; whole: SwapStep; leaving: SwapStep; end: SwapStep; dissolving: SwapStep; gone: SwapStep } | null> {
+  async function swapTest(
+    name: string,
+    vitality: number,
+  ): Promise<{
+    middle: SwapStep;
+    whole: SwapStep;
+    leaving: SwapStep;
+    end: SwapStep;
+    dissolving: SwapStep;
+    gone: SwapStep;
+  } | null> {
     const preset = farPresets().find((f) => f.name === name);
     if (preset === undefined) return null;
     // Keep its far form in a slot at full size while the test runs.
-    const set = [world.treeSet, world.bushSet].find((s) => s.forms === preset.far.forms);
-    if (set === undefined) throw new Error(`The swap test's ${name} belongs to no set of far forms.`);
+    const set = [world.treeSet, world.bushSet].find(
+      (s) => s.forms === preset.far.forms,
+    );
+    if (set === undefined) {
+      throw new Error(
+        `The swap test's ${name} belongs to no set of far forms.`,
+      );
+    }
     const release = await set.stream.hold(preset.far.form);
     const gl = world.renderer.getContext();
-    const focal = gl.drawingBufferHeight / 2 / Math.tan(THREE.MathUtils.degToRad(world.camera.fov) / 2);
+    const focal =
+      gl.drawingBufferHeight /
+      2 /
+      Math.tan(THREE.MathUtils.degToRad(world.camera.fov) / 2);
     let copy = swapCopies.get(preset.far);
     if (copy === undefined) {
       copy = createCopies(preset.plant(), world.light, [], preset.far);
@@ -373,14 +635,20 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     const dz = -Math.cos(world.walker.yaw);
     const eye = world.camera.position.clone();
     const swapPx = FAR.swapPx * (preset.far.share ?? 1);
-    const span = (f: number): number => swapPx * FAR.band - f * swapPx * (FAR.band - 1);
+    const span = (f: number): number =>
+      swapPx * FAR.band - f * swapPx * (FAR.band - 1);
     const leavePx = swapPx / FAR.leave;
     const leaving = (g: number): number => swapPx - g * (swapPx - leavePx);
-    const going = (g: number): number => GONE.start - g * (GONE.start - GONE.end);
+    const going = (g: number): number =>
+      GONE.start - g * (GONE.start - GONE.end);
     const others = world.instanced().filter((o) => o.far !== undefined);
     const hidden = others.map((o) => o.object.visible);
     for (const o of others) o.object.visible = false;
-    const alone = new Set<THREE.Object3D>([world.sky.mesh, copy.object, set.forms.cards.object]);
+    const alone = new Set<THREE.Object3D>([
+      world.sky.mesh,
+      copy.object,
+      set.forms.cards.object,
+    ]);
     const shown = world.scene.children.map((o) => o.visible);
     for (const o of world.scene.children) if (!alone.has(o)) o.visible = false;
     world.swapping = copy;
@@ -389,22 +657,63 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** The distance at which the crown spans `px` device pixels. */
     const at = (px: number): number => (2 * crown.radius * focal) / px;
     /** Places the copy where its crown spans `from` pixels and measures moving the detail center back until it spans `to`. */
-    const step = (copies: Copies, from: number, to: number): SwapStep => walk(copies, from, at(to) - at(from), 0);
+    const step = (copies: Copies, from: number, to: number): SwapStep =>
+      walk(copies, from, at(to) - at(from), 0);
     /**
      * Places the copy where its crown spans `from` pixels and measures moving the detail center back `back` meters,
      * over the crown's part of the screen and at least a `block`-pixel square around it.
      */
-    const walk = (copies: Copies, from: number, back: number, block: number): SwapStep => {
+    const walk = (
+      copies: Copies,
+      from: number,
+      back: number,
+      block: number,
+    ): SwapStep => {
       const distance = at(from);
       // Put the crown's center at eye height, straight ahead.
-      copies.respot([{ x: eye.x + dx * distance - crown.center.x, y: eye.y - crown.center.y, z: eye.z + dz * distance - crown.center.z, yaw: 0, scale: 1, vitality }]);
+      copies.respot([
+        {
+          x: eye.x + dx * distance - crown.center.x,
+          y: eye.y - crown.center.y,
+          z: eye.z + dz * distance - crown.center.z,
+          yaw: 0,
+          scale: 1,
+          vitality,
+        },
+      ]);
       copies.setVitality(vitality);
-      const corners = [-1, 1].flatMap((sx) => [-1, 1].flatMap((sy) => [-1, 1].map((sz) => new THREE.Vector3(eye.x + dx * distance + sx * crown.radius, eye.y + sy * crown.radius, eye.z + dz * distance + sz * crown.radius).project(world.camera))));
+      const corners = [-1, 1].flatMap((sx) =>
+        [-1, 1].flatMap((sy) =>
+          [-1, 1].map((sz) =>
+            new THREE.Vector3(
+              eye.x + dx * distance + sx * crown.radius,
+              eye.y + sy * crown.radius,
+              eye.z + dz * distance + sz * crown.radius,
+            ).project(world.camera),
+          ),
+        ),
+      );
       const px = corners.map((c) => ((c.x + 1) / 2) * gl.drawingBufferWidth);
       const py = corners.map((c) => ((c.y + 1) / 2) * gl.drawingBufferHeight);
-      const [mx, my] = [(Math.min(...px) + Math.max(...px)) / 2, (Math.min(...py) + Math.max(...py)) / 2];
-      const rect = [Math.floor(Math.min(...px, mx - block / 2)), Math.floor(Math.min(...py, my - block / 2)), Math.ceil(Math.max(...px, mx + block / 2)), Math.ceil(Math.max(...py, my + block / 2))] as const;
-      const changeIn = (a: Uint8Array, b: Uint8Array): Change => pictureChange(a, b, gl.drawingBufferWidth, gl.drawingBufferHeight, 64, rect);
+      const [mx, my] = [
+        (Math.min(...px) + Math.max(...px)) / 2,
+        (Math.min(...py) + Math.max(...py)) / 2,
+      ];
+      const rect = [
+        Math.floor(Math.min(...px, mx - block / 2)),
+        Math.floor(Math.min(...py, my - block / 2)),
+        Math.ceil(Math.max(...px, mx + block / 2)),
+        Math.ceil(Math.max(...py, my + block / 2)),
+      ] as const;
+      const changeIn = (a: Uint8Array, b: Uint8Array): Change =>
+        pictureChange(
+          a,
+          b,
+          gl.drawingBufferWidth,
+          gl.drawingBufferHeight,
+          64,
+          rect,
+        );
       world.frozen = t;
       world.detailPin = { x: eye.x, z: eye.z };
       const before = grabFrame(3);
@@ -425,7 +734,12 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         end: step(copy, leavePx + 0.1, leavePx - 0.1),
         // A crown too small to see dissolves over hundreds of meters, so each of these is one step of walking, measured over a block.
         dissolving: walk(copy, going(0.5), WALK_STEP, 64),
-        gone: walk(copy, (2 * crown.radius * focal) / (at(GONE.end) - WALK_STEP / 2), WALK_STEP, 64),
+        gone: walk(
+          copy,
+          (2 * crown.radius * focal) / (at(GONE.end) - WALK_STEP / 2),
+          WALK_STEP,
+          64,
+        ),
       };
     } finally {
       release();
@@ -463,7 +777,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
           if (beat % 3 === 0) world.press("ShiftLeft");
           else world.release("ShiftLeft");
         }
-        if (beat > 0 && t - beat * 2.5 < 0.5) world.walker.yaw += ((beat % 2 === 1 ? 1.2 : -1.2) * (now - last)) / 1000 / 0.5;
+        if (beat > 0 && t - beat * 2.5 < 0.5) {
+          world.walker.yaw +=
+            ((beat % 2 === 1 ? 1.2 : -1.2) * (now - last)) / 1000 / 0.5;
+        }
         last = now;
         requestAnimationFrame(tick);
       };
@@ -474,7 +791,18 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
   /** A far form set's slot usage as plain numbers, for reports. */
   const farCards = (set: FarSet): Record<string, number> => {
     const st = set.stream.stats();
-    return { slots: st.slots, forms: set.forms.count, held: st.held, turnedIn: st.turnedIn, mb: Math.round(st.bytes / 2 ** 20), wanted: st.wanted, farCopies: st.farCopies, carded: st.carded, read: st.read, baked: st.baked };
+    return {
+      slots: st.slots,
+      forms: set.forms.count,
+      held: st.held,
+      turnedIn: st.turnedIn,
+      mb: Math.round(st.bytes / 2 ** 20),
+      wanted: st.wanted,
+      farCopies: st.farCopies,
+      carded: st.carded,
+      read: st.read,
+      baked: st.baked,
+    };
   };
 
   return {
@@ -485,13 +813,22 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     sky: (k: number): number => {
       const skies = sweep(COMPOSING.world, COMPOSING.lib).blueprints;
       const sky = skies[k];
-      if (sky === undefined) throw new Error(`The sweep holds ${skies.length} skies, numbered from 0: there is no sky ${k}.`);
+      if (sky === undefined) {
+        throw new Error(
+          `The sweep holds ${skies.length} skies, numbered from 0: there is no sky ${k}.`,
+        );
+      }
       world.skyWorld = sky;
       return skies.length;
     },
     /** Each placed landmark's name, site, height and triangles. */
     landmarks: () =>
-      world.ways.sites.map((s, i) => ({ name: world.landmarks[s.landmark]?.name, ...s.site, height: world.landmarkViews[i]?.height, triangles: world.landmarkViews[i]?.triangles })),
+      world.ways.sites.map((s, i) => ({
+        name: world.landmarks[s.landmark]?.name,
+        ...s.site,
+        height: world.landmarkViews[i]?.height,
+        triangles: world.landmarkViews[i]?.triangles,
+      })),
     /** Sets the vitality of every landmark's entity, 0 to 1, which also changes the trails they join. */
     landmarkVitality: (v: number) => {
       world.setVitality(new Map(world.landmarkEntities.map((e) => [e.id, v])));
@@ -502,15 +839,32 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
      * everywhere the thing shows and the wear of every trail it joins.
      */
     entityVitality: (key: string, v: number) => {
-      const named = [...world.settlement.buildings.map((b) => b.represented), ...world.landmarkEntities].filter((r) => r.name === key).map((r) => r.id);
-      world.setVitality(new Map((world.thingVitality.has(key) ? [key] : named).map((id) => [id, v])));
+      const named = [
+        ...world.settlement.buildings.map((b) => b.represented),
+        ...world.landmarkEntities,
+      ]
+        .filter((r) => r.name === key)
+        .map((r) => r.id);
+      world.setVitality(
+        new Map(
+          (world.thingVitality.has(key) ? [key] : named).map((id) => [id, v]),
+        ),
+      );
     },
     /** Each trail, which is a dependency, with its ends, length and the ways it follows. */
     trails: () =>
       world.ways.network.trails.map((t) => ({
         id: t.id,
-        from: { place: t.from, entity: world.entityOfPlace.get(t.from), vitality: world.vitalityOfPlace(t.from) },
-        to: { place: t.to, entity: world.entityOfPlace.get(t.to), vitality: world.vitalityOfPlace(t.to) },
+        from: {
+          place: t.from,
+          entity: world.entityOfPlace.get(t.from),
+          vitality: world.vitalityOfPlace(t.from),
+        },
+        to: {
+          place: t.to,
+          entity: world.entityOfPlace.get(t.to),
+          vitality: world.vitalityOfPlace(t.to),
+        },
         length: Math.round(t.length),
         ways: t.ways.map((w) => w.way),
       })),
@@ -523,14 +877,37 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         length: Math.round(w.length),
         width: +w.style.width.toFixed(2),
         crossing: w.style.crossing,
-        crossings: w.crossings.map((c) => ({ x: Math.round(c.x), z: Math.round(c.z), span: +c.span.toFixed(1), yaw: +c.yaw.toFixed(2) })),
+        crossings: w.crossings.map((c) => ({
+          x: Math.round(c.x),
+          z: Math.round(c.z),
+          span: +c.span.toFixed(1),
+          yaw: +c.yaw.toFixed(2),
+        })),
         carries: w.carries.map((c) => world.ways.network.trails[c.trail]?.id),
-        wear: wayWear(world.ways.network, i, world.vitalityOfPlace).map((v) => +v.toFixed(2)),
-        points: Array.from({ length: Math.ceil(w.points.length / 20) }, (_, k) => [Math.round(w.points[k * 20] ?? 0), Math.round(w.points[k * 20 + 1] ?? 0)]),
+        wear: wayWear(world.ways.network, i, (id) =>
+          world.vitalityOfPlace(id),
+        ).map((v) => +v.toFixed(2)),
+        points: Array.from(
+          { length: Math.ceil(w.points.length / 20) },
+          (_, k) => [
+            Math.round(w.points[k * 20] ?? 0),
+            Math.round(w.points[k * 20 + 1] ?? 0),
+          ],
+        ),
       })),
     /** Every building: what it represents, where it is, and its current vitality. */
     buildings: () =>
-      world.settlement.buildings.map((b) => ({ name: b.represented.name, building: b.kindName, ...b.site, width: b.plan.width, depth: b.plan.depth, triangles: b.triangles, vitality: b.vitality, sign: world.settlement.signOf(b), readingSpot: world.settlement.readingSpotOf(b) })),
+      world.settlement.buildings.map((b) => ({
+        name: b.represented.name,
+        building: b.kindName,
+        ...b.site,
+        width: b.plan.width,
+        depth: b.plan.depth,
+        triangles: b.triangles,
+        vitality: b.vitality,
+        sign: world.settlement.signOf(b),
+        readingSpot: world.settlement.readingSpotOf(b),
+      })),
     /** Sets building `i`'s vitality, and its sign's. */
     vitality: (i: number, v: number) => {
       const b = world.settlement.buildings[i];
@@ -541,10 +918,23 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       const s = world.subjects[i];
       if (s !== undefined) world.approach(s);
     },
-    subjects: () => world.subjects.map((s) => ({ name: s.represented.name, formName: s.formName, ...(s.built === undefined ? {} : { built: s.built }), x: s.x, z: s.z, height: s.height, vitality: s.represented.vitality })),
-    card: () => (world.shown === null ? null : { name: world.shown.name, what: world.shown.what }),
+    subjects: () =>
+      world.subjects.map((s) => ({
+        name: s.represented.name,
+        formName: s.formName,
+        ...(s.built === undefined ? {} : { built: s.built }),
+        x: s.x,
+        z: s.z,
+        height: s.height,
+        vitality: s.represented.vitality,
+      })),
+    card: () =>
+      world.shown === null
+        ? null
+        : { name: world.shown.name, what: world.shown.what },
     closeCard: () => world.hideCard(),
-    walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) => world.walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
+    walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) =>
+      world.walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
     /** Sends the person to the landing nearest (x, z), as a pick on the map does, at `pace` along the tread or straight across. Returns false when neither route reaches it. */
     travel: (x: number, z: number, pace: number = TRAVEL.pace) => {
       const at = world.landingNear(x, z);
@@ -560,7 +950,14 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         const unit = spacing * 2 ** k;
         const lo = { x: o.x * unit, z: o.z * unit };
         const hi = { x: (o.x + CLIP.size) * unit, z: (o.z + CLIP.size) * unit };
-        return Math.round(Math.min(world.walker.x - lo.x, hi.x - world.walker.x, world.walker.z - lo.z, hi.z - world.walker.z));
+        return Math.round(
+          Math.min(
+            world.walker.x - lo.x,
+            hi.x - world.walker.x,
+            world.walker.z - lo.z,
+            hi.z - world.walker.z,
+          ),
+        );
       });
     },
     /** Where a person sent to (x, z) would stand (`landingNear`), or null. */
@@ -569,14 +966,37 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** Each tile placed within sight of the person since the last call (`Standing.late`), whose things could be seen appearing. */
     tilesLate: () => world.thingTiles.late(),
     /** The tiles each layer still waits for (`ThingTiles.pending`), and the land's workers. */
-    tilesPending: () => ({ ...world.thingTiles.pending(), workers: world.land.workers() }),
+    tilesPending: () => ({
+      ...world.thingTiles.pending(),
+      workers: world.land.workers(),
+    }),
     /** The walk's state: the held keys, whether a tap's walk or a trip is under way, and why the last trip ended. */
-    walkState: () => ({ keys: [...world.keys], goal: world.goal !== null, trip: world.trip !== null, lastEnd: world.tripEnd }),
+    walkState: () => ({
+      keys: [...world.keys],
+      goal: world.goal !== null,
+      trip: world.trip !== null,
+      lastEnd: world.tripEnd,
+    }),
     /**
      * The trip under way, or null: distance along and total length, pace, whether the view follows the way, and how
      * many times its own pace it goes while paper hides the world (`hurry`).
      */
-    trip: () => (world.trip === null ? null : { s: +world.trip.at.s.toFixed(1), length: Math.round(world.trip.plan.length), v: +world.trip.at.v.toFixed(2), going: world.trip.at.going, follows: world.trip.at.follows, stopping: world.trip.stopping, hurry: world.trip.hurry === null ? null : +world.trip.hurry.toFixed(2), unready: world.trip.marks.filter((m) => !m.ready).length, asked: world.trip.marks.filter((m) => m.asked).length, yaw: +world.trip.at.yaw.toFixed(2) }),
+    trip: () =>
+      world.trip === null
+        ? null
+        : {
+            s: +world.trip.at.s.toFixed(1),
+            length: Math.round(world.trip.plan.length),
+            v: +world.trip.at.v.toFixed(2),
+            going: world.trip.at.going,
+            follows: world.trip.at.follows,
+            stopping: world.trip.stopping,
+            hurry:
+              world.trip.hurry === null ? null : +world.trip.hurry.toFixed(2),
+            unready: world.trip.marks.filter((m) => !m.ready).length,
+            asked: world.trip.marks.filter((m) => m.asked).length,
+            yaw: +world.trip.at.yaw.toFixed(2),
+          },
     /**
      * Plans a trip from (x0, z0) to the landing nearest (x1, z1) and steps it
      * at 60 frames a second without moving the person. Returns its length,
@@ -585,14 +1005,20 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     tripTime: (x0: number, z0: number, x1: number, z1: number) => {
       // Start at a landing, since the given point may be inside a thing.
       const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
-      x0 = start.x;
-      z0 = start.z;
+      const sx = start.x;
+      const sz = start.z;
       const at = world.landingNear(x1, z1);
       const t0 = performance.now();
-      const chosen = at === null ? null : world.travelWay({ x: x0, z: z0 }, at);
+      const chosen = at === null ? null : world.travelWay({ x: sx, z: sz }, at);
       const planMs = Math.round(performance.now() - t0);
       if (at === null || chosen === null) return null;
-      const plan = planTrip(fordBeside(world.terrain, chosen.way, world.broken), chosen.off, null, TRAVEL.pace, (x, z) => wadingAt(world.terrain, world.decks, x, z));
+      const plan = planTrip(
+        fordBeside(world.terrain, chosen.way, world.broken),
+        chosen.off,
+        null,
+        TRAVEL.pace,
+        (x, z) => wadingAt(world.terrain, world.decks, x, z),
+      );
       let t = travelFrom(plan, plan.heading[0] as number);
       let seconds = 0;
       while (!t.done && seconds < 3600) {
@@ -600,9 +1026,38 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         seconds += 1 / 60;
       }
       const tread = trailWay(world.ways.network, { x: x0, z: z0 }, at);
-      const trails = tread === null ? null : Math.round(tread.reduce((sum, p, i) => (i === 0 ? Math.hypot(p.x - x0, p.z - z0) : sum + Math.hypot(p.x - (tread[i - 1] as Walker).x, p.z - (tread[i - 1] as Walker).z)), 0) + Math.hypot((tread[tread.length - 1] as Walker).x - at.x, (tread[tread.length - 1] as Walker).z - at.z));
+      const trails =
+        tread === null
+          ? null
+          : Math.round(
+              tread.reduce(
+                (sum, p, i) =>
+                  i === 0
+                    ? Math.hypot(p.x - x0, p.z - z0)
+                    : sum +
+                      Math.hypot(
+                        p.x - (tread[i - 1] as Walker).x,
+                        p.z - (tread[i - 1] as Walker).z,
+                      ),
+                0,
+              ) +
+                Math.hypot(
+                  (tread[tread.length - 1] as Walker).x - at.x,
+                  (tread[tread.length - 1] as Walker).z - at.z,
+                ),
+            );
       const end = chosen.way[chosen.way.length - 1] as Walker;
-      return { by: chosen.by, planMs, gap: Math.round(Math.hypot(end.x - at.x, end.z - at.z)), off: [Math.round(chosen.off.start), Math.round(chosen.off.end)], straight: Math.round(Math.hypot(at.x - x0, at.z - z0)), length: Math.round(plan.length), trails, seconds: Math.round(seconds), walking: Math.round(plan.length / WALK_TO.pace) };
+      return {
+        by: chosen.by,
+        planMs,
+        gap: Math.round(Math.hypot(end.x - at.x, end.z - at.z)),
+        off: [Math.round(chosen.off.start), Math.round(chosen.off.end)],
+        straight: Math.round(Math.hypot(at.x - x0, at.z - z0)),
+        length: Math.round(plan.length),
+        trails,
+        seconds: Math.round(seconds),
+        walking: Math.round(plan.length / WALK_TO.pace),
+      };
     },
     /**
      * The tour (`tourStops`). With no name, returns every stop's name, what is
@@ -612,7 +1067,14 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
      */
     tour: (name?: string) => {
       const stops = tour();
-      if (name === undefined) return stops.map((s) => ({ name: s.name, what: s.what, x: Math.round(s.x), z: Math.round(s.z) }));
+      if (name === undefined) {
+        return stops.map((s) => ({
+          name: s.name,
+          what: s.what,
+          x: Math.round(s.x),
+          z: Math.round(s.z),
+        }));
+      }
       const s = stops.find((t) => t.name === name.toLowerCase());
       if (s !== undefined) world.walkTo(s.x, s.z, s.yaw, s.pitch);
       return s ?? null;
@@ -620,23 +1082,58 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** Moves to where the world's next open would land the person, as if they last stood at `stood`, or as on a first visit. */
     valley: (stood?: LastSpot) => world.valleyView(stood),
     /** The person's spot, as the page saves it with the world (`lastSpotAt`). */
-    stood: () => (world.code === null ? null : lastSpotAt(world.code.world, world.walker.x, world.walker.z, world.walker.yaw)),
-    walker: () => ({ x: world.walker.x, z: world.walker.z, yawDeg: (world.walker.yaw * 180) / Math.PI, pitchDeg: (world.walker.pitch * 180) / Math.PI, eye: world.walker.eye }),
+    stood: () =>
+      world.code === null
+        ? null
+        : lastSpotAt(
+            world.code.world,
+            world.walker.x,
+            world.walker.z,
+            world.walker.yaw,
+          ),
+    walker: () => ({
+      x: world.walker.x,
+      z: world.walker.z,
+      yawDeg: (world.walker.yaw * 180) / Math.PI,
+      pitchDeg: (world.walker.pitch * 180) / Math.PI,
+      eye: world.walker.eye,
+    }),
     /**
      * Points the camera at the land from above for a capture, from exactly `pos` toward `target`. Without them it
      * uses the world's center or where the last call looked. `walk` or any trip returns to walking.
      */
-    overview: (pos?: [number, number, number], target?: [number, number, number]) => world.lookFromAbove(pos, target),
+    overview: (
+      pos?: [number, number, number],
+      target?: [number, number, number],
+    ) => world.lookFromAbove(pos, target),
     freeze: (t: number | null) => (world.frozen = t),
     /** For filming only. Fixes the camera at `pin`, with the walker under it, where `eye` is the camera's height in world meters. Null releases it. */
-    film: (pin: { x: number; z: number; eye: number; yaw: number; pitch: number } | null) => {
+    film: (
+      pin: {
+        x: number;
+        z: number;
+        eye: number;
+        yaw: number;
+        pitch: number;
+      } | null,
+    ) => {
       world.viewPin = pin;
       if (pin === null) return;
       world.walkTo(pin.x, pin.z, pin.yaw, pin.pitch);
       world.arrived = true;
     },
-    streams: () => world.terrain.streams.map((s) => s.stations.filter((_, k) => k % 10 === 0).map((p) => [Math.round(p.x), Math.round(p.z), +p.level.toFixed(2)])),
-    report: () => ({ ...world.terrain.report, fit: world.terrain.fit, bakeMs: Math.round(world.bakeMs), steps: world.openingSteps }),
+    streams: () =>
+      world.terrain.streams.map((s) =>
+        s.stations
+          .filter((_, k) => k % 10 === 0)
+          .map((p) => [Math.round(p.x), Math.round(p.z), +p.level.toFixed(2)]),
+      ),
+    report: () => ({
+      ...world.terrain.report,
+      fit: world.terrain.fit,
+      bakeMs: Math.round(world.bakeMs),
+      steps: world.openingSteps,
+    }),
     info: () => world.renderer.info.render,
     /** The water's mirror stats, and draw calls in the whole last frame: shadow, mirror and view. */
     water: () => ({ ...world.water.stats(), frameCalls: world.frameCalls }),
@@ -650,25 +1147,48 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
      * pool them. Nothing rebakes. Returns how many files it set.
      */
     fileVitality: (path: string, v: number) => {
-      const under = (p: string): boolean => path === "" || p === path || p.startsWith(`${path}/`);
-      const files = (world.code?.world.patches ?? []).filter((p) => under(p.path));
-      const definitions = (world.code?.world.symbols ?? []).filter((s) => under(s.file));
-      world.setVitality(new Map([...files.map((p) => p.path), ...definitions.map((s) => s.id)].map((id) => [id, v])));
+      const under = (p: string): boolean =>
+        path === "" || p === path || p.startsWith(`${path}/`);
+      const files = (world.code?.world.patches ?? []).filter((p) =>
+        under(p.path),
+      );
+      const definitions = (world.code?.world.symbols ?? []).filter((s) =>
+        under(s.file),
+      );
+      world.setVitality(
+        new Map(
+          [...files.map((p) => p.path), ...definitions.map((s) => s.id)].map(
+            (id) => [id, v],
+          ),
+        ),
+      );
       return files.length;
     },
     /** The ground's own vitality and its area's at (x, z), or underfoot, as the grass, ground and water use them. */
-    groundVitality: (x?: number, z?: number) => groundVitalityAt(x ?? world.walker.x, z ?? world.walker.z),
+    groundVitality: (x?: number, z?: number) =>
+      groundVitalityAt(x ?? world.walker.x, z ?? world.walker.z),
     /** The air settings last applied at the eye: the ground's decline around it, the eye's height above the land, and the air values. */
     air: () => world.appliedAir,
     understory: () => world.understory.stats(),
     /** A hash of the baked heights, water levels and shore distances, to prove a change leaves the bake identical byte for byte. */
-    bakeHash: () => contentHash(world.terrain.lattice.heights, world.terrain.waterLevel, world.terrain.shore),
+    bakeHash: () =>
+      contentHash(
+        world.terrain.lattice.heights,
+        world.terrain.waterLevel,
+        world.terrain.shore,
+      ),
     /** Copies and triangles each kind of the understory drew in the last pass. */
     understoryDrawn: () => world.understory.drawnByKind(),
     /** Shows or hides the wild bushes, for comparing frame costs. */
     showWilds: (on: boolean) => world.wildGrowth.show(on),
     /** Per wild bush blueprint: copies placed, triangles per copy, levels, and what the last pass drew. */
-    wilds: () => world.wildGrowth.all().map((v) => ({ placed: v.count, perCopy: v.triangles / Math.max(1, v.count), levels: v.levels, ...v.drawn() })),
+    wilds: () =>
+      world.wildGrowth.all().map((v) => ({
+        placed: v.count,
+        perCopy: v.triangles / Math.max(1, v.count),
+        levels: v.levels,
+        ...v.drawn(),
+      })),
     placements: () => world.understory.placements(),
     showUnderstory: (on: boolean) => world.understory.show(on),
     /** Shows or hides what drifts through the air, for comparing frame costs. */
@@ -698,25 +1218,55 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
      */
     drawn: () => {
       const kinds = new Map<THREE.Object3D, string>();
-      const name = (kind: string, objects: readonly (THREE.Object3D | undefined)[]): void => {
+      const name = (
+        kind: string,
+        objects: readonly (THREE.Object3D | undefined)[],
+      ): void => {
         for (const o of objects) if (o !== undefined) kinds.set(o, kind);
       };
-      name("trees", world.treeViews.map((v) => v.object));
-      name("understory", [...world.understory.all().map((v) => v.object), ...world.understory.quiet()]);
-      name("wild bushes", world.wildGrowth.all().map((v) => v.object));
+      name(
+        "trees",
+        world.treeViews.map((v) => v.object),
+      );
+      name("understory", [
+        ...world.understory.all().map((v) => v.object),
+        ...world.understory.quiet(),
+      ]);
+      name(
+        "wild bushes",
+        world.wildGrowth.all().map((v) => v.object),
+      );
       // Each far set's cards draw in one batch. The bush set also covers stones and flowers.
       name("far trees", [world.treeSet.forms.cards.object]);
       name("far understory", [world.bushSet.forms.cards.object]);
       name("grass", [world.grass.mesh]);
-      name("ground", [world.ground.fine, world.ground.coarse, world.ground.mirror, world.ground.wilds]);
+      name("ground", [
+        world.ground.fine,
+        world.ground.coarse,
+        world.ground.mirror,
+        world.ground.wilds,
+      ]);
       name("water", [world.water.group]);
       name("sky", [world.sky.mesh]);
       name("signs", [world.signs.mesh]);
-      name("buildings", world.settlement.views().map((v) => v.object));
-      name("landmarks", [...world.landmarkViews, ...world.landmarkPool.values()].map((v) => v.object));
-      name("trails", (world.built?.views ?? []).map((v) => v.object));
+      name(
+        "buildings",
+        world.settlement.views().map((v) => v.object),
+      );
+      name(
+        "landmarks",
+        [...world.landmarkViews, ...world.landmarkPool.values()].map(
+          (v) => v.object,
+        ),
+      );
+      name(
+        "trails",
+        (world.built?.views ?? []).map((v) => v.object),
+      );
       const now = performance.now();
-      return tallyFrame(world.renderer, world.scene, world.camera, kinds, () => world.frame(0, now, world.hour));
+      return tallyFrame(world.renderer, world.scene, world.camera, kinds, () =>
+        world.frame(0, now, world.hour),
+      );
     },
     /**
      * Draws `settle` frames at this instant, without time passing, and
@@ -727,7 +1277,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** How much the picture changed between two grabbed frames (`pictureChange`). */
     change: frameChange,
     /** The walk test (`walkSteps`): each step's change to the detail drawn, and the wind's along the same walk. */
-    steps: (meters: number, step = 0.7, at?: number) => walkSteps(meters, step, at),
+    steps: (meters: number, step = 0.7, at?: number) =>
+      walkSteps(meters, step, at),
     /** The ramp test (`vitalityRamp`): what each frame of a vitality ramp changes, compared with the wind. */
     ramp: vitalityRamp,
     /** Finishes every vitality ease at once, so the next draw shows exactly the vitality set. */
@@ -742,7 +1293,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     standCheck: async (seconds = 30) => {
       const was = world.frozen;
       world.frozen = world.light.uTime.value;
-      const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+      const wait = (ms: number): Promise<void> =>
+        new Promise((r) => setTimeout(r, ms));
       try {
         await wait(300);
         const base = grabFrame();
@@ -750,7 +1302,11 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         for (let t = 0.5; t <= seconds; t += 0.5) {
           await wait(500);
           const o = world.land.origins[0] as { x: number; z: number };
-          looks.push([t, +frameChange(base, grabFrame()).worst.toFixed(2), `${o.x},${o.z}`]);
+          looks.push([
+            t,
+            +frameChange(base, grabFrame()).worst.toFixed(2),
+            `${o.x},${o.z}`,
+          ]);
         }
         return { worst: Math.max(0, ...looks.map((l) => l[1])), looks };
       } finally {
@@ -770,8 +1326,17 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
      * which need no land of their own, to measure a painting by itself.
      */
     paintCheck: async (count = 6, look = true, near = false) => {
-      const from = (s: Subject): number => Math.hypot(s.x - world.walker.x, s.z - world.walker.z);
-      const far = near ? world.subjects.filter((s) => from(s) <= PAINTING.near).sort((a, b) => from(a) - from(b)).slice(0, count) : world.subjects.filter((s) => from(s) > PAINTING.near).sort((a, b) => from(b) - from(a)).slice(0, count);
+      const from = (s: Subject): number =>
+        Math.hypot(s.x - world.walker.x, s.z - world.walker.z);
+      const far = near
+        ? world.subjects
+            .filter((s) => from(s) <= PAINTING.near)
+            .sort((a, b) => from(a) - from(b))
+            .slice(0, count)
+        : world.subjects
+            .filter((s) => from(s) > PAINTING.near)
+            .sort((a, b) => from(b) - from(a))
+            .slice(0, count);
       const was = world.frozen;
       world.frozen = world.light.uTime.value;
       const intervals: number[] = [];
@@ -783,7 +1348,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         if (going) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
-      const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+      const wait = (ms: number): Promise<void> =>
+        new Promise((r) => setTimeout(r, ms));
       try {
         await wait(300);
         const base = look ? grabFrame() : null;
@@ -791,7 +1357,8 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
         let first: string | null = null;
         for (const s of far) {
           let done = false;
-          const job = world.viewOf(s.represented.id, 520, 660)
+          const job = world
+            .viewOf(s.represented.id, 520, 660)
             .then((p) => {
               if (first !== null || p === null) return;
               const out = document.createElement("canvas");
@@ -813,18 +1380,31 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
           await job;
           if (base !== null) changes.push(frameChange(base, grabFrame()).worst);
         }
-        return { painted: far.map((s) => s.represented.id), worst: +Math.max(0, ...changes).toFixed(2), checks: changes.length, intervals, first };
+        return {
+          painted: far.map((s) => s.represented.id),
+          worst: +Math.max(0, ...changes).toFixed(2),
+          checks: changes.length,
+          intervals,
+          first,
+        };
       } finally {
         going = false;
         world.frozen = was;
       }
     },
     /** The swap test (`swapTest`) for preset `name` at `vitality`. With no name, returns every tree and bush preset's name. */
-    swap: (name?: string, vitality = 1) => (name === undefined ? farPresets().map((p) => p.name) : swapTest(name, vitality)),
+    swap: (name?: string, vitality = 1) =>
+      name === undefined
+        ? farPresets().map((p) => p.name)
+        : swapTest(name, vitality),
     /** Resolves once the bushes' far forms, which load after the loading screen closes, have loaded and both sets have settled. */
     farReady: () => world.bushesBaked,
     /** Resolves once both far sets have settled at the person's current spot, with no form loading or fading. */
-    farSettled: () => Promise.all([world.treeSet.stream.settled(), world.bushSet.stream.settled()]).then(() => undefined),
+    farSettled: () =>
+      Promise.all([
+        world.treeSet.stream.settled(),
+        world.bushSet.stream.settled(),
+      ]).then(() => undefined),
     /** Walks as a person would for `seconds` of real time (`wander`). */
     wander,
     /** Shows or hides the far tree cards, to see what they draw. */
@@ -855,25 +1435,78 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
     stride: (seconds: number) => {
       for (let k = 0; k < Math.round(seconds * 60); k++) {
-        const next = walkStep(world.terrain, world.solids, world.walker, { dx: -Math.sin(world.walker.yaw), dz: -Math.cos(world.walker.yaw), speed: WALK_TO.pace }, 1 / 60);
+        const next = walkStep(
+          world.terrain,
+          world.solids,
+          world.walker,
+          {
+            dx: -Math.sin(world.walker.yaw),
+            dz: -Math.cos(world.walker.yaw),
+            speed: WALK_TO.pace,
+          },
+          1 / 60,
+        );
         world.walker.x = next.x;
         world.walker.z = next.z;
       }
-      world.body = standAt(world.terrain, world.decks, world.walker.x, world.walker.z);
+      world.body = standAt(
+        world.terrain,
+        world.decks,
+        world.walker.x,
+        world.walker.z,
+      );
       world.walker.eye = world.body.eye;
-      return { x: world.walker.x, z: world.walker.z, depth: waterDepthAt(world.terrain, world.walker.x, world.walker.z) };
+      return {
+        x: world.walker.x,
+        z: world.walker.z,
+        depth: waterDepthAt(world.terrain, world.walker.x, world.walker.z),
+      };
     },
     depth: () => waterDepthAt(world.terrain, world.walker.x, world.walker.z),
     /** The body's speed, its eye height, the camera height with the stride added, and the footing under it. */
-    gait: () => (world.body === null ? null : { speed: Math.hypot(world.body.vx, world.body.vz), eye: world.body.eye, camera: world.camera.position.y, footing: footingAt(world.terrain, world.decks, world.walker.x, world.walker.z) }),
+    gait: () =>
+      world.body === null
+        ? null
+        : {
+            speed: Math.hypot(world.body.vx, world.body.vz),
+            eye: world.body.eye,
+            camera: world.camera.position.y,
+            footing: footingAt(
+              world.terrain,
+              world.decks,
+              world.walker.x,
+              world.walker.z,
+            ),
+          },
     /** Every footbridge deck a walker can stand on: its center, its direction, its span and width, and its top at the center. */
-    decks: () => world.decks.flatMap((d) => ("tops" in d ? [] : [{ x: d.x, z: d.z, along: [d.cos, -d.sin], span: d.half * 2, width: d.halfWidth * 2, top: d.base + d.topAt(0) }])),
+    decks: () =>
+      world.decks.flatMap((d) =>
+        "tops" in d
+          ? []
+          : [
+              {
+                x: d.x,
+                z: d.z,
+                along: [d.cos, -d.sin],
+                span: d.half * 2,
+                width: d.halfWidth * 2,
+                top: d.base + d.topAt(0),
+              },
+            ],
+      ),
     /** At each (x, z): the ground height without bridges, the stance without decks (`stanceAt`), and the footing with decks. */
     profile: (points: readonly (readonly [number, number])[]) =>
       points.map(([x, z]) => {
         const s = stanceAt(world.terrain, x, z);
         const f = footingAt(world.terrain, world.decks, x, z);
-        return { ground: groundHeightAt(world.terrain, x, z), eye: s.eye, depth: s.depth, swim: s.swim, footing: f.ground, deck: f.deck };
+        return {
+          ground: groundHeightAt(world.terrain, x, z),
+          eye: s.eye,
+          depth: s.depth,
+          swim: s.swim,
+          footing: f.ground,
+          deck: f.deck,
+        };
       }),
     /**
      * Runs the world's walk for `seconds` at 60 frames a second without
@@ -881,23 +1514,51 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
      * tap to `to`. Records each frame as [t, x, z, speed, camera y, eye
      * height, footing, depth, on a deck, yaw].
      */
-    trace: (seconds: number, drive: { keys?: readonly string[]; hold?: number; to?: readonly [number, number] }) => {
+    trace: (
+      seconds: number,
+      drive: {
+        keys?: readonly string[];
+        hold?: number;
+        to?: readonly [number, number];
+      },
+    ) => {
       world.release();
       if (drive.to !== undefined) world.setGoal(drive.to[0], drive.to[1]);
       for (const k of drive.keys ?? []) world.press(k);
       const rows: number[][] = [];
       for (let i = 0; i < Math.round(seconds * 60); i++) {
-        if (drive.hold !== undefined && i === Math.round(drive.hold * 60)) world.release();
+        if (drive.hold !== undefined && i === Math.round(drive.hold * 60)) {
+          world.release();
+        }
         world.updateWalk(1 / 60);
-        const f = footingAt(world.terrain, world.decks, world.walker.x, world.walker.z);
+        const f = footingAt(
+          world.terrain,
+          world.decks,
+          world.walker.x,
+          world.walker.z,
+        );
         const b = world.body as Stride;
-        rows.push([i / 60, world.walker.x, world.walker.z, Math.hypot(b.vx, b.vz), world.camera.position.y, world.walker.eye, f.ground, f.depth, f.deck ? 1 : 0, world.walker.yaw]);
+        rows.push([
+          i / 60,
+          world.walker.x,
+          world.walker.z,
+          Math.hypot(b.vx, b.vz),
+          world.camera.position.y,
+          world.walker.eye,
+          f.ground,
+          f.depth,
+          f.deck ? 1 : 0,
+          world.walker.yaw,
+        ]);
       }
       world.release();
       return rows;
     },
     /** Where a tap's walk is headed, or null, and the corners of its way. */
-    goal: () => ({ goal: world.goal === null ? null : { ...world.goal.target }, way: world.goal?.way.map((p) => [p.x, p.z]) ?? null }),
+    goal: () => ({
+      goal: world.goal === null ? null : { ...world.goal.target },
+      way: world.goal?.way.map((p) => [p.x, p.z]) ?? null,
+    }),
     /** How far (x, z) is from the nearest solid's edge, at most 2 m, and negative inside one. */
     clearance: (x: number, z: number) => clearanceAt(world.solids, x, z),
     /** How many trunks, rocks, bushes and walls block a walker. */
@@ -906,13 +1567,29 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     stance: () => stanceAt(world.terrain, world.walker.x, world.walker.z),
     /** Where the ground at (x, z) shows on screen, in CSS pixels from the page's top left. Null when it is behind the view. */
     onScreen: (x: number, z: number) => {
-      const p = new THREE.Vector3(x, groundHeightAt(world.terrain, x, z), z).project(world.camera);
+      const p = new THREE.Vector3(
+        x,
+        groundHeightAt(world.terrain, x, z),
+        z,
+      ).project(world.camera);
       if (p.z > 1) return null;
       const rect = world.canvas.getBoundingClientRect();
-      return { x: rect.left + ((p.x + 1) / 2) * rect.width, y: rect.top + ((1 - p.y) / 2) * rect.height };
+      return {
+        x: rect.left + ((p.x + 1) / 2) * rect.width,
+        y: rect.top + ((1 - p.y) / 2) * rect.height,
+      };
     },
-    ponds: () => world.terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
-    plants: () => world.trees.map((t) => ({ x: t.x, z: t.z, height: (world.variants[t.variant] as TreeVariant).height * t.scale, region: regionAt(t.x, t.z), preset: composedName(world.treeBlueprints[t.variant] as Blueprint), vitality: t.represented.vitality })),
+    ponds: () =>
+      world.terrain.ponds.map((p) => ({ x: p.x, z: p.z, reach: p.reach })),
+    plants: () =>
+      world.trees.map((t) => ({
+        x: t.x,
+        z: t.z,
+        height: (world.variants[t.variant] as TreeVariant).height * t.scale,
+        region: regionAt(t.x, t.z),
+        preset: composedName(world.treeBlueprints[t.variant] as Blueprint),
+        vitality: t.represented.vitality,
+      })),
     /**
      * Places every code tree `copies` times, each copy on its own patch, to measure at scale. 1 restores the world as
      * it is. The bake thread places them again. Not for a world a person walks.
@@ -920,7 +1597,10 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
     forest: async (copies: number) => {
       world.forestCopies = Math.max(1, Math.round(copies));
       await world.rebake(world.spec);
-      return { trees: world.trees.length, understory: world.understory.stats().placed };
+      return {
+        trees: world.trees.length,
+        understory: world.understory.stats().placed,
+      };
     },
     /** Forces every instanced blueprint's detail ("full" or "far"), or lets distance choose ("auto"). */
     detail: (mode: DetailMode) => {
@@ -932,7 +1612,9 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       builds: world.variants.length,
       levels: world.instanced().map((v) => v.levels),
       drawn: world.instanced().reduce((n, v) => n + v.drawn().copies, 0),
-      drawnTriangles: world.instanced().reduce((n, v) => n + v.drawn().triangles, 0),
+      drawnTriangles: world
+        .instanced()
+        .reduce((n, v) => n + v.drawn().triangles, 0),
       /** The crown span in device pixels at which trees switch to their far form (`FAR.swapPx`). */
       swapPx: FAR.swapPx,
       /** Milliseconds spent loading the trees' far forms, by baking or reading, and then the bushes'. */
@@ -945,15 +1627,23 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
       treeCards: farCards(world.treeSet),
       bushCards: farCards(world.bushSet),
       /** The understory's build count by group, one build per distinct blueprint. */
-      understoryBuilds: Object.fromEntries(Object.entries(world.code?.naturalBuilds ?? {}).map(([group, builds]) => [group, builds.length])),
+      understoryBuilds: Object.fromEntries(
+        Object.entries(world.code?.naturalBuilds ?? {}).map(
+          ([group, builds]) => [group, builds.length],
+        ),
+      ),
       /** Trees in the last pass in the band, or small enough on screen to draw as far forms. */
       treesInBand: world.treeViews.reduce((n, v) => n + v.drawn().band, 0),
       treesFar: world.treeViews.reduce((n, v) => n + v.drawn().far, 0),
       treesDrawn: world.treeViews.reduce((n, v) => n + v.drawn().copies, 0),
-      treeTriangles: world.treeViews.reduce((n, v) => n + v.drawn().triangles, 0),
+      treeTriangles: world.treeViews.reduce(
+        (n, v) => n + v.drawn().triangles,
+        0,
+      ),
     }),
     /** Where the walker is, or (x, z): the area and file patch underfoot, in either world. */
-    place: (x?: number, z?: number) => placeAt(world.places, x ?? world.walker.x, z ?? world.walker.z),
+    place: (x?: number, z?: number) =>
+      placeAt(world.places, x ?? world.walker.x, z ?? world.walker.z),
     /** The codebase's world: its size, areas, patches, buildings, landmarks and trails. */
     code: () =>
       world.code === null
@@ -962,12 +1652,31 @@ export function worldHooks(world: WorldInside): Readonly<Record<string, unknown>
             name: world.code.world.name,
             judged: world.code.summary,
             size: world.code.world.size,
-            regions: world.code.world.regions.map((r) => ({ area: r.area, land: r.biome?.slots.relief?.use ?? "", x: Math.round(r.x), z: Math.round(r.z) })),
-            areas: world.code.world.areas.map((a) => ({ path: a.path, x: Math.round(a.x), z: Math.round(a.z), ground: Math.round(a.ground), depth: a.depth })),
+            regions: world.code.world.regions.map((r) => ({
+              area: r.area,
+              land: r.biome?.slots.relief?.use ?? "",
+              x: Math.round(r.x),
+              z: Math.round(r.z),
+            })),
+            areas: world.code.world.areas.map((a) => ({
+              path: a.path,
+              x: Math.round(a.x),
+              z: Math.round(a.z),
+              ground: Math.round(a.ground),
+              depth: a.depth,
+            })),
             symbols: world.code.world.symbols.length,
             placedSymbols: world.symbolPlacements.filter((k) => k >= 0).length,
             patches: world.code.world.patches.length,
-            things: world.code.world.things.map((t) => ({ path: t.path, name: t.name, as: t.as, blueprint: t.blueprint.id, x: Math.round(t.x), z: Math.round(t.z), vitality: +t.vitality.toFixed(2) })),
+            things: world.code.world.things.map((t) => ({
+              path: t.path,
+              name: t.name,
+              as: t.as,
+              blueprint: t.blueprint.id,
+              x: Math.round(t.x),
+              z: Math.round(t.z),
+              vitality: +t.vitality.toFixed(2),
+            })),
             trails: world.code.world.trails.map((t) => `${t.from}->${t.to}`),
           },
   };

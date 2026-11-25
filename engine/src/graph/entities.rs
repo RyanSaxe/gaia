@@ -133,11 +133,10 @@ pub(crate) fn manifests(files: &[Listed]) -> Vec<Found> {
                     .find(|c| paths.contains(c.as_str()))
                 });
             out.push(Found {
-                name: json
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .map(String::from)
-                    .unwrap_or_else(|| dir.rsplit('/').next().unwrap_or("").to_string()),
+                name: json.get("name").and_then(Value::as_str).map_or_else(
+                    || dir.rsplit('/').next().unwrap_or("").to_string(),
+                    String::from,
+                ),
                 path: dir,
                 form: "package",
                 manifest: f.path.to_string(),
@@ -179,7 +178,11 @@ pub(crate) fn installed(files: &[Listed]) -> BTreeMap<String, BTreeSet<String>> 
             "pyproject.toml" => pyproject_toml(text, &mut named),
             "go.mod" => go_mod(text, &mut named),
             "Gemfile" => gemfile(text, &mut named),
-            n if n.starts_with("requirements") && n.ends_with(".txt") => {
+            n if n.starts_with("requirements")
+                && std::path::Path::new(n)
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("txt")) =>
+            {
                 for line in text.lines() {
                     requirement(line, &mut named);
                 }

@@ -11,6 +11,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -91,61 +92,74 @@ impl<'a> Ctx<'a> {
             uses_of: HashMap::new(),
             calls_out: HashMap::new(),
         };
-        for e in graph.edges.iter().filter(|e| {
-            matches!(e.kind, "calls" | "references" | "implements")
-                && e.to.starts_with("def:")
-                && file_part(&e.from) != file_part(&e.to)
-        }) {
-            if let Some(at) = &e.at {
-                ctx.uses_of
-                    .entry(e.to.as_str())
-                    .or_default()
-                    .push((e.from.as_str(), at.start));
-            }
-            if e.kind == "calls" {
-                ctx.calls_out
-                    .entry(e.from.as_str())
-                    .or_default()
-                    .push(e.to.as_str());
-            }
-        }
+        ctx.index_nodes(graph);
+        ctx.index_edges_and_pending(graph);
+        ctx.index_held(held);
+        ctx
+    }
+
+    fn index_nodes(&mut self, graph: &'a CodeGraph) {
         for n in &graph.nodes {
             match n {
                 Node::Def(d) => {
-                    ctx.defs_of.entry(d.file.as_str()).or_default().push(d);
-                    ctx.defs.insert(d.id.as_str(), d);
-                    ctx.lineage.insert(d.id.as_str(), d.lineage.as_str());
+                    self.defs_of.entry(d.file.as_str()).or_default().push(d);
+                    self.defs.insert(d.id.as_str(), d);
+                    self.lineage.insert(d.id.as_str(), d.lineage.as_str());
                 }
                 Node::File(f) => {
-                    ctx.files_in.entry(parent_dir(&f.path)).or_default().push(f);
-                    ctx.files.insert(f.id.as_str(), f);
-                    ctx.lineage.insert(f.id.as_str(), f.lineage.as_str());
+                    self.files_in
+                        .entry(parent_dir(&f.path))
+                        .or_default()
+                        .push(f);
+                    self.files.insert(f.id.as_str(), f);
+                    self.lineage.insert(f.id.as_str(), f.lineage.as_str());
                 }
                 Node::Dir(d) => {
                     if !d.path.is_empty() {
-                        ctx.dirs_in.entry(parent_dir(&d.path)).or_default().push(d);
+                        self.dirs_in.entry(parent_dir(&d.path)).or_default().push(d);
                     }
-                    ctx.lineage.insert(d.id.as_str(), d.lineage.as_str());
+                    self.lineage.insert(d.id.as_str(), d.lineage.as_str());
                 }
                 Node::Block(b) => {
-                    ctx.lineage.insert(b.id.as_str(), b.lineage.as_str());
+                    self.lineage.insert(b.id.as_str(), b.lineage.as_str());
                 }
             }
         }
         for n in &graph.nodes {
             if let Node::Block(b) = n {
-                let file = ctx
+                let file = self
                     .defs
                     .get(b.def.as_str())
                     .map_or(b.def.as_str(), |d| d.file.as_str());
                 let holder = b.def.split_once('#').map_or(b.def.as_str(), |(_, q)| q);
-                ctx.blocks_of.entry(file).or_default().push((
+                self.blocks_of.entry(file).or_default().push((
                     b.id.as_str(),
                     b.shape.as_str(),
                     b.span.start,
                     b.span.end,
                     holder,
                 ));
+            }
+        }
+    }
+
+    fn index_edges_and_pending(&mut self, graph: &'a CodeGraph) {
+        for e in graph.edges.iter().filter(|e| {
+            matches!(e.kind, "calls" | "references" | "implements")
+                && e.to.starts_with("def:")
+                && file_part(&e.from) != file_part(&e.to)
+        }) {
+            if let Some(at) = &e.at {
+                self.uses_of
+                    .entry(e.to.as_str())
+                    .or_default()
+                    .push((e.from.as_str(), at.start));
+            }
+            if e.kind == "calls" {
+                self.calls_out
+                    .entry(e.from.as_str())
+                    .or_default()
+                    .push(e.to.as_str());
             }
         }
         let file_of = |defs: &HashMap<&'a str, &'a DefNode>, id: &'a str| -> &'a str {
@@ -156,38 +170,42 @@ impl<'a> Ctx<'a> {
             .iter()
             .filter(|e| e.kind == "imports" && e.to.starts_with("file:"))
         {
-            let from = file_of(&ctx.defs, e.from.as_str());
+            let from = file_of(&self.defs, e.from.as_str());
             if from != e.to {
-                ctx.imports.entry(from).or_default().push(e.to.as_str());
-                ctx.importers.entry(e.to.as_str()).or_default().push(from);
+                self.imports.entry(from).or_default().push(e.to.as_str());
+                self.importers.entry(e.to.as_str()).or_default().push(from);
             }
         }
-        for v in ctx.imports.values_mut().chain(ctx.importers.values_mut()) {
+        for v in self.imports.values_mut().chain(self.importers.values_mut()) {
             v.sort_unstable();
             v.dedup();
         }
         for r in &graph.pending {
-            let file = file_of(&ctx.defs, r.from.as_str());
-            ctx.pending_of.entry(file).or_default().push(r);
+            let file = file_of(&self.defs, r.from.as_str());
+            self.pending_of.entry(file).or_default().push(r);
         }
+    }
+
+    fn index_held(&mut self, held: &Value) {
         for (key, value) in held.as_object().into_iter().flatten() {
             let mut parts = key.splitn(3, '|');
             if let (Some(l), Some(_), Some(field)) = (parts.next(), parts.next(), parts.next()) {
-                ctx.held
+                self.held
                     .entry(l.to_string())
                     .or_default()
                     .insert(field.to_string(), value["answer"].clone());
             }
         }
-        ctx
     }
 
     /// A file's definitions as an outline: their signatures, in source order.
     pub fn outline(&self, file: &str) -> Vec<Value> {
-        self.defs_of
-            .get(file)
-            .map(|defs| defs.iter().map(|d| json!({ "name": d.name, "role": d.role, "lines": [d.span.start, d.span.end], "signature": d.signature })).collect())
-            .unwrap_or_default()
+        let Some(defs) = self.defs_of.get(file) else {
+            return Vec::new();
+        };
+        defs.iter()
+            .map(|d| json!({ "name": d.name, "role": d.role, "lines": [d.span.start, d.span.end], "signature": d.signature }))
+            .collect()
     }
 
     /// A file's text from the snapshot, by its path.
@@ -215,11 +233,10 @@ pub trait Call: Sync {
 /// `engine/vocab/`, and `code`, a number raised when the call's code changes. A
 /// change to a call's words or code sends only that call's questions again.
 fn version_of(vocab: &str, code: u32) -> String {
-    let hash: String = Sha256::digest(vocab.as_bytes())
-        .iter()
-        .take(4)
-        .map(|b| format!("{b:02x}"))
-        .collect();
+    let mut hash = String::with_capacity(8);
+    for b in Sha256::digest(vocab.as_bytes()).iter().take(4) {
+        let _ = write!(hash, "{b:02x}");
+    }
     format!("{hash}-{code}")
 }
 
@@ -234,10 +251,11 @@ pub(super) fn vocab_version(vocab: &str, code: u32) -> String {
 /// file, so a change to one call's words keeps the other calls' answers.
 fn section_version(vocab: &str, section: &str, code: u32) -> String {
     let table: toml::Table = toml::from_str(vocab).unwrap_or_default();
-    let words = table
-        .get(section)
-        .map(ToString::to_string)
-        .unwrap_or_default();
+    let words = if let Some(v) = table.get(section) {
+        v.to_string()
+    } else {
+        String::new()
+    };
     version_of(&words, code)
 }
 
@@ -256,17 +274,30 @@ fn nearness(a: &str, b: &str) -> usize {
         let rest = rest.split('#').next().unwrap_or(rest);
         rest.split('/').map(str::to_string).collect()
     };
-    path(a).iter().zip(path(b).iter()).take_while(|(x, y)| x == y).count()
+    path(a)
+        .iter()
+        .zip(path(b).iter())
+        .take_while(|(x, y)| x == y)
+        .count()
 }
 
 /// A link question over `candidates`, each described by `words`, plus "outside". When the candidates don't all
 /// fit in `QUESTION_MOST`, it offers as many as fit, nearest to the question's file first, so the question always
 /// goes out.
-fn link_choice(text: &str, file: &str, candidates: &[String], words: impl Fn(&String) -> String, outside: &str) -> Value {
+fn link_choice(
+    text: &str,
+    file: &str,
+    candidates: &[String],
+    words: impl Fn(&String) -> String,
+    outside: &str,
+) -> Value {
     let all: BTreeMap<String, String> = candidates
         .iter()
         .map(|c| (c.clone(), words(c)))
-        .chain(std::iter::once(("outside".to_string(), outside.to_string())))
+        .chain(std::iter::once((
+            "outside".to_string(),
+            outside.to_string(),
+        )))
         .collect();
     let whole = choice(text, &all);
     if tokens(&whole.to_string()) <= QUESTION_MOST {
@@ -278,14 +309,17 @@ fn link_choice(text: &str, file: &str, candidates: &[String], words: impl Fn(&St
         let options: BTreeMap<String, String> = near[..n]
             .iter()
             .map(|(_, c)| ((*c).clone(), words(c)))
-            .chain(std::iter::once(("outside".to_string(), outside.to_string())))
+            .chain(std::iter::once((
+                "outside".to_string(),
+                outside.to_string(),
+            )))
             .collect();
         choice(text, &options)
     };
     // Binary search for how many of the nearest fit. A question with none fits, and one with all does not.
     let (mut fit, mut over) = (0, near.len());
     while fit + 1 < over {
-        let n = (fit + over) / 2;
+        let n = usize::midpoint(fit, over);
         if tokens(&nearest(n).to_string()) <= QUESTION_MOST {
             fit = n;
         } else {
@@ -314,7 +348,7 @@ fn excerpt(lines: &[&str], at: &[usize], around: usize) -> String {
     out.join("\n")
 }
 
-fn file_of<'a>(unit: Unit<'a>) -> Option<&'a FileNode> {
+fn file_of(unit: Unit<'_>) -> Option<&FileNode> {
     match unit {
         Unit::File(f) => Some(f),
         Unit::Dir(_) => None,
@@ -554,7 +588,10 @@ mod tests {
         let words = "[a]\nx = \"one\"\n";
         let commented = "# Why a is here.\n[a]\n\n# A note.\nx   =   \"one\" # trailing\n";
         assert_eq!(vocab_version(words, 1), vocab_version(commented, 1));
-        assert_ne!(vocab_version(words, 1), vocab_version("[a]\nx = \"two\"\n", 1));
+        assert_ne!(
+            vocab_version(words, 1),
+            vocab_version("[a]\nx = \"two\"\n", 1)
+        );
         assert_ne!(vocab_version(words, 1), vocab_version(words, 2));
     }
 
@@ -587,7 +624,9 @@ mod tests {
                             q.id
                         ),
                         Some("score") => assert!(
-                            q.json["criteria"].as_array().is_some_and(|levels| levels.len() > 1),
+                            q.json["criteria"]
+                                .as_array()
+                                .is_some_and(|levels| levels.len() > 1),
                             "{} has levels",
                             q.id
                         ),

@@ -4,14 +4,26 @@
 // draws whatever words it gets, so a new kind of page needs no change to the
 // book.
 
-import { type CodeSymbol, type CodeWorld, type Journal, type JournalEntry, areaVitality, entityOf } from "@gaia/world";
+import {
+  type CodeSymbol,
+  type CodeWorld,
+  type Journal,
+  type JournalEntry,
+  areaVitality,
+  entityOf,
+} from "@gaia/world";
 import type { JudgedThing } from "../../world-service/protocol.ts";
 
 /**
  * Maps a page id to the id of its thing in the world. `entity:<path>` maps to the entity's path, `own:<file>` to the
  * file, and any other id to itself.
  */
-export const thingIdOf = (of: string): string => (of.startsWith("entity:") ? of.slice("entity:".length) : of.startsWith("own:") ? of.slice("own:".length) : of);
+export const thingIdOf = (of: string): string =>
+  of.startsWith("entity:")
+    ? of.slice("entity:".length)
+    : of.startsWith("own:")
+      ? of.slice("own:".length)
+      : of;
 
 /**
  * The vitality each page shows: a file's, a definition's or an entity's own, and a folder's pooled from every file
@@ -19,9 +31,22 @@ export const thingIdOf = (of: string): string => (of.startsWith("entity:") ? of.
  * form, a plant or stone as much as a building.
  */
 export function pageVitality(code: CodeWorld): (of: string) => number {
-  const pooled = areaVitality(code.patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
-  const entities = [...code.things, ...code.naturalThings.filter((s) => s.of === "entity")];
-  const own = new Map([...code.patches.map((p) => [p.path, p.vitality] as const), ...code.symbols.map((d) => [d.id, d.vitality] as const), ...entities.map((e) => [entityOf(e.path), e.vitality] as const)]);
+  const pooled = areaVitality(
+    code.patches.map((p) => ({
+      area: p.area,
+      vitality: p.vitality,
+      size: p.radius * p.radius,
+    })),
+  );
+  const entities = [
+    ...code.things,
+    ...code.naturalThings.filter((s) => s.of === "entity"),
+  ];
+  const own = new Map([
+    ...code.patches.map((p) => [p.path, p.vitality] as const),
+    ...code.symbols.map((d) => [d.id, d.vitality] as const),
+    ...entities.map((e) => [entityOf(e.path), e.vitality] as const),
+  ]);
   return (of) => own.get(of) ?? own.get(thingIdOf(of)) ?? pooled.get(of) ?? 1;
 }
 
@@ -90,7 +115,10 @@ interface Text {
   readonly first: number;
   readonly lines: readonly string[];
   /** The line ranges Jev marked. */
-  readonly marks: readonly (Mark & { readonly from: number; readonly to: number })[];
+  readonly marks: readonly (Mark & {
+    readonly from: number;
+    readonly to: number;
+  })[];
   readonly folded?: readonly Folded[];
   /** Whether it is set as prose: a document's text, with one paragraph per line. */
   readonly prose?: boolean;
@@ -122,13 +150,22 @@ export interface PageWords {
   readonly signature?: string;
   readonly body: Rows | Code | Full;
   /** An entity's trails at the foot of its page: the entities it imports from and those that import from it. */
-  readonly trails?: { readonly uses: readonly Row[]; readonly usedBy: readonly Row[] };
+  readonly trails?: {
+    readonly uses: readonly Row[];
+    readonly usedBy: readonly Row[];
+  };
 }
 
 /** The data words are built from: the journal, the world, vitality by id, and each file's text once it arrives. */
 export interface WordsSource {
   readonly journal: Journal;
-  readonly world: { readonly name: string; readonly symbols: readonly Pick<CodeSymbol, "id" | "kind" | "line" | "lines">[] };
+  readonly world: {
+    readonly name: string;
+    readonly symbols: readonly Pick<
+      CodeSymbol,
+      "id" | "kind" | "line" | "lines"
+    >[];
+  };
   /** Vitality by id: a folder's or file's path, a definition's id, or an entity's `entity:<path>`. */
   vitality(of: string): number;
   /** A file's lines, or undefined until they arrive. */
@@ -138,11 +175,20 @@ export interface WordsSource {
 }
 
 /** The part with the highest Jev importance, or undefined before the understanding pass judges any. */
-export function mostImportant(src: WordsSource, parts: readonly string[]): string | undefined {
+export function mostImportant(
+  src: WordsSource,
+  parts: readonly string[],
+): string | undefined {
   let top: { readonly of: string; readonly importance: number } | undefined;
   for (const of of parts) {
     const importance = src.thing?.(of)?.importance;
-    if (importance != null && (top === undefined || importance > top.importance)) top = { of, importance };
+    if (
+      importance !== undefined &&
+      importance !== null &&
+      (top === undefined || importance > top.importance)
+    ) {
+      top = { of, importance };
+    }
   }
   return top?.of;
 }
@@ -160,7 +206,10 @@ function definitionsOf(src: WordsSource, file: string): string[] {
 }
 
 /** The candidates for a page's lead: a folder's files, or a file's definitions. */
-const partsOf = (src: WordsSource, e: JournalEntry): string[] => (e.kind === "file" ? definitionsOf(src, e.of) : e.lists.filter((of) => src.journal.entry(of)?.kind === "file"));
+const partsOf = (src: WordsSource, e: JournalEntry): string[] =>
+  e.kind === "file"
+    ? definitionsOf(src, e.of)
+    : e.lists.filter((of) => src.journal.entry(of)?.kind === "file");
 
 /**
  * A page's lead snippet: a file's most important definition, or for a folder,
@@ -172,9 +221,19 @@ function leadOf(src: WordsSource, e: JournalEntry): Snippet | undefined {
   if (e.lead === undefined) return undefined;
   const part = mostImportant(src, partsOf(src, e));
   const shown = part === undefined ? undefined : src.journal.entry(part);
-  const of = shown?.kind === "file" ? mostImportant(src, definitionsOf(src, shown.of)) : part;
+  const of =
+    shown?.kind === "file"
+      ? mostImportant(src, definitionsOf(src, shown.of))
+      : part;
   const symbol = src.world.symbols.find((s) => s.id === of);
-  if (part === undefined || shown === undefined || of === undefined || symbol === undefined) return undefined;
+  if (
+    part === undefined ||
+    shown === undefined ||
+    of === undefined ||
+    symbol === undefined
+  ) {
+    return undefined;
+  }
   const text = src.lines(symbol.id.slice(0, symbol.id.indexOf("#")));
   if (text === undefined) return undefined;
   const end = symbol.line + symbol.lines - 1;
@@ -203,9 +262,12 @@ export function leadFiles(src: WordsSource, e: JournalEntry): string[] {
 }
 
 /** A page's importance, when the understanding pass has judged it. */
-const importanceOf = (src: WordsSource, of: string): { importance?: number } => {
+const importanceOf = (
+  src: WordsSource,
+  of: string,
+): { importance?: number } => {
   const i = src.thing?.(of)?.importance;
-  return i == null ? {} : { importance: i };
+  return i === undefined || i === null ? {} : { importance: i };
 };
 
 const folders = (path: string): string[] => path.split("/").slice(0, -1);
@@ -216,30 +278,72 @@ export function contentsWords(src: WordsSource): PageWords {
   for (const of of src.journal.contents) {
     const e = src.journal.entry(of) as JournalEntry;
     rows.push(rowOf(src, e, 0));
-    if (e.kind === "chapter") for (const sub of e.lists) if (src.journal.entry(sub)?.kind === "chapter") rows.push(rowOf(src, src.journal.entry(sub) as JournalEntry, 1));
+    if (e.kind === "chapter") {
+      for (const sub of e.lists) {
+        if (src.journal.entry(sub)?.kind === "chapter") {
+          rows.push(rowOf(src, src.journal.entry(sub) as JournalEntry, 1));
+        }
+      }
+    }
   }
-  return { path: [], name: src.world.name, vitality: src.vitality(""), body: { kind: "rows", rows } };
+  return {
+    path: [],
+    name: src.world.name,
+    vitality: src.vitality(""),
+    body: { kind: "rows", rows },
+  };
 }
 
 function rowOf(src: WordsSource, e: JournalEntry, depth: number): Row {
-  return { of: e.of, name: e.name, depth, vitality: src.vitality(e.of), ...importanceOf(src, e.of), page: e.page };
+  return {
+    of: e.of,
+    name: e.name,
+    depth,
+    vitality: src.vitality(e.of),
+    ...importanceOf(src, e.of),
+    page: e.page,
+  };
 }
 
-const rowsOf = (src: WordsSource, ofs: readonly string[]): Row[] => ofs.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0));
+const rowsOf = (src: WordsSource, ofs: readonly string[]): Row[] =>
+  ofs.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0));
 
 /**
  * Builds one entry's page words. With `marked`, a definition's code carries
  * Jev's marks, for the appendix. Its journal page shows the code without marks.
  */
-export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): PageWords {
+export function wordsOf(
+  src: WordsSource,
+  e: JournalEntry,
+  marked = false,
+): PageWords {
   if (e.kind === "entity" && e.text === undefined) {
     // An entity with no README lists its folder's contents, with its trails at the foot.
     const path = e.of.slice("entity:".length);
-    return { path: path === "" ? [] : path.split("/"), name: e.name, vitality: src.vitality(e.of), body: { kind: "rows", rows: rowsOf(src, e.lists) }, trails: { uses: rowsOf(src, e.uses ?? []), usedBy: rowsOf(src, e.usedBy ?? []) } };
+    return {
+      path: path === "" ? [] : path.split("/"),
+      name: e.name,
+      vitality: src.vitality(e.of),
+      body: { kind: "rows", rows: rowsOf(src, e.lists) },
+      trails: {
+        uses: rowsOf(src, e.uses ?? []),
+        usedBy: rowsOf(src, e.usedBy ?? []),
+      },
+    };
   }
   if (e.kind === "chapter") {
     const lead = leadOf(src, e);
-    return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), ...importanceOf(src, e.of), body: { kind: "rows", rows: rowsOf(src, e.lists), ...(lead === undefined ? {} : { lead }) } };
+    return {
+      path: folders(e.of),
+      name: e.name,
+      vitality: src.vitality(e.of),
+      ...importanceOf(src, e.of),
+      body: {
+        kind: "rows",
+        rows: rowsOf(src, e.lists),
+        ...(lead === undefined ? {} : { lead }),
+      },
+    };
   }
   if (e.kind === "file" && e.lists.length > 0) {
     // A file with definitions lists its own page first, then every definition in it, with nested ones indented under
@@ -252,7 +356,13 @@ export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): Page
       for (const inner of d.lists) walk(inner, depth + 1);
     };
     for (const of of e.lists) walk(of, 0);
-    return { path: folders(e.of), name: e.name, vitality: src.vitality(e.of), ...importanceOf(src, e.of), body: { kind: "rows", rows, ...(lead === undefined ? {} : { lead }) } };
+    return {
+      path: folders(e.of),
+      name: e.name,
+      vitality: src.vitality(e.of),
+      ...importanceOf(src, e.of),
+      body: { kind: "rows", rows, ...(lead === undefined ? {} : { lead }) },
+    };
   }
   if (e.kind === "own" || e.kind === "file" || e.kind === "entity") {
     // The page's own text. A file's own page shows the file with each definition folded after its first line, a file
@@ -262,18 +372,34 @@ export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): Page
     const folded = held.flatMap((of): Folded[] => {
       const s = src.world.symbols.find((d) => d.id === of);
       const d = src.journal.entry(of);
-      return s === undefined || d === undefined || s.lines < 2 ? [] : [{ from: s.line + 1, to: s.line + s.lines - 1, of, page: d.page }];
+      return s === undefined || d === undefined || s.lines < 2
+        ? []
+        : [{ from: s.line + 1, to: s.line + s.lines - 1, of, page: d.page }];
     });
     const set = setOf(src.lines(file));
     const prose = PROSE.test(file) ? proseOf(set.lines) : null;
     const text = prose === null ? set : { ...set, lines: prose.lines };
     const thing = e.of.slice("entity:".length);
     return {
-      path: e.kind !== "entity" ? folders(file) : thing === "" ? [] : thing.split("/"),
+      path:
+        e.kind !== "entity"
+          ? folders(file)
+          : thing === ""
+            ? []
+            : thing.split("/"),
       name: e.name,
       vitality: src.vitality(e.of),
       ...importanceOf(src, e.of),
-      body: { kind: "code", first: 1, lines: text.lines, opensAt: 1, marks: [], ...(folded.length > 0 ? { folded } : {}), ...(prose === null ? {} : { prose: true, pre: prose.pre }), ...(text.rest > 0 ? { rest: text.rest } : {}) },
+      body: {
+        kind: "code",
+        first: 1,
+        lines: text.lines,
+        opensAt: 1,
+        marks: [],
+        ...(folded.length > 0 ? { folded } : {}),
+        ...(prose === null ? {} : { prose: true, pre: prose.pre }),
+        ...(text.rest > 0 ? { rest: text.rest } : {}),
+      },
     };
   }
   const symbol = src.world.symbols.find((s) => s.id === e.of);
@@ -285,7 +411,16 @@ export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): Page
   // The blocks Jev picked: the key block and the weakest block. A definition longer than `FITS` lines opens at its key block.
   const { key, weak } = src.thing?.(e.of)?.picks ?? {};
   // Where the two overlap, the gutter shows the weak mark, which comes first.
-  const marks = !marked ? [] : [...(weak === undefined ? [] : [{ kind: "improve" as const, from: weak.start, to: weak.end }]), ...(key === undefined ? [] : [{ kind: "understand" as const, from: key.start, to: key.end }])];
+  const marks = !marked
+    ? []
+    : [
+        ...(weak === undefined
+          ? []
+          : [{ kind: "improve" as const, from: weak.start, to: weak.end }]),
+        ...(key === undefined
+          ? []
+          : [{ kind: "understand" as const, from: key.start, to: key.end }]),
+      ];
   const opensAt = count - 1 > FITS && key !== undefined ? key.start : line + 1;
   return {
     path: file.split("/"),
@@ -293,7 +428,13 @@ export function wordsOf(src: WordsSource, e: JournalEntry, marked = false): Page
     vitality: src.vitality(e.of),
     ...importanceOf(src, e.of),
     ...(signature === undefined ? {} : { signature }),
-    body: { kind: "code", first: line + 1, lines: text.slice(line, line + count - 1), opensAt, marks },
+    body: {
+      kind: "code",
+      first: line + 1,
+      lines: text.slice(line, line + count - 1),
+      opensAt,
+      marks,
+    },
   };
 }
 
@@ -315,7 +456,10 @@ const PROSE = /\.(md|mdx|markdown|txt|rst)$/i;
  * lines are kept as code without the fences. Links and images keep their
  * text, and bold and inline code marks are dropped.
  */
-export function proseOf(lines: readonly string[]): { readonly lines: readonly string[]; readonly pre: readonly boolean[] } {
+export function proseOf(lines: readonly string[]): {
+  readonly lines: readonly string[];
+  readonly pre: readonly boolean[];
+} {
   const out: string[] = [];
   const pre: boolean[] = [];
   let paragraph: string[] = [];
@@ -370,9 +514,22 @@ const SET = { lines: 2000, chars: 1500 } as const;
  * returns no lines for a binary file, such as an image, or before the text
  * arrives.
  */
-function setOf(lines: readonly string[] | undefined): { readonly lines: readonly string[]; readonly rest: number } {
-  if (lines === undefined || lines.slice(0, 50).some((l) => l.includes("\u0000") || l.includes("\uFFFD"))) return { lines: [], rest: 0 };
-  return { lines: lines.slice(0, SET.lines).map((l) => (l.length > SET.chars ? `${l.slice(0, SET.chars)} …` : l)), rest: Math.max(0, lines.length - SET.lines) };
+function setOf(lines: readonly string[] | undefined): {
+  readonly lines: readonly string[];
+  readonly rest: number;
+} {
+  if (
+    lines === undefined ||
+    lines.slice(0, 50).some((l) => l.includes("\u0000") || l.includes("\uFFFD"))
+  ) {
+    return { lines: [], rest: 0 };
+  }
+  return {
+    lines: lines
+      .slice(0, SET.lines)
+      .map((l) => (l.length > SET.chars ? `${l.slice(0, SET.chars)} …` : l)),
+    rest: Math.max(0, lines.length - SET.lines),
+  };
 }
 
 /** About how many lines after its signature a definition's page holds. */

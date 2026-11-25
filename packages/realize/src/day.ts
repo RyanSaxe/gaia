@@ -12,16 +12,23 @@ const smoothstep = (lo: number, hi: number, x: number): number => {
 };
 
 /** A direction's height above the horizon and its bearing (0 along +z), in radians. */
-const heightOf = (v: Vec3): number => Math.asin(Math.min(1, Math.max(-1, v[1])));
+const heightOf = (v: Vec3): number =>
+  Math.asin(Math.min(1, Math.max(-1, v[1])));
 const bearingOf = (v: Vec3): number => Math.atan2(v[0], v[2]);
 /** The short way round from one bearing to another, radians. */
-const turn = (from: number, to: number): number => ((to - from + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+const turn = (from: number, to: number): number =>
+  ((to - from + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
 
 /**
  * The slope at a key of a monotone cubic through it, from the changes over the spans before and after (Fritsch and
  * Butland). It is zero where the key is a peak or a trough, so the curve never overshoots a key.
  */
-function slopeAt(before: number, after: number, spanBefore: number, spanAfter: number): number {
+function slopeAt(
+  before: number,
+  after: number,
+  spanBefore: number,
+  spanAfter: number,
+): number {
   const a = before / spanBefore;
   const b = after / spanAfter;
   if (a * b <= 0) return 0;
@@ -31,10 +38,22 @@ function slopeAt(before: number, after: number, spanBefore: number, spanAfter: n
 }
 
 /** A cubic from `p0` to `p1` over `span` hours, leaving and arriving at the slopes `m0` and `m1`, at fraction `t`. */
-function hermite(p0: number, p1: number, m0: number, m1: number, span: number, t: number): number {
+function hermite(
+  p0: number,
+  p1: number,
+  m0: number,
+  m1: number,
+  span: number,
+  t: number,
+): number {
   const t2 = t * t;
   const t3 = t2 * t;
-  return (2 * t3 - 3 * t2 + 1) * p0 + (t3 - 2 * t2 + t) * span * m0 + (3 * t2 - 2 * t3) * p1 + (t3 - t2) * span * m1;
+  return (
+    (2 * t3 - 3 * t2 + 1) * p0 +
+    (t3 - 2 * t2 + t) * span * m0 +
+    (3 * t2 - 2 * t3) * p1 +
+    (t3 - t2) * span * m1
+  );
 }
 
 /**
@@ -43,34 +62,69 @@ function hermite(p0: number, p1: number, m0: number, m1: number, span: number, t
  * overshoots a key. The body moves along it without a corner or a jump in speed, so the sun rises and sets on a
  * steady slant.
  */
-function bodyAt(keys: readonly DayKey[], i: number, t: number, direction: (light: LightSpec) => Vec3): Vec3 {
+function bodyAt(
+  keys: readonly DayKey[],
+  i: number,
+  t: number,
+  direction: (light: LightSpec) => Vec3,
+): Vec3 {
   const n = keys.length;
   const key = (k: number): DayKey => keys[(((i + k) % n) + n) % n] as DayKey;
-  const span = (k: number): number => (key(k + 1).hour - key(k).hour + 24) % 24 || 24;
-  const [d0, d1, d2, d3] = [-1, 0, 1, 2].map((k) => direction(key(k).light)) as [Vec3, Vec3, Vec3, Vec3];
-  const [h0, h1, h2, h3] = [d0, d1, d2, d3].map(heightOf) as [number, number, number, number];
+  const span = (k: number): number =>
+    (key(k + 1).hour - key(k).hour + 24) % 24 || 24;
+  const [d0, d1, d2, d3] = [-1, 0, 1, 2].map((k) =>
+    direction(key(k).light),
+  ) as [Vec3, Vec3, Vec3, Vec3];
+  const [h0, h1, h2, h3] = [d0, d1, d2, d3].map(heightOf) as [
+    number,
+    number,
+    number,
+    number,
+  ];
   const b1 = bearingOf(d1);
   const b0 = b1 - turn(bearingOf(d0), b1);
   const b2 = b1 + turn(b1, bearingOf(d2));
   const b3 = b2 + turn(bearingOf(d2), bearingOf(d3));
   const along = (p0: number, p1: number, p2: number, p3: number): number =>
-    hermite(p1, p2, slopeAt(p1 - p0, p2 - p1, span(-1), span(0)), slopeAt(p2 - p1, p3 - p2, span(0), span(1)), span(0), t);
+    hermite(
+      p1,
+      p2,
+      slopeAt(p1 - p0, p2 - p1, span(-1), span(0)),
+      slopeAt(p2 - p1, p3 - p2, span(0), span(1)),
+      span(0),
+      t,
+    );
   const height = along(h0, h1, h2, h3);
   const bearing = along(b0, b1, b2, b3);
-  return [Math.sin(bearing) * Math.cos(height), Math.sin(height), Math.cos(bearing) * Math.cos(height)];
+  return [
+    Math.sin(bearing) * Math.cos(height),
+    Math.sin(height),
+    Math.cos(bearing) * Math.cos(height),
+  ];
 }
 
-const mixColor = (a: Rgb, b: Rgb, t: number): Rgb => (t <= 0 ? a : t >= 1 ? b : mixLab(a, b, t));
+const mixColor = (a: Rgb, b: Rgb, t: number): Rgb =>
+  t <= 0 ? a : t >= 1 ? b : mixLab(a, b, t);
 
-function mixLight(a: LightSpec, b: LightSpec, t: number, sunDirection: Vec3, moonDirection: Vec3): LightSpec {
+function mixLight(
+  a: LightSpec,
+  b: LightSpec,
+  t: number,
+  sunDirection: Vec3,
+  moonDirection: Vec3,
+): LightSpec {
   return {
     sunDirection,
     sunColor: mixColor(a.sunColor, b.sunColor, t),
     // A sun below the horizon gives the land no direct light.
-    sunIntensity: lerp(a.sunIntensity, b.sunIntensity, t) * smoothstep(-0.04, 0.06, sunDirection[1]),
+    sunIntensity:
+      lerp(a.sunIntensity, b.sunIntensity, t) *
+      smoothstep(-0.04, 0.06, sunDirection[1]),
     moonDirection,
     moonColor: mixColor(a.moonColor, b.moonColor, t),
-    moonIntensity: lerp(a.moonIntensity, b.moonIntensity, t) * smoothstep(-0.04, 0.08, moonDirection[1]),
+    moonIntensity:
+      lerp(a.moonIntensity, b.moonIntensity, t) *
+      smoothstep(-0.04, 0.08, moonDirection[1]),
     nightness: lerp(a.nightness, b.nightness, t),
     ambientColor: mixColor(a.ambientColor, b.ambientColor, t),
     ambientIntensity: lerp(a.ambientIntensity, b.ambientIntensity, t),
@@ -102,5 +156,11 @@ export function lightAt(day: DaySpec, hour: number): LightSpec {
   const b = keys[(i + 1) % keys.length] ?? last;
   const span = (b.hour - a.hour + 24) % 24 || 24;
   const t = ((h - a.hour + 24) % 24) / span;
-  return mixLight(a.light, b.light, t, bodyAt(keys, i, t, (l) => l.sunDirection), bodyAt(keys, i, t, (l) => l.moonDirection));
+  return mixLight(
+    a.light,
+    b.light,
+    t,
+    bodyAt(keys, i, t, (l) => l.sunDirection),
+    bodyAt(keys, i, t, (l) => l.moonDirection),
+  );
 }

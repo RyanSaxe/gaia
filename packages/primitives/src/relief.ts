@@ -3,7 +3,14 @@
 // the terrain package's `RELIEF_BUDGET`, which keeps sight lines short, so no
 // landform is a mountain.
 
-import { type BuildContext, type HeightField, type Landform, type StreamBed, primitive, t } from "@gaia/schema";
+import {
+  type BuildContext,
+  type HeightField,
+  type Landform,
+  type StreamBed,
+  primitive,
+  t,
+} from "@gaia/schema";
 import { bedOffset } from "./geometry/field.ts";
 
 /** Radians from +x (east) toward +z (south). */
@@ -14,14 +21,26 @@ const COMPASS = {
   north: -Math.PI / 2,
 } as const;
 
-const seedOf = (ctx: BuildContext, label: string): number => Math.floor(ctx.rand.fork(label).next() * 2 ** 31);
+const seedOf = (ctx: BuildContext, label: string): number =>
+  Math.floor(ctx.rand.fork(label).next() * 2 ** 31);
 /** The region's width in meters, from the world layout. */
 const extentOf = (ctx: BuildContext): number => ctx.facts.extent ?? 150;
 
 const sum = (...of: HeightField[]): HeightField => ({ op: "sum", of });
-const scale = (by: number, of: HeightField): HeightField => ({ op: "scale", by, of });
+const scale = (by: number, of: HeightField): HeightField => ({
+  op: "scale",
+  by,
+  of,
+});
 const constant = (value: number): HeightField => ({ op: "constant", value });
-const noise = (seed: number, wavelength: number, octaves: number, gain: number, angle = 0, stretch = 1): HeightField => ({
+const noise = (
+  seed: number,
+  wavelength: number,
+  octaves: number,
+  gain: number,
+  angle = 0,
+  stretch = 1,
+): HeightField => ({
   op: "noise",
   seed,
   wavelength,
@@ -46,7 +65,11 @@ export const rollingHillsParams = {
     "moderately spaced": 50,
     "broad and sweeping": 78,
   }),
-  roughness: t.scale("How uneven the slopes are", { smooth: 0.3, "softly uneven": 0.42, rugged: 0.56 }),
+  roughness: t.scale("How uneven the slopes are", {
+    smooth: 0.3,
+    "softly uneven": 0.42,
+    rugged: 0.56,
+  }),
   grain: t.choice("Which way the hills run", {
     round: "No direction: rounded hills every way",
     "north-south": "Long hills running north to south",
@@ -55,7 +78,12 @@ export const rollingHillsParams = {
   }),
 };
 
-const GRAIN = { round: 0, "north-south": Math.PI / 2, "east-west": 0, diagonal: -Math.PI / 4 } as const;
+const GRAIN = {
+  round: 0,
+  "north-south": Math.PI / 2,
+  "east-west": 0,
+  diagonal: -Math.PI / 4,
+} as const;
 
 export const rollingHills = primitive({
   id: "rolling-hills@1",
@@ -64,8 +92,21 @@ export const rollingHills = primitive({
   params: rollingHillsParams,
   build: (p, ctx): Landform => ({
     height: sum(
-      scale(p.height * 0.62, noise(seedOf(ctx, "hills"), p.breadth, 4, p.roughness, GRAIN[p.grain], p.grain === "round" ? 1 : 1.9)),
-      scale(p.height * 0.1, noise(seedOf(ctx, "swell"), p.breadth * 2.6, 2, 0.5)),
+      scale(
+        p.height * 0.62,
+        noise(
+          seedOf(ctx, "hills"),
+          p.breadth,
+          4,
+          p.roughness,
+          GRAIN[p.grain],
+          p.grain === "round" ? 1 : 1.9,
+        ),
+      ),
+      scale(
+        p.height * 0.1,
+        noise(seedOf(ctx, "swell"), p.breadth * 2.6, 2, 0.5),
+      ),
     ),
     water: [],
   }),
@@ -74,16 +115,36 @@ export const rollingHills = primitive({
 // ---------- valley ----------
 
 export const valleyParams = {
-  depth: t.scale("How far the floor lies below the valley's shoulders", { shallow: 3, moderate: 5, deep: 7 }),
-  width: t.scale("How wide the valley is from shoulder to shoulder", { narrow: 44, open: 64, broad: 90 }),
-  run: t.choice("Which way the valley runs", {
-    "north-south": "From north to south, its floor in shade at morning and evening, for code that feels private and sheltered",
-    "east-west": "From east to west, the sun travelling along it all day, for code that feels open and sunny",
-    "northeast-southwest": "From northeast to southwest, its floor catching the afternoon light, for code that feels warm and mellow",
-    "northwest-southeast": "From northwest to southeast, its floor catching the morning light, for code that feels fresh and early",
+  depth: t.scale("How far the floor lies below the valley's shoulders", {
+    shallow: 3,
+    moderate: 5,
+    deep: 7,
   }),
-  fall: t.scale("How steeply the floor descends along the valley", { "nearly level": 0.005, gentle: 0.012, steady: 0.022 }),
-  meander: t.scale("How much the valley winds", { straight: 4, winding: 20, "strongly meandering": 30 }),
+  width: t.scale("How wide the valley is from shoulder to shoulder", {
+    narrow: 44,
+    open: 64,
+    broad: 90,
+  }),
+  run: t.choice("Which way the valley runs", {
+    "north-south":
+      "From north to south, its floor in shade at morning and evening, for code that feels private and sheltered",
+    "east-west":
+      "From east to west, the sun travelling along it all day, for code that feels open and sunny",
+    "northeast-southwest":
+      "From northeast to southwest, its floor catching the afternoon light, for code that feels warm and mellow",
+    "northwest-southeast":
+      "From northwest to southeast, its floor catching the morning light, for code that feels fresh and early",
+  }),
+  fall: t.scale("How steeply the floor descends along the valley", {
+    "nearly level": 0.005,
+    gentle: 0.012,
+    steady: 0.022,
+  }),
+  meander: t.scale("How much the valley winds", {
+    straight: 4,
+    winding: 20,
+    "strongly meandering": 30,
+  }),
   stream: t.choice("What runs along the floor", {
     "dry bed": "A grassy floor with no water",
     trickle: "A narrow, shallow trickle",
@@ -104,7 +165,11 @@ const FLOOR = { straight: 0.14, winding: 1 / 3, widest: 0.38 } as const;
 /** The distance from one bend of a valley to the next, in valley widths. */
 const VALLEY_BEND_WIDTHS = 250 / 64;
 
-const STREAM = { "dry bed": null, trickle: { width: 2.4, depth: 0.45 }, brook: { width: 3.8, depth: 0.7 } } as const;
+const STREAM = {
+  "dry bed": null,
+  trickle: { width: 2.4, depth: 0.45 },
+  brook: { width: 3.8, depth: 0.7 },
+} as const;
 
 export const valley = primitive({
   id: "valley@1",
@@ -120,7 +185,10 @@ export const valley = primitive({
       angle,
       halfWidth: p.width / 2,
       // The floor widens with `meander`, so the stream has room to loop like a lowland brook.
-      floor: Math.min(FLOOR.widest, FLOOR.straight + ((FLOOR.winding - FLOOR.straight) * p.meander) / 20),
+      floor: Math.min(
+        FLOOR.widest,
+        FLOOR.straight + ((FLOOR.winding - FLOOR.straight) * p.meander) / 20,
+      ),
       meander: p.meander,
       // A valley bends once every few of its widths, as real valleys do. An open valley, 64 m wide, bends every 250 m.
       meanderWavelength: VALLEY_BEND_WIDTHS * p.width,
@@ -130,7 +198,13 @@ export const valley = primitive({
       scale(p.depth, trough),
       { op: "plane", angle, grade: p.fall, reach: extent * 0.6 },
       // Multiplying the noise by `trough` roughens the shoulders and leaves the floor smooth for the stream.
-      { op: "product", of: [trough, scale(p.depth * 0.32, noise(seedOf(ctx, "shoulders"), 42, 3, 0.45))] },
+      {
+        op: "product",
+        of: [
+          trough,
+          scale(p.depth * 0.32, noise(seedOf(ctx, "shoulders"), 42, 3, 0.45)),
+        ],
+      },
     );
     const water: StreamBed[] = [];
     const bed = STREAM[p.stream];
@@ -157,7 +231,12 @@ export const valley = primitive({
           walked = 0;
         }
       }
-      water.push({ kind: "stream", path: new Float32Array(points), width: bed.width, depth: bed.depth });
+      water.push({
+        kind: "stream",
+        path: new Float32Array(points),
+        width: bed.width,
+        depth: bed.depth,
+      });
     }
     return { height, water };
   },
@@ -170,15 +249,27 @@ export const terracesParams = {
     hillside: "Straight steps climbing across the region",
     "terraced hill": "Rings of steps around a rounded hill",
   }),
-  rise: t.scale("How tall each step is", { "knee-high": 0.6, "waist-high": 1.1, "head-high": 1.8, tall: 2.6 }),
-  climb: t.scale("How high the steps climb in all", { "a low rise": 4, "a hillside": 7, "a tall hillside": 10 }),
+  rise: t.scale("How tall each step is", {
+    "knee-high": 0.6,
+    "waist-high": 1.1,
+    "head-high": 1.8,
+    tall: 2.6,
+  }),
+  climb: t.scale("How high the steps climb in all", {
+    "a low rise": 4,
+    "a hillside": 7,
+    "a tall hillside": 10,
+  }),
   facing: t.choice("Which way the steps look out", {
     north: "Toward the north",
     east: "Toward the east",
     south: "Toward the south",
     west: "Toward the west",
   }),
-  edge: t.scale("How each step meets the next", { "soft and grassy": 0.7, crisp: 0.4 }),
+  edge: t.scale("How each step meets the next", {
+    "soft and grassy": 0.7,
+    crisp: 0.4,
+  }),
 };
 
 /** The steepest riser grade for any `edge`, so the steps stay climbable. */
@@ -192,7 +283,10 @@ export const terraces = primitive({
   build: (p, ctx): Landform => {
     const extent = extentOf(ctx);
     const out = COMPASS[p.facing];
-    const wobble = scale(p.rise * 0.45, noise(seedOf(ctx, "wobble"), 38, 2, 0.4));
+    const wobble = scale(
+      p.rise * 0.45,
+      noise(seedOf(ctx, "wobble"), 38, 2, 0.4),
+    );
     let base: HeightField;
     let grade: number;
     if (p.form === "hillside") {
@@ -205,9 +299,17 @@ export const terraces = primitive({
       base = sum(scale(p.climb, { op: "dome", radius }), wobble);
     }
     // A riser climbs one step over `riser` of the tread's run, so its grade is base grade * 1.5 / riser.
-    const riser = Math.min(0.92, Math.max(p.edge, (1.5 * grade * 1.3) / RISER_GRADE));
+    const riser = Math.min(
+      0.92,
+      Math.max(p.edge, (1.5 * grade * 1.3) / RISER_GRADE),
+    );
     return {
-      height: sum(constant(-p.climb * 0.45), { op: "terrace", step: p.rise, riser, of: base }),
+      height: sum(constant(-p.climb * 0.45), {
+        op: "terrace",
+        step: p.rise,
+        riser,
+        of: base,
+      }),
       water: [],
     };
   },
@@ -216,14 +318,22 @@ export const terraces = primitive({
 // ---------- basin ----------
 
 export const basinParams = {
-  depth: t.scale("How deep the hollow is", { "a shallow dip": 2.5, "a bowl": 4.5, "a deep hollow": 6.5 }),
+  depth: t.scale("How deep the hollow is", {
+    "a shallow dip": 2.5,
+    "a bowl": 4.5,
+    "a deep hollow": 6.5,
+  }),
   size: t.scale("How wide the hollow is", { small: 26, medium: 36, wide: 48 }),
   rim: t.scale("How the edge meets the land around it", {
     "melting into the land": 0,
     "a soft rim": 0.22,
     "a raised rim": 0.45,
   }),
-  pond: t.flag("Does water collect at the bottom?", "A pond fills the bottom", "A dry, grassy hollow"),
+  pond: t.flag(
+    "Does water collect at the bottom?",
+    "A pond fills the bottom",
+    "A dry, grassy hollow",
+  ),
 };
 
 export const basin = primitive({
@@ -235,28 +345,59 @@ export const basin = primitive({
     height: sum(
       constant(p.depth * 0.3),
       scale(-p.depth, { op: "dome", radius: p.size }),
-      scale(p.rim * p.depth, { op: "ring", radius: p.size, width: p.size * 0.35 }),
+      scale(p.rim * p.depth, {
+        op: "ring",
+        radius: p.size,
+        width: p.size * 0.35,
+      }),
       scale(0.9, noise(seedOf(ctx, "floor"), 36, 3, 0.45)),
     ),
-    water: p.pond ? [{ kind: "pond", x: 0, z: 0, radius: p.size * 0.55, depth: Math.min(1.3, p.depth * 0.25) }] : [],
+    water: p.pond
+      ? [
+          {
+            kind: "pond",
+            x: 0,
+            z: 0,
+            radius: p.size * 0.55,
+            depth: Math.min(1.3, p.depth * 0.25),
+          },
+        ]
+      : [],
   }),
 });
 
 // ---------- dunes ----------
 
 export const dunesParams = {
-  height: t.scale("How tall the ridges are", { ripples: 1, "low dunes": 2, "tall dunes": 3.2 }),
-  spacing: t.scale("How far apart the ridges are", { tight: 20, even: 28, wide: 40 }),
+  height: t.scale("How tall the ridges are", {
+    ripples: 1,
+    "low dunes": 2,
+    "tall dunes": 3.2,
+  }),
+  spacing: t.scale("How far apart the ridges are", {
+    tight: 20,
+    even: 28,
+    wide: 40,
+  }),
   wind: t.choice("Which way the wind that shaped them blows", {
     "from the west": "Ridges run north to south, steep faces to the east",
     "from the north": "Ridges run east to west, steep faces to the south",
     "from the east": "Ridges run north to south, steep faces to the west",
     "from the south": "Ridges run east to west, steep faces to the north",
   }),
-  wander: t.scale("How regular the ridges are", { regular: 0.15, wavering: 0.45, broken: 0.9 }),
+  wander: t.scale("How regular the ridges are", {
+    regular: 0.15,
+    wavering: 0.45,
+    broken: 0.9,
+  }),
 };
 
-const WIND = { "from the west": COMPASS.east, "from the north": COMPASS.south, "from the east": COMPASS.west, "from the south": COMPASS.north } as const;
+const WIND = {
+  "from the west": COMPASS.east,
+  "from the north": COMPASS.south,
+  "from the east": COMPASS.west,
+  "from the south": COMPASS.north,
+} as const;
 
 export const dunes = primitive({
   id: "dunes@1",
@@ -266,7 +407,13 @@ export const dunes = primitive({
   build: (p, ctx): Landform => ({
     height: sum(
       constant(-p.height * 0.4),
-      scale(p.height, { op: "dunes", seed: seedOf(ctx, "dunes"), wavelength: p.spacing, angle: WIND[p.wind], wander: p.wander }),
+      scale(p.height, {
+        op: "dunes",
+        seed: seedOf(ctx, "dunes"),
+        wavelength: p.spacing,
+        angle: WIND[p.wind],
+        wander: p.wander,
+      }),
       scale(0.7, noise(seedOf(ctx, "swell"), 70, 2, 0.5)),
     ),
     water: [],
@@ -281,7 +428,11 @@ export const meadowParams = {
     "softly undulating": 1.4,
     "gently uneven": 2.4,
   }),
-  tilt: t.scale("How much the whole meadow leans", { level: 0, "slightly tilted": 0.015, tilted: 0.035 }),
+  tilt: t.scale("How much the whole meadow leans", {
+    level: 0,
+    "slightly tilted": 0.015,
+    tilted: 0.035,
+  }),
   facing: t.choice("Which way it leans", {
     north: "Down toward the north",
     east: "Down toward the east",
@@ -306,4 +457,11 @@ export const meadow = primitive({
   }),
 });
 
-export const RELIEF_PRIMITIVES = [rollingHills, valley, terraces, basin, dunes, meadow];
+export const RELIEF_PRIMITIVES = [
+  rollingHills,
+  valley,
+  terraces,
+  basin,
+  dunes,
+  meadow,
+];

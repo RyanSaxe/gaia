@@ -10,7 +10,16 @@
 # a CSS rule, a Markdown section or a JSON key, so Jev is never asked about
 # them.
 [parts]
-skip_roles = ["rule", "section", "key", "element", "property", "field", "variable", "constant"]
+skip_roles = [
+  "rule",
+  "section",
+  "key",
+  "element",
+  "property",
+  "field",
+  "variable",
+  "constant",
+]
 
 # Importance, asked of every part in its folder's or file's request. The
 # state holds the project's description and the answers above the part.

@@ -63,12 +63,21 @@ function rng(seed: number): () => number {
 }
 
 /** One box blur of `src` along rows (`step` 1) or columns (`step` w), clamped at the edges. */
-function boxPass(src: Float32Array, out: Float32Array, w: number, h: number, rad: number, along: "rows" | "columns"): void {
-  const [lines, len, step, stride] = along === "rows" ? [h, w, 1, w] : [w, h, w, 1];
+function boxPass(
+  src: Float32Array,
+  out: Float32Array,
+  w: number,
+  h: number,
+  rad: number,
+  along: "rows" | "columns",
+): void {
+  const [lines, len, step, stride] =
+    along === "rows" ? [h, w, 1, w] : [w, h, w, 1];
   const n = 2 * rad + 1;
   for (let l = 0; l < lines; l++) {
     const base = l * stride;
-    const at = (k: number): number => src[base + Math.max(0, Math.min(len - 1, k)) * step] as number;
+    const at = (k: number): number =>
+      src[base + Math.max(0, Math.min(len - 1, k)) * step] as number;
     let s = 0;
     for (let k = -rad; k <= rad; k++) s += at(k);
     for (let k = 0; k < len; k++) {
@@ -79,7 +88,12 @@ function boxPass(src: Float32Array, out: Float32Array, w: number, h: number, rad
 }
 
 /** Blurs an RGBA image's color with three box blurs of radius about `sigma`, which approximates a Gaussian. */
-function blurred(src: Uint8ClampedArray, w: number, h: number, sigma: number): Uint8ClampedArray {
+function blurred(
+  src: Uint8ClampedArray,
+  w: number,
+  h: number,
+  sigma: number,
+): Uint8ClampedArray {
   const rad = Math.round(sigma);
   if (rad < 1) return src;
   const out = new Uint8ClampedArray(src.length);
@@ -98,7 +112,12 @@ function blurred(src: Uint8ClampedArray, w: number, h: number, sigma: number): U
 }
 
 /** Smooth noise in -1..1 on a lattice `cell` pixels apart. */
-function valueNoise(w: number, h: number, cell: number, r: () => number): (x: number, y: number) => number {
+function valueNoise(
+  w: number,
+  h: number,
+  cell: number,
+  r: () => number,
+): (x: number, y: number) => number {
   const gw = Math.ceil(w / cell) + 2;
   const gh = Math.ceil(h / cell) + 2;
   const g = new Float32Array(gw * gh);
@@ -111,13 +130,18 @@ function valueNoise(w: number, h: number, cell: number, r: () => number): (x: nu
     const y0 = Math.min(gh - 2, gy | 0);
     const tx = sm(Math.min(1, gx - x0));
     const ty = sm(Math.min(1, gy - y0));
-    const v = (i: number, j: number): number => g[(y0 + j) * gw + x0 + i] as number;
-    return (v(0, 0) * (1 - tx) + v(1, 0) * tx) * (1 - ty) + (v(0, 1) * (1 - tx) + v(1, 1) * tx) * ty;
+    const v = (i: number, j: number): number =>
+      g[(y0 + j) * gw + x0 + i] as number;
+    return (
+      (v(0, 0) * (1 - tx) + v(1, 0) * tx) * (1 - ty) +
+      (v(0, 1) * (1 - tx) + v(1, 1) * tx) * ty
+    );
   };
 }
 
 const clamp255 = (v: number): number => Math.max(0, Math.min(255, v)) | 0;
-const rgb = (c: RGB): string => `rgb(${clamp255(c[0])},${clamp255(c[1])},${clamp255(c[2])})`;
+const rgb = (c: RGB): string =>
+  `rgb(${clamp255(c[0])},${clamp255(c[1])},${clamp255(c[2])})`;
 
 export function paint(job: PaintJob): OffscreenCanvas {
   const { w, h } = job;
@@ -128,7 +152,11 @@ export function paint(job: PaintJob): OffscreenCanvas {
   };
   const source = (px: Pixels): OffscreenCanvas => {
     const [c, x] = canvas(px.width, px.height);
-    x.putImageData(new ImageData(new Uint8ClampedArray(px.data), px.width, px.height), 0, 0);
+    x.putImageData(
+      new ImageData(new Uint8ClampedArray(px.data), px.width, px.height),
+      0,
+      0,
+    );
     return c;
   };
   const color = source(job.color);
@@ -144,15 +172,29 @@ export function paint(job: PaintJob): OffscreenCanvas {
     const [, x] = canvas(iw, ih);
     x.imageSmoothingQuality = "high";
     x.drawImage(im, 0, 0, iw, ih);
-    return { data: blurred(x.getImageData(0, 0, iw, ih).data, iw, ih, blur / s), w: iw, h: ih, s };
+    return {
+      data: blurred(x.getImageData(0, 0, iw, ih).data, iw, ih, blur / s),
+      w: iw,
+      h: ih,
+      s,
+    };
   };
   const at = (img: Img, x: number, y: number): RGB => {
-    const i = (Math.max(0, Math.min(img.h - 1, (y / img.s) | 0)) * img.w + Math.max(0, Math.min(img.w - 1, (x / img.s) | 0))) * 4;
-    return [img.data[i] as number, img.data[i + 1] as number, img.data[i + 2] as number];
+    const i =
+      (Math.max(0, Math.min(img.h - 1, (y / img.s) | 0)) * img.w +
+        Math.max(0, Math.min(img.w - 1, (x / img.s) | 0))) *
+      4;
+    return [
+      img.data[i] as number,
+      img.data[i + 1] as number,
+      img.data[i + 2] as number,
+    ];
   };
-  const differ = (a: RGB, b: RGB): number => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+  const differ = (a: RGB, b: RGB): number =>
+    Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
   const thingMask = grab(mask, 2);
-  const isThing = (x: number, y: number): boolean => at(thingMask, x, y)[0] > 120;
+  const isThing = (x: number, y: number): boolean =>
+    at(thingMask, x, y)[0] > 120;
 
   // The direction field. Strokes run along shapes (the structure tensor's minor direction). Where there is no clear
   // direction, they follow one gentle diagonal with slow drift.
@@ -161,8 +203,17 @@ export function paint(job: PaintJob): OffscreenCanvas {
   const fh = Math.ceil(h / q);
   const small = grab(color, 3, fw, fh).data;
   const lum = new Float32Array(fw * fh);
-  for (let i = 0; i < fw * fh; i++) lum[i] = 0.3 * (small[i * 4] as number) + 0.59 * (small[i * 4 + 1] as number) + 0.11 * (small[i * 4 + 2] as number);
-  const tensor = [new Float32Array(fw * fh), new Float32Array(fw * fh), new Float32Array(fw * fh)] as const;
+  for (let i = 0; i < fw * fh; i++) {
+    lum[i] =
+      0.3 * (small[i * 4] as number) +
+      0.59 * (small[i * 4 + 1] as number) +
+      0.11 * (small[i * 4 + 2] as number);
+  }
+  const tensor = [
+    new Float32Array(fw * fh),
+    new Float32Array(fw * fh),
+    new Float32Array(fw * fh),
+  ] as const;
   for (let y = 1; y < fh - 1; y++) {
     for (let x = 1; x < fw - 1; x++) {
       const i = y * fw + x;
@@ -182,12 +233,16 @@ export function paint(job: PaintJob): OffscreenCanvas {
   }) as [Float32Array, Float32Array, Float32Array];
   const drift = valueNoise(w, h, 260, r);
   const dirAt = (x: number, y: number): Point => {
-    const i = Math.max(0, Math.min(fh - 1, (y / q) | 0)) * fw + Math.max(0, Math.min(fw - 1, (x / q) | 0));
+    const i =
+      Math.max(0, Math.min(fh - 1, (y / q) | 0)) * fw +
+      Math.max(0, Math.min(fw - 1, (x / q) | 0));
     const a = XX[i] as number;
     const b = XY[i] as number;
     const c = YY[i] as number;
     const tr = a + c + 1e-3;
-    const coh = Math.min(1, Math.sqrt((a - c) ** 2 + 4 * b * b) / tr) * Math.min(1, tr / 40);
+    const coh =
+      Math.min(1, Math.sqrt((a - c) ** 2 + 4 * b * b) / tr) *
+      Math.min(1, tr / 40);
     const th = 0.5 * Math.atan2(2 * b, a - c) + Math.PI / 2;
     const d0 = -0.32 + drift(x, y) * 0.5;
     const vx = Math.cos(2 * th) * coh + Math.cos(2 * d0) * (1 - coh);
@@ -233,7 +288,11 @@ export function paint(job: PaintJob): OffscreenCanvas {
       const warm = (r() - 0.5) * 10;
       const s0 = r() * 0.25 * last;
       const s1 = last * (1 - r() * 0.2);
-      ctx.strokeStyle = rgb([col[0] + jit + warm, col[1] + jit, col[2] + jit - warm]);
+      ctx.strokeStyle = rgb([
+        col[0] + jit + warm,
+        col[1] + jit,
+        col[2] + jit - warm,
+      ]);
       ctx.globalAlpha = alpha * (0.5 + r() * 0.45);
       ctx.lineWidth = Math.max(1, (rad / n) * (1.3 + r() * 0.8));
       const from = Math.floor(s0);
@@ -241,10 +300,15 @@ export function paint(job: PaintJob): OffscreenCanvas {
       line(
         (k) => {
           const t = last > 0 ? k / last : 0.5;
-          const taper = Math.sin(Math.PI * Math.min(1, Math.max(0, 0.08 + t * 0.84)));
+          const taper = Math.sin(
+            Math.PI * Math.min(1, Math.max(0, 0.08 + t * 0.84)),
+          );
           const p = pts[k] as Point;
           const nk = normals[k] as Point;
-          return [p[0] + nk[0] * o * (0.45 + 0.55 * taper), p[1] + nk[1] * o * (0.45 + 0.55 * taper)];
+          return [
+            p[0] + nk[0] * o * (0.45 + 0.55 * taper),
+            p[1] + nk[1] * o * (0.45 + 0.55 * taper),
+          ];
         },
         from,
         to,
@@ -301,11 +365,19 @@ export function paint(job: PaintJob): OffscreenCanvas {
       const seen = at(ref, x0, y0);
       const around = at(coarse, x0, y0);
       // Off the thing, mixes the color 40% toward the coarse view, which damps specks such as petals and glints.
-      const c0: RGB = layer.thing ? seen : [seen[0] * 0.6 + around[0] * 0.4, seen[1] * 0.6 + around[1] * 0.4, seen[2] * 0.6 + around[2] * 0.4];
+      const c0: RGB = layer.thing
+        ? seen
+        : [
+            seen[0] * 0.6 + around[0] * 0.4,
+            seen[1] * 0.6 + around[1] * 0.4,
+            seen[2] * 0.6 + around[2] * 0.4,
+          ];
       // Raises saturation by 18% and adds a random brightness shift, so neighboring strokes differ a little.
       const m = (c0[0] + c0[1] + c0[2]) / 3;
       const jit = (r() - 0.5) * 16;
-      const col = c0.map((v) => Math.max(0, Math.min(255, m + (v - m) * 1.18 + jit))) as RGB;
+      const col = c0.map((v) =>
+        Math.max(0, Math.min(255, m + (v - m) * 1.18 + jit)),
+      ) as RGB;
       const path: Point[] = [[x0, y0]];
       for (const sgn of [1, -1]) {
         let [x, y] = [x0, y0];

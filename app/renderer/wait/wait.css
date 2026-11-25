@@ -2,26 +2,62 @@
    or transform transition, or a pen line's dash, so it runs on the compositor while the main thread builds the
    world. */
 /* `--night` is a registered number so it can transition, and a wait shown before the world's hour is known darkens gradually. */
-@property --night { syntax: "<number>"; inherits: true; initial-value: 0; }
-.veil[data-wait] { display: block; overflow: hidden; background: none; transition: opacity 1.1s cubic-bezier(0.3, 0, 0.2, 1), visibility 0s linear 1.1s, --night 1.2s ease; }
+@property --night {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+.veil[data-wait] {
+  display: block;
+  overflow: hidden;
+  background: none;
+  transition:
+    opacity 1.1s cubic-bezier(0.3, 0, 0.2, 1),
+    visibility 0s linear 1.1s,
+    --night 1.2s ease;
+}
 
 /* ---------- the map sheet ---------- */
 /* The paper under the sheet, creased at its folds like a jump's cover. It fades out into the world. */
 .wait-paper {
-  position: absolute; inset: 0;
+  position: absolute;
+  inset: 0;
   background:
-    linear-gradient(90deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.1) 50%, transparent calc(50% + 1.5px)),
-    linear-gradient(0deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.08) 50%, transparent calc(50% + 1.5px)),
+    linear-gradient(
+      90deg,
+      transparent calc(50% - 1px),
+      rgba(110, 84, 50, 0.1) 50%,
+      transparent calc(50% + 1.5px)
+    ),
+    linear-gradient(
+      0deg,
+      transparent calc(50% - 1px),
+      rgba(110, 84, 50, 0.08) 50%,
+      transparent calc(50% + 1.5px)
+    ),
     radial-gradient(ellipse 80% 70% at 50% 46%, #f1e7cd, #e4d5b2);
-  filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.45));
+  filter: sepia(calc(var(--night, 0) * 0.3))
+    brightness(calc(1 - var(--night, 0) * 0.45));
 }
 /* After dark a warm lantern glow lights the paper from low on the right, and its edges darken to blue. The glow does
    not move, so only new drawing on the sheet moves. */
 .wait-lantern {
-  position: absolute; inset: 0; pointer-events: none; opacity: var(--night, 0);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--night, 0);
   background:
-    radial-gradient(ellipse 46% 42% at 58% 60%, rgba(255, 200, 120, 0.2), rgba(255, 214, 160, 0.07) 60%, rgba(255, 214, 160, 0) 100%),
-    radial-gradient(ellipse 85% 80% at 54% 54%, rgba(18, 22, 52, 0) 46%, rgba(18, 22, 52, 0.62) 100%);
+    radial-gradient(
+      ellipse 46% 42% at 58% 60%,
+      rgba(255, 200, 120, 0.2),
+      rgba(255, 214, 160, 0.07) 60%,
+      rgba(255, 214, 160, 0) 100%
+    ),
+    radial-gradient(
+      ellipse 85% 80% at 54% 54%,
+      rgba(18, 22, 52, 0) 46%,
+      rgba(18, 22, 52, 0.62) 100%
+    );
 }
 
 /* The sheet matches the field map (lab.css `.field-map`): the same size, paper, torn edge, creases and lantern glow,
@@ -32,83 +68,300 @@
    than expected reshapes the sheet once divided, folding the paper in from above and below. */
 .wait-sheet {
   --side: min(94vw, 90vh, 980px);
-  position: absolute; left: 50%; top: 50%; width: var(--side); height: calc(var(--side) / var(--aspect, 1));
-  transform: translate(-50%, -50%); transform-origin: 50% 45%;
-  filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16));
-  transition: opacity 0.5s ease, transform 0.6s ease-in, height 0.6s cubic-bezier(0.3, 0.1, 0.3, 1);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--side);
+  height: calc(var(--side) / var(--aspect, 1));
+  transform: translate(-50%, -50%);
+  transform-origin: 50% 45%;
+  filter: sepia(calc(var(--night, 0) * 0.3))
+    brightness(calc(1 - var(--night, 0) * 0.16));
+  transition:
+    opacity 0.5s ease,
+    transform 0.6s ease-in,
+    height 0.6s cubic-bezier(0.3, 0.1, 0.3, 1);
 }
-.wait-square { position: absolute; left: 0; top: 50%; width: 100%; aspect-ratio: 1; transform: translateY(-50%); }
+.wait-square {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  aspect-ratio: 1;
+  transform: translateY(-50%);
+}
 /* The sheet's shadow, and a turning card's, which narrows as the card turns edge-on (`turnOver`). */
-.wait-sheet::before, .wait-turn-shadow { content: ""; position: absolute; inset: 0.6% 0.6% 0.4%; box-shadow: 0 16px 26px rgba(25, 18, 8, 0.36); }
-.wait-sheet.folding { opacity: 0; transform: translate(-50%, -50%) perspective(1600px) rotateX(10deg) scale(0.95, 0.82); }
-.wait-body, .wait-body::after { position: absolute; inset: 0; }
-.wait-body { -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
-.wait-body::after {
-  content: ""; pointer-events: none; mix-blend-mode: multiply; box-shadow: inset 0 0 44px rgba(120, 90, 50, 0.2);
-  background:
-    radial-gradient(ellipse 85% 75% at 64% 80%, rgba(255, 222, 170, calc(var(--night, 0) * 0.42)), rgba(255, 236, 205, 0) 45%, rgba(48, 46, 80, calc(var(--night, 0) * 0.66)) 100%),
-    linear-gradient(90deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.13) 50%, transparent calc(50% + 1.5px)),
-    linear-gradient(0deg, transparent calc(50% - 1px), rgba(110, 84, 50, 0.11) 50%, transparent calc(50% + 1.5px)),
-    linear-gradient(90deg, rgba(110, 84, 50, 0.05), transparent 12%, transparent 46%, rgba(110, 84, 50, 0.05) 50%, transparent 54%, transparent 88%, rgba(110, 84, 50, 0.05));
+.wait-sheet::before,
+.wait-turn-shadow {
+  content: "";
+  position: absolute;
+  inset: 0.6% 0.6% 0.4%;
+  box-shadow: 0 16px 26px rgba(25, 18, 8, 0.36);
 }
-.wait-ground, .wait-hedges, .wait-ink { position: absolute; inset: 0; width: 100%; height: 100%; }
+.wait-sheet.folding {
+  opacity: 0;
+  transform: translate(-50%, -50%) perspective(1600px) rotateX(10deg)
+    scale(0.95, 0.82);
+}
+.wait-body,
+.wait-body::after {
+  position: absolute;
+  inset: 0;
+}
+.wait-body {
+  -webkit-mask-image: var(--deckle);
+  mask-image: var(--deckle);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+.wait-body::after {
+  content: "";
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  box-shadow: inset 0 0 44px rgba(120, 90, 50, 0.2);
+  background:
+    radial-gradient(
+      ellipse 85% 75% at 64% 80%,
+      rgba(255, 222, 170, calc(var(--night, 0) * 0.42)),
+      rgba(255, 236, 205, 0) 45%,
+      rgba(48, 46, 80, calc(var(--night, 0) * 0.66)) 100%
+    ),
+    linear-gradient(
+      90deg,
+      transparent calc(50% - 1px),
+      rgba(110, 84, 50, 0.13) 50%,
+      transparent calc(50% + 1.5px)
+    ),
+    linear-gradient(
+      0deg,
+      transparent calc(50% - 1px),
+      rgba(110, 84, 50, 0.11) 50%,
+      transparent calc(50% + 1.5px)
+    ),
+    linear-gradient(
+      90deg,
+      rgba(110, 84, 50, 0.05),
+      transparent 12%,
+      transparent 46%,
+      rgba(110, 84, 50, 0.05) 50%,
+      transparent 54%,
+      transparent 88%,
+      rgba(110, 84, 50, 0.05)
+    );
+}
+.wait-ground,
+.wait-hedges,
+.wait-ink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
 /* Layers that fade in over the sheet: each vitality change with its paper, then the relief over each area's own ground. */
-.wait-layers { position: absolute; inset: 0; }
+.wait-layers {
+  position: absolute;
+  inset: 0;
+}
 /* A card chosen on the start page. Its painting covers the sheet until the land is divided. */
-.wait-chosen { position: absolute; left: 0; width: 100%; pointer-events: none; }
+.wait-chosen {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
 /* The card then flips in place, as the journal turns a page (`.jb-strip` in journal.css), to show the sheet's bare
    paper that the map is drawn on. Both sides have the sheet's torn edge. */
-.wait-turn { position: absolute; perspective: 2400px; perspective-origin: 50% 50%; pointer-events: none; filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16)); }
-.wait-turn-card { position: absolute; inset: 0; transform-origin: 0 50%; transform-style: preserve-3d; }
-.wait-turn-page { position: absolute; left: 0; top: 0; -webkit-mask-image: var(--deckle); mask-image: var(--deckle); -webkit-mask-size: 100% 100%; mask-size: 100% 100%; }
-.wait-turn-leaf { position: absolute; width: 0; height: 0; visibility: hidden; }
-.wait-layer { position: absolute; opacity: 0; transition: var(--wash-in); }
-.wait-layer.shown { opacity: 1; }
-/* Each border is an animated pen line. The hedgerow's soft band under it fades in as the lines draw. */
-.wait-hedges { opacity: 0; transition: opacity 2.4s ease 0.5s; }
-.wait-hedges.shown { opacity: 1; }
-.wait-ink { overflow: visible; }
-.wait-ink path {
-  fill: none; stroke: rgba(46, 66, 34, 0.44); stroke-linejoin: round; stroke-linecap: round;
-  stroke-dasharray: 1 1; stroke-dashoffset: 1; transition-property: stroke-dashoffset; transition-timing-function: cubic-bezier(0.45, 0.05, 0.4, 1);
+.wait-turn {
+  position: absolute;
+  perspective: 2400px;
+  perspective-origin: 50% 50%;
+  pointer-events: none;
+  filter: sepia(calc(var(--night, 0) * 0.3))
+    brightness(calc(1 - var(--night, 0) * 0.16));
 }
-.wait-sheet.shown .wait-ink path { stroke-dashoffset: 0; }
+.wait-turn-card {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 50%;
+  transform-style: preserve-3d;
+}
+.wait-turn-page {
+  position: absolute;
+  left: 0;
+  top: 0;
+  -webkit-mask-image: var(--deckle);
+  mask-image: var(--deckle);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+.wait-turn-leaf {
+  position: absolute;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+}
+.wait-layer {
+  position: absolute;
+  opacity: 0;
+  transition: var(--wash-in);
+}
+.wait-layer.shown {
+  opacity: 1;
+}
+/* Each border is an animated pen line. The hedgerow's soft band under it fades in as the lines draw. */
+.wait-hedges {
+  opacity: 0;
+  transition: opacity 2.4s ease 0.5s;
+}
+.wait-hedges.shown {
+  opacity: 1;
+}
+.wait-ink {
+  overflow: visible;
+}
+.wait-ink path {
+  fill: none;
+  stroke: rgba(46, 66, 34, 0.44);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  transition-property: stroke-dashoffset;
+  transition-timing-function: cubic-bezier(0.45, 0.05, 0.4, 1);
+}
+.wait-sheet.shown .wait-ink path {
+  stroke-dashoffset: 0;
+}
 /* Once the world is built, pen lines draw each river from its source and each trail along its course, over the
    relief as it fades in, timed by each line's length. */
-.wait-pens { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.wait-pens .pen {
-  fill: none; stroke-linejoin: round; stroke-linecap: round;
-  stroke-dasharray: 1 1; stroke-dashoffset: 1; transition-property: stroke-dashoffset; transition-timing-function: cubic-bezier(0.35, 0.05, 0.45, 1);
+.wait-pens {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
 }
-.wait-pens.shown .pen { stroke-dashoffset: 0; }
+.wait-pens .pen {
+  fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  transition-property: stroke-dashoffset;
+  transition-timing-function: cubic-bezier(0.35, 0.05, 0.45, 1);
+}
+.wait-pens.shown .pen {
+  stroke-dashoffset: 0;
+}
 /* Names and marks are small canvases revealed by a sliding window. The window and the canvas translate in opposite
    directions, so the canvas stays still as the window opens along a name's direction or up from a mark's base. */
-.wait-names, .wait-marks { position: absolute; inset: 0; pointer-events: none; }
-.wait-name, .wait-mark { position: absolute; overflow: hidden; }
-.wait-reveal, .wait-reveal > canvas { display: block; }
-.wait-name .wait-reveal, .wait-name .wait-reveal > canvas { transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.4, 1); }
-.wait-name .wait-reveal { transform: translateX(-100%); }
-.wait-name .wait-reveal > canvas { transform: translateX(100%); }
-.wait-mark .wait-reveal, .wait-mark .wait-reveal > canvas { transition: transform 0.7s cubic-bezier(0.45, 0.05, 0.4, 1); }
-.wait-mark .wait-reveal { transform: translateY(100%); }
-.wait-mark .wait-reveal > canvas { transform: translateY(-100%); }
-.wait-name.shown .wait-reveal, .wait-name.shown .wait-reveal > canvas, .wait-mark.shown .wait-reveal, .wait-mark.shown .wait-reveal > canvas { transform: none; }
+.wait-names,
+.wait-marks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.wait-name,
+.wait-mark {
+  position: absolute;
+  overflow: hidden;
+}
+.wait-reveal,
+.wait-reveal > canvas {
+  display: block;
+}
+.wait-name .wait-reveal,
+.wait-name .wait-reveal > canvas {
+  transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.4, 1);
+}
+.wait-name .wait-reveal {
+  transform: translateX(-100%);
+}
+.wait-name .wait-reveal > canvas {
+  transform: translateX(100%);
+}
+.wait-mark .wait-reveal,
+.wait-mark .wait-reveal > canvas {
+  transition: transform 0.7s cubic-bezier(0.45, 0.05, 0.4, 1);
+}
+.wait-mark .wait-reveal {
+  transform: translateY(100%);
+}
+.wait-mark .wait-reveal > canvas {
+  transform: translateY(-100%);
+}
+.wait-name.shown .wait-reveal,
+.wait-name.shown .wait-reveal > canvas,
+.wait-mark.shown .wait-reveal,
+.wait-mark.shown .wait-reveal > canvas {
+  transform: none;
+}
 
 /* ---------- the slip: consent over the limit, or a failure ---------- */
 .wait-slip {
-  position: absolute; z-index: 5; left: 50%; bottom: max(28px, 8vh); width: min(330px, calc(100% - 32px)); margin-left: max(-165px, calc(-50% + 16px));
-  padding: 14px 18px 15px; border-radius: 6px; text-align: center; background: #f7f1e3; color: #3a3226;
-  box-shadow: 0 10px 28px rgba(30, 22, 10, 0.22), 0 0 0 1px rgba(74, 60, 44, 0.08);
-  font: 15px/1.45 "Iowan Old Style", Georgia, "Times New Roman", serif; animation: page-in 0.45s ease-out both;
-  filter: sepia(calc(var(--night, 0) * 0.3)) brightness(calc(1 - var(--night, 0) * 0.16));
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: max(28px, 8vh);
+  width: min(330px, calc(100% - 32px));
+  margin-left: max(-165px, calc(-50% + 16px));
+  padding: 14px 18px 15px;
+  border-radius: 6px;
+  text-align: center;
+  background: #f7f1e3;
+  color: #3a3226;
+  box-shadow:
+    0 10px 28px rgba(30, 22, 10, 0.22),
+    0 0 0 1px rgba(74, 60, 44, 0.08);
+  font:
+    15px/1.45 "Iowan Old Style",
+    Georgia,
+    "Times New Roman",
+    serif;
+  animation: page-in 0.45s ease-out both;
+  filter: sepia(calc(var(--night, 0) * 0.3))
+    brightness(calc(1 - var(--night, 0) * 0.16));
 }
-.wait-slip.leaving { animation: page-out 0.32s ease-in both; pointer-events: none; }
-.wait-slip p { margin: 0 0 12px; }
-.wait-choices { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.wait-slip.leaving {
+  animation: page-out 0.32s ease-in both;
+  pointer-events: none;
+}
+.wait-slip p {
+  margin: 0 0 12px;
+}
+.wait-choices {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 .wait-choices button {
-  font: italic 600 14.5px "Iowan Old Style", Georgia, "Times New Roman", serif; color: #3a3226; background: transparent;
-  border: 1px solid rgba(74, 60, 44, 0.32); border-radius: 999px; padding: 6px 16px; min-height: 40px; cursor: pointer;
+  font:
+    italic 600 14.5px "Iowan Old Style",
+    Georgia,
+    "Times New Roman",
+    serif;
+  color: #3a3226;
+  background: transparent;
+  border: 1px solid rgba(74, 60, 44, 0.32);
+  border-radius: 999px;
+  padding: 6px 16px;
+  min-height: 40px;
+  cursor: pointer;
 }
-.wait-choices button[data-answer="true"] { background: #6f9a45; border-color: #56803a; color: #fbf6e8; }
-.wait-choices button:hover, .wait-choices button:focus-visible { outline: none; border-color: rgba(74, 60, 44, 0.6); box-shadow: 0 0 0 3px rgba(111, 154, 69, 0.2); }
-.wait-choices button[data-answer="true"]:hover, .wait-choices button[data-answer="true"]:focus-visible { background: #648d3d; }
+.wait-choices button[data-answer="true"] {
+  background: #6f9a45;
+  border-color: #56803a;
+  color: #fbf6e8;
+}
+.wait-choices button:hover,
+.wait-choices button:focus-visible {
+  outline: none;
+  border-color: rgba(74, 60, 44, 0.6);
+  box-shadow: 0 0 0 3px rgba(111, 154, 69, 0.2);
+}
+.wait-choices button[data-answer="true"]:hover,
+.wait-choices button[data-answer="true"]:focus-visible {
+  background: #648d3d;
+}

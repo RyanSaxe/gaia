@@ -5,18 +5,20 @@ Usage: build.py [world|music] [--out ASSETS_DIR] [--keep]
   --out         where the files go (default: app/renderer/sound/assets, with the music in its music/ folder)
   --keep        keep the music's MIDI, rendered parts and mixed stems in the cache's work/ folder
 """
+
 import argparse
 import shutil
 import time
 from pathlib import Path
 
 import cache
+import world
+from music import compose, encode, mix, patches, render
 
 REPO = Path(__file__).resolve().parents[2]
 
 
-def music(out, keep):
-    from music import compose, encode, mix, patches, render
+def music(out: Path, *, keep: bool) -> None:
     cache.music()
     patches.write()
     work = cache.CACHE / "work"
@@ -31,8 +33,9 @@ def music(out, keep):
             shutil.rmtree(work, ignore_errors=True)
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+def main() -> None:
+    description = (__doc__ or "").splitlines()[0]
+    ap = argparse.ArgumentParser(description=description)
     ap.add_argument("half", nargs="?", choices=("world", "music"))
     ap.add_argument("--out", type=Path, default=REPO / "app" / "renderer" / "sound" / "assets")
     ap.add_argument("--keep", action="store_true")
@@ -40,10 +43,9 @@ def main():
     out = args.out.resolve()
     start = time.time()
     if args.half in (None, "world"):
-        import world
         world.main(out)
     if args.half in (None, "music"):
-        music(out, args.keep)
+        music(out, keep=args.keep)
     print(f"done in {time.time() - start:.0f} s: {out}")
 
 

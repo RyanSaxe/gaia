@@ -31,7 +31,10 @@ export interface Listener {
   hear(m: Moment): void;
 }
 
-export function createListener(scape: Soundscape, music: Music | null): Listener {
+export function createListener(
+  scape: Soundscape,
+  music: Music | null,
+): Listener {
   let mixed = -Infinity;
   let was: Moment | null = null;
   // The stride's phase. A footfall plays each time it passes a whole number, and starting at 0.6 brings the first soon
@@ -65,7 +68,14 @@ export function createListener(scape: Soundscape, music: Music | null): Listener
         turnFrom = m.t;
         scape.paper(m.t, "turn");
       }
-      if (book.turning && turnFrom !== null && riffle === null && m.t - turnFrom >= RIFFLE_AFTER) riffle = scape.paper(m.t, "riffle");
+      if (
+        book.turning &&
+        turnFrom !== null &&
+        riffle === null &&
+        m.t - turnFrom >= RIFFLE_AFTER
+      ) {
+        riffle = scape.paper(m.t, "riffle");
+      }
       if (!book.turning) {
         riffle?.stop(m.t);
         riffle = null;

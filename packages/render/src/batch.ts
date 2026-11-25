@@ -7,9 +7,28 @@
 
 import * as THREE from "three";
 import type { Part } from "@gaia/schema";
-import { FLUTTERS, type Realized, mergeParts, shownVitality, spinAt } from "@gaia/realize";
+import {
+  FLUTTERS,
+  type Realized,
+  mergeParts,
+  shownVitality,
+  spinAt,
+} from "@gaia/realize";
 import type { SceneLight } from "./light.ts";
-import { CLOSED, DEPTH_FRAG, DEPTH_VERT, FOLIAGE, LAMP, PLANT_FRAG, PLANT_VERT, type PlantView, geometryOf, hasRuin, letGoOnUpload, sprayColors } from "./plant.ts";
+import {
+  CLOSED,
+  DEPTH_FRAG,
+  DEPTH_VERT,
+  FOLIAGE,
+  LAMP,
+  PLANT_FRAG,
+  PLANT_VERT,
+  type PlantView,
+  geometryOf,
+  hasRuin,
+  letGoOnUpload,
+  sprayColors,
+} from "./plant.ts";
 import { createSmokeMaterial } from "./smoke.ts";
 import { closeEachFrame, followVitality } from "./lag.ts";
 
@@ -24,13 +43,18 @@ export interface BatchMember {
 }
 
 /** A batch of plants as one set of meshes, with the parts of a plant view that a scene and a shadow pass use, and each member's vitality. */
-export interface PlantBatch extends Pick<PlantView, "object" | "triangles" | "useDepth" | "dispose"> {
+export interface PlantBatch extends Pick<
+  PlantView,
+  "object" | "triangles" | "useDepth" | "dispose"
+> {
   readonly members: number;
   setVitality(member: number, v: number): void;
   /** Moves a member to a new bake's site. Its texels, its ray test and the batch's bounds follow. */
   move(member: number, at: Pick<BatchMember, "x" | "y" | "z" | "yaw">): void;
   /** The member the ray hits first and the distance along the ray, tested against its parts as built, as a plant's own ray test is. */
-  pick(raycaster: THREE.Raycaster): { readonly member: number; readonly distance: number } | undefined;
+  pick(
+    raycaster: THREE.Raycaster,
+  ): { readonly member: number; readonly distance: number } | undefined;
 }
 
 /** Texels at the head of each member's row: four for its matrix, one for vitality, seed, turn and height, one for motion, and three for a spray's bark, stem and bloom. */
@@ -39,7 +63,11 @@ const HEAD = 9;
 const PER_SWATCH = 3;
 
 function swap(source: string, from: string, to: string): string {
-  if (!source.includes(from)) throw new Error(`The plant shader no longer contains "${from}"; update batch.ts.`);
+  if (!source.includes(from)) {
+    throw new Error(
+      `The plant shader no longer contains "${from}"; update batch.ts.`,
+    );
+  }
   return source.split(from).join(to);
 }
 
@@ -58,9 +86,21 @@ mat4 batchModel() { return mat4(batchAt(0), batchAt(1), batchAt(2), batchAt(3));
   out = swap(out, "uniform float uSeed;", "#define uSeed (batchAt(4).y)");
   out = swap(out, "uniform float uHeight;", "#define uHeight (batchAt(4).w)");
   out = swap(out, "uniform float uSway;", "#define uSway (batchAt(5).x)");
-  out = swap(out, "uniform float uFrequency;", "#define uFrequency (batchAt(5).y)");
-  out = swap(out, "uniform float uVitalityLag;", "#define uVitalityLag (batchAt(5).z)");
-  out = swap(out, "uniform float uFlutter;", `#define uFlutter (batchAt(${HEAD} + ${PER_SWATCH} * int(aBatch.y + 0.5) + 2).x)`);
+  out = swap(
+    out,
+    "uniform float uFrequency;",
+    "#define uFrequency (batchAt(5).y)",
+  );
+  out = swap(
+    out,
+    "uniform float uVitalityLag;",
+    "#define uVitalityLag (batchAt(5).z)",
+  );
+  out = swap(
+    out,
+    "uniform float uFlutter;",
+    `#define uFlutter (batchAt(${HEAD} + ${PER_SWATCH} * int(aBatch.y + 0.5) + 2).x)`,
+  );
   out = swap(out, "uniform float uTurn;", "#define uTurn (batchAt(4).z)");
   // The texture's matrix places each member. The meshes themselves sit at the origin.
   out = swap(out, "modelMatrix", "batchModel()");
@@ -92,7 +132,8 @@ const BATCH_FRAG = batchedFragment(PLANT_FRAG);
 const BATCH_DEPTH = batched(DEPTH_VERT);
 
 /** The key of the material a part shares with other members' parts. */
-const materialOf = (part: Part): string => `${CLOSED.has(part.swatch) ? "front" : "both"}|${part.cutout.some((c) => c !== 0) ? "cover" : "solid"}|${hasRuin(part) ? "ruin" : "plain"}`;
+const materialOf = (part: Part): string =>
+  `${CLOSED.has(part.swatch) ? "front" : "both"}|${part.cutout.some((c) => c !== 0) ? "cover" : "solid"}|${hasRuin(part) ? "ruin" : "plain"}`;
 
 /** Each member's parts merged by swatch as a plant's are, its bounds, and the swatch slot each part takes. */
 interface Prepared {
@@ -104,31 +145,69 @@ interface Prepared {
   bounds: THREE.Sphere;
 }
 
-const placement = (at: Pick<BatchMember, "x" | "y" | "z" | "yaw">): THREE.Matrix4 =>
-  new THREE.Matrix4().compose(new THREE.Vector3(at.x, at.y, at.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), at.yaw), new THREE.Vector3(1, 1, 1));
+const placement = (
+  at: Pick<BatchMember, "x" | "y" | "z" | "yaw">,
+): THREE.Matrix4 =>
+  new THREE.Matrix4().compose(
+    new THREE.Vector3(at.x, at.y, at.z),
+    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), at.yaw),
+    new THREE.Vector3(1, 1, 1),
+  );
 
-export function createPlantBatch(members: readonly BatchMember[], light: SceneLight): PlantBatch {
+export function createPlantBatch(
+  members: readonly BatchMember[],
+  light: SceneLight,
+): PlantBatch {
   const object = new THREE.Group();
   const prepared: Prepared[] = members.map((m) => {
     const parts = mergeParts(m.plant.parts);
     const box = new THREE.Box3();
-    for (const p of parts) for (let i = 0; i < p.positions.length; i += 3) box.expandByPoint(new THREE.Vector3(p.positions[i], p.positions[i + 1], p.positions[i + 2]));
+    for (const p of parts) {
+      for (let i = 0; i < p.positions.length; i += 3) {
+        box.expandByPoint(
+          new THREE.Vector3(
+            p.positions[i],
+            p.positions[i + 1],
+            p.positions[i + 2],
+          ),
+        );
+      }
+    }
     const height = Math.max(0.3, box.max.y);
     const matrix = placement(m);
     // Wind and decline move vertices a little past the built mesh, as a plant's own bounds allow for.
-    const local = box.isEmpty() ? new THREE.Sphere(new THREE.Vector3(), 1) : box.getBoundingSphere(new THREE.Sphere());
+    const local = box.isEmpty()
+      ? new THREE.Sphere(new THREE.Vector3(), 1)
+      : box.getBoundingSphere(new THREE.Sphere());
     local.radius += 2 + 0.15 * height;
-    return { parts, matrix, height, local, bounds: local.clone().applyMatrix4(matrix) };
+    return {
+      parts,
+      matrix,
+      height,
+      local,
+      bounds: local.clone().applyMatrix4(matrix),
+    };
   });
   // Every swatch the batch draws takes one slot, the same in every member's row.
-  const swatches = [...new Set(prepared.flatMap((p) => p.parts.filter((part) => part.swatch !== "smoke").map((part) => part.swatch)))].sort();
+  const swatches = [
+    ...new Set(
+      prepared.flatMap((p) =>
+        p.parts
+          .filter((part) => part.swatch !== "smoke")
+          .map((part) => part.swatch),
+      ),
+    ),
+  ].sort();
   const slotOf = new Map(swatches.map((s, i) => [s, i]));
   const width = HEAD + PER_SWATCH * swatches.length;
   const data = new Float32Array(width * Math.max(1, members.length) * 4);
-  const texel = (member: number, x: number, v: readonly number[]): void => data.set(v, (member * width + x) * 4);
+  const texel = (member: number, x: number, v: readonly number[]): void =>
+    data.set(v, (member * width + x) * 4);
   members.forEach((m, i) => {
     const { matrix, height } = prepared[i] as Prepared;
-    for (let c = 0; c < 4; c++) texel(i, c, matrix.elements.slice(c * 4, c * 4 + 4));
+    for (let c = 0; c < 4; c++) {
+      texel(i, c, matrix.elements.slice(c * 4, c * 4 + 4));
+    }
     texel(i, 4, [shownVitality(m.vitality), 0, 0, height]);
     texel(i, 5, [m.plant.motion.sway, m.plant.motion.frequency, 0, 0]);
     const spray = sprayColors(m.plant);
@@ -136,20 +215,42 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     texel(i, 7, spray.uStem.value.toArray());
     texel(i, 8, spray.uBloomColor.value.toArray());
     swatches.forEach((name, k) => {
-      const swatch = m.plant.palette.swatches[name] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
-      texel(i, HEAD + PER_SWATCH * k, [...swatch.healthy, FOLIAGE[name] ?? 0.5]);
-      texel(i, HEAD + PER_SWATCH * k + 1, [...swatch.decline, LAMP.has(name) ? 1 : 0]);
-      texel(i, HEAD + PER_SWATCH * k + 2, [FLUTTERS.has(name) ? 1 : 0, 0, 0, 0]);
+      const swatch = m.plant.palette.swatches[name] ?? {
+        healthy: [1, 0, 1],
+        decline: [1, 0, 1],
+      };
+      texel(i, HEAD + PER_SWATCH * k, [
+        ...swatch.healthy,
+        FOLIAGE[name] ?? 0.5,
+      ]);
+      texel(i, HEAD + PER_SWATCH * k + 1, [
+        ...swatch.decline,
+        LAMP.has(name) ? 1 : 0,
+      ]);
+      texel(i, HEAD + PER_SWATCH * k + 2, [
+        FLUTTERS.has(name) ? 1 : 0,
+        0,
+        0,
+        0,
+      ]);
     });
   });
-  const texture = new THREE.DataTexture(data, width, Math.max(1, members.length), THREE.RGBAFormat, THREE.FloatType);
+  const texture = new THREE.DataTexture(
+    data,
+    width,
+    Math.max(1, members.length),
+    THREE.RGBAFormat,
+    THREE.FloatType,
+  );
   texture.minFilter = THREE.NearestFilter;
   texture.magFilter = THREE.NearestFilter;
   texture.needsUpdate = true;
   const shared = { uBatch: { value: texture }, uDetail: { value: 0 } };
 
   // Spinning pieces turn by each member's accumulated phase, so a wheel's speed follows its vitality without jumping.
-  const spins = prepared.map((p) => p.parts.some((part) => part.channels.spin !== undefined));
+  const spins = prepared.map((p) =>
+    p.parts.some((part) => part.channels.spin !== undefined),
+  );
   const turns = members.map(() => 0);
   let turnedAt = light.uTime.value;
   const advanceTurns = (): void => {
@@ -159,7 +260,8 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     turnedAt = now;
     spins.forEach((spinning, i) => {
       if (!spinning) return;
-      turns[i] = (turns[i] as number) + dt * spinAt(data[(i * width + 4) * 4] as number);
+      turns[i] =
+        (turns[i] as number) + dt * spinAt(data[(i * width + 4) * 4] as number);
       data[(i * width + 4) * 4 + 2] = turns[i] as number;
     });
     texture.needsUpdate = true;
@@ -188,11 +290,22 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
   const box = new THREE.Box3();
   const bound = (): void => {
     box.makeEmpty();
-    for (const p of prepared) box.union(new THREE.Box3().setFromCenterAndSize(p.bounds.center, new THREE.Vector3().setScalar(p.bounds.radius * 2)));
+    for (const p of prepared) {
+      box.union(
+        new THREE.Box3().setFromCenterAndSize(
+          p.bounds.center,
+          new THREE.Vector3().setScalar(p.bounds.radius * 2),
+        ),
+      );
+    }
     if (!box.isEmpty()) box.getBoundingSphere(sphere);
   };
   bound();
-  const meshes: { mesh: THREE.Mesh; color: THREE.Material; depth: THREE.Material }[] = [];
+  const meshes: {
+    mesh: THREE.Mesh;
+    color: THREE.Material;
+    depth: THREE.Material;
+  }[] = [];
   const materials: THREE.Material[] = [];
   const geometries: THREE.BufferGeometry[] = [];
   let triangles = 0;
@@ -200,7 +313,10 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     const [side, cover, ruin] = key.split("|");
     const part = mergeParts(g.parts)[0] as Part;
     const geometry = geometryOf(part);
-    geometry.setAttribute("aBatch", new THREE.BufferAttribute(new Float32Array(g.batch), 2));
+    geometry.setAttribute(
+      "aBatch",
+      new THREE.BufferAttribute(new Float32Array(g.batch), 2),
+    );
     geometry.boundingSphere = sphere;
     geometry.boundingBox = box;
     letGoOnUpload(geometry);
@@ -219,7 +335,14 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
       defines,
       vertexShader: BATCH_DEPTH,
       fragmentShader: DEPTH_FRAG,
-      uniforms: { uTime: light.uTime, uWind: light.uWind, uWindDir: light.uWindDir, uNightness: light.uNightness, uEye: light.uEye, ...shared },
+      uniforms: {
+        uTime: light.uTime,
+        uWind: light.uWind,
+        uWindDir: light.uWindDir,
+        uNightness: light.uNightness,
+        uEye: light.uEye,
+        ...shared,
+      },
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geometry, color);
@@ -230,10 +353,19 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     meshes.push({ mesh, color, depth });
   }
   // Smoke drifts in its own soft material over its member, and casts no shadow.
-  const smokeLife = members.map((m) => ({ uVitality: { value: shownVitality(m.vitality) } }));
+  const smokeLife = members.map((m) => ({
+    uVitality: { value: shownVitality(m.vitality) },
+  }));
   const veils: THREE.Mesh[] = smokes.map(({ member, part }) => {
-    const swatch = members[member]?.plant.palette.swatches.smoke ?? { healthy: [1, 1, 1], decline: [1, 1, 1] };
-    const material = createSmokeMaterial(light, smokeLife[member] as { uVitality: { value: number } }, new THREE.Vector3(...swatch.healthy));
+    const swatch = members[member]?.plant.palette.swatches.smoke ?? {
+      healthy: [1, 1, 1],
+      decline: [1, 1, 1],
+    };
+    const material = createSmokeMaterial(
+      light,
+      smokeLife[member] as { uVitality: { value: number } },
+      new THREE.Vector3(...swatch.healthy),
+    );
     const geometry = geometryOf(part);
     geometries.push(geometry);
     const mesh = new THREE.Mesh(geometry, material);
@@ -254,7 +386,12 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     for (const member of lagging) {
       const at = (member * width + 4) * 4;
       const target = targets[member] as number;
-      const [shown, lag] = followVitality(data[at] as number, data[at + 6] as number, target, keep);
+      const [shown, lag] = followVitality(
+        data[at] as number,
+        data[at + 6] as number,
+        target,
+        keep,
+      );
       data[at] = shown;
       data[at + 6] = lag;
       const smoke = smokeLife[member];
@@ -297,20 +434,29 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
       const before = p.matrix.clone().invert();
       p.matrix = placement(at);
       p.bounds = p.local.clone().applyMatrix4(p.matrix);
-      for (let c = 0; c < 4; c++) texel(member, c, p.matrix.elements.slice(c * 4, c * 4 + 4));
+      for (let c = 0; c < 4; c++) {
+        texel(member, c, p.matrix.elements.slice(c * 4, c * 4 + 4));
+      }
       texture.needsUpdate = true;
       bound();
       const moved = new THREE.Matrix4().multiplyMatrices(p.matrix, before);
       const group = picks[member];
       group?.applyMatrix4(moved);
       group?.updateMatrixWorld(true);
-      for (const v of veils) if (v.userData.member === member) v.applyMatrix4(moved);
+      for (const v of veils) {
+        if (v.userData.member === member) v.applyMatrix4(moved);
+      }
     },
     pick(raycaster) {
       let best: { member: number; distance: number } | undefined;
       picks.forEach((group, member) => {
         const hit = raycaster.intersectObject(group, true)[0];
-        if (hit !== undefined && (best === undefined || hit.distance < best.distance)) best = { member, distance: hit.distance };
+        if (
+          hit !== undefined &&
+          (best === undefined || hit.distance < best.distance)
+        ) {
+          best = { member, distance: hit.distance };
+        }
       });
       return best;
     },
@@ -320,7 +466,9 @@ export function createPlantBatch(members: readonly BatchMember[], light: SceneLi
     },
     dispose() {
       for (const g of geometries) g.dispose();
-      for (const group of picks) group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      for (const group of picks) {
+        group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      }
       for (const m of materials) m.dispose();
       texture.dispose();
       object.removeFromParent();

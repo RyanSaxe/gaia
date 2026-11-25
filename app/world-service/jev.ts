@@ -4,10 +4,19 @@
 // its own `ask`, and the engine refuses a whole batch unless it runs with
 // GAIA_JEV=live.
 
-import type { EngineClient, JevClient, JevRequest, JevResponse } from "@gaia/schema";
+import type {
+  EngineClient,
+  JevClient,
+  JevRequest,
+  JevResponse,
+} from "@gaia/schema";
 
 export function engineJev(engine: EngineClient): JevClient {
-  let queue: { request: JevRequest; resolve: (r: JevResponse) => void; reject: (e: unknown) => void }[] = [];
+  let queue: {
+    request: JevRequest;
+    resolve: (r: JevResponse) => void;
+    reject: (e: unknown) => void;
+  }[] = [];
   const flush = (): void => {
     const batch = queue;
     queue = [];
@@ -15,8 +24,11 @@ export function engineJev(engine: EngineClient): JevClient {
       ({ responses }) =>
         batch.forEach((q, i) => {
           const r = responses[i];
-          if (r === undefined) q.reject(new Error("Jev answered fewer requests than it was asked."));
-          else if ("error" in r) q.reject(new Error(r.error));
+          if (r === undefined) {
+            q.reject(
+              new Error("Jev answered fewer requests than it was asked."),
+            );
+          } else if ("error" in r) q.reject(new Error(r.error));
           else q.resolve(r);
         }),
       (error: unknown) => batch.forEach((q) => q.reject(error)),

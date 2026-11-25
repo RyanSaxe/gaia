@@ -57,13 +57,24 @@ export const TWILIGHT = {
 
 /** What the sky function reads: the hour's light and the sky's three gradient colors. */
 export interface SkyInput {
-  readonly light: Pick<LightSpec, "sunDirection" | "sunColor" | "horizonGlow" | "glow">;
-  readonly sky: { readonly zenith: Rgb; readonly mid: Rgb; readonly horizon: Rgb };
+  readonly light: Pick<
+    LightSpec,
+    "sunDirection" | "sunColor" | "horizonGlow" | "glow"
+  >;
+  readonly sky: {
+    readonly zenith: Rgb;
+    readonly mid: Rgb;
+    readonly horizon: Rgb;
+  };
 }
 
 /** What the air reads besides the sky: the local air's tint, its density and its low mist. */
 export interface AirInput extends SkyInput {
-  readonly fog: { readonly color: Rgb; readonly density: number; readonly mist: number };
+  readonly fog: {
+    readonly color: Rgb;
+    readonly density: number;
+    readonly mist: number;
+  };
 }
 
 const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
@@ -72,11 +83,26 @@ const smoothstep = (lo: number, hi: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 /** A direction's height above the horizon: 0 below it, eased in over the lowest `AIR.horizonEase` so it starts level at the horizon, and exact above that. */
-const heightAbove = (y: number): number => (y <= 0 ? 0 : y >= AIR.horizonEase ? y : (y * y * (2 * AIR.horizonEase - y)) / (AIR.horizonEase * AIR.horizonEase));
-const mix = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const heightAbove = (y: number): number =>
+  y <= 0
+    ? 0
+    : y >= AIR.horizonEase
+      ? y
+      : (y * y * (2 * AIR.horizonEase - y)) /
+        (AIR.horizonEase * AIR.horizonEase);
+const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
+];
 /** How strongly twilight colors the sky at this hour: the hour's glow, fading as the sun sinks below the horizon. */
 const twilightOf = (light: Pick<LightSpec, "glow" | "sunDirection">): number =>
-  light.glow * smoothstep(TWILIGHT.lasts[0], TWILIGHT.lasts[1], light.sunDirection[1] / Math.hypot(...light.sunDirection));
+  light.glow *
+  smoothstep(
+    TWILIGHT.lasts[0],
+    TWILIGHT.lasts[1],
+    light.sunDirection[1] / Math.hypot(...light.sunDirection),
+  );
 const normalize2 = (x: number, y: number): [number, number] => {
   const len = Math.hypot(x, y);
   return [x / len, y / len];
@@ -90,36 +116,88 @@ const normalize2 = (x: number, y: number): [number, number] => {
  * horizon's color, so nothing seen there can meet the sky at a line. Only the
  * dome draws clouds, stars and the moon, on top.
  */
-export function skyColorAt(look: SkyInput & { readonly fog?: AirInput["fog"] }, dir: Vec3): Rgb {
+export function skyColorAt(
+  look: SkyInput & { readonly fog?: AirInput["fog"] },
+  dir: Vec3,
+): Rgb {
   const { light, sky } = look;
   const e = heightAbove(dir[1]);
   let color = mix(sky.horizon, sky.mid, smoothstep(0, 0.32, e));
   color = mix(color, sky.zenith, smoothstep(0.28, 0.9, e));
   const sl = Math.hypot(...light.sunDirection);
-  const sun: Vec3 = [light.sunDirection[0] / sl, light.sunDirection[1] / sl, light.sunDirection[2] / sl];
+  const sun: Vec3 = [
+    light.sunDirection[0] / sl,
+    light.sunDirection[1] / sl,
+    light.sunDirection[2] / sl,
+  ];
   const sunUp = smoothstep(-0.08, 0.02, sun[1]);
   const flatDir = normalize2(dir[0] + 1e-4, dir[2] + 1e-4);
   const flatSun = normalize2(sun[0] + 1e-4, sun[2] + 1e-4);
-  const toward = (flatDir[0] * flatSun[0] + flatDir[1] * flatSun[1]) * 0.5 + 0.5;
-  color = mix(color, light.horizonGlow, Math.exp(-e * 5) * (0.35 + 0.65 * toward * toward) * light.glow * 0.75);
+  const toward =
+    (flatDir[0] * flatSun[0] + flatDir[1] * flatSun[1]) * 0.5 + 0.5;
+  color = mix(
+    color,
+    light.horizonGlow,
+    Math.exp(-e * 5) * (0.35 + 0.65 * toward * toward) * light.glow * 0.75,
+  );
   const twilight = twilightOf(light);
   const away = (1 - toward) * (1 - toward);
   const set = smoothstep(TWILIGHT.setBy[0], TWILIGHT.setBy[1], -sun[1]);
   const cool = mix(sky.mid, sky.zenith, 0.5);
   const low = (reach: number): number => Math.exp(-((e / reach) ** 2));
-  color = mix(color, cool, twilight * away * (TWILIGHT.cool * low(TWILIGHT.coolReach) + set * TWILIGHT.shadow * low(TWILIGHT.shadowReach)));
-  const belt = Math.exp(-(((e - TWILIGHT.beltAt) / TWILIGHT.beltWidth) ** 2)) * smoothstep(0, TWILIGHT.beltAt, e);
-  color = mix(color, light.horizonGlow, twilight * away * set * TWILIGHT.belt * belt);
-  const ember: Rgb = [light.horizonGlow[0] * light.sunColor[0], light.horizonGlow[1] * light.sunColor[1], light.horizonGlow[2] * light.sunColor[2]];
-  color = mix(color, ember, twilight * toward ** TWILIGHT.emberFocus * low(TWILIGHT.emberReach) * TWILIGHT.ember);
+  color = mix(
+    color,
+    cool,
+    twilight *
+      away *
+      (TWILIGHT.cool * low(TWILIGHT.coolReach) +
+        set * TWILIGHT.shadow * low(TWILIGHT.shadowReach)),
+  );
+  const belt =
+    Math.exp(-(((e - TWILIGHT.beltAt) / TWILIGHT.beltWidth) ** 2)) *
+    smoothstep(0, TWILIGHT.beltAt, e);
+  color = mix(
+    color,
+    light.horizonGlow,
+    twilight * away * set * TWILIGHT.belt * belt,
+  );
+  const ember: Rgb = [
+    light.horizonGlow[0] * light.sunColor[0],
+    light.horizonGlow[1] * light.sunColor[1],
+    light.horizonGlow[2] * light.sunColor[2],
+  ];
+  color = mix(
+    color,
+    ember,
+    twilight *
+      toward ** TWILIGHT.emberFocus *
+      low(TWILIGHT.emberReach) *
+      TWILIGHT.ember,
+  );
   // Toward the sun too, below the horizon the sky keeps the horizon's color.
   const level = Math.hypot(dir[0], e, dir[2]);
-  const sunDot = Math.max((dir[0] * sun[0] + e * sun[1] + dir[2] * sun[2]) / level, 0);
+  const sunDot = Math.max(
+    (dir[0] * sun[0] + e * sun[1] + dir[2] * sun[2]) / level,
+    0,
+  );
   color = mix(color, light.sunColor, Math.pow(sunDot, 10) * 0.28 * sunUp);
-  const halo = (Math.pow(sunDot, 180) * 0.18 + Math.pow(sunDot, TWILIGHT.aureoleFocus) * twilight * TWILIGHT.aureole) * sunUp;
-  color = [color[0] + light.sunColor[0] * halo, color[1] + light.sunColor[1] * halo, color[2] + light.sunColor[2] * halo];
+  const halo =
+    (Math.pow(sunDot, 180) * 0.18 +
+      Math.pow(sunDot, TWILIGHT.aureoleFocus) * twilight * TWILIGHT.aureole) *
+    sunUp;
+  color = [
+    color[0] + light.sunColor[0] * halo,
+    color[1] + light.sunColor[1] * halo,
+    color[2] + light.sunColor[2] * halo,
+  ];
   if (look.fog === undefined) return color;
-  return mix(color, look.fog.color, clamp01(look.fog.mist * AIR.mistGain) * (1 - smoothstep(AIR.mistRise[0], AIR.mistRise[1], e)) * AIR.mistSky);
+  return mix(
+    color,
+    look.fog.color,
+    clamp01(look.fog.mist * AIR.mistGain) *
+      (1 - smoothstep(AIR.mistRise[0], AIR.mistRise[1], e)) *
+      AIR.mistSky,
+  );
 }
 
 /**
@@ -128,16 +206,34 @@ export function skyColorAt(look: SkyInput & { readonly fog?: AirInput["fog"] }, 
  * the sky's own color along the same ray. Past `AIR.dissolveEnd` the surface
  * is gone and only the sky remains.
  */
-export function aerialAt(look: AirInput, color: Rgb, eye: Vec3, point: Vec3): Rgb {
+export function aerialAt(
+  look: AirInput,
+  color: Rgb,
+  eye: Vec3,
+  point: Vec3,
+): Rgb {
   const ray: Vec3 = [point[0] - eye[0], point[1] - eye[1], point[2] - eye[2]];
   const dist = Math.hypot(...ray);
   const k = 1 / Math.max(dist, 1e-4);
   const sky = skyColorAt(look, [ray[0] * k, ray[1] * k, ray[2] * k]);
-  const skim = Math.exp((-Math.abs(ray[1]) / Math.max(dist, 1e-4)) * AIR.skim) * smoothstep(AIR.skimFrom[0], AIR.skimFrom[1], dist);
-  const air = mix(sky, look.fog.color, AIR.tint * (1 - smoothstep(AIR.tintFade[0], AIR.tintFade[1], dist)) * (1 - skim));
-  let haze = (1 - Math.exp(-dist * look.fog.density)) * (0.65 + 0.35 * smoothstep(150, AIR.hazeFull, dist));
+  const skim =
+    Math.exp((-Math.abs(ray[1]) / Math.max(dist, 1e-4)) * AIR.skim) *
+    smoothstep(AIR.skimFrom[0], AIR.skimFrom[1], dist);
+  const air = mix(
+    sky,
+    look.fog.color,
+    AIR.tint *
+      (1 - smoothstep(AIR.tintFade[0], AIR.tintFade[1], dist)) *
+      (1 - skim),
+  );
+  let haze =
+    (1 - Math.exp(-dist * look.fog.density)) *
+    (0.65 + 0.35 * smoothstep(150, AIR.hazeFull, dist));
   haze += (1 - haze) * skim;
-  const mist = look.fog.mist * Math.exp(-Math.max(point[1], 0) * 0.45) * (1 - Math.exp(-dist * 0.035));
+  const mist =
+    look.fog.mist *
+    Math.exp(-Math.max(point[1], 0) * 0.45) *
+    (1 - Math.exp(-dist * 0.035));
   const hazed = mix(color, air, clamp01(haze + mist * 0.7));
   return mix(hazed, sky, smoothstep(AIR.dissolveStart, AIR.dissolveEnd, dist));
 }

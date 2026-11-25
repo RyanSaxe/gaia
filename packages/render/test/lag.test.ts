@@ -25,7 +25,11 @@ describe("a change in vitality easing in", () => {
       expect(was[k]).toBeLessThanOrEqual(shown[k] as number);
     }
     const middle = shown.map((s, k) => (s + (was[k] as number)) / 2);
-    for (let k = 1; k < middle.length; k++) expect((middle[k] as number) - (middle[k - 1] as number)).toBeLessThan(0.01);
+    for (let k = 1; k < middle.length; k++) {
+      expect((middle[k] as number) - (middle[k - 1] as number)).toBeLessThan(
+        0.01,
+      );
+    }
     // Half a lag in, it has not yet moved even halfway.
     expect(middle[Math.round(30 * CHANNEL_MATH.vitalityLag)]).toBeLessThan(0.5);
   });

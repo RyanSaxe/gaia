@@ -8,7 +8,12 @@ import type { PlantView } from "./plant.ts";
 
 export interface SunShadow {
   /** Renders the plants' depth from the sun, covering a square of `extent` around `center`. */
-  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, plants: readonly Pick<PlantView, "useDepth">[], hide: readonly THREE.Object3D[]): void;
+  render(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    plants: readonly Pick<PlantView, "useDepth">[],
+    hide: readonly THREE.Object3D[],
+  ): void;
   frame(center: THREE.Vector3, extent: number): void;
   dispose(): void;
 }
@@ -27,7 +32,10 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
   depthTexture.compareFunction = THREE.LessEqualCompare;
   depthTexture.minFilter = THREE.LinearFilter;
   depthTexture.magFilter = THREE.LinearFilter;
-  const target = new THREE.WebGLRenderTarget(size, size, { depthTexture, depthBuffer: true });
+  const target = new THREE.WebGLRenderTarget(size, size, {
+    depthTexture,
+    depthBuffer: true,
+  });
   const camera = new THREE.OrthographicCamera(-20, 20, 20, -20, 1, 120);
   light.uShadowMap.value = target.depthTexture;
   light.uShadowTexel.value = 1 / size;
@@ -41,7 +49,9 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
     // with the night. They start from 0 as the sun sinks past where its light
     // ends, so the map's change of caster never shows.
     const fromMoon = light.uSunIntensity.value <= 0.001;
-    const sun = fromMoon ? light.uMoonDirection.value : light.uSunDirection.value;
+    const sun = fromMoon
+      ? light.uMoonDirection.value
+      : light.uSunDirection.value;
     const night = smooth01((light.uNightness.value - 0.45) / 0.35);
     const sunk = smooth01((-light.uSunDirection.value.y - SUN_GONE) / 0.12);
     light.uMoonShadow.value = fromMoon ? night * sunk : 0;
@@ -55,14 +65,19 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
     upward.set(0, 1, 0).applyQuaternion(camera.quaternion);
     const offAcross = camera.position.dot(across) % texel;
     const offUpward = camera.position.dot(upward) % texel;
-    camera.position.addScaledVector(across, -offAcross).addScaledVector(upward, -offUpward);
+    camera.position
+      .addScaledVector(across, -offAcross)
+      .addScaledVector(upward, -offUpward);
     camera.left = -extent;
     camera.right = extent;
     camera.top = extent;
     camera.bottom = -extent;
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);
-    light.uShadowMatrix.value.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    light.uShadowMatrix.value.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse,
+    );
   };
   update();
 

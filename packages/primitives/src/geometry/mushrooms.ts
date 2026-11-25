@@ -6,7 +6,19 @@
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { mushroomParams } from "../wildflowers.ts";
-import { PartBuilder, type V3, add, addScaled, basis, clamp, cross, lossThreshold, noise3, normalize, scale } from "./kit.ts";
+import {
+  PartBuilder,
+  type V3,
+  add,
+  addScaled,
+  basis,
+  clamp,
+  cross,
+  lossThreshold,
+  noise3,
+  normalize,
+  scale,
+} from "./kit.ts";
 
 type Grouping = Resolved<typeof mushroomParams>["grouping"];
 type CapShape = Resolved<typeof mushroomParams>["cap"];
@@ -32,15 +44,65 @@ interface Mushroom {
  * (share of the radius, share of the crown's height over the rim).
  */
 const PROFILES: Record<CapShape, readonly (readonly [number, number])[]> = {
-  domed: [[0, 1], [0.3, 0.96], [0.56, 0.85], [0.78, 0.65], [0.93, 0.38], [1, 0.1], [0.98, -0.04], [0.9, -0.09]],
-  flat: [[0, 1], [0.16, 0.95], [0.42, 0.84], [0.7, 0.64], [0.9, 0.36], [1, 0.06], [0.98, -0.1], [0.91, -0.15]],
-  pointed: [[0, 1], [0.1, 0.9], [0.3, 0.68], [0.54, 0.44], [0.78, 0.2], [0.97, 0.02], [0.96, -0.06], [0.89, -0.08]],
+  domed: [
+    [0, 1],
+    [0.3, 0.96],
+    [0.56, 0.85],
+    [0.78, 0.65],
+    [0.93, 0.38],
+    [1, 0.1],
+    [0.98, -0.04],
+    [0.9, -0.09],
+  ],
+  flat: [
+    [0, 1],
+    [0.16, 0.95],
+    [0.42, 0.84],
+    [0.7, 0.64],
+    [0.9, 0.36],
+    [1, 0.06],
+    [0.98, -0.1],
+    [0.91, -0.15],
+  ],
+  pointed: [
+    [0, 1],
+    [0.1, 0.9],
+    [0.3, 0.68],
+    [0.54, 0.44],
+    [0.78, 0.2],
+    [0.97, 0.02],
+    [0.96, -0.06],
+    [0.89, -0.08],
+  ],
 };
 /** Per shape: cap radius and crown height over the rim as shares of the mushroom's height, the stalk's radius as a share of the cap's, and its girth from foot to top. */
-const FORM: Record<CapShape, { readonly radius: number; readonly crown: number; readonly stalk: number; readonly girth: readonly number[] }> = {
-  domed: { radius: 0.32, crown: 0.28, stalk: 0.22, girth: [1.45, 1.28, 1.08, 1, 0.94, 0.9] },
-  flat: { radius: 0.42, crown: 0.19, stalk: 0.16, girth: [1.55, 1.2, 0.98, 0.9, 0.84, 0.8] },
-  pointed: { radius: 0.22, crown: 0.46, stalk: 0.17, girth: [1.12, 1.06, 1, 0.95, 0.9, 0.86] },
+const FORM: Record<
+  CapShape,
+  {
+    readonly radius: number;
+    readonly crown: number;
+    readonly stalk: number;
+    readonly girth: readonly number[];
+  }
+> = {
+  domed: {
+    radius: 0.32,
+    crown: 0.28,
+    stalk: 0.22,
+    girth: [1.45, 1.28, 1.08, 1, 0.94, 0.9],
+  },
+  flat: {
+    radius: 0.42,
+    crown: 0.19,
+    stalk: 0.16,
+    girth: [1.55, 1.2, 0.98, 0.9, 0.84, 0.8],
+  },
+  pointed: {
+    radius: 0.22,
+    crown: 0.46,
+    stalk: 0.17,
+    girth: [1.12, 1.06, 1, 0.95, 0.9, 0.86],
+  },
 };
 /** Each girth ring's height up the stalk, as a share of its length. */
 const STALK_RINGS = [0, 0.07, 0.25, 0.55, 0.82, 1];
@@ -50,13 +112,18 @@ const FOOT = -0.008;
 /** The share of mushrooms that never drop their caps. They stay slumped and grey down to vitality 0. */
 const STUBBORN = 0.35;
 
-export function buildMushrooms(p: Resolved<typeof mushroomParams>, ctx: BuildContext): Built {
+export function buildMushrooms(
+  p: Resolved<typeof mushroomParams>,
+  ctx: BuildContext,
+): Built {
   const r = ctx.rand.fork("mushrooms");
   const caps = new PartBuilder("cap");
   const flesh = new PartBuilder("stalk");
   const spots = new PartBuilder("spot");
   const s = 0.85 + 0.15 * (ctx.facts.scale ?? 1);
-  for (const m of layout(p.grouping, p.cap, p.height * s, r.fork("layout"))) emitMushroom(caps, flesh, spots, m, p.cap);
+  for (const m of layout(p.grouping, p.cap, p.height * s, r.fork("layout"))) {
+    emitMushroom(caps, flesh, spots, m, p.cap);
+  }
   const parts = [flesh.part(), caps.part()];
   if (spots.vertexCount > 0) parts.push(spots.part());
   return { parts, anchors: [] };
@@ -70,7 +137,10 @@ function capOf(m: Mushroom): { rim: V3; axis: V3 } {
   const lean = Math.tan(m.tilt);
   const up = m.height - m.crown;
   // The stalk curves up toward its cap, so the cap tilts less than the stalk leans.
-  return { rim: addScaled(addScaled(m.foot, [0, 1, 0], up), m.lean, up * lean), axis: normalize(add([0, 1, 0], scale(m.lean, lean * 0.35))) };
+  return {
+    rim: addScaled(addScaled(m.foot, [0, 1, 0], up), m.lean, up * lean),
+    axis: normalize(add([0, 1, 0], scale(m.lean, lean * 0.35))),
+  };
 }
 
 /** Whether `a`'s cap would cut into `b`'s cap or stalk. */
@@ -78,22 +148,52 @@ function meets(a: Mushroom, b: Mushroom): boolean {
   const ca = capOf(a).rim;
   const cb = capOf(b).rim;
   const across = Math.hypot(ca[0] - cb[0], ca[2] - cb[2]);
-  const overlap = ca[1] - 0.2 * a.crown < cb[1] + b.crown && cb[1] - 0.2 * b.crown < ca[1] + a.crown;
+  const overlap =
+    ca[1] - 0.2 * a.crown < cb[1] + b.crown &&
+    cb[1] - 0.2 * b.crown < ca[1] + a.crown;
   if (overlap && across < (a.radius + b.radius) * 1.04) return true;
   // When a's cap is below b's, check b's stalk at the height of a's cap.
   if (ca[1] + a.crown > cb[1]) return false;
-  const k = clamp((ca[1] - b.foot[1]) / Math.max(cb[1] - b.foot[1], 1e-3), 0, 1);
+  const k = clamp(
+    (ca[1] - b.foot[1]) / Math.max(cb[1] - b.foot[1], 1e-3),
+    0,
+    1,
+  );
   const sx = b.foot[0] + (cb[0] - b.foot[0]) * k;
   const sz = b.foot[2] + (cb[2] - b.foot[2]) * k;
-  return Math.hypot(ca[0] - sx, ca[2] - sz) < a.radius + b.radius * STALK_SHARE + 0.01;
+  return (
+    Math.hypot(ca[0] - sx, ca[2] - sz) <
+    a.radius + b.radius * STALK_SHARE + 0.01
+  );
 }
 
-function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): Mushroom[] {
+function layout(
+  grouping: Grouping,
+  shape: CapShape,
+  tallest: number,
+  r: Rand,
+): Mushroom[] {
   const form = FORM[shape];
   const wants: Mushroom[] = [];
-  const spot = (x: number, z: number, height: number, lean: V3, tilt = r.range(0.03, 0.18), size = r.range(0.85, 1.15)): void => {
+  const spot = (
+    x: number,
+    z: number,
+    height: number,
+    lean: V3,
+    tilt = r.range(0.03, 0.18),
+    size = r.range(0.85, 1.15),
+  ): void => {
     const fr = r.fork(`m${wants.length}`);
-    wants.push({ foot: [x, FOOT, z], height, lean: normalize(lean), tilt, radius: height * form.radius * size, crown: height * form.crown * (0.7 + 0.3 * size), young: false, r: fr });
+    wants.push({
+      foot: [x, FOOT, z],
+      height,
+      lean: normalize(lean),
+      tilt,
+      radius: height * form.radius * size,
+      crown: height * form.crown * (0.7 + 0.3 * size),
+      young: false,
+      r: fr,
+    });
   };
   const away = (x: number, z: number): V3 => normalize([x + 1e-3, 0, z]);
   const jitter = (): V3 => [r.range(-1, 1), 0, r.range(-1, 1)];
@@ -105,20 +205,36 @@ function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): 
       if (k === gap) continue;
       const a = ((k + r.range(-0.25, 0.25)) / n) * Math.PI * 2;
       const d = radius * r.range(0.9, 1.08);
-      spot(Math.cos(a) * d, Math.sin(a) * d, tallest * r.range(0.62, 1), add(away(Math.cos(a), Math.sin(a)), scale(jitter(), 0.7)));
+      spot(
+        Math.cos(a) * d,
+        Math.sin(a) * d,
+        tallest * r.range(0.62, 1),
+        add(away(Math.cos(a), Math.sin(a)), scale(jitter(), 0.7)),
+      );
     }
   } else if (grouping === "cluster") {
     const n = 7 + Math.floor(r.next() * 4);
     for (let k = 0; k < n; k++) {
       const a = r.next() * Math.PI * 2;
-      const d = k === 0 ? 0 : (0.03 + 0.1 * Math.sqrt(r.next())) * (0.6 + tallest);
+      const d =
+        k === 0 ? 0 : (0.03 + 0.1 * Math.sqrt(r.next())) * (0.6 + tallest);
       const edge = d / (0.13 * (0.6 + tallest));
       // Small caps of similar size. The outer ones lean out and sit a little lower, so the cluster forms tiers.
-      spot(Math.cos(a) * d, Math.sin(a) * d, tallest * (1 - 0.25 * edge) * r.range(0.8, 1.05), k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)), k === 0 ? 0.04 : 0.2 + 0.25 * edge, r.range(0.55, 0.75));
+      spot(
+        Math.cos(a) * d,
+        Math.sin(a) * d,
+        tallest * (1 - 0.25 * edge) * r.range(0.8, 1.05),
+        k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)),
+        k === 0 ? 0.04 : 0.2 + 0.25 * edge,
+        r.range(0.55, 0.75),
+      );
     }
   } else {
     // Small groups spaced apart, each of one to three mushrooms, or two to four with pointed caps.
-    const groups = shape === "pointed" ? 6 + Math.floor(r.next() * 3) : 4 + Math.floor(r.next() * 3);
+    const groups =
+      shape === "pointed"
+        ? 6 + Math.floor(r.next() * 3)
+        : 4 + Math.floor(r.next() * 3);
     const reach = 0.7 + 1.1 * tallest;
     const centers: [number, number][] = [];
     for (let tries = 0; centers.length < groups && tries < 300; tries++) {
@@ -126,7 +242,13 @@ function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): 
       const d = reach * Math.sqrt(r.next());
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d;
-      if (centers.some(([cx, cz]) => Math.hypot(cx - x, cz - z) < 0.3 + 0.35 * tallest)) continue;
+      if (
+        centers.some(
+          ([cx, cz]) => Math.hypot(cx - x, cz - z) < 0.3 + 0.35 * tallest,
+        )
+      ) {
+        continue;
+      }
       centers.push([x, z]);
     }
     for (const [cx, cz] of centers) {
@@ -134,19 +256,39 @@ function layout(grouping: Grouping, shape: CapShape, tallest: number, r: Rand): 
       for (let k = 0; k < count; k++) {
         const a = r.next() * Math.PI * 2;
         const d = k === 0 ? 0 : r.range(0.05, 0.12) * (0.6 + tallest);
-        spot(cx + Math.cos(a) * d, cz + Math.sin(a) * d, tallest * r.range(0.6, 1) * (k === 0 ? 1 : 0.85), k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)));
+        spot(
+          cx + Math.cos(a) * d,
+          cz + Math.sin(a) * d,
+          tallest * r.range(0.6, 1) * (k === 0 ? 1 : 0.85),
+          k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)),
+        );
       }
     }
   }
   // Scale every mushroom so the tallest is `tallest`.
   const most = Math.max(...wants.map((m) => m.height));
-  const sized = wants.map((m) => ({ ...m, height: (m.height * tallest) / most, radius: (m.radius * tallest) / most, crown: (m.crown * tallest) / most }));
+  const sized = wants.map((m) => ({
+    ...m,
+    height: (m.height * tallest) / most,
+    radius: (m.radius * tallest) / most,
+    crown: (m.crown * tallest) / most,
+  }));
   // Young buttons at the feet of the first third.
   for (const m of sized.slice(0, Math.ceil(sized.length / 3))) {
     const a = m.r.next() * Math.PI * 2;
     const d = m.radius * 1.4;
     const h = m.height * m.r.range(0.3, 0.42);
-    sized.push({ ...m, foot: [m.foot[0] + Math.cos(a) * d, FOOT, m.foot[2] + Math.sin(a) * d], height: h, lean: [Math.cos(a), 0, Math.sin(a)], tilt: m.r.range(0.08, 0.22), radius: h * form.radius * 0.85, crown: h * form.crown * 1.15, young: true, r: m.r.fork("button") });
+    sized.push({
+      ...m,
+      foot: [m.foot[0] + Math.cos(a) * d, FOOT, m.foot[2] + Math.sin(a) * d],
+      height: h,
+      lean: [Math.cos(a), 0, Math.sin(a)],
+      tilt: m.r.range(0.08, 0.22),
+      radius: h * form.radius * 0.85,
+      crown: h * form.crown * 1.15,
+      young: true,
+      r: m.r.fork("button"),
+    });
   }
   return settle(sized);
 }
@@ -156,21 +298,43 @@ function settle(wants: readonly Mushroom[]): Mushroom[] {
   const placed: Mushroom[] = [];
   for (const want of [...wants].sort((a, b) => b.height - a.height)) {
     let m = want;
-    for (let tries = 0; tries < 18 && placed.some((o) => meets(m, o) || meets(o, m)); tries++) {
+    for (
+      let tries = 0;
+      tries < 18 && placed.some((o) => meets(m, o) || meets(o, m));
+      tries++
+    ) {
       const step = tries % 3;
-      m = step === 0 ? { ...m, tilt: Math.min(0.5, m.tilt + 0.07) } : step === 1 ? { ...m, radius: m.radius * 0.88, crown: m.crown * 0.94 } : { ...m, height: m.height * 0.9, radius: m.radius * 0.95, crown: m.crown * 0.92 };
+      m =
+        step === 0
+          ? { ...m, tilt: Math.min(0.5, m.tilt + 0.07) }
+          : step === 1
+            ? { ...m, radius: m.radius * 0.88, crown: m.crown * 0.94 }
+            : {
+                ...m,
+                height: m.height * 0.9,
+                radius: m.radius * 0.95,
+                crown: m.crown * 0.92,
+              };
     }
     if (!placed.some((o) => meets(m, o) || meets(o, m))) placed.push(m);
   }
   return placed;
 }
 
-function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder, m: Mushroom, shape: CapShape): void {
+function emitMushroom(
+  caps: PartBuilder,
+  flesh: PartBuilder,
+  spots: PartBuilder,
+  m: Mushroom,
+  shape: CapShape,
+): void {
   const form = FORM[shape];
   const { radius, crown } = m;
   const { rim, axis: capAxis } = capOf(m);
   // The cap sits a little askew on its stalk.
-  const axis = normalize(add(capAxis, [m.r.range(-0.1, 0.1), 0, m.r.range(-0.1, 0.1)]));
+  const axis = normalize(
+    add(capAxis, [m.r.range(-0.1, 0.1), 0, m.r.range(-0.1, 0.1)]),
+  );
   // At real size, sixteen sides look round from a person's eye height.
   const sides = m.young ? 10 : 16;
   // As vitality falls, the cap slumps about a hinge under its rim on the far side, then drops beside the stalk.
@@ -180,7 +344,15 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   const capLoss = stubborn ? 0 : lossThreshold(m.r.next(), 0.5, 0.05);
   const tint = m.r.range(-0.015, 0.015);
   const tone = m.r.range(-0.07, 0.07);
-  const capCh = { loss: capLoss, droop: 0.45, wither: 1, glow: 0, pivot: fallTo, bough: hinge, tint };
+  const capCh = {
+    loss: capLoss,
+    droop: 0.45,
+    wither: 1,
+    glow: 0,
+    pivot: fallTo,
+    bough: hinge,
+    tint,
+  };
   const [u, v] = basis(axis);
   const seed = Math.floor(m.r.next() * 1e6);
   const squash = m.r.range(-0.06, 0.06);
@@ -190,26 +362,67 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   const phase = m.r.next() * Math.PI * 2;
   // An uneven cap: a little oval, its margin lumpy and, on a flat cap, wavy.
   const around = (rho: number, eta: number, a: number): V3 => {
-    const lump = 1 + squash * Math.cos(2 * (a - squashAt)) + 0.035 * noise3(Math.cos(a) * 1.8, Math.sin(a) * 1.8, rho * 2, seed);
-    const out = add(scale(u, Math.cos(a) * rho * radius * lump), scale(v, Math.sin(a) * rho * radius * lump));
-    return addScaled(add(rim, out), axis, (eta + wave * Math.sin(a * waves + phase) * rho * rho * rho) * crown);
+    const lump =
+      1 +
+      squash * Math.cos(2 * (a - squashAt)) +
+      0.035 * noise3(Math.cos(a) * 1.8, Math.sin(a) * 1.8, rho * 2, seed);
+    const out = add(
+      scale(u, Math.cos(a) * rho * radius * lump),
+      scale(v, Math.sin(a) * rho * radius * lump),
+    );
+    return addScaled(
+      add(rim, out),
+      axis,
+      (eta + wave * Math.sin(a * waves + phase) * rho * rho * rho) * crown,
+    );
   };
-  const radialAt = (a: number): V3 => add(scale(u, Math.cos(a)), scale(v, Math.sin(a)));
+  const radialAt = (a: number): V3 =>
+    add(scale(u, Math.cos(a)), scale(v, Math.sin(a)));
   // Noise mottles the cap's shade in soft blotches.
-  const mottle = (p: V3): number => tone + 0.14 * noise3(p[0] * (3 / radius), p[1] * (3 / radius), p[2] * (3 / radius), seed + 7);
-  const hue = (p: V3): number => tint + 0.012 * noise3(p[0] * (2 / radius), p[1] * (2 / radius), p[2] * (2 / radius), seed + 11);
+  const mottle = (p: V3): number =>
+    tone +
+    0.14 *
+      noise3(
+        p[0] * (3 / radius),
+        p[1] * (3 / radius),
+        p[2] * (3 / radius),
+        seed + 7,
+      );
+  const hue = (p: V3): number =>
+    tint +
+    0.012 *
+      noise3(
+        p[0] * (2 / radius),
+        p[1] * (2 / radius),
+        p[2] * (2 / radius),
+        seed + 11,
+      );
   const profile = PROFILES[shape];
   // Flat and pointed caps darken toward their middle, as many do.
-  const shades = shape === "domed" ? [0.7, 0.74, 0.78, 0.78, 0.74, 0.66, 0.5, 0.42] : [0.5, 0.56, 0.66, 0.74, 0.76, 0.68, 0.52, 0.42];
+  const shades =
+    shape === "domed"
+      ? [0.7, 0.74, 0.78, 0.78, 0.74, 0.66, 0.5, 0.42]
+      : [0.5, 0.56, 0.66, 0.74, 0.76, 0.68, 0.52, 0.42];
   const shadeOf = (i: number): number => shades[i] ?? 0.6;
   const capShade = (i: number, p: V3): number => shadeOf(i) + mottle(p);
   const normalOf = (i: number, a: number): V3 => {
     const [r0, e0] = profile[Math.max(0, i - 1)] as readonly [number, number];
-    const [r1, e1] = profile[Math.min(profile.length - 1, i + 1)] as readonly [number, number];
-    return normalize(add(scale(radialAt(a), -(e1 - e0) * crown), scale(axis, (r1 - r0) * radius)));
+    const [r1, e1] = profile[Math.min(profile.length - 1, i + 1)] as readonly [
+      number,
+      number,
+    ];
+    return normalize(
+      add(
+        scale(radialAt(a), -(e1 - e0) * crown),
+        scale(axis, (r1 - r0) * radius),
+      ),
+    );
   };
   const apexAt = around(0, 1, 0);
-  const apex = caps.vertex(apexAt, axis, capShade(0, apexAt), { ...capCh, tint: hue(apexAt) });
+  const apex = caps.vertex(apexAt, axis, capShade(0, apexAt), {
+    ...capCh,
+    tint: hue(apexAt),
+  });
   const rows: number[] = [];
   /** Each cap vertex position by profile row and side, so spots can lie on the cap's facets. */
   const at: V3[][] = [Array.from({ length: sides }, () => apexAt)];
@@ -221,12 +434,23 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
       const a = (j / sides) * Math.PI * 2;
       const p = around(rho, eta, a);
       row.push(p);
-      caps.vertex(p, normalOf(i, a), capShade(i, p), { ...capCh, tint: hue(p) });
+      caps.vertex(p, normalOf(i, a), capShade(i, p), {
+        ...capCh,
+        tint: hue(p),
+      });
     }
     at.push(row);
   }
-  for (let j = 0; j < sides; j++) caps.triangle(apex, (rows[0] as number) + j, (rows[0] as number) + ((j + 1) % sides));
-  for (let k = 0; k + 1 < rows.length; k++) band(caps, rows[k] as number, rows[k + 1] as number, sides);
+  for (let j = 0; j < sides; j++) {
+    caps.triangle(
+      apex,
+      (rows[0] as number) + j,
+      (rows[0] as number) + ((j + 1) % sides),
+    );
+  }
+  for (let k = 0; k + 1 < rows.length; k++) {
+    band(caps, rows[k] as number, rows[k + 1] as number, sides);
+  }
   // Spots in the palette's spot swatch, shaded like the cap beneath them. `SPOTS` in palettes.ts makes them white on silver-birch caps and the cap color elsewhere.
   if (shape !== "pointed") {
     const count = 8 + Math.floor(m.r.next() * 6);
@@ -248,37 +472,74 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
       };
       const onCap = add(scale(rowAt(i - 1), 1 - along), scale(rowAt(i), along));
       // The spot uses the cap's interpolated normal, so only the swatch color tells a spot from its cap.
-      const n = normalize(add(scale(normalOf(i - 1, a), 1 - along), scale(normalOf(i, a), along)));
+      const n = normalize(
+        add(scale(normalOf(i - 1, a), 1 - along), scale(normalOf(i, a), along)),
+      );
       const center = addScaled(onCap, n, 0.004 * radius);
       const [su, sv] = basis(n);
       const size = radius * m.r.range(0.045, 0.085);
-      const shade = shadeOf(i - 1) + (shadeOf(i) - shadeOf(i - 1)) * along + mottle(center);
+      const shade =
+        shadeOf(i - 1) + (shadeOf(i) - shadeOf(i - 1)) * along + mottle(center);
       const ch = { ...capCh, tint: hue(center) };
       const hub = spots.vertex(center, n, shade, ch);
       for (let j = 0; j < 6; j++) {
         const b = (j / 6) * Math.PI * 2;
-        spots.vertex(addScaled(addScaled(center, su, Math.cos(b) * size * m.r.range(0.75, 1.2)), sv, Math.sin(b) * size * m.r.range(0.75, 1.2)), n, shade, ch);
+        spots.vertex(
+          addScaled(
+            addScaled(center, su, Math.cos(b) * size * m.r.range(0.75, 1.2)),
+            sv,
+            Math.sin(b) * size * m.r.range(0.75, 1.2),
+          ),
+          n,
+          shade,
+          ch,
+        );
       }
-      for (let j = 0; j < 6; j++) spots.triangle(hub, hub + 1 + j, hub + 1 + ((j + 1) % 6));
+      for (let j = 0; j < 6; j++) {
+        spots.triangle(hub, hub + 1 + j, hub + 1 + ((j + 1) % 6));
+      }
     }
   }
   // Ridged gills under the cap, rising from the lip to the stalk, in the stalk's swatch.
   // The stalk's top radius is at least 0.028 of the mushroom's height, so a small cap's stalk looks thick enough to carry it.
   const stalkTop = Math.max(radius * form.stalk, 0.028 * m.height);
-  const [lastR, lastE] = profile[profile.length - 1] as readonly [number, number];
+  const [lastR, lastE] = profile[profile.length - 1] as readonly [
+    number,
+    number,
+  ];
   const gillCh = { ...capCh, wither: 0.85, glow: 0.12, tint: tint * 0.5 };
   const under: number[] = [];
-  for (const [rho, eta, shade] of [[lastR, lastE, 0.5], [0.62, lastE + 0.1, 0.4], [(stalkTop / radius) * 1.15, lastE + 0.2, 0.34]] as const) {
+  for (const [rho, eta, shade] of [
+    [lastR, lastE, 0.5],
+    [0.62, lastE + 0.1, 0.4],
+    [(stalkTop / radius) * 1.15, lastE + 0.2, 0.34],
+  ] as const) {
     under.push(flesh.vertexCount);
     for (let j = 0; j < sides; j++) {
       const a = (j / sides) * Math.PI * 2;
-      const ridge = rho < lastR && rho > 0.3 ? (j % 2 === 0 ? 0.025 : -0.025) : 0;
-      flesh.vertex(around(rho, eta + ridge, a), normalize(addScaled(scale(axis, -1), radialAt(a), 0.25)), shade, gillCh);
+      const ridge =
+        rho < lastR && rho > 0.3 ? (j % 2 === 0 ? 0.025 : -0.025) : 0;
+      flesh.vertex(
+        around(rho, eta + ridge, a),
+        normalize(addScaled(scale(axis, -1), radialAt(a), 0.25)),
+        shade,
+        gillCh,
+      );
     }
   }
-  for (let k = 0; k + 1 < under.length; k++) band(flesh, under[k] as number, under[k + 1] as number, sides);
+  for (let k = 0; k + 1 < under.length; k++) {
+    band(flesh, under[k] as number, under[k + 1] as number, sides);
+  }
   // The stalk: swollen at its foot, darkened by the soil, bowed a little, and running up into the cap.
-  const stalkCh = { loss: stubborn ? 0 : clamp(capLoss * 0.5, 0.02, 0.3), droop: 0, wither: 0.7, glow: 0, pivot: m.foot, bough: m.foot, tint: tint * 0.4 };
+  const stalkCh = {
+    loss: stubborn ? 0 : clamp(capLoss * 0.5, 0.02, 0.3),
+    droop: 0,
+    wither: 0.7,
+    glow: 0,
+    pivot: m.foot,
+    bough: m.foot,
+    tint: tint * 0.4,
+  };
   const into = addScaled(rim, axis, (lastE + 0.36) * crown);
   const side = normalize(cross([0, 1, 0], m.lean));
   const bow = m.r.range(-0.04, 0.04) * m.height;
@@ -287,34 +548,78 @@ function emitMushroom(caps: PartBuilder, flesh: PartBuilder, spots: PartBuilder,
   const reach: V3 = [into[0] - m.foot[0], 0, into[2] - m.foot[2]];
   const stalkRows: number[] = [];
   STALK_RINGS.forEach((t, k) => {
-    const c = add(add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))), scale(side, Math.sin(2 * Math.PI * t) * bow));
+    const c = add(
+      add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))),
+      scale(side, Math.sin(2 * Math.PI * t) * bow),
+    );
     const along = normalize(add(rise, scale(reach, 2 * (1 - t))));
-    const su = normalize(addScaled(side, along, -(side[0] * along[0] + side[1] * along[1] + side[2] * along[2])));
+    const su = normalize(
+      addScaled(
+        side,
+        along,
+        -(side[0] * along[0] + side[1] * along[1] + side[2] * along[2]),
+      ),
+    );
     const sv = normalize(cross(along, su));
     stalkRows.push(flesh.vertexCount);
     for (let j = 0; j < STALK_SIDES; j++) {
       const a = (j / STALK_SIDES) * Math.PI * 2;
       const n = add(scale(su, Math.cos(a)), scale(sv, Math.sin(a)));
-      const rough = 1 + 0.06 * noise3(Math.cos(a) * 2, t * 4, Math.sin(a) * 2, seed + 3);
-      flesh.vertex(addScaled(c, n, stalkTop * (form.girth[k] ?? 1) * rough), n, 0.34 + 0.4 * Math.sqrt(t) + 0.05 * noise3(j * 0.9, t * 6, 0, seed + 5), stalkCh);
+      const rough =
+        1 + 0.06 * noise3(Math.cos(a) * 2, t * 4, Math.sin(a) * 2, seed + 3);
+      flesh.vertex(
+        addScaled(c, n, stalkTop * (form.girth[k] ?? 1) * rough),
+        n,
+        0.34 + 0.4 * Math.sqrt(t) + 0.05 * noise3(j * 0.9, t * 6, 0, seed + 5),
+        stalkCh,
+      );
     }
   });
-  for (let k = 0; k + 1 < stalkRows.length; k++) band(flesh, stalkRows[k + 1] as number, stalkRows[k] as number, STALK_SIDES);
+  for (let k = 0; k + 1 < stalkRows.length; k++) {
+    band(
+      flesh,
+      stalkRows[k + 1] as number,
+      stalkRows[k] as number,
+      STALK_SIDES,
+    );
+  }
   // 75% of grown domed and flat mushrooms get a skirt round the stalk under the cap, like fly agarics and parasols.
   if (shape !== "pointed" && !m.young && m.r.next() < 0.75) {
     const t = 0.8;
-    const c = add(add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))), scale(side, Math.sin(2 * Math.PI * t) * bow));
+    const c = add(
+      add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))),
+      scale(side, Math.sin(2 * Math.PI * t) * bow),
+    );
     const along = normalize(add(rise, scale(reach, 2 * (1 - t))));
-    const su = normalize(addScaled(side, along, -(side[0] * along[0] + side[1] * along[1] + side[2] * along[2])));
+    const su = normalize(
+      addScaled(
+        side,
+        along,
+        -(side[0] * along[0] + side[1] * along[1] + side[2] * along[2]),
+      ),
+    );
     const sv = normalize(cross(along, su));
     const skirt: number[] = [];
-    for (const [reachOut, drop, shade] of [[1.05, 0, 0.62], [2, 0.045, 0.5]] as const) {
+    for (const [reachOut, drop, shade] of [
+      [1.05, 0, 0.62],
+      [2, 0.045, 0.5],
+    ] as const) {
       skirt.push(flesh.vertexCount);
       for (let j = 0; j < STALK_SIDES; j++) {
         const a = (j / STALK_SIDES) * Math.PI * 2;
         const n = add(scale(su, Math.cos(a)), scale(sv, Math.sin(a)));
-        const frill = 1 + 0.12 * noise3(Math.cos(a) * 2.5, Math.sin(a) * 2.5, 1, seed + 9);
-        flesh.vertex(addScaled(addScaled(c, n, stalkTop * 0.92 * reachOut * frill), along, -drop * m.height), normalize(addScaled(n, along, 0.6)), shade, stalkCh);
+        const frill =
+          1 + 0.12 * noise3(Math.cos(a) * 2.5, Math.sin(a) * 2.5, 1, seed + 9);
+        flesh.vertex(
+          addScaled(
+            addScaled(c, n, stalkTop * 0.92 * reachOut * frill),
+            along,
+            -drop * m.height,
+          ),
+          normalize(addScaled(n, along, 0.6)),
+          shade,
+          stalkCh,
+        );
       }
     }
     band(flesh, skirt[0] as number, skirt[1] as number, STALK_SIDES);

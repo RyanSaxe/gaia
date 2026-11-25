@@ -23,13 +23,28 @@ export type Tally = Record<Pass, Record<string, Drawn>>;
  * orthographic camera is the sun's shadow, and any other camera is the
  * mirror.
  */
-export function tallyFrame(renderer: THREE.WebGLRenderer, scene: THREE.Scene, view: THREE.Camera, kinds: ReadonlyMap<THREE.Object3D, string>, draw: () => void): Tally {
+export function tallyFrame(
+  renderer: THREE.WebGLRenderer,
+  scene: THREE.Scene,
+  view: THREE.Camera,
+  kinds: ReadonlyMap<THREE.Object3D, string>,
+  draw: () => void,
+): Tally {
   const tally: Tally = { shadow: {}, mirror: {}, view: {} };
   const info = renderer.info.render;
   const restore: (() => void)[] = [];
   scene.traverse((o) => {
-    const drawable = o as Partial<THREE.Mesh & THREE.Points & THREE.Line & THREE.Sprite>;
-    if (drawable.isMesh !== true && drawable.isPoints !== true && drawable.isLine !== true && drawable.isSprite !== true) return;
+    const drawable = o as Partial<
+      THREE.Mesh & THREE.Points & THREE.Line & THREE.Sprite
+    >;
+    if (
+      drawable.isMesh !== true &&
+      drawable.isPoints !== true &&
+      drawable.isLine !== true &&
+      drawable.isSprite !== true
+    ) {
+      return;
+    }
     let kind = "other";
     for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) {
       const k = kinds.get(a);
@@ -38,7 +53,9 @@ export function tallyFrame(renderer: THREE.WebGLRenderer, scene: THREE.Scene, vi
         break;
       }
     }
+    // oxlint-disable-next-line typescript/unbound-method -- re-bound via .apply(this, args) and restored verbatim
     const before = o.onBeforeRender;
+    // oxlint-disable-next-line typescript/unbound-method -- re-bound via .apply(this, args) and restored verbatim
     const after = o.onAfterRender;
     let calls = 0;
     let triangles = 0;
@@ -49,8 +66,15 @@ export function tallyFrame(renderer: THREE.WebGLRenderer, scene: THREE.Scene, vi
     };
     o.onAfterRender = function (...args) {
       after.apply(this, args);
-      const camera = args[2] as THREE.Camera & { isOrthographicCamera?: boolean };
-      const pass: Pass = camera === view ? "view" : camera.isOrthographicCamera === true ? "shadow" : "mirror";
+      const camera = args[2] as THREE.Camera & {
+        isOrthographicCamera?: boolean;
+      };
+      const pass: Pass =
+        camera === view
+          ? "view"
+          : camera.isOrthographicCamera === true
+            ? "shadow"
+            : "mirror";
       const sum = (tally[pass][kind] ??= { calls: 0, triangles: 0 });
       sum.calls += info.calls - calls;
       sum.triangles += info.triangles - triangles;
@@ -84,8 +108,17 @@ export type PixelRect = readonly [number, number, number, number];
  * place a lot, so the most-changed square block of `block` pixels separates
  * it from change spread thin.
  */
-export function pictureChange(a: Uint8Array, b: Uint8Array, width: number, height: number, block = 64, rect?: PixelRect): Change {
-  if (a.length !== width * height * 4 || b.length !== a.length) throw new Error(`Frames must both hold ${width}x${height} RGBA pixels.`);
+export function pictureChange(
+  a: Uint8Array,
+  b: Uint8Array,
+  width: number,
+  height: number,
+  block = 64,
+  rect?: PixelRect,
+): Change {
+  if (a.length !== width * height * 4 || b.length !== a.length) {
+    throw new Error(`Frames must both hold ${width}x${height} RGBA pixels.`);
+  }
   const [x0, y0, x1, y1] = rect ?? [0, 0, width, height];
   const cols = Math.ceil(width / block);
   const sums = new Float64Array(cols * Math.ceil(height / block));
@@ -95,7 +128,11 @@ export function pictureChange(a: Uint8Array, b: Uint8Array, width: number, heigh
     const row = Math.floor(y / block) * cols;
     for (let x = Math.max(0, x0); x < Math.min(width, x1); x++) {
       const i = (y * width + x) * 4;
-      const d = (Math.abs((a[i] as number) - (b[i] as number)) + Math.abs((a[i + 1] as number) - (b[i + 1] as number)) + Math.abs((a[i + 2] as number) - (b[i + 2] as number))) / 3;
+      const d =
+        (Math.abs((a[i] as number) - (b[i] as number)) +
+          Math.abs((a[i + 1] as number) - (b[i + 1] as number)) +
+          Math.abs((a[i + 2] as number) - (b[i + 2] as number))) /
+        3;
       const k = row + Math.floor(x / block);
       sums[k] = (sums[k] as number) + d;
       counts[k] = (counts[k] as number) + 1;

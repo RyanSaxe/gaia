@@ -13,7 +13,9 @@ export const MAX_REGIONS = 32;
 /** The slots of the wild's two covers, after every region's. */
 const WILD_SLOTS = [MAX_REGIONS - 2, MAX_REGIONS - 1] as const;
 
-const vectors = <T>(make: () => T): { value: T[] } => ({ value: Array.from({ length: MAX_REGIONS }, make) });
+const vectors = <T>(make: () => T): { value: T[] } => ({
+  value: Array.from({ length: MAX_REGIONS }, make),
+});
 
 export function createRegionCovers() {
   const uniforms = {
@@ -28,7 +30,7 @@ export function createRegionCovers() {
     uCoverSoil: vectors(() => new THREE.Vector3()),
     /** Blade height, blade width, density, clump. */
     uCoverShape: vectors(() => new THREE.Vector4()),
-    uCoverFlowers: { value: new Array<number>(MAX_REGIONS).fill(0) },
+    uCoverFlowers: { value: Array.from({ length: MAX_REGIONS }, () => 0) },
     uFlowerA: vectors(() => new THREE.Vector3()),
     uFlowerB: vectors(() => new THREE.Vector3()),
     uFlowerC: vectors(() => new THREE.Vector3()),
@@ -47,13 +49,23 @@ export function createRegionCovers() {
   };
   return {
     uniforms,
-    update(spec: WorldSpec, covers: readonly GroundSpec[], terrain: Terrain): void {
+    update(
+      spec: WorldSpec,
+      covers: readonly GroundSpec[],
+      terrain: Terrain,
+    ): void {
       uniforms.uCoverReach.value = landRadius(terrain) - 1;
-      if (spec.regions.length > WILD_SLOTS[0]) throw new Error(`The world draws at most ${WILD_SLOTS[0]} regions; this world has ${spec.regions.length}.`);
+      if (spec.regions.length > WILD_SLOTS[0]) {
+        throw new Error(
+          `The world draws at most ${WILD_SLOTS[0]} regions; this world has ${spec.regions.length}.`,
+        );
+      }
       uniforms.uRegionCount.value = spec.regions.length;
       spec.regions.forEach((r, i) => {
         const c = covers[i];
-        if (c === undefined) throw new Error(`Region ${r.id} has no ground cover.`);
+        if (c === undefined) {
+          throw new Error(`Region ${r.id} has no ground cover.`);
+        }
         setSlot(i, c);
       });
     },

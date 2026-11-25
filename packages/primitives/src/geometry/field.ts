@@ -36,13 +36,20 @@ export function gradientNoise(seed: number, x: number, z: number): number {
 }
 
 /** Fractal sum of gradient noise, normalized to about -1..1. */
-export function fbm(seed: number, x: number, z: number, octaves: number, gain: number): number {
+export function fbm(
+  seed: number,
+  x: number,
+  z: number,
+  octaves: number,
+  gain: number,
+): number {
   let sum = 0;
   let amp = 1;
   let norm = 0;
   let f = 1;
   for (let i = 0; i < octaves; i++) {
-    sum += amp * gradientNoise(seed + i * 1013, x * f + i * 17.3, z * f - i * 9.1);
+    sum +=
+      amp * gradientNoise(seed + i * 1013, x * f + i * 17.3, z * f - i * 9.1);
     norm += amp;
     amp *= gain;
     f *= 2.03;
@@ -50,13 +57,23 @@ export function fbm(seed: number, x: number, z: number, octaves: number, gain: n
   return sum / norm;
 }
 
-function ridged(seed: number, x: number, z: number, octaves: number, gain: number): number {
+function ridged(
+  seed: number,
+  x: number,
+  z: number,
+  octaves: number,
+  gain: number,
+): number {
   let sum = 0;
   let amp = 1;
   let norm = 0;
   let f = 1;
   for (let i = 0; i < octaves; i++) {
-    const r = 1 - Math.abs(gradientNoise(seed + i * 1013, x * f + i * 17.3, z * f - i * 9.1));
+    const r =
+      1 -
+      Math.abs(
+        gradientNoise(seed + i * 1013, x * f + i * 17.3, z * f - i * 9.1),
+      );
     sum += amp * r * r;
     norm += amp;
     amp *= gain;
@@ -73,13 +90,26 @@ const VALLEY_BENDS = { second: 0.15, apart: 2.1, tightest: 1.5 } as const;
  * every `meanderWavelength`, or less where a swing that wide would bend tighter than `VALLEY_BENDS.tightest` half
  * widths.
  */
-export function troughOffset(f: Extract<HeightField, { op: "trough" }>, u: number): number {
+export function troughOffset(
+  f: Extract<HeightField, { op: "trough" }>,
+  u: number,
+): number {
   const p1 = ((f.seed % 997) / 997) * Math.PI * 2;
   const p2 = ((f.seed % 613) / 613) * Math.PI * 2;
   const w = (Math.PI * 2) / f.meanderWavelength;
-  const sharper = 1 - VALLEY_BENDS.second + VALLEY_BENDS.second * VALLEY_BENDS.apart * VALLEY_BENDS.apart;
-  const swing = Math.min(f.meander, 1 / (VALLEY_BENDS.tightest * f.halfWidth * w * w * sharper));
-  return swing * ((1 - VALLEY_BENDS.second) * Math.sin(u * w + p1) + VALLEY_BENDS.second * Math.sin(u * w * VALLEY_BENDS.apart + p2));
+  const sharper =
+    1 -
+    VALLEY_BENDS.second +
+    VALLEY_BENDS.second * VALLEY_BENDS.apart * VALLEY_BENDS.apart;
+  const swing = Math.min(
+    f.meander,
+    1 / (VALLEY_BENDS.tightest * f.halfWidth * w * w * sharper),
+  );
+  return (
+    swing *
+    ((1 - VALLEY_BENDS.second) * Math.sin(u * w + p1) +
+      VALLEY_BENDS.second * Math.sin(u * w * VALLEY_BENDS.apart + p2))
+  );
 }
 
 /**
@@ -91,33 +121,54 @@ const BENDS = { apart: [10, 26], tightest: 2, toe: 1.4 } as const;
 /** The range of a trough's `meander` in meters, from straight to strongly meandering in `valley@1`. It sets how the stream winds. */
 const MEANDER = [4, 30] as const;
 /** The stream's two bend waves. The second, shorter wave keeps the bends from repeating. `sharper` is how much tighter their sum bends than one wave. */
-const WAVES = { second: 0.15, apart: 2.1, sharper: 0.85 + 0.15 * 2.1 * 2.1 } as const;
+const WAVES = {
+  second: 0.15,
+  apart: 2.1,
+  sharper: 0.85 + 0.15 * 2.1 * 2.1,
+} as const;
 
 /** The trough fields that set how a stream bends: seed, `meander` in meters, floor share and half width. */
-export type BendOf = Pick<Extract<HeightField, { op: "trough" }>, "seed" | "meander" | "floor" | "halfWidth">;
+export type BendOf = Pick<
+  Extract<HeightField, { op: "trough" }>,
+  "seed" | "meander" | "floor" | "halfWidth"
+>;
 
 /**
  * How far a stream `width` meters wide swings from its valley's axis at distance `s` along it. These are the stream's
  * own meanders across the floor, at the stream's scale.
  */
 export function bedBend(f: BendOf, s: number, width: number): number {
-  const m = Math.max(0, Math.min(1, (f.meander - MEANDER[0]) / (MEANDER[1] - MEANDER[0])));
-  const apart = width * (BENDS.apart[0] + (BENDS.apart[1] - BENDS.apart[0]) * m);
+  const m = Math.max(
+    0,
+    Math.min(1, (f.meander - MEANDER[0]) / (MEANDER[1] - MEANDER[0])),
+  );
+  const apart =
+    width * (BENDS.apart[0] + (BENDS.apart[1] - BENDS.apart[0]) * m);
   const k = (Math.PI * 2) / apart;
   // The widest swing that keeps every bend within `BENDS.tightest` and the channel on the floor and its toe, never up
   // the valley's sides. A winding valley's stream swings that wide, and a straight valley's stream barely swings.
   const onFloor = BENDS.toe * f.floor * f.halfWidth - width / 2;
-  const swing = Math.min(onFloor, 1 / (BENDS.tightest * width * k * k * WAVES.sharper)) * Math.min(1, 0.15 + 1.4 * m);
+  const swing =
+    Math.min(onFloor, 1 / (BENDS.tightest * width * k * k * WAVES.sharper)) *
+    Math.min(1, 0.15 + 1.4 * m);
   const p1 = ((f.seed % 811) / 811) * Math.PI * 2;
   const p2 = ((f.seed % 467) / 467) * Math.PI * 2;
-  return swing * ((1 - WAVES.second) * Math.sin(s * k + p1) + WAVES.second * Math.sin(s * k * WAVES.apart + p2));
+  return (
+    swing *
+    ((1 - WAVES.second) * Math.sin(s * k + p1) +
+      WAVES.second * Math.sin(s * k * WAVES.apart + p2))
+  );
 }
 
 /**
  * The sideways offset of a stream bed `width` meters wide at distance `u` along its trough. It adds the stream's own
  * meanders (`bedBend`) to the trough's axis (`troughOffset`), whose long bends are too broad to look like a stream's.
  */
-export function bedOffset(f: Extract<HeightField, { op: "trough" }>, u: number, width: number): number {
+export function bedOffset(
+  f: Extract<HeightField, { op: "trough" }>,
+  u: number,
+  width: number,
+): number {
   return troughOffset(f, u) + bedBend(f, u, width);
 }
 
@@ -130,19 +181,24 @@ export function fieldAt(f: HeightField, x: number, z: number): number {
       const s = Math.sin(f.angle);
       const u = (x * c + z * s) / (f.wavelength * f.stretch);
       const v = (-x * s + z * c) / f.wavelength;
-      return f.style === "ridged" ? ridged(f.seed, u, v, f.octaves, f.gain) : fbm(f.seed, u, v, f.octaves, f.gain);
+      return f.style === "ridged"
+        ? ridged(f.seed, u, v, f.octaves, f.gain)
+        : fbm(f.seed, u, v, f.octaves, f.gain);
     }
     case "dunes": {
       const c = Math.cos(f.angle);
       const s = Math.sin(f.angle);
       const u = x * c + z * s;
       const big = f.wavelength * 2.5;
-      const p = u / f.wavelength + f.wander * 0.8 * fbm(f.seed, x / big, z / big, 2, 0.5);
+      const p =
+        u / f.wavelength +
+        f.wander * 0.8 * fbm(f.seed, x / big, z / big, 2, 0.5);
       const t = p - Math.floor(p);
       // A long windward climb, then a shorter, steeper lee face, flat at both ends.
       const rise = 0.62;
       const shape = t < rise ? smooth(0, rise, t) : 1 - smooth(rise, 1, t);
-      const crest = 0.68 + 0.32 * fbm(f.seed + 7, x / (big * 1.3), z / (big * 1.3), 2, 0.5);
+      const crest =
+        0.68 + 0.32 * fbm(f.seed + 7, x / (big * 1.3), z / (big * 1.3), 2, 0.5);
       return shape * crest;
     }
     case "trough": {
@@ -156,7 +212,9 @@ export function fieldAt(f: HeightField, x: number, z: number): number {
       for (let step = 0; step < 4; step++) {
         const off = troughOffset(f, a);
         const d1 = (troughOffset(f, a + 0.5) - troughOffset(f, a - 0.5)) / 1;
-        const d2 = (troughOffset(f, a + 0.5) - 2 * off + troughOffset(f, a - 0.5)) / 0.25;
+        const d2 =
+          (troughOffset(f, a + 0.5) - 2 * off + troughOffset(f, a - 0.5)) /
+          0.25;
         const g1 = a - u + (off - v) * d1;
         const g2 = 1 + d1 * d1 + (off - v) * d2;
         if (g2 <= 0) break;

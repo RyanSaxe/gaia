@@ -38,18 +38,38 @@ import type { Bed } from "./hearing.ts";
 
 interface Entry {
   readonly lufs: number;
-  readonly steps?: readonly { readonly start: number; readonly length: number }[];
+  readonly steps?: readonly {
+    readonly start: number;
+    readonly length: number;
+  }[];
 }
-const entries: Readonly<Record<string, { readonly loudness_lufs: number; readonly steps?: Entry["steps"] }>> = manifest.files;
+const entries: Readonly<
+  Record<
+    string,
+    { readonly loudness_lufs: number; readonly steps?: Entry["steps"] }
+  >
+> = manifest.files;
 
 /** A recording's loudness and, for footfalls, each footfall's position, from the manifest. */
 function entry(file: string): Entry {
   const e = entries[file.replace(/\.ogg$/, "")];
   if (e === undefined) throw new Error(`The sound manifest has no ${file}.`);
-  return { lufs: e.loudness_lufs, ...(e.steps === undefined ? {} : { steps: e.steps }) };
+  return {
+    lufs: e.loudness_lufs,
+    ...(e.steps === undefined ? {} : { steps: e.steps }),
+  };
 }
 
-const BEDS: Readonly<Record<Bed, string>> = { wind, gusts, leaves, stream, mill, birds, evening, crickets };
+const BEDS: Readonly<Record<Bed, string>> = {
+  wind,
+  gusts,
+  leaves,
+  stream,
+  mill,
+  birds,
+  evening,
+  crickets,
+};
 const BED_FILES: Readonly<Record<Bed, string>> = {
   wind: "wind.ogg",
   gusts: "gusts.ogg",
@@ -71,8 +91,21 @@ const PAPER: Readonly<Record<Paper, readonly [string, string]>> = {
   turn: [pageTurn, "page-turn.ogg"],
   riffle: [riffle, "riffle.ogg"],
 };
-const STEM_URLS: Readonly<Record<Stem, string>> = { bed, melody, shimmer, minor };
-const PHRASE_URLS: Readonly<Record<Phrase, string>> = { "day-1": day1, "day-2": day2, "day-3": day3, "day-4": day4, "night-1": night1, "night-2": night2, "ruin-1": ruin1 };
+const STEM_URLS: Readonly<Record<Stem, string>> = {
+  bed,
+  melody,
+  shimmer,
+  minor,
+};
+const PHRASE_URLS: Readonly<Record<Phrase, string>> = {
+  "day-1": day1,
+  "day-2": day2,
+  "day-3": day3,
+  "day-4": day4,
+  "night-1": night1,
+  "night-2": night2,
+  "ruin-1": ruin1,
+};
 /**
  * The beds are field recordings of air, water, birds and insects, with little
  * content above 16 kHz. Decoded at 32 kHz they take two thirds of the memory
@@ -80,36 +113,79 @@ const PHRASE_URLS: Readonly<Record<Phrase, string>> = { "day-1": day1, "day-2": 
  */
 const BED_RATE = 32000;
 
-async function decode(ctx: BaseAudioContext, url: string): Promise<AudioBuffer> {
+async function decode(
+  ctx: BaseAudioContext,
+  url: string,
+): Promise<AudioBuffer> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`Could not load the sound at ${url.slice(0, 80)}: ${response.status}.`);
+  if (!response.ok) {
+    throw new Error(
+      `Could not load the sound at ${url.slice(0, 80)}: ${response.status}.`,
+    );
+  }
   return ctx.decodeAudioData(await response.arrayBuffer());
 }
 
 /** Loads the world's recordings for `ctx`. The beds go on a shelf and decode while they may be heard, or stay once decoded with `keep`. The short sounds decode now. */
-export async function loadBank(ctx: BaseAudioContext, keep = false): Promise<Bank> {
+export async function loadBank(
+  ctx: BaseAudioContext,
+  keep = false,
+): Promise<Bank> {
   const bedDecoder = new OfflineAudioContext(2, 1, BED_RATE);
-  const all = async <K extends string>(table: Readonly<Record<K, readonly [string, string]>>): Promise<Record<K, AudioBuffer>> =>
-    Object.fromEntries(await Promise.all(Object.entries<readonly [string, string]>(table).map(async ([k, [url]]) => [k, await decode(ctx, url)] as const))) as Record<K, AudioBuffer>;
+  const all = async <K extends string>(
+    table: Readonly<Record<K, readonly [string, string]>>,
+  ): Promise<Record<K, AudioBuffer>> =>
+    Object.fromEntries(
+      await Promise.all(
+        Object.entries<readonly [string, string]>(table).map(
+          async ([k, [url]]) => [k, await decode(ctx, url)] as const,
+        ),
+      ),
+    ) as Record<K, AudioBuffer>;
   const [stepBuffers, paper] = await Promise.all([all(STEPS), all(PAPER)]);
   const sprite = (g: Ground): Sprite => {
-    const cuts = (entry(STEPS[g][1]).steps ?? []).map((s) => ({ at: s.start, length: s.length }));
-    if (cuts.length === 0) throw new Error(`The sound manifest lists no footfalls in ${STEPS[g][1]}.`);
+    const cuts = (entry(STEPS[g][1]).steps ?? []).map((s) => ({
+      at: s.start,
+      length: s.length,
+    }));
+    if (cuts.length === 0) {
+      throw new Error(
+        `The sound manifest lists no footfalls in ${STEPS[g][1]}.`,
+      );
+    }
     return { buffer: stepBuffers[g], cuts };
   };
-  const steps = { grass: sprite("grass"), dry: sprite("dry"), wood: sprite("wood") };
+  const steps = {
+    grass: sprite("grass"),
+    dry: sprite("dry"),
+    wood: sprite("wood"),
+  };
   const lufs = {
-    ...Object.fromEntries((Object.keys(BED_FILES) as Bed[]).map((b) => [b, entry(BED_FILES[b]).lufs])),
+    ...Object.fromEntries(
+      (Object.keys(BED_FILES) as Bed[]).map((b) => [
+        b,
+        entry(BED_FILES[b]).lufs,
+      ]),
+    ),
     "steps-grass": entry(STEPS.grass[1]).lufs,
     "steps-dry": entry(STEPS.dry[1]).lufs,
     "steps-wood": entry(STEPS.wood[1]).lufs,
-    ...Object.fromEntries((Object.keys(PAPER) as Paper[]).map((p) => [p, entry(PAPER[p][1]).lufs])),
+    ...Object.fromEntries(
+      (Object.keys(PAPER) as Paper[]).map((p) => [p, entry(PAPER[p][1]).lufs]),
+    ),
   } as Bank["lufs"];
-  return { beds: createShelf((name: Bed) => decode(bedDecoder, BEDS[name]), keep), steps, paper, lufs };
+  return {
+    beds: createShelf((name: Bed) => decode(bedDecoder, BEDS[name]), keep),
+    steps,
+    paper,
+    lufs,
+  };
 }
 
 /** Each part's chunks, laid end to end in one file, with each chunk's byte offset and length. */
-const CHUNKS = score.piece.chunks as Readonly<Record<Stem, readonly { readonly at: number; readonly bytes: number }[]>>;
+const CHUNKS = score.piece.chunks as Readonly<
+  Record<Stem, readonly { readonly at: number; readonly bytes: number }[]>
+>;
 
 /**
  * Loads the score for `ctx`: the piece's parts a chunk at a time and the
@@ -123,7 +199,9 @@ export function loadMusic(ctx: BaseAudioContext, keep = false): MusicBank {
     let bytes = files.get(stem);
     if (bytes === undefined) {
       bytes = fetch(STEM_URLS[stem]).then((r) => {
-        if (!r.ok) throw new Error(`Could not load the music's ${stem}: ${r.status}.`);
+        if (!r.ok) {
+          throw new Error(`Could not load the music's ${stem}: ${r.status}.`);
+        }
         return r.arrayBuffer();
       });
       files.set(stem, bytes);
@@ -135,13 +213,22 @@ export function loadMusic(ctx: BaseAudioContext, keep = false): MusicBank {
     const span = CHUNKS[stem][Number(k)];
     if (span === undefined) throw new Error(`The music has no chunk ${name}.`);
     // decodeAudioData takes ownership of its buffer, so each chunk is decoded from a copy of its bytes.
-    return ctx.decodeAudioData((await file(stem)).slice(span.at, span.at + span.bytes));
+    return ctx.decodeAudioData(
+      (await file(stem)).slice(span.at, span.at + span.bytes),
+    );
   };
   const { frames, margin, rate } = score.piece.chunk;
   return {
     chunks: createShelf(chunk, keep),
-    chunk: { count: CHUNKS.bed.length, seconds: frames / rate, margin: margin / rate },
-    phrases: createShelf((name: Phrase) => decode(ctx, PHRASE_URLS[name]), keep),
+    chunk: {
+      count: CHUNKS.bed.length,
+      seconds: frames / rate,
+      margin: margin / rate,
+    },
+    phrases: createShelf(
+      (name: Phrase) => decode(ctx, PHRASE_URLS[name]),
+      keep,
+    ),
     lufs: { piece: score.piece.lufs, phrases: score.phrases.lufs },
   };
 }

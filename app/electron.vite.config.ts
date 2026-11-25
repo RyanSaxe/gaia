@@ -12,7 +12,17 @@ export default defineConfig({
     build: {
       // The world service runs the world package, so the build bundles Gaia's own packages instead of requiring them at
       // run time.
-      externalizeDeps: { exclude: ["@gaia/schema", "@gaia/world", "@gaia/kinds", "@gaia/primitives", "@gaia/realize", "@gaia/render", "@gaia/terrain"] },
+      externalizeDeps: {
+        exclude: [
+          "@gaia/schema",
+          "@gaia/world",
+          "@gaia/kinds",
+          "@gaia/primitives",
+          "@gaia/realize",
+          "@gaia/render",
+          "@gaia/terrain",
+        ],
+      },
       rollupOptions: {
         input: {
           index: resolve(here, "main/index.ts"),

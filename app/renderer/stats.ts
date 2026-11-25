@@ -64,9 +64,12 @@ function createProbe() {
   let watchesLongTasks = false;
   try {
     new PerformanceObserver((list) => {
-      for (const e of list.getEntries()) long.push({ at: e.startTime + e.duration, ms: e.duration });
+      for (const e of list.getEntries()) {
+        long.push({ at: e.startTime + e.duration, ms: e.duration });
+      }
     }).observe({ type: "longtask", buffered: false });
-    watchesLongTasks = PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false;
+    watchesLongTasks =
+      PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false;
   } catch {
     // This browser has no long-task timing, so reports give null.
   }
@@ -88,11 +91,16 @@ function createProbe() {
         first = at[i] as number;
       }
       const view = sorted.subarray(0, n).sort();
-      const q = (p: number): number => (n === 0 ? 0 : (view[Math.min(n - 1, Math.floor(p * n))] as number));
+      const q = (p: number): number =>
+        n === 0 ? 0 : (view[Math.min(n - 1, Math.floor(p * n))] as number);
       const median = q(0.5);
       let stutters = 0;
-      for (let k = 0; k < n; k++) if ((view[k] as number) > median * STUTTER) stutters++;
-      while (long.length > 0 && now - (long[0] as { at: number }).at > WINDOW) long.shift();
+      for (let k = 0; k < n; k++) {
+        if ((view[k] as number) > median * STUTTER) stutters++;
+      }
+      while (long.length > 0 && now - (long[0] as { at: number }).at > WINDOW) {
+        long.shift();
+      }
       const round = (v: number): number => Math.round(v * 10) / 10;
       return {
         seconds: round((now - first) / 1000),
@@ -102,7 +110,9 @@ function createProbe() {
         maxMs: round(n === 0 ? 0 : (view[n - 1] as number)),
         stutters,
         longTasks: watchesLongTasks ? long.length : null,
-        longestTaskMs: watchesLongTasks ? Math.round(long.reduce((m, t) => Math.max(m, t.ms), 0)) : null,
+        longestTaskMs: watchesLongTasks
+          ? Math.round(long.reduce((m, t) => Math.max(m, t.ms), 0))
+          : null,
       };
     },
   };
@@ -145,7 +155,8 @@ export function createStats(): Stats {
       return { ...now, smooth: probe.read(performance.now()) };
     },
     smoothness: () => probe.read(performance.now()),
-    passes: () => (counting ? { calls: now.calls, triangles: now.triangles } : null),
+    passes: () =>
+      counting ? { calls: now.calls, triangles: now.triangles } : null,
     count(next) {
       reporting = next;
     },

@@ -9,7 +9,9 @@ export type BlueprintId = `bp-${string}`;
 /** A filled slot: the chosen primitive, the stored words for its params, and its own slots. */
 export interface FilledSlot {
   readonly use: PrimitiveId;
-  readonly params: Readonly<Record<string, string | boolean | readonly string[]>>;
+  readonly params: Readonly<
+    Record<string, string | boolean | readonly string[]>
+  >;
   readonly slots?: Readonly<Record<string, FilledSlot>>;
 }
 

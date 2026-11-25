@@ -17,18 +17,36 @@ export interface TableLayout {
   /** The table top's width and depth. */
   readonly table: { readonly w: number; readonly d: number };
   /** The sheet's width and depth, its center on the table, and its rotation in radians. */
-  readonly sheet: { readonly w: number; readonly h: number; readonly x: number; readonly z: number; readonly turn: number };
+  readonly sheet: {
+    readonly w: number;
+    readonly h: number;
+    readonly x: number;
+    readonly z: number;
+    readonly turn: number;
+  };
   /** Gaia's logo: its far left corner and width on the sheet. */
   readonly logo: { readonly x: number; readonly y: number; readonly w: number };
   /** The heading "the worlds you have walked": the position of its first letter, and its size. */
-  readonly say: { readonly x: number; readonly y: number; readonly size: number };
+  readonly say: {
+    readonly x: number;
+    readonly y: number;
+    readonly size: number;
+  };
   readonly cards: readonly CardPlace[];
   /** The text size of a world's name beneath its card. */
   readonly name: number;
   /** The line an address is written on: its y on the sheet, its ends, and the size of the text around it. */
-  readonly line: { readonly y: number; readonly x0: number; readonly x1: number; readonly size: number };
+  readonly line: {
+    readonly y: number;
+    readonly x0: number;
+    readonly x1: number;
+    readonly size: number;
+  };
   /** The quill's nib and the tip of its vane on the sheet. The tip may lie past the sheet's edge. */
-  readonly quill: { readonly nib: readonly [number, number]; readonly tip: readonly [number, number] };
+  readonly quill: {
+    readonly nib: readonly [number, number];
+    readonly tip: readonly [number, number];
+  };
   /** The inkwell and the lantern, on the table. */
   readonly inkwell: readonly [number, number];
   readonly lantern: readonly [number, number];
@@ -49,14 +67,23 @@ export const NAME_ROOM = 3.9;
  * sits a third of the way down the band's free space, so the line below keeps
  * its room. Between equal sides, fewer columns win.
  */
-export function cardsIn(n: number, band: Band, most: number, name: number): CardPlace[] {
+export function cardsIn(
+  n: number,
+  band: Band,
+  most: number,
+  name: number,
+): CardPlace[] {
   if (n === 0) return [];
   const [x0, y0, x1, y1] = band;
   const nameRoom = name * NAME_ROOM;
   let best = { cols: 1, rows: n, side: 0 };
   for (let cols = 1; cols <= n; cols++) {
     const rows = Math.ceil(n / cols);
-    const side = Math.min(most, (x1 - x0) / (cols + GAP * (cols - 1)), (y1 - y0 - rows * nameRoom - (rows - 1) * ROW_GAP) / rows);
+    const side = Math.min(
+      most,
+      (x1 - x0) / (cols + GAP * (cols - 1)),
+      (y1 - y0 - rows * nameRoom - (rows - 1) * ROW_GAP) / rows,
+    );
     if (side > best.side + 1e-3) best = { cols, rows, side };
   }
   const { cols, rows, side } = best;
@@ -67,16 +94,32 @@ export function cardsIn(n: number, band: Band, most: number, name: number): Card
     const row = Math.floor(i / cols);
     const inRow = row === rows - 1 ? n - row * cols : cols;
     const left = (x0 + x1) / 2 - ((inRow - 1) * step) / 2;
-    return { x: left + (i - row * cols) * step, y: top + row * rowStep + side / 2, side, nameWidth: step * 0.9 };
+    return {
+      x: left + (i - row * cols) * step,
+      y: top + row * rowStep + side / 2,
+      side,
+      nameWidth: step * 0.9,
+    };
   });
 }
 
 /** Whether a quill from `nib` to `tip`, with its vane about 3 cm to either side, comes within 3 cm of a box on the sheet. */
-export function crosses(nib: readonly [number, number], tip: readonly [number, number], box: Band): boolean {
+export function crosses(
+  nib: readonly [number, number],
+  tip: readonly [number, number],
+  box: Band,
+): boolean {
   for (let t = 0; t <= 1; t += 0.02) {
     const x = nib[0] + (tip[0] - nib[0]) * t;
     const y = nib[1] + (tip[1] - nib[1]) * t;
-    if (x > box[0] - 0.03 && x < box[2] + 0.03 && y > box[1] - 0.03 && y < box[3] + 0.03) return true;
+    if (
+      x > box[0] - 0.03 &&
+      x < box[2] + 0.03 &&
+      y > box[1] - 0.03 &&
+      y < box[3] + 0.03
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -86,13 +129,37 @@ export function tableLayout(phone: boolean, n: number): TableLayout {
   if (!phone) {
     const sheet = { w: 1.12, h: 0.74, x: -0.03, z: 0.03, turn: -0.009 };
     const name = n <= 4 ? 0.02 : 0.017;
-    const line = n === 0 ? { y: 0.43, x0: 0.3, x1: 0.82, size: 0.022 } : { y: 0.615, x0: 0.34, x1: 0.78, size: 0.0175 };
-    const cards = cardsIn(n, [0.09, 0.19, sheet.w - 0.09, line.y - line.size * 3.9], 0.28, name);
+    const line =
+      n === 0
+        ? { y: 0.43, x0: 0.3, x1: 0.82, size: 0.022 }
+        : { y: 0.615, x0: 0.34, x1: 0.78, size: 0.0175 };
+    const cards = cardsIn(
+      n,
+      [0.09, 0.19, sheet.w - 0.09, line.y - line.size * 3.9],
+      0.28,
+      name,
+    );
     // The quill rests by the line with its vane rising toward the far right corner. Its tip starts 17 cm above the line
     // and moves down until the quill clears every card and name.
     const nib = [0.81, line.y + 0.012] as const;
     let tipY = line.y - 0.17;
-    while (tipY < nib[1] - 0.05 && cards.some((c) => crosses(nib, [1.02, tipY], [c.x - c.side / 2, c.y - c.side / 2, c.x + c.side / 2, c.y + c.side / 2 + name * NAME_ROOM]))) tipY += 0.01;
+    while (
+      tipY < nib[1] - 0.05 &&
+      cards.some((c) =>
+        crosses(
+          nib,
+          [1.02, tipY],
+          [
+            c.x - c.side / 2,
+            c.y - c.side / 2,
+            c.x + c.side / 2,
+            c.y + c.side / 2 + name * NAME_ROOM,
+          ],
+        ),
+      )
+    ) {
+      tipY += 0.01;
+    }
     return {
       phone,
       table: { w: 1.85, d: 1.4 },
@@ -109,14 +176,22 @@ export function tableLayout(phone: boolean, n: number): TableLayout {
   }
   const sheet = { w: 0.58, h: 0.96, x: 0, z: 0.06, turn: 0.006 };
   const name = n <= 2 ? 0.026 : 0.022;
-  const line = n === 0 ? { y: 0.5, x0: 0.07, x1: 0.51, size: 0.029 } : { y: 0.735, x0: 0.07, x1: 0.51, size: 0.025 };
+  const line =
+    n === 0
+      ? { y: 0.5, x0: 0.07, x1: 0.51, size: 0.029 }
+      : { y: 0.735, x0: 0.07, x1: 0.51, size: 0.025 };
   return {
     phone,
     table: { w: 1.35, d: 1.6 },
     sheet,
     logo: { x: 0.04, y: 0.035, w: 0.19 },
     say: { x: 0.048, y: 0.205, size: 0.025 },
-    cards: cardsIn(n, [0.04, 0.23, sheet.w - 0.04, line.y - line.size * 3.6], 0.3, name),
+    cards: cardsIn(
+      n,
+      [0.04, 0.23, sheet.w - 0.04, line.y - line.size * 3.6],
+      0.3,
+      name,
+    ),
     name,
     line,
     quill: { nib: [0.15, 0.93], tip: [0.5, 0.912] },

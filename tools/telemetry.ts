@@ -17,14 +17,22 @@ export function telemetryLine(body: string, received: Date): string | null {
   } catch {
     return null;
   }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
   return `${JSON.stringify({ received: received.toISOString(), ...parsed })}\n`;
 }
 
 /** Handles POST /telemetry: appends the report to `file`, refusing anything too large or not a JSON object. */
-export function handleTelemetry(req: IncomingMessage, res: ServerResponse, file: string): void {
+export function handleTelemetry(
+  req: IncomingMessage,
+  res: ServerResponse,
+  file: string,
+): void {
   if (req.method !== "POST") {
-    res.writeHead(405, { allow: "POST", "content-type": "text/plain" }).end("POST a report.");
+    res
+      .writeHead(405, { allow: "POST", "content-type": "text/plain" })
+      .end("POST a report.");
     return;
   }
   const chunks: Buffer[] = [];
@@ -35,7 +43,9 @@ export function handleTelemetry(req: IncomingMessage, res: ServerResponse, file:
     size += chunk.length;
     if (size > TELEMETRY_LIMIT) {
       refused = true;
-      res.writeHead(413, { "content-type": "text/plain", connection: "close" }).end("Too large.");
+      res
+        .writeHead(413, { "content-type": "text/plain", connection: "close" })
+        .end("Too large.");
       req.destroy();
       return;
     }
@@ -43,9 +53,14 @@ export function handleTelemetry(req: IncomingMessage, res: ServerResponse, file:
   });
   req.on("end", () => {
     if (refused) return;
-    const line = telemetryLine(Buffer.concat(chunks).toString("utf8"), new Date());
+    const line = telemetryLine(
+      Buffer.concat(chunks).toString("utf8"),
+      new Date(),
+    );
     if (line === null) {
-      res.writeHead(400, { "content-type": "text/plain" }).end("Send one JSON object.");
+      res
+        .writeHead(400, { "content-type": "text/plain" })
+        .end("Send one JSON object.");
       return;
     }
     mkdirSync(dirname(file), { recursive: true });

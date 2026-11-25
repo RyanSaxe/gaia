@@ -9,11 +9,23 @@
 
 import * as THREE from "three";
 import { CHANNEL_MATH } from "@gaia/realize";
-import { GROUND_DECLINE, type Ownership, groundDecline, vitalityAt, vitalityOver } from "@gaia/terrain";
+import {
+  GROUND_DECLINE,
+  type Ownership,
+  groundDecline,
+  vitalityAt,
+  vitalityOver,
+} from "@gaia/terrain";
 import { hexToVec3 } from "@gaia/render";
 
 function fieldTexture(data: Uint8Array, n: number): THREE.DataTexture {
-  const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat, THREE.UnsignedByteType);
+  const t = new THREE.DataTexture(
+    data,
+    n,
+    n,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType,
+  );
   t.minFilter = THREE.LinearFilter;
   t.magFilter = THREE.LinearFilter;
   t.needsUpdate = true;
@@ -22,7 +34,9 @@ function fieldTexture(data: Uint8Array, n: number): THREE.DataTexture {
 
 /** The field and the colors declining cover turns toward, shared by the ground and the grass. The water reads the field. */
 export const vitalityUniforms = {
-  uVitalityField: { value: fieldTexture(new Uint8Array([255, 255, 255, 255]), 1) },
+  uVitalityField: {
+    value: fieldTexture(new Uint8Array([255, 255, 255, 255]), 1),
+  },
   /** The field's origin, meters between its samples, and samples per side. */
   uVitalityMap: { value: new THREE.Vector3(0, 1, 1) },
   /** The straw colors, low, high and tip, that declining cover dries toward. */
@@ -49,7 +63,11 @@ export function setGroundOwnership(own: Ownership | null): void {
   const old = vitalityUniforms.uVitalityField.value;
   vitalityUniforms.uVitalityField.value = fieldTexture(bytes, n);
   old.dispose();
-  vitalityUniforms.uVitalityMap.value.set(own?.origin ?? 0, own?.spacing ?? 1, n);
+  vitalityUniforms.uVitalityMap.value.set(
+    own?.origin ?? 0,
+    own?.spacing ?? 1,
+    n,
+  );
 }
 
 /**
@@ -57,7 +75,10 @@ export function setGroundOwnership(own: Ownership | null): void {
  * on the area's water (`area[owner]`). Call it whenever a file's or an area's
  * vitality changes. It rewrites a few hundred kilobytes and never the bake.
  */
-export function showGroundVitality(ground: ArrayLike<number>, area: ArrayLike<number>): void {
+export function showGroundVitality(
+  ground: ArrayLike<number>,
+  area: ArrayLike<number>,
+): void {
   if (owned === null) return;
   vitalityOver(owned, ground, levels, 2, 0);
   vitalityOver(owned, area, levels, 2, 1);
@@ -71,9 +92,15 @@ export function showGroundVitality(ground: ArrayLike<number>, area: ArrayLike<nu
 }
 
 /** The ground's own vitality and its area's at (x, z), as the shaders read them. */
-export function groundVitalityAt(x: number, z: number): { ground: number; area: number } {
+export function groundVitalityAt(
+  x: number,
+  z: number,
+): { ground: number; area: number } {
   if (owned === null) return { ground: 1, area: 1 };
-  return { ground: vitalityAt(owned, levels, x, z, 2, 0), area: vitalityAt(owned, levels, x, z, 2, 1) };
+  return {
+    ground: vitalityAt(owned, levels, x, z, 2, 0),
+    area: vitalityAt(owned, levels, x, z, 2, 1),
+  };
 }
 
 /** Samples a side of the square `declineAround` reads its disc from. */
@@ -96,7 +123,11 @@ export function declineAround(x: number, z: number, radius: number): number {
       const r2 = u * u + w * w;
       if (r2 >= 1) continue;
       const k = (1 - r2) * (1 - r2);
-      sum += k * groundDecline(vitalityAt(owned, levels, x + u * radius, z + w * radius, 2, 0));
+      sum +=
+        k *
+        groundDecline(
+          vitalityAt(owned, levels, x + u * radius, z + w * radius, 2, 0),
+        );
       weight += k;
     }
   }

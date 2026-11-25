@@ -4,14 +4,43 @@
 // of it and no geometry is rebuilt as vitality changes.
 
 import { type BuildingPlan, CUT, type Rand, type Vec3 } from "@gaia/schema";
-import { type Channels, type PartBuilder, type V3, addScaled, clamp, cross, icosphere, normalize, rotate } from "../kit.ts";
-import { type Ruin, type Wall, clearings, hidden, insideMass, massOf, on, peakOf, ruinAt, shownWalls, topAt, wallTop } from "./frame.ts";
+import {
+  type Channels,
+  type PartBuilder,
+  type V3,
+  addScaled,
+  clamp,
+  cross,
+  icosphere,
+  normalize,
+  rotate,
+} from "../kit.ts";
+import {
+  type Ruin,
+  type Wall,
+  clearings,
+  hidden,
+  insideMass,
+  massOf,
+  on,
+  peakOf,
+  ruinAt,
+  shownWalls,
+  topAt,
+  wallTop,
+} from "./frame.ts";
 
 /** True when a point on the ground lies inside one of the building's masses. */
-const indoors = (plan: BuildingPlan, x: number, z: number): boolean => plan.masses.some((m) => insideMass(plan, m, [x, 0.1, z], -0.05));
+const indoors = (plan: BuildingPlan, x: number, z: number): boolean =>
+  plan.masses.some((m) => insideMass(plan, m, [x, 0.1, z], -0.05));
 
 /** Sorted breaks every `cell` meters from `a` to `b`, with `extra` breaks added where they fall inside. */
-function breaks(a: number, b: number, cell: number, extra: readonly number[]): number[] {
+function breaks(
+  a: number,
+  b: number,
+  cell: number,
+  extra: readonly number[],
+): number[] {
   const n = Math.max(1, Math.round((b - a) / cell));
   const out = Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
   for (const x of extra) if (x > a + 0.02 && x < b - 0.02) out.push(x);
@@ -24,18 +53,44 @@ function breaks(a: number, b: number, cell: number, extra: readonly number[]): n
  * shade can vary across it. Its doors and windows are cut out exactly, so
  * an open door or a broken pane shows the dark inside.
  */
-export function wallSheet(b: PartBuilder, plan: BuildingPlan, w: Wall, y0: number, d: number, cell: number, at: (p: V3) => { c: Channels; shade: number }): void {
+export function wallSheet(
+  b: PartBuilder,
+  plan: BuildingPlan,
+  w: Wall,
+  y0: number,
+  d: number,
+  cell: number,
+  at: (p: V3) => { c: Channels; shade: number },
+): void {
   const top = wallTop(plan, massOf(plan, w));
   const holes = clearings(plan, w, 0).filter((h) => h.y1 <= top + 1e-3);
   const peak = peakOf(plan, w).y;
-  const gableRows = peak - top > 0.05 ? Math.max(1, Math.round((peak - top) / cell)) : 0;
+  const gableRows =
+    peak - top > 0.05 ? Math.max(1, Math.round((peak - top) / cell)) : 0;
   // A gable's sheet has a column break at each end of its crest, so at any cell size it reaches the gable's top and the
   // stones laid up to it rest on it.
-  const crest = gableRows > 0 ? Array.from({ length: 17 }, (_, k) => (w.length * k) / 16).filter((s) => topAt(plan, w, s) > peak - 1e-3) : [];
-  const cols = breaks(0, w.length, cell, [...holes.flatMap((h) => [h.s0, h.s1]), ...crest.slice(0, 1), ...crest.slice(-1)]);
-  const body = breaks(y0, top, cell, holes.flatMap((h) => [h.y0, h.y1]));
+  const crest =
+    gableRows > 0
+      ? Array.from({ length: 17 }, (_, k) => (w.length * k) / 16).filter(
+          (s) => topAt(plan, w, s) > peak - 1e-3,
+        )
+      : [];
+  const cols = breaks(0, w.length, cell, [
+    ...holes.flatMap((h) => [h.s0, h.s1]),
+    ...crest.slice(0, 1),
+    ...crest.slice(-1),
+  ]);
+  const body = breaks(
+    y0,
+    top,
+    cell,
+    holes.flatMap((h) => [h.y0, h.y1]),
+  );
   const rows = body.length + gableRows;
-  const yAt = (s: number, j: number): number => (j < body.length ? (body[j] as number) : top + ((topAt(plan, w, s) - top) * (j - body.length + 1)) / gableRows);
+  const yAt = (s: number, j: number): number =>
+    j < body.length
+      ? (body[j] as number)
+      : top + ((topAt(plan, w, s) - top) * (j - body.length + 1)) / gableRows;
   const idx: number[] = [];
   for (let j = 0; j < rows; j++) {
     for (const s of cols) {
@@ -49,7 +104,9 @@ export function wallSheet(b: PartBuilder, plan: BuildingPlan, w: Wall, y0: numbe
     for (let i = 0; i + 1 < n; i++) {
       const sm = ((cols[i] as number) + (cols[i + 1] as number)) / 2;
       const ym = (yAt(sm, j) + yAt(sm, j + 1)) / 2;
-      if (holes.some((h) => sm > h.s0 && sm < h.s1 && ym > h.y0 && ym < h.y1)) continue;
+      if (holes.some((h) => sm > h.s0 && sm < h.s1 && ym > h.y0 && ym < h.y1)) {
+        continue;
+      }
       const a = idx[j * n + i] as number;
       const bb = idx[j * n + i + 1] as number;
       const c = idx[(j + 1) * n + i + 1] as number;
@@ -61,19 +118,45 @@ export function wallSheet(b: PartBuilder, plan: BuildingPlan, w: Wall, y0: numbe
 }
 
 /** One leaf card facing `n`, centered at `c`, `size` across, turned by `twist` about `n`. */
-function card(b: PartBuilder, c: Vec3, n: Vec3, up: Vec3, size: number, twist: number, cut: number, ch: Channels, shade: number): void {
+function card(
+  b: PartBuilder,
+  c: Vec3,
+  n: Vec3,
+  up: Vec3,
+  size: number,
+  twist: number,
+  cut: number,
+  ch: Channels,
+  shade: number,
+): void {
   const side0 = normalize(cross(up, n));
   const side = rotate(side0, n, twist);
   const along = normalize(cross(n, side));
   const h = size / 2;
-  const corners: [number, number][] = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
-  const idx = corners.map(([x, y]) => b.vertex(addScaled(addScaled(c, side, x * h), along, y * h), n, shade + 0.12 * y, ch, [x, y, cut]));
+  const corners: [number, number][] = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ];
+  const idx = corners.map(([x, y]) =>
+    b.vertex(
+      addScaled(addScaled(c, side, x * h), along, y * h),
+      n,
+      shade + 0.12 * y,
+      ch,
+      [x, y, cut],
+    ),
+  );
   b.triangle(idx[0] as number, idx[1] as number, idx[2] as number);
   b.triangle(idx[0] as number, idx[2] as number, idx[3] as number);
 }
 
 /** The rot and grain at a point on the wall layer that lasts longest. Ivy at that point goes with that layer. */
-export type Hold = (w: Wall, p: Vec3) => { readonly rot: number; readonly grain: (p: Vec3) => Vec3 };
+export type Hold = (
+  w: Wall,
+  p: Vec3,
+) => { readonly rot: number; readonly grain: (p: Vec3) => Vec3 };
 
 /**
  * Ivy on the walls: strands from the ground at the corners and over the
@@ -82,9 +165,18 @@ export type Hold = (w: Wall, p: Vec3) => { readonly rot: number; readonly grain:
  * goes a little before the piece of wall it clings to (`hold`), so no ivy
  * hangs over a hole.
  */
-export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coarse = 1, hold?: Hold): void {
+export function ivy(
+  b: PartBuilder,
+  plan: BuildingPlan,
+  ruin: Ruin,
+  r: Rand,
+  coarse = 1,
+  hold?: Hold,
+): void {
   for (const w of shownWalls(plan)) {
-    const holes = clearings(plan, w, 0.05).filter((h) => h.y0 < plan.floor + 0.5);
+    const holes = clearings(plan, w, 0.05).filter(
+      (h) => h.y0 < plan.floor + 0.5,
+    );
     const starts = [0.25 + 0.4 * r.next(), w.length - 0.25 - 0.4 * r.next()];
     const mid = w.length * (0.3 + 0.4 * r.next());
     if (ruinAt(ruin, on(w, mid, 0)) > 0.2 || w.length > 6) starts.push(mid);
@@ -95,10 +187,21 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
       for (let y = 0.15; y < reach; y += 0.22 * coarse) {
         s = clamp(s + (r.next() - 0.5) * 0.35, 0.1, w.length - 0.1);
         // Ivy stays at least 0.3 m below the wall's top, and off openings and hidden wall.
-        if (holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) || hidden(plan, w, s, y) || y > topAt(plan, w, s) - 0.3) continue;
+        if (
+          holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) ||
+          hidden(plan, w, s, y) ||
+          y > topAt(plan, w, s) - 0.3
+        ) {
+          continue;
+        }
         for (let k = 0; k < 2; k++) {
           const ss = clamp(s + (r.next() - 0.5) * 0.5, 0.05, w.length - 0.05);
-          const c = on(w, ss, Math.min(y + (r.next() - 0.5) * 0.15, topAt(plan, w, ss) - 0.3), 0.06 + 0.05 * r.next());
+          const c = on(
+            w,
+            ss,
+            Math.min(y + (r.next() - 0.5) * 0.15, topAt(plan, w, ss) - 0.3),
+            0.06 + 0.05 * r.next(),
+          );
           const height = y / reach;
           const held = hold?.(w, c);
           const ch: Channels = {
@@ -108,12 +211,35 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
             glow: 0,
             pivot: c,
             tint: (r.next() - 0.5) * 0.06,
-            grow: clamp(0.62 - 0.5 * height + 0.1 * zone + (r.next() - 0.5) * 0.08, 0.06, 0.7),
+            grow: clamp(
+              0.62 - 0.5 * height + 0.1 * zone + (r.next() - 0.5) * 0.08,
+              0.06,
+              0.7,
+            ),
             // A leaf's rot is 0.06 above the wall piece behind it, so the leaf goes a little before that piece.
-            ...(held && { rot: Math.min(1, held.rot + 0.06), grain: held.grain }),
+            ...(held && {
+              rot: Math.min(1, held.rot + 0.06),
+              grain: held.grain,
+            }),
           };
-          const n = normalize(addScaled(w.n, [r.next() - 0.5, r.next() * 0.4, r.next() - 0.5], 0.5));
-          card(b, c, n, [0, 1, 0], 0.32 + 0.16 * r.next(), (r.next() - 0.5) * 1.4, CUT.cluster + r.next() * 0.98, ch, 0.42 + 0.2 * r.next());
+          const n = normalize(
+            addScaled(
+              w.n,
+              [r.next() - 0.5, r.next() * 0.4, r.next() - 0.5],
+              0.5,
+            ),
+          );
+          card(
+            b,
+            c,
+            n,
+            [0, 1, 0],
+            0.32 + 0.16 * r.next(),
+            (r.next() - 0.5) * 1.4,
+            CUT.cluster + r.next() * 0.98,
+            ch,
+            0.42 + 0.2 * r.next(),
+          );
         }
       }
     }
@@ -126,10 +252,22 @@ export function ivy(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, coa
  * ground never leaves a root in the air. Each grows in below its threshold,
  * the rankest first, so a house at low vitality sits in long, dry grass.
  */
-export function weeds(b: PartBuilder, spots: readonly { x: number; z: number; grow: number; size: number }[], r: Rand): void {
+export function weeds(
+  b: PartBuilder,
+  spots: readonly { x: number; z: number; grow: number; size: number }[],
+  r: Rand,
+): void {
   for (const spot of spots) {
     const pivot: V3 = [spot.x, -0.03, spot.z];
-    const ch: Channels = { loss: 0, droop: 0.2, wither: 0.6, glow: 0, pivot, tint: (r.next() - 0.5) * 0.08, grow: spot.grow };
+    const ch: Channels = {
+      loss: 0,
+      droop: 0.2,
+      wither: 0.6,
+      glow: 0,
+      pivot,
+      tint: (r.next() - 0.5) * 0.08,
+      grow: spot.grow,
+    };
     const blades = 7;
     const turn = r.next() * Math.PI * 2;
     for (let k = 0; k < blades; k++) {
@@ -138,9 +276,15 @@ export function weeds(b: PartBuilder, spots: readonly { x: number; z: number; gr
       const h = spot.size * (0.65 + 0.55 * r.next());
       const lean = 0.25 + 0.45 * r.next();
       const root = addScaled(pivot, out, 0.04);
-      const tip = addScaled(addScaled(root, out, h * lean), [0, 1, 0], h * (1 - lean * 0.4));
+      const tip = addScaled(
+        addScaled(root, out, h * lean),
+        [0, 1, 0],
+        h * (1 - lean * 0.4),
+      );
       const side: V3 = [-out[2], 0, out[0]];
-      const n = normalize(cross(side, [tip[0] - root[0], tip[1] - root[1], tip[2] - root[2]]));
+      const n = normalize(
+        cross(side, [tip[0] - root[0], tip[1] - root[1], tip[2] - root[2]]),
+      );
       const half = 0.035 + 0.025 * r.next();
       const i0 = b.vertex(addScaled(root, side, -half), n, 0.18, ch);
       const i1 = b.vertex(addScaled(root, side, half), n, 0.18, ch);
@@ -151,7 +295,12 @@ export function weeds(b: PartBuilder, spots: readonly { x: number; z: number; gr
 }
 
 /** Weed spots round a building's base and through its yard, rankest at the collapse. */
-export function weedSpots(plan: BuildingPlan, ruin: Ruin, r: Rand, count: number): { x: number; z: number; grow: number; size: number }[] {
+export function weedSpots(
+  plan: BuildingPlan,
+  ruin: Ruin,
+  r: Rand,
+  count: number,
+): { x: number; z: number; grow: number; size: number }[] {
   const out: { x: number; z: number; grow: number; size: number }[] = [];
   const door = plan.openings.find((o) => o.kind === "door");
   const walls = shownWalls(plan);
@@ -162,9 +311,21 @@ export function weedSpots(plan: BuildingPlan, ruin: Ruin, r: Rand, count: number
     const p = on(w, s, 0, out0);
     if (indoors(plan, p[0], p[2])) continue;
     // Keep the doorway and its walk passable a little longer.
-    const onWalk = door !== undefined && Math.abs(p[0] - door.position[0]) < 0.6 && p[2] > plan.depth / 2;
+    const onWalk =
+      door !== undefined &&
+      Math.abs(p[0] - door.position[0]) < 0.6 &&
+      p[2] > plan.depth / 2;
     const z = ruinAt(ruin, p);
-    out.push({ x: p[0], z: p[2], grow: clamp(0.2 + 0.28 * r.next() + 0.15 * z - (onWalk ? 0.15 : 0), 0.06, 0.62), size: 0.45 + 0.5 * r.next() + 0.3 * z });
+    out.push({
+      x: p[0],
+      z: p[2],
+      grow: clamp(
+        0.2 + 0.28 * r.next() + 0.15 * z - (onWalk ? 0.15 : 0),
+        0.06,
+        0.62,
+      ),
+      size: 0.45 + 0.5 * r.next() + 0.3 * z,
+    });
   }
   return out;
 }
@@ -173,7 +334,15 @@ export function weedSpots(plan: BuildingPlan, ruin: Ruin, r: Rand, count: number
  * A rough lump of rubble on the ground: a squashed, jittered icosphere, sunk
  * a little, that grows in below its `grow` threshold.
  */
-export function lump(b: PartBuilder, c: Vec3, radii: Vec3, yaw: number, shade: number, ch: Channels, r: Rand): void {
+export function lump(
+  b: PartBuilder,
+  c: Vec3,
+  radii: Vec3,
+  yaw: number,
+  shade: number,
+  ch: Channels,
+  r: Rand,
+): void {
   const blob = icosphere(0);
   const base = b.vertexCount;
   const cs = Math.cos(yaw);
@@ -184,9 +353,16 @@ export function lump(b: PartBuilder, c: Vec3, radii: Vec3, yaw: number, shade: n
     const x = q[0] * radii[0] * j;
     const z = q[2] * radii[2] * j;
     const y = Math.max(q[1] * radii[1] * j, -radii[1] * 0.35);
-    b.vertex([c[0] + x * cs - z * sn, c[1] + y, c[2] + x * sn + z * cs], [q[0] * cs - q[2] * sn, q[1], q[0] * sn + q[2] * cs], shade + 0.15 * q[1], ch);
+    b.vertex(
+      [c[0] + x * cs - z * sn, c[1] + y, c[2] + x * sn + z * cs],
+      [q[0] * cs - q[2] * sn, q[1], q[0] * sn + q[2] * cs],
+      shade + 0.15 * q[1],
+      ch,
+    );
   });
-  for (const [a, bb, cc] of blob.triangles) b.triangle(base + a, base + bb, base + cc);
+  for (const [a, bb, cc] of blob.triangles) {
+    b.triangle(base + a, base + bb, base + cc);
+  }
 }
 
 /**
@@ -194,7 +370,14 @@ export function lump(b: PartBuilder, c: Vec3, radii: Vec3, yaw: number, shade: n
  * stones and chunks of wall on the ground. The pieces nearest the weak corner
  * appear first.
  */
-export function rubble(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, size: number, count: number): void {
+export function rubble(
+  b: PartBuilder,
+  plan: BuildingPlan,
+  ruin: Ruin,
+  r: Rand,
+  size: number,
+  count: number,
+): void {
   const walls = shownWalls(plan);
   for (let i = 0; i < count; i++) {
     // 70% of the rubble lies near the weak corner, inside and out, and the rest along the walls.
@@ -215,7 +398,29 @@ export function rubble(b: PartBuilder, plan: BuildingPlan, ruin: Ruin, r: Rand, 
     const zone = ruinAt(ruin, [x, 0, z]);
     const s = size * (0.55 + 0.7 * r.next()) * (0.8 + 0.4 * zone);
     const c: V3 = [x, s * 0.08, z];
-    const ch: Channels = { loss: 0, droop: 0, wither: 0.55 + 0.3 * r.next(), glow: 0, pivot: [x, 0, z], tint: (r.next() - 0.5) * 0.05, grow: clamp(0.08 + 0.34 * zone * (0.55 + 0.45 * r.next()) + (near ? 0 : 0.06 * r.next()), 0.05, 0.45) };
-    lump(b, c, [s, s * 0.55, s * (0.7 + 0.4 * r.next())], r.next() * Math.PI, 0.4 + 0.2 * r.next(), ch, r);
+    const ch: Channels = {
+      loss: 0,
+      droop: 0,
+      wither: 0.55 + 0.3 * r.next(),
+      glow: 0,
+      pivot: [x, 0, z],
+      tint: (r.next() - 0.5) * 0.05,
+      grow: clamp(
+        0.08 +
+          0.34 * zone * (0.55 + 0.45 * r.next()) +
+          (near ? 0 : 0.06 * r.next()),
+        0.05,
+        0.45,
+      ),
+    };
+    lump(
+      b,
+      c,
+      [s, s * 0.55, s * (0.7 + 0.4 * r.next())],
+      r.next() * Math.PI,
+      0.4 + 0.2 * r.next(),
+      ch,
+      r,
+    );
   }
 }

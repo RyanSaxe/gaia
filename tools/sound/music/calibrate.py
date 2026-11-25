@@ -11,8 +11,8 @@
 
 Usage: python -m music.calibrate pitches   (from tools/sound, after the music's setup. It rewrites pitchcal.json.)
 """
+
 import json
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -22,19 +22,25 @@ import numpy as np
 import pyloudnorm as pyln
 import soundfile as sf
 
-from cache import PATCHES, SFIZZ
-
-from .patches import parse
-from .render import in_ram, patch
+from cache import PATCHES, SFIZZ, run_command
+from music.patches import parse
+from music.render import in_ram, patch
 
 PITCHCAL = Path(__file__).resolve().parent / "pitchcal.json"
+SILENCE_PEAK = 1e-5
+MIN_LOUDNESS_LUFS = -70.0
 LEADS = {  # patch: (lowest, highest, velocity)
-    "ClarinetSus.sfz": (55, 91, 60), "gaia-FluteSusVib.sfz": (60, 93, 66), "OboeSusVib.sfz": (60, 89, 60),
-    "gaia-SViolinVib.sfz": (55, 93, 64), "BassoonSus.sfz": (40, 64, 56),
-    str(PATCHES / "fs-celesta.sfz"): (72, 100, 38), str(PATCHES / "vcsl-harp.sfz"): (60, 89, 44)}
+    "ClarinetSus.sfz": (55, 91, 60),
+    "gaia-FluteSusVib.sfz": (60, 93, 66),
+    "OboeSusVib.sfz": (60, 89, 60),
+    "gaia-SViolinVib.sfz": (55, 93, 64),
+    "BassoonSus.sfz": (40, 64, 56),
+    str(PATCHES / "fs-celesta.sfz"): (72, 100, 38),
+    str(PATCHES / "vcsl-harp.sfz"): (60, 89, 44),
+}
 
 
-def keys(path):
+def keys(path: Path) -> tuple[int, int]:
     lo, hi = 127, 0
     for h, o in parse(path.read_text(encoding="latin-1")):
         if h == "region":
@@ -43,7 +49,7 @@ def keys(path):
     return lo, hi
 
 
-def loudness(name):
+def loudness(name: str) -> tuple[float, list[int]]:
     path = patch(name)
     lo, hi = keys(path)
     notes = [int(lo + (hi - lo) * f) for f in (0.25, 0.5, 0.75)]
@@ -58,14 +64,28 @@ def loudness(name):
             tr.append(mido.Message("note_on", note=n, velocity=100, time=0))
             tr.append(mido.Message("note_off", note=n, velocity=0, time=1536))
         mid.save(f"{d}/ref.mid")
-        subprocess.run([str(SFIZZ), "--sfz", str(in_ram(path)), "--midi", f"{d}/ref.mid", "--wav", f"{d}/ref.wav",
-                        "-q", "10", "-p", "64"], capture_output=True, check=True)
+        run_command(
+            SFIZZ,
+            [
+                "--sfz",
+                str(in_ram(path)),
+                "--midi",
+                f"{d}/ref.mid",
+                "--wav",
+                f"{d}/ref.wav",
+                "-q",
+                "10",
+                "-p",
+                "64",
+            ],
+            capture_output=True,
+        )
         x, sr = sf.read(f"{d}/ref.wav", always_2d=True)
     return round(float(pyln.Meter(sr).integrated_loudness(x[: int(4.8 * sr)])), 2), notes
 
 
-def pitches():
-    res = {}
+def pitches() -> None:
+    res: dict[str, dict[str, float]] = {}
     meter = pyln.Meter(48000)
     for name, (lo, hi, vel) in LEADS.items():
         ps = list(range(lo, hi + 1))
@@ -81,22 +101,42 @@ def pitches():
                 tr.append(mido.Message("note_off", note=p, velocity=0, time=1152))
                 tr.append(mido.Message("control_change", control=11, value=100, time=1728))  # 1.8 s of rest
             mid.save(f"{d}/cal.mid")
-            subprocess.run([str(SFIZZ), "--sfz", str(in_ram(patch(name))), "--midi", f"{d}/cal.mid", "--wav",
-                            f"{d}/cal.wav", "-s", "48000", "-q", "10", "-p", "64"], capture_output=True, check=True)
+            run_command(
+                SFIZZ,
+                [
+                    "--sfz",
+                    str(in_ram(patch(name))),
+                    "--midi",
+                    f"{d}/cal.mid",
+                    "--wav",
+                    f"{d}/cal.wav",
+                    "-s",
+                    "48000",
+                    "-q",
+                    "10",
+                    "-p",
+                    "64",
+                ],
+                capture_output=True,
+            )
             x, sr = sf.read(f"{d}/cal.wav", always_2d=True)
-        loud = {}
+        loud: dict[int, float | None] = {}
         for i, p in enumerate(ps):
             t0 = int(i * 3.0 * sr)
-            seg = x[t0:t0 + int(0.8 * sr)]
-            loud[p] = float(meter.integrated_loudness(seg)) if np.abs(seg).max() > 1e-5 else None
-        med = float(np.median([v for v in loud.values() if v is not None and v > -70]))
+            seg = x[t0 : t0 + int(0.8 * sr)]
+            loud[p] = float(meter.integrated_loudness(seg)) if float(np.abs(seg).max()) > SILENCE_PEAK else None
+        med = float(np.median([v for v in loud.values() if v is not None and v > MIN_LOUDNESS_LUFS]))
         key = Path(name).name
-        res[key] = {str(p): round(float(np.clip(med - v, -12, 12)), 1) for p, v in loud.items() if v is not None and v > -70}
+        res[key] = {
+            str(p): round(float(np.clip(med - v, -12, 12)), 1)
+            for p, v in loud.items()
+            if v is not None and v > MIN_LOUDNESS_LUFS
+        }
         print(f"{key:24s} median {med:6.1f}  " + " ".join(f"{p}:{res[key].get(str(p), 0):+.0f}" for p in ps))
     PITCHCAL.write_text(json.dumps(res, indent=1))
 
 
 if __name__ == "__main__":
     if sys.argv[1:] != ["pitches"]:
-        raise SystemExit(__doc__)
+        sys.exit(__doc__)
     pitches()

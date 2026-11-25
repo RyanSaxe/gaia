@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type Engine, superviseEngine } from "./engine.ts";
 
 // A stand-in engine that echoes each line and exits with code 3 on "quit".
-const ECHO = "require('readline').createInterface({ input: process.stdin }).on('line', (l) => (l === 'quit' ? process.exit(3) : console.log(l)))";
+const ECHO =
+  "require('readline').createInterface({ input: process.stdin }).on('line', (l) => (l === 'quit' ? process.exit(3) : console.log(l)))";
 
 /** Returns a promise and the function that resolves it. */
 function signal(): { promise: Promise<void>; resolve: () => void } {
@@ -35,6 +36,11 @@ describe("the engine supervisor", () => {
     await steps.echoed.promise;
     engine.send("quit");
     await steps.second.promise;
-    expect(events).toEqual(["up", "line: hello", "down: exited with code 3", "up"]);
+    expect(events).toEqual([
+      "up",
+      "line: hello",
+      "down: exited with code 3",
+      "up",
+    ]);
   });
 });

@@ -12,10 +12,15 @@ import showcaseGraph from "./fixtures/showcase-graph.json";
 /** Which bundled codebase: the showcase with its `v1/` as it is, or fixed. */
 export type Snapshot = "showcase" | "showcase-fixed";
 
-const GRAPHS: Readonly<Record<Snapshot, unknown>> = { showcase: showcaseGraph, "showcase-fixed": showcaseFixedGraph };
+const GRAPHS: Readonly<Record<Snapshot, unknown>> = {
+  showcase: showcaseGraph,
+  "showcase-fixed": showcaseFixedGraph,
+};
 
 /** A snapshot's graph. */
-export const snapshotGraphOf = (of: Snapshot): CodeGraph => GRAPHS[of] as CodeGraph;
+export const snapshotGraphOf = (of: Snapshot): CodeGraph =>
+  GRAPHS[of] as CodeGraph;
 
 /** A snapshot's code facts, read from its graph. */
-export const snapshotFacts = (of: Snapshot): CodeFacts => factsOf(snapshotGraphOf(of));
+export const snapshotFacts = (of: Snapshot): CodeFacts =>
+  factsOf(snapshotGraphOf(of));

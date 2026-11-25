@@ -22,7 +22,16 @@ export const HUSH = {
 } as const;
 
 /** The recordings that play continuously, with levels that follow the person's position. */
-export const BEDS = ["wind", "gusts", "leaves", "stream", "mill", "birds", "evening", "crickets"] as const;
+export const BEDS = [
+  "wind",
+  "gusts",
+  "leaves",
+  "stream",
+  "mill",
+  "birds",
+  "evening",
+  "crickets",
+] as const;
 export type Bed = (typeof BEDS)[number];
 
 /** One bed's gain relative to its Hush loudness (1 is that loudness, 0 silent), its pan from -1 left to 1 right, and its low-pass cutoff in Hz. */
@@ -47,9 +56,18 @@ const db = (v: number): number => 10 ** (v / 20);
  * distance from `near` meters, capped at its value at `closest`. It pans
  * toward its side, never fully into one ear, and is duller behind.
  */
-function placed(d: number, bearing: number, near: number, closest: number): Layer {
+function placed(
+  d: number,
+  bearing: number,
+  near: number,
+  closest: number,
+): Layer {
   const r = (bearing * Math.PI) / 180;
-  return { gain: near / Math.max(d, closest), pan: Math.sin(r) * 0.6, lowpass: Math.cos(r) < 0 ? 5500 + 6500 * (1 + Math.cos(r)) : 12000 };
+  return {
+    gain: near / Math.max(d, closest),
+    pan: Math.sin(r) * 0.6,
+    lowpass: Math.cos(r) < 0 ? 5500 + 6500 * (1 + Math.cos(r)) : 12000,
+  };
 }
 
 /**
@@ -65,7 +83,9 @@ const CEILING = 2;
 /** Returns the mix the person hears where they are, with each gain capped at `CEILING`. */
 export function hear(e: Earshot): Mix {
   const mix = heard(e);
-  return Object.fromEntries(BEDS.map((b) => [b, { ...mix[b], gain: Math.min(CEILING, mix[b].gain) }])) as Mix;
+  return Object.fromEntries(
+    BEDS.map((b) => [b, { ...mix[b], gain: Math.min(CEILING, mix[b].gain) }]),
+  ) as Mix;
 }
 
 function heard(e: Earshot): Mix {
@@ -77,34 +97,61 @@ function heard(e: Earshot): Mix {
   // The rush of air, heard only while travel moves the person faster than walking.
   const rush = e.travelling ? smooth(5, 11, e.speed) : 0;
   // Wind follows the gust at the ear, a few decibels either way, and rises a little with height and while travelling.
-  const gustDb = Math.min(3, Math.max(-4, 20 * Math.log10(Math.max(e.gust, 0.05) / 0.35) * 0.45));
+  const gustDb = Math.min(
+    3,
+    Math.max(-4, 20 * Math.log10(Math.max(e.gust, 0.05) / 0.35) * 0.45),
+  );
   const windDb = gustDb + 4 * rush - 3 * e.canopy;
   const mid = { pan: 0, lowpass: OPEN };
   const silent = { gain: 0, pan: 0, lowpass: OPEN };
-  const stream = e.stream === null ? silent : placed(e.stream.d, e.stream.bearing, 6, 3);
-  const mill = e.mill === null ? silent : placed(e.mill.d, e.mill.bearing, 8, 4);
+  const stream =
+    e.stream === null ? silent : placed(e.stream.d, e.stream.bearing, 6, 3);
+  const mill =
+    e.mill === null ? silent : placed(e.mill.d, e.mill.bearing, 8, 4);
   return {
     // Over low-vitality ground the wind sounds dry and loses the grass's high end.
     wind: { ...mid, gain: db(windDb), lowpass: 7000 + 9000 * thriving },
     gusts: { ...mid, gain: db(windDb) * thriving * (1 - e.canopy * 0.5) },
-    leaves: { ...mid, gain: db(gustDb) * smooth(0.1, 0.6, e.canopy) * thriving },
+    leaves: {
+      ...mid,
+      gain: db(gustDb) * smooth(0.1, 0.6, e.canopy) * thriving,
+    },
     // A wider stream is a little louder, by about 2 dB for each doubling of its width past four meters.
-    stream: e.stream === null ? silent : { ...stream, gain: stream.gain * db(Math.min(4, Math.max(-6, 6.6 * Math.log10(e.stream.width / 4)))) },
-    mill: e.mill === null ? silent : { ...mill, gain: mill.gain * e.mill.turning },
-    birds: { ...mid, gain: day * thriving * (0.6 + 0.4 * e.canopy), lowpass: 9000 },
+    stream:
+      e.stream === null
+        ? silent
+        : {
+            ...stream,
+            gain:
+              stream.gain *
+              db(
+                Math.min(4, Math.max(-6, 6.6 * Math.log10(e.stream.width / 4))),
+              ),
+          },
+    mill:
+      e.mill === null ? silent : { ...mill, gain: mill.gain * e.mill.turning },
+    birds: {
+      ...mid,
+      gain: day * thriving * (0.6 + 0.4 * e.canopy),
+      lowpass: 9000,
+    },
     evening: { ...mid, gain: dusk * thriving, lowpass: 9000 },
     crickets: { ...mid, gain: dark * (0.4 + 0.6 * thriving) },
   };
 }
 
 /** Footfalls per second at a speed in m/s: none when standing, travelling or in deep water, and quicker as they hurry. */
-export function cadence(e: Pick<Earshot, "speed" | "travelling" | "underfoot" | "depth">): number {
+export function cadence(
+  e: Pick<Earshot, "speed" | "travelling" | "underfoot" | "depth">,
+): number {
   if (e.speed < 0.4 || e.travelling || e.depth > 0.6) return 0;
   return Math.min(3.6, 1.6 + 0.3 * e.speed);
 }
 
 /** The footfall surface: a bridge's boards, dry straw where `failing` is above 0.5, or grass. */
-export function footing(e: Pick<Earshot, "underfoot" | "decline">): "wood" | "dry" | "grass" {
+export function footing(
+  e: Pick<Earshot, "underfoot" | "decline">,
+): "wood" | "dry" | "grass" {
   if (e.underfoot === "deck") return "wood";
   return failing(e.decline) > 0.5 ? "dry" : "grass";
 }

@@ -109,8 +109,23 @@ void main() {
 `;
 
 /** Appends one box's faces to the arrays. `face` marks the painted front, which gets atlas coordinates. */
-function addBox(out: { pos: number[]; nrm: number[]; face: number[]; uv: number[]; idx: number[] }, c: readonly number[], half: readonly number[], painted: boolean): void {
-  const axes: readonly (readonly [number, number, number])[] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+function addBox(
+  out: {
+    pos: number[];
+    nrm: number[];
+    face: number[];
+    uv: number[];
+    idx: number[];
+  },
+  c: readonly number[],
+  half: readonly number[],
+  painted: boolean,
+): void {
+  const axes: readonly (readonly [number, number, number])[] = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+  ];
   for (let i = 0; i < 3; i++) {
     for (const sign of [-1, 1]) {
       const n = (axes[i] as readonly number[]).map((x) => x * sign);
@@ -120,8 +135,20 @@ function addBox(out: { pos: number[]; nrm: number[]; face: number[]; uv: number[
       const h2 = half[(i + 2) % 3] as number;
       const base = out.pos.length / 3;
       const front = painted && i === 2 && sign === 1;
-      for (const [u, v] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
-        for (let k = 0; k < 3; k++) out.pos.push((c[k] as number) + (n[k] as number) * (half[i] as number) + (t1[k] as number) * u * h1 + (t2[k] as number) * v * h2);
+      for (const [u, v] of [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ] as const) {
+        for (let k = 0; k < 3; k++) {
+          out.pos.push(
+            (c[k] as number) +
+              (n[k] as number) * (half[i] as number) +
+              (t1[k] as number) * u * h1 +
+              (t2[k] as number) * v * h2,
+          );
+        }
         out.nrm.push(...n);
         out.face.push(front ? 1 : 0);
         // On the front (+z) face, t1 is x and t2 is y.
@@ -129,19 +156,40 @@ function addBox(out: { pos: number[]; nrm: number[]; face: number[]; uv: number[
       }
       const [ax, ay, az] = t1;
       const [bx, by, bz] = t2;
-      const facing = (ay * bz - az * by) * (n[0] as number) + (az * bx - ax * bz) * (n[1] as number) + (ax * by - ay * bx) * (n[2] as number) > 0;
-      if (facing) out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      else out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      const facing =
+        (ay * bz - az * by) * (n[0] as number) +
+          (az * bx - ax * bz) * (n[1] as number) +
+          (ax * by - ay * bx) * (n[2] as number) >
+        0;
+      if (facing) {
+        out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      } else out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
     }
   }
 }
 
 function signGeometry(): THREE.BufferGeometry {
-  const out = { pos: [] as number[], nrm: [] as number[], face: [] as number[], uv: [] as number[], idx: [] as number[] };
+  const out = {
+    pos: [] as number[],
+    nrm: [] as number[],
+    face: [] as number[],
+    uv: [] as number[],
+    idx: [] as number[],
+  };
   const b = BOARD;
   // The post, sunk a little, then the cross-arm the board hangs from, then the board.
-  addBox(out, [0, b.top / 2 - 0.1, -0.06], [b.post / 2, b.top / 2 + 0.1, b.post / 2], false);
-  addBox(out, [0, b.bottom + b.h + 0.12, -0.06], [b.w / 2 + 0.08, 0.04, 0.05], false);
+  addBox(
+    out,
+    [0, b.top / 2 - 0.1, -0.06],
+    [b.post / 2, b.top / 2 + 0.1, b.post / 2],
+    false,
+  );
+  addBox(
+    out,
+    [0, b.bottom + b.h + 0.12, -0.06],
+    [b.w / 2 + 0.08, 0.04, 0.05],
+    false,
+  );
   addBox(out, [0, b.bottom + b.h / 2, 0], [b.w / 2, b.h / 2, b.d / 2], true);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(out.pos, 3));
@@ -154,12 +202,22 @@ function signGeometry(): THREE.BufferGeometry {
 
 const SERIF = `Georgia, "Iowan Old Style", "Times New Roman", serif`;
 /** A name's board in atlas slot pixels. A long name breaks onto two lines, and the board widens up to 1.45 times before the letters shrink further. */
-const NAME_BOARD: Board = { width: SLOT.w - 56, height: SLOT.h, size: 92, least: 50, twoLines: true, widen: 1.45 };
+const NAME_BOARD: Board = {
+  width: SLOT.w - 56,
+  height: SLOT.h,
+  size: 92,
+  least: 50,
+  twoLines: true,
+  widen: 1.45,
+};
 /** A note sits under its name, at the bottom of the board. */
 const NOTE = { share: 0.7, at: 0.84, size: 30 };
 
 /** Paints each name and note into its atlas slot, fitted to its board (`lettering.ts`). Returns how much each board widened. */
-function paintNames(canvas: HTMLCanvasElement, signs: readonly Sign[]): number[] {
+function paintNames(
+  canvas: HTMLCanvasElement,
+  signs: readonly Sign[],
+): number[] {
   const ctx = canvas.getContext("2d");
   if (ctx === null) return signs.map(() => 1);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -168,25 +226,44 @@ function paintNames(canvas: HTMLCanvasElement, signs: readonly Sign[]): number[]
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const measure = (style: string) => (text: string, size: number): number => {
-    ctx.font = `${style} ${size}px ${SERIF}`;
-    return ctx.measureText(text).width;
-  };
+  const measure =
+    (style: string) =>
+    (text: string, size: number): number => {
+      ctx.font = `${style} ${size}px ${SERIF}`;
+      return ctx.measureText(text).width;
+    };
   return signs.map((sign, i) => {
     const x = (i % SLOT.cols) * SLOT.w + SLOT.w / 2;
     const y = Math.floor(i / SLOT.cols) * SLOT.h;
     const noted = sign.note !== "";
     const area = noted ? SLOT.h * NOTE.share : SLOT.h;
-    const name = letter(sign.name, { ...NAME_BOARD, height: area }, measure("italic 600"));
+    const name = letter(
+      sign.name,
+      { ...NAME_BOARD, height: area },
+      measure("italic 600"),
+    );
     // A widened board stretches its slot: letters are painted narrower by as much, so they keep their shape.
     ctx.setTransform(1 / name.widen, 0, 0, 1, x, y);
     ctx.font = `italic 600 ${name.size}px ${SERIF}`;
     const middle = noted ? area * 0.56 : area * 0.5;
     const step = name.size * 1.08;
-    name.lines.forEach((line, k) => ctx.fillText(line, 0, middle + (k - (name.lines.length - 1) / 2) * step));
+    name.lines.forEach((line, k) =>
+      ctx.fillText(line, 0, middle + (k - (name.lines.length - 1) / 2) * step),
+    );
     if (noted) {
       const spaced = sign.note.toUpperCase().split("").join(" ");
-      const note = letter(spaced, { width: NAME_BOARD.width * name.widen, height: SLOT.h * (1 - NOTE.share), size: NOTE.size, least: NOTE.size, twoLines: false, widen: 1 }, measure("600"));
+      const note = letter(
+        spaced,
+        {
+          width: NAME_BOARD.width * name.widen,
+          height: SLOT.h * (1 - NOTE.share),
+          size: NOTE.size,
+          least: NOTE.size,
+          twoLines: false,
+          widen: 1,
+        },
+        measure("600"),
+      );
       ctx.font = `600 ${note.size}px ${SERIF}`;
       ctx.fillText(spaced, 0, SLOT.h * NOTE.at);
     }
@@ -195,7 +272,10 @@ function paintNames(canvas: HTMLCanvasElement, signs: readonly Sign[]): number[]
   });
 }
 
-export function createSigns(light: SceneLight, capacity = SLOT.cols * SLOT.rows): Signs {
+export function createSigns(
+  light: SceneLight,
+  capacity = SLOT.cols * SLOT.rows,
+): Signs {
   const canvas = document.createElement("canvas");
   canvas.width = SLOT.w * SLOT.cols;
   canvas.height = SLOT.h * SLOT.rows;
@@ -207,9 +287,16 @@ export function createSigns(light: SceneLight, capacity = SLOT.cols * SLOT.rows)
   names.generateMipmaps = true;
   names.minFilter = THREE.LinearMipmapLinearFilter;
   const geometry = signGeometry();
-  const life = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
+  const life = new THREE.InstancedBufferAttribute(
+    new Float32Array(capacity * 4),
+    4,
+  );
   geometry.setAttribute("aSign", life);
-  const material = new THREE.ShaderMaterial({ vertexShader: SIGN_VERT, fragmentShader: SIGN_FRAG, uniforms: { ...light, uNames: { value: names } } });
+  const material = new THREE.ShaderMaterial({
+    vertexShader: SIGN_VERT,
+    fragmentShader: SIGN_FRAG,
+    uniforms: { ...light, uNames: { value: names } },
+  });
   const mesh = new THREE.InstancedMesh(geometry, material, capacity);
   mesh.count = 0;
   mesh.frustumCulled = false;
@@ -228,7 +315,13 @@ export function createSigns(light: SceneLight, capacity = SLOT.cols * SLOT.rows)
         m.compose(new THREE.Vector3(s.x, s.y, s.z), q, unit);
         mesh.setMatrixAt(i, m);
         // Each sign leans its own way: mostly back or to one side, never into the reader.
-        life.setXYZW(i, shownVitality(s.vitality), ((i * 2.399) % (Math.PI * 2)) * 0.5 + 0.2, i, widths[i] ?? 1);
+        life.setXYZW(
+          i,
+          shownVitality(s.vitality),
+          ((i * 2.399) % (Math.PI * 2)) * 0.5 + 0.2,
+          i,
+          widths[i] ?? 1,
+        );
       });
       mesh.count = shown.length;
       mesh.instanceMatrix.needsUpdate = true;

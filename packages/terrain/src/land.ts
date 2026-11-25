@@ -17,7 +17,12 @@ export interface LandSite {
  * (`amount`, `wavelength`) bends a region's whole side, and the fine warp
  * (`fine`, `fineWavelength`) roughens a small cell's edge.
  */
-export const LAND_WARP = { amount: 34, wavelength: 150, fine: 5, fineWavelength: 34 } as const;
+export const LAND_WARP = {
+  amount: 34,
+  wavelength: 150,
+  fine: 5,
+  fineWavelength: 34,
+} as const;
 
 const WARP_SEEDS = [5101, 5203, 5309, 5407] as const;
 
@@ -28,8 +33,12 @@ export function warpPoint(x: number, z: number): [number, number] {
   const fu = x / LAND_WARP.fineWavelength;
   const fv = z / LAND_WARP.fineWavelength;
   return [
-    x + LAND_WARP.amount * fbm(WARP_SEEDS[0], u, v, 2, 0.4) + LAND_WARP.fine * fbm(WARP_SEEDS[2], fu, fv, 2, 0.5),
-    z + LAND_WARP.amount * fbm(WARP_SEEDS[1], u, v, 2, 0.4) + LAND_WARP.fine * fbm(WARP_SEEDS[3], fu, fv, 2, 0.5),
+    x +
+      LAND_WARP.amount * fbm(WARP_SEEDS[0], u, v, 2, 0.4) +
+      LAND_WARP.fine * fbm(WARP_SEEDS[2], fu, fv, 2, 0.5),
+    z +
+      LAND_WARP.amount * fbm(WARP_SEEDS[1], u, v, 2, 0.4) +
+      LAND_WARP.fine * fbm(WARP_SEEDS[3], fu, fv, 2, 0.5),
   ];
 }
 
@@ -72,12 +81,24 @@ function gridOf(sites: readonly LandSite[]): Grid {
   const z0 = minZ - MARGIN;
   // With few sites over a large land, cells widen with each site's share of the land. A 16 m cell there would search
   // rings of empty cells hundreds of meters out. Cell size changes only which sites a lookup reads.
-  const cell = Math.max(CELL, Math.sqrt(((maxX - minX + 2 * MARGIN) * (maxZ - minZ + 2 * MARGIN)) / Math.max(1, sites.length)) / 2);
+  const cell = Math.max(
+    CELL,
+    Math.sqrt(
+      ((maxX - minX + 2 * MARGIN) * (maxZ - minZ + 2 * MARGIN)) /
+        Math.max(1, sites.length),
+    ) / 2,
+  );
   const nx = Math.max(1, Math.ceil((maxX + MARGIN - x0) / cell));
   const nz = Math.max(1, Math.ceil((maxZ + MARGIN - z0) / cell));
   // Bucket the sites by lookup cell so each cell reads only nearby sites.
   const bucket: number[][] = Array.from({ length: nx * nz }, () => []);
-  sites.forEach((s, k) => (bucket[Math.floor((s.z - z0) / cell) * nx + Math.floor((s.x - x0) / cell)] as number[]).push(k));
+  sites.forEach((s, k) =>
+    (
+      bucket[
+        Math.floor((s.z - z0) / cell) * nx + Math.floor((s.x - x0) / cell)
+      ] as number[]
+    ).push(k),
+  );
   const starts = new Int32Array(nx * nz + 1);
   const ids: number[] = [];
   const near: number[] = [];
@@ -85,8 +106,16 @@ function gridOf(sites: readonly LandSite[]): Grid {
     for (let i = 0; i < nx; i++) {
       const ax = x0 + i * cell;
       const az = z0 + j * cell;
-      const lo = (s: LandSite): number => Math.hypot(Math.max(ax - s.x, 0, s.x - ax - cell), Math.max(az - s.z, 0, s.z - az - cell)) - (s.reach ?? 0);
-      const hi = (s: LandSite): number => Math.hypot(Math.max(Math.abs(s.x - ax), Math.abs(s.x - ax - cell)), Math.max(Math.abs(s.z - az), Math.abs(s.z - az - cell))) - (s.reach ?? 0);
+      const lo = (s: LandSite): number =>
+        Math.hypot(
+          Math.max(ax - s.x, 0, s.x - ax - cell),
+          Math.max(az - s.z, 0, s.z - az - cell),
+        ) - (s.reach ?? 0);
+      const hi = (s: LandSite): number =>
+        Math.hypot(
+          Math.max(Math.abs(s.x - ax), Math.abs(s.x - ax - cell)),
+          Math.max(Math.abs(s.z - az), Math.abs(s.z - az - cell)),
+        ) - (s.reach ?? 0);
       // Grow a ring of buckets until it holds a site, then read every bucket that could hold a nearer one.
       let bestHi = Infinity;
       let ring = 0;
@@ -95,7 +124,11 @@ function gridOf(sites: readonly LandSite[]): Grid {
         for (let dj = -ring; dj <= ring; dj++) {
           for (let di = -ring; di <= ring; di++) {
             if (Math.max(Math.abs(di), Math.abs(dj)) !== ring) continue;
-            for (const k of bucket[(j + dj) * nx + (i + di)] ?? []) if (i + di >= 0 && i + di < nx) bestHi = Math.min(bestHi, hi(sites[k] as LandSite));
+            for (const k of bucket[(j + dj) * nx + (i + di)] ?? []) {
+              if (i + di >= 0 && i + di < nx) {
+                bestHi = Math.min(bestHi, hi(sites[k] as LandSite));
+              }
+            }
           }
         }
       }
@@ -105,7 +138,9 @@ function gridOf(sites: readonly LandSite[]): Grid {
         if (j + dj < 0 || j + dj >= nz) continue;
         for (let di = -reachOut; di <= reachOut; di++) {
           if (i + di < 0 || i + di >= nx) continue;
-          for (const k of bucket[(j + dj) * nx + (i + di)] as number[]) near.push(k);
+          for (const k of bucket[(j + dj) * nx + (i + di)] as number[]) {
+            near.push(k);
+          }
         }
       }
       for (const k of near) bestHi = Math.min(bestHi, hi(sites[k] as LandSite));
@@ -121,7 +156,11 @@ function gridOf(sites: readonly LandSite[]): Grid {
 }
 
 /** Index of the site with the least distance minus reach from an already warped point (wx, wz). Ties keep the lower index. */
-export function nearestSite(sites: readonly LandSite[], wx: number, wz: number): number {
+export function nearestSite(
+  sites: readonly LandSite[],
+  wx: number,
+  wz: number,
+): number {
   const g = gridOf(sites);
   const i = Math.floor((wx - g.x0) / g.cell);
   const j = Math.floor((wz - g.z0) / g.cell);
@@ -140,12 +179,18 @@ export function nearestSite(sites: readonly LandSite[], wx: number, wz: number):
     return best;
   }
   const c = j * g.nx + i;
-  for (let n = g.starts[c] as number; n < (g.starts[c + 1] as number); n++) visit(g.ids[n] as number);
+  for (let n = g.starts[c] as number; n < (g.starts[c + 1] as number); n++) {
+    visit(g.ids[n] as number);
+  }
   return best;
 }
 
 /** Index of the site whose cell holds (x, z), measured from the warped point. */
-export function siteAt(sites: readonly LandSite[], x: number, z: number): number {
+export function siteAt(
+  sites: readonly LandSite[],
+  x: number,
+  z: number,
+): number {
   const [wx, wz] = warpPoint(x, z);
   return nearestSite(sites, wx, wz);
 }

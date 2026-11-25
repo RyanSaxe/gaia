@@ -6,7 +6,15 @@
 // keeps some 50 MB of a bake's leftovers until it happens to collect, and a
 // phone cannot spare that.
 
-import { type ComposedRows, GROUND_VITALITY, type Ownership, type ReliefReport, type WorldSpec, frameOf, ownershipGrid } from "@gaia/terrain";
+import {
+  type ComposedRows,
+  GROUND_VITALITY,
+  type Ownership,
+  type ReliefReport,
+  type WorldSpec,
+  frameOf,
+  ownershipGrid,
+} from "@gaia/terrain";
 import type { BakeJob, BakeReply } from "./bake-worker.ts";
 import type { LandSource } from "./land-chunks.ts";
 import { type Placed, type PlaceRequest, groundSites } from "./place.ts";
@@ -37,8 +45,13 @@ export interface Baker {
 /** Rows per band: small enough to spread over every worker, large enough that messages stay few. */
 const BAND = 96;
 
-export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2))): Baker {
-  const waiting = new Map<number, { worker: Worker; resolve: (reply: BakeReply) => void }>();
+export function createBaker(
+  threads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2)),
+): Baker {
+  const waiting = new Map<
+    number,
+    { worker: Worker; resolve: (reply: BakeReply) => void }
+  >();
   let nextId = 0;
   const spawn = (): Worker[] =>
     Array.from({ length: threads }, () => {
@@ -54,14 +67,22 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
         for (const [id, job] of waiting) {
           if (job.worker !== w) continue;
           waiting.delete(id);
-          job.resolve({ id, kind: "failed", message: `A bake thread stopped: ${e.message}` });
+          job.resolve({
+            id,
+            kind: "failed",
+            message: `A bake thread stopped: ${e.message}`,
+          });
         }
       };
       return w;
     });
   // The first bake's workers start with the page, so that bake begins at once.
   let started: Worker[] | null = spawn();
-  const ask = (worker: Worker, job: BakeJob, transfer: Transferable[] = []): Promise<BakeReply> =>
+  const ask = (
+    worker: Worker,
+    job: BakeJob,
+    transfer: Transferable[] = [],
+  ): Promise<BakeReply> =>
     new Promise((resolve) => {
       const id = nextId++;
       waiting.set(id, { worker, resolve });
@@ -69,7 +90,11 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
     });
 
   /** Computes the land's ground owners in bands of rows over `on`, every worker but the finishing one when there are others. */
-  async function own(world: WorldSpec, toPlace: PlaceRequest, on: readonly Worker[]): Promise<Ownership> {
+  async function own(
+    world: WorldSpec,
+    toPlace: PlaceRequest,
+    on: readonly Worker[],
+  ): Promise<Ownership> {
     const sites = groundSites(toPlace.code);
     const land = frameOf(world);
     const grid = ownershipGrid((land.n - 1) * land.spacing);
@@ -82,7 +107,17 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
         const k0 = Math.min(grid.n, k * rows);
         const k1 = Math.min(grid.n, k0 + rows);
         if (k1 <= k0) return;
-        const reply = await ask(w, { kind: "own", sites, land: { size: world.size, ...(world.aspect === undefined ? {} : { aspect: world.aspect }) }, grid, k0, k1 });
+        const reply = await ask(w, {
+          kind: "own",
+          sites,
+          land: {
+            size: world.size,
+            ...(world.aspect === undefined ? {} : { aspect: world.aspect }),
+          },
+          grid,
+          k0,
+          k1,
+        });
         if (reply.kind === "failed") throw new Error(reply.message);
         if (reply.kind !== "owned") return;
         owners.set(reply.owners, reply.k0 * grid.n * taps);
@@ -107,7 +142,11 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
       for (const w of workers) if (w !== kept) w.terminate();
     }
   }
-  async function bakeOn(workers: readonly Worker[], world: WorldSpec, toPlace: PlaceRequest): Promise<Baked> {
+  async function bakeOn(
+    workers: readonly Worker[],
+    world: WorldSpec,
+    toPlace: PlaceRequest,
+  ): Promise<Baked> {
     const { n } = frameOf(world);
     const bands: [number, number][] = [];
     for (let z = 0; z < n; z += BAND) bands.push([z, Math.min(n, z + BAND)]);
@@ -126,11 +165,39 @@ export function createBaker(threads = Math.max(1, Math.min(4, (navigator.hardwar
       }),
     );
     const composed = Math.round(performance.now() - t0);
-    const moved = parts.flatMap((p) => [p.raw.buffer, p.region.buffer, p.coverRegions.buffer, p.coverShares.buffer]);
+    const moved = parts.flatMap((p) => [
+      p.raw.buffer,
+      p.region.buffer,
+      p.coverRegions.buffer,
+      p.coverShares.buffer,
+    ]);
     const finisher = workers[0] as Worker;
-    const [reply, ownership] = await Promise.all([ask(finisher, { kind: "finish", world, parts, toPlace }, moved), own(world, toPlace, workers.length > 1 ? workers.slice(1) : [finisher])]);
-    if (reply.kind !== "finished") throw new Error(reply.kind === "failed" ? reply.message : "The bake finished without a terrain.");
-    return { land: reply.land, report: reply.report, wildBase: reply.wildBase, placed: { ...reply.placed, took: { compose: composed, ...reply.placed.took, finished: Math.round(performance.now() - t0) } }, whole: finisher, ownership };
+    const [reply, ownership] = await Promise.all([
+      ask(finisher, { kind: "finish", world, parts, toPlace }, moved),
+      own(world, toPlace, workers.length > 1 ? workers.slice(1) : [finisher]),
+    ]);
+    if (reply.kind !== "finished") {
+      throw new Error(
+        reply.kind === "failed"
+          ? reply.message
+          : "The bake finished without a terrain.",
+      );
+    }
+    return {
+      land: reply.land,
+      report: reply.report,
+      wildBase: reply.wildBase,
+      placed: {
+        ...reply.placed,
+        took: {
+          compose: composed,
+          ...reply.placed.took,
+          finished: Math.round(performance.now() - t0),
+        },
+      },
+      whole: finisher,
+      ownership,
+    };
   }
   return {
     bake(world, toPlace) {

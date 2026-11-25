@@ -1,0 +1,95 @@
+# prek runs these before each commit, and CI runs `prek run --all-files`.
+# Formatters fix files rather than only reporting them.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: end-of-file-fixer
+        exclude: ^engine/tests/fixtures/
+      - id: trailing-whitespace
+        exclude: ^engine/tests/fixtures/
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # CI's checkout stages nothing, so check every file it is given.
+        # Committed music Ogg stems and showcase fixture JSONs reach ~1.7 MB.
+        args: [--enforce-all, --maxkb=2048]
+
+  - repo: https://github.com/rvben/rumdl-pre-commit
+    rev: v0.3.6
+    hooks:
+      - id: rumdl-check
+        args: [--fix]
+        exclude: ^engine/tests/fixtures/
+
+  - repo: local
+    hooks:
+      # BYOR project rules in .byor/rules/project/ (pinned through uvx so CI
+      # enforces repo-owned rules without requiring BYOR on runners).
+      - id: ast-grep
+        name: ast-grep
+        entry: uvx --from ast-grep-cli@0.51.3 ast-grep scan
+        language: system
+        pass_filenames: false
+
+  # Python: tools/sound/ is a uv project with its own pyproject.toml and uv.lock.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.6
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^tools/sound/.*\.py$
+      - id: ruff-format
+        files: ^tools/sound/.*\.py$
+
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty
+        entry: uv run --directory tools/sound --frozen ty check .
+        language: system
+        files: ^tools/sound/(.*\.py|pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+      - id: uv-lock-check
+        name: uv-lock-check
+        entry: uv lock --check --directory tools/sound
+        language: system
+        files: ^tools/sound/(pyproject\.toml|uv\.lock)$
+        pass_filenames: false
+
+  # Web: oxfmt and oxlint run from node_modules at the versions in pnpm-lock.yaml.
+  - repo: local
+    hooks:
+      - id: oxfmt
+        name: oxfmt
+        entry: pnpm exec oxfmt --no-error-on-unmatched-pattern
+        language: system
+        files: \.([cm]?[jt]sx?|css|html|json|ya?ml|toml)$
+        exclude: ^(engine/tests/fixtures/|app/renderer/terrain/fixtures/.*\.json$)
+      - id: oxlint
+        name: oxlint
+        entry: pnpm exec oxlint --type-aware --type-check --deny-warnings
+        language: system
+        files: \.[cm]?[jt]sx?$
+        exclude: ^engine/tests/fixtures/
+
+  # Rust: tools/cargo.ts selects rustup's cargo ahead of any system toolchain.
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo-fmt
+        entry: pnpm exec tsx tools/cargo.ts fmt --all
+        language: system
+        files: \.rs$
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo-clippy
+        entry: pnpm exec tsx tools/cargo.ts clippy --all-targets -- -D warnings
+        language: system
+        files: (\.rs$|(^|/)Cargo\.toml$|^Cargo\.lock$|^clippy\.toml$)
+        pass_filenames: false
+      - id: cargo-lock-check
+        name: cargo-lock-check
+        entry: sh -c 'pnpm exec tsx tools/cargo.ts metadata --locked --format-version 1 >/dev/null'
+        language: system
+        files: ((^|/)Cargo\.toml$|^Cargo\.lock$)
+        pass_filenames: false

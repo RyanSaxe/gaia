@@ -25,7 +25,8 @@ const GUTTER = `<linearGradient id="jb-silk-gutter" gradientUnits="userSpaceOnUs
 
 /** A smooth curve through the points (Catmull-Rom), `n` samples. */
 function curve(points: readonly Point[], n: number): Point[] {
-  const at = (k: number): Point => points[Math.max(0, Math.min(points.length - 1, k))] as Point;
+  const at = (k: number): Point =>
+    points[Math.max(0, Math.min(points.length - 1, k))] as Point;
   const out: Point[] = [];
   for (let i = 0; i < n; i++) {
     const t = (i / (n - 1)) * (points.length - 1);
@@ -33,19 +34,34 @@ function curve(points: readonly Point[], n: number): Point[] {
     const u = t - k;
     const [p0, p1, p2, p3] = [at(k - 1), at(k), at(k + 1), at(k + 2)];
     const c = (a: number, b: number, c2: number, d: number): number =>
-      0.5 * (2 * b + (-a + c2) * u + (2 * a - 5 * b + 4 * c2 - d) * u * u + (-a + 3 * b - 3 * c2 + d) * u * u * u);
+      0.5 *
+      (2 * b +
+        (-a + c2) * u +
+        (2 * a - 5 * b + 4 * c2 - d) * u * u +
+        (-a + 3 * b - 3 * c2 + d) * u * u * u);
     out.push([c(p0[0], p1[0], p2[0], p3[0]), c(p0[1], p1[1], p2[1], p3[1])]);
   }
   return out;
 }
 
 const shadeOf = (silk: readonly number[], k: number, white = 0): string => {
-  const ch = silk.map((v) => Math.round(Math.min(255, v * k + (255 - v * k) * white)));
+  const ch = silk.map((v) =>
+    Math.round(Math.min(255, v * k + (255 - v * k) * white)),
+  );
   return `rgb(${ch.join(",")})`;
 };
 
 /** Returns the ribbon as an SVG in the book's pixels, with its bounding box. */
-export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { readonly left: number; readonly top: number; readonly width: number; readonly height: number; readonly svg: string } {
+export function ribbonSvg(
+  lie: RibbonLie,
+  silk: readonly number[] = BASE,
+): {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+  readonly svg: string;
+} {
   const N = 90;
   const c = curve(lie.points, N);
   const normals = c.map((_, i) => {
@@ -56,13 +72,26 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
     return [-dy / l, dx / l] as Point;
   });
   // It narrows where it twists, and `light` dims there to show its duller back.
-  const turn = (t: number): number => Math.exp(-(((t - lie.twist) / 0.045) ** 2));
+  const turn = (t: number): number =>
+    Math.exp(-(((t - lie.twist) / 0.045) ** 2));
   const half = (t: number): number => (lie.width / 2) * (1 - 0.72 * turn(t));
   // Brightness along its length in broad swells, as of draped silk.
-  const light = (t: number): number => (0.9 + 0.16 * Math.sin(t * 9.5 + 0.6) + 0.07 * Math.sin(t * 23 + 1.3)) * (1 - 0.32 * turn(t));
+  const light = (t: number): number =>
+    (0.9 + 0.16 * Math.sin(t * 9.5 + 0.6) + 0.07 * Math.sin(t * 23 + 1.3)) *
+    (1 - 0.32 * turn(t));
   // The swallowtail notch reaches back 0.75 of the width from the tip.
   const notch = lie.width * 0.75;
-  const len = c.reduce((s, p, i) => (i === 0 ? 0 : s + Math.hypot(p[0] - (c[i - 1] as Point)[0], p[1] - (c[i - 1] as Point)[1])), 0);
+  const len = c.reduce(
+    (s, p, i) =>
+      i === 0
+        ? 0
+        : s +
+          Math.hypot(
+            p[0] - (c[i - 1] as Point)[0],
+            p[1] - (c[i - 1] as Point)[1],
+          ),
+    0,
+  );
   const cutFrom = 1 - notch / len;
   const lanes = LANES.length;
   const side = (i: number, u: number): Point => {
@@ -73,7 +102,11 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
     // The swallowtail is cut by the `jb-silk-cut` clip path below, not here.
     return [p[0] + nn[0] * u * h, p[1] + nn[1] * u * h];
   };
-  const quads: { readonly path: string; readonly fill: string; readonly free: boolean }[] = [];
+  const quads: {
+    readonly path: string;
+    readonly fill: string;
+    readonly free: boolean;
+  }[] = [];
   for (let i = 0; i < N - 1; i++) {
     const t = i / (N - 1);
     for (let l = 0; l < lanes; l++) {
@@ -86,7 +119,11 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
       const k = (LANES[l] as number) * light(t);
       // Lane 2 mixes toward white where `light` exceeds 0.98.
       const white = l === 2 ? Math.max(0, light(t) - 0.98) * 1.6 : 0;
-      quads.push({ path: `M${a[0].toFixed(1)} ${a[1].toFixed(1)}L${b[0].toFixed(1)} ${b[1].toFixed(1)}L${d[0].toFixed(1)} ${d[1].toFixed(1)}L${e[0].toFixed(1)} ${e[1].toFixed(1)}Z`, fill: shadeOf(silk, k, white), free: t >= lie.free });
+      quads.push({
+        path: `M${a[0].toFixed(1)} ${a[1].toFixed(1)}L${b[0].toFixed(1)} ${b[1].toFixed(1)}L${d[0].toFixed(1)} ${d[1].toFixed(1)}L${e[0].toFixed(1)} ${e[1].toFixed(1)}Z`,
+        fill: shadeOf(silk, k, white),
+        free: t >= lie.free,
+      });
     }
   }
   const xs = c.map((p) => p[0]);
@@ -99,9 +136,20 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
   const hang = c[Math.round(lie.free * (N - 1))] as Point;
   // The clip outline: down one edge, in to the notch's point, and back up the other edge.
   const cut = c[Math.round(cutFrom * (N - 1))] as Point;
-  const outline = [...c.map((_, i) => side(i, -1)), cut, ...c.map((_, i) => side(N - 1 - i, 1))];
+  const outline = [
+    ...c.map((_, i) => side(i, -1)),
+    cut,
+    ...c.map((_, i) => side(N - 1 - i, 1)),
+  ];
   const clip = `<clipPath id="jb-silk-cut" clipPathUnits="userSpaceOnUse"><path d="M${outline.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join("L")}Z"/></clipPath>`;
-  const draw = (free: boolean): string => quads.filter((q) => q.free === free).map((q) => `<path d="${q.path}" fill="${q.fill}" stroke="${q.fill}" stroke-width="0.5"/>`).join("");
+  const draw = (free: boolean): string =>
+    quads
+      .filter((q) => q.free === free)
+      .map(
+        (q) =>
+          `<path d="${q.path}" fill="${q.fill}" stroke="${q.fill}" stroke-width="0.5"/>`,
+      )
+      .join("");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${left} ${top} ${width} ${height}" style="overflow:visible">
 <defs>${clip}<filter id="jb-silk-shadow" x="-40%" y="-10%" width="180%" height="120%"><feDropShadow dx="1.4" dy="2.2" stdDeviation="1.8" flood-color="#1c0b04" flood-opacity="0.38"/></filter></defs>
 <g filter="url(#jb-silk-shadow)"><g clip-path="url(#jb-silk-cut)">${draw(false)}${GUTTER}</g><g class="jb-ribbon-free" style="transform-box: view-box; transform-origin: ${hang[0].toFixed(1)}px ${hang[1].toFixed(1)}px"><g clip-path="url(#jb-silk-cut)">${draw(true)}</g></g></g></svg>`;
@@ -113,7 +161,22 @@ export function ribbonSvg(lie: RibbonLie, silk: readonly number[] = BASE): { rea
  * the text, and out of the bottom along the book's lower edge. It is the only shape. Elsewhere in the book it is
  * rotated about the spine (`RIBBON_POSES`), and only its head and tail show.
  */
-export const RIBBON_LIE: RibbonLie = { points: [[7, -346], [7.5, -200], [8.5, 0], [8, 200], [9, 320], [12, 346], [28, 362], [56, 368], [84, 366]], width: 14, twist: 0.9, free: 0.85 };
+export const RIBBON_LIE: RibbonLie = {
+  points: [
+    [7, -346],
+    [7.5, -200],
+    [8.5, 0],
+    [8, 200],
+    [9, 320],
+    [12, 346],
+    [28, 362],
+    [56, 368],
+    [84, 366],
+  ],
+  width: 14,
+  twist: 0.9,
+  free: 0.85,
+};
 
 /**
  * The ribbon's CSS pose about the spine: raised `z` book pixels, rotated `deg` about the spine, then offset `off` from
@@ -141,4 +204,5 @@ export const RIBBON_POSES = {
 } as const satisfies Record<string, RibbonPose>;
 
 /** A pose as a CSS transform, about the spine. */
-export const ribbonTransform = (p: RibbonPose): string => `translateZ(${p.z}px) rotateY(${p.deg.toFixed(2)}deg) translateZ(${p.off}px)`;
+export const ribbonTransform = (p: RibbonPose): string =>
+  `translateZ(${p.z}px) rotateY(${p.deg.toFixed(2)}deg) translateZ(${p.off}px)`;

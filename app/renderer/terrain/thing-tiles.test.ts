@@ -11,13 +11,21 @@ const per = Math.ceil(frame.n / TILE.size);
 const FOCAL = 2000;
 
 /** The tile's center in meters. */
-const middle = (ti: number, tj: number): [number, number] => [worldOf(frame, (ti + 0.5) * TILE.size), worldOf(frame, (tj + 0.5) * TILE.size)];
+const middle = (ti: number, tj: number): [number, number] => [
+  worldOf(frame, (ti + 0.5) * TILE.size),
+  worldOf(frame, (tj + 0.5) * TILE.size),
+];
 
 describe("what is placed on the land, tile by tile", () => {
   it("places each thing's tiles as far as the largest of its kind can be seen, wherever the person walks", async () => {
     const placed: string[][] = [];
     const tiles = createThingTiles(() => FOCAL);
-    tiles.add<string>({ name: "stones", largest: () => 0.5, tile: (ti, tj) => [`${ti},${tj}`], place: (things) => placed.push([...things]) });
+    tiles.add<string>({
+      name: "stones",
+      largest: () => 0.5,
+      tile: (ti, tj) => [`${ti},${tj}`],
+      place: (things) => placed.push([...things]),
+    });
     tiles.open(spec);
     const reach = seenTo(0.5, FOCAL);
     expect(reach).toBeCloseTo((2 * 0.5 * FOCAL) / GONE.end);
@@ -28,7 +36,12 @@ describe("what is placed on the land, tile by tile", () => {
       for (let tj = 0; tj < per; tj++) {
         for (let ti = 0; ti < per; ti++) {
           const [x, z] = middle(ti, tj);
-          if (Math.hypot(x - cx, z - cz) + TILE.size < reach && !held.has(`${ti},${tj}`)) out.push(`${ti},${tj}`);
+          if (
+            Math.hypot(x - cx, z - cz) + TILE.size < reach &&
+            !held.has(`${ti},${tj}`)
+          ) {
+            out.push(`${ti},${tj}`);
+          }
         }
       }
       return out;
@@ -48,7 +61,10 @@ describe("what is placed on the land, tile by tile", () => {
     tiles.add<string>({
       name: "flaky",
       largest: () => 0.1,
-      tile: (ti, tj) => (fails-- > 0 ? Promise.reject(new Error("a worker failed")) : Promise.resolve([`${ti},${tj}`])),
+      tile: (ti, tj) =>
+        fails-- > 0
+          ? Promise.reject(new Error("a worker failed"))
+          : Promise.resolve([`${ti},${tj}`]),
       place: (things) => placed.push([...things]),
     });
     tiles.open(spec);
@@ -72,7 +88,12 @@ describe("what is placed on the land, tile by tile", () => {
     const late = new Promise<void>((r) => (release = r));
     const placed: number[][] = [];
     const tiles = createThingTiles(() => FOCAL);
-    tiles.add<number>({ name: "late", largest: () => 0.1, tile: () => late.then(() => [1]), place: (things) => placed.push([...things]) });
+    tiles.add<number>({
+      name: "late",
+      largest: () => 0.1,
+      tile: () => late.then(() => [1]),
+      place: (things) => placed.push([...things]),
+    });
     tiles.open(spec);
     tiles.follow(0, 0);
     // Another world opens before the first's tiles arrive.

@@ -14,11 +14,25 @@ export const landmark = kind({
     form: slot("Landmark", {
       ask: "the landmark is the feeling a person takes away from it. Choose the landmark whose feel suits the code it represents.",
     }),
-    motion: slot("Motion", { optional: true, ask: "whether it moves in the wind, like a living thing." }),
-    palette: slot("Palette", { ask: "its colors show the mood of the code it represents and how it stands out from its land." }),
+    motion: slot("Motion", {
+      optional: true,
+      ask: "whether it moves in the wind, like a living thing.",
+    }),
+    palette: slot("Palette", {
+      ask: "its colors show the mood of the code it represents and how it stands out from its land.",
+    }),
   },
   facts: {
     // Scale grows with how much code depends on it, and a little with its line count.
-    scale: (e) => Math.min(1.25, Math.max(0.85, 0.78 + Math.log2(e.dependents.length + 1) / 12 + Math.log2(e.lines + 1) / 160)),
+    scale: (e) =>
+      Math.min(
+        1.25,
+        Math.max(
+          0.85,
+          0.78 +
+            Math.log2(e.dependents.length + 1) / 12 +
+            Math.log2(e.lines + 1) / 160,
+        ),
+      ),
   },
 });

@@ -21,19 +21,49 @@ import { SNAPSHOT } from "./snapshot-paths.ts";
 const repo = resolve(import.meta.dirname, "..");
 const root = resolve(process.argv[2] ?? repo);
 const out = resolve(process.argv[3] ?? SNAPSHOT.graph);
-if (process.env.GAIA_DATA_DIR === undefined) throw new Error("Set GAIA_DATA_DIR to the store that holds Jev's answers for this project.");
+if (process.env.GAIA_DATA_DIR === undefined) {
+  throw new Error(
+    "Set GAIA_DATA_DIR to the store that holds Jev's answers for this project.",
+  );
+}
 const env = cargoEnv();
-execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env, stdio: "inherit" });
+execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], {
+  cwd: repo,
+  env,
+  stdio: "inherit",
+});
 
-const request = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "project.graph", params: { root, judged: true } });
-const run = spawnSync(engineBinary(repo, "release"), ["rpc"], { input: `${request}\n`, env, maxBuffer: 1 << 30 });
-const response = JSON.parse(run.stdout.toString()) as { result?: CodeGraph; error?: { message: string } };
-if (response.result === undefined) throw new Error(response.error?.message ?? "project.graph answered nothing");
+const request = JSON.stringify({
+  jsonrpc: "2.0",
+  id: 1,
+  method: "project.graph",
+  params: { root, judged: true },
+});
+const run = spawnSync(engineBinary(repo, "release"), ["rpc"], {
+  input: `${request}\n`,
+  env,
+  maxBuffer: 1 << 30,
+});
+const response = JSON.parse(run.stdout.toString()) as {
+  result?: CodeGraph;
+  error?: { message: string };
+};
+if (response.result === undefined) {
+  throw new Error(response.error?.message ?? "project.graph answered nothing");
+}
 const graph = judgedGraph(response.result);
 const defs = graph.nodes.filter((n) => n.kind === "def");
-const withImportance = defs.filter((n) => typeof n.judged?.value?.importance === "number").length;
-if (withImportance === 0) throw new Error(`No definition has an importance in ${process.env.GAIA_DATA_DIR}: Jev's answers for this project are not there.`);
+const withImportance = defs.filter(
+  (n) => typeof n.judged?.value?.importance === "number",
+).length;
+if (withImportance === 0) {
+  throw new Error(
+    `No definition has an importance in ${process.env.GAIA_DATA_DIR}: Jev's answers for this project are not there.`,
+  );
+}
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify(graph)}\n`);
 const files = graph.nodes.filter((n) => n.kind === "file").length;
-console.log(`${out}: ${files} files, ${defs.length} definitions, ${withImportance} with an importance`);
+console.log(
+  `${out}: ${files} files, ${defs.length} definitions, ${withImportance} with an importance`,
+);

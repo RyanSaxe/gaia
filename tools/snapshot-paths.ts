@@ -7,4 +7,7 @@ import { join } from "node:path";
 
 const DIR = join(homedir(), ".cache", "gaia-snapshot");
 
-export const SNAPSHOT = { graph: join(DIR, "graph.json"), answers: join(DIR, "jev.json") } as const;
+export const SNAPSHOT = {
+  graph: join(DIR, "graph.json"),
+  answers: join(DIR, "jev.json"),
+} as const;

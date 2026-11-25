@@ -93,7 +93,9 @@ export function applyLight(light: SceneLight, l: LightSpec): void {
   light.uMoonColor.value.set(...l.moonColor);
   light.uMoonIntensity.value = l.moonIntensity;
   light.uNightness.value = l.nightness;
-  light.uLanternIntensity.value = LANTERN.intensity * smooth(LANTERN.fadeIn[0], LANTERN.fadeIn[1], l.nightness);
+  light.uLanternIntensity.value =
+    LANTERN.intensity *
+    smooth(LANTERN.fadeIn[0], LANTERN.fadeIn[1], l.nightness);
 }
 
 /**
@@ -117,7 +119,13 @@ export interface Lantern {
    * at `ground`. `walked` is the distance moved since the last frame. The
    * lantern sways with each stride and settles when the person stops.
    */
-  follow(eye: THREE.Vector3, forward: THREE.Vector3, ground: number, walked: number, dt: number): void;
+  follow(
+    eye: THREE.Vector3,
+    forward: THREE.Vector3,
+    ground: number,
+    walked: number,
+    dt: number,
+  ): void;
 }
 
 export function createLantern(light: SceneLight): Lantern {
@@ -133,14 +141,23 @@ export function createLantern(light: SceneLight): Lantern {
       if (flat.lengthSq() < 1e-6) flat.set(0, 0, -1);
       flat.normalize();
       const side = LANTERN.side + Math.sin(phase) * LANTERN.sway * swing;
-      const y = ground + EYE - LANTERN.drop + Math.cos(phase * 2) * LANTERN.bob * swing;
-      light.uLanternPosition.value.set(eye.x + flat.x * LANTERN.ahead - flat.z * side, y, eye.z + flat.z * LANTERN.ahead + flat.x * side);
+      const y =
+        ground + EYE - LANTERN.drop + Math.cos(phase * 2) * LANTERN.bob * swing;
+      light.uLanternPosition.value.set(
+        eye.x + flat.x * LANTERN.ahead - flat.z * side,
+        y,
+        eye.z + flat.z * LANTERN.ahead + flat.x * side,
+      );
     },
   };
 }
 
 export const hexToVec3 = (hex: number): THREE.Vector3 =>
-  new THREE.Vector3(((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255);
+  new THREE.Vector3(
+    ((hex >> 16) & 255) / 255,
+    ((hex >> 8) & 255) / 255,
+    (hex & 255) / 255,
+  );
 
 /**
  * A 1 by 1 comparison depth texture for a shadow sampler that no shadow pass

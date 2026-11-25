@@ -53,7 +53,15 @@ export const CHANNEL_MATH = {
  * it to the shaders and the ground declines by it, so one rule sets how
  * plainly vitality shows.
  */
-export const shownVitality = (v: number): number => Math.min(1, Math.max(0, (v - CHANNEL_MATH.shownRuin) / (CHANNEL_MATH.shownWhole - CHANNEL_MATH.shownRuin)));
+export const shownVitality = (v: number): number =>
+  Math.min(
+    1,
+    Math.max(
+      0,
+      (v - CHANNEL_MATH.shownRuin) /
+        (CHANNEL_MATH.shownWhole - CHANNEL_MATH.shownRuin),
+    ),
+  );
 
 export interface VitalityView {
   /** Positions after loss, the wind when given, and droop. */
@@ -70,7 +78,8 @@ const smoothstep = (e0: number, e1: number, x: number): number => {
 };
 
 /** The integral of smoothstep(0, 1, t) from 0 to t. */
-const smoothRise = (t: number): number => (t <= 0 ? 0 : t >= 1 ? t - 0.5 : t * t * t * (1 - 0.5 * t));
+const smoothRise = (t: number): number =>
+  t <= 0 ? 0 : t >= 1 ? t - 0.5 : t * t * t * (1 - 0.5 * t);
 
 /**
  * smoothstep(e0, e1, v) averaged over the shown vitality from `v + lag` to
@@ -79,27 +88,41 @@ const smoothRise = (t: number): number => (t <= 0 ? 0 : t >= 1 ? t - 0.5 : t * t
  * spreads over the frames the lag spans. It matches the plant shader's
  * `eased`. With no lag it is the step itself.
  */
-export function easedStep(e0: number, e1: number, v: number, lag: number): number {
+export function easedStep(
+  e0: number,
+  e1: number,
+  v: number,
+  lag: number,
+): number {
   if (Math.abs(lag) < 1e-4) return smoothstep(e0, e1, v);
   const w = e1 - e0;
-  return (w * (smoothRise((v - e0) / w) - smoothRise((v + lag - e0) / w))) / -lag;
+  return (
+    (w * (smoothRise((v - e0) / w) - smoothRise((v + lag - e0) / w))) / -lag
+  );
 }
 
 /** clamp(u, 0, 1) averaged as u runs evenly from `was` to `now` (the plant shader's `easedClamp`). */
 export function easedClamp(now: number, was: number): number {
   if (Math.abs(now - was) < 1e-4) return Math.min(1, Math.max(0, now));
-  const rise = (u: number): number => (u <= 0 ? 0 : u >= 1 ? u - 0.5 : 0.5 * u * u);
+  const rise = (u: number): number =>
+    u <= 0 ? 0 : u >= 1 ? u - 0.5 : 0.5 * u * u;
   return (rise(now) - rise(was)) / (now - was);
 }
 
 /** A neutral swatch for tests that only care whether colors move. */
-export const REFERENCE_SWATCH: Swatch = { healthy: [0.3, 0.6, 0.3], decline: [0.6, 0.5, 0.35] };
+export const REFERENCE_SWATCH: Swatch = {
+  healthy: [0.3, 0.6, 0.3],
+  decline: [0.6, 0.5, 0.35],
+};
 
 /**
  * Rotates a color's hue by `turns` in YIQ space, which the shader does the
  * same way. Brightness is unchanged, so tint never alters shade.
  */
-export function hueRotate(rgb: readonly [number, number, number], turns: number): [number, number, number] {
+export function hueRotate(
+  rgb: readonly [number, number, number],
+  turns: number,
+): [number, number, number] {
   const [r, g, b] = rgb;
   const y = 0.299 * r + 0.587 * g + 0.114 * b;
   const i = 0.596 * r - 0.274 * g - 0.322 * b;
@@ -108,24 +131,39 @@ export function hueRotate(rgb: readonly [number, number, number], turns: number)
   const i2 = i * Math.cos(a) - q * Math.sin(a);
   const q2 = i * Math.sin(a) + q * Math.cos(a);
   const c = (x: number): number => Math.min(1, Math.max(0, x));
-  return [c(y + 0.956 * i2 + 0.621 * q2), c(y - 0.272 * i2 - 0.647 * q2), c(y - 1.106 * i2 + 1.703 * q2)];
+  return [
+    c(y + 0.956 * i2 + 0.621 * q2),
+    c(y - 0.272 * i2 - 0.647 * q2),
+    c(y - 1.106 * i2 + 1.703 * q2),
+  ];
 }
 
 /** Turns `v` about the unit `axis` by `angle` radians (Rodrigues), as the shader does. */
-function turn(v: readonly [number, number, number], axis: readonly [number, number, number], angle: number): [number, number, number] {
+function turn(
+  v: readonly [number, number, number],
+  axis: readonly [number, number, number],
+  angle: number,
+): [number, number, number] {
   const c = Math.cos(angle);
   const s = Math.sin(angle);
   const [x, y, z] = v;
   const [ux, uy, uz] = axis;
   const d = (ux * x + uy * y + uz * z) * (1 - c);
-  return [x * c + (uy * z - uz * y) * s + ux * d, y * c + (uz * x - ux * z) * s + uy * d, z * c + (ux * y - uy * x) * s + uz * d];
+  return [
+    x * c + (uy * z - uz * y) * s + ux * d,
+    y * c + (uz * x - ux * z) * s + uy * d,
+    z * c + (ux * y - uy * x) * s + uz * d,
+  ];
 }
 
 /** How deep rot has reached at vitality `v`: a surface with rot `r` is a hole wherever its noise is below `r * rotAt(v)`. */
-export const rotAt = (v: number): number => CHANNEL_MATH.rotMost * Math.min(1, Math.max(0, 1 - v / CHANNEL_MATH.rotStart));
+export const rotAt = (v: number): number =>
+  CHANNEL_MATH.rotMost *
+  Math.min(1, Math.max(0, 1 - v / CHANNEL_MATH.rotStart));
 
 /** How fast a spinning piece turns at vitality `v`, as a share of its full speed. */
-export const spinAt = (v: number): number => smoothstep(CHANNEL_MATH.spinStop, CHANNEL_MATH.spinFull, v);
+export const spinAt = (v: number): number =>
+  smoothstep(CHANNEL_MATH.spinStop, CHANNEL_MATH.spinFull, v);
 
 /** The wind on a copy at one moment, and whether the part flutters, as thin swatches do. */
 export interface InWind {
@@ -143,7 +181,13 @@ export interface InWind {
  * moment ago while a change eases in. Each step is averaged over that lag, and
  * anything linear in vitality uses the midpoint.
  */
-export function applyVitality(part: Part, vitality: number, swatch: Swatch = REFERENCE_SWATCH, wind?: InWind, lag = 0): VitalityView {
+export function applyVitality(
+  part: Part,
+  vitality: number,
+  swatch: Swatch = REFERENCE_SWATCH,
+  wind?: InWind,
+  lag = 0,
+): VitalityView {
   const v = Math.min(1, Math.max(0, vitality));
   const mid = v + 0.5 * lag;
   const { loss, droop, wither, glow, pivot, bough } = part.channels;
@@ -160,9 +204,15 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
     let oy = (part.positions[i * 3 + 1] ?? 0) - py;
     let oz = (part.positions[i * 3 + 2] ?? 0) - pz;
     // A spray's leaves drop in place, cut away per fragment. Every other piece collapses onto its pivot.
-    const threshold = SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0)) ? 0 : (loss[i] ?? 0);
+    const threshold = SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0))
+      ? 0
+      : (loss[i] ?? 0);
     const grows = part.channels.grow?.[i] ?? 0;
-    const keep = (threshold > 0 ? easedStep(threshold, threshold + m.lossBand, v, lag) : 1) * (grows > 0 ? 1 - easedStep(grows, grows + m.lossBand, v, lag) : 1);
+    const keep =
+      (threshold > 0
+        ? easedStep(threshold, threshold + m.lossBand, v, lag)
+        : 1) *
+      (grows > 0 ? 1 - easedStep(grows, grows + m.lossBand, v, lag) : 1);
     ox *= keep;
     oy *= keep;
     oz *= keep;
@@ -175,14 +225,21 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
       const az = fall[i * 4 + 2] ?? 0;
       const most = Math.hypot(ax, ay, az);
       const angle = most * (1 - easedStep(from - m.fallBand, from, v, lag));
-      if (most > 1e-6 && angle !== 0) [ox, oy, oz] = turn([ox, oy, oz], [ax / most, ay / most, az / most], angle);
+      if (most > 1e-6 && angle !== 0) {
+        [ox, oy, oz] = turn(
+          [ox, oy, oz],
+          [ax / most, ay / most, az / most],
+          angle,
+        );
+      }
     }
     collapsed[i * 3] = px + ox;
     collapsed[i * 3 + 1] = py + oy;
     collapsed[i * 3 + 2] = pz + oz;
 
     const w = (wither[i] ?? 0) * (1 - mid);
-    const bright = m.shadeLow + (m.shadeHigh - m.shadeLow) * (part.shade[i] ?? 0.5);
+    const bright =
+      m.shadeLow + (m.shadeHigh - m.shadeLow) * (part.shade[i] ?? 0.5);
     const g = (glow[i] ?? 0) * mid * m.glowStrength;
     // Tint varies only the healthy color, so decline reads the same across a canopy.
     const tinted = hueRotate(swatch.healthy, part.tint[i] ?? 0);
@@ -193,7 +250,10 @@ export function applyVitality(part: Part, vitality: number, swatch: Swatch = REF
       emission[i * 3 + c] = healthy * g;
     }
   }
-  const positions = wind === undefined ? collapsed : swayAt(part, collapsed, wind.state, wind.flutter);
+  const positions =
+    wind === undefined
+      ? collapsed
+      : swayAt(part, collapsed, wind.state, wind.flutter);
   // Droop bends the whole bough down about its joint, keeping each point's distance from it.
   for (let i = 0; i < count; i++) {
     const s = (droop[i] ?? 0) * (1 - mid);

@@ -1,4 +1,11 @@
-import type { DependencyFacts, EntityFacts, FileFacts, RegionFacts, RepositoryFacts, ThingFacts } from "./facts.ts";
+import type {
+  DependencyFacts,
+  EntityFacts,
+  FileFacts,
+  RegionFacts,
+  RepositoryFacts,
+  ThingFacts,
+} from "./facts.ts";
 import type { Role } from "./ports.ts";
 
 export interface Slot<R extends Role = Role> {
@@ -13,12 +20,22 @@ export interface Slot<R extends Role = Role> {
   readonly ask?: string;
 }
 
-export function slot<R extends Role>(role: R, opts: { on?: string; optional?: boolean; ask?: string } = {}): Slot<R> {
-  return { role, optional: opts.optional ?? false, ...(opts.on === undefined ? {} : { on: opts.on }), ...(opts.ask === undefined ? {} : { ask: opts.ask }) };
+export function slot<R extends Role>(
+  role: R,
+  opts: { on?: string; optional?: boolean; ask?: string } = {},
+): Slot<R> {
+  return {
+    role,
+    optional: opts.optional ?? false,
+    ...(opts.on === undefined ? {} : { on: opts.on }),
+    ...(opts.ask === undefined ? {} : { ask: opts.ask }),
+  };
 }
 
 /** What each role consumes and produces, by name, for checks at load time. */
-const ROLE_IO: Readonly<Record<Role, { input: string | null; output: string }>> = {
+const ROLE_IO: Readonly<
+  Record<Role, { input: string | null; output: string }>
+> = {
   Skeleton: { input: null, output: "Skeleton" },
   Surface: { input: "Skeleton", output: "Built" },
   Foliage: { input: "Skeleton", output: "Built" },
@@ -48,7 +65,10 @@ const ROLE_IO: Readonly<Record<Role, { input: string | null; output: string }>> 
 
 /** Anchors come from a Skeleton's tips or a Built's anchors. */
 function feeds(output: string, input: string): boolean {
-  return output === input || (input === "Anchors" && (output === "Built" || output === "Skeleton"));
+  return (
+    output === input ||
+    (input === "Anchors" && (output === "Built" || output === "Skeleton"))
+  );
 }
 
 /**
@@ -57,7 +77,13 @@ function feeds(output: string, input: string): boolean {
  * `link` one dependency between two entities, and `repository` the whole
  * repository.
  */
-export type Subject = "file" | "entity" | "thing" | "region" | "link" | "repository";
+export type Subject =
+  | "file"
+  | "entity"
+  | "thing"
+  | "region"
+  | "link"
+  | "repository";
 
 export interface SubjectFacts {
   file: FileFacts;
@@ -84,7 +110,13 @@ export interface Kind<S extends Subject = Subject> {
 }
 
 /** Any kind, for code that reads slots and stages but never binds facts. */
-export type AnyKind = Kind<"file"> | Kind<"entity"> | Kind<"thing"> | Kind<"region"> | Kind<"link"> | Kind<"repository">;
+export type AnyKind =
+  | Kind<"file">
+  | Kind<"entity">
+  | Kind<"thing">
+  | Kind<"region">
+  | Kind<"link">
+  | Kind<"repository">;
 
 /** The slot groups Jev answers in order: the kind's stages, or every slot at once. */
 export function stagesOf(k: AnyKind): readonly (readonly string[])[] {
@@ -95,21 +127,34 @@ export function kind<S extends Subject>(def: Kind<S>): Kind<S> {
   if (def.stages !== undefined) {
     const staged = def.stages.flat();
     const names = Object.keys(def.slots);
-    if (staged.length !== names.length || !names.every((n) => staged.includes(n))) {
+    if (
+      staged.length !== names.length ||
+      !names.every((n) => staged.includes(n))
+    ) {
       throw new Error(`${def.id}'s stages must list every slot exactly once.`);
     }
   }
   for (const [name, s] of Object.entries(def.slots)) {
     const io = ROLE_IO[s.role];
     if (s.on === undefined) {
-      if (io.input !== null) throw new Error(`${def.id}.${name} is a ${s.role} and needs an "on" slot.`);
+      if (io.input !== null) {
+        throw new Error(
+          `${def.id}.${name} is a ${s.role} and needs an "on" slot.`,
+        );
+      }
       continue;
     }
     const source = def.slots[s.on];
-    if (source === undefined) throw new Error(`${def.id}.${name} is on "${s.on}", which does not exist.`);
+    if (source === undefined) {
+      throw new Error(
+        `${def.id}.${name} is on "${s.on}", which does not exist.`,
+      );
+    }
     const out = ROLE_IO[source.role].output;
     if (io.input === null || !feeds(out, io.input)) {
-      throw new Error(`${def.id}.${name} (${s.role}) cannot take ${out} from "${s.on}".`);
+      throw new Error(
+        `${def.id}.${name} (${s.role}) cannot take ${out} from "${s.on}".`,
+      );
     }
   }
   return Object.freeze(def);

@@ -9,24 +9,91 @@
 
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { type ComposedRows, type LandOutline, type OwnedSite, type ReliefReport, type Terrain, type WorldSpec, composeRows, finishTerrain, landformsOf, ownershipRows, planOf, wildBase } from "@gaia/terrain";
-import { type Chunk, type LandSource, chunkBuffers, cutChunk, bakeChunk } from "./land-chunks.ts";
+import {
+  type ComposedRows,
+  type LandOutline,
+  type OwnedSite,
+  type ReliefReport,
+  type Terrain,
+  type WorldSpec,
+  composeRows,
+  finishTerrain,
+  landformsOf,
+  ownershipRows,
+  planOf,
+  wildBase,
+} from "@gaia/terrain";
+import {
+  type Chunk,
+  type LandSource,
+  chunkBuffers,
+  cutChunk,
+  bakeChunk,
+} from "./land-chunks.ts";
 import { type Placed, type PlaceRequest, placeWorld } from "./place.ts";
 
 export type BakeJob =
-  | { readonly kind: "compose"; readonly world: WorldSpec; readonly z0: number; readonly z1: number }
-  | { readonly kind: "finish"; readonly world: WorldSpec; readonly parts: readonly ComposedRows[]; readonly toPlace: PlaceRequest }
-  | { readonly kind: "own"; readonly sites: readonly OwnedSite[]; readonly land: LandOutline; readonly grid: { readonly n: number; readonly origin: number; readonly spacing: number }; readonly k0: number; readonly k1: number }
+  | {
+      readonly kind: "compose";
+      readonly world: WorldSpec;
+      readonly z0: number;
+      readonly z1: number;
+    }
+  | {
+      readonly kind: "finish";
+      readonly world: WorldSpec;
+      readonly parts: readonly ComposedRows[];
+      readonly toPlace: PlaceRequest;
+    }
+  | {
+      readonly kind: "own";
+      readonly sites: readonly OwnedSite[];
+      readonly land: LandOutline;
+      readonly grid: {
+        readonly n: number;
+        readonly origin: number;
+        readonly spacing: number;
+      };
+      readonly k0: number;
+      readonly k1: number;
+    }
   /** Keeps a world's land source, by the page's number for that world, for later chunk requests. */
-  | { readonly kind: "land"; readonly world: number; readonly source: LandSource }
-  | { readonly kind: "chunk"; readonly world: number; readonly k: number; readonly cx: number; readonly cz: number };
+  | {
+      readonly kind: "land";
+      readonly world: number;
+      readonly source: LandSource;
+    }
+  | {
+      readonly kind: "chunk";
+      readonly world: number;
+      readonly k: number;
+      readonly cx: number;
+      readonly cz: number;
+    };
 
 export type BakeRequest = BakeJob & { readonly id: number };
 
 export type BakeReply =
-  | { readonly id: number; readonly kind: "composed"; readonly rows: ComposedRows }
-  | { readonly id: number; readonly kind: "finished"; readonly land: LandSource; readonly report: ReliefReport; readonly wildBase: number; readonly placed: Placed }
-  | { readonly id: number; readonly kind: "owned"; readonly k0: number; readonly owners: Uint16Array; readonly shares: Uint8Array }
+  | {
+      readonly id: number;
+      readonly kind: "composed";
+      readonly rows: ComposedRows;
+    }
+  | {
+      readonly id: number;
+      readonly kind: "finished";
+      readonly land: LandSource;
+      readonly report: ReliefReport;
+      readonly wildBase: number;
+      readonly placed: Placed;
+    }
+  | {
+      readonly id: number;
+      readonly kind: "owned";
+      readonly k0: number;
+      readonly owners: Uint16Array;
+      readonly shares: Uint8Array;
+    }
   | { readonly id: number; readonly kind: "kept" }
   | { readonly id: number; readonly kind: "chunk"; readonly chunk: Chunk }
   | { readonly id: number; readonly kind: "failed"; readonly message: string };
@@ -46,7 +113,8 @@ const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
  * copy equal to the last is replaced by the last, so each thread builds that
  * cache once per world rather than once per band.
  */
-let lastWorld: { readonly json: string; readonly world: WorldSpec } | null = null;
+let lastWorld: { readonly json: string; readonly world: WorldSpec } | null =
+  null;
 const keptWorld = (world: WorldSpec): WorldSpec => {
   const json = JSON.stringify(world);
   if (lastWorld?.json === json) return lastWorld.world;
@@ -54,7 +122,8 @@ const keptWorld = (world: WorldSpec): WorldSpec => {
   return world;
 };
 /** The land source of the world the page shows, with its number. Only the newest is kept. */
-let source: { readonly world: number; readonly source: LandSource } | null = null;
+let source: { readonly world: number; readonly source: LandSource } | null =
+  null;
 /**
  * The whole leveled land this thread last finished. The page keeps the
  * finishing thread a while after a bake and cuts the first chunks of the
@@ -72,8 +141,13 @@ scope.onmessage = (e) => {
       source = { world: req.world, source: req.source };
       reply = { id: req.id, kind: "kept" };
     } else if (req.kind === "chunk") {
-      if (source === null || source.world !== req.world) throw new Error(`No land source for world ${req.world}.`);
-      const chunk = whole === null ? bakeChunk(source.source, req.k, req.cx, req.cz) : cutChunk(whole, source.source, req.k, req.cx, req.cz);
+      if (source === null || source.world !== req.world) {
+        throw new Error(`No land source for world ${req.world}.`);
+      }
+      const chunk =
+        whole === null
+          ? bakeChunk(source.source, req.k, req.cx, req.cz)
+          : cutChunk(whole, source.source, req.k, req.cx, req.cz);
       reply = { id: req.id, kind: "chunk", chunk };
       moved = chunkBuffers(chunk);
     } else if (req.kind === "own") {
@@ -84,7 +158,12 @@ scope.onmessage = (e) => {
       const world = keptWorld(req.world);
       const rows = composeRows(world, landformsOf(world, lib), req.z0, req.z1);
       reply = { id: req.id, kind: "composed", rows };
-      moved = [rows.raw.buffer, rows.region.buffer, rows.coverRegions.buffer, rows.coverShares.buffer];
+      moved = [
+        rows.raw.buffer,
+        rows.region.buffer,
+        rows.coverRegions.buffer,
+        rows.coverShares.buffer,
+      ];
     } else {
       const world = keptWorld(req.world);
       const t0 = performance.now();
@@ -94,10 +173,25 @@ scope.onmessage = (e) => {
       whole = t;
       // The wild base reads the leveled land all around its rim. Only the whole world has that, so the page cannot measure it.
       const base = wildBase(t);
-      reply = { id: req.id, kind: "finished", land: { plan: planOf(t), edits: placed.edits, ways: placed.network.ways }, report: t.report, wildBase: base, placed: { ...placed, took: { finish: finished, ...placed.took } } };
+      reply = {
+        id: req.id,
+        kind: "finished",
+        land: {
+          plan: planOf(t),
+          edits: placed.edits,
+          ways: placed.network.ways,
+        },
+        report: t.report,
+        wildBase: base,
+        placed: { ...placed, took: { finish: finished, ...placed.took } },
+      };
     }
   } catch (error) {
-    reply = { id: req.id, kind: "failed", message: error instanceof Error ? error.message : String(error) };
+    reply = {
+      id: req.id,
+      kind: "failed",
+      message: error instanceof Error ? error.message : String(error),
+    };
   }
   scope.postMessage(reply, moved);
 };

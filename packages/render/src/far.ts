@@ -8,16 +8,32 @@
 
 import * as THREE from "three";
 import type { Part } from "@gaia/schema";
-import { AIR, CHANNEL_MATH, FLUTTERS, type Realized, mergeParts, shownVitality } from "@gaia/realize";
+import {
+  AIR,
+  CHANNEL_MATH,
+  FLUTTERS,
+  type Realized,
+  mergeParts,
+  shownVitality,
+} from "@gaia/realize";
 import type { InstanceSpot } from "./instances.ts";
 import { copySeed } from "./instances.ts";
 import { LIGHT_GLSL, noShadowMap, type SceneLight } from "./light.ts";
-import { FOLIAGE, PLANT_FRAG, PLANT_VERT, geometryOf, sprayColors } from "./plant.ts";
+import {
+  FOLIAGE,
+  PLANT_FRAG,
+  PLANT_VERT,
+  geometryOf,
+  sprayColors,
+} from "./plant.ts";
 import { WIND_GLSL } from "./sway.ts";
 import { closeEachFrame, followVitality } from "./lag.ts";
 
 /** The bake's view directions: `azimuths` evenly around, at each of `elevations` in degrees, which cluster where a walker sees far trees. */
-export const FAR_VIEWS = { azimuths: 16, elevations: [-8, 0, 8, 18, 34, 60] } as const;
+export const FAR_VIEWS = {
+  azimuths: 16,
+  elevations: [-8, 0, 8, 18, 34, 60],
+} as const;
 /**
  * The vitalities whose coverage is baked. Coverage between them is interpolated, and color comes from 1 and 0. The
  * last is 0, the vitality of the poorest code, so a card there shows only what its tree keeps at 0.
@@ -52,10 +68,15 @@ export interface DroopField {
  * reads the movement of the boughs beside it. Twelve cells a side hold a
  * tree's droop to about a texel at the swap.
  */
-export function droopField(parts: readonly Part[], center: THREE.Vector3, radius: number): DroopField {
+export function droopField(
+  parts: readonly Part[],
+  center: THREE.Vector3,
+  radius: number,
+): DroopField {
   const n = DROOP_CELLS;
   const sums = new Float64Array(n * n * n * 4);
-  const cellOf = (v: number, c: number): number => Math.floor(((v - c) / (2 * radius) + 0.5) * n);
+  const cellOf = (v: number, c: number): number =>
+    Math.floor(((v - c) / (2 * radius) + 0.5) * n);
   let reach = 0;
   for (const part of parts) {
     const p = part.positions;
@@ -81,7 +102,9 @@ export function droopField(parts: readonly Part[], center: THREE.Vector3, radius
       const k = d / Math.hypot(ox, ly, oz);
       const moved = [ox * k - ox, ly * k - oy, oz * k - oz] as const;
       reach = Math.max(reach, Math.hypot(...moved));
-      for (let a = 0; a < 3; a++) sums[at + a] = (sums[at + a] as number) + (moved[a] as number);
+      for (let a = 0; a < 3; a++) {
+        sums[at + a] = (sums[at + a] as number) + (moved[a] as number);
+      }
     }
   }
   const field = new Float32Array(n * n * n * 3);
@@ -89,7 +112,9 @@ export function droopField(parts: readonly Part[], center: THREE.Vector3, radius
   for (let c = 0; c < n * n * n; c++) {
     const count = sums[c * 4 + 3] as number;
     if (count === 0) continue;
-    for (let a = 0; a < 3; a++) field[c * 3 + a] = (sums[c * 4 + a] as number) / count;
+    for (let a = 0; a < 3; a++) {
+      field[c * 3 + a] = (sums[c * 4 + a] as number) / count;
+    }
     filled[c] = 1;
   }
   // Empty cells take the mean of their filled neighbors, a ring at a time outward.
@@ -102,23 +127,39 @@ export function droopField(parts: readonly Part[], center: THREE.Vector3, radius
       const gz = Math.floor(c / (n * n));
       let count = 0;
       const mean = [0, 0, 0];
-      for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]] as const) {
+      for (const [dx, dy, dz] of [
+        [1, 0, 0],
+        [-1, 0, 0],
+        [0, 1, 0],
+        [0, -1, 0],
+        [0, 0, 1],
+        [0, 0, -1],
+      ] as const) {
         const [x, y, z] = [gx + dx, gy + dy, gz + dz];
         if (x < 0 || y < 0 || z < 0 || x >= n || y >= n || z >= n) continue;
         const o = (z * n + y) * n + x;
         if (was[o] !== 1) continue;
-        for (let a = 0; a < 3; a++) mean[a] = (mean[a] as number) + (field[o * 3 + a] as number);
+        for (let a = 0; a < 3; a++) {
+          mean[a] = (mean[a] as number) + (field[o * 3 + a] as number);
+        }
         count++;
       }
       if (count === 0) continue;
-      for (let a = 0; a < 3; a++) field[c * 3 + a] = (mean[a] as number) / count;
+      for (let a = 0; a < 3; a++) {
+        field[c * 3 + a] = (mean[a] as number) / count;
+      }
       filled[c] = 1;
     }
   }
   const scale = field.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
   const cells = new Uint8Array(n * n * n * 4);
   for (let c = 0; c < n * n * n; c++) {
-    for (let a = 0; a < 3; a++) cells[c * 4 + a] = scale > 0 ? Math.round(((field[c * 3 + a] as number) / scale) * 127.5 + 127.5) : 128;
+    for (let a = 0; a < 3; a++) {
+      cells[c * 4 + a] =
+        scale > 0
+          ? Math.round(((field[c * 3 + a] as number) / scale) * 127.5 + 127.5)
+          : 128;
+    }
     cells[c * 4 + 3] = 255;
   }
   return { cells, scale, reach };
@@ -127,13 +168,24 @@ export function droopField(parts: readonly Part[], center: THREE.Vector3, radius
 /** One tree build, baked. */
 export interface FarForm {
   /** The plant's bounds at its origin, unscaled and unturned. The woods size a copy on screen from these. */
-  readonly bounds: { readonly center: THREE.Vector3; readonly radius: number; readonly height: number };
+  readonly bounds: {
+    readonly center: THREE.Vector3;
+    readonly radius: number;
+    readonly height: number;
+  };
   /** GPU memory in bytes that its atlases take, mipmaps included. */
   readonly bytes: number;
   /** How long the bake took, milliseconds. */
   readonly ms: number;
   /** @internal The card's textures, droop and motion, and the targets the bake drew them into. A form read from storage has no targets. */
-  readonly atlas: { readonly layers: readonly THREE.Texture[]; readonly droop: DroopField; readonly frame: number; readonly sway: number; readonly frequency: number; readonly targets?: readonly THREE.WebGLRenderTarget[] };
+  readonly atlas: {
+    readonly layers: readonly THREE.Texture[];
+    readonly droop: DroopField;
+    readonly frame: number;
+    readonly sway: number;
+    readonly frequency: number;
+    readonly targets?: readonly THREE.WebGLRenderTarget[];
+  };
   dispose(): void;
 }
 
@@ -141,11 +193,19 @@ export interface FarForm {
 export function farViewDir(i: number, j: number): THREE.Vector3 {
   const az = (2 * Math.PI * i) / FAR_VIEWS.azimuths;
   const el = ((FAR_VIEWS.elevations[j] ?? 0) * Math.PI) / 180;
-  return new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az));
+  return new THREE.Vector3(
+    Math.cos(el) * Math.cos(az),
+    Math.sin(el),
+    Math.cos(el) * Math.sin(az),
+  );
 }
 
 const swap = (source: string, from: string, to: string): string => {
-  if (!source.includes(from)) throw new Error(`The plant shader no longer contains "${from.slice(0, 70)}"; update far.ts.`);
+  if (!source.includes(from)) {
+    throw new Error(
+      `The plant shader no longer contains "${from.slice(0, 70)}"; update far.ts.`,
+    );
+  }
   return source.split(from).join(to);
 };
 
@@ -154,7 +214,8 @@ const OUTPUT = {
   cover: "gl_FragColor = vec4(1.0, 1.0, 1.0, cover);",
   albedo: "gl_FragColor = vec4(albedo, cover);",
   normal: "gl_FragColor = vec4(n * 0.5 + 0.5, cover);",
-  depth: "gl_FragColor = vec4(clamp(0.5 + dot(vWorld - uBakeCenter, uBakeDir) / (2.0 * uBakeRadius), 0.0, 1.0), 0.0, 0.0, cover);",
+  depth:
+    "gl_FragColor = vec4(clamp(0.5 + dot(vWorld - uBakeCenter, uBakeDir) / (2.0 * uBakeRadius), 0.0, 1.0), 0.0, 0.0, cover);",
   glow: "gl_FragColor = vec4(clamp(vGlow, 0.0, 1.0), 0.0, 0.0, cover);",
   foliage: "gl_FragColor = vec4(uFoliage, 0.0, 0.0, cover);",
 } as const;
@@ -162,18 +223,38 @@ type Output = keyof typeof OUTPUT;
 
 /** The plant's vertex shader with color vitality separate from shape vitality, and droop removed so every slice nests inside the vitality-1 outline. */
 function bakeVert(): string {
-  let s = swap(PLANT_VERT, "void main() {", "uniform float uColorVitality;\nvec3 bakeKeep(vec3 p, vec3 joint) { return p; }\nvoid main() {");
-  s = swap(s, "vWither = aWither * (1.0 - vitalityMid());", "vWither = aWither * (1.0 - uColorVitality);");
+  let s = swap(
+    PLANT_VERT,
+    "void main() {",
+    "uniform float uColorVitality;\nvec3 bakeKeep(vec3 p, vec3 joint) { return p; }\nvoid main() {",
+  );
+  s = swap(
+    s,
+    "vWither = aWither * (1.0 - vitalityMid());",
+    "vWither = aWither * (1.0 - uColorVitality);",
+  );
   s = swap(s, "vec3 p = applyDroop(", "vec3 p = bakeKeep(");
   return s;
 }
 
 /** The plant's fragment shader, writing one layer instead of lit color, with leaves merging as they would on screen at the swap. */
 function bakeFrag(output: Output): string {
-  let s = swap(PLANT_FRAG, "void main() {", "uniform vec3 uBakeCenter;\nuniform vec3 uBakeDir;\nuniform float uBakeRadius;\nvoid main() {");
+  let s = swap(
+    PLANT_FRAG,
+    "void main() {",
+    "uniform vec3 uBakeCenter;\nuniform vec3 uBakeDir;\nuniform float uBakeRadius;\nvoid main() {",
+  );
   // A bake texel is 1 / `SUPERSAMPLE` of a screen pixel at the swap, so scaling the footprint merges leaves as the screen would there.
-  s = swap(s, "float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0), 1e-4);", `float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0) * ${SUPERSAMPLE}.0, 1e-4);`);
-  s = swap(s, "gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);", OUTPUT[output]);
+  s = swap(
+    s,
+    "float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0), 1e-4);",
+    `float px = max(sqrt(abs(dx.x * dy.y - dx.y * dy.x) * 2.0) * ${SUPERSAMPLE}.0, 1e-4);`,
+  );
+  s = swap(
+    s,
+    "gl_FragColor = vec4(aerial(shoulder(color), vWorld) + glow * (1.0 - uNightness * 0.35), cover);",
+    OUTPUT[output],
+  );
   return s;
 }
 
@@ -209,20 +290,97 @@ interface Pass {
  * depth. Layer 3 is coverage at 0.6, 0.3 and 0, and foliage.
  */
 const PASSES: readonly Pass[] = [
-  { output: "cover", vitality: 1, colorVitality: 1, layer: 0, to: [3, -1, -1, -1] },
-  { output: "albedo", vitality: 1, colorVitality: 1, layer: 0, to: [0, 1, 2, -1] },
-  { output: "albedo", vitality: SLICES[3], colorVitality: 0, layer: 1, to: [0, 1, 2, -1] },
-  { output: "glow", vitality: 1, colorVitality: 1, layer: 1, to: [3, -1, -1, -1] },
-  { output: "normal", vitality: 1, colorVitality: 1, layer: 2, to: [0, 1, 2, -1] },
-  { output: "depth", vitality: 1, colorVitality: 1, layer: 2, to: [3, -1, -1, -1] },
-  { output: "cover", vitality: SLICES[1], colorVitality: 1, layer: 3, to: [0, -1, -1, -1] },
-  { output: "cover", vitality: SLICES[2], colorVitality: 1, layer: 3, to: [1, -1, -1, -1] },
-  { output: "cover", vitality: SLICES[3], colorVitality: 1, layer: 3, to: [2, -1, -1, -1] },
-  { output: "foliage", vitality: 1, colorVitality: 1, layer: 3, to: [3, -1, -1, -1] },
+  {
+    output: "cover",
+    vitality: 1,
+    colorVitality: 1,
+    layer: 0,
+    to: [3, -1, -1, -1],
+  },
+  {
+    output: "albedo",
+    vitality: 1,
+    colorVitality: 1,
+    layer: 0,
+    to: [0, 1, 2, -1],
+  },
+  {
+    output: "albedo",
+    vitality: SLICES[3],
+    colorVitality: 0,
+    layer: 1,
+    to: [0, 1, 2, -1],
+  },
+  {
+    output: "glow",
+    vitality: 1,
+    colorVitality: 1,
+    layer: 1,
+    to: [3, -1, -1, -1],
+  },
+  {
+    output: "normal",
+    vitality: 1,
+    colorVitality: 1,
+    layer: 2,
+    to: [0, 1, 2, -1],
+  },
+  {
+    output: "depth",
+    vitality: 1,
+    colorVitality: 1,
+    layer: 2,
+    to: [3, -1, -1, -1],
+  },
+  {
+    output: "cover",
+    vitality: SLICES[1],
+    colorVitality: 1,
+    layer: 3,
+    to: [0, -1, -1, -1],
+  },
+  {
+    output: "cover",
+    vitality: SLICES[2],
+    colorVitality: 1,
+    layer: 3,
+    to: [1, -1, -1, -1],
+  },
+  {
+    output: "cover",
+    vitality: SLICES[3],
+    colorVitality: 1,
+    layer: 3,
+    to: [2, -1, -1, -1],
+  },
+  {
+    output: "foliage",
+    vitality: 1,
+    colorVitality: 1,
+    layer: 3,
+    to: [3, -1, -1, -1],
+  },
 ];
 
 const mapOf = (to: Pass["to"]): THREE.Matrix4 => {
-  const m = new THREE.Matrix4().set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  const m = new THREE.Matrix4().set(
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+  );
   to.forEach((dest, src) => {
     if (dest >= 0) m.elements[src * 4 + dest] = 1;
   });
@@ -252,16 +410,30 @@ export interface FarBake {
  * air, detail thinned as it is at that distance, and leaves merged to that
  * pixel size.
  */
-export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, framePx = 128): FarBake {
+export function startFarBake(
+  renderer: THREE.WebGLRenderer,
+  plant: Realized,
+  framePx = 128,
+): FarBake {
   let spent = 0;
-  const parts = mergeParts(plant.parts).filter((p: Part) => p.indices.length > 0);
+  const parts = mergeParts(plant.parts).filter(
+    (p: Part) => p.indices.length > 0,
+  );
   // Frame only what is above the soil, as `createPlantInstances` bounds its copies. A bramble's canes root below
   // ground, where no one sees them.
   const box = new THREE.Box3();
   const point = new THREE.Vector3();
   for (const part of parts) {
     const p = part.positions;
-    for (let i = 0; i < p.length; i += 3) box.expandByPoint(point.set(p[i] as number, Math.max(0, p[i + 1] as number), p[i + 2] as number));
+    for (let i = 0; i < p.length; i += 3) {
+      box.expandByPoint(
+        point.set(
+          p[i] as number,
+          Math.max(0, p[i + 1] as number),
+          p[i + 2] as number,
+        ),
+      );
+    }
   }
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const height = Math.max(0.3, box.max.y);
@@ -275,12 +447,25 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   const px = framePx * SUPERSAMPLE;
 
   // The eye distance at which this plant turns far, so detail thins as it would there.
-  const pxPerRad = renderer.getDrawingBufferSize(new THREE.Vector2()).y / ((FOV * Math.PI) / 180);
+  const pxPerRad =
+    renderer.getDrawingBufferSize(new THREE.Vector2()).y /
+    ((FOV * Math.PI) / 180);
   const eyeAt = (2 * radius * pxPerRad) / framePx;
   // Still air, and a shadow map of its own. An unset sampler would read whatever the bake last bound, even the target it draws into.
   const unlit = noShadowMap();
-  const light = { uTime: { value: 0 }, uWind: { value: 0 }, uWindDir: { value: new THREE.Vector2(1, 0) }, uNightness: { value: 0 }, uEye: { value: new THREE.Vector3() }, uShadowMap: { value: unlit } };
-  const bake = { uBakeCenter: { value: sphere.center.clone() }, uBakeDir: { value: new THREE.Vector3() }, uBakeRadius: { value: radius } };
+  const light = {
+    uTime: { value: 0 },
+    uWind: { value: 0 },
+    uWindDir: { value: new THREE.Vector2(1, 0) },
+    uNightness: { value: 0 },
+    uEye: { value: new THREE.Vector3() },
+    uShadowMap: { value: unlit },
+  };
+  const bake = {
+    uBakeCenter: { value: sphere.center.clone() },
+    uBakeDir: { value: new THREE.Vector3() },
+    uBakeRadius: { value: radius },
+  };
   const shared = {
     uVitality: { value: 1 },
     // Each slice is baked at rest.
@@ -297,22 +482,42 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   const vert = bakeVert();
   const scene = new THREE.Scene();
   const meshes = parts.map((part) => {
-    const swatch = plant.palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
+    const swatch = plant.palette.swatches[part.swatch] ?? {
+      healthy: [1, 0, 1],
+      decline: [1, 0, 1],
+    };
     const foliage = FOLIAGE[part.swatch] ?? 0.5;
     const uniforms = {
       ...light,
       ...shared,
       ...bake,
       uFlutter: { value: FLUTTERS.has(part.swatch) ? 1 : 0 },
-      uHealthy: { value: new THREE.Vector3(...(swatch.healthy as [number, number, number])) },
-      uDecline: { value: new THREE.Vector3(...(swatch.decline as [number, number, number])) },
+      uHealthy: {
+        value: new THREE.Vector3(
+          ...(swatch.healthy as [number, number, number]),
+        ),
+      },
+      uDecline: {
+        value: new THREE.Vector3(
+          ...(swatch.decline as [number, number, number]),
+        ),
+      },
       ...sprayColors(plant),
       uFoliage: { value: foliage },
       uLamp: { value: 0 },
     };
     const materials = new Map<Output, THREE.ShaderMaterial>();
     for (const output of Object.keys(OUTPUT) as Output[]) {
-      materials.set(output, new THREE.ShaderMaterial({ vertexShader: vert, fragmentShader: bakeFrag(output), uniforms, side: foliage === 0 ? THREE.FrontSide : THREE.DoubleSide, alphaToCoverage: true }));
+      materials.set(
+        output,
+        new THREE.ShaderMaterial({
+          vertexShader: vert,
+          fragmentShader: bakeFrag(output),
+          uniforms,
+          side: foliage === 0 ? THREE.FrontSide : THREE.DoubleSide,
+          alphaToCoverage: true,
+        }),
+      );
     }
     const mesh = new THREE.Mesh(geometryOf(part), materials.get("cover"));
     mesh.frustumCulled = false;
@@ -321,12 +526,28 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   });
 
   // One elevation row at a time keeps the multisampled target small.
-  const row = new THREE.WebGLRenderTarget(cols * px, px, { depthBuffer: true, type: THREE.UnsignedByteType, samples: 4 });
+  const row = new THREE.WebGLRenderTarget(cols * px, px, {
+    depthBuffer: true,
+    type: THREE.UnsignedByteType,
+    samples: 4,
+  });
   row.texture.minFilter = THREE.NearestFilter;
   row.texture.magFilter = THREE.NearestFilter;
   // Mipmaps are made once, when the last chunk is in.
-  const layers = [0, 1, 2, 3].map(() => new THREE.WebGLRenderTarget(cols * framePx, rows * framePx, { depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter }));
-  const downUniforms = { uSrc: { value: row.texture }, uOrigin: { value: new THREE.Vector2() }, uMap: { value: new THREE.Matrix4() } };
+  const layers = [0, 1, 2, 3].map(
+    () =>
+      new THREE.WebGLRenderTarget(cols * framePx, rows * framePx, {
+        depthBuffer: false,
+        generateMipmaps: false,
+        minFilter: THREE.LinearMipmapLinearFilter,
+        magFilter: THREE.LinearFilter,
+      }),
+  );
+  const downUniforms = {
+    uSrc: { value: row.texture },
+    uOrigin: { value: new THREE.Vector2() },
+    uMap: { value: new THREE.Matrix4() },
+  };
   const down = new THREE.ShaderMaterial({
     vertexShader: QUAD_VERT,
     fragmentShader: DOWN_FRAG,
@@ -344,22 +565,42 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
   quad.frustumCulled = false;
   const quadScene = new THREE.Scene().add(quad);
   const quadCamera = new THREE.Camera();
-  const camera = new THREE.OrthographicCamera(-radius, radius, radius, -radius, 1000, 1000 + 4 * radius + 2);
-  camera.position.set(sphere.center.x, sphere.center.y, sphere.center.z + 2 * radius + 1000);
+  const camera = new THREE.OrthographicCamera(
+    -radius,
+    radius,
+    radius,
+    -radius,
+    1000,
+    1000 + 4 * radius + 2,
+  );
+  camera.position.set(
+    sphere.center.x,
+    sphere.center.y,
+    sphere.center.z + 2 * radius + 1000,
+  );
   camera.lookAt(sphere.center);
 
-  const nextFrame = (): Promise<void> => new Promise((resolve) => (typeof requestAnimationFrame === "function" ? requestAnimationFrame(() => resolve()) : setTimeout(resolve, 0)));
+  const nextFrame = (): Promise<void> =>
+    new Promise((resolve) =>
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame(() => resolve())
+        : setTimeout(resolve, 0),
+    );
   // Compiling ahead is not enough. Each output's first draw into the
   // multisampled target sets up GPU state, so each output is drawn once, one
   // pixel across, a frame apart, before the bake steps.
   const ready = (async (): Promise<void> => {
     for (const output of Object.keys(OUTPUT) as Output[]) {
-      for (const m of meshes) m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
+      for (const m of meshes) {
+        m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
+      }
       await renderer.compileAsync(scene, camera);
     }
     await renderer.compileAsync(quadScene, quadCamera);
     for (const output of Object.keys(OUTPUT) as Output[]) {
-      for (const m of meshes) m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
+      for (const m of meshes) {
+        m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
+      }
       const was = renderer.getRenderTarget();
       row.viewport.set(0, 0, 1, 1);
       row.scissor.set(0, 0, 1, 1);
@@ -400,7 +641,9 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
     const pass = PASSES[pk % PASSES.length] as Pass;
     shared.uVitality.value = pass.vitality;
     shared.uColorVitality.value = pass.colorVitality;
-    for (const m of meshes) m.mesh.material = m.materials.get(pass.output) as THREE.ShaderMaterial;
+    for (const m of meshes) {
+      m.mesh.material = m.materials.get(pass.output) as THREE.ShaderMaterial;
+    }
     if (i === 0) {
       row.scissorTest = false;
       renderer.setRenderTarget(row);
@@ -437,12 +680,21 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
       renderer.render(empty, quadCamera);
     }
     free();
-    const bytes = Math.round(cols * framePx * rows * framePx * 4 * layers.length * (4 / 3));
+    const bytes = Math.round(
+      cols * framePx * rows * framePx * 4 * layers.length * (4 / 3),
+    );
     return {
       bounds: { center: sphere.center.clone(), radius, height },
       bytes,
       ms: spent,
-      atlas: { layers: layers.map((l) => l.texture), droop, frame: framePx, sway: plant.motion.sway, frequency: plant.motion.frequency, targets: layers },
+      atlas: {
+        layers: layers.map((l) => l.texture),
+        droop,
+        frame: framePx,
+        sway: plant.motion.sway,
+        frequency: plant.motion.frequency,
+        targets: layers,
+      },
       dispose: () => {
         for (const l of layers) l.dispose();
       },
@@ -454,7 +706,12 @@ export function startFarBake(renderer: THREE.WebGLRenderer, plant: Realized, fra
     step(budgetMs, views = Number.POSITIVE_INFINITY) {
       if (done !== null || cancelled) return done;
       const t0 = performance.now();
-      const was = { target: renderer.getRenderTarget(), auto: renderer.autoClear, color: renderer.getClearColor(new THREE.Color()), alpha: renderer.getClearAlpha() };
+      const was = {
+        target: renderer.getRenderTarget(),
+        auto: renderer.autoClear,
+        color: renderer.getClearColor(new THREE.Color()),
+        alpha: renderer.getClearAlpha(),
+      };
       renderer.autoClear = false;
       renderer.setClearColor(0x000000, 0);
       let n = 0;
@@ -489,7 +746,11 @@ export const FAR_BAKE_VERSION = 8;
 /** A far form as plain data, to store: its bounds and motion, and each atlas's full-size level, row by row from the bottom. */
 export interface FarFormData {
   readonly version: number;
-  readonly bounds: { readonly center: readonly [number, number, number]; readonly radius: number; readonly height: number };
+  readonly bounds: {
+    readonly center: readonly [number, number, number];
+    readonly radius: number;
+    readonly height: number;
+  };
   readonly frame: number;
   readonly sway: number;
   readonly frequency: number;
@@ -504,21 +765,49 @@ export interface FarFormData {
  * Reads a baked form back for storage, once, without stalling. It reads only
  * each atlas's full-size level, since mipmaps are rebuilt on load.
  */
-export async function farFormData(renderer: THREE.WebGLRenderer, form: FarForm): Promise<FarFormData> {
+export async function farFormData(
+  renderer: THREE.WebGLRenderer,
+  form: FarForm,
+): Promise<FarFormData> {
   const targets = form.atlas.targets;
-  if (targets === undefined) throw new Error("farFormData reads a form just baked; this one was read from storage.");
+  if (targets === undefined) {
+    throw new Error(
+      "farFormData reads a form just baked; this one was read from storage.",
+    );
+  }
   const first = targets[0] as THREE.WebGLRenderTarget;
   const width = first.width;
   const height = first.height;
   const layers = await Promise.all(
     targets.map(async (target) => {
       const out = new Uint8Array(width * height * 4);
-      await renderer.readRenderTargetPixelsAsync(target, 0, 0, width, height, out);
+      await renderer.readRenderTargetPixelsAsync(
+        target,
+        0,
+        0,
+        width,
+        height,
+        out,
+      );
       return out;
     }),
   );
   const c = form.bounds.center;
-  return { version: FAR_BAKE_VERSION, bounds: { center: [c.x, c.y, c.z], radius: form.bounds.radius, height: form.bounds.height }, frame: form.atlas.frame, sway: form.atlas.sway, frequency: form.atlas.frequency, droop: form.atlas.droop, width, height, layers };
+  return {
+    version: FAR_BAKE_VERSION,
+    bounds: {
+      center: [c.x, c.y, c.z],
+      radius: form.bounds.radius,
+      height: form.bounds.height,
+    },
+    frame: form.atlas.frame,
+    sway: form.atlas.sway,
+    frequency: form.atlas.frequency,
+    droop: form.atlas.droop,
+    width,
+    height,
+    layers,
+  };
 }
 
 /** Rebuilds a far form from stored data, with atlases filtered and mipmapped as a bake's are. Returns null when the data is from another bake version. */
@@ -527,7 +816,13 @@ export function farFormFrom(data: FarFormData): FarForm | null {
   // The closures below read only these, so they do not keep the stored record and its pixels alive.
   const { width, height } = data;
   const layers = data.layers.map((pixels) => {
-    const t = new THREE.DataTexture(pixels, width, height, THREE.RGBAFormat, THREE.UnsignedByteType);
+    const t = new THREE.DataTexture(
+      pixels,
+      width,
+      height,
+      THREE.RGBAFormat,
+      THREE.UnsignedByteType,
+    );
     t.minFilter = THREE.LinearMipmapLinearFilter;
     t.magFilter = THREE.LinearFilter;
     t.generateMipmaps = true;
@@ -544,10 +839,20 @@ export function farFormFrom(data: FarFormData): FarForm | null {
   });
   const [x, y, z] = data.bounds.center;
   return {
-    bounds: { center: new THREE.Vector3(x, y, z), radius: data.bounds.radius, height: data.bounds.height },
+    bounds: {
+      center: new THREE.Vector3(x, y, z),
+      radius: data.bounds.radius,
+      height: data.bounds.height,
+    },
     bytes: Math.round(data.width * data.height * 4 * layers.length * (4 / 3)),
     ms: 0,
-    atlas: { layers, droop: data.droop, frame: data.frame, sway: data.sway, frequency: data.frequency },
+    atlas: {
+      layers,
+      droop: data.droop,
+      frame: data.frame,
+      sway: data.sway,
+      frequency: data.frequency,
+    },
     dispose: () => {
       for (const t of layers) t.dispose();
     },
@@ -602,7 +907,12 @@ export function farness(px: number, swapPx: number, band: number): number {
  * draws in neither form. The woods choose each copy's full form with this,
  * and the card's shader (`FAR_CHOICE_GLSL`) its card, so the two agree.
  */
-export function farChoice(px: number, swapPx: number, turn: FarTurn, ortho: boolean): { full: boolean; card: number } {
+export function farChoice(
+  px: number,
+  swapPx: number,
+  turn: FarTurn,
+  ortho: boolean,
+): { full: boolean; card: number } {
   if (px <= turn.gone.end) return { full: false, card: 0 };
   const f = farness(px, swapPx, turn.band);
   const leavePx = ortho ? swapPx : swapPx / turn.leave;
@@ -648,9 +958,22 @@ float farCard(vec4 crown, float swapPx, out float gone) {
  * scaled as the copy is. The copy's size on screen is measured from it, the
  * same for its full form and its card.
  */
-export function crownsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere): Float32Array {
+export function crownsOf(
+  spots: readonly InstanceSpot[],
+  sphere: THREE.Sphere,
+): Float32Array {
   const crowns = new Float32Array(spots.length * 4);
-  spots.forEach((s, k) => crowns.set([s.x + sphere.center.x * s.scale, s.y + sphere.center.y * s.scale, s.z + sphere.center.z * s.scale, sphere.radius * s.scale], k * 4));
+  spots.forEach((s, k) =>
+    crowns.set(
+      [
+        s.x + sphere.center.x * s.scale,
+        s.y + sphere.center.y * s.scale,
+        s.z + sphere.center.z * s.scale,
+        sphere.radius * s.scale,
+      ],
+      k * 4,
+    ),
+  );
   return crowns;
 }
 
@@ -663,7 +986,12 @@ const MEMBER_ROW = 256;
  * first mip level. `shadowLift` is how far toward the sun, in radii, it reads its shadow, and `overFull` how far toward
  * the eye, in radii, a card drawn over its full form sits.
  */
-export const CARD = { coverEdge: [0.25, 0.75], bareEdge: [0.15, 0.65], shadowLift: 0.2, overFull: 0.15 } as const;
+export const CARD = {
+  coverEdge: [0.25, 0.75],
+  bareEdge: [0.15, 0.65],
+  shadowLift: 0.2,
+  overFull: 0.15,
+} as const;
 
 const CARD_VERT = /* glsl */ `
 attribute vec4 aSpot; // x, y, z, yaw
@@ -1039,7 +1367,22 @@ export const PLACE_STRIDE = 9;
 /** Each copy as its card draws it: position (x, y, z), yaw, scale, vitality, seed, and the ground's slope under it. */
 export function placesOf(spots: readonly InstanceSpot[]): Float32Array {
   const places = new Float32Array(spots.length * PLACE_STRIDE);
-  spots.forEach((s, k) => places.set([s.x, s.y, s.z, s.yaw, s.scale, shownVitality(s.vitality ?? 1), copySeed(s), s.slope?.[0] ?? 0, s.slope?.[1] ?? 0], k * PLACE_STRIDE));
+  spots.forEach((s, k) =>
+    places.set(
+      [
+        s.x,
+        s.y,
+        s.z,
+        s.yaw,
+        s.scale,
+        shownVitality(s.vitality ?? 1),
+        copySeed(s),
+        s.slope?.[0] ?? 0,
+        s.slope?.[1] ?? 0,
+      ],
+      k * PLACE_STRIDE,
+    ),
+  );
   return places;
 }
 
@@ -1063,7 +1406,12 @@ export interface FarCards {
    * atlas `layer`, so a form read from storage can upload one atlas a frame.
    * The caller disposes of the form's own textures afterward.
    */
-  fill(renderer: THREE.WebGLRenderer, slot: number, form: FarForm, layer?: number): void;
+  fill(
+    renderer: THREE.WebGLRenderer,
+    slot: number,
+    form: FarForm,
+    layer?: number,
+  ): void;
   /** The crown span, in device pixels, at which copies shown from `slot` turn far. 0 draws none of their cards. */
   turnAt(slot: number, swapPx: number): void;
   /** One plant's copies, whose cards show while `anchor` and every object above it are visible. */
@@ -1103,7 +1451,9 @@ interface Member {
 
 /** Whether `o` draws, meaning it and every object above it are visible. */
 const visibleUp = (o: THREE.Object3D): boolean => {
-  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) if (!a.visible) return false;
+  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) {
+    if (!a.visible) return false;
+  }
   return true;
 };
 
@@ -1113,12 +1463,27 @@ const visibleUp = (o: THREE.Object3D): boolean => {
  * pixels, and a card that small reads its atlas `log2(frame / gone)` levels
  * down (\`minified\` in its shader), so no card reads the levels past that.
  */
-export const farLevels = (frame: number, gone: number): number => Math.max(1, Math.min(Math.floor(Math.log2(FAR_VIEWS.azimuths * frame)) + 1, Math.ceil(Math.log2(frame / gone)) + 1));
+export const farLevels = (frame: number, gone: number): number =>
+  Math.max(
+    1,
+    Math.min(
+      Math.floor(Math.log2(FAR_VIEWS.azimuths * frame)) + 1,
+      Math.ceil(Math.log2(frame / gone)) + 1,
+    ),
+  );
 
 /** GPU memory a set's slots take for views `frame` texels across: each slot's four atlases at `farLevels` levels and its droop field. */
-export function farSlotBytes(frame: number, gone: number, slots: number): number {
+export function farSlotBytes(
+  frame: number,
+  gone: number,
+  slots: number,
+): number {
   let texels = 0;
-  for (let level = 0; level < farLevels(frame, gone); level++) texels += ((FAR_VIEWS.azimuths * frame) >> level) * ((FAR_VIEWS.elevations.length * frame) >> level);
+  for (let level = 0; level < farLevels(frame, gone); level++) {
+    texels +=
+      ((FAR_VIEWS.azimuths * frame) >> level) *
+      ((FAR_VIEWS.elevations.length * frame) >> level);
+  }
   return slots * (texels * 4 * 4 + DROOP_CELLS ** 3 * 4);
 }
 
@@ -1129,22 +1494,48 @@ export function farSlotBytes(frame: number, gone: number, slots: number): number
  * a bare tree is mostly twigs finer than a texel. By default a bare copy
  * sharpens as a vitality-1 copy does.
  */
-export function createFarCards(light: SceneLight, turn: FarTurn, most: number, bareEdge: readonly [number, number] = CARD.coverEdge): FarCards {
-  if (!(most >= 1)) throw new Error(`A set of far cards holds at least one form; it was given ${most} slots.`);
+export function createFarCards(
+  light: SceneLight,
+  turn: FarTurn,
+  most: number,
+  bareEdge: readonly [number, number] = CARD.coverEdge,
+): FarCards {
+  if (!(most >= 1)) {
+    throw new Error(
+      `A set of far cards holds at least one form; it was given ${most} slots.`,
+    );
+  }
   let slots = most;
   const card = new THREE.PlaneGeometry(2, 2, 1, 5);
-  const pass = { uFarPass: { value: new THREE.Vector2(0, 0) }, uFarBand: { value: turn.band }, uFarLeave: { value: turn.leave }, uFarGone: { value: new THREE.Vector2(turn.gone.start, turn.gone.end) } };
+  const pass = {
+    uFarPass: { value: new THREE.Vector2(0, 0) },
+    uFarBand: { value: turn.band },
+    uFarLeave: { value: turn.leave },
+    uFarGone: { value: new THREE.Vector2(turn.gone.start, turn.gone.end) },
+  };
   // Each slot's form: row 0 its bounds' center and radius, row 1 its height, sway, frequency and the span it turns far
   // at, row 2 its droop field's scale and reach.
   let slotData = new Float32Array(slots * 3 * 4);
-  let slotTable = new THREE.DataTexture(slotData, slots, 3, THREE.RGBAFormat, THREE.FloatType);
+  let slotTable = new THREE.DataTexture(
+    slotData,
+    slots,
+    3,
+    THREE.RGBAFormat,
+    THREE.FloatType,
+  );
   slotTable.needsUpdate = true;
   // Each member's slot and whether it shows. Member 0 belongs to no plant and marks unused room.
   let memberRows = 1;
   let memberData = new Float32Array(MEMBER_ROW * memberRows * 4).fill(0);
   memberData[0] = -1;
   const tableOf = (data: Float32Array, rows: number): THREE.DataTexture => {
-    const t = new THREE.DataTexture(data, MEMBER_ROW, rows, THREE.RGBAFormat, THREE.FloatType);
+    const t = new THREE.DataTexture(
+      data,
+      MEMBER_ROW,
+      rows,
+      THREE.RGBAFormat,
+      THREE.FloatType,
+    );
     t.needsUpdate = true;
     return t;
   };
@@ -1161,12 +1552,38 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
     uDroop: { value: null as THREE.Texture | null },
     uDroopSlots: { value: slots },
     uElev: { value: [...FAR_VIEWS.elevations] },
-    uCoverEdge: { value: new THREE.Vector4(CARD.coverEdge[0], CARD.coverEdge[1], bareEdge[0], bareEdge[1]) },
+    uCoverEdge: {
+      value: new THREE.Vector4(
+        CARD.coverEdge[0],
+        CARD.coverEdge[1],
+        bareEdge[0],
+        bareEdge[1],
+      ),
+    },
     uShadowLift: { value: CARD.shadowLift },
   };
-  const solidMaterial = new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, uniforms, side: THREE.DoubleSide, alphaToCoverage: true });
-  const fadingMaterial = new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_FRAG, uniforms, defines: { FADING: "" }, side: THREE.DoubleSide, transparent: true, depthWrite: false });
-  const depthMaterial = new THREE.ShaderMaterial({ vertexShader: CARD_VERT, fragmentShader: CARD_DEPTH_FRAG, uniforms, side: THREE.DoubleSide });
+  const solidMaterial = new THREE.ShaderMaterial({
+    vertexShader: CARD_VERT,
+    fragmentShader: CARD_FRAG,
+    uniforms,
+    side: THREE.DoubleSide,
+    alphaToCoverage: true,
+  });
+  const fadingMaterial = new THREE.ShaderMaterial({
+    vertexShader: CARD_VERT,
+    fragmentShader: CARD_FRAG,
+    uniforms,
+    defines: { FADING: "" },
+    side: THREE.DoubleSide,
+    transparent: true,
+    depthWrite: false,
+  });
+  const depthMaterial = new THREE.ShaderMaterial({
+    vertexShader: CARD_VERT,
+    fragmentShader: CARD_DEPTH_FRAG,
+    uniforms,
+    side: THREE.DoubleSide,
+  });
 
   // Both meshes read the same copies. Three fixes how many instances a geometry can draw when it is first bound, so
   // outgrowing it takes a new geometry, never new attributes.
@@ -1174,10 +1591,34 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
     const g = new THREE.InstancedBufferGeometry();
     g.index = card.index;
     g.setAttribute("position", card.getAttribute("position"));
-    g.setAttribute("aSpot", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
-    g.setAttribute("aMore", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
-    g.setAttribute("aSlope", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 2), 2));
-    g.setAttribute("aCrown", new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, room) * 4), 4));
+    g.setAttribute(
+      "aSpot",
+      new THREE.InstancedBufferAttribute(
+        new Float32Array(Math.max(1, room) * 4),
+        4,
+      ),
+    );
+    g.setAttribute(
+      "aMore",
+      new THREE.InstancedBufferAttribute(
+        new Float32Array(Math.max(1, room) * 4),
+        4,
+      ),
+    );
+    g.setAttribute(
+      "aSlope",
+      new THREE.InstancedBufferAttribute(
+        new Float32Array(Math.max(1, room) * 2),
+        2,
+      ),
+    );
+    g.setAttribute(
+      "aCrown",
+      new THREE.InstancedBufferAttribute(
+        new Float32Array(Math.max(1, room) * 4),
+        4,
+      ),
+    );
     g.instanceCount = 0;
     return g;
   };
@@ -1211,7 +1652,8 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
   let nextIndex = 1;
   const freeIndices: number[] = [];
 
-  const attribute = (name: string): THREE.InstancedBufferAttribute => geometry.getAttribute(name) as THREE.InstancedBufferAttribute;
+  const attribute = (name: string): THREE.InstancedBufferAttribute =>
+    geometry.getAttribute(name) as THREE.InstancedBufferAttribute;
   const writeRecord = (m: Member): void => {
     const at = m.index * 4;
     memberData[at] = m.slot;
@@ -1237,7 +1679,11 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
       slope.array.set(m.places.subarray(at + 7, at + 9), i * 2);
       crown.array.set(m.crowns.subarray(k * 4, k * 4 + 4), i * 4);
     }
-    for (const [k, e] of m.easing) if (k < m.count) more.array[(m.offset + k) * 4 + 1] = e.shown + 0.5 * e.lag;
+    for (const [k, e] of m.easing) {
+      if (k < m.count) {
+        more.array[(m.offset + k) * 4 + 1] = e.shown + 0.5 * e.lag;
+      }
+    }
     for (const a of [spot, more, slope, crown]) a.needsUpdate = true;
   };
   /** Packs every member's copies afresh, each with room to grow, in a geometry large enough to hold them. */
@@ -1278,11 +1724,21 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
       return slots;
     },
     fit(count) {
-      if (layers !== null) throw new Error("A set's far cards are fitted before any form fills a slot.");
+      if (layers !== null) {
+        throw new Error(
+          "A set's far cards are fitted before any form fills a slot.",
+        );
+      }
       slots = Math.max(1, Math.min(most, Math.floor(count)));
       slotData = new Float32Array(slots * 3 * 4);
       slotTable.dispose();
-      slotTable = new THREE.DataTexture(slotData, slots, 3, THREE.RGBAFormat, THREE.FloatType);
+      slotTable = new THREE.DataTexture(
+        slotData,
+        slots,
+        3,
+        THREE.RGBAFormat,
+        THREE.FloatType,
+      );
       slotTable.needsUpdate = true;
       uniforms.uSlots.value = slotTable;
       uniforms.uDroopSlots.value = slots;
@@ -1291,55 +1747,99 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
       return layers === null ? 0 : farSlotBytes(frame, turn.gone.end, slots);
     },
     fill(renderer, slot, form, layer) {
-      if (!(slot >= 0 && slot < slots)) throw new Error(`No slot ${slot}; the set holds ${slots}.`);
+      if (!(slot >= 0 && slot < slots)) {
+        throw new Error(`No slot ${slot}; the set holds ${slots}.`);
+      }
       const width = FAR_VIEWS.azimuths * form.atlas.frame;
       const height = FAR_VIEWS.elevations.length * form.atlas.frame;
       if (layers === null) {
         frame = form.atlas.frame;
         const levels = farLevels(frame, turn.gone.end);
-        layers = [uniforms.uLayer0, uniforms.uLayer1, uniforms.uLayer2, uniforms.uLayer3].map((uniform) => {
+        layers = [
+          uniforms.uLayer0,
+          uniforms.uLayer1,
+          uniforms.uLayer2,
+          uniforms.uLayer3,
+        ].map((uniform) => {
           const array = new THREE.DataArrayTexture(null, width, height, slots);
           array.minFilter = THREE.LinearMipmapLinearFilter;
           array.magFilter = THREE.LinearFilter;
           array.generateMipmaps = false;
           // Allocate the levels a card reads. Each is copied from a form's own level, never generated from level 0.
           // Three gives an array as many levels as its mipmaps, and with no data ready it only allocates them.
-          array.mipmaps = Array.from({ length: levels }, (_, level) => ({ data: new Uint8Array(0), width: Math.max(1, width >> level), height: Math.max(1, height >> level) }));
+          array.mipmaps = Array.from({ length: levels }, (_, level) => ({
+            data: new Uint8Array(0),
+            width: Math.max(1, width >> level),
+            height: Math.max(1, height >> level),
+          }));
           array.source.dataReady = false;
           array.needsUpdate = true;
           renderer.initTexture(array);
           uniform.value = array;
           return array;
         });
-        droop = new THREE.Data3DTexture(new Uint8Array(DROOP_CELLS ** 3 * 4 * slots).fill(128), DROOP_CELLS, DROOP_CELLS, DROOP_CELLS * slots);
+        droop = new THREE.Data3DTexture(
+          new Uint8Array(DROOP_CELLS ** 3 * 4 * slots).fill(128),
+          DROOP_CELLS,
+          DROOP_CELLS,
+          DROOP_CELLS * slots,
+        );
         droop.minFilter = THREE.LinearFilter;
         droop.magFilter = THREE.LinearFilter;
         droop.unpackAlignment = 1;
         droop.needsUpdate = true;
         uniforms.uDroop.value = droop;
       }
-      if (form.atlas.frame !== frame) throw new Error(`A set's far forms all bake at one size; this one is ${form.atlas.frame} texels a view, the set's ${frame}.`);
+      if (form.atlas.frame !== frame) {
+        throw new Error(
+          `A set's far forms all bake at one size; this one is ${form.atlas.frame} texels a view, the set's ${frame}.`,
+        );
+      }
       const levels = farLevels(frame, turn.gone.end);
       const at = new THREE.Vector3(0, 0, slot);
       form.atlas.layers.forEach((source, l) => {
         if (layer !== undefined && l !== layer) return;
         // A form read from storage uploads here, its mipmaps made as a bake's are.
         renderer.initTexture(source);
-        const array = (layers as THREE.DataArrayTexture[])[l] as THREE.DataArrayTexture;
+        const array = (layers as THREE.DataArrayTexture[])[
+          l
+        ] as THREE.DataArrayTexture;
         for (let level = 0; level < levels; level++) {
-          const region = new THREE.Box2(new THREE.Vector2(0, 0), new THREE.Vector2(Math.max(1, width >> level), Math.max(1, height >> level)));
-          renderer.copyTextureToTexture(source, array, region, at, level, level);
+          const region = new THREE.Box2(
+            new THREE.Vector2(0, 0),
+            new THREE.Vector2(
+              Math.max(1, width >> level),
+              Math.max(1, height >> level),
+            ),
+          );
+          renderer.copyTextureToTexture(
+            source,
+            array,
+            region,
+            at,
+            level,
+            level,
+          );
         }
       });
       if (layer === undefined || layer === 0) {
         const field = droop as THREE.Data3DTexture;
-        (field.image.data as Uint8Array).set(form.atlas.droop.cells, slot * DROOP_CELLS ** 3 * 4);
+        (field.image.data as Uint8Array).set(
+          form.atlas.droop.cells,
+          slot * DROOP_CELLS ** 3 * 4,
+        );
         field.needsUpdate = true;
       }
       const c = form.bounds.center;
       slotData.set([c.x, c.y, c.z, form.bounds.radius], slot * 4);
-      slotData.set([form.bounds.height, form.atlas.sway, form.atlas.frequency], (slots + slot) * 4);
-      slotData.set([form.atlas.droop.scale, form.atlas.droop.reach], (2 * slots + slot) * 4);
+      slotData.set(
+        [form.bounds.height, form.atlas.sway, form.atlas.frequency],
+        (slots + slot) * 4,
+      );
+      slotData.set(
+        [form.atlas.droop.scale, form.atlas.droop.reach],
+        (2 * slots + slot) * 4,
+      );
       slotTable.needsUpdate = true;
     },
     turnAt(slot, swapPx) {
@@ -1349,7 +1849,19 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
       slotTable.needsUpdate = true;
     },
     copies(anchor) {
-      const m: Member = { index: takeIndex(), anchor, places: new Float32Array(0), crowns: new Float32Array(0), count: 0, offset: 0, room: 0, slot: -1, depth: false, shown: false, easing: new Map() };
+      const m: Member = {
+        index: takeIndex(),
+        anchor,
+        places: new Float32Array(0),
+        crowns: new Float32Array(0),
+        count: 0,
+        offset: 0,
+        room: 0,
+        slot: -1,
+        depth: false,
+        shown: false,
+        easing: new Map(),
+      };
       members.push(m);
       writeRecord(m);
       // A copy whose vitality changes eases toward it as its near form does (`followVitality`). Its card shows
@@ -1358,7 +1870,9 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
         const more = attribute("aMore");
         for (const [k, e] of m.easing) {
           [e.shown, e.lag] = followVitality(e.shown, e.lag, e.target, keep);
-          if (k < m.count) more.array[(m.offset + k) * 4 + 1] = e.shown + 0.5 * e.lag;
+          if (k < m.count) {
+            more.array[(m.offset + k) * 4 + 1] = e.shown + 0.5 * e.lag;
+          }
           if (e.shown === e.target && e.lag === 0) m.easing.delete(k);
         }
         more.needsUpdate = true;
@@ -1377,7 +1891,9 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
           } else writeCopies(m);
         },
         setVitalityAt(index, v) {
-          const shown = attribute("aMore").array[(m.offset + index) * 4 + 1] as number;
+          const shown = attribute("aMore").array[
+            (m.offset + index) * 4 + 1
+          ] as number;
           const from = m.easing.get(index) ?? { shown, lag: 0, target: 0 };
           m.easing.set(index, { ...from, target: shownVitality(v) });
           closeEachFrame(close);
@@ -1434,7 +1950,9 @@ export function createFarCards(light: SceneLight, turn: FarTurn, most: number, b
     dispose() {
       geometry.dispose();
       card.dispose();
-      for (const m of [solidMaterial, fadingMaterial, depthMaterial]) m.dispose();
+      for (const m of [solidMaterial, fadingMaterial, depthMaterial]) {
+        m.dispose();
+      }
       slotTable.dispose();
       memberTable.dispose();
       for (const l of layers ?? []) l.dispose();

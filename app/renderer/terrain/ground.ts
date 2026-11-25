@@ -13,7 +13,16 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { SHORE_CAP, TRAILS, type Terrain, WILDS, frameOf, landHalf, wildBase, wildsRing } from "@gaia/terrain";
+import {
+  SHORE_CAP,
+  TRAILS,
+  type Terrain,
+  WILDS,
+  frameOf,
+  landHalf,
+  wildBase,
+  wildsRing,
+} from "@gaia/terrain";
 import { CLIP, type PageLand } from "./land.ts";
 import { SWARD_GLSL } from "../world/environment.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
@@ -68,8 +77,17 @@ export interface GroundTexture {
  * A texture array over every layer of the page's land, with `data` in layer order: the levels' layers, then the
  * layers set aside for a painting. A layer uploads in the frame after it changes.
  */
-function clipTexture(data: Float32Array | Uint8Array, format: THREE.PixelFormat, type: THREE.TextureDataType): THREE.DataArrayTexture {
-  const texture = new THREE.DataArrayTexture(data, CLIP.size, CLIP.size, CLIP.levels + CLIP.aside);
+function clipTexture(
+  data: Float32Array | Uint8Array,
+  format: THREE.PixelFormat,
+  type: THREE.TextureDataType,
+): THREE.DataArrayTexture {
+  const texture = new THREE.DataArrayTexture(
+    data,
+    CLIP.size,
+    CLIP.size,
+    CLIP.levels + CLIP.aside,
+  );
   texture.format = format;
   texture.type = type;
   texture.minFilter = THREE.NearestFilter;
@@ -84,10 +102,22 @@ function clipTexture(data: Float32Array | Uint8Array, format: THREE.PixelFormat,
 export function createGroundTexture(land: PageLand): GroundTexture {
   const { levels } = CLIP;
   const ground = clipTexture(land.ground, THREE.RGBAFormat, THREE.FloatType);
-  const coverRegions = clipTexture(land.coverRegions, THREE.RGBAFormat, THREE.UnsignedByteType);
-  const coverShares = clipTexture(land.coverShares, THREE.RGBAFormat, THREE.UnsignedByteType);
+  const coverRegions = clipTexture(
+    land.coverRegions,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType,
+  );
+  const coverShares = clipTexture(
+    land.coverShares,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType,
+  );
   const places = clipTexture(land.trailPlaces, THREE.RGFormat, THREE.FloatType);
-  const nearPond = clipTexture(land.nearPond, THREE.RedFormat, THREE.UnsignedByteType);
+  const nearPond = clipTexture(
+    land.nearPond,
+    THREE.RedFormat,
+    THREE.UnsignedByteType,
+  );
   const textures = [ground, coverRegions, coverShares, places, nearPond];
   const origins = Array.from({ length: levels }, () => new THREE.Vector2());
   const layers = Array.from({ length: levels }, (_, k) => k);
@@ -143,7 +173,13 @@ export function createGroundTexture(land: PageLand): GroundTexture {
  * inside of a bend and around a pond. The width blends between them as the shore's contour curvature, one over the
  * radius, goes from `straight` to `curved`, measured `along` meters either way along the contour.
  */
-export const BANKS = { narrow: 0.7, wide: 2.6, straight: 0.012, curved: 0.04, along: 2.5 } as const;
+export const BANKS = {
+  narrow: 0.7,
+  wide: 2.6,
+  straight: 0.012,
+  curved: 0.04,
+  along: 2.5,
+} as const;
 
 /** GLSL that reads the ground texture with the mesh's own triangle interpolation. */
 export const GROUND_SAMPLE_GLSL = /* glsl */ `
@@ -232,7 +268,6 @@ float bankWidth(vec2 xz, float shore) {
   return mix(${BANKS.narrow.toFixed(2)}, ${BANKS.wide.toFixed(2)}, smoothstep(${BANKS.straight.toFixed(3)}, ${BANKS.curved.toFixed(3)}, -curve));
 }
 `;
-
 
 /**
  * The wild land past the land's square, a shader copy of `wildHeightAt` and
@@ -580,11 +615,18 @@ export interface GroundMesh {
 }
 
 /** Appends to `into` a grid of `quads` by `quads` quads around its center, as columns and rows. `keep` chooses which quads to draw. */
-function grid(quads: number, level: number, keep: (i: number, j: number) => boolean, into: { pos: number[]; index: number[] }): void {
+function grid(
+  quads: number,
+  level: number,
+  keep: (i: number, j: number) => boolean,
+  into: { pos: number[]; index: number[] },
+): void {
   const first = into.pos.length / 3;
   const side = quads + 1;
   const h = quads / 2;
-  for (let j = 0; j <= quads; j++) for (let i = 0; i <= quads; i++) into.pos.push(i - h, level, j - h);
+  for (let j = 0; j <= quads; j++) {
+    for (let i = 0; i <= quads; i++) into.pos.push(i - h, level, j - h);
+  }
   for (let j = 0; j < quads; j++) {
     for (let i = 0; i < quads; i++) {
       if (!keep(i - h, j - h)) continue;
@@ -598,7 +640,11 @@ function grid(quads: number, level: number, keep: (i: number, j: number) => bool
   }
 }
 
-function meshOf(pos: number[], index: number[], material: THREE.ShaderMaterial): THREE.Mesh {
+function meshOf(
+  pos: number[],
+  index: number[],
+  material: THREE.ShaderMaterial,
+): THREE.Mesh {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(index);
@@ -609,10 +655,19 @@ function meshOf(pos: number[], index: number[], material: THREE.ShaderMaterial):
 }
 
 /** Builds the rings: ring 0 whole, and each later ring with a hole where the ring inside it lies. */
-function ringsMesh(material: THREE.ShaderMaterial, q: number = RINGS.quads): THREE.Mesh {
+function ringsMesh(
+  material: THREE.ShaderMaterial,
+  q: number = RINGS.quads,
+): THREE.Mesh {
   const into = { pos: [] as number[], index: [] as number[] };
   for (let level = 0; level < RINGS.levels; level++) {
-    grid(q, level, (i, j) => level === 0 || !(i >= -q / 4 && i < q / 4 && j >= -q / 4 && j < q / 4), into);
+    grid(
+      q,
+      level,
+      (i, j) =>
+        level === 0 || !(i >= -q / 4 && i < q / 4 && j >= -q / 4 && j < q / 4),
+      into,
+    );
   }
   return meshOf(into.pos, into.index, material);
 }
@@ -623,15 +678,30 @@ function wildsGeometry(t: Terrain): THREE.BufferGeometry {
   const count = ring.positions.length / 3;
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(ring.positions, 3));
-  g.setAttribute("aWater", new THREE.BufferAttribute(new Float32Array(count).fill(-5), 1));
-  g.setAttribute("aShore", new THREE.BufferAttribute(new Float32Array(count).fill(SHORE_CAP), 1));
-  g.setAttribute("aTrail", new THREE.BufferAttribute(new Float32Array(count).fill(TRAILS.reach), 1));
+  g.setAttribute(
+    "aWater",
+    new THREE.BufferAttribute(new Float32Array(count).fill(-5), 1),
+  );
+  g.setAttribute(
+    "aShore",
+    new THREE.BufferAttribute(new Float32Array(count).fill(SHORE_CAP), 1),
+  );
+  g.setAttribute(
+    "aTrail",
+    new THREE.BufferAttribute(new Float32Array(count).fill(TRAILS.reach), 1),
+  );
   g.setIndex(new THREE.BufferAttribute(ring.indices, 1));
   g.computeVertexNormals();
   return g;
 }
 
-export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers, tex: GroundTexture, clearings: Clearings): GroundMesh {
+export function createGround(
+  t: Terrain,
+  light: SceneLight,
+  covers: RegionCovers,
+  tex: GroundTexture,
+  clearings: Clearings,
+): GroundMesh {
   const uniforms = {
     ...light,
     ...covers.uniforms,
@@ -649,25 +719,77 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     uLevels: { value: RINGS.levels },
     uSnap: { value: SNAP * t.lattice.spacing },
   };
-  const ringUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing }, uBaseLevel: { value: 0 }, uMorph: { value: 1 } };
-  const coarseUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uBaseLevel: { value: Math.log2(RINGS.coarse) }, uMorph: { value: 0 } };
-  const material = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: ringUniforms });
+  const ringUniforms = {
+    ...uniforms,
+    uCenter: { value: new THREE.Vector2() },
+    uViewer: { value: new THREE.Vector2() },
+    uBase: { value: t.lattice.spacing },
+    uBaseLevel: { value: 0 },
+    uMorph: { value: 1 },
+  };
+  const coarseUniforms = {
+    ...uniforms,
+    uCenter: { value: new THREE.Vector2() },
+    uViewer: { value: new THREE.Vector2() },
+    uBase: { value: t.lattice.spacing * RINGS.coarse },
+    uBaseLevel: { value: Math.log2(RINGS.coarse) },
+    uMorph: { value: 0 },
+  };
+  const material = new THREE.ShaderMaterial({
+    vertexShader: VERT,
+    fragmentShader: FRAG,
+    uniforms: ringUniforms,
+  });
   const fine = ringsMesh(material);
   // The coarse grid seen from above reads the trails from the texture at full resolution.
-  const coarseMaterial = new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: coarseUniforms, defines: { TRAIL_TEXTURE: "" } });
+  const coarseMaterial = new THREE.ShaderMaterial({
+    vertexShader: VERT,
+    fragmentShader: FRAG,
+    uniforms: coarseUniforms,
+    defines: { TRAIL_TEXTURE: "" },
+  });
   // The whole lattice: the same grid, one level, centered on the world.
-  const coarseOf = (l: { readonly n: number; readonly spacing: number }): THREE.Mesh => {
-    const quads = 2 * Math.ceil(((l.n - 1) * l.spacing) / (2 * RINGS.coarse * l.spacing));
+  const coarseOf = (l: {
+    readonly n: number;
+    readonly spacing: number;
+  }): THREE.Mesh => {
+    const quads =
+      2 * Math.ceil(((l.n - 1) * l.spacing) / (2 * RINGS.coarse * l.spacing));
     const into = { pos: [] as number[], index: [] as number[] };
     grid(quads, 0, () => true, into);
     return meshOf(into.pos, into.index, coarseMaterial);
   };
   const coarse = meshOf([], [], coarseMaterial);
   let coarseN = 0;
-  const mirrorUniforms = { ...uniforms, uCenter: { value: new THREE.Vector2() }, uViewer: { value: new THREE.Vector2() }, uBase: { value: t.lattice.spacing * RINGS.coarse }, uBaseLevel: { value: Math.log2(RINGS.coarse) }, uMorph: { value: 1 }, uQuads: { value: RINGS.mirrorQuads }, uSnap: { value: SNAP * t.lattice.spacing * RINGS.coarse } };
-  const mirror = ringsMesh(new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms: mirrorUniforms, defines: { TRAIL_TEXTURE: "" } }), RINGS.mirrorQuads);
+  const mirrorUniforms = {
+    ...uniforms,
+    uCenter: { value: new THREE.Vector2() },
+    uViewer: { value: new THREE.Vector2() },
+    uBase: { value: t.lattice.spacing * RINGS.coarse },
+    uBaseLevel: { value: Math.log2(RINGS.coarse) },
+    uMorph: { value: 1 },
+    uQuads: { value: RINGS.mirrorQuads },
+    uSnap: { value: SNAP * t.lattice.spacing * RINGS.coarse },
+  };
+  const mirror = ringsMesh(
+    new THREE.ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      uniforms: mirrorUniforms,
+      defines: { TRAIL_TEXTURE: "" },
+    }),
+    RINGS.mirrorQuads,
+  );
   mirror.visible = false;
-  const wilds = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({ vertexShader: VERT, fragmentShader: FRAG, uniforms, defines: { WILDS: "" } }));
+  const wilds = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      uniforms,
+      defines: { WILDS: "" },
+    }),
+  );
   wilds.frustumCulled = false;
   let baked = t;
   let aerial = false;
@@ -702,10 +824,16 @@ export function createGround(t: Terrain, light: SceneLight, covers: RegionCovers
     },
     follow(x, z) {
       ringUniforms.uViewer.value.set(x, z);
-      ringUniforms.uCenter.value.set(Math.round(x / snap) * snap, Math.round(z / snap) * snap);
+      ringUniforms.uCenter.value.set(
+        Math.round(x / snap) * snap,
+        Math.round(z / snap) * snap,
+      );
       const mirrorSnap = snap * RINGS.coarse;
       mirrorUniforms.uViewer.value.set(x, z);
-      mirrorUniforms.uCenter.value.set(Math.round(x / mirrorSnap) * mirrorSnap, Math.round(z / mirrorSnap) * mirrorSnap);
+      mirrorUniforms.uCenter.value.set(
+        Math.round(x / mirrorSnap) * mirrorSnap,
+        Math.round(z / mirrorSnap) * mirrorSnap,
+      );
     },
   };
 }

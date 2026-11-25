@@ -10,7 +10,13 @@
 // An edit that moves no node across a rung therefore leaves the land unchanged.
 
 import { rand, seedOf } from "@gaia/schema";
-import { type LandOutline, type LandSite, nearestSite, pastTheEdge, warpPoint } from "@gaia/terrain";
+import {
+  type LandOutline,
+  type LandSite,
+  nearestSite,
+  pastTheEdge,
+  warpPoint,
+} from "@gaia/terrain";
 
 /** A node of the divided tree: a directory, a directory's own ground, or a leaf, which is a file or a lot. */
 export interface LandNode {
@@ -41,7 +47,8 @@ export interface Land {
   readonly leaves: readonly LeafLand[];
 }
 
-export const onLand = (land: LandOutline, x: number, z: number): boolean => pastTheEdge(land, x, z) <= 0;
+export const onLand = (land: LandOutline, x: number, z: number): boolean =>
+  pastTheEdge(land, x, z) <= 0;
 
 interface Raster {
   readonly step: number;
@@ -78,19 +85,33 @@ function rasterOf(land: LandOutline, step: number): Raster {
       wz.push(b);
     }
   }
-  return { step, n, half, px: Float64Array.from(px), pz: Float64Array.from(pz), wx: Float64Array.from(wx), wz: Float64Array.from(wz), at };
+  return {
+    step,
+    n,
+    half,
+    px: Float64Array.from(px),
+    pz: Float64Array.from(pz),
+    wx: Float64Array.from(wx),
+    wz: Float64Array.from(wz),
+    at,
+  };
 }
 
-const groundOf = (node: LandNode): number => (node.children.length === 0 ? node.ground : node.children.reduce((n, c) => n + groundOf(c), 0));
+const groundOf = (node: LandNode): number =>
+  node.children.length === 0
+    ? node.ground
+    : node.children.reduce((n, c) => n + groundOf(c), 0);
 
 /** Ratio between consecutive rungs. A node's share changes only when its ground crosses a rung. */
 const RUNG = 1.25;
 
 /** Rounds ground up to the next power of `RUNG`. `divide` splits land by these values, never by exact ground. */
-export const rung = (ground: number): number => (ground > 0 ? RUNG ** Math.ceil(Math.log(ground) / Math.log(RUNG) - 1e-9) : 0);
+export const rung = (ground: number): number =>
+  ground > 0 ? RUNG ** Math.ceil(Math.log(ground) / Math.log(RUNG) - 1e-9) : 0;
 
 /** The rung nearest `amount` on a log scale, which may be below it. A threshold set this way matches `amount` on average. */
-export const nearestRung = (amount: number): number => rung(amount / Math.sqrt(RUNG));
+export const nearestRung = (amount: number): number =>
+  rung(amount / Math.sqrt(RUNG));
 
 /** Passes in which each site not `pinned` moves to the centroid of its cells. These passes make the parts round. */
 const MOVES = 6;
@@ -107,7 +128,15 @@ const PASSES = 24;
  * weights for fixed sites are unique up to a constant. Equal inputs therefore
  * give equal divisions, and nearby inputs give nearby divisions.
  */
-function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64Array, sz: Float64Array, owner: Int32Array, pinned: readonly boolean[]): void {
+function settle(
+  r: Raster,
+  cells: Int32Array,
+  targets: Float64Array,
+  sx: Float64Array,
+  sz: Float64Array,
+  owner: Int32Array,
+  pinned: readonly boolean[],
+): void {
   const k = targets.length;
   const cellArea = r.step * r.step;
   // Each weight starts at target area / pi. The disc where dist^2 < w then has the target area.
@@ -152,7 +181,11 @@ function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64
       if (next < 0 || next === best) continue;
       // Count cells within one step of the border between their two nearest sites. A weight change dw moves that border
       // by dw / (2 * apart), so each such cell adds 1 / (4 * apart * step) to the pair's trade.
-      const apart2 = Math.max(cellArea, ((sx[best] as number) - (sx[next] as number)) ** 2 + ((sz[best] as number) - (sz[next] as number)) ** 2);
+      const apart2 = Math.max(
+        cellArea,
+        ((sx[best] as number) - (sx[next] as number)) ** 2 +
+          ((sz[best] as number) - (sz[next] as number)) ** 2,
+      );
       if ((nd - bd) ** 2 < 4 * apart2 * cellArea) {
         const h = 1 / (4 * Math.sqrt(apart2) * r.step);
         trade[best * k + next] = (trade[best * k + next] as number) + h;
@@ -160,7 +193,9 @@ function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64
       }
     }
     let off = 0;
-    for (let j = 0; j < k; j++) off += ((count[j] as number) - (targets[j] as number)) ** 2;
+    for (let j = 0; j < k; j++) {
+      off += ((count[j] as number) - (targets[j] as number)) ** 2;
+    }
     return off;
   };
   // A site with no cells gains cells at about the rate of a lone disc. Other sites get 5% of that rate so the Newton
@@ -178,16 +213,38 @@ function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64
       off = assign(weight);
     }
     let settled = pass >= MOVES;
-    for (let j = 0; j < k && settled; j++) if (Math.abs((count[j] as number) - (targets[j] as number)) > Math.max(1, 0.005 * (targets[j] as number))) settled = false;
+    for (let j = 0; j < k && settled; j++) {
+      if (
+        Math.abs((count[j] as number) - (targets[j] as number)) >
+        Math.max(1, 0.005 * (targets[j] as number))
+      ) {
+        settled = false;
+      }
+    }
     if (settled || pass >= PASSES) return;
-    const step = newtonStep(trade, Float64Array.from(targets, (t, j) => t - (count[j] as number)), Float64Array.from(count, (n) => (n === 0 ? grows : 0.05 * grows)));
+    const step = newtonStep(
+      trade,
+      Float64Array.from(targets, (t, j) => t - (count[j] as number)),
+      Float64Array.from(count, (n) => (n === 0 ? grows : 0.05 * grows)),
+    );
     // Scale the step so no weight changes by more than a lone disc's weight for half of max(target, count) plus two
     // cells. Then halve it until the counts move closer to their targets, and give up below 1/20 of that scale.
     let fits = 1;
-    for (let j = 0; j < k; j++) fits = Math.min(fits, ((0.5 * Math.max(targets[j] as number, count[j] as number) + 2) * cellArea) / Math.PI / Math.max(1e-9, Math.abs(step[j] as number)));
+    for (let j = 0; j < k; j++) {
+      fits = Math.min(
+        fits,
+        ((0.5 * Math.max(targets[j] as number, count[j] as number) + 2) *
+          cellArea) /
+          Math.PI /
+          Math.max(1e-9, Math.abs(step[j] as number)),
+      );
+    }
     let better = false;
     for (let scale = fits; scale > fits / 20 && !better; scale /= 2) {
-      const tried = Float64Array.from(weight, (w, j) => w + scale * (step[j] as number));
+      const tried = Float64Array.from(
+        weight,
+        (w, j) => w + scale * (step[j] as number),
+      );
       const now = assign(tried);
       if (now < off) {
         weight = tried;
@@ -209,7 +266,11 @@ function settle(r: Raster, cells: Int32Array, targets: Float64Array, sx: Float64
  * the diagonal `alone`. The diagonal makes the system nonsingular and gives a
  * site with no neighbors a lone disc's growth rate.
  */
-function newtonStep(trade: Float64Array, short: Float64Array, alone: Float64Array): Float64Array {
+function newtonStep(
+  trade: Float64Array,
+  short: Float64Array,
+  alone: Float64Array,
+): Float64Array {
   const k = short.length;
   const times = (v: Float64Array, out: Float64Array): void => {
     for (let i = 0; i < k; i++) {
@@ -231,7 +292,9 @@ function newtonStep(trade: Float64Array, short: Float64Array, alone: Float64Arra
   for (let it = 0; it < 2 * k + 8 && rr > enough; it++) {
     times(dir, turned);
     let dq = 0;
-    for (let i = 0; i < k; i++) dq += (dir[i] as number) * (turned[i] as number);
+    for (let i = 0; i < k; i++) {
+      dq += (dir[i] as number) * (turned[i] as number);
+    }
     if (dq <= 0) break;
     const alpha = rr / dq;
     let next = 0;
@@ -240,7 +303,9 @@ function newtonStep(trade: Float64Array, short: Float64Array, alone: Float64Arra
       rest[i] = (rest[i] as number) - alpha * (turned[i] as number);
       next += (rest[i] as number) ** 2;
     }
-    for (let i = 0; i < k; i++) dir[i] = (rest[i] as number) + (next / rr) * (dir[i] as number);
+    for (let i = 0; i < k; i++) {
+      dir[i] = (rest[i] as number) + (next / rr) * (dir[i] as number);
+    }
     rr = next;
   }
   return x;
@@ -260,7 +325,14 @@ const SPACING = 48;
  * depend on the cells only through their centroid and second moments, so a
  * small change in ground moves them a little.
  */
-function spaceSites(r: Raster, cells: Int32Array, kids: readonly LandNode[], targets: Float64Array, sx: Float64Array, sz: Float64Array): void {
+function spaceSites(
+  r: Raster,
+  cells: Int32Array,
+  kids: readonly LandNode[],
+  targets: Float64Array,
+  sx: Float64Array,
+  sz: Float64Array,
+): void {
   const k = kids.length;
   let cx = 0;
   let cz = 0;
@@ -349,7 +421,12 @@ function spaceSites(r: Raster, cells: Int32Array, kids: readonly LandNode[], tar
 }
 
 /** Splits `cells` among a node's children and recurses to the leaves. Writes each leaf's cells to `out`. */
-function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, Int32Array>): void {
+function divide(
+  r: Raster,
+  node: LandNode,
+  cells: Int32Array,
+  out: Map<string, Int32Array>,
+): void {
   if (node.children.length === 0) {
     out.set(node.id, cells);
     return;
@@ -366,7 +443,15 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   const sz = new Float64Array(kids.length);
   spaceSites(r, cells, kids, targets, sx, sz);
   const owner = new Int32Array(cells.length);
-  settle(r, cells, targets, sx, sz, owner, kids.map((kid) => kid.center === true));
+  settle(
+    r,
+    cells,
+    targets,
+    sx,
+    sz,
+    owner,
+    kids.map((kid) => kid.center === true),
+  );
   // Every leaf needs at least one cell. A child with fewer cells than leaves gets the cells nearest its site,
   // reassigned from siblings that keep at least one cell per leaf. A child with no cells first moves its site to the
   // farthest cell of the sibling with the most spare cells, then gets max(leaves, target) cells. Several empty
@@ -374,18 +459,23 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   const leaves = kids.map((kid) => leavesOf(kid).length);
   const held = new Int32Array(kids.length);
   owner.forEach((o) => (held[o] = (held[o] as number) + 1));
-  const spare = (o: number): number => (held[o] as number) - Math.max(leaves[o] as number, targets[o] as number);
+  const spare = (o: number): number =>
+    (held[o] as number) - Math.max(leaves[o] as number, targets[o] as number);
   kids.forEach((_, j) => {
     const need = leaves[j] as number;
     if ((held[j] as number) >= need) return;
     if ((held[j] as number) === 0) {
       let richest = -1;
-      for (let o = 0; o < kids.length; o++) if (o !== j && (richest < 0 || spare(o) > spare(richest))) richest = o;
+      for (let o = 0; o < kids.length; o++) {
+        if (o !== j && (richest < 0 || spare(o) > spare(richest))) richest = o;
+      }
       let far = -1;
       for (let c = 0; c < cells.length; c++) {
         if (owner[c] !== richest) continue;
         const q = cells[c] as number;
-        const d = ((r.wx[q] as number) - (sx[richest] as number)) ** 2 + ((r.wz[q] as number) - (sz[richest] as number)) ** 2;
+        const d =
+          ((r.wx[q] as number) - (sx[richest] as number)) ** 2 +
+          ((r.wz[q] as number) - (sz[richest] as number)) ** 2;
         if (d > far) {
           far = d;
           sx[j] = r.wx[q] as number;
@@ -393,9 +483,19 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
         }
       }
     }
-    let want = (held[j] as number) === 0 ? Math.max(need, Math.round(targets[j] as number)) : need - (held[j] as number);
+    let want =
+      (held[j] as number) === 0
+        ? Math.max(need, Math.round(targets[j] as number))
+        : need - (held[j] as number);
     const near = Array.from(cells.keys())
-      .map((c) => [c, ((r.wx[cells[c] as number] as number) - (sx[j] as number)) ** 2 + ((r.wz[cells[c] as number] as number) - (sz[j] as number)) ** 2] as const)
+      .map(
+        (c) =>
+          [
+            c,
+            ((r.wx[cells[c] as number] as number) - (sx[j] as number)) ** 2 +
+              ((r.wz[cells[c] as number] as number) - (sz[j] as number)) ** 2,
+          ] as const,
+      )
       .sort((a, b) => a[1] - b[1] || a[0] - b[0]);
     for (const [c] of near) {
       if (want === 0) break;
@@ -409,7 +509,9 @@ function divide(r: Raster, node: LandNode, cells: Int32Array, out: Map<string, I
   });
   const parts: number[][] = kids.map(() => []);
   owner.forEach((o, c) => (parts[o] as number[]).push(cells[c] as number));
-  kids.forEach((kid, j) => divide(r, kid, Int32Array.from(parts[j] as number[]), out));
+  kids.forEach((kid, j) =>
+    divide(r, kid, Int32Array.from(parts[j] as number[]), out),
+  );
 }
 
 /** Leaves in depth-first order. */
@@ -430,11 +532,18 @@ const SITE_SPACING = 16;
  * Nearest-site division over these sites matches the nested division to
  * within a few meters, and every leaf with cells keeps at least one.
  */
-function sitesOf(r: Raster, leaves: readonly LandNode[], shares: ReadonlyMap<string, Int32Array>): { site: LandSite; leaf: number }[] {
+function sitesOf(
+  r: Raster,
+  leaves: readonly LandNode[],
+  shares: ReadonlyMap<string, Int32Array>,
+): { site: LandSite; leaf: number }[] {
   const m = Math.max(2, Math.round(SITE_SPACING / r.step));
   const blocks = Math.ceil(r.n / m);
   const out: { site: LandSite; leaf: number }[] = [];
-  const cellOf = (q: number): [number, number] => [Math.round(((r.px[q] as number) + r.half) / r.step - 0.5), Math.round(((r.pz[q] as number) + r.half) / r.step - 0.5)];
+  const cellOf = (q: number): [number, number] => [
+    Math.round(((r.px[q] as number) + r.half) / r.step - 0.5),
+    Math.round(((r.pz[q] as number) + r.half) / r.step - 0.5),
+  ];
   leaves.forEach((leaf, li) => {
     const cells = shares.get(leaf.id) ?? new Int32Array(0);
     if (cells.length === 0) return;
@@ -477,7 +586,8 @@ function sitesOf(r: Raster, leaves: readonly LandNode[], shares: ReadonlyMap<str
       let best = cells[0] as number;
       let near = Infinity;
       for (const q of cells) {
-        const d = ((r.px[q] as number) - x) ** 2 + ((r.pz[q] as number) - z) ** 2;
+        const d =
+          ((r.px[q] as number) - x) ** 2 + ((r.pz[q] as number) - z) ** 2;
         if (d < near) {
           near = d;
           best = q;
@@ -485,7 +595,15 @@ function sitesOf(r: Raster, leaves: readonly LandNode[], shares: ReadonlyMap<str
       }
       picks.push(best);
     }
-    for (const q of picks) out.push({ site: { x: Math.round((r.wx[q] as number) * 100) / 100, z: Math.round((r.wz[q] as number) * 100) / 100 }, leaf: li });
+    for (const q of picks) {
+      out.push({
+        site: {
+          x: Math.round((r.wx[q] as number) * 100) / 100,
+          z: Math.round((r.wz[q] as number) * 100) / 100,
+        },
+        leaf: li,
+      });
+    }
   });
   return out;
 }
@@ -503,7 +621,13 @@ export function divideLand(root: LandNode, land: LandOutline): Land {
   const sites = drawn.map((d) => d.site);
   // Final ownership uses `nearestSite`, the same rule as `siteAt` and the terrain regions.
   const owner = new Int32Array(r.px.length);
-  for (let q = 0; q < owner.length; q++) owner[q] = (drawn[nearestSite(sites, r.wx[q] as number, r.wz[q] as number)] as { leaf: number }).leaf;
+  for (let q = 0; q < owner.length; q++) {
+    owner[q] = (
+      drawn[nearestSite(sites, r.wx[q] as number, r.wz[q] as number)] as {
+        leaf: number;
+      }
+    ).leaf;
+  }
   const cells: number[][] = leaves.map(() => []);
   owner.forEach((o, q) => (cells[o] as number[]).push(q));
   const out: LeafLand[] = leaves.map((leaf, j) => {
@@ -537,14 +661,24 @@ export function divideLand(root: LandNode, land: LandOutline): Land {
         for (let di = -1; di <= 1 && whole; di++) {
           const ii = i + di;
           const kk = jj + dj;
-          const o = ii < 0 || kk < 0 || ii >= r.n || kk >= r.n ? -1 : (r.at[kk * r.n + ii] as number);
+          const o =
+            ii < 0 || kk < 0 || ii >= r.n || kk >= r.n
+              ? -1
+              : (r.at[kk * r.n + ii] as number);
           if (o < 0 || owner[o] !== j) whole = false;
         }
       }
       if (whole) inner.push([r.px[q] as number, r.pz[q] as number]);
     }
     const own = drawn.filter((d) => d.leaf === j).map((d) => d.site);
-    return { id: leaf.id, sites: own, ground: mine.length * step * step, x: mine.length > 0 ? hx : (own[0]?.x ?? 0), z: mine.length > 0 ? hz : (own[0]?.z ?? 0), inner };
+    return {
+      id: leaf.id,
+      sites: own,
+      ground: mine.length * step * step,
+      x: mine.length > 0 ? hx : (own[0]?.x ?? 0),
+      z: mine.length > 0 ? hz : (own[0]?.z ?? 0),
+      inner,
+    };
   });
   return { step, leaves: out };
 }
@@ -564,19 +698,49 @@ export interface Plot {
  * `cells` are the leaf's `LeafLand.inner` points and `cellStep` is the raster
  * spacing. Every plot gets at least one cell.
  */
-export function dividePlots(root: LandNode, cells: readonly (readonly [number, number])[], cellStep: number): ReadonlyMap<string, Plot> {
+export function dividePlots(
+  root: LandNode,
+  cells: readonly (readonly [number, number])[],
+  cellStep: number,
+): ReadonlyMap<string, Plot> {
   const out = new Map<string, Plot>();
   if (cells.length === 0) return out;
   // With fewer cells than plots, split each cell in four until every plot can have one.
   let points = cells;
   let step = cellStep;
-  for (const wanted = leavesOf(root).length; points.length < wanted; step /= 2) points = points.flatMap(([x, z]) => [-1, 1].flatMap((dz) => [-1, 1].map((dx) => [x + (dx * step) / 4, z + (dz * step) / 4] as const)));
+  for (
+    const wanted = leavesOf(root).length;
+    points.length < wanted;
+    step /= 2
+  ) {
+    points = points.flatMap(([x, z]) =>
+      [-1, 1].flatMap((dz) =>
+        [-1, 1].map(
+          (dx) => [x + (dx * step) / 4, z + (dz * step) / 4] as const,
+        ),
+      ),
+    );
+  }
   const px = Float64Array.from(points, (p) => p[0]);
   const pz = Float64Array.from(points, (p) => p[1]);
   const warped = points.map((p) => warpPoint(p[0], p[1]));
-  const r: Raster = { step, n: 0, half: 0, px, pz, wx: Float64Array.from(warped, (w) => w[0]), wz: Float64Array.from(warped, (w) => w[1]), at: new Int32Array(0) };
+  const r: Raster = {
+    step,
+    n: 0,
+    half: 0,
+    px,
+    pz,
+    wx: Float64Array.from(warped, (w) => w[0]),
+    wz: Float64Array.from(warped, (w) => w[1]),
+    at: new Int32Array(0),
+  };
   const shares = new Map<string, Int32Array>();
-  divide(r, root, Int32Array.from({ length: points.length }, (_, i) => i), shares);
+  divide(
+    r,
+    root,
+    Int32Array.from({ length: points.length }, (_, i) => i),
+    shares,
+  );
   for (const leaf of leavesOf(root)) {
     const mine = shares.get(leaf.id);
     if (mine === undefined || mine.length === 0) continue;
@@ -597,7 +761,11 @@ export function dividePlots(root: LandNode, cells: readonly (readonly [number, n
         best = q;
       }
     }
-    out.set(leaf.id, { x: px[best] as number, z: pz[best] as number, ground: mine.length * step * step });
+    out.set(leaf.id, {
+      x: px[best] as number,
+      z: pz[best] as number,
+      ground: mine.length * step * step,
+    });
   }
   return out;
 }

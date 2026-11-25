@@ -24,25 +24,49 @@ export interface Lattice {
 
 export function createLattice(extent: number, spacing: number): Lattice {
   const n = Math.round(extent / spacing) + 1;
-  return { n, spacing, origin: (-(n - 1) * spacing) / 2, heights: new Float32Array(n * n) };
+  return {
+    n,
+    spacing,
+    origin: (-(n - 1) * spacing) / 2,
+    heights: new Float32Array(n * n),
+  };
 }
 
 /** A lattice's position and size, without its samples. */
-export type LatticeFrame = Pick<Lattice, "n" | "spacing" | "origin" | "originZ">;
+export type LatticeFrame = Pick<
+  Lattice,
+  "n" | "spacing" | "origin" | "originZ"
+>;
 
 /** World x of column `i`. It is also world z of row `i` on a lattice without `originZ`. */
-export const worldOf = (l: Pick<Lattice, "origin" | "spacing">, i: number): number => l.origin + i * l.spacing;
+export const worldOf = (
+  l: Pick<Lattice, "origin" | "spacing">,
+  i: number,
+): number => l.origin + i * l.spacing;
 /** World z of row `i`. */
-export const worldOfZ = (l: Pick<Lattice, "origin" | "originZ" | "spacing">, i: number): number => (l.originZ ?? l.origin) + i * l.spacing;
+export const worldOfZ = (
+  l: Pick<Lattice, "origin" | "originZ" | "spacing">,
+  i: number,
+): number => (l.originZ ?? l.origin) + i * l.spacing;
 
 /**
  * Height at any point, interpolated as the mesh draws it. Each cell splits
  * into two triangles along the diagonal from (ix+1, iz) to (ix, iz+1).
  */
-export function heightAt(l: Lattice, x: number, z: number, values: Float32Array = l.heights): number {
+export function heightAt(
+  l: Lattice,
+  x: number,
+  z: number,
+  values: Float32Array = l.heights,
+): number {
   const ux = (x - l.origin) / l.spacing;
   const uz = (z - (l.originZ ?? l.origin)) / l.spacing;
-  if (l.beyond !== undefined && (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)) return l.beyond(x, z, values);
+  if (
+    l.beyond !== undefined &&
+    (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)
+  ) {
+    return l.beyond(x, z, values);
+  }
   const gx = Math.min(l.n - 1.000001, Math.max(0, ux));
   const gz = Math.min(l.n - 1.000001, Math.max(0, uz));
   const ix = Math.floor(gx);

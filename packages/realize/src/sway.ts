@@ -33,7 +33,15 @@ export const WIND = {
   /** The whole plant bends from its base, by height. */
   trunk: { lean: 0.05, swing: 0.45, rate: 0.75, most: 0.1 },
   /** A bough turns about its joint. Its reach is a share of the plant's height, clamped to `least` and `longest` meters. */
-  bough: { lean: 0.07, swing: 0.6, rate: 1.55, most: 0.2, reach: 0.35, least: 0.6, longest: 4 },
+  bough: {
+    lean: 0.07,
+    swing: 0.6,
+    rate: 1.55,
+    most: 0.2,
+    reach: 0.35,
+    least: 0.6,
+    longest: 4,
+  },
   /** A twig turns about where it leaves its bough, over its reach in meters. */
   twig: { lean: 0.1, swing: 0.8, rate: 2.7, most: 0.28, reach: 0.6 },
   /** Leaves and flowers turn on their stalks, only in a gust. Past its reach in meters a piece turns less, so a long strand only rustles. */
@@ -68,7 +76,12 @@ export const FLUTTERS: ReadonlySet<string> = new Set(["leaf", "bloom", "eye"]);
 export const STIFF: ReadonlySet<number> = new Set([CUT.needles, CUT.strand]);
 
 /** A seeded phase in radians from a joint's place, so neighboring boughs never swing in step. */
-export function jointPhase(x: number, y: number, z: number, seed: number): number {
+export function jointPhase(
+  x: number,
+  y: number,
+  z: number,
+  seed: number,
+): number {
   const h = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
   return (h - Math.floor(h) + seed) * 6.283185307179586;
 }
@@ -91,11 +104,15 @@ export interface WindState {
 /** How far a plant of `height` meters bends at its trunk, relative to the reference plant in `WIND.build`. */
 export function trunkGive(height: number): number {
   const b = WIND.build;
-  return Math.min(b.most, Math.max(b.least, Math.sqrt(b.height / Math.max(height, 0.3))));
+  return Math.min(
+    b.most,
+    Math.max(b.least, Math.sqrt(b.height / Math.max(height, 0.3))),
+  );
 }
 
 /** Eases an angle toward `most`, never past it. */
-const ease = (angle: number, most: number): number => most * Math.tanh(angle / most);
+const ease = (angle: number, most: number): number =>
+  most * Math.tanh(angle / most);
 
 /**
  * One level's turn at a joint, as a horizontal vector (x, z) whose length is
@@ -103,9 +120,18 @@ const ease = (angle: number, most: number): number => most * Math.tanh(angle / m
  * swinging about it. `gust` is the gust at the joint, `fade` scales the
  * swing, and `lag` delays it in radians.
  */
-function leanOf(level: WindLevel, s: WindState, give: number, gust: number, phase: number, fade: number, lag: number): [number, number] {
+function leanOf(
+  level: WindLevel,
+  s: WindState,
+  give: number,
+  gust: number,
+  phase: number,
+  fade: number,
+  lag: number,
+): [number, number] {
   const t = s.time * (0.5 + s.frequency) * level.rate + phase - lag;
-  const answer = WIND.answer.calm + (WIND.answer.full - WIND.answer.calm) * gust * gust;
+  const answer =
+    WIND.answer.calm + (WIND.answer.full - WIND.answer.calm) * gust * gust;
   const lean = level.lean * answer;
   const swing = level.lean * level.swing * answer * fade;
   const along = give * (lean + swing * Math.sin(t));
@@ -119,7 +145,16 @@ function leanOf(level: WindLevel, s: WindState, give: number, gust: number, phas
 }
 
 /** Turns `p` about the unit axis `k` through `j` by `angle`, keeping its distance from `j`. Writes into `p`. */
-function turnAbout(p: number[], j0: number, j1: number, j2: number, k0: number, k1: number, k2: number, angle: number): void {
+function turnAbout(
+  p: number[],
+  j0: number,
+  j1: number,
+  j2: number,
+  k0: number,
+  k1: number,
+  k2: number,
+  angle: number,
+): void {
   const vx = (p[0] as number) - j0;
   const vy = (p[1] as number) - j1;
   const vz = (p[2] as number) - j2;
@@ -138,21 +173,52 @@ function turnAbout(p: number[], j0: number, j1: number, j2: number, k0: number, 
  * swing fades and lags with distance, so a long hanging piece sways rather
  * than whips. Writes into `p`.
  */
-function bendAt(p: number[], j0: number, j1: number, j2: number, level: WindLevel, s: WindState, give: number, gust: number, reach: number, phase: number): void {
-  const d = Math.hypot((p[0] as number) - j0, (p[1] as number) - j1, (p[2] as number) - j2);
+function bendAt(
+  p: number[],
+  j0: number,
+  j1: number,
+  j2: number,
+  level: WindLevel,
+  s: WindState,
+  give: number,
+  gust: number,
+  reach: number,
+  phase: number,
+): void {
+  const d = Math.hypot(
+    (p[0] as number) - j0,
+    (p[1] as number) - j1,
+    (p[2] as number) - j2,
+  );
   if (d < 1e-4) return;
   const full = reach * WIND.grow;
   const x = 1 - Math.min(d / full, 1);
   const grow = 1 - x * x;
-  const [lx, lz] = leanOf(level, s, give, gust, phase, full / Math.max(d, full), Math.max(0, d - full) * WIND.trail);
+  const [lx, lz] = leanOf(
+    level,
+    s,
+    give,
+    gust,
+    phase,
+    full / Math.max(d, full),
+    Math.max(0, d - full) * WIND.trail,
+  );
   const angle = Math.hypot(lx, lz);
   if (angle < 1e-7) return;
   // The axis is up x lean, so a positive turn about it moves points above the joint toward the lean.
   turnAbout(p, j0, j1, j2, lz / angle, 0, -lx / angle, angle * grow);
 }
 
-const same = (a: Float32Array, i: number, b: Float32Array, k: number): boolean =>
-  Math.abs((a[i * 3] as number) - (b[k * 3] as number)) + Math.abs((a[i * 3 + 1] as number) - (b[k * 3 + 1] as number)) + Math.abs((a[i * 3 + 2] as number) - (b[k * 3 + 2] as number)) < 1e-5;
+const same = (
+  a: Float32Array,
+  i: number,
+  b: Float32Array,
+  k: number,
+): boolean =>
+  Math.abs((a[i * 3] as number) - (b[k * 3] as number)) +
+    Math.abs((a[i * 3 + 1] as number) - (b[k * 3 + 1] as number)) +
+    Math.abs((a[i * 3 + 2] as number) - (b[k * 3 + 2] as number)) <
+  1e-5;
 
 /**
  * Where each vertex of `part` moves in the wind, from `positions` as
@@ -161,15 +227,31 @@ const same = (a: Float32Array, i: number, b: Float32Array, k: number): boolean =
  * never where their cut is `STIFF`. The copy is unrotated at `s.at`, and the
  * shader does the same in the copy's own frame.
  */
-export function swayAt(part: Part, positions: Float32Array, s: WindState, flutter: boolean): Float32Array {
+export function swayAt(
+  part: Part,
+  positions: Float32Array,
+  s: WindState,
+  flutter: boolean,
+): Float32Array {
   const out = new Float32Array(positions.length);
   const { pivot, bough, twig } = part.channels;
   const give = s.strength * s.sway;
   const trunk = trunkGive(s.height);
-  const boughReach = Math.min(WIND.bough.longest, Math.max(WIND.bough.least, WIND.bough.reach * s.height));
+  const boughReach = Math.min(
+    WIND.bough.longest,
+    Math.max(WIND.bough.least, WIND.bough.reach * s.height),
+  );
   const [wx, wz] = windDirAt(s.time);
   const p = [0, 0, 0];
-  const [tx, tz] = leanOf(WIND.trunk, s, give * trunk, gustAt(s.at[0], s.at[2], s.time), s.seed * 6.283185307179586, 1, 0);
+  const [tx, tz] = leanOf(
+    WIND.trunk,
+    s,
+    give * trunk,
+    gustAt(s.at[0], s.at[2], s.time),
+    s.seed * 6.283185307179586,
+    1,
+    0,
+  );
   for (let i = 0; i < part.shade.length; i++) {
     p[0] = positions[i * 3] as number;
     p[1] = positions[i * 3 + 1] as number;
@@ -198,12 +280,59 @@ export function swayAt(part: Part, positions: Float32Array, s: WindState, flutte
       const ay = (ny / nl) * nod + sy * twist;
       const az = (nz / nl) * nod + sz * twist;
       const al = Math.hypot(ax, ay, az) || 1;
-      const amp = ease(give * WIND.leaf.swing * WIND.answer.full * gust * gust * Math.sin(s.time * (0.5 + s.frequency) * WIND.leaf.rate + phase), WIND.leaf.most);
-      const d = Math.hypot((p[0] as number) - p0, (p[1] as number) - p1, (p[2] as number) - p2);
-      turnAbout(p, p0, p1, p2, ax / al, ay / al, az / al, amp * Math.min(1, WIND.leaf.reach / Math.max(d, 1e-4)));
+      const amp = ease(
+        give *
+          WIND.leaf.swing *
+          WIND.answer.full *
+          gust *
+          gust *
+          Math.sin(s.time * (0.5 + s.frequency) * WIND.leaf.rate + phase),
+        WIND.leaf.most,
+      );
+      const d = Math.hypot(
+        (p[0] as number) - p0,
+        (p[1] as number) - p1,
+        (p[2] as number) - p2,
+      );
+      turnAbout(
+        p,
+        p0,
+        p1,
+        p2,
+        ax / al,
+        ay / al,
+        az / al,
+        amp * Math.min(1, WIND.leaf.reach / Math.max(d, 1e-4)),
+      );
     }
-    if (!same(twig, i, bough, i)) bendAt(p, j(twig, 0), j(twig, 1), j(twig, 2), WIND.twig, s, give, gust, WIND.twig.reach, jointPhase(j(twig, 0), j(twig, 1), j(twig, 2), s.seed));
-    if (Math.hypot(j(bough, 0), j(bough, 1), j(bough, 2)) > 1e-4) bendAt(p, j(bough, 0), j(bough, 1), j(bough, 2), WIND.bough, s, give * Math.sqrt(trunk), gust, boughReach, jointPhase(j(bough, 0), j(bough, 1), j(bough, 2), s.seed));
+    if (!same(twig, i, bough, i)) {
+      bendAt(
+        p,
+        j(twig, 0),
+        j(twig, 1),
+        j(twig, 2),
+        WIND.twig,
+        s,
+        give,
+        gust,
+        WIND.twig.reach,
+        jointPhase(j(twig, 0), j(twig, 1), j(twig, 2), s.seed),
+      );
+    }
+    if (Math.hypot(j(bough, 0), j(bough, 1), j(bough, 2)) > 1e-4) {
+      bendAt(
+        p,
+        j(bough, 0),
+        j(bough, 1),
+        j(bough, 2),
+        WIND.bough,
+        s,
+        give * Math.sqrt(trunk),
+        gust,
+        boughReach,
+        jointPhase(j(bough, 0), j(bough, 1), j(bough, 2), s.seed),
+      );
+    }
     // The whole plant bends from its base. Each point leans by its height and drops to keep its length.
     const y = Math.max(0, p[1] as number);
     const k = (y * y) / Math.max(s.height, 0.3);

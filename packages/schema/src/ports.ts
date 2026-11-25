@@ -163,7 +163,16 @@ export const CUT = {
 } as const;
 
 /** The cuts that are sprays: their leaves drop in place rather than collapsing onto the pivot. */
-export const SPRAYS: ReadonlySet<number> = new Set([CUT.cluster, CUT.oval, CUT.lobed, CUT.umbels, CUT.crowded, CUT.crowdedPointed, CUT.crowdedLobed, CUT.crowdedUmbels]);
+export const SPRAYS: ReadonlySet<number> = new Set([
+  CUT.cluster,
+  CUT.oval,
+  CUT.lobed,
+  CUT.umbels,
+  CUT.crowded,
+  CUT.crowdedPointed,
+  CUT.crowdedLobed,
+  CUT.crowdedUmbels,
+]);
 
 export interface Anchor {
   readonly position: Vec3;
@@ -176,7 +185,11 @@ export interface Anchor {
    * the anchor moves with it. Absent for an anchor attached to nothing that
    * moves.
    */
-  readonly carry?: { readonly bough: Vec3; readonly twig: Vec3; readonly droop: number };
+  readonly carry?: {
+    readonly bough: Vec3;
+    readonly twig: Vec3;
+    readonly droop: number;
+  };
 }
 
 export interface Built {

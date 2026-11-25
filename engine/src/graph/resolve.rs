@@ -248,12 +248,7 @@ impl<'a> Paths<'a> {
         };
         let tail = segments.join("/");
         let mut out = Vec::new();
-        for p in self
-            .by_last
-            .get(*last)
-            .map(Vec::as_slice)
-            .unwrap_or_default()
-        {
+        for p in self.by_last.get(*last).into_iter().flatten() {
             let (bare, id) = match p.strip_suffix('/') {
                 Some(d) => (d.to_string(), format!("dir:{d}")),
                 None => (stem(p).to_string(), format!("file:{p}")),
@@ -341,14 +336,98 @@ struct Rules<'a> {
     candidates_of: RefCell<HashMap<String, Vec<String>>>,
 }
 
+fn family_extensions(spec: Option<&Spec>) -> Vec<&'static str> {
+    let Some(spec) = spec else { return Vec::new() };
+    super::languages::table()
+        .values()
+        .filter(|s| s.family == spec.family)
+        .flat_map(|s| s.extensions.iter().map(String::as_str))
+        .collect()
+}
+
+fn relative_starts(from: &str, here: &str, s: &str) -> Option<Vec<String>> {
+    Some(match from {
+        "here" => vec![here.to_string()],
+        "parent" => vec![parent(here).to_string()],
+        "ancestors" => {
+            let mut out = Vec::new();
+            let mut d = here;
+            loop {
+                out.push(d.to_string());
+                if d.is_empty() {
+                    break;
+                }
+                d = parent(d);
+            }
+            out
+        }
+        "dots" => {
+            let dots = s.chars().take_while(|c| *c == '.').count();
+            let mut d = here;
+            for _ in 1..dots {
+                d = parent(d);
+            }
+            vec![d.to_string()]
+        }
+        _ => return None,
+    })
+}
+
 impl Rules<'_> {
-    fn family_extensions(&self, spec: Option<&Spec>) -> Vec<&'static str> {
-        let Some(spec) = spec else { return Vec::new() };
-        super::languages::table()
-            .values()
-            .filter(|s| s.family == spec.family)
-            .flat_map(|s| s.extensions.iter().map(String::as_str))
-            .collect()
+    fn resolve_relative(
+        &self,
+        k: usize,
+        s: &str,
+        here: &str,
+        ext: &[&str],
+        in_module: bool,
+        r: &super::languages::Relative,
+    ) -> Option<Outcome> {
+        // A prefix on its own, as Rust's `use super::*` cleans to `super`.
+        let bare = r.prefix.trim_end_matches([':', '/']);
+        let rest = match s.strip_prefix(r.prefix.as_str()) {
+            Some(rest) => rest,
+            None if !bare.is_empty() && bare != r.prefix && s == bare => "",
+            None => return None,
+        };
+        if in_module && r.in_module.as_deref() == Some("file") {
+            // One step up from a module inside the file is the file. Any
+            // further step resolves as it would at the file's top level.
+            if rest == bare || rest.starts_with(r.prefix.as_str()) {
+                return Some(self.import(k, rest, false));
+            }
+            return Some(Outcome::Edge(self.units[k].id()));
+        }
+        let starts = relative_starts(r.from.as_str(), here, s)?;
+        let rest = if r.from == "dots" {
+            s.trim_start_matches('.').replace('.', "/")
+        } else {
+            rest.replace("::", "/")
+        };
+        // JavaScript's `./` and `../` chains are paths already.
+        let rel = if r.prefix.ends_with('/') {
+            s.to_string()
+        } else {
+            rest
+        };
+        for start in &starts {
+            let origin = if r.prefix.ends_with('/') {
+                here
+            } else {
+                start.as_str()
+            };
+            let Some(target) = normalize(origin, &rel) else {
+                continue;
+            };
+            let named = rel
+                .split('/')
+                .filter(|p| !matches!(*p, "" | "." | ".."))
+                .count();
+            if let Some(o) = self.with_items_dropped(&target, named, ext) {
+                return Some(o);
+            }
+        }
+        Some(self.candidates(k, s))
     }
 
     /// `in_module` is true when the import is inside a module definition.
@@ -359,80 +438,14 @@ impl Rules<'_> {
         if s.is_empty() {
             return Outcome::Outside;
         }
-        let ext = self.family_extensions(spec);
+        let ext = family_extensions(spec);
         let here = dir_of(unit.path);
 
         // Relative forms resolve from the place their prefix names.
-        for r in spec.map(|s| s.relative.as_slice()).unwrap_or_default() {
-            // A prefix on its own, as Rust's `use super::*` cleans to `super`.
-            let bare = r.prefix.trim_end_matches([':', '/']);
-            let rest = match s.strip_prefix(r.prefix.as_str()) {
-                Some(rest) => rest,
-                None if !bare.is_empty() && bare != r.prefix && s == bare => "",
-                None => continue,
-            };
-            if in_module && r.in_module.as_deref() == Some("file") {
-                // One step up from a module inside the file is the file. Any
-                // further step resolves as it would at the file's top level.
-                if rest == bare || rest.starts_with(r.prefix.as_str()) {
-                    return self.import(k, rest, false);
-                }
-                return Outcome::Edge(unit.id());
+        for r in spec.into_iter().flat_map(|s| &s.relative) {
+            if let Some(o) = self.resolve_relative(k, &s, here, &ext, in_module, r) {
+                return o;
             }
-            let starts: Vec<String> = match r.from.as_str() {
-                "here" => vec![here.to_string()],
-                "parent" => vec![parent(here).to_string()],
-                "ancestors" => {
-                    let mut out = Vec::new();
-                    let mut d = here;
-                    loop {
-                        out.push(d.to_string());
-                        if d.is_empty() {
-                            break;
-                        }
-                        d = parent(d);
-                    }
-                    out
-                }
-                "dots" => {
-                    let dots = s.chars().take_while(|c| *c == '.').count();
-                    let mut d = here;
-                    for _ in 1..dots {
-                        d = parent(d);
-                    }
-                    vec![d.to_string()]
-                }
-                _ => continue,
-            };
-            let rest = if r.from == "dots" {
-                s.trim_start_matches('.').replace('.', "/")
-            } else {
-                rest.replace("::", "/")
-            };
-            // JavaScript's `./` and `../` chains are paths already.
-            let rel = if r.prefix.ends_with('/') {
-                s.clone()
-            } else {
-                rest
-            };
-            for start in &starts {
-                let base = if r.prefix.ends_with('/') {
-                    here
-                } else {
-                    start.as_str()
-                };
-                let Some(target) = normalize(base, &rel) else {
-                    continue;
-                };
-                let named = rel
-                    .split('/')
-                    .filter(|p| !matches!(*p, "" | "." | ".."))
-                    .count();
-                if let Some(o) = self.with_items_dropped(&target, named, &ext) {
-                    return o;
-                }
-            }
-            return self.candidates(k, &s);
         }
 
         // A workspace package by its manifest's name, and a subpath through its exports.
@@ -495,7 +508,11 @@ impl Rules<'_> {
             .filter(|p| s == p.name || s.starts_with(&format!("{}/", p.name)))
             .max_by_key(|p| p.name.len())?;
         let sub = s[pkg.name.len()..].trim_start_matches('/');
-        let key = if sub.is_empty() { ".".to_string() } else { format!("./{sub}") };
+        let key = if sub.is_empty() {
+            ".".to_string()
+        } else {
+            format!("./{sub}")
+        };
         let target = match (pkg.exports.get(&key), sub.is_empty()) {
             (Some(t), _) => t.clone(),
             (None, true) => pkg.entry?.to_string(),
@@ -528,7 +545,7 @@ impl Rules<'_> {
             let t = parts[..parts.len() - drop].join("/");
             let named = self.paths.named(&t, ext);
             match named.len() {
-                0 => continue,
+                0 => {}
                 1 => return Some(Outcome::Edge(named[0].clone())),
                 _ => return Some(Outcome::Pending(named)),
             }
@@ -545,7 +562,7 @@ impl Rules<'_> {
         let key = format!("{}|{s}", spec.map_or("", |sp| sp.family.as_str()));
         let known = self.candidates_of.borrow().get(&key).cloned();
         let all = known.unwrap_or_else(|| {
-            let found = self.find_candidates(s, &self.family_extensions(spec));
+            let found = self.find_candidates(s, &family_extensions(spec));
             self.candidates_of.borrow_mut().insert(key, found.clone());
             found
         });
@@ -658,50 +675,68 @@ fn binding<'a>(units: &[Unit<'a>], of: &'a Aliased, files: Vec<usize>) -> Option
     })
 }
 
-/// Runs the rules over every file.
-pub fn run(
-    units: &[Unit],
-    dirs: &BTreeSet<String>,
-    packages: &[Package],
-    installed: &BTreeMap<String, BTreeSet<String>>,
-) -> Resolved {
-    let rules = Rules {
-        units,
-        paths: Paths::new(units, dirs),
-        packages,
-        installed,
-        configs: units
-            .iter()
-            .enumerate()
-            .filter(|(_, u)| u.text.is_some() && u.spec.is_none_or(|s| s.data))
-            .map(|(i, _)| i)
-            .collect(),
-        candidates_of: RefCell::new(HashMap::new()),
-    };
-    let mut edges: Vec<Edge> = Vec::new();
-    let mut pending: Vec<PendingRef> = Vec::new();
-    // One edge per site, so two calls from one definition to another are two edges.
-    let mut seen: HashSet<(String, String, &'static str, u32)> = HashSet::new();
-    let mut push =
-        |edges: &mut Vec<Edge>, from: String, to: String, kind: &'static str, at: Span| {
-            if from != to && seen.insert((from.clone(), to.clone(), kind, at.start)) {
-                edges.push(Edge {
-                    from,
-                    to,
-                    kind,
-                    by: Filled::by("rule"),
-                    at: Some(at),
-                });
-            }
-        };
+type Bindings<'a> = HashMap<&'a str, Vec<(Option<usize>, Bound<'a>)>>;
 
-    // Imports come first, because the call rule searches the files each file
-    // imports and the names each import binds, with the definition each import
-    // is in.
+struct EdgeSink {
+    edges: Vec<Edge>,
+    pending: Vec<PendingRef>,
+    seen: HashSet<(String, String, &'static str, u32)>,
+}
+
+impl EdgeSink {
+    fn new() -> Self {
+        Self {
+            edges: Vec::new(),
+            pending: Vec::new(),
+            seen: HashSet::new(),
+        }
+    }
+
+    fn push(&mut self, from: String, to: String, kind: &'static str, at: Span) {
+        if from != to && self.seen.insert((from.clone(), to.clone(), kind, at.start)) {
+            self.edges.push(Edge {
+                from,
+                to,
+                kind,
+                by: Filled::by("rule"),
+                at: Some(at),
+            });
+        }
+    }
+}
+
+struct ImportIndex<'a> {
+    imported: Vec<BTreeSet<usize>>,
+    bound: Vec<Bindings<'a>>,
+    passes: Vec<Passes<'a>>,
+}
+
+fn looked<'s>(
+    within: Option<&'s Vec<usize>>,
+    imported: &'s BTreeSet<usize>,
+) -> Box<dyn Iterator<Item = usize> + 's> {
+    match within {
+        Some(w) => Box::new(w.iter().copied()),
+        None => Box::new(imported.iter().copied()),
+    }
+}
+
+fn is_own_export(units: &[Unit], k: usize, i: usize) -> bool {
+    let (Some(p), Some(spec)) = (units[k].parse, units[k].spec) else {
+        return false;
+    };
+    let d = &p.defs[i];
+    d.parent.is_none() && d.owner.is_none() && (d.exported || !spec.rules.marks_exports)
+}
+
+fn resolve_imports<'a>(
+    units: &'a [Unit<'a>],
+    rules: &Rules<'a>,
+    sink: &mut EdgeSink,
+) -> ImportIndex<'a> {
     let mut imported: Vec<BTreeSet<usize>> = vec![BTreeSet::new(); units.len()];
-    type Bindings<'a> = HashMap<&'a str, Vec<(Option<usize>, Bound<'a>)>>;
-    let mut bound: Vec<Bindings> = units.iter().map(|_| HashMap::new()).collect();
-    let mut passes: Vec<Passes> = units.iter().map(|_| Passes::default()).collect();
+    let mut bound: Vec<Bindings<'a>> = units.iter().map(|_| HashMap::new()).collect();
+    let mut passes: Vec<Passes<'a>> = units.iter().map(|_| Passes::default()).collect();
     let index: HashMap<&str, usize> = units.iter().enumerate().map(|(i, u)| (u.path, i)).collect();
     let files_of = |id: &str| -> Vec<usize> {
         if let Some(p) = id.strip_prefix("file:") {
@@ -722,36 +757,20 @@ pub fn run(
         };
         for r in p.refs.iter().filter(|r| r.kind == RefKind::Import) {
             let outcome = rules.import(k, &r.text, in_module(r.from));
-            // An alias whose import Jev must resolve keeps its own name.
             let files = match &outcome {
                 Outcome::Edge(to) => Some(files_of(to)),
                 Outcome::Outside => Some(Vec::new()),
                 Outcome::Pending(_) => None,
             };
             if let Some(files) = files {
-                for a in &r.aliases {
-                    if let Some(b) = binding(units, &a.of, files.clone()) {
-                        bound[k]
-                            .entry(a.name.as_str())
-                            .or_default()
-                            .push((r.from, b));
-                    }
-                }
-                for a in &r.passes {
-                    if let Some(b) = binding(units, &a.of, files.clone()) {
-                        passes[k].named.entry(a.name.as_str()).or_default().push(b);
-                    }
-                }
-                if r.passes_all {
-                    passes[k].every.extend(&files);
-                }
+                record_import_bindings(units, r, &files, &mut bound[k], &mut passes[k]);
             }
             match outcome {
                 Outcome::Edge(to) => {
                     imported[k].extend(files_of(&to));
-                    push(&mut edges, u.from(r.from), to, "imports", r.at);
+                    sink.push(u.from(r.from), to, "imports", r.at);
                 }
-                Outcome::Pending(candidates) => pending.push(PendingRef {
+                Outcome::Pending(candidates) => sink.pending.push(PendingRef {
                     from: u.from(r.from),
                     kind: "import",
                     text: r.text.clone(),
@@ -762,247 +781,343 @@ pub fn run(
             }
         }
     }
+    ImportIndex {
+        imported,
+        bound,
+        passes,
+    }
+}
 
-    // Calls and references: candidates by name, nearest tier first.
-    let mut by_name: HashMap<&str, Vec<(usize, usize)>> = HashMap::new();
-    for (k, u) in units.iter().enumerate() {
-        for (i, d) in u
-            .parse
-            .map(|p| p.defs.as_slice())
-            .unwrap_or_default()
-            .iter()
-            .enumerate()
-        {
-            by_name.entry(d.name.as_str()).or_default().push((k, i));
+fn record_import_bindings<'a>(
+    units: &'a [Unit<'a>],
+    r: &'a super::parse::Ref,
+    files: &[usize],
+    bound: &mut Bindings<'a>,
+    passes: &mut Passes<'a>,
+) {
+    for a in &r.aliases {
+        if let Some(b) = binding(units, &a.of, files.to_vec()) {
+            bound.entry(a.name.as_str()).or_default().push((r.from, b));
         }
     }
-    // What a file re-exports of its own: a top-level definition that it
-    // exports, where its language marks exports. `follow` stops at such a
-    // definition.
-    let own = |k: usize, i: usize| {
-        let (Some(p), Some(spec)) = (units[k].parse, units[k].spec) else {
-            return false;
-        };
-        let d = &p.defs[i];
-        d.parent.is_none() && d.owner.is_none() && (d.exported || !spec.marks_exports)
-    };
-    let defines: HashSet<(usize, &str)> = by_name
-        .iter()
-        .flat_map(|(name, at)| {
-            at.iter()
-                .filter(|(k, i)| own(*k, *i))
-                .map(move |(k, _)| (*k, *name))
-        })
-        .collect();
-    for (k, u) in units.iter().enumerate() {
+    for a in &r.passes {
+        if let Some(b) = binding(units, &a.of, files.to_vec()) {
+            passes.named.entry(a.name.as_str()).or_default().push(b);
+        }
+    }
+    if r.passes_all {
+        passes.every.extend(files);
+    }
+}
+
+struct CallResolver<'a> {
+    units: &'a [Unit<'a>],
+    imports: ImportIndex<'a>,
+    by_name: HashMap<&'a str, Vec<(usize, usize)>>,
+    defines: HashSet<(usize, &'a str)>,
+}
+
+impl<'a> CallResolver<'a> {
+    fn new(units: &'a [Unit<'a>], imports: ImportIndex<'a>) -> Self {
+        let mut by_name: HashMap<&'a str, Vec<(usize, usize)>> = HashMap::new();
+        for (k, u) in units.iter().enumerate() {
+            for (i, d) in u.parse.into_iter().flat_map(|p| &p.defs).enumerate() {
+                by_name.entry(d.name.as_str()).or_default().push((k, i));
+            }
+        }
+        let defines: HashSet<(usize, &'a str)> = by_name
+            .iter()
+            .flat_map(|(name, at)| {
+                at.iter()
+                    .filter(|(k, i)| is_own_export(units, *k, *i))
+                    .map(move |(k, _)| (*k, *name))
+            })
+            .collect();
+        Self {
+            units,
+            imports,
+            by_name,
+            defines,
+        }
+    }
+
+    fn resolve_unit(&self, k: usize, sink: &mut EdgeSink) {
+        let u = &self.units[k];
         let (Some(p), Some(spec)) = (u.parse, u.spec) else {
-            continue;
+            return;
         };
         for r in p.refs.iter().filter(|r| r.kind != RefKind::Import) {
-            // A definition inside a function is visible only to code inside
-            // that function.
-            let visible = |kk: usize, i: usize| -> bool {
-                let Some(pp) = units[kk].parse else {
-                    return false;
-                };
+            self.resolve_ref(k, u, p, spec, r, sink);
+        }
+    }
+
+    fn resolve_ref(
+        &self,
+        unit_idx: usize,
+        unit: &Unit<'a>,
+        parse: &'a FileParse,
+        spec: &Spec,
+        reference: &'a super::parse::Ref,
+        sink: &mut EdgeSink,
+    ) {
+        let caller = reference.from.map(|i| &parse.defs[i]);
+        let self_like = |q: &str| {
+            matches!(q, "self" | "this" | "Self" | "cls" | "@")
+                || caller.and_then(|d| d.self_name.as_deref()) == Some(q)
+        };
+        let alias = |name: &str| {
+            let made = self.imports.bound[unit_idx].get(name)?;
+            std::iter::successors(reference.from, |&i| parse.defs[i].parent)
+                .map(Some)
+                .chain([None])
+                .find_map(|scope| made.iter().find(|(s, _)| *s == scope).map(|(_, b)| b))
+        };
+        let (name, qualifier, within) = match reference.qualifier.as_deref() {
+            None => match alias(&reference.text) {
+                Some(b) => (b.name.unwrap_or(&reference.text), None, Some(&b.files)),
+                None => (reference.text.as_str(), None, None),
+            },
+            Some(q) => match alias(q).filter(|_| !self_like(q)) {
+                Some(b) => (reference.text.as_str(), b.name, Some(&b.files)),
+                None => (reference.text.as_str(), Some(q), None),
+            },
+        };
+        let modules = qualifier
+            .filter(|q| !self_like(q))
+            .map(|q| {
+                follow(
+                    &self.imports.passes,
+                    &self.defines,
+                    looked(within, &self.imports.imported[unit_idx]),
+                    q,
+                )
+                .modules
+            })
+            .filter(|m| !m.is_empty());
+        let (qualifier, within) = match &modules {
+            Some(m) => (None, Some(m)),
+            None => (qualifier, within),
+        };
+        let reexported: Vec<(usize, usize)> = if qualifier.is_none() {
+            follow(
+                &self.imports.passes,
+                &self.defines,
+                looked(within, &self.imports.imported[unit_idx]),
+                name,
+            )
+            .defined
+            .into_iter()
+            .flat_map(|(f, n)| {
+                self.by_name
+                    .get(n)
+                    .into_iter()
+                    .flatten()
+                    .copied()
+                    .filter(move |&(kk, i)| kk == f && is_own_export(self.units, kk, i))
+            })
+            .collect()
+        } else {
+            Vec::new()
+        };
+        let all = self.visible_candidates(unit_idx, spec, reference, name, within, &reexported);
+        let caller_owner = caller.and_then(|d| d.owner.as_deref());
+        let (pool, certain) =
+            self.narrow_by_qualifier(&all, spec, reference, qualifier, caller_owner, &self_like);
+        let chosen = self.pick_tier(unit_idx, unit, &pool, within, &reexported);
+        let kind = match reference.kind {
+            RefKind::Call => "calls",
+            RefKind::Reference => "references",
+            RefKind::Implements => "implements",
+            RefKind::Import => return,
+        };
+        match chosen.as_slice() {
+            [] => {}
+            [(kk, i)] if certain => {
+                sink.push(
+                    unit.from(reference.from),
+                    self.units[*kk].def_ids[*i].clone(),
+                    kind,
+                    reference.at,
+                );
+            }
+            many if reference.kind == RefKind::Call => sink.pending.push(PendingRef {
+                from: unit.from(reference.from),
+                kind: "call",
+                text: reference.text.clone(),
+                at: reference.at,
+                candidates: many
+                    .iter()
+                    .map(|(kk, i)| self.units[*kk].def_ids[*i].clone())
+                    .collect(),
+            }),
+            _ => {}
+        }
+    }
+
+    fn visible_candidates(
+        &self,
+        k: usize,
+        spec: &Spec,
+        r: &super::parse::Ref,
+        name: &str,
+        within: Option<&Vec<usize>>,
+        reexported: &[(usize, usize)],
+    ) -> Vec<(usize, usize)> {
+        let mut all: Vec<(usize, usize)> = if let Some(v) = self.by_name.get(name) {
+            v.iter()
+                .copied()
+                .filter(|(kk, _)| within.is_none_or(|w| w.contains(kk)))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        for d in reexported {
+            if !all.contains(d) {
+                all.push(*d);
+            }
+        }
+        all.retain(|&(kk, i)| {
+            let visible = self.units[kk].parse.is_some_and(|pp| {
                 match pp.defs[i].parent.map(|q| &pp.defs[q]) {
                     Some(parent) if parent.callable => {
                         kk == k && parent.span.start <= r.at.start && r.at.end <= parent.span.end
                     }
                     _ => true,
                 }
-            };
-            let caller = r.from.map(|i| &p.defs[i]);
-            let self_like = |q: &str| {
-                matches!(q, "self" | "this" | "Self" | "cls" | "@")
-                    || caller.and_then(|d| d.self_name.as_deref()) == Some(q)
-            };
-            // A name an import binds refers to what it binds in the files the
-            // import names. So `buildV1()` calls `buildSite` there, and `ns.walk()`
-            // calls `walk` in `ns`'s module. An import inside a definition binds
-            // only there, as Python's `from m import a as f` inside a function does.
-            let alias = |name: &str| {
-                let made = bound[k].get(name)?;
-                std::iter::successors(r.from, |&i| p.defs[i].parent)
-                    .map(Some)
-                    .chain([None])
-                    .find_map(|scope| made.iter().find(|(s, _)| *s == scope).map(|(_, b)| b))
-            };
-            let (name, qualifier, within) = match r.qualifier.as_deref() {
-                None => match alias(&r.text) {
-                    Some(b) => (b.name.unwrap_or(&r.text), None, Some(&b.files)),
-                    None => (r.text.as_str(), None, None),
-                },
-                Some(q) => match alias(q).filter(|_| !self_like(q)) {
-                    Some(b) => (r.text.as_str(), b.name, Some(&b.files)),
-                    None => (r.text.as_str(), Some(q), None),
-                },
-            };
-            // A file the rule searches may re-export a name from another file, as
-            // a package's index does. `ns.walk()` searches the module that
-            // `export * as ns from './x'` names, and `walk()` resolves to the
-            // `walk` that `export { walk } from './x'` names.
-            fn looked<'s>(
-                within: Option<&'s Vec<usize>>,
-                imported: &'s BTreeSet<usize>,
-            ) -> Box<dyn Iterator<Item = usize> + 's> {
-                match within {
-                    Some(w) => Box::new(w.iter().copied()),
-                    None => Box::new(imported.iter().copied()),
-                }
-            }
-            let modules = qualifier
-                .filter(|q| !self_like(q))
-                .map(|q| follow(&passes, &defines, looked(within, &imported[k]), q).modules)
-                .filter(|m| !m.is_empty());
-            let (qualifier, within) = match &modules {
-                Some(m) => (None, Some(m)),
-                None => (qualifier, within),
-            };
-            let passed: Vec<(usize, usize)> = if qualifier.is_none() {
-                follow(&passes, &defines, looked(within, &imported[k]), name)
-                    .defined
-                    .into_iter()
-                    .flat_map(|(f, n)| {
-                        let defs = by_name.get(n).map(Vec::as_slice).unwrap_or_default();
-                        defs.iter().copied().filter(move |&(kk, i)| kk == f && own(kk, i))
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
-            let mut all: Vec<(usize, usize)> = by_name
-                .get(name)
-                .map(|v| {
-                    v.iter()
-                        .copied()
-                        .filter(|(kk, _)| within.is_none_or(|w| w.contains(kk)))
-                        .collect()
-                })
-                .unwrap_or_default();
-            for d in &passed {
-                if !all.contains(d) {
-                    all.push(*d);
-                }
-            }
-            all.retain(|(kk, i)| {
-                units[*kk].spec.is_some_and(|s| s.family == spec.family)
-                    && visible(*kk, *i)
-                    && (!r.macro_call
-                        || units[*kk]
-                            .parse
-                            .is_some_and(|pp| pp.defs[*i].role == "macro"))
             });
-            // The call's qualifier decides how sure the rule can be. `self.push`
-            // in Batch and `Batch::new` name the owner, and `utils.join` names a
-            // file or package. An unqualified call never resolves to another
-            // class's method. When the rule cannot place a receiver, such as
-            // `err` in `err.Error()`, it leaves the call to Jev with its candidates.
-            let caller_owner = caller.and_then(|d| d.owner.as_deref());
-            let owner_of =
-                |kk: usize, i: usize| units[kk].parse.and_then(|pp| pp.defs[i].owner.as_deref());
-            let (pool, certain): (Vec<(usize, usize)>, bool) = match qualifier {
-                Some(q) if self_like(q) => {
-                    let mine: Vec<_> = all
-                        .iter()
-                        .copied()
-                        .filter(|(kk, i)| {
-                            caller_owner.is_some() && owner_of(*kk, *i) == caller_owner
-                        })
-                        .collect();
-                    if mine.is_empty() {
-                        (all.clone(), false)
-                    } else {
-                        (mine, true)
-                    }
-                }
-                Some(q) => {
-                    let named: Vec<_> = all
-                        .iter()
-                        .copied()
-                        .filter(|(kk, i)| {
-                            let path = units[*kk].path;
-                            let file = stem(path).rsplit('/').next().unwrap_or("");
-                            let dir = dir_of(path).rsplit('/').next().unwrap_or("");
-                            owner_of(*kk, *i) == Some(q) || file == q || dir == q
-                        })
-                        .collect();
-                    match (named.is_empty(), r.path) {
-                        (false, _) => (named, true),
-                        // A path that names none of them, as `Vec::new` names
-                        // no `new` here, resolves outside the repository.
-                        (true, true) => (Vec::new(), false),
-                        // A value the rule cannot place may resolve to any
-                        // method, or to any function where functions are values.
-                        (true, false) => (
-                            all.iter()
-                                .copied()
-                                .filter(|(kk, i)| {
-                                    spec.functions_as_values || owner_of(*kk, *i).is_some()
-                                })
-                                .collect(),
-                            false,
-                        ),
-                    }
-                }
-                // Java, C#, Kotlin, Swift, C++ and Ruby call their own class's
-                // methods without `self`. Python, JavaScript, Go and Rust don't.
-                None => (
-                    all.iter()
-                        .copied()
-                        .filter(|(kk, i)| {
-                            owner_of(*kk, *i).is_none()
-                                || (spec.implicit_self && owner_of(*kk, *i) == caller_owner)
-                        })
-                        .collect(),
-                    true,
-                ),
-            };
-            // A re-exported name ranks after names the imported files define
-            // themselves, and before a neighbour that only shares the name.
-            let tiers: [&dyn Fn(usize, usize) -> bool; 4] = [
-                &|kk, _| kk == k,
-                &|kk, _| imported[k].contains(&kk) || within.is_some_and(|w| w.contains(&kk)),
-                &|kk, i| passed.contains(&(kk, i)),
-                &|kk, _| dir_of(units[kk].path) == dir_of(u.path),
-            ];
-            let mut chosen: Vec<(usize, usize)> = Vec::new();
-            for tier in tiers {
-                chosen = pool.iter().copied().filter(|(kk, i)| tier(*kk, *i)).collect();
-                if !chosen.is_empty() {
-                    break;
+            self.units[kk].spec.is_some_and(|s| s.family == spec.family)
+                && visible
+                && (!r.macro_call
+                    || self.units[kk]
+                        .parse
+                        .is_some_and(|pp| pp.defs[i].role == "macro"))
+        });
+        all
+    }
+
+    fn narrow_by_qualifier(
+        &self,
+        all: &[(usize, usize)],
+        spec: &Spec,
+        r: &super::parse::Ref,
+        qualifier: Option<&str>,
+        caller_owner: Option<&str>,
+        self_like: &dyn Fn(&str) -> bool,
+    ) -> (Vec<(usize, usize)>, bool) {
+        let owner_of = |kk: usize, i: usize| {
+            self.units[kk]
+                .parse
+                .and_then(|pp| pp.defs[i].owner.as_deref())
+        };
+        match qualifier {
+            Some(q) if self_like(q) => {
+                let mine: Vec<_> = all
+                    .iter()
+                    .copied()
+                    .filter(|&(kk, i)| caller_owner.is_some() && owner_of(kk, i) == caller_owner)
+                    .collect();
+                if mine.is_empty() {
+                    (all.to_vec(), false)
+                } else {
+                    (mine, true)
                 }
             }
-            let kind = match r.kind {
-                RefKind::Call => "calls",
-                RefKind::Reference => "references",
-                RefKind::Implements => "implements",
-                RefKind::Import => continue,
-            };
-            match chosen.as_slice() {
-                [] => {}
-                [(kk, i)] if certain => push(
-                    &mut edges,
-                    u.from(r.from),
-                    units[*kk].def_ids[*i].clone(),
-                    kind,
-                    r.at,
-                ),
-                many if r.kind == RefKind::Call => pending.push(PendingRef {
-                    from: u.from(r.from),
-                    kind: "call",
-                    text: r.text.clone(),
-                    at: r.at,
-                    candidates: many
-                        .iter()
-                        .map(|(kk, i)| units[*kk].def_ids[*i].clone())
-                        .collect(),
-                }),
-                // A type or trait named in several places has no rule yet.
-                _ => {}
+            Some(q) => {
+                let named: Vec<_> = all
+                    .iter()
+                    .copied()
+                    .filter(|&(kk, i)| {
+                        let path = self.units[kk].path;
+                        let file = stem(path).rsplit('/').next().unwrap_or("");
+                        let dir = dir_of(path).rsplit('/').next().unwrap_or("");
+                        owner_of(kk, i) == Some(q) || file == q || dir == q
+                    })
+                    .collect();
+                match (named.is_empty(), r.path) {
+                    (false, _) => (named, true),
+                    (true, true) => (Vec::new(), false),
+                    (true, false) => (
+                        all.iter()
+                            .copied()
+                            .filter(|&(kk, i)| {
+                                spec.rules.functions_as_values || owner_of(kk, i).is_some()
+                            })
+                            .collect(),
+                        false,
+                    ),
+                }
             }
+            None => (
+                all.iter()
+                    .copied()
+                    .filter(|&(kk, i)| {
+                        owner_of(kk, i).is_none()
+                            || (spec.rules.implicit_self && owner_of(kk, i) == caller_owner)
+                    })
+                    .collect(),
+                true,
+            ),
         }
     }
 
-    Resolved { edges, pending }
+    fn pick_tier(
+        &self,
+        k: usize,
+        u: &Unit<'_>,
+        pool: &[(usize, usize)],
+        within: Option<&Vec<usize>>,
+        reexported: &[(usize, usize)],
+    ) -> Vec<(usize, usize)> {
+        let tiers: [&dyn Fn(usize, usize) -> bool; 4] = [
+            &|kk, _| kk == k,
+            &|kk, _| {
+                self.imports.imported[k].contains(&kk) || within.is_some_and(|w| w.contains(&kk))
+            },
+            &|kk, i| reexported.contains(&(kk, i)),
+            &|kk, _| dir_of(self.units[kk].path) == dir_of(u.path),
+        ];
+        for tier in tiers {
+            let chosen: Vec<(usize, usize)> = pool
+                .iter()
+                .copied()
+                .filter(|&(kk, i)| tier(kk, i))
+                .collect();
+            if !chosen.is_empty() {
+                return chosen;
+            }
+        }
+        Vec::new()
+    }
+}
+
+/// Runs the rules over every file.
+pub fn run(
+    units: &[Unit],
+    dirs: &BTreeSet<String>,
+    packages: &[Package],
+    installed: &BTreeMap<String, BTreeSet<String>>,
+) -> Resolved {
+    let rules = Rules {
+        units,
+        paths: Paths::new(units, dirs),
+        packages,
+        installed,
+        configs: units
+            .iter()
+            .enumerate()
+            .filter(|(_, u)| u.text.is_some() && u.spec.is_none_or(|s| s.data))
+            .map(|(i, _)| i)
+            .collect(),
+        candidates_of: RefCell::new(HashMap::new()),
+    };
+    let mut sink = EdgeSink::new();
+    let imports = resolve_imports(units, &rules, &mut sink);
+    let resolver = CallResolver::new(units, imports);
+    for k in 0..units.len() {
+        resolver.resolve_unit(k, &mut sink);
+    }
+    Resolved {
+        edges: sink.edges,
+        pending: sink.pending,
+    }
 }

@@ -8,7 +8,10 @@ import type { FromRenderer, ToRenderer } from "../world-service/protocol.ts";
 declare global {
   interface Window {
     /** Set by the preload script when the page runs inside the app. */
-    gaiaShell?: { readonly app: "electron"; readonly chooseFolder: () => Promise<string | null> };
+    gaiaShell?: {
+      readonly app: "electron";
+      readonly chooseFolder: () => Promise<string | null>;
+    };
   }
 }
 
@@ -32,7 +35,8 @@ export function worldService(): WorldService | null {
     const next = event.ports[0];
     if (next === undefined) return;
     port = next;
-    port.onmessage = (m: MessageEvent<ToRenderer>) => listeners.forEach((l) => l(m.data));
+    port.onmessage = (m: MessageEvent<ToRenderer>) =>
+      listeners.forEach((l) => l(m.data));
     for (const message of waiting.splice(0)) port.postMessage(message);
   });
   service = {

@@ -14,7 +14,10 @@ export interface EngineMethods {
    * every reference the rules have not resolved as pending. The engine parses every language the
    * same way, through its grammar's queries in `engine/queries/`.
    */
-  "project.graph": { params: { root: string; judged?: boolean }; result: CodeGraph };
+  "project.graph": {
+    params: { root: string; judged?: boolean };
+    result: CodeGraph;
+  };
   /**
    * Builds every request the engine would send Jev to understand the project,
    * the links first and then importance and quality at every level, and looks
@@ -28,27 +31,39 @@ export interface EngineMethods {
    * checked-out commit, or the disk outside git. Null when that snapshot has no
    * such file, the file is binary, or the path leaves the root.
    */
-  "project.source": { params: { root: string; path: string; commit?: string }; result: { lines: readonly string[] | null } };
+  "project.source": {
+    params: { root: string; path: string; commit?: string };
+    result: { lines: readonly string[] | null };
+  };
   /**
    * The commit `project.graph` would read `root` at now: the checked-out
    * commit, or null when it would read the disk. The start screen compares it
    * with the last opened commit to show whether the code has changed.
    */
-  "project.commit": { params: { root: string }; result: { commit: string | null } };
+  "project.commit": {
+    params: { root: string };
+    result: { commit: string | null };
+  };
   /**
    * How many commits after `from` up to `to` changed a file under `root`, or
    * null when `from` is not in `to`'s history, as after a rebase or a switch to
    * another branch, or either is not a commit git knows. The start screen uses
    * it to show, on a world's card, the commits since the person last opened it.
    */
-  "project.commits": { params: { root: string; from: string; to: string }; result: { commits: number | null } };
+  "project.commits": {
+    params: { root: string; from: string; to: string };
+    result: { commits: number | null };
+  };
   /**
    * Sends every ready request, up to `max`, 256 by default, as many at once as
    * Jev accepts: the links first, then folders top-down and each file after
    * its folder. Returns the nodes whose answers are now held, so the waiting
    * screen can draw them. Call it until nothing is left.
    */
-  "understanding.next": { params: { root: string; max?: number }; result: UnderstandProgress };
+  "understanding.next": {
+    params: { root: string; max?: number };
+    result: UnderstandProgress;
+  };
   /**
    * Checks a GitHub address before anything is cloned. It returns whether the
    * address names a public repository GitHub serves, using one `git ls-remote`,
@@ -70,20 +85,38 @@ export interface EngineMethods {
    * request failed, in request order. It fails as a whole only when nothing can
    * be sent, such as when the engine runs without GAIA_JEV=live.
    */
-  "jev.batch": { params: { requests: JevRequest[] }; result: { responses: (JevResponse | JevFailure)[] } };
+  "jev.batch": {
+    params: { requests: JevRequest[] };
+    result: { responses: (JevResponse | JevFailure)[] };
+  };
   /** What a batch would send and cost, without sending it or reading the key. */
   "jev.estimate": { params: { requests: JevRequest[] }; result: JevEstimate };
   /**
    * Whether OPENROUTER_API_KEY is nonempty and whether this engine runs with
    * GAIA_JEV=live. Only these two flags cross the protocol. The key never does.
    */
-  "jev.status": { params: Record<string, never>; result: { key: boolean; live: boolean } };
+  "jev.status": {
+    params: Record<string, never>;
+    result: { key: boolean; live: boolean };
+  };
   /** Reads one record from a project's app-data store. Null when it was never written. */
-  "store.get": { params: { project: string; table: StoreTable; key: string }; result: { value: unknown } | null };
+  "store.get": {
+    params: { project: string; table: StoreTable; key: string };
+    result: { value: unknown } | null;
+  };
   /** Reads every record of one table of a project's store, by key. */
-  "store.read": { params: { project: string; table: StoreTable }; result: { records: Record<string, unknown> } };
+  "store.read": {
+    params: { project: string; table: StoreTable };
+    result: { records: Record<string, unknown> };
+  };
   /** Writes records atomically, so a world update is never half-saved. */
-  "store.put": { params: { project: string; writes: { table: StoreTable; key: string; value: unknown }[] }; result: { ok: true } };
+  "store.put": {
+    params: {
+      project: string;
+      writes: { table: StoreTable; key: string; value: unknown }[];
+    };
+    result: { ok: true };
+  };
 }
 
 /**
@@ -95,10 +128,26 @@ export interface EngineMethods {
 export type Unreachable = "address" | "missing" | "offline" | "large" | "slow";
 
 /** Where a GitHub address leads (`project.locate`). `kept` is true when Gaia already has a copy. */
-export type Located = { readonly found: true; readonly owner: string; readonly repo: string; readonly root: string; readonly kept: boolean } | { readonly found: false; readonly why: Unreachable };
+export type Located =
+  | {
+      readonly found: true;
+      readonly owner: string;
+      readonly repo: string;
+      readonly root: string;
+      readonly kept: boolean;
+    }
+  | { readonly found: false; readonly why: Unreachable };
 
 /** A clone or an update (`project.clone`). `fetched` is true when a copy already there was updated rather than cloned anew. */
-export type Cloned = { readonly cloned: true; readonly owner: string; readonly repo: string; readonly root: string; readonly fetched: boolean } | { readonly cloned: false; readonly why: Unreachable };
+export type Cloned =
+  | {
+      readonly cloned: true;
+      readonly owner: string;
+      readonly repo: string;
+      readonly root: string;
+      readonly fetched: boolean;
+    }
+  | { readonly cloned: false; readonly why: Unreachable };
 
 /**
  * The tables of a project's app-data store (`engine/src/store.rs`). `calls`
@@ -132,7 +181,11 @@ export type Pass = "link" | "folders" | "files";
 
 /** What understanding a project would send, pass by pass, and what it would cost. */
 export interface UnderstandPlan {
-  readonly pending: readonly { readonly pass: Pass; readonly requests: number; readonly kept: number }[];
+  readonly pending: readonly {
+    readonly pass: Pass;
+    readonly requests: number;
+    readonly kept: number;
+  }[];
   readonly estimate: JevEstimate;
 }
 
@@ -141,7 +194,10 @@ export interface UnderstandProgress {
   readonly sent: number;
   readonly failed: number;
   /** The first few requests that failed after the engine's client retried them, with each one's unit and error. */
-  readonly failures: readonly { readonly unit: NodeId; readonly error: string }[];
+  readonly failures: readonly {
+    readonly unit: NodeId;
+    readonly error: string;
+  }[];
   readonly left: number;
   /** Nodes whose requests are all answered. */
   readonly settled: readonly NodeId[];
@@ -150,5 +206,8 @@ export interface UnderstandProgress {
 }
 
 export interface EngineClient {
-  call<M extends keyof EngineMethods>(method: M, params: EngineMethods[M]["params"]): Promise<EngineMethods[M]["result"]>;
+  call<M extends keyof EngineMethods>(
+    method: M,
+    params: EngineMethods[M]["params"],
+  ): Promise<EngineMethods[M]["result"]>;
 }

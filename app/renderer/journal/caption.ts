@@ -32,6 +32,8 @@ const CONCEPTS: readonly (readonly [string, string])[] = [
 export function conceptsCaption(thing: JudgedThing): CaptionFact[] {
   return CONCEPTS.flatMap(([key, label]) => {
     const v = thing.concepts[key];
-    return v == null ? [] : [{ label, value: `${Math.round(v * 100)}%` }];
+    return v === undefined || v === null
+      ? []
+      : [{ label, value: `${Math.round(v * 100)}%` }];
   });
 }

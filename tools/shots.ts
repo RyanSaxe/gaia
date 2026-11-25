@@ -16,7 +16,13 @@
 // unless --world names another world.
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -194,22 +200,52 @@ app.whenReady().then(take).then(
 `,
 );
 
-const electron = createRequire(resolve(repo, "app/package.json"))("electron") as string;
+const electron = createRequire(resolve(repo, "app/package.json"))(
+  "electron",
+) as string;
 const argv = process.argv.slice(2);
 const at = argv.indexOf("--world");
 const world = at < 0 ? "proving" : (argv[at + 1] ?? "proving");
 if (!["proving", "showcase", "showcase-fixed"].includes(world)) {
   rmSync(scratch, { recursive: true, force: true });
-  throw new Error(`No world named ${world}; choose from proving, showcase or showcase-fixed.`);
+  throw new Error(
+    `No world named ${world}; choose from proving, showcase or showcase-fixed.`,
+  );
 }
 const words = at < 0 ? argv : [...argv.slice(0, at), ...argv.slice(at + 2)];
-const settings = { page, out, result, profile: join(scratch, "profile"), world, words, looks: LOOKS, width: WIDTH, height: HEIGHT, quality: QUALITY, script: PAGE };
-const env: NodeJS.ProcessEnv = { ...process.env, GAIA_SHOTS: JSON.stringify(settings) };
+const settings = {
+  page,
+  out,
+  result,
+  profile: join(scratch, "profile"),
+  world,
+  words,
+  looks: LOOKS,
+  width: WIDTH,
+  height: HEIGHT,
+  quality: QUALITY,
+  script: PAGE,
+};
+const env: NodeJS.ProcessEnv = {
+  ...process.env,
+  GAIA_SHOTS: JSON.stringify(settings),
+};
 delete env.ELECTRON_RUN_AS_NODE;
-const run = spawnSync(electron, [main], { env, stdio: ["ignore", "inherit", "inherit"] });
-const shot = run.status === 0 ? (JSON.parse(readFileSync(result, "utf8")) as { saved: string[]; messages: string[] }) : null;
+const run = spawnSync(electron, [main], {
+  env,
+  stdio: ["ignore", "inherit", "inherit"],
+});
+const shot =
+  run.status === 0
+    ? (JSON.parse(readFileSync(result, "utf8")) as {
+        saved: string[];
+        messages: string[];
+      })
+    : null;
 rmSync(scratch, { recursive: true, force: true });
-if (shot === null) throw new Error(`Electron exited with ${run.status ?? run.signal}`);
+if (shot === null) {
+  throw new Error(`Electron exited with ${run.status ?? run.signal}`);
+}
 console.log(`Saved ${shot.saved.length} shots in ${out}`);
 const errors = webglErrors();
 for (const message of shot.messages) errors.note(message);

@@ -46,7 +46,9 @@ export interface Intent {
 /** The water's depth at lattice sample i, 0 where it is dry. */
 const sampleDepth = (t: Terrain, i: number): number => {
   const level = t.waterLevel[i] as number;
-  return level > DRY / 2 ? Math.max(0, level - (t.lattice.heights[i] as number)) : 0;
+  return level > DRY / 2
+    ? Math.max(0, level - (t.lattice.heights[i] as number))
+    : 0;
 };
 
 /**
@@ -61,7 +63,10 @@ export function waterDepthAt(t: Terrain, x: number, z: number): number {
   const l = t.lattice;
   const ux = (x - l.origin) / l.spacing;
   const uz = (z - (l.originZ ?? l.origin)) / l.spacing;
-  if (l.beyond !== undefined && (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)) {
+  if (
+    l.beyond !== undefined &&
+    (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)
+  ) {
     const level = heightAt(l, x, z, t.waterLevel);
     return level > DRY / 2 ? Math.max(0, level - heightAt(l, x, z)) : 0;
   }
@@ -75,10 +80,18 @@ export function waterDepthAt(t: Terrain, x: number, z: number): number {
   const i = iz * l.n + ix;
   if (fx + fz <= 1) {
     const d00 = sampleDepth(t, i);
-    return d00 + fx * (sampleDepth(t, i + 1) - d00) + fz * (sampleDepth(t, i + l.n) - d00);
+    return (
+      d00 +
+      fx * (sampleDepth(t, i + 1) - d00) +
+      fz * (sampleDepth(t, i + l.n) - d00)
+    );
   }
   const d11 = sampleDepth(t, i + l.n + 1);
-  return d11 + (1 - fx) * (sampleDepth(t, i + l.n) - d11) + (1 - fz) * (sampleDepth(t, i + 1) - d11);
+  return (
+    d11 +
+    (1 - fx) * (sampleDepth(t, i + l.n) - d11) +
+    (1 - fz) * (sampleDepth(t, i + 1) - d11)
+  );
 }
 
 const smoothstep = (lo: number, hi: number, x: number): number => {
@@ -88,7 +101,9 @@ const smoothstep = (lo: number, hi: number, x: number): number => {
 
 /** The share of full speed left at `depth`: wading slows to 40% by 1.1 m, and swimming is slower again. */
 export const wadeSpeed = (depth: number): number =>
-  1 - WADE.slow * smoothstep(WADE.slowFrom, WADE.slowTo, depth) - (1 - WADE.slow - SWIM.pace) * smoothstep(SWIM.from, SWIM.to, depth);
+  1 -
+  WADE.slow * smoothstep(WADE.slowFrom, WADE.slowTo, depth) -
+  (1 - WADE.slow - SWIM.pace) * smoothstep(SWIM.from, SWIM.to, depth);
 
 /** A person's eye height, the water depth, and how much they swim, 0 to 1, at a point. */
 export interface Stance {
@@ -109,7 +124,11 @@ export function stanceAt(t: Terrain, x: number, z: number): Stance {
   // A smooth maximum of standing and floating, exact outside the ease band.
   const h = Math.max(0, SWIM.ease - Math.abs(wading - SWIM.eye)) / SWIM.ease;
   const above = Math.max(wading, SWIM.eye) + (h * h * SWIM.ease) / 4;
-  return { eye: groundHeightAt(t, x, z) + depth + above, depth, swim: smoothstep(SWIM.from, SWIM.to, depth) };
+  return {
+    eye: groundHeightAt(t, x, z) + depth + above,
+    depth,
+    swim: smoothstep(SWIM.from, SWIM.to, depth),
+  };
 }
 
 /** Longest substep in meters, so a step never passes through a thin solid. */
@@ -122,12 +141,18 @@ const edge: Edge = { distance: 0, nx: 0, nz: 0 };
  * normal, which keeps only the part along the edge. A substep that cannot be
  * freed, as in a wedge between two solids, is not taken.
  */
-export function moveBy(solids: Solids, from: Walker, mx: number, mz: number): Walker {
+export function moveBy(
+  solids: Solids,
+  from: Walker,
+  mx: number,
+  mz: number,
+): Walker {
   const parts = Math.max(1, Math.ceil(Math.hypot(mx, mz) / SUBSTEP));
   let x = from.x;
   let z = from.z;
   // A walker placed inside a solid can always move outward.
-  let allowed = Math.max(0, BODY_RADIUS - nearestEdge(solids, x, z, edge).distance) + 1e-6;
+  let allowed =
+    Math.max(0, BODY_RADIUS - nearestEdge(solids, x, z, edge).distance) + 1e-6;
   for (let p = 0; p < parts; p++) {
     let nx = x + mx / parts;
     let nz = z + mz / parts;
@@ -151,10 +176,18 @@ export function moveBy(solids: Solids, from: Walker, mx: number, mz: number): Wa
  * swimming, but water never stops the step. Solids slide it along their
  * edge, so pushing straight at one stops and pushing at an angle slides.
  */
-export function walkStep(t: Terrain, solids: Solids, from: Walker, intent: Intent, dt: number): Walker {
+export function walkStep(
+  t: Terrain,
+  solids: Solids,
+  from: Walker,
+  intent: Intent,
+  dt: number,
+): Walker {
   const len = Math.hypot(intent.dx, intent.dz);
   if (len < 1e-9 || dt <= 0 || intent.speed <= 0) return from;
-  const step = (intent.speed * wadeSpeed(waterDepthAt(t, from.x, from.z)) * dt) / Math.max(1, len);
+  const step =
+    (intent.speed * wadeSpeed(waterDepthAt(t, from.x, from.z)) * dt) /
+    Math.max(1, len);
   return moveBy(solids, from, intent.dx * step, intent.dz * step);
 }
 
@@ -186,7 +219,14 @@ export interface Walk {
 }
 
 /** Whether a body walking straight from a to b stays `room` meters clear of every solid. */
-function clearWay(solids: Solids, ax: number, az: number, bx: number, bz: number, room: number): boolean {
+function clearWay(
+  solids: Solids,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  room: number,
+): boolean {
   const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.2));
   for (let i = 0; i <= n; i++) {
     const x = ax + ((bx - ax) * i) / n;
@@ -206,17 +246,28 @@ const PLAN = { cell: 0.5, past: 8, side: 16, expansions: 40_000 } as const;
  * face. When solids ring the target, the way ends at the nearest reachable
  * point.
  */
-export function planWalk(t: Terrain, solids: Solids, at: Walker, to: Walker): Walk {
+export function planWalk(
+  t: Terrain,
+  solids: Solids,
+  at: Walker,
+  to: Walker,
+): Walk {
   // Copy the start point, since the caller's walker keeps moving.
   const from = { x: at.x, z: at.z };
   let tx = to.x;
   let tz = to.z;
-  for (let left = Math.hypot(tx - from.x, tz - from.z); left > 0.1 && nearestEdge(solids, tx, tz, edge).distance < BODY_RADIUS; left -= 0.1) {
+  for (
+    let left = Math.hypot(tx - from.x, tz - from.z);
+    left > 0.1 && nearestEdge(solids, tx, tz, edge).distance < BODY_RADIUS;
+    left -= 0.1
+  ) {
     tx += ((from.x - tx) / left) * 0.1;
     tz += ((from.z - tz) / left) * 0.1;
   }
   const target = { x: tx, z: tz };
-  if (clearWay(solids, from.x, from.z, tx, tz, BODY_RADIUS)) return { target, way: [from, target], leg: 0 };
+  if (clearWay(solids, from.x, from.z, tx, tz, BODY_RADIUS)) {
+    return { target, way: [from, target], leg: 0 };
+  }
   const way = routeAround(solids, from, target);
   return { target: way[way.length - 1] as Walker, way, leg: 0 };
 }
@@ -232,15 +283,24 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
   const sideCells = Math.round(PLAN.side / h);
   const nv = sideCells * 2 + 1;
   const count = nu * nv;
-  const xAt = (i: number): number => from.x + ux * ((i % nu) - back) * h - uz * (Math.floor(i / nu) - sideCells) * h;
-  const zAt = (i: number): number => from.z + uz * ((i % nu) - back) * h + ux * (Math.floor(i / nu) - sideCells) * h;
+  const xAt = (i: number): number =>
+    from.x +
+    ux * ((i % nu) - back) * h -
+    uz * (Math.floor(i / nu) - sideCells) * h;
+  const zAt = (i: number): number =>
+    from.z +
+    uz * ((i % nu) - back) * h +
+    ux * (Math.floor(i / nu) - sideCells) * h;
   const state = new Uint8Array(count); // 0 unknown, 1 open, 2 closed
   const open = (i: number): boolean => {
     if (state[i] === 0) {
       const x = xAt(i);
       const z = zAt(i);
       // Within 1.5 m of the start only the body must fit, so a walker standing close to a solid can leave.
-      const room = Math.hypot(x - from.x, z - from.z) < 1.5 ? BODY_RADIUS : BODY_RADIUS + WALK_TO.clearance;
+      const room =
+        Math.hypot(x - from.x, z - from.z) < 1.5
+          ? BODY_RADIUS
+          : BODY_RADIUS + WALK_TO.clearance;
       state[i] = nearestEdge(solids, x, z, edge).distance >= room ? 1 : 2;
     }
     return state[i] === 1;
@@ -249,7 +309,8 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
   const goal = start + Math.round(length / h);
   const gu = goal % nu;
   const gv = Math.floor(goal / nu);
-  const toGoal = (i: number): number => Math.hypot((i % nu) - gu, Math.floor(i / nu) - gv);
+  const toGoal = (i: number): number =>
+    Math.hypot((i % nu) - gu, Math.floor(i / nu) - gv);
   const g = new Float32Array(count).fill(Infinity);
   const f = new Float32Array(count);
   const parent = new Int32Array(count).fill(-1);
@@ -275,7 +336,11 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
         const l = c * 2 + 1;
         if (l >= heap.length) break;
         const r = l + 1;
-        const m = r < heap.length && (f[heap[r] as number] as number) < (f[heap[l] as number] as number) ? r : l;
+        const m =
+          r < heap.length &&
+          (f[heap[r] as number] as number) < (f[heap[l] as number] as number)
+            ? r
+            : l;
         if ((f[heap[m] as number] as number) >= (f[last] as number)) break;
         heap[c] = heap[m] as number;
         c = m;
@@ -288,7 +353,11 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
   f[start] = toGoal(start);
   push(start);
   let best = start;
-  for (let expanded = 0; heap.length > 0 && expanded < PLAN.expansions; expanded++) {
+  for (
+    let expanded = 0;
+    heap.length > 0 && expanded < PLAN.expansions;
+    expanded++
+  ) {
     const i = pop();
     if (done[i] === 1) continue;
     done[i] = 1;
@@ -300,11 +369,19 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
       for (let du = -1; du <= 1; du++) {
         const u = iu + du;
         const v = iv + dv;
-        if ((du === 0 && dv === 0) || u < 0 || u >= nu || v < 0 || v >= nv) continue;
+        if ((du === 0 && dv === 0) || u < 0 || u >= nu || v < 0 || v >= nv) {
+          continue;
+        }
         const j = v * nu + u;
         if (done[j] === 1 || !open(j)) continue;
         // Do not cut a corner between two closed cells.
-        if (du !== 0 && dv !== 0 && (!open(iv * nu + u) || !open(v * nu + iu))) continue;
+        if (
+          du !== 0 &&
+          dv !== 0 &&
+          (!open(iv * nu + u) || !open(v * nu + iu))
+        ) {
+          continue;
+        }
         const cost = (g[i] as number) + (du !== 0 && dv !== 0 ? Math.SQRT2 : 1);
         if (cost >= (g[j] as number)) continue;
         g[j] = cost;
@@ -322,15 +399,25 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
   if (best === goal) points[points.length - 1] = to;
   // Pull the way taut by going straight from each corner to the farthest point with a clear line.
   const way: Walker[] = [from];
-  for (let a = 0; a < points.length - 1; ) {
+  for (let a = 0; a < points.length - 1;) {
     const p = points[a] as Walker;
     let lo = a + 1;
     let hi = points.length - 1;
     while (lo < hi) {
       const mid = (lo + hi + 1) >> 1;
       const q = points[mid] as Walker;
-      if (clearWay(solids, p.x, p.z, q.x, q.z, BODY_RADIUS + WALK_TO.clearance / 2)) lo = mid;
-      else hi = mid - 1;
+      if (
+        clearWay(
+          solids,
+          p.x,
+          p.z,
+          q.x,
+          q.z,
+          BODY_RADIUS + WALK_TO.clearance / 2,
+        )
+      ) {
+        lo = mid;
+      } else hi = mid - 1;
     }
     way.push(points[lo] as Walker);
     a = lo;
@@ -340,7 +427,12 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
 }
 
 /** The point `ahead` meters along the way past the walker's projection on it. Advances to the next leg once the walker passes a leg's end. */
-function pursue(walk: Walk, x: number, z: number, ahead: number): { leg: number; x: number; z: number } {
+function pursue(
+  walk: Walk,
+  x: number,
+  z: number,
+  ahead: number,
+): { leg: number; x: number; z: number } {
   const way = walk.way;
   let leg = walk.leg;
   let u: number;
@@ -380,7 +472,16 @@ export interface Heading {
 /** The point `WALK_TO.lookAhead` along the way to aim for, so corners round in curves, at walking pace or jogging while the target is far. */
 export function wayAhead(walk: Walk, from: Walker): Heading {
   const remaining = Math.hypot(walk.target.x - from.x, walk.target.z - from.z);
-  const pace = WALK_TO.pace * (1 + (WALK_TO.jog - 1) * smoothstep(WALK_TO.walkWithin, WALK_TO.jogFrom, remaining));
+  const pace =
+    WALK_TO.pace *
+    (1 +
+      (WALK_TO.jog - 1) *
+        smoothstep(WALK_TO.walkWithin, WALK_TO.jogFrom, remaining));
   const aim = pursue(walk, from.x, from.z, WALK_TO.lookAhead);
-  return { walk: aim.leg === walk.leg ? walk : { ...walk, leg: aim.leg }, aim: { x: aim.x, z: aim.z }, pace, remaining };
+  return {
+    walk: aim.leg === walk.leg ? walk : { ...walk, leg: aim.leg },
+    aim: { x: aim.x, z: aim.z },
+    pace,
+    remaining,
+  };
 }

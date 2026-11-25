@@ -32,7 +32,9 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
   /** Whether a place has been chosen, so the page takes no more choices. */
   let left = false;
   // The clock's hour, local or from `?hour=`, until the first frame passes the world's hour.
-  const asked = Number(new URLSearchParams(location.search).get("hour") ?? Number.NaN);
+  const asked = Number(
+    new URLSearchParams(location.search).get("hour") ?? Number.NaN,
+  );
   let hour = Number.isFinite(asked) ? asked : localHour(new Date());
   // While the table's card rises, the wait holds back new painting, so the sheet still matches the card when it takes
   // the card's place. The held painting then runs in arrival order.
@@ -44,7 +46,13 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
   const held = (paint: () => void): void => void covered.then(paint);
   const table = (): StartPage => {
     cover();
-    return createTable(veil, { hour, sheet: wait.sheet, chosen: wait.chosen, face: wait.face, landed: () => uncover() });
+    return createTable(veil, {
+      hour,
+      sheet: (...args) => wait.sheet(...args),
+      chosen: (...args) => wait.chosen(...args),
+      face: (...args) => wait.face(...args),
+      landed: () => uncover(),
+    });
   };
   return {
     ...wait,

@@ -44,13 +44,23 @@ export function pacer<T>(pace: Pace): Pacer<T> {
   let last: number | null = null;
   let gap = pace.spreadMs[0];
   let flushing = false;
-  const step = (): number => Math.min(pace.everyMs, Math.max(0, by - (at ?? 0)) / Math.max(1, queue.length));
+  const step = (): number =>
+    Math.min(
+      pace.everyMs,
+      Math.max(0, by - (at ?? 0)) / Math.max(1, queue.length),
+    );
   return {
     add(items, now) {
       if (items.length === 0) return;
       if (last !== null) {
         const since = now - last;
-        gap = Math.max(pace.spreadMs[0], Math.min(pace.spreadMs[1], Math.max(since, (gap + since) / 2) * AHEAD));
+        gap = Math.max(
+          pace.spreadMs[0],
+          Math.min(
+            pace.spreadMs[1],
+            Math.max(since, (gap + since) / 2) * AHEAD,
+          ),
+        );
       }
       last = now;
       if (queue.length === 0) at = Math.max(at ?? now, now);

@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { Library, kind, slot } from "@gaia/schema";
 import { TREE_PRIMITIVES } from "@gaia/primitives";
 import { tree } from "@gaia/kinds";
-import { assemble, planDetails, planStructure, readStructure, validate } from "@gaia/world";
+import {
+  assemble,
+  planDetails,
+  planStructure,
+  readStructure,
+  validate,
+} from "@gaia/world";
 import { SCANNER, fakeJev } from "./fixtures.ts";
 
 const lib = new Library(TREE_PRIMITIVES);
@@ -18,9 +24,23 @@ describe("a tree's blueprint in two requests", () => {
   it("assembles a valid blueprint, and equal answers name the same blueprint", () => {
     const run = () => {
       const s = planStructure(tree, lib, subject);
-      const structure = readStructure(tree, lib, s, fakeJev(s.request, { "form.use": "branching@1", "crown.use": "leaf-strands@1" }));
+      const structure = readStructure(
+        tree,
+        lib,
+        s,
+        fakeJev(s.request, {
+          "form.use": "branching@1",
+          "crown.use": "leaf-strands@1",
+        }),
+      );
       const d = planDetails(tree, lib, structure, subject);
-      return assemble(tree, lib, structure, d, fakeJev(d.request, { "form.habit": "weeping" }));
+      return assemble(
+        tree,
+        lib,
+        structure,
+        d,
+        fakeJev(d.request, { "form.habit": "weeping" }),
+      );
     };
     const a = run();
     expect(validate(a, tree, lib)).toEqual([]);
@@ -33,15 +53,42 @@ describe("a tree's blueprint in two requests", () => {
     const structure = readStructure(tree, lib, s, fakeJev(s.request));
     const d = planDetails(tree, lib, structure, subject);
     const bp = assemble(tree, lib, structure, d, fakeJev(d.request));
-    const broken = { ...bp, slots: { ...bp.slots, form: { use: "branching@1" as const, params: { habit: "spiral" } } } };
+    const broken = {
+      ...bp,
+      slots: {
+        ...bp.slots,
+        form: { use: "branching@1" as const, params: { habit: "spiral" } },
+      },
+    };
     expect(validate(broken, tree, lib).length).toBeGreaterThan(0);
     const { crown: _crown, ...rest } = bp.slots;
-    const bloomOnNothing = { ...bp, slots: { ...rest, bloom: { use: "blossoms@1" as const, params: { form: "petals", count: "plenty" } } } };
+    const bloomOnNothing = {
+      ...bp,
+      slots: {
+        ...rest,
+        bloom: {
+          use: "blossoms@1" as const,
+          params: { form: "petals", count: "plenty" },
+        },
+      },
+    };
     expect(validate(bloomOnNothing, tree, lib).length).toBeGreaterThan(0);
     // When Jev leaves out a part, what stands on it is dropped too. A kind with an optional crown lets Jev leave it out.
-    const shrub = kind({ ...tree, id: "shrub", slots: { ...tree.slots, crown: slot("Foliage", { on: "form", optional: true }) } });
+    const shrub = kind({
+      ...tree,
+      id: "shrub",
+      slots: {
+        ...tree.slots,
+        crown: slot("Foliage", { on: "form", optional: true }),
+      },
+    });
     const bare = planStructure(shrub, lib, subject);
-    const read = readStructure(shrub, lib, bare, fakeJev(bare.request, { "crown.present": false, "bloom.present": true }));
+    const read = readStructure(
+      shrub,
+      lib,
+      bare,
+      fakeJev(bare.request, { "crown.present": false, "bloom.present": true }),
+    );
     expect(read.crown).toBeUndefined();
     expect(read.bloom).toBeUndefined();
   });

@@ -19,7 +19,10 @@ const PAGE = ["#27342c", "#18211b"] as const;
 /** The shadow the page's cut edge casts into the G-shaped window onto the view. */
 const EDGE_SHADE = "rgba(7, 10, 8, 0.8)";
 /** The name's ink and its "ai" green, for paper and dark backgrounds. */
-const NAME_INK = { paper: { ink: "#2b2721", ai: "#557d4c" }, dark: { ink: "#f3ecdc", ai: "#a7c98f" } } as const;
+const NAME_INK = {
+  paper: { ink: "#2b2721", ai: "#557d4c" },
+  dark: { ink: "#f3ecdc", ai: "#a7c98f" },
+} as const;
 
 /**
  * Positions on the icon's square, as fractions of its side: the G's size and baseline, and the view's placement. The
@@ -33,8 +36,13 @@ let view: HTMLImageElement | null = null;
 
 /** Loads the mark's two font faces and its view. Paint nothing until it resolves. */
 export async function brandReady(): Promise<void> {
-  const faces = [new FontFace(G_FAMILY, `url(${G_FACE})`), new FontFace(NAME_FAMILY, `url(${NAME_FACE})`)];
-  for (const face of await Promise.all(faces.map((f) => f.load()))) document.fonts.add(face);
+  const faces = [
+    new FontFace(G_FAMILY, `url(${G_FACE})`),
+    new FontFace(NAME_FAMILY, `url(${NAME_FACE})`),
+  ];
+  for (const face of await Promise.all(faces.map((f) => f.load()))) {
+    document.fonts.add(face);
+  }
   const image = new Image();
   image.src = VIEW;
   await image.decode();
@@ -70,7 +78,13 @@ export function paintIcon(size: number, small: boolean): HTMLCanvasElement {
   };
   // The window: the view, clipped to the G.
   const [w, wg] = canvasOf(size, size);
-  wg.drawImage(view, size * VIEW_AT.x, size * VIEW_AT.y, size * VIEW_AT.side, size * VIEW_AT.side);
+  wg.drawImage(
+    view,
+    size * VIEW_AT.x,
+    size * VIEW_AT.y,
+    size * VIEW_AT.side,
+    size * VIEW_AT.side,
+  );
   wg.globalCompositeOperation = "destination-in";
   letterG(wg);
   // The page's cut edge: the page with the G cut out casts its shadow into the window, and only there.
@@ -102,7 +116,13 @@ function tile(side: number): HTMLCanvasElement {
 }
 
 /** Writes "gaia" from the left end of its baseline, with "ai" in green, and returns the word's width. */
-function writeName(g: Ctx, x: number, baseline: number, px: number, ground: keyof typeof NAME_INK): number {
+function writeName(
+  g: Ctx,
+  x: number,
+  baseline: number,
+  px: number,
+  ground: keyof typeof NAME_INK,
+): number {
   g.font = `${px}px "${NAME_FAMILY}"`;
   g.textAlign = "left";
   g.textBaseline = "alphabetic";
@@ -132,8 +152,17 @@ export function paintName(width: number): HTMLCanvasElement {
   const em = ink.actualBoundingBoxLeft + ink.actualBoundingBoxRight;
   const px = (100 * width) / em;
   const k = px / 100;
-  const [c, g] = canvasOf(width, (ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent) * k);
-  writeName(g, ink.actualBoundingBoxLeft * k, ink.actualBoundingBoxAscent * k, px, "paper");
+  const [c, g] = canvasOf(
+    width,
+    (ink.actualBoundingBoxAscent + ink.actualBoundingBoxDescent) * k,
+  );
+  writeName(
+    g,
+    ink.actualBoundingBoxLeft * k,
+    ink.actualBoundingBoxAscent * k,
+    px,
+    "paper",
+  );
   return c;
 }
 
@@ -144,7 +173,10 @@ const LOCKUP = { gap: 0.2, name: 0.86, baseline: 0.71 } as const;
  * Paints the icon beside the name, `width` pixels wide, on a transparent background for any paper, or on its own sheet
  * of map paper with the torn edge `torn` (a loaded `DECKLE_MASK`).
  */
-export function paintLockup(width: number, torn?: HTMLImageElement): HTMLCanvasElement {
+export function paintLockup(
+  width: number,
+  torn?: HTMLImageElement,
+): HTMLCanvasElement {
   // Measures the name for an icon side of 1, then scales everything to `width`.
   const [, probe] = canvasOf(1, 1);
   probe.font = `100px "${NAME_FAMILY}"`;
@@ -153,10 +185,26 @@ export function paintLockup(width: number, torn?: HTMLImageElement): HTMLCanvasE
   const pad = onPaper ? 0.5 : 0;
   const side = width / (1 + LOCKUP.gap + nameWidth + pad * 2);
   const [c, g] = canvasOf(width, side * (1 + pad * 2));
-  if (onPaper) layGround(g, MAP_STYLE, c.width / 2, c.height / 2, (width / 400) * 0.62, c.width, c.height);
+  if (onPaper) {
+    layGround(
+      g,
+      MAP_STYLE,
+      c.width / 2,
+      c.height / 2,
+      (width / 400) * 0.62,
+      c.width,
+      c.height,
+    );
+  }
   const [x0, y0] = [side * pad, side * pad];
   g.drawImage(tile(side), x0, y0);
-  writeName(g, x0 + side * (1 + LOCKUP.gap), y0 + side * LOCKUP.baseline, side * LOCKUP.name, "paper");
+  writeName(
+    g,
+    x0 + side * (1 + LOCKUP.gap),
+    y0 + side * LOCKUP.baseline,
+    side * LOCKUP.name,
+    "paper",
+  );
   if (!onPaper) return c;
   g.globalCompositeOperation = "destination-in";
   g.drawImage(torn, 0, 0, c.width, c.height);

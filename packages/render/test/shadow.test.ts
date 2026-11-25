@@ -16,7 +16,10 @@ function texelOf(matrix: THREE.Matrix4, p: THREE.Vector3): [number, number] {
 
 describe("the sun's shadow map", () => {
   it("keeps its texels on the same spots of land as its box follows a walk, under a midday or a low evening sun", () => {
-    for (const direction of [new THREE.Vector3(0.45, 0.85, 0.3), new THREE.Vector3(-0.8, 0.2, 0.55)]) {
+    for (const direction of [
+      new THREE.Vector3(0.45, 0.85, 0.3),
+      new THREE.Vector3(-0.8, 0.2, 0.55),
+    ]) {
       const light = createSceneLight();
       light.uSunIntensity.value = 1;
       light.uSunDirection.value.copy(direction).normalize();
@@ -24,7 +27,10 @@ describe("the sun's shadow map", () => {
       const spot = new THREE.Vector3(3.3, 0.7, -5.1);
       const at = (k: number): [number, number] => {
         // A walk of 2 m in 1.7 cm steps, a little less than half a texel, at eye height over a gentle slope.
-        shadow.frame(new THREE.Vector3(0.017 * k, 1.6 + 0.004 * k, -0.011 * k), EXTENT);
+        shadow.frame(
+          new THREE.Vector3(0.017 * k, 1.6 + 0.004 * k, -0.011 * k),
+          EXTENT,
+        );
         return texelOf(light.uShadowMatrix.value, spot);
       };
       const [u0, v0] = at(0);
@@ -47,7 +53,9 @@ describe("the sun's shadow map", () => {
     const shadow = createSunShadow(light, SIZE);
     const made = light.uShadowMap.value as THREE.DepthTexture;
     expect(before).toBeInstanceOf(THREE.DepthTexture);
-    expect((before as THREE.DepthTexture).compareFunction).toBe(made.compareFunction);
+    expect((before as THREE.DepthTexture).compareFunction).toBe(
+      made.compareFunction,
+    );
     expect(before?.version).toBeGreaterThan(0);
     shadow.dispose();
   });

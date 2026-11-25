@@ -64,7 +64,11 @@ export interface RegionLook {
 export interface WorldLook {
   readonly light: LightSpec;
   readonly sky: SkyLook["sky"] & { readonly mid: Rgb };
-  readonly fog: { readonly color: Rgb; readonly density: number; readonly mist: number };
+  readonly fog: {
+    readonly color: Rgb;
+    readonly density: number;
+    readonly mist: number;
+  };
   readonly ground: GroundSpec;
   readonly groundDecline: Rgb;
   readonly drift: AccentSpec | null;
@@ -76,7 +80,13 @@ export interface WorldLook {
 export const GROUND_DECLINE: Rgb = hex(0xb1a17a);
 
 /** The air of a region whose biome sets none: clear, with no tint. */
-export const CLEAR_AIR: AtmosphereSpec = { tint: hex(0xc8dcec), tintAmount: 0, density: 0.0035, mist: 0, specks: 0 };
+export const CLEAR_AIR: AtmosphereSpec = {
+  tint: hex(0xc8dcec),
+  tintAmount: 0,
+  density: 0.0035,
+  mist: 0,
+  specks: 0,
+};
 
 const DEEP_ZENITH: Rgb = hex(0x2c3a78);
 const CLOUD_WHITE: Rgb = hex(0xfdfcf8);
@@ -84,7 +94,13 @@ const CLOUD_WHITE: Rgb = hex(0xfdfcf8);
 const NIGHT_ZENITH: Rgb = hex(0x0f1b44);
 const NIGHT_HORIZON: Rgb = hex(0x2c4475);
 /** How much richer than the sun's light a low sun's glow on clouds is: a little deeper and half again as strong in color. */
-const CLOUD_GLOW = { hue: 0, pull: 0, maxTurn: 0, chroma: 1.5, lightness: -0.03 } as const;
+const CLOUD_GLOW = {
+  hue: 0,
+  pull: 0,
+  maxTurn: 0,
+  chroma: 1.5,
+  lightness: -0.03,
+} as const;
 
 function slotOutput<T>(built: ReturnType<typeof buildSlots>, name: string): T {
   const out = built.get(name)?.output;
@@ -124,46 +140,105 @@ export function overcastLight(light: LightSpec, o: number): LightSpec {
     ambientColor,
     ambientIntensity: light.ambientIntensity * (1 + k.ambient * o),
     shadowColor: mixLab(light.shadowColor, ambientColor, k.lift * o),
-    celSoftness: light.celSoftness + (Math.max(light.celSoftness, k.soft) - light.celSoftness) * o,
+    celSoftness:
+      light.celSoftness +
+      (Math.max(light.celSoftness, k.soft) - light.celSoftness) * o,
     glow: light.glow * (1 - k.glow * o),
   };
 }
 
-export function realizeSky(world: Filled, lib: Library, seed: number, hour: number): SkyLook {
-  const built = buildSlots(world.blueprint, world.kind, lib, { seed, facts: {} });
+export function realizeSky(
+  world: Filled,
+  lib: Library,
+  seed: number,
+  hour: number,
+): SkyLook {
+  const built = buildSlots(world.blueprint, world.kind, lib, {
+    seed,
+    facts: {},
+  });
   const day = slotOutput<DaySpec>(built, "light");
   const sky = slotOutput<SkySpec>(built, "sky");
   const overcast = sky.clouds.overcast ?? 0;
   const light = overcastLight(lightAt(day, hour), overcast);
   const night = light.nightness;
-  const fairZenith = mixLab(mixLab(sky.zenith, DEEP_ZENITH, light.zenithDim), light.horizonGlow, light.glow * 0.12);
+  const fairZenith = mixLab(
+    mixLab(sky.zenith, DEEP_ZENITH, light.zenithDim),
+    light.horizonGlow,
+    light.glow * 0.12,
+  );
   const fairHorizon = mixLab(sky.horizon, light.horizonGlow, light.glow);
   // Through an overcast sky's breaks the sky shows pale and bright, near the clouds around it, and at a low sun as
   // bright as the glowing horizon, so a break never reads as a dark hole.
-  const dayHorizon = overcast > 0 ? mixLab(fairHorizon, OVERCAST_DAY.breaks, 0.35 * overcast * (1 - light.glow)) : fairHorizon;
-  const dayZenith = overcast > 0 ? mixLab(fairZenith, mixLab(dayHorizon, OVERCAST_DAY.breaks, 0.4 * (1 - light.glow)), 0.7 * overcast) : fairZenith;
+  const dayHorizon =
+    overcast > 0
+      ? mixLab(
+          fairHorizon,
+          OVERCAST_DAY.breaks,
+          0.35 * overcast * (1 - light.glow),
+        )
+      : fairHorizon;
+  const dayZenith =
+    overcast > 0
+      ? mixLab(
+          fairZenith,
+          mixLab(dayHorizon, OVERCAST_DAY.breaks, 0.4 * (1 - light.glow)),
+          0.7 * overcast,
+        )
+      : fairZenith;
   // Night keeps a trace of the world's own sky, so a lavender world has a lavender night.
   const zenith = mixLab(dayZenith, NIGHT_ZENITH, night * 0.94);
-  const horizon = mixLab(dayHorizon, mixLab(NIGHT_HORIZON, light.moonColor, 0.12), night * 0.92);
+  const horizon = mixLab(
+    dayHorizon,
+    mixLab(NIGHT_HORIZON, light.moonColor, 0.12),
+    night * 0.92,
+  );
   // By night, the moon lights the clouds silver instead of the sun lighting them white.
   const fairLit = mixLab(CLOUD_WHITE, light.sunColor, 0.12 + light.glow * 0.45);
   // An overcast sky's clouds are grey-white, their undersides a soft slate.
-  const dayLit = overcast > 0 ? mixLab(fairLit, OVERCAST_DAY.body, 0.5 * overcast) : fairLit;
+  const dayLit =
+    overcast > 0 ? mixLab(fairLit, OVERCAST_DAY.body, 0.5 * overcast) : fairLit;
   const nightLit = mixLab(mixLab(horizon, zenith, 0.25), light.moonColor, 0.32);
   const cloudLit = mixLab(dayLit, nightLit, night);
-  const fairShade = mixLab(mixLab(cloudLit, light.shadowColor, 0.6), zenith, 0.2 + night * 0.3);
-  const cloudShade = overcast > 0 ? mixLab(fairShade, OVERCAST_DAY.under, 0.35 * overcast * (1 - night)) : fairShade;
+  const fairShade = mixLab(
+    mixLab(cloudLit, light.shadowColor, 0.6),
+    zenith,
+    0.2 + night * 0.3,
+  );
+  const cloudShade =
+    overcast > 0
+      ? mixLab(fairShade, OVERCAST_DAY.under, 0.35 * overcast * (1 - night))
+      : fairShade;
   // The sun's own light and the hour's glow, deepened, as clouds show it when the sun is low.
-  const cloudGlow = shiftColor(mixLab(light.sunColor, light.horizonGlow, 0.4), CLOUD_GLOW);
+  const cloudGlow = shiftColor(
+    mixLab(light.sunColor, light.horizonGlow, 0.4),
+    CLOUD_GLOW,
+  );
   return {
     light,
-    sky: { zenith, horizon, clouds: sky.clouds, cloudLit, cloudShade, cloudGlow, moon: day.moon, stars: day.stars },
+    sky: {
+      zenith,
+      horizon,
+      clouds: sky.clouds,
+      cloudLit,
+      cloudShade,
+      cloudGlow,
+      moon: day.moon,
+      stars: day.stars,
+    },
     wind: slotOutput<WindSpec>(built, "wind"),
   };
 }
 
-export function realizeRegion(region: Filled, lib: Library, seed: number): RegionLook {
-  const built = buildSlots(region.blueprint, region.kind, lib, { seed, facts: {} });
+export function realizeRegion(
+  region: Filled,
+  lib: Library,
+  seed: number,
+): RegionLook {
+  const built = buildSlots(region.blueprint, region.kind, lib, {
+    seed,
+    facts: {},
+  });
   return {
     ground: slotOutput<GroundSpec>(built, "cover"),
     groundDecline: GROUND_DECLINE,
@@ -173,11 +248,18 @@ export function realizeRegion(region: Filled, lib: Library, seed: number): Regio
   };
 }
 
-const airOf = (built: ReturnType<typeof buildSlots>): AtmosphereSpec => (built.get("air")?.output as AtmosphereSpec | undefined) ?? CLEAR_AIR;
+const airOf = (built: ReturnType<typeof buildSlots>): AtmosphereSpec =>
+  (built.get("air")?.output as AtmosphereSpec | undefined) ?? CLEAR_AIR;
 
 /** One region's air, as `realizeRegion` gives it. */
-export function regionAir(region: Filled, lib: Library, seed: number): AtmosphereSpec {
-  return airOf(buildSlots(region.blueprint, region.kind, lib, { seed, facts: {} }));
+export function regionAir(
+  region: Filled,
+  lib: Library,
+  seed: number,
+): AtmosphereSpec {
+  return airOf(
+    buildSlots(region.blueprint, region.kind, lib, { seed, facts: {} }),
+  );
 }
 
 /**
@@ -186,7 +268,10 @@ export function regionAir(region: Filled, lib: Library, seed: number): Atmospher
  * weight, and tint mixes by how strongly each region tints, so a clear
  * region's tint, with zero `tintAmount`, adds no color.
  */
-export function mixAir(airs: readonly AtmosphereSpec[], weights: ArrayLike<number>): AtmosphereSpec {
+export function mixAir(
+  airs: readonly AtmosphereSpec[],
+  weights: ArrayLike<number>,
+): AtmosphereSpec {
   let total = 0;
   let pull = 0;
   let tint = CLEAR_AIR.tint;
@@ -204,7 +289,13 @@ export function mixAir(airs: readonly AtmosphereSpec[], weights: ArrayLike<numbe
     tint = mixLab(tint, air.tint, (w * air.tintAmount) / pull);
   });
   if (total <= 0) return CLEAR_AIR;
-  return { tint, tintAmount: pull / total, density: density / total, mist: mist / total, specks: specks / total };
+  return {
+    tint,
+    tintAmount: pull / total,
+    density: density / total,
+    mist: mist / total,
+    specks: specks / total,
+  };
 }
 
 /**
@@ -212,7 +303,13 @@ export function mixAir(airs: readonly AtmosphereSpec[], weights: ArrayLike<numbe
  * slightly declined ground keeps its air. At full decline the haze is `thicken` times as dense, low mist rises by
  * `mist`, and the tint greys toward `tint`, pulling the horizon and fog by at least `pull`.
  */
-export const MURK = { from: 0.3, tint: hex(0x7f7b6e), pull: 0.75, thicken: 3.5, mist: 0.3 } as const;
+export const MURK = {
+  from: 0.3,
+  tint: hex(0x7f7b6e),
+  pull: 0.75,
+  thicken: 3.5,
+  mist: 0.3,
+} as const;
 
 /**
  * The air over ground whose decline is `decline`, from 0 for none to 1 for full, which is `groundDecline` of the
@@ -225,7 +322,9 @@ export function murkyAir(air: AtmosphereSpec, decline: number): AtmosphereSpec {
   if (d === 0) return air;
   return {
     tint: mixLab(air.tint, MURK.tint, d),
-    tintAmount: air.tintAmount + (Math.max(air.tintAmount, MURK.pull) - air.tintAmount) * d,
+    tintAmount:
+      air.tintAmount +
+      (Math.max(air.tintAmount, MURK.pull) - air.tintAmount) * d,
     density: air.density * (1 + (MURK.thicken - 1) * d),
     mist: Math.min(1, air.mist + MURK.mist * d),
     specks: air.specks,
@@ -237,7 +336,10 @@ export function murkyAir(air: AtmosphereSpec, decline: number): AtmosphereSpec {
  * and low mist thin as `AIR.thinScale / (AIR.thinScale + meters above that)`, so a view from high over the land shows
  * all of it, softened by distance.
  */
-export function airFromHeight(air: AtmosphereSpec, height: number): AtmosphereSpec {
+export function airFromHeight(
+  air: AtmosphereSpec,
+  height: number,
+): AtmosphereSpec {
   const above = height - AIR.thinFrom;
   if (!(above > 0)) return air;
   const thin = AIR.thinScale / (AIR.thinScale + above);
@@ -245,12 +347,19 @@ export function airFromHeight(air: AtmosphereSpec, height: number): AtmosphereSp
 }
 
 /** The shared sky seen through `air`: its horizon pulled toward the air's tint, and the fog the air lays over distance. */
-export function throughAir(sky: SkyLook, air: AtmosphereSpec): Pick<WorldLook, "sky" | "fog"> {
+export function throughAir(
+  sky: SkyLook,
+  air: AtmosphereSpec,
+): Pick<WorldLook, "sky" | "fog"> {
   // The air is in front of the sunset. At night its color fades into the dark.
   const tint = mixLab(air.tint, sky.sky.horizon, sky.light.nightness * 0.75);
   const horizon = mixLab(sky.sky.horizon, tint, air.tintAmount * 0.5);
   // Night air is only moonlit, so distance dims the land a little rather than washing it pale.
-  const fog = mixLab(mixLab(horizon, tint, air.tintAmount * 0.5), sky.sky.zenith, sky.light.nightness * 0.3);
+  const fog = mixLab(
+    mixLab(horizon, tint, air.tintAmount * 0.5),
+    sky.sky.zenith,
+    sky.light.nightness * 0.3,
+  );
   return {
     sky: { ...sky.sky, horizon, mid: mixLab(sky.sky.zenith, horizon, 0.5) },
     fog: { color: fog, density: air.density, mist: air.mist },
@@ -258,7 +367,13 @@ export function throughAir(sky: SkyLook, air: AtmosphereSpec): Pick<WorldLook, "
 }
 
 /** Composes the shared sky at `hour` with one region's air and ground, as seen from inside that region. */
-export function realizeWorld(world: Filled, region: Filled, lib: Library, seed: number, hour: number): WorldLook {
+export function realizeWorld(
+  world: Filled,
+  region: Filled,
+  lib: Library,
+  seed: number,
+  hour: number,
+): WorldLook {
   const sky = realizeSky(world, lib, seed, hour);
   const local = realizeRegion(region, lib, seed);
   return {

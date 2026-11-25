@@ -16,7 +16,15 @@ import type { Shelf } from "./shelf.ts";
 export type MusicPlan = "phrases" | "loop" | "layers";
 export const STEMS = ["bed", "melody", "shimmer", "minor"] as const;
 export type Stem = (typeof STEMS)[number];
-export const PHRASES = ["day-1", "day-2", "day-3", "day-4", "night-1", "night-2", "ruin-1"] as const;
+export const PHRASES = [
+  "day-1",
+  "day-2",
+  "day-3",
+  "day-4",
+  "night-1",
+  "night-2",
+  "ruin-1",
+] as const;
 export type Phrase = (typeof PHRASES)[number];
 /** When a phrase fits: `ruin` where `failing` of the land's decline is above 0.5, otherwise `night` or `day` by darkness. */
 export type Moment = "day" | "night" | "ruin";
@@ -32,7 +40,11 @@ export type Chunk = `${Stem}:${number}`;
 export interface MusicBank {
   readonly chunks: Shelf<Chunk>;
   /** The piece's chunk count, each chunk's length, and the unplayed audio decoded on either side of a chunk, in seconds. */
-  readonly chunk: { readonly count: number; readonly seconds: number; readonly margin: number };
+  readonly chunk: {
+    readonly count: number;
+    readonly seconds: number;
+    readonly margin: number;
+  };
   readonly phrases: Shelf<Phrase>;
   /** The loudness in LUFS of the whole piece, bed and melody together, and of the phrases, so both play at the Hush mix's -21 LUFS. */
   readonly lufs: { readonly piece: number; readonly phrases: number };
@@ -64,7 +76,8 @@ const JOIN_BEFORE = 1;
 /** For `phrases`: seconds from the start to the first phrase, and the range of rest between one phrase's end and the next. */
 const REST = { first: 6, between: [45, 100] } as const;
 
-const suits = (p: Phrase): Moment => (p.startsWith("night") ? "night" : p.startsWith("ruin") ? "ruin" : "day");
+const suits = (p: Phrase): Moment =>
+  p.startsWith("night") ? "night" : p.startsWith("ruin") ? "ruin" : "day";
 
 function moment(ear: Earshot): Moment {
   if (failing(ear.decline) > 0.5) return "ruin";
@@ -72,7 +85,14 @@ function moment(ear: Earshot): Moment {
 }
 
 /** Plays `bank` into `out` from `start` by `plan`. `random` picks the phrases and the rests. */
-export function createMusic(ctx: BaseAudioContext, bank: MusicBank, out: AudioNode, plan: MusicPlan, start: number, random: () => number): Music {
+export function createMusic(
+  ctx: BaseAudioContext,
+  bank: MusicBank,
+  out: AudioNode,
+  plan: MusicPlan,
+  start: number,
+  random: () => number,
+): Music {
   if (plan === "phrases") {
     const level = db(HUSH.music - bank.lufs.phrases);
     let next = start + REST.first;
@@ -96,7 +116,11 @@ export function createMusic(ctx: BaseAudioContext, bank: MusicBank, out: AudioNo
         source.start(t);
         const played = chosen;
         source.onended = () => bank.phrases.put(played);
-        next = t + buffer.duration + REST.between[0] + random() * (REST.between[1] - REST.between[0]);
+        next =
+          t +
+          buffer.duration +
+          REST.between[0] +
+          random() * (REST.between[1] - REST.between[0]);
         chosen = null;
       },
     };
@@ -119,7 +143,16 @@ export function createMusic(ctx: BaseAudioContext, bank: MusicBank, out: AudioNo
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0, start);
       gain.connect(out);
-      return [stem, { gain, wantedAt: start, next: null, from: start, playing: new Set() } satisfies Part];
+      return [
+        stem,
+        {
+          gain,
+          wantedAt: start,
+          next: null,
+          from: start,
+          playing: new Set(),
+        } satisfies Part,
+      ];
     }),
   ) as Record<Stem, Part>;
   /** Schedules each decoded chunk of the part that is due to start within `AHEAD` seconds of `t`. */
@@ -185,7 +218,12 @@ export function createMusic(ctx: BaseAudioContext, bank: MusicBank, out: AudioNo
       }
       // The night colour and the minor bed start playing silently a little before they are audible, so they come in on time.
       set(t, "bed", 1 - ruin, ruin < 1);
-      set(t, "minor", ruin * db(MINOR_LIFT), plan === "layers" && failing(ear.decline + 0.04) > 0);
+      set(
+        t,
+        "minor",
+        ruin * db(MINOR_LIFT),
+        plan === "layers" && failing(ear.decline + 0.04) > 0,
+      );
       set(t, "melody", theme * (1 - ruin) * (1 - 0.4 * night), true);
       set(t, "shimmer", night, ear.night > 0.25);
     },

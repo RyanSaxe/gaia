@@ -50,7 +50,10 @@ function noise1(seed: number): (x: number) => number {
   };
 }
 
-const canvasOf = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingContext2D] => {
+const canvasOf = (
+  w: number,
+  h: number,
+): [HTMLCanvasElement, CanvasRenderingContext2D] => {
   const c = document.createElement("canvas");
   c.width = Math.max(1, Math.round(w));
   c.height = Math.max(1, Math.round(h));
@@ -58,7 +61,16 @@ const canvasOf = (w: number, h: number): [HTMLCanvasElement, CanvasRenderingCont
 };
 
 /** Draws text in the map's serif, with the faint spread of ink on rough paper. */
-function letter(g: CanvasRenderingContext2D, text: string, x: number, y: number, font: string, color: string, align: CanvasTextAlign = "center", spacing = 0): void {
+function letter(
+  g: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  font: string,
+  color: string,
+  align: CanvasTextAlign = "center",
+  spacing = 0,
+): void {
   g.save();
   g.font = font;
   g.textAlign = align;
@@ -66,24 +78,46 @@ function letter(g: CanvasRenderingContext2D, text: string, x: number, y: number,
   g.letterSpacing = `${spacing}px`;
   g.fillStyle = color;
   g.globalAlpha = 0.18;
-  for (const [dx, dy] of [[0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]] as const) g.fillText(text, x + dx, y + dy);
+  for (const [dx, dy] of [
+    [0.6, 0],
+    [-0.6, 0],
+    [0, 0.6],
+    [0, -0.6],
+  ] as const) {
+    g.fillText(text, x + dx, y + dy);
+  }
   g.globalAlpha = 1;
   g.fillText(text, x, y);
   g.restore();
 }
 
 /** Draws a quill line up to `upTo` of its length. The ink is heavier where the nib first touched and thins as it runs low. */
-function inkLine(g: CanvasRenderingContext2D, x0: number, x1: number, y: number, mm: number, seed: number, ink: string, upTo = 1): void {
+function inkLine(
+  g: CanvasRenderingContext2D,
+  x0: number,
+  x1: number,
+  y: number,
+  mm: number,
+  seed: number,
+  ink: string,
+  upTo = 1,
+): void {
   const wobble = noise1(seed);
   const steps = 220;
   const end = Math.max(0, Math.min(1, upTo));
-  const at = (t: number): number => y + wobble(t * 6) * 0.9 * mm + wobble(t * 31 + 50) * 0.15 * mm;
+  const at = (t: number): number =>
+    y + wobble(t * 6) * 0.9 * mm + wobble(t * 31 + 50) * 0.15 * mm;
   g.save();
   g.strokeStyle = g.fillStyle = ink;
   g.lineCap = "round";
   for (let i = 0; i < steps * end; i++) {
     const t = i / steps;
-    g.lineWidth = (0.75 + 0.55 * Math.exp(-t * 18) - 0.25 * t + 0.08 * wobble(t * 40 + 90)) * mm;
+    g.lineWidth =
+      (0.75 +
+        0.55 * Math.exp(-t * 18) -
+        0.25 * t +
+        0.08 * wobble(t * 40 + 90)) *
+      mm;
     g.beginPath();
     g.moveTo(x0 + (x1 - x0) * t, at(t));
     g.lineTo(x0 + (x1 - x0) * (t + 1 / steps), at(t + 1 / steps));
@@ -97,10 +131,23 @@ function inkLine(g: CanvasRenderingContext2D, x0: number, x1: number, y: number,
   g.restore();
 }
 
-const baseName = (path: string): string => path.split("/").filter(Boolean).pop() ?? path;
+const baseName = (path: string): string => {
+  const parts = path.split("/");
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i];
+    if (part !== undefined && part !== "") return part;
+  }
+  return path;
+};
 /** A world's location, shown in italic with its name: its GitHub owner, or its parent folder. */
-export const whereOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? (r.github.split("/")[0] ?? "") : r.root.includes("/") ? baseName(r.root.slice(0, r.root.lastIndexOf("/"))) : "");
-export const nameOf = (r: StartOffer["recent"][number]): string => (r.github !== undefined ? (r.github.split("/")[1] ?? r.name) : r.name);
+export const whereOf = (r: StartOffer["recent"][number]): string =>
+  r.github !== undefined
+    ? (r.github.split("/")[0] ?? "")
+    : r.root.includes("/")
+      ? baseName(r.root.slice(0, r.root.lastIndexOf("/")))
+      : "";
+export const nameOf = (r: StartOffer["recent"][number]): string =>
+  r.github !== undefined ? (r.github.split("/")[1] ?? r.name) : r.name;
 
 /**
  * Paints the sheet's ink at `pxPerM` pixels per metre: Gaia's logo at the top,
@@ -108,29 +155,89 @@ export const nameOf = (r: StartOffer["recent"][number]): string => (r.github !==
  * prompt above the line. The canvas is clear wherever there is no ink, so the
  * paper shows through.
  */
-export function paintSheetInk(l: TableLayout, recent: readonly StartOffer["recent"][number][], logo: HTMLImageElement, pxPerM: number): HTMLCanvasElement {
+export function paintSheetInk(
+  l: TableLayout,
+  recent: readonly StartOffer["recent"][number][],
+  logo: HTMLImageElement,
+  pxPerM: number,
+): HTMLCanvasElement {
   const P = (m: number): number => m * pxPerM;
   const [c, g] = canvasOf(P(l.sheet.w), P(l.sheet.h));
   const lw = P(l.logo.w);
-  g.drawImage(logo, P(l.logo.x), P(l.logo.y), lw, (lw * logo.naturalHeight) / logo.naturalWidth);
+  g.drawImage(
+    logo,
+    P(l.logo.x),
+    P(l.logo.y),
+    lw,
+    (lw * logo.naturalHeight) / logo.naturalWidth,
+  );
   const none = recent.length === 0;
-  letter(g, none ? "where shall we wander?" : "the worlds you have walked", P(l.say.x), P(l.say.y), `italic ${P(l.say.size)}px ${SERIF}`, INK_SOFT, "left", P(0.0004));
+  letter(
+    g,
+    none ? "where shall we wander?" : "the worlds you have walked",
+    P(l.say.x),
+    P(l.say.y),
+    `italic ${P(l.say.size)}px ${SERIF}`,
+    INK_SOFT,
+    "left",
+    P(0.0004),
+  );
   for (const [i, r] of recent.entries()) {
     const card = l.cards[i];
     if (card === undefined) break;
     const below = card.y + card.side / 2;
     const where = whereOf(r);
-    if (where !== "") letter(g, where, P(card.x), P(below + l.name * 1.3), `italic ${fitted(g, where, `italic {}px ${SERIF}`, P(l.name * 0.72), P(card.nameWidth), 0)}px ${SERIF}`, INK_SOFT);
-    const { lines, size } = nameLines(g, nameOf(r).toUpperCase(), P(l.name), P(card.nameWidth));
-    lines.forEach((text, k) => letter(g, text, P(card.x), P(below + l.name * (where !== "" ? 2.55 : 1.75)) + k * size * 1.1, `600 ${size}px ${SERIF}`, INK, "center", size * 0.17));
+    if (where !== "") {
+      letter(
+        g,
+        where,
+        P(card.x),
+        P(below + l.name * 1.3),
+        `italic ${fitted(g, where, `italic {}px ${SERIF}`, P(l.name * 0.72), P(card.nameWidth), 0)}px ${SERIF}`,
+        INK_SOFT,
+      );
+    }
+    const { lines, size } = nameLines(
+      g,
+      nameOf(r).toUpperCase(),
+      P(l.name),
+      P(card.nameWidth),
+    );
+    lines.forEach((text, k) =>
+      letter(
+        g,
+        text,
+        P(card.x),
+        P(below + l.name * (where !== "" ? 2.55 : 1.75)) + k * size * 1.1,
+        `600 ${size}px ${SERIF}`,
+        INK,
+        "center",
+        size * 0.17,
+      ),
+    );
   }
   const mid = (l.line.x0 + l.line.x1) / 2;
-  letter(g, `${none ? "write" : "or write"} the address of a place on GitHub`, P(mid), P(l.line.y - l.line.size * 2.6), `italic ${P(l.line.size)}px ${SERIF}`, INK_SOFT);
+  letter(
+    g,
+    `${none ? "write" : "or write"} the address of a place on GitHub`,
+    P(mid),
+    P(l.line.y - l.line.size * 2.6),
+    `italic ${P(l.line.size)}px ${SERIF}`,
+    INK_SOFT,
+  );
   return c;
 }
 
 /** The largest size up to `size` at which `text` fits `width` in `font`, where "{}" in `font` is the size and letters are spaced by `spacing` ems. The result is at least `least` times `size`. */
-function fitted(g: CanvasRenderingContext2D, text: string, font: string, size: number, width: number, spacing: number, least = 0.55): number {
+function fitted(
+  g: CanvasRenderingContext2D,
+  text: string,
+  font: string,
+  size: number,
+  width: number,
+  spacing: number,
+  least = 0.55,
+): number {
   g.save();
   g.font = font.replace("{}", String(size));
   g.letterSpacing = `${size * spacing}px`;
@@ -145,27 +252,54 @@ function fitted(g: CanvasRenderingContext2D, text: string, font: string, size: n
  * slash nearest the middle when that keeps the text larger. The end is cut
  * off only when even two lines at half size do not fit.
  */
-function nameLines(g: CanvasRenderingContext2D, name: string, size: number, width: number): { lines: string[]; size: number } {
+function nameLines(
+  g: CanvasRenderingContext2D,
+  name: string,
+  size: number,
+  width: number,
+): { lines: string[]; size: number } {
   const font = `600 {}px ${SERIF}`;
   const one = fitted(g, name, font, size, width, 0.17, 0);
-  if (one >= size * 0.8 || name.length < 6) return { lines: [name], size: Math.max(one, size * 0.5) };
-  const marks = [...name.matchAll(/[-._/ ]/g)].map((m) => (m.index ?? 0) + 1).filter((k) => k > 1 && k < name.length - 1);
-  const at = (marks.length > 0 ? marks : [Math.ceil(name.length / 2)]).reduce((b, k) => (Math.abs(k - name.length / 2) < Math.abs(b - name.length / 2) ? k : b));
+  if (one >= size * 0.8 || name.length < 6) {
+    return { lines: [name], size: Math.max(one, size * 0.5) };
+  }
+  const marks = [...name.matchAll(/[-._/ ]/g)]
+    .map((m) => (m.index ?? 0) + 1)
+    .filter((k) => k > 1 && k < name.length - 1);
+  const at = (marks.length > 0 ? marks : [Math.ceil(name.length / 2)]).reduce(
+    (b, k) =>
+      Math.abs(k - name.length / 2) < Math.abs(b - name.length / 2) ? k : b,
+  );
   const lines = [name.slice(0, at).trim(), name.slice(at).trim()];
-  const two = Math.min(...lines.map((t) => fitted(g, t, font, size, width, 0.17, 0)));
+  const two = Math.min(
+    ...lines.map((t) => fitted(g, t, font, size, width, 0.17, 0)),
+  );
   if (two <= one) return { lines: [name], size: Math.max(one, size * 0.5) };
   // Slightly under the exact fit, so measuring again never finds it a little too wide.
   const shown = Math.max(two * 0.98, size * 0.5);
-  return { lines: lines.map((t) => clipped(g, t, font.replace("{}", String(shown)), width, shown * 0.17)), size: shown };
+  return {
+    lines: lines.map((t) =>
+      clipped(g, t, font.replace("{}", String(shown)), width, shown * 0.17),
+    ),
+    size: shown,
+  };
 }
 
 /** Cuts the end of `text`, adding an ellipsis, so it fits `width` in `font`. */
-function clipped(g: CanvasRenderingContext2D, text: string, font: string, width: number, spacing: number): string {
+function clipped(
+  g: CanvasRenderingContext2D,
+  text: string,
+  font: string,
+  width: number,
+  spacing: number,
+): string {
   g.save();
   g.font = font;
   g.letterSpacing = `${spacing}px`;
   let shown = text;
-  while (shown.length > 1 && g.measureText(shown).width > width) shown = shown.slice(0, -2) + "…";
+  while (shown.length > 1 && g.measureText(shown).width > width) {
+    shown = shown.slice(0, -2) + "…";
+  }
   g.restore();
   return shown;
 }
@@ -174,7 +308,12 @@ function clipped(g: CanvasRenderingContext2D, text: string, font: string, width:
 export function writingBox(l: TableLayout): SheetBox {
   const mid = (l.line.x0 + l.line.x1) / 2;
   const half = (l.line.x1 - l.line.x0) / 2 + 0.11;
-  return [Math.max(0.01, mid - half), l.line.y - l.line.size * 2, Math.min(l.sheet.w - 0.01, mid + half), Math.min(l.sheet.h - 0.005, l.line.y + l.line.size * 7)];
+  return [
+    Math.max(0.01, mid - half),
+    l.line.y - l.line.size * 2,
+    Math.min(l.sheet.w - 0.01, mid + half),
+    Math.min(l.sheet.h - 0.005, l.line.y + l.line.size * 7),
+  ];
 }
 
 /**
@@ -185,7 +324,12 @@ export function writingBox(l: TableLayout): SheetBox {
  * pencilled underline, moved down to make room for an answer. Returns the
  * folder text's box on the sheet.
  */
-export function paintWriting(g: CanvasRenderingContext2D, l: TableLayout, w: Writing, pxPerM: number): SheetBox {
+export function paintWriting(
+  g: CanvasRenderingContext2D,
+  l: TableLayout,
+  w: Writing,
+  pxPerM: number,
+): SheetBox {
   const [bx, by, wx1] = writingBox(l);
   const wx0 = bx;
   const P = (m: number): number => m * pxPerM;
@@ -196,15 +340,61 @@ export function paintWriting(g: CanvasRenderingContext2D, l: TableLayout, w: Wri
   const mid = (ln.x0 + ln.x1) / 2;
   g.clearRect(0, 0, g.canvas.width, g.canvas.height);
   inkLine(g, X(ln.x0), X(ln.x1), Y(ln.y), mm, 5, "rgba(46,34,22,0.88)");
-  if (w.typed === "") letter(g, "github.com/…", X(mid), Y(ln.y - ln.size * 0.55), `italic ${P(ln.size * 1.2)}px ${SERIF}`, "rgba(96,92,86,0.42)");
-  else letter(g, fit(g, w.typed, `${P(ln.size * 1.2)}px ${SERIF}`, P(ln.x1 - ln.x0)), X(mid), Y(ln.y - ln.size * 0.55), `${P(ln.size * 1.2)}px ${SERIF}`, w.answer === "" ? "rgba(30,24,40,0.9)" : "rgba(30,24,40,0.62)");
-  if (w.reading > 0) inkLine(g, X(ln.x0), X(ln.x1), Y(ln.y + 0.0006), mm * 1.5, 6, "rgba(30,22,14,0.95)", w.reading);
-  const lines = w.answer === "" ? [] : wrap(g, w.answer, `italic ${P(ln.size * 0.95)}px ${SERIF}`, P(Math.min(ln.x1 - ln.x0 + 0.2, wx1 - wx0 - 0.02)));
+  if (w.typed === "") {
+    letter(
+      g,
+      "github.com/…",
+      X(mid),
+      Y(ln.y - ln.size * 0.55),
+      `italic ${P(ln.size * 1.2)}px ${SERIF}`,
+      "rgba(96,92,86,0.42)",
+    );
+  } else {
+    letter(
+      g,
+      fit(g, w.typed, `${P(ln.size * 1.2)}px ${SERIF}`, P(ln.x1 - ln.x0)),
+      X(mid),
+      Y(ln.y - ln.size * 0.55),
+      `${P(ln.size * 1.2)}px ${SERIF}`,
+      w.answer === "" ? "rgba(30,24,40,0.9)" : "rgba(30,24,40,0.62)",
+    );
+  }
+  if (w.reading > 0) {
+    inkLine(
+      g,
+      X(ln.x0),
+      X(ln.x1),
+      Y(ln.y + 0.0006),
+      mm * 1.5,
+      6,
+      "rgba(30,22,14,0.95)",
+      w.reading,
+    );
+  }
+  const lines =
+    w.answer === ""
+      ? []
+      : wrap(
+          g,
+          w.answer,
+          `italic ${P(ln.size * 0.95)}px ${SERIF}`,
+          P(Math.min(ln.x1 - ln.x0 + 0.2, wx1 - wx0 - 0.02)),
+        );
   g.save();
   g.globalAlpha = w.answered;
-  lines.forEach((text, i) => letter(g, text, X(mid), Y(ln.y + ln.size * (1.9 + i * 1.3)), `italic ${P(ln.size * 0.95)}px ${SERIF}`, INK_ANSWER));
+  lines.forEach((text, i) =>
+    letter(
+      g,
+      text,
+      X(mid),
+      Y(ln.y + ln.size * (1.9 + i * 1.3)),
+      `italic ${P(ln.size * 0.95)}px ${SERIF}`,
+      INK_ANSWER,
+    ),
+  );
   g.restore();
-  const folderY = ln.y + ln.size * (lines.length === 0 ? 2.9 : 3 + lines.length * 1.3);
+  const folderY =
+    ln.y + ln.size * (lines.length === 0 ? 2.9 : 3 + lines.length * 1.3);
   const font = `${P(ln.size * 0.98)}px ${SERIF}`;
   const folder = "or open a folder on this computer";
   letter(g, folder, X(mid), Y(folderY), font, INK);
@@ -219,21 +409,38 @@ export function paintWriting(g: CanvasRenderingContext2D, l: TableLayout, w: Wri
   g.lineTo(X(mid + half), Y(folderY + ln.size * 0.3));
   g.stroke();
   g.restore();
-  return [mid - half, folderY - ln.size * 1.1, mid + half, folderY + ln.size * 0.6];
+  return [
+    mid - half,
+    folderY - ln.size * 1.1,
+    mid + half,
+    folderY + ln.size * 0.6,
+  ];
 }
 
 /** Returns `text` as written on the line, keeping only its end, after an ellipsis, when it runs past the line. */
-function fit(g: CanvasRenderingContext2D, text: string, font: string, width: number): string {
+function fit(
+  g: CanvasRenderingContext2D,
+  text: string,
+  font: string,
+  width: number,
+): string {
   g.save();
   g.font = font;
   let shown = text;
-  while (shown.length > 1 && g.measureText(shown).width > width) shown = shown.slice(1);
+  while (shown.length > 1 && g.measureText(shown).width > width) {
+    shown = shown.slice(1);
+  }
   g.restore();
   return shown === text ? text : `…${shown.slice(1)}`;
 }
 
 /** Breaks `text` into lines no wider than `width` in `font`. */
-function wrap(g: CanvasRenderingContext2D, text: string, font: string, width: number): string[] {
+function wrap(
+  g: CanvasRenderingContext2D,
+  text: string,
+  font: string,
+  width: number,
+): string[] {
   g.save();
   g.font = font;
   const lines: string[] = [];
@@ -251,7 +458,10 @@ function wrap(g: CanvasRenderingContext2D, text: string, font: string, width: nu
 }
 
 /** Creates a canvas for the line's strip at `pxPerM` pixels per metre. */
-export function writingCanvas(l: TableLayout, pxPerM: number): HTMLCanvasElement {
+export function writingCanvas(
+  l: TableLayout,
+  pxPerM: number,
+): HTMLCanvasElement {
   const [x0, y0, x1, y1] = writingBox(l);
   return canvasOf((x1 - x0) * pxPerM, (y1 - y0) * pxPerM)[0];
 }
@@ -262,14 +472,20 @@ export function writingCanvas(l: TableLayout, pxPerM: number): HTMLCanvasElement
  * shaft, pale with a grey-brown band and split in places like a used
  * feather's, with soft down where the vane begins.
  */
-export function paintFeather(w: number, h: number, seed: number): HTMLCanvasElement {
+export function paintFeather(
+  w: number,
+  h: number,
+  seed: number,
+): HTMLCanvasElement {
   const [c, g] = canvasOf(w, h);
   const r = seeded(seed);
   const n = noise1(seed + 4);
   const mid = h / 2;
   // The vane is narrow at its base, widest two thirds along and rounded at the tip, with one side narrower than the other.
   const half = (t: number, side: number): number => {
-    const body = Math.sin(Math.min(1, t / 0.92) * Math.PI * 0.62) * (1 - Math.pow(Math.max(0, t - 0.7) / 0.3, 2.2) * 0.85);
+    const body =
+      Math.sin(Math.min(1, t / 0.92) * Math.PI * 0.62) *
+      (1 - Math.pow(Math.max(0, t - 0.7) / 0.3, 2.2) * 0.85);
     return Math.max(0, body) * (h / 2 - 2) * (side > 0 ? 1 : 0.72);
   };
   g.lineCap = "round";
@@ -279,17 +495,24 @@ export function paintFeather(w: number, h: number, seed: number): HTMLCanvasElem
     const t = start + (1 - start) * (i / barbs);
     for (const side of [-1, 1]) {
       const split = n(t * 22 + side * 5) > 0.62 ? 0.82 : 1;
-      const len = half((t - start) / (1 - start), side) * split * (0.96 + r() * 0.06);
+      const len =
+        half((t - start) / (1 - start), side) * split * (0.96 + r() * 0.06);
       if (len < 2) continue;
       const x = t * w;
       const tone = 0.5 + 0.5 * n(t * 7 + side * 2.3);
-      const band = Math.exp(-Math.pow((t - 0.55) / 0.12, 2)) * 0.6 + (t > 0.9 ? 0.4 : 0);
+      const band =
+        Math.exp(-Math.pow((t - 0.55) / 0.12, 2)) * 0.6 + (t > 0.9 ? 0.4 : 0);
       const L = 236 - band * 70 - tone * 18;
       g.strokeStyle = `rgba(${L + 6},${L},${L - 12},${0.55 + r() * 0.35})`;
       g.lineWidth = (0.9 + r() * 0.7) * (h / 256);
       g.beginPath();
       g.moveTo(x, mid);
-      g.quadraticCurveTo(x + len * 0.155, mid + side * len * 0.55, x + len * 0.62, mid + side * len);
+      g.quadraticCurveTo(
+        x + len * 0.155,
+        mid + side * len * 0.55,
+        x + len * 0.62,
+        mid + side * len,
+      );
       g.stroke();
     }
   }
@@ -301,7 +524,14 @@ export function paintFeather(w: number, h: number, seed: number): HTMLCanvasElem
     g.lineWidth = 0.8 * (h / 256);
     g.beginPath();
     g.moveTo(t * w, mid);
-    g.bezierCurveTo(t * w + len * 0.2, mid + side * len * 0.3, t * w + len * (r() - 0.2), mid + side * len * 0.8, t * w + len * 0.5 * (r() - 0.3), mid + side * len);
+    g.bezierCurveTo(
+      t * w + len * 0.2,
+      mid + side * len * 0.3,
+      t * w + len * (r() - 0.2),
+      mid + side * len * 0.8,
+      t * w + len * 0.5 * (r() - 0.3),
+      mid + side * len,
+    );
     g.stroke();
   }
   return c;

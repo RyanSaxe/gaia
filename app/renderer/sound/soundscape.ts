@@ -45,7 +45,12 @@ const FADE_IN = 3;
 const HEARD = 0.003;
 /** Seconds after which an inaudible bed stops and releases its recording. */
 const RELEASE = 60;
-const PAPER_LEVEL: Readonly<Record<Paper, number>> = { open: -4, shut: -6, turn: -5, riffle: -6 };
+const PAPER_LEVEL: Readonly<Record<Paper, number>> = {
+  open: -4,
+  shut: -6,
+  turn: -5,
+  riffle: -6,
+};
 /** The page-turn recording holds two turns, and only the first, this many seconds long, plays. */
 const ONE_TURN = 0.9;
 
@@ -58,7 +63,14 @@ export type Solo = Bed | "steps" | "paper";
  * picks which footfall plays and where each bed starts. With `solo`, only that
  * sound plays.
  */
-export function createSoundscape(ctx: BaseAudioContext, bank: Bank, out: AudioNode, start: number, random: () => number, solo: Solo | null = null): Soundscape {
+export function createSoundscape(
+  ctx: BaseAudioContext,
+  bank: Bank,
+  out: AudioNode,
+  start: number,
+  random: () => number,
+  solo: Solo | null = null,
+): Soundscape {
   const plays = (sound: Solo): boolean => solo === null || solo === sound;
   const master = ctx.createGain();
   master.gain.setValueAtTime(0, start);
@@ -78,7 +90,15 @@ export function createSoundscape(ctx: BaseAudioContext, bank: Bank, out: AudioNo
     const level = ctx.createGain();
     level.gain.setValueAtTime(0, start);
     tone.connect(side).connect(level).connect(world);
-    return { name, tone, side, level, base: db(HUSH[name] - bank.lufs[name]), source: null as AudioBufferSourceNode | null, heardAt: 0 };
+    return {
+      name,
+      tone,
+      side,
+      level,
+      base: db(HUSH[name] - bank.lufs[name]),
+      source: null as AudioBufferSourceNode | null,
+      heardAt: 0,
+    };
   });
 
   let last = -1;
@@ -106,9 +126,17 @@ export function createSoundscape(ctx: BaseAudioContext, bank: Bank, out: AudioNo
           b.source = null;
           bank.beds.put(b.name);
         }
-        b.level.gain.setTargetAtTime(heard ? layer.gain * b.base : 0, t, EASE.gain);
+        b.level.gain.setTargetAtTime(
+          heard ? layer.gain * b.base : 0,
+          t,
+          EASE.gain,
+        );
         b.side.pan.setTargetAtTime(layer.pan, t, EASE.pan);
-        b.tone.frequency.setTargetAtTime(Math.min(layer.lowpass, ctx.sampleRate / 2 - 100), t, EASE.tone);
+        b.tone.frequency.setTargetAtTime(
+          Math.min(layer.lowpass, ctx.sampleRate / 2 - 100),
+          t,
+          EASE.tone,
+        );
       }
     },
     step(t, ground, side) {
@@ -125,7 +153,9 @@ export function createSoundscape(ctx: BaseAudioContext, bank: Bank, out: AudioNo
       const pan = ctx.createStereoPanner();
       pan.pan.value = side * 0.08;
       const level = ctx.createGain();
-      level.gain.value = db(HUSH.steps - bank.lufs[`steps-${ground}`] + (random() - 0.5) * 3);
+      level.gain.value = db(
+        HUSH.steps - bank.lufs[`steps-${ground}`] + (random() - 0.5) * 3,
+      );
       source.connect(pan).connect(level).connect(world);
       source.start(t, cut.at, cut.length);
     },

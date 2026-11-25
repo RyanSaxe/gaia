@@ -7,7 +7,12 @@ import "./journal.css";
 import LEATHER from "./leather.webp";
 import PAPER from "./paper.webp";
 import { linesOf } from "./page.ts";
-import { RIBBON_LIE, RIBBON_POSES, ribbonSvg, ribbonTransform } from "./ribbon.ts";
+import {
+  RIBBON_LIE,
+  RIBBON_POSES,
+  ribbonSvg,
+  ribbonTransform,
+} from "./ribbon.ts";
 import { type Curl, angleOf, createCurl } from "./curl.ts";
 import { swipes } from "./swipe.ts";
 import { loadTitleFace } from "./title-face.ts";
@@ -26,7 +31,11 @@ export interface BookPages {
   /** Negative when `a` comes before `b` in the book. */
   order(a: string, b: string): number;
   /** The tabs on the fore-edge: each tab's name, the place it opens, and the first chapter of its part of the book. */
-  tabs(): readonly { readonly name: string; readonly at: string; readonly from: string }[];
+  tabs(): readonly {
+    readonly name: string;
+    readonly at: string;
+    readonly from: string;
+  }[];
   /** Resolves once everything a place's spread needs, such as a file's text, has arrived, so its pages are drawn complete. */
   ready?(at: string): Promise<void>;
   /**
@@ -38,7 +47,10 @@ export interface BookPages {
    * Returns the faces a riffle from `from` toward `toward` shows. For face `k` of `of`, it returns a page of real code
    * from a file between the two, or null when no code has arrived yet.
    */
-  passing?(from: string, toward: string): (k: number, of: number) => HTMLElement | null;
+  passing?(
+    from: string,
+    toward: string,
+  ): (k: number, of: number) => HTMLElement | null;
   /** A place's position in the book from 0 at the front to 1 at the back, which sets the thickness of the page edges. */
   fraction?(at: string): number;
 }
@@ -55,7 +67,11 @@ export interface JournalBook {
   readonly slip: HTMLElement;
   /** Rebuilds the tabs and redraws the open spread after the pages' content changes. */
   refresh(): void;
-  state(): { readonly open: boolean; readonly at: string | null; readonly turning: boolean };
+  state(): {
+    readonly open: boolean;
+    readonly at: string | null;
+    readonly turning: boolean;
+  };
 }
 
 /** A page's size in the book's own pixels, and how far the boards overhang the pages. */
@@ -122,7 +138,11 @@ const el = (cls: string, parent?: HTMLElement): HTMLDivElement => {
   return e;
 };
 
-export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: (open: boolean) => void): JournalBook {
+export function createJournalBook(
+  layer: HTMLElement,
+  pages: BookPages,
+  onOpen: (open: boolean) => void,
+): JournalBook {
   loadTitleFace();
   const root = el("journal", layer);
   // An SVG filter (`jp-brush`) that roughens the edges of the mark strokes down the gutter.
@@ -148,7 +168,10 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   const right = el("jb-right", inner);
   const tabs = el("jb-tabs", inner);
   // The shadow a turning leaf casts on each page, and the strips it bends in (`curl.ts`).
-  const shades = { right: el("jb-shade right", inner), left: el("jb-shade left", inner) };
+  const shades = {
+    right: el("jb-shade right", inner),
+    left: el("jb-shade left", inner),
+  };
   const curlHost = el("jb-curl", inner);
   const leaf = el("jb-leaf", inner);
   const leafFront = el("jb-face front", leaf);
@@ -175,7 +198,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     ribbon.style.transformOrigin = `${-drawn.left}px 0`;
     ribbon.style.setProperty("--head", `${-PAGE.h / 2 - drawn.top}px`);
     ribbon.style.setProperty("--foot", `${PAGE.h / 2 - drawn.top}px`);
-    for (const [name, pose] of Object.entries(RIBBON_POSES)) ribbon.style.setProperty(`--${name}`, ribbonTransform(pose));
+    for (const [name, pose] of Object.entries(RIBBON_POSES)) {
+      ribbon.style.setProperty(`--${name}`, ribbonTransform(pose));
+    }
     ribbon.innerHTML = drawn.svg;
     ribbon.dataset.side = "here";
   }
@@ -198,21 +223,42 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     /** A row's offset from the top of the page body, summed through the code or list that holds it. */
     const down = (e: HTMLElement): number => {
       let y = 0;
-      for (let n: HTMLElement | null = e; n !== null && n !== body; n = n.offsetParent as HTMLElement | null) y += n.offsetTop;
+      for (
+        let n: HTMLElement | null = e;
+        n !== null && n !== body;
+        n = n.offsetParent as HTMLElement | null
+      ) {
+        y += n.offsetTop;
+      }
       return y;
     };
     const rows = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")];
-    for (const row of rows) row.classList.toggle("jp-past", down(row) + row.offsetHeight > bottom);
+    for (const row of rows) {
+      row.classList.toggle("jp-past", down(row) + row.offsetHeight > bottom);
+    }
     // A definition too long for its page gets a fold note where the page ends. The last row that fits is hidden to make room for it.
     const fold = body.querySelector<HTMLElement>(".jp-fold.after");
     if (fold !== null && rows.some((r) => r.classList.contains("jp-past"))) {
-      const last = rows.filter((r) => !r.classList.contains("jp-past")).at(-1);
+      let last: HTMLElement | undefined;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i];
+        if (row !== undefined && !row.classList.contains("jp-past")) {
+          last = row;
+          break;
+        }
+      }
       if (last !== undefined) {
         last.classList.add("jp-past");
-        const more = rows.filter((r) => r.classList.contains("jp-past") && r.classList.contains("jp-line")).length;
+        const more = rows.filter(
+          (r) =>
+            r.classList.contains("jp-past") && r.classList.contains("jp-line"),
+        ).length;
         fold.style.top = `${down(last)}px`;
         // A document's lines are paragraphs, so its fold says "read on" instead of a line count.
-        fold.textContent = body.querySelector(".jp-code.prose") !== null ? "read on" : linesOf(more);
+        fold.textContent =
+          body.querySelector(".jp-code.prose") !== null
+            ? "read on"
+            : linesOf(more);
         fold.classList.add("shown");
       }
     }
@@ -221,11 +267,18 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   /** Paints one gutter stroke for each run of lines a mark covers, and one beside each marked row. */
   function paintMarks(body: HTMLElement): void {
     for (const old of body.querySelectorAll(".jp-stroke")) old.remove();
-    const shown = [...body.querySelectorAll<HTMLElement>(".jp-marked:not(.jp-past)")];
+    const shown = [
+      ...body.querySelectorAll<HTMLElement>(".jp-marked:not(.jp-past)"),
+    ];
     const runs: HTMLElement[][] = [];
     for (const e of shown) {
       const last = runs[runs.length - 1]?.at(-1);
-      const joins = last !== undefined && e.classList.contains("jp-line") && last.nextElementSibling === e && last.style.getPropertyValue("--mark") === e.style.getPropertyValue("--mark");
+      const joins =
+        last !== undefined &&
+        e.classList.contains("jp-line") &&
+        last.nextElementSibling === e &&
+        last.style.getPropertyValue("--mark") ===
+          e.style.getPropertyValue("--mark");
       if (joins) runs[runs.length - 1]?.push(e);
       else runs.push([e]);
     }
@@ -243,7 +296,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   }
   /** Where the ribbon lies from the spread open at `place`: on it, or among the leaves before or after it. */
   const sideOf = (place: string | null): RibbonSide =>
-    place === null || pages.order(place, marked) === 0 ? "here" : pages.order(marked, place) < 0 ? "before" : "after";
+    place === null || pages.order(place, marked) === 0
+      ? "here"
+      : pages.order(marked, place) < 0
+        ? "before"
+        : "after";
   /** Rests the ribbon on its page's side, in journal.css's pose for that side. */
   function layRibbon(): void {
     const side = sideOf(at);
@@ -295,25 +352,45 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   const EDGES = { least: 1.5, most: 9 } as const;
   function layDepth(place: string, ms = 0): void {
     const f = Math.max(0, Math.min(1, pages.fraction?.(place) ?? 0.5));
-    const [l, r] = [EDGES.least + (EDGES.most - EDGES.least) * f, EDGES.least + (EDGES.most - EDGES.least) * (1 - f)];
-    for (const [block, e, side] of [[blockRight, r, "right"], [blockLeft, l, "left"]] as const) {
-      block.style.transition = ms > 0 ? `width ${ms}ms ease, left ${ms}ms ease, background-size ${ms}ms ease` : "none";
+    const [l, r] = [
+      EDGES.least + (EDGES.most - EDGES.least) * f,
+      EDGES.least + (EDGES.most - EDGES.least) * (1 - f),
+    ];
+    for (const [block, e, side] of [
+      [blockRight, r, "right"],
+      [blockLeft, l, "left"],
+    ] as const) {
+      block.style.transition =
+        ms > 0
+          ? `width ${ms}ms ease, left ${ms}ms ease, background-size ${ms}ms ease`
+          : "none";
       block.style.width = `${PAGE.w + e}px`;
       const lines = `repeating-linear-gradient(90deg, #efe6cd 0 1px, #c4b593 1px 2px) ${side} top / ${e.toFixed(1)}px 100% no-repeat`;
-      const head = "repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left top / 100% 2px no-repeat, repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left bottom / 100% 2px no-repeat";
-      const fade = side === "right" ? "linear-gradient(90deg, #b9a983, #d9cdae 4%, #e5dabe)" : "linear-gradient(270deg, #b9a983, #d9cdae 4%, #e5dabe)";
+      const head =
+        "repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left top / 100% 2px no-repeat, repeating-linear-gradient(0deg, #efe6cd 0 1px, #c4b593 1px 2px) left bottom / 100% 2px no-repeat";
+      const fade =
+        side === "right"
+          ? "linear-gradient(90deg, #b9a983, #d9cdae 4%, #e5dabe)"
+          : "linear-gradient(270deg, #b9a983, #d9cdae 4%, #e5dabe)";
       // A thick stack darkens toward its outer edge.
       const depth = `linear-gradient(${side === "right" ? 90 : 270}deg, rgba(0,0,0,0) calc(100% - ${e.toFixed(1)}px), rgba(70,50,25,${(0.04 + 0.022 * e).toFixed(3)}) 100%)`;
       block.style.background = `${depth}, ${lines}, ${head}, ${fade}`;
       const W = PAGE.w + e;
-      block.style.clipPath = side === "right"
-        ? `path("M0 2 C 10 0.6, 24 0, 44 0 L ${W} 0 L ${W} 664 L 44 664 C 24 664, 10 663.4, 0 662 Z")`
-        : `path("M0 0 L ${W - 44} 0 C ${W - 24} 0, ${W - 10} 0.6, ${W} 2 L ${W} 662 C ${W - 10} 663.4, ${W - 24} 664, ${W - 44} 664 L 0 664 Z")`;
+      block.style.clipPath =
+        side === "right"
+          ? `path("M0 2 C 10 0.6, 24 0, 44 0 L ${W} 0 L ${W} 664 L 44 664 C 24 664, 10 663.4, 0 662 Z")`
+          : `path("M0 0 L ${W - 44} 0 C ${W - 24} 0, ${W - 10} 0.6, ${W} 2 L ${W} 662 C ${W - 10} 663.4, ${W - 24} 664, ${W - 44} 664 L 0 664 Z")`;
       if (side === "left") block.style.left = `${PAGE.overhang - e}px`;
     }
   }
   function markTabs(place: string): void {
-    for (const t of tabs.children) t.classList.toggle("on", (t as HTMLElement).dataset.from !== undefined && within(place, (t as HTMLElement).dataset.from as string));
+    for (const t of tabs.children) {
+      t.classList.toggle(
+        "on",
+        (t as HTMLElement).dataset.from !== undefined &&
+          within(place, (t as HTMLElement).dataset.from as string),
+      );
+    }
   }
   function show(place: string): void {
     layDepth(place);
@@ -324,19 +401,29 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     markTabs(place);
     layEdges();
   }
-  const after = (ms: number): Promise<void> => new Promise<void>((r) => window.setTimeout(r, ms));
+  const after = (ms: number): Promise<void> =>
+    new Promise<void>((r) => window.setTimeout(r, ms));
   /** Resolves once a place's painting is done. */
-  const painted = (place: string): Promise<void> => pages.painted?.(place) ?? Promise.resolve();
+  const painted = (place: string): Promise<void> =>
+    pages.painted?.(place) ?? Promise.resolve();
   /** Resolves once a place's code and painting have arrived, or, if the code never does, once the painting is done and `TEXT_AT_MOST` has passed. */
-  const wholeAt = (place: string): Promise<void> => Promise.all([Promise.race([pages.ready?.(place), after(TEXT_AT_MOST)]), painted(place)]).then(() => undefined);
+  const wholeAt = (place: string): Promise<void> =>
+    Promise.all([
+      Promise.race([pages.ready?.(place), after(TEXT_AT_MOST)]),
+      painted(place),
+    ]).then(() => undefined);
   /** Whether a promise settles within 40 ms. */
-  const settledSoon = (p: Promise<void>): Promise<boolean> => Promise.race([p.then(() => true), after(40).then(() => false)]);
+  const settledSoon = (p: Promise<void>): Promise<boolean> =>
+    Promise.race([p.then(() => true), after(40).then(() => false)]);
   /** Whether `place` lies in the part of the book from the tab at `chapter` to the next tab. */
   function within(place: string, chapter: string): boolean {
     const list = pages.tabs();
     const k = list.findIndex((t) => t.from === chapter);
     const next = list[k + 1];
-    return pages.order(chapter, place) <= 0 && (next === undefined || pages.order(place, next.from) < 0);
+    return (
+      pages.order(chapter, place) <= 0 &&
+      (next === undefined || pages.order(place, next.from) < 0)
+    );
   }
 
   // ---------- placement: in the corner, or open in the middle ----------
@@ -345,7 +432,10 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   function poses(): { held: string; corner: string; scale: number } {
     const vw = layer.clientWidth || window.innerWidth;
     const vh = layer.clientHeight || window.innerHeight;
-    const scale = Math.min((vw * FILL.w) / (PAGE.w * 2 + PAGE.overhang * 2), (vh * FILL.h) / (PAGE.h + PAGE.overhang * 2));
+    const scale = Math.min(
+      (vw * FILL.w) / (PAGE.w * 2 + PAGE.overhang * 2),
+      (vh * FILL.h) / (PAGE.h + PAGE.overhang * 2),
+    );
     // Places the slip's center, in the shut book's pixels from the book's center, in the lower left corner. The slip is
     // near the cover's outer edge, so the book extends off the screen's left and bottom.
     const slipX = -(26 + 92 - PAGE.w / 2);
@@ -383,7 +473,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
    */
   function liftMargins(scale: number): void {
     const k = (MARGIN_PERSPECTIVE - MARGIN_LIFT * scale) / MARGIN_PERSPECTIVE;
-    for (const m of margins) m.style.transform = `translateZ(${MARGIN_LIFT}px) scale(${k})`;
+    for (const m of margins) {
+      m.style.transform = `translateZ(${MARGIN_LIFT}px) scale(${k})`;
+    }
   }
   place(false);
   // A window resize moves the book without a transition. It animates between its corner and the middle only to open and shut.
@@ -402,7 +494,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     }
     turning = true;
     const ready = wholeAt(target);
-    const beside = at !== null && (pages.next(at, 1) === target || pages.next(at, -1) === target);
+    const beside =
+      at !== null &&
+      (pages.next(at, 1) === target || pages.next(at, -1) === target);
     void settledSoon(ready).then((now) => {
       // A far page is reached by a riffle, ready or not. An adjacent page turns as one leaf.
       if (at === null || !beside) return riffleTo(target, ready, now);
@@ -410,7 +504,10 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       // An adjacent page that is not ready lifts as it does under the pointer. The book riffles instead only if it takes longer than `BESIDE_MS`.
       const page = pages.order(at, target) < 0 ? right : cover;
       page.classList.add("lift");
-      void Promise.race([ready.then(() => true), after(BESIDE_MS).then(() => false)]).then((came) => {
+      void Promise.race([
+        ready.then(() => true),
+        after(BESIDE_MS).then(() => false),
+      ]).then((came) => {
         page.classList.remove("lift");
         if (came) turnNow(target);
         else riffleTo(target, ready, false);
@@ -431,16 +528,28 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
    * leaf's turn (`ms`), the most leaves turned before landing (`most`, or `whole` when the target is ready), and the
    * slower gap and turn while the target is still being built (`waiting`, `waitingMs`).
    */
-  const RIFFLE = { gap: 55, ends: 140, ms: 560, most: 36, whole: 12, waiting: 300, waitingMs: 900 } as const;
+  const RIFFLE = {
+    gap: 55,
+    ends: 140,
+    ms: 560,
+    most: 36,
+    whole: 12,
+    waiting: 300,
+    waitingMs: 900,
+  } as const;
   /** Four fixed SVG backgrounds of faint text lines, for faces a riffle shows without real code. */
   const GHOSTS = Array.from({ length: 4 }, (_, v) => {
     let seed = 17 + v * 101;
-    const r = (): number => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-    const lines: string[] = [`<rect x="58" y="62" width="${150 + r() * 120}" height="9" rx="4.5" opacity="0.13"/>`];
+    const r = (): number => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const lines: string[] = [
+      `<rect x="58" y="62" width="${150 + r() * 120}" height="9" rx="4.5" opacity="0.13"/>`,
+    ];
     for (let y = 132; y < 610; y += 17) {
       if (r() < 0.12) continue;
       const indent = 92 + Math.floor(r() * 4) * 14;
-      lines.push(`<rect x="${indent}" y="${y}" width="${40 + r() * (380 - indent)}" height="5" rx="2.5"/>`);
+      lines.push(
+        `<rect x="${indent}" y="${y}" width="${40 + r() * (380 - indent)}" height="5" rx="2.5"/>`,
+      );
     }
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="520" height="660" fill="#3a2f24" opacity="0.085">${lines.join("")}</svg>`;
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
@@ -459,14 +568,27 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
    * in the air turns shut from its current angle over the cover's duration, so it stays ahead of the cover and
    * neither passes through it. The cover's heights open and shut are the ribbon's among its leaves (`RIBBON_POSES`).
    */
-  function fallShut(each: readonly (readonly [HTMLElement, number, number])[]): void {
-    const [opened, shut] = [RIBBON_POSES["before-open"].z, RIBBON_POSES["before-shut"].z];
+  function fallShut(
+    each: readonly (readonly [HTMLElement, number, number])[],
+  ): void {
+    const [opened, shut] = [
+      RIBBON_POSES["before-open"].z,
+      RIBBON_POSES["before-shut"].z,
+    ];
     const poses = each.map(([e, z, off]) => {
       const deg = angleOf(e);
       const above = opened - (z - off);
       return deg < -170
-        ? { e, from: `translateZ(${opened}px) rotateY(${deg}deg) translateZ(${above}px)`, to: `translateZ(${shut}px) rotateY(0deg) translateZ(${above}px)` }
-        : { e, from: `translateZ(${z}px) rotateY(${deg}deg) translateZ(${off}px)`, to: `translateZ(${z}px) rotateY(0deg) translateZ(${off}px)` };
+        ? {
+            e,
+            from: `translateZ(${opened}px) rotateY(${deg}deg) translateZ(${above}px)`,
+            to: `translateZ(${shut}px) rotateY(0deg) translateZ(${above}px)`,
+          }
+        : {
+            e,
+            from: `translateZ(${z}px) rotateY(${deg}deg) translateZ(${off}px)`,
+            to: `translateZ(${z}px) rotateY(0deg) translateZ(${off}px)`,
+          };
     });
     for (const p of poses) {
       p.e.style.transition = "none";
@@ -482,7 +604,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
    * Riffles toward a far page: many leaves turn in quick succession, several in the air at once, and the last carries
    * the target page once it is ready. While the target is still being built, the leaves keep turning more slowly.
    */
-  function riffleTo(target: string, ready: Promise<void>, wholeNow: boolean): void {
+  function riffleTo(
+    target: string,
+    ready: Promise<void>,
+    wholeNow: boolean,
+  ): void {
     const from = at as string;
     const forward = pages.order(from, target) < 0;
     // A riffle leaves the ribbon at the page it started from, unless it is going back to the ribbon. If the ribbon lies
@@ -495,12 +621,22 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     let whole = wholeNow;
     void ready.then(() => (whole = true));
     let distance = 0;
-    for (let p: string | null = from; p !== null && p !== target && distance < 400; distance++) p = pages.next(p, forward ? 1 : -1);
-    const leaves = Math.max(2, Math.min(wholeNow ? RIFFLE.whole : RIFFLE.most, distance - 1));
+    for (
+      let p: string | null = from;
+      p !== null && p !== target && distance < 400;
+      distance++
+    ) {
+      p = pages.next(p, forward ? 1 : -1);
+    }
+    const leaves = Math.max(
+      2,
+      Math.min(wholeNow ? RIFFLE.whole : RIFFLE.most, distance - 1),
+    );
     // Each face shows a page of code the riffle passes if that code has arrived, or faint lines of writing otherwise.
     const passing = pages.passing?.(from, target);
     const faces = 2 * leaves + 2;
-    const face = (n: number): HTMLElement => passing?.(forward ? n : faces - n, faces) ?? ghost(n);
+    const face = (n: number): HTMLElement =>
+      passing?.(forward ? n : faces - n, faces) ?? ghost(n);
     const [start, end] = forward ? [0, -179.6] : [-179.6, 0];
     right.classList.remove("lift");
     cover.classList.remove("lift");
@@ -509,9 +645,15 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     /** The z offset of the riffle leaf carrying the ribbon, or null. */
     let riding: number | null = null;
     const timers: number[] = [];
-    const later = (f: () => void, ms: number): void => void timers.push(window.setTimeout(f, ms));
+    const later = (f: () => void, ms: number): void =>
+      void timers.push(window.setTimeout(f, ms));
     /** Turns a leaf over, and the ribbon with it when `carries`. */
-    const launch = (front: HTMLElement, back: HTMLElement, ms: number, carries = false): HTMLElement => {
+    const launch = (
+      front: HTMLElement,
+      back: HTMLElement,
+      ms: number,
+      carries = false,
+    ): HTMLElement => {
       const l = el("jb-leaf jb-riffle", inner);
       put(el("jb-face front", l), front);
       put(el("jb-face back", l), back);
@@ -538,12 +680,21 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       markTabs(target);
       const lifted = (forward ? right : left).firstElementChild as HTMLElement;
       put(forward ? right : left, face(1));
-      launch(forward ? lifted : face(0), forward ? face(0) : lifted, RIFFLE.ms, forward && lies === "here");
+      launch(
+        forward ? lifted : face(0),
+        forward ? face(0) : lifted,
+        RIFFLE.ms,
+        forward && lies === "here",
+      );
       later(step, RIFFLE.ends);
     };
     const land = (last: HTMLElement): void => {
       shutUnderWay = null;
-      put(forward ? left : right, last.querySelector(forward ? ".back" : ".front")?.firstElementChild as HTMLElement);
+      put(
+        forward ? left : right,
+        last.querySelector(forward ? ".back" : ".front")
+          ?.firstElementChild as HTMLElement,
+      );
       for (const f of flying) f.leaf.remove();
       at = target;
       markTabs(target);
@@ -561,8 +712,20 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       shutUnderWay = null;
       for (const t of timers) window.clearTimeout(t);
       queued = null;
-      const falling: [HTMLElement, number, number][] = flying.map(({ leaf: l, z }) => [l, z, 0]);
-      if (ribbon.dataset.side === "carried") falling.push(riding === null ? [ribbon, new DOMMatrixReadOnly(getComputedStyle(ribbon).transform).m43, 0] : [ribbon, riding, RIBBON_ON_LEAF]);
+      const falling: [HTMLElement, number, number][] = flying.map(
+        ({ leaf: l, z }) => [l, z, 0],
+      );
+      if (ribbon.dataset.side === "carried") {
+        falling.push(
+          riding === null
+            ? [
+                ribbon,
+                new DOMMatrixReadOnly(getComputedStyle(ribbon).transform).m43,
+                0,
+              ]
+            : [ribbon, riding, RIBBON_ON_LEAF],
+        );
+      }
       fallShut(falling);
       window.setTimeout(() => {
         for (const f of flying) f.leaf.remove();
@@ -574,8 +737,19 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       const toGo = leaves - k;
       if (toGo > 0 || !whole) {
         const waiting = toGo <= 0;
-        launch(face(k * 2), face(k * 2 + 1), waiting ? RIFFLE.waitingMs : RIFFLE.ms);
-        later(step, waiting ? RIFFLE.waiting : k < 3 || toGo < 3 ? RIFFLE.ends : RIFFLE.gap);
+        launch(
+          face(k * 2),
+          face(k * 2 + 1),
+          waiting ? RIFFLE.waitingMs : RIFFLE.ms,
+        );
+        later(
+          step,
+          waiting
+            ? RIFFLE.waiting
+            : k < 3 || toGo < 3
+              ? RIFFLE.ends
+              : RIFFLE.gap,
+        );
         return;
       }
       // The last leaf carries the target page, with the target's other page beneath.
@@ -584,7 +758,12 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       // Riffling forward to the ribbon's page, the ribbon rests on the page under the last leaf. Riffling back, the last leaf carries it over.
       if (home && forward) rest("here");
       // Riffle leaves turn flat, without `curl.ts` strips. Bending the first and last leaves stalled the main thread for half a second per riffle.
-      const last = launch(forward ? face(k * 2) : to.right, forward ? to.left : face(k * 2), RIFFLE.ms + 260, home && !forward);
+      const last = launch(
+        forward ? face(k * 2) : to.right,
+        forward ? to.left : face(k * 2),
+        RIFFLE.ms + 260,
+        home && !forward,
+      );
       later(() => land(last), RIFFLE.ms + 300);
     };
     if (lifts) later(first, LIFT.leaves);
@@ -630,7 +809,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     // Updates the tabs as the page starts turning.
     markTabs(target);
     // A ribbon on the turning page turns with it. Turning forward onto the ribbon's page, the ribbon rests on the page beneath.
-    const carries = from !== null && pages.order(forward ? from : target, marked) === 0;
+    const carries =
+      from !== null && pages.order(forward ? from : target, marked) === 0;
     if (forward && pages.order(target, marked) === 0) rest("here");
     void leaf.offsetWidth;
     // Bends the leaf with `curl.ts` strips and casts its shadow. Each frame the strips follow the leaf's angle, by hand
@@ -639,7 +819,15 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     let frame = 0;
     const bend = (): void => {
       curl?.remove();
-      curl = createCurl(curlHost, leafFront.firstElementChild as HTMLElement | null, leafBack.firstElementChild as HTMLElement | null, PAGE.w, PAGE.h, true, shades);
+      curl = createCurl(
+        curlHost,
+        leafFront.firstElementChild as HTMLElement | null,
+        leafBack.firstElementChild as HTMLElement | null,
+        PAGE.w,
+        PAGE.h,
+        true,
+        shades,
+      );
       leaf.classList.add("curled");
       cancelAnimationFrame(frame);
       const tick = (): void => {
@@ -669,9 +857,17 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     /** The leaf's angle at `progress`, limited by `HOLD` while the far side's painting is not done. */
     const angleAt = (progress: number): number => {
       const deg = forward ? -179.6 * progress : -179.6 * (1 - progress);
-      return ready ? deg : forward ? Math.max(deg, HOLD.forward) : Math.min(deg, HOLD.back);
+      return ready
+        ? deg
+        : forward
+          ? Math.max(deg, HOLD.forward)
+          : Math.min(deg, HOLD.back);
     };
-    const lay = (deg: number, ms: number, ease = "cubic-bezier(.3,.1,.3,1)"): void => {
+    const lay = (
+      deg: number,
+      ms: number,
+      ease = "cubic-bezier(.3,.1,.3,1)",
+    ): void => {
       leaf.style.transition = ms > 0 ? `transform ${ms}ms ${ease}` : "none";
       leaf.style.transform = `translateZ(1.4px) rotateY(${deg.toFixed(2)}deg)`;
     };
@@ -729,7 +925,14 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       window.clearTimeout(timer);
       if (angleOf(leaf) < -175) {
         unbend();
-        fallShut(carries ? [[leaf, 1.4, 0], [ribbon, CURL_Z, RIBBON_ON_LEAF]] : [[leaf, 1.4, 0]]);
+        fallShut(
+          carries
+            ? [
+                [leaf, 1.4, 0],
+                [ribbon, CURL_Z, RIBBON_ON_LEAF],
+              ]
+            : [[leaf, 1.4, 0]],
+        );
       } else lay(0, FALL.ms, FALL.ease);
       timer = window.setTimeout(forward ? undone : done, COVER_MS + 40);
     };
@@ -750,7 +953,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
           if (now) return over(progress);
           if (shut) return;
           // The page beneath is complete but the painting on the leaf's far side is not, so the leaf lifts to `HOLD` and waits.
-          lay(angleAt(Math.max(progress, 0.5)), HOLD.ms, "cubic-bezier(.2,.7,.3,1)");
+          lay(
+            angleAt(Math.max(progress, 0.5)),
+            HOLD.ms,
+            "cubic-bezier(.2,.7,.3,1)",
+          );
           void whole.then(() => over(Math.max(progress, 0.5)));
         });
       },
@@ -772,18 +979,39 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
    * a tap, which goes to the row, name or picture under it, or turns the page
    * from bare paper (below).
    */
-  let taken: { readonly side: "left" | "right"; readonly x0: number; readonly y0: number; turn: Turn | null; progress: number; reach: number } | null = null;
+  let taken: {
+    readonly side: "left" | "right";
+    readonly x0: number;
+    readonly y0: number;
+    turn: Turn | null;
+    progress: number;
+    reach: number;
+  } | null = null;
   let dragged = false;
-  const take = (side: "left" | "right") => (e: PointerEvent): void => {
-    if (!open || turning || e.button !== 0) return;
-    // The grabbed spot's distance from the spine, which follows the pointer.
-    const r = (side === "right" ? right : left).getBoundingClientRect();
-    taken = { side, x0: e.clientX, y0: e.clientY, turn: null, progress: 0, reach: Math.max(40, side === "right" ? e.clientX - r.left : r.right - e.clientX) };
-  };
+  const take =
+    (side: "left" | "right") =>
+    (e: PointerEvent): void => {
+      if (!open || turning || e.button !== 0) return;
+      // The grabbed spot's distance from the spine, which follows the pointer.
+      const r = (side === "right" ? right : left).getBoundingClientRect();
+      taken = {
+        side,
+        x0: e.clientX,
+        y0: e.clientY,
+        turn: null,
+        progress: 0,
+        reach: Math.max(
+          40,
+          side === "right" ? e.clientX - r.left : r.right - e.clientX,
+        ),
+      };
+    };
   // A finger can drag a page from anywhere on it, and a mouse only from its edge, so a press while reading never starts a turn.
-  const takeByHand = (side: "left" | "right") => (e: PointerEvent): void => {
-    if (e.pointerType === "touch") take(side)(e);
-  };
+  const takeByHand =
+    (side: "left" | "right") =>
+    (e: PointerEvent): void => {
+      if (e.pointerType === "touch") take(side)(e);
+    };
   right.addEventListener("pointerdown", takeByHand("right"));
   left.addEventListener("pointerdown", takeByHand("left"));
   window.addEventListener("pointermove", (e) => {
@@ -792,8 +1020,11 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const toward = taken.side === "right" ? -dx : dx;
     if (taken.turn === null) {
       // A drag starts only after `DRAG.start` px toward the spine, more than a tap's wobble.
-      if (toward < DRAG.start || Math.abs(e.clientY - taken.y0) > toward) return;
-      const target = at === null ? null : pages.next(at, taken.side === "right" ? 1 : -1);
+      if (toward < DRAG.start || Math.abs(e.clientY - taken.y0) > toward) {
+        return;
+      }
+      const target =
+        at === null ? null : pages.next(at, taken.side === "right" ? 1 : -1);
       if (target === null || turning) {
         taken = null;
         return;
@@ -805,12 +1036,13 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     }
     // At angle a, the grabbed spot lies `reach` times cos(a) from the spine. Solves for the angle that puts it under the
     // pointer.
-    taken.progress = Math.acos(Math.max(-1, Math.min(1, 1 - toward / taken.reach))) / Math.PI;
+    taken.progress =
+      Math.acos(Math.max(-1, Math.min(1, 1 - toward / taken.reach))) / Math.PI;
     taken.turn.hold(taken.progress);
   });
   const letGo = (): void => {
     root.classList.remove("taking");
-    if (taken?.turn != null) {
+    if (taken?.turn !== undefined && taken.turn !== null) {
       if (taken.progress >= 0.5) taken.turn.finish(taken.progress);
       else taken.turn.cancel(taken.progress);
     }
@@ -896,7 +1128,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
   // ---------- clicks, swipes and keys ----------
 
   /** Whether there is a spread in that direction. The first spread's left and the last spread's right turn nowhere. */
-  const turns = (side: "left" | "right"): boolean => open && at !== null && pages.next(at, side === "right" ? 1 : -1) !== null;
+  const turns = (side: "left" | "right"): boolean =>
+    open && at !== null && pages.next(at, side === "right" ? 1 : -1) !== null;
   /** Turns to the next spread forward (1) or back (-1), if there is one. */
   function turnBy(by: 1 | -1): void {
     const to = open && at !== null ? pages.next(at, by) : null;
@@ -926,16 +1159,30 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       // Skips a hidden fold or a row past the page's end, which take no click.
       if (b.offsetParent === null || b.closest(".jp-past") !== null) continue;
       let [x, y] = [0, 0];
-      for (let n: HTMLElement | null = b; n !== null && n !== page; n = n.offsetParent as HTMLElement | null) {
+      for (
+        let n: HTMLElement | null = b;
+        n !== null && n !== page;
+        n = n.offsetParent as HTMLElement | null
+      ) {
         x += n.offsetLeft;
         y += n.offsetTop;
       }
-      const [x0, x1] = [Math.max(0, x - from), Math.min(EDGE, x + b.offsetWidth - from)];
+      const [x0, x1] = [
+        Math.max(0, x - from),
+        Math.min(EDGE, x + b.offsetWidth - from),
+      ];
       if (x1 <= x0) continue;
       // Merges stacked rows into one hole, since a seam between two would lift the page as the pointer crossed it.
       const last = holes.at(-1);
-      if (last !== undefined && last.x0 === x0 && last.x1 === x1 && y <= last.y1 + 1 && y >= last.y0) last.y1 = Math.max(last.y1, y + b.offsetHeight);
-      else holes.push({ x0, x1, y0: y, y1: y + b.offsetHeight });
+      if (
+        last !== undefined &&
+        last.x0 === x0 &&
+        last.x1 === x1 &&
+        y <= last.y1 + 1 &&
+        y >= last.y0
+      ) {
+        last.y1 = Math.max(last.y1, y + b.offsetHeight);
+      } else holes.push({ x0, x1, y0: y, y1: y + b.offsetHeight });
     }
     if (holes.length === 0) return "";
     return `path(evenodd, "M0 0H${EDGE}V${PAGE.h}H0Z${holes.map((h) => `M${h.x0} ${h.y0}H${h.x1}V${h.y1}H${h.x0}Z`).join("")}")`;
@@ -946,7 +1193,8 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
     const m = el(`jb-margin ${side}`, inner);
     margins.push(m);
     // Scales about the spine, the center of the open book (`liftMargins`).
-    m.style.transformOrigin = side === "right" ? "calc(var(--edge) - var(--pw)) 50%" : "var(--pw) 50%";
+    m.style.transformOrigin =
+      side === "right" ? "calc(var(--edge) - var(--pw)) 50%" : "var(--pw) 50%";
     // Its page lifts a little under the pointer, and a drag can start here.
     const page = side === "right" ? right : cover;
     // Only where there is a spread that way. The first spread's left edge and the last one's right stay flat (`layEdges`).
@@ -1041,7 +1289,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
         setOpen(false);
         // `view.ts` also listens on window in the capture phase. On M it would reopen the book, and on Escape close the map.
         e.stopImmediatePropagation();
-      } else if (e.code === "ArrowRight" || e.code === "ArrowLeft") turnBy(e.code === "ArrowRight" ? 1 : -1);
+      } else if (e.code === "ArrowRight" || e.code === "ArrowLeft") {
+        turnBy(e.code === "ArrowRight" ? 1 : -1);
+      }
       e.stopPropagation();
       if (e.code !== "Tab") e.preventDefault();
     },
@@ -1060,7 +1310,9 @@ export function createJournalBook(layer: HTMLElement, pages: BookPages, onOpen: 
       const target = place0 ?? "map";
       const ready = wholeAt(target);
       void settledSoon(ready).then((now) => {
-        if (now || target === "map") return void ready.then(() => setOpen(true, target));
+        if (now || target === "map") {
+          return void ready.then(() => setOpen(true, target));
+        }
         setOpen(true, "map", () => turnTo(target));
       });
     },

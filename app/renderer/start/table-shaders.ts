@@ -492,9 +492,9 @@ void main() {
  * The final pass to the screen. Everything between `uFocus` and `uFocusFar` is
  * sharp, so the whole sheet is readable, and the blur grows outside that band,
  * as with a camera focused on the sheet. A chosen card, rendered separately and
-  * in focus, is blended over the table by `uLifting`, fully while it rises and
-  * then fading as the wait's sheet covers it. The lifted card's layer is
-  * premultiplied, and the table under it is opaque.
+ * in focus, is blended over the table by `uLifting`, fully while it rises and
+ * then fading as the wait's sheet covers it. The lifted card's layer is
+ * premultiplied, and the table under it is opaque.
  */
 export const POST_VERTEX = /* glsl */ `
 void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }

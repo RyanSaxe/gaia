@@ -26,8 +26,16 @@ const OPEN_MS = 900_000;
 const repo = resolve(import.meta.dirname, "..");
 const appDir = resolve(repo, "app");
 const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-execFileSync(pnpm, ["--filter", "@gaia/app", "build"], { cwd: repo, stdio: ["ignore", "ignore", "inherit"], shell: process.platform === "win32" });
-execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], { cwd: repo, env: cargoEnv(), stdio: "inherit" });
+execFileSync(pnpm, ["--filter", "@gaia/app", "build"], {
+  cwd: repo,
+  stdio: ["ignore", "ignore", "inherit"],
+  shell: process.platform === "win32",
+});
+execFileSync("cargo", ["build", "-p", "gaia-engine", "--quiet"], {
+  cwd: repo,
+  env: cargoEnv(),
+  stdio: "inherit",
+});
 
 const scratch = mkdtempSync(join(tmpdir(), "gaia-opens-"));
 const out = join(scratch, "out.json");
@@ -92,10 +100,18 @@ await import(appMain);
 `,
 );
 
-const electron = createRequire(resolve(appDir, "package.json"))("electron") as string;
+const electron = createRequire(resolve(appDir, "package.json"))(
+  "electron",
+) as string;
 const env: NodeJS.ProcessEnv = {
   ...process.env,
-  GAIA_OPENS: JSON.stringify({ appDir, appMain: pathToFileURL(join(appDir, "out/main/index.js")).href, out, profile: join(scratch, "profile"), openMs: OPEN_MS }),
+  GAIA_OPENS: JSON.stringify({
+    appDir,
+    appMain: pathToFileURL(join(appDir, "out/main/index.js")).href,
+    out,
+    profile: join(scratch, "profile"),
+    openMs: OPEN_MS,
+  }),
   GAIA_PROJECT: "showcase",
   GAIA_DATA_DIR: join(scratch, "data"),
 };
@@ -103,22 +119,47 @@ delete env.ELECTRON_RUN_AS_NODE;
 delete env.ELECTRON_RENDERER_URL;
 // Jev is off unless asked for, so the showcase opens from its kept answers alone.
 delete env.GAIA_JEV;
-const run = spawnSync(electron, [opens], { env, encoding: "utf8", timeout: OPEN_MS + 60_000 });
+const run = spawnSync(electron, [opens], {
+  env,
+  encoding: "utf8",
+  timeout: OPEN_MS + 60_000,
+});
 const said = `${run.stdout ?? ""}${run.stderr ?? ""}`;
-const result = run.status === 0 ? (JSON.parse(readFileSync(out, "utf8")) as { opened: { status: string; title: string } | null; problems: string[]; messages: string[] }) : null;
+const result =
+  run.status === 0
+    ? (JSON.parse(readFileSync(out, "utf8")) as {
+        opened: { status: string; title: string } | null;
+        problems: string[];
+        messages: string[];
+      })
+    : null;
 rmSync(scratch, { recursive: true, force: true });
 
-const problems = [...(result?.problems ?? [`Electron exited with ${run.status ?? run.signal}`])];
+const problems = [
+  ...(result?.problems ?? [`Electron exited with ${run.status ?? run.signal}`]),
+];
 // Main, the world service and the engine report their errors on Electron's output, each line beginning "gaia:" or
 // "gaia-engine:".
-for (const l of said.split("\n")) if (/^gaia(-engine)?:/.test(l.trim())) problems.push(`output: ${l.trim()}`);
+for (const l of said.split("\n")) {
+  if (/^gaia(-engine)?:/.test(l.trim())) problems.push(`output: ${l.trim()}`);
+}
 const errors = webglErrors();
 for (const message of result?.messages ?? []) errors.note(message);
 if (errors.count() > 0) problems.push(errors.summary());
 
-if (result?.opened != null) console.log(`app-opens: the showcase opened in the app; ${result.opened.status}; the window reads "${result.opened.title}".`);
+if (result?.opened !== undefined && result.opened !== null) {
+  console.log(
+    `app-opens: the showcase opened in the app; ${result.opened.status}; the window reads "${result.opened.title}".`,
+  );
+}
 for (const p of problems) console.log(`app-opens: ${p}`);
-if (result?.opened == null || problems.length > 0) {
-  if (said.trim() !== "") console.log(`app-opens: Electron printed:\n${said.trim()}`);
+if (
+  result?.opened === undefined ||
+  result.opened === null ||
+  problems.length > 0
+) {
+  if (said.trim() !== "") {
+    console.log(`app-opens: Electron printed:\n${said.trim()}`);
+  }
   process.exitCode = 1;
 }

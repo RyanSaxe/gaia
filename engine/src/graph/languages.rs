@@ -8,12 +8,27 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
+use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex, OnceLock};
 use tree_sitter::{Language, Query, WasmStore, wasmtime};
 
 const TABLE: &str = include_str!("../../languages.toml");
+
+#[derive(Deserialize, Default)]
+pub struct ResolutionRules {
+    /// An unqualified call can reach the caller's own class's methods.
+    #[serde(default)]
+    pub implicit_self: bool,
+    /// A call on a value can reach a function that belongs to no class, as
+    /// a JavaScript object's own functions do.
+    #[serde(default)]
+    pub functions_as_values: bool,
+    /// Its files declare which definitions they export, and a re-export passes on only those.
+    #[serde(default)]
+    pub marks_exports: bool,
+}
 
 #[derive(Deserialize)]
 struct Entry {
@@ -29,12 +44,8 @@ struct Entry {
     data: bool,
     #[serde(default)]
     builtins: Vec<String>,
-    #[serde(default)]
-    implicit_self: bool,
-    #[serde(default)]
-    functions_as_values: bool,
-    #[serde(default)]
-    marks_exports: bool,
+    #[serde(flatten)]
+    rules: ResolutionRules,
     #[serde(default)]
     conventions: Vec<ConventionEntry>,
 }
@@ -90,13 +101,7 @@ pub struct Spec {
     pub data: bool,
     /// The modules the language's runtime or standard library provides.
     pub builtins: Vec<String>,
-    /// An unqualified call can reach the caller's own class's methods.
-    pub implicit_self: bool,
-    /// A call on a value can reach a function that belongs to no class, as
-    /// a JavaScript object's own functions do.
-    pub functions_as_values: bool,
-    /// Its files declare which definitions they export, and a re-export passes on only those.
-    pub marks_exports: bool,
+    pub rules: ResolutionRules,
     convention_tags: Vec<String>,
     conventions: GlobSet,
 }
@@ -129,14 +134,17 @@ pub struct Loaded {
 pub fn table() -> &'static BTreeMap<String, Spec> {
     static TABLE_SPECS: OnceLock<BTreeMap<String, Spec>> = OnceLock::new();
     TABLE_SPECS.get_or_init(|| {
-        let entries: BTreeMap<String, Entry> =
-            toml::from_str(TABLE).expect("engine/languages.toml is the language table");
+        let entries: BTreeMap<String, Entry> = toml::from_str(TABLE)
+            .unwrap_or_else(|e| panic!("engine/languages.toml is the language table: {e}"));
         entries
             .into_iter()
             .map(|(name, e)| {
                 let mut globs = GlobSetBuilder::new();
                 for c in &e.conventions {
-                    globs.add(Glob::new(&c.path).expect("a convention's path is a glob"));
+                    globs.add(
+                        Glob::new(&c.path)
+                            .unwrap_or_else(|err| panic!("a convention's path is a glob: {err}")),
+                    );
                 }
                 let spec = Spec {
                     name: name.clone(),
@@ -147,11 +155,11 @@ pub fn table() -> &'static BTreeMap<String, Spec> {
                     relative: e.relative,
                     data: e.data,
                     builtins: e.builtins,
-                    implicit_self: e.implicit_self,
-                    functions_as_values: e.functions_as_values,
-                    marks_exports: e.marks_exports,
+                    rules: e.rules,
                     convention_tags: e.conventions.into_iter().map(|c| c.tag).collect(),
-                    conventions: globs.build().expect("the conventions build"),
+                    conventions: globs
+                        .build()
+                        .unwrap_or_else(|err| panic!("the conventions build: {err}")),
                 };
                 (name, spec)
             })
@@ -169,6 +177,10 @@ pub fn of_path(path: &str) -> Option<&'static Spec> {
 
 /// A compiled grammar, its shipped tags query and Gaia's query file, by the table's name.
 fn compiled(name: &str) -> Option<(Language, Option<String>, &'static str)> {
+    compiled_tagged(name).or_else(|| compiled_untagged(name))
+}
+
+fn compiled_tagged(name: &str) -> Option<(Language, Option<String>, &'static str)> {
     let js_tags = tree_sitter_javascript::TAGS_QUERY;
     Some(match name {
         "typescript" => (
@@ -236,6 +248,12 @@ fn compiled(name: &str) -> Option<(Language, Option<String>, &'static str)> {
             Some(tree_sitter_swift::TAGS_QUERY.to_string()),
             include_str!("../../queries/swift.scm"),
         ),
+        _ => return None,
+    })
+}
+
+fn compiled_untagged(name: &str) -> Option<(Language, Option<String>, &'static str)> {
+    Some(match name {
         "kotlin" => (
             tree_sitter_kotlin_ng::LANGUAGE.into(),
             None,
@@ -305,10 +323,11 @@ pub fn wasm_language(name: &str, bytes: &[u8]) -> Result<Language, String> {
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    let mut out = String::with_capacity(64);
+    for b in Sha256::digest(bytes) {
+        let _ = write!(out, "{b:02x}");
+    }
+    out
 }
 
 /// Reads a release's file from the data folder, or else downloads it, and

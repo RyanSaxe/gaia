@@ -36,24 +36,41 @@ const CELL = 4;
 /** Meters past its edge that each solid is indexed, so a query finds every solid within `REACH` from its own cell. */
 const REACH = 2;
 
-const cellKey = (ix: number, iz: number): number => (ix + 32768) * 65536 + (iz + 32768);
+const cellKey = (ix: number, iz: number): number =>
+  (ix + 32768) * 65536 + (iz + 32768);
 
 /** Andrew's monotone chain: the convex hull of x, z pairs, counter-clockwise, without collinear corners. */
 function hullOf(points: readonly number[]): Float64Array {
   const pts: [number, number][] = [];
-  for (let i = 0; i + 1 < points.length; i += 2) pts.push([points[i] as number, points[i + 1] as number]);
+  for (let i = 0; i + 1 < points.length; i += 2) {
+    pts.push([points[i] as number, points[i + 1] as number]);
+  }
   pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   if (pts.length < 3) return Float64Array.from(pts.flat());
-  const cross = (o: [number, number], a: [number, number], b: [number, number]): number => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const cross = (
+    o: [number, number],
+    a: [number, number],
+    b: [number, number],
+  ): number => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lower: [number, number][] = [];
   for (const p of pts) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 1e-12) lower.pop();
+    while (
+      lower.length >= 2 &&
+      cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 1e-12
+    ) {
+      lower.pop();
+    }
     lower.push(p);
   }
   const upper: [number, number][] = [];
   for (let i = pts.length - 1; i >= 0; i--) {
     const p = pts[i]!;
-    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 1e-12) upper.pop();
+    while (
+      upper.length >= 2 &&
+      cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 1e-12
+    ) {
+      upper.pop();
+    }
     upper.push(p);
   }
   lower.pop();
@@ -63,10 +80,17 @@ function hullOf(points: readonly number[]): Float64Array {
 
 /** Indexes solids from their outlines on the ground. */
 export function solidsOf(shapes: readonly SolidShape[]): Solids {
-  const items: Solid[] = shapes.map((s) => ("points" in s ? { hull: hullOf(s.points), round: 0 } : { hull: Float64Array.of(s.x, s.z), round: s.radius }));
+  const items: Solid[] = shapes.map((s) =>
+    "points" in s
+      ? { hull: hullOf(s.points), round: 0 }
+      : { hull: Float64Array.of(s.x, s.z), round: s.radius },
+  );
   const cells = new Map<number, number[]>();
   items.forEach((solid, i) => {
-    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    let x0 = Infinity,
+      x1 = -Infinity,
+      z0 = Infinity,
+      z1 = -Infinity;
     for (let k = 0; k < solid.hull.length; k += 2) {
       x0 = Math.min(x0, solid.hull[k] as number);
       x1 = Math.max(x1, solid.hull[k] as number);
@@ -74,8 +98,16 @@ export function solidsOf(shapes: readonly SolidShape[]): Solids {
       z1 = Math.max(z1, solid.hull[k + 1] as number);
     }
     const pad = solid.round + REACH;
-    for (let iz = Math.floor((z0 - pad) / CELL); iz <= Math.floor((z1 + pad) / CELL); iz++) {
-      for (let ix = Math.floor((x0 - pad) / CELL); ix <= Math.floor((x1 + pad) / CELL); ix++) {
+    for (
+      let iz = Math.floor((z0 - pad) / CELL);
+      iz <= Math.floor((z1 + pad) / CELL);
+      iz++
+    ) {
+      for (
+        let ix = Math.floor((x0 - pad) / CELL);
+        ix <= Math.floor((x1 + pad) / CELL);
+        ix++
+      ) {
         const key = cellKey(ix, iz);
         const list = cells.get(key);
         if (list === undefined) cells.set(key, [i]);
@@ -89,7 +121,14 @@ export function solidsOf(shapes: readonly SolidShape[]): Solids {
 export const NO_SOLIDS: Solids = solidsOf([]);
 
 /** A placed component's ground outline. `outline` holds its radius in `outline.length` directions at scale 1, which this turns and scales as Three places it, times `share`. */
-export function outlineShape(x: number, z: number, yaw: number, scale: number, outline: ArrayLike<number>, share = 1): SolidShape {
+export function outlineShape(
+  x: number,
+  z: number,
+  yaw: number,
+  scale: number,
+  outline: ArrayLike<number>,
+  share = 1,
+): SolidShape {
   const k = outline.length;
   const c = Math.cos(yaw);
   const s = Math.sin(yaw);
@@ -107,7 +146,10 @@ export function outlineShape(x: number, z: number, yaw: number, scale: number, o
 }
 
 /** A building's walls, one footprint per mass on its site. */
-export function wallsShape(plan: BuildingPlan, site: BuildingSite): SolidShape[] {
+export function wallsShape(
+  plan: BuildingPlan,
+  site: BuildingSite,
+): SolidShape[] {
   // One shape per mass, so a walk can pass through the open corner of an L
   // or between a cluster's volumes. A round mass is an octagon.
   return plan.masses.map((m) => {
@@ -128,7 +170,10 @@ export function wallsShape(plan: BuildingPlan, site: BuildingSite): SolidShape[]
 }
 
 /** Shapes drawn in a thing's own frame, placed on its site as Three places it. */
-export function placeShapes(shapes: readonly SolidShape[], site: Pick<BuildingSite, "x" | "z" | "yaw">): SolidShape[] {
+export function placeShapes(
+  shapes: readonly SolidShape[],
+  site: Pick<BuildingSite, "x" | "z" | "yaw">,
+): SolidShape[] {
   const at = { ...site, level: 0 };
   return shapes.map((shape) => {
     if (!("points" in shape)) {
@@ -136,7 +181,15 @@ export function placeShapes(shapes: readonly SolidShape[], site: Pick<BuildingSi
       return { x, z, radius: shape.radius };
     }
     const points: number[] = [];
-    for (let i = 0; i + 1 < shape.points.length; i += 2) points.push(...siteToWorld(at, shape.points[i] as number, shape.points[i + 1] as number));
+    for (let i = 0; i + 1 < shape.points.length; i += 2) {
+      points.push(
+        ...siteToWorld(
+          at,
+          shape.points[i] as number,
+          shape.points[i + 1] as number,
+        ),
+      );
+    }
     return { points };
   });
 }
@@ -145,11 +198,24 @@ export function placeShapes(shapes: readonly SolidShape[], site: Pick<BuildingSi
 const PAST_WALLS = 1e-3;
 
 /** The outlines of the solid pieces a building shows past its walls, in its own frame, for `buildingShapes`. */
-export function buildingPieces(plan: BuildingPlan, parts: readonly Part[]): SolidShape[] {
+export function buildingPieces(
+  plan: BuildingPlan,
+  parts: readonly Part[],
+): SolidShape[] {
   const walls = solidsOf(wallsShape(plan, { x: 0, z: 0, yaw: 0, level: 0 }));
   return piecesShapes(parts, { x: 0, y: 0, z: 0, yaw: 0 }).filter((shape) => {
     if (!("points" in shape)) return true;
-    for (let i = 0; i + 1 < shape.points.length; i += 2) if (clearanceAt(walls, shape.points[i] as number, shape.points[i + 1] as number) > PAST_WALLS) return true;
+    for (let i = 0; i + 1 < shape.points.length; i += 2) {
+      if (
+        clearanceAt(
+          walls,
+          shape.points[i] as number,
+          shape.points[i + 1] as number,
+        ) > PAST_WALLS
+      ) {
+        return true;
+      }
+    }
     return false;
   });
 }
@@ -158,8 +224,27 @@ export function buildingPieces(plan: BuildingPlan, parts: readonly Part[]): Soli
  * What stops a walker at a building on its site: each mass's walls, every solid piece the building shows past them
  * (`buildingPieces`), and the ground `beside` it, such as a mill wheel's pit.
  */
-export function buildingShapes(plan: BuildingPlan, pieces: readonly SolidShape[], beside: Extent | null, site: BuildingSite): SolidShape[] {
-  const box: SolidShape[] = beside === null ? [] : [{ points: [[beside.x0, beside.z0], [beside.x1, beside.z0], [beside.x1, beside.z1], [beside.x0, beside.z1]].flatMap(([lx, lz]) => siteToWorld(site, lx as number, lz as number)) }];
+export function buildingShapes(
+  plan: BuildingPlan,
+  pieces: readonly SolidShape[],
+  beside: Extent | null,
+  site: BuildingSite,
+): SolidShape[] {
+  const box: SolidShape[] =
+    beside === null
+      ? []
+      : [
+          {
+            points: [
+              [beside.x0, beside.z0],
+              [beside.x1, beside.z0],
+              [beside.x1, beside.z1],
+              [beside.x0, beside.z1],
+            ].flatMap(([lx, lz]) =>
+              siteToWorld(site, lx as number, lz as number),
+            ),
+          },
+        ];
   return [...wallsShape(plan, site), ...placeShapes(pieces, site), ...box];
 }
 
@@ -170,7 +255,13 @@ export const BODY_BAND = { from: 0.1, to: 1.8 } as const;
  * Clips a convex polygon, `stride` numbers to a corner, to the side of `edge` along coordinate `axis` that `keep`
  * names: at or above it for 1, at or below it for -1.
  */
-function clip(poly: readonly number[], stride: number, axis: number, edge: number, keep: 1 | -1): number[] {
+function clip(
+  poly: readonly number[],
+  stride: number,
+  axis: number,
+  edge: number,
+  keep: 1 | -1,
+): number[] {
   const out: number[] = [];
   const n = poly.length / stride;
   for (let i = 0; i < n; i++) {
@@ -178,18 +269,47 @@ function clip(poly: readonly number[], stride: number, axis: number, edge: numbe
     const a = poly[i * stride + axis] as number;
     const b = poly[j * stride + axis] as number;
     const inA = (a - edge) * keep >= 0;
-    if (inA) for (let k = 0; k < stride; k++) out.push(poly[i * stride + k] as number);
+    if (inA) {
+      for (let k = 0; k < stride; k++) out.push(poly[i * stride + k] as number);
+    }
     if (inA !== (b - edge) * keep >= 0) {
       const u = (edge - a) / (b - a);
-      for (let k = 0; k < stride; k++) out.push((poly[i * stride + k] as number) + ((poly[j * stride + k] as number) - (poly[i * stride + k] as number)) * u);
+      for (let k = 0; k < stride; k++) {
+        out.push(
+          (poly[i * stride + k] as number) +
+            ((poly[j * stride + k] as number) -
+              (poly[i * stride + k] as number)) *
+              u,
+        );
+      }
     }
   }
   return out;
 }
 
 /** Clips a convex polygon, `stride` numbers to a corner, to the rectangle from (x0, z0) to (x1, z1) on coordinates 0 and `zAxis`. */
-const clipRect = (poly: readonly number[], stride: number, zAxis: number, x0: number, x1: number, z0: number, z1: number): number[] =>
-  clip(clip(clip(clip(poly, stride, 0, x0, 1), stride, 0, x1, -1), stride, zAxis, z0, 1), stride, zAxis, z1, -1);
+const clipRect = (
+  poly: readonly number[],
+  stride: number,
+  zAxis: number,
+  x0: number,
+  x1: number,
+  z0: number,
+  z1: number,
+): number[] =>
+  clip(
+    clip(
+      clip(clip(poly, stride, 0, x0, 1), stride, 0, x1, -1),
+      stride,
+      zAxis,
+      z0,
+      1,
+    ),
+    stride,
+    zAxis,
+    z1,
+    -1,
+  );
 
 /**
  * The solids of a built thing placed at (x, y, z) and turned by `yaw` as Three
@@ -207,7 +327,15 @@ const clipRect = (poly: readonly number[], stride: number, zAxis: number, x0: nu
  * never closes a gap that a body fits through, and a ring, an eave or a bough
  * blocks along itself and never across the ground it bounds.
  */
-export function piecesShapes(parts: readonly Part[], at: { readonly x: number; readonly y: number; readonly z: number; readonly yaw: number }): SolidShape[] {
+export function piecesShapes(
+  parts: readonly Part[],
+  at: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+    readonly yaw: number;
+  },
+): SolidShape[] {
   const side = BODY_RADIUS * Math.SQRT2;
   const floor = floorOf(parts, { x: 0, y: 0, z: 0, yaw: 0 });
   const highest = floor === null ? 0 : Math.max(0, ...floor.tops);
@@ -224,20 +352,47 @@ export function piecesShapes(parts: readonly Part[], at: { readonly x: number; r
     }
     const flat = (poly: readonly number[]): number[] => {
       const out: number[] = [];
-      for (let i = 0; i < poly.length; i += 3) out.push(poly[i] as number, poly[i + 2] as number);
+      for (let i = 0; i < poly.length; i += 3) {
+        out.push(poly[i] as number, poly[i + 2] as number);
+      }
       return out;
     };
-    const over = floor !== null && highest > 0 && x1 >= floor.x0 && z1 >= floor.z0 && x0 <= floor.x0 + floor.cols * FLOOR_CELL && z0 <= floor.z0 + floor.rows * FLOOR_CELL;
+    const over =
+      floor !== null &&
+      highest > 0 &&
+      x1 >= floor.x0 &&
+      z1 >= floor.z0 &&
+      x0 <= floor.x0 + floor.cols * FLOOR_CELL &&
+      z0 <= floor.z0 + floor.rows * FLOOR_CELL;
     if (!over) return [flat(clip(above, 3, 1, BODY_BAND.to, -1))];
     // Over a floor, the band's top follows the floor, cell by cell.
     const out: number[][] = [];
-    for (let i = Math.floor((x0 - floor.x0) / FLOOR_CELL); i <= Math.floor((x1 - floor.x0) / FLOOR_CELL); i++) {
-      for (let j = Math.floor((z0 - floor.z0) / FLOOR_CELL); j <= Math.floor((z1 - floor.z0) / FLOOR_CELL); j++) {
+    for (
+      let i = Math.floor((x0 - floor.x0) / FLOOR_CELL);
+      i <= Math.floor((x1 - floor.x0) / FLOOR_CELL);
+      i++
+    ) {
+      for (
+        let j = Math.floor((z0 - floor.z0) / FLOOR_CELL);
+        j <= Math.floor((z1 - floor.z0) / FLOOR_CELL);
+        j++
+      ) {
         const cx = floor.x0 + i * FLOOR_CELL;
         const cz = floor.z0 + j * FLOOR_CELL;
-        const cell = clipRect(above, 3, 2, cx, cx + FLOOR_CELL, cz, cz + FLOOR_CELL);
+        const cell = clipRect(
+          above,
+          3,
+          2,
+          cx,
+          cx + FLOOR_CELL,
+          cz,
+          cz + FLOOR_CELL,
+        );
         if (cell.length === 0) continue;
-        const top = Math.max(0, deckAt([floor], cx + FLOOR_CELL / 2, cz + FLOOR_CELL / 2));
+        const top = Math.max(
+          0,
+          deckAt([floor], cx + FLOOR_CELL / 2, cz + FLOOR_CELL / 2),
+        );
         out.push(flat(clip(cell, 3, 1, top + BODY_BAND.to, -1)));
       }
     }
@@ -255,8 +410,22 @@ export function piecesShapes(parts: readonly Part[], at: { readonly x: number; r
     }
     for (let i = Math.floor(x0 / side); i <= Math.floor(x1 / side); i++) {
       for (let j = Math.floor(z0 / side); j <= Math.floor(z1 / side); j++) {
-        const whole = x0 >= i * side && x1 <= (i + 1) * side && z0 >= j * side && z1 <= (j + 1) * side;
-        const cut = whole ? poly : clipRect(poly, 2, 1, i * side, (i + 1) * side, j * side, (j + 1) * side);
+        const whole =
+          x0 >= i * side &&
+          x1 <= (i + 1) * side &&
+          z0 >= j * side &&
+          z1 <= (j + 1) * side;
+        const cut = whole
+          ? poly
+          : clipRect(
+              poly,
+              2,
+              1,
+              i * side,
+              (i + 1) * side,
+              j * side,
+              (j + 1) * side,
+            );
         if (cut.length === 0) continue;
         const key = (i + 32768) * 65536 + (j + 32768);
         const square = squares.get(key);
@@ -270,11 +439,28 @@ export function piecesShapes(parts: readonly Part[], at: { readonly x: number; r
     const p = part.positions;
     const grows = (v: number): boolean => (part.channels.grow?.[v] ?? 0) > 0;
     for (let t = 0; t + 2 < part.indices.length; t += 3) {
-      const vs = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
+      const vs = [
+        part.indices[t] as number,
+        part.indices[t + 1] as number,
+        part.indices[t + 2] as number,
+      ];
       if (vs.some(grows)) continue;
       const ys = vs.map((v) => p[v * 3 + 1] as number);
-      if (Math.max(...ys) < BODY_BAND.from || Math.min(...ys) > highest + BODY_BAND.to) continue;
-      for (const poly of inBand(vs.flatMap((v) => [p[v * 3] as number, p[v * 3 + 1] as number, p[v * 3 + 2] as number]))) if (poly.length > 0) add(poly);
+      if (
+        Math.max(...ys) < BODY_BAND.from ||
+        Math.min(...ys) > highest + BODY_BAND.to
+      ) {
+        continue;
+      }
+      for (const poly of inBand(
+        vs.flatMap((v) => [
+          p[v * 3] as number,
+          p[v * 3 + 1] as number,
+          p[v * 3 + 2] as number,
+        ]),
+      )) {
+        if (poly.length > 0) add(poly);
+      }
     }
   }
   const c = Math.cos(at.yaw);
@@ -282,7 +468,12 @@ export function piecesShapes(parts: readonly Part[], at: { readonly x: number; r
   const shapes: SolidShape[] = [];
   for (const local of squares.values()) {
     const points: number[] = [];
-    for (let i = 0; i + 1 < local.length; i += 2) points.push(at.x + (local[i] as number) * c + (local[i + 1] as number) * s, at.z - (local[i] as number) * s + (local[i + 1] as number) * c);
+    for (let i = 0; i + 1 < local.length; i += 2) {
+      points.push(
+        at.x + (local[i] as number) * c + (local[i + 1] as number) * s,
+        at.z - (local[i] as number) * s + (local[i + 1] as number) * c,
+      );
+    }
     shapes.push({ points });
   }
   return shapes;
@@ -360,11 +551,18 @@ const probe: Edge = { distance: 0, nx: 0, nz: 0 };
  * Writes the nearest solid's edge to (x, z) into `out`. `out.distance` is
  * `REACH` when nothing is that close. It is accurate within `REACH` meters.
  */
-export function nearestEdge(solids: Solids, x: number, z: number, out: Edge): Edge {
+export function nearestEdge(
+  solids: Solids,
+  x: number,
+  z: number,
+  out: Edge,
+): Edge {
   out.distance = REACH;
   out.nx = 1;
   out.nz = 0;
-  const list = solids.cells.get(cellKey(Math.floor(x / CELL), Math.floor(z / CELL)));
+  const list = solids.cells.get(
+    cellKey(Math.floor(x / CELL), Math.floor(z / CELL)),
+  );
   if (list === undefined) return out;
   for (const i of list) {
     edgeOf(solids.items[i] as Solid, x, z, probe);
@@ -380,4 +578,5 @@ export function nearestEdge(solids: Solids, x: number, z: number, out: Edge): Ed
 const scratch: Edge = { distance: 0, nx: 0, nz: 0 };
 
 /** Distance from (x, z) to the nearest solid's edge, negative inside one and at most `REACH`. */
-export const clearanceAt = (solids: Solids, x: number, z: number): number => nearestEdge(solids, x, z, scratch).distance;
+export const clearanceAt = (solids: Solids, x: number, z: number): number =>
+  nearestEdge(solids, x, z, scratch).distance;

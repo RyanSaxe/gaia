@@ -14,7 +14,8 @@ const CLOSED = 1e-4;
 const closing = new Set<(keep: number) => boolean>();
 
 /** How much of a difference each stage keeps over `dt` seconds. */
-export const lagKept = (dt: number): number => Math.exp(-Math.max(0, dt) / CHANNEL_MATH.vitalityLag);
+export const lagKept = (dt: number): number =>
+  Math.exp(-Math.max(0, dt) / CHANNEL_MATH.vitalityLag);
 
 /**
  * One frame of easing. The shown vitality closes on `target` by `keep`, and
@@ -22,7 +23,12 @@ export const lagKept = (dt: number): number => Math.exp(-Math.max(0, dt) / CHANN
  * `keep`. Returns the new shown vitality and lag, which land exactly on
  * `target` and 0 once both differences are below `CLOSED`.
  */
-export function followVitality(shown: number, lag: number, target: number, keep: number): [number, number] {
+export function followVitality(
+  shown: number,
+  lag: number,
+  target: number,
+  keep: number,
+): [number, number] {
   const was = shown + lag;
   let next = target + (shown - target) * keep;
   if (Math.abs(next - target) < CLOSED) next = target;
@@ -43,11 +49,13 @@ export function closeEachFrame(close: (keep: number) => boolean): void {
 export function easeVitality(dt: number): void {
   if (dt <= 0 || closing.size === 0) return;
   const keep = lagKept(dt);
-  for (const close of [...closing]) if (!close(keep)) closing.delete(close);
+  for (const close of Array.from(closing)) {
+    if (!close(keep)) closing.delete(close);
+  }
 }
 
 /** Brings every change to rest at once, for a script that sets vitality and checks where it settles. */
 export function settleVitality(): void {
-  for (const close of [...closing]) close(0);
+  for (const close of Array.from(closing)) close(0);
   closing.clear();
 }

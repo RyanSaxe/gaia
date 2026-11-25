@@ -20,7 +20,9 @@ export interface VitalPart {
  * large file at vitality 0.3 outweighs a small one at 0.9. Parts with a total
  * size of 0 give 1.
  */
-export function pooledVitality(parts: Iterable<Pick<VitalPart, "vitality" | "size">>): number {
+export function pooledVitality(
+  parts: Iterable<Pick<VitalPart, "vitality" | "size">>,
+): number {
   let sum = 0;
   let weight = 0;
   for (const p of parts) {
@@ -36,7 +38,9 @@ export function pooledVitality(parts: Iterable<Pick<VitalPart, "vitality" | "siz
  * every file at or below the directory by size, as `pooledVitality` does. A
  * directory with no files at or below it is absent.
  */
-export function areaVitality(parts: readonly VitalPart[]): ReadonlyMap<string, number> {
+export function areaVitality(
+  parts: readonly VitalPart[],
+): ReadonlyMap<string, number> {
   const sums = new Map<string, { sum: number; weight: number }>();
   for (const p of parts) {
     const w = Math.max(0, p.size);
@@ -49,7 +53,9 @@ export function areaVitality(parts: readonly VitalPart[]): ReadonlyMap<string, n
       sums.set(path, s);
     }
   }
-  return new Map([...sums].map(([path, s]) => [path, s.weight > 0 ? s.sum / s.weight : 1]));
+  return new Map(
+    [...sums].map(([path, s]) => [path, s.weight > 0 ? s.sum / s.weight : 1]),
+  );
 }
 
 /**
@@ -57,11 +63,18 @@ export function areaVitality(parts: readonly VitalPart[]): ReadonlyMap<string, n
  * directly in it. A directory with no files of its own uses its
  * `areaVitality`. Maps shade each area's own ground with this value.
  */
-export function groundVitality(parts: readonly VitalPart[]): ReadonlyMap<string, number> {
+export function groundVitality(
+  parts: readonly VitalPart[],
+): ReadonlyMap<string, number> {
   const whole = areaVitality(parts);
   const own = new Map<string, VitalPart[]>();
   for (const p of parts) own.set(p.area, [...(own.get(p.area) ?? []), p]);
-  return new Map([...whole].map(([path, v]) => [path, own.has(path) ? pooledVitality(own.get(path) ?? []) : v]));
+  return new Map(
+    [...whole].map(([path, v]) => [
+      path,
+      own.has(path) ? pooledVitality(own.get(path) ?? []) : v,
+    ]),
+  );
 }
 
 /**
@@ -84,8 +97,14 @@ export function vitalityOf(world: CodeWorld): Map<string, number> {
  * building or landmark, the small form and the definition's symbol. No
  * position or form changes.
  */
-export function withVitality(world: CodeWorld, changes: ReadonlyMap<string, number>): CodeWorld {
-  const changed = <T extends { readonly vitality: number }>(id: string, of: T): T => {
+export function withVitality(
+  world: CodeWorld,
+  changes: ReadonlyMap<string, number>,
+): CodeWorld {
+  const changed = <T extends { readonly vitality: number }>(
+    id: string,
+    of: T,
+  ): T => {
     const vitality = changes.get(id);
     return vitality === undefined ? of : { ...of, vitality };
   };
@@ -108,6 +127,14 @@ export interface DefinitionLines {
  * Returns the world with each definition in `moved` at its new lines, by id,
  * so the journal shows the right code. Nothing moves on the land.
  */
-export function withLines(world: CodeWorld, moved: Readonly<Record<string, DefinitionLines>>): CodeWorld {
-  return { ...world, symbols: world.symbols.map((s) => (moved[s.id] === undefined ? s : { ...s, ...moved[s.id] })) };
+export function withLines(
+  world: CodeWorld,
+  moved: Readonly<Record<string, DefinitionLines>>,
+): CodeWorld {
+  return {
+    ...world,
+    symbols: world.symbols.map((s) =>
+      moved[s.id] === undefined ? s : { ...s, ...moved[s.id] },
+    ),
+  };
 }

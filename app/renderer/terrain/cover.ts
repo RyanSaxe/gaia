@@ -5,8 +5,21 @@
 // turns it to straw.
 
 import * as THREE from "three";
-import { CLEARINGS_GLSL, type Clearing, LIGHT_GLSL, type SceneLight, WIND_FIELD_GLSL, createClearings, hexToVec3 } from "@gaia/render";
-import { BANKS, GROUND_SAMPLE_GLSL, type GroundTexture, WILD_GLSL } from "./ground.ts";
+import {
+  CLEARINGS_GLSL,
+  type Clearing,
+  LIGHT_GLSL,
+  type SceneLight,
+  WIND_FIELD_GLSL,
+  createClearings,
+  hexToVec3,
+} from "@gaia/render";
+import {
+  BANKS,
+  GROUND_SAMPLE_GLSL,
+  type GroundTexture,
+  WILD_GLSL,
+} from "./ground.ts";
 import { REGIONS_GLSL, type RegionCovers, TUFT_GLSL } from "./regions.ts";
 import { CLEARING_GLSL, type Clearings } from "./clearings.ts";
 import { TRAIL_GLSL, trailUniforms } from "./trails.ts";
@@ -331,7 +344,14 @@ const TIERS = [
  * every distance. Toward its reach each blade narrows smoothly to nothing over
  * its own seeded band, so none appears or vanishes as the viewer moves.
  */
-export function createGrass(light: SceneLight, ground: GroundTexture, covers: RegionCovers, under: Clearings, count = 190000, radius = 60): Grass {
+export function createGrass(
+  light: SceneLight,
+  ground: GroundTexture,
+  covers: RegionCovers,
+  under: Clearings,
+  count = 190000,
+  radius = 60,
+): Grass {
   // One blade, one unit wide and tall: five rows and a soft tip. The vertex
   // shader gives it its cover's outline, lean and arc. A flower draws the
   // same vertices as a stem from its first two rows, and a bloom. The stem's
@@ -347,7 +367,13 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
     const a = round[r] as number;
     const onRim = r >= 2 ? 1 : 0;
     // The stem's foot is (0, 0) and its top (0, -1). The rim's points lie left and right of the bloom's center.
-    for (const side of [-1, 1]) bloom.push(onRim === 1 ? side * Math.cos(a) : 0, r === 0 ? 0 : Math.sin(a), onRim);
+    for (const side of [-1, 1]) {
+      bloom.push(
+        onRim === 1 ? side * Math.cos(a) : 0,
+        r === 0 ? 0 : Math.sin(a),
+        onRim,
+      );
+    }
   });
   verts.push(0, 1, 0);
   bloom.push(0, 1, 1);
@@ -372,7 +398,9 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
     return seed / 4294967296;
   };
-  const tierOf = (i: number): { readonly inner: number; readonly reach: number } => {
+  const tierOf = (
+    i: number,
+  ): { readonly inner: number; readonly reach: number } => {
     let edge = 0;
     for (const tier of TIERS) {
       edge += tier.share * count;
@@ -396,7 +424,9 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   geometry.setAttribute("aThin", new THREE.InstancedBufferAttribute(thin, 3));
   geometry.instanceCount = count;
   const center = { value: new THREE.Vector3() };
-  const frustumPlanes = { value: Array.from({ length: 5 }, () => new THREE.Vector4()) };
+  const frustumPlanes = {
+    value: Array.from({ length: 5 }, () => new THREE.Vector4()),
+  };
   const clearings = createClearings();
   const material = new THREE.ShaderMaterial({
     vertexShader: GRASS_VERT,
@@ -421,10 +451,20 @@ export function createGrass(light: SceneLight, ground: GroundTexture, covers: Re
   const frustum = new THREE.Frustum();
   const viewProjection = new THREE.Matrix4();
   mesh.onBeforeRender = (_renderer, _scene, camera) => {
-    frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    frustum.setFromProjectionMatrix(
+      viewProjection.multiplyMatrices(
+        camera.projectionMatrix,
+        camera.matrixWorldInverse,
+      ),
+    );
     for (let i = 0; i < CULLING_PLANES.length; i++) {
       const plane = frustum.planes[CULLING_PLANES[i] as number] as THREE.Plane;
-      (frustumPlanes.value[i] as THREE.Vector4).set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
+      (frustumPlanes.value[i] as THREE.Vector4).set(
+        plane.normal.x,
+        plane.normal.y,
+        plane.normal.z,
+        plane.constant,
+      );
     }
     material.uniformsNeedUpdate = true;
   };

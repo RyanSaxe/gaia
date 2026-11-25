@@ -31,5 +31,11 @@ export function markOf(blueprint: Blueprint, plant: Realized): PlantMark {
       if (part.swatch === "leaf") crown = Math.min(crown, y);
     }
   }
-  return { blueprint, palette: plant.palette, height, radius, crown: Number.isFinite(crown) ? Math.max(0, crown) : 0 };
+  return {
+    blueprint,
+    palette: plant.palette,
+    height,
+    radius,
+    crown: Number.isFinite(crown) ? Math.max(0, crown) : 0,
+  };
 }

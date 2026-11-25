@@ -5,37 +5,63 @@
 
 import { primitive, t } from "@gaia/schema";
 import { buildTower, buildWaterwheel } from "./geometry/building/features.ts";
-import { buildBell, buildDovecote, buildForge, buildGranary, buildWell } from "./geometry/building/yard.ts";
+import {
+  buildBell,
+  buildDovecote,
+  buildForge,
+  buildGranary,
+  buildWell,
+} from "./geometry/building/yard.ts";
 import { buildGarden } from "./geometry/building/garden.ts";
 import { OVERHANGS, THATCH_THICKNESS } from "./geometry/building/frame.ts";
 import { layOutCottage } from "./geometry/building/layout.ts";
 import { buildCasements } from "./geometry/building/openings.ts";
 import { buildThatch, buildTiles } from "./geometry/building/roofs.ts";
-import { buildFieldstone, buildTimberFrame } from "./geometry/building/walls.ts";
+import {
+  buildFieldstone,
+  buildTimberFrame,
+} from "./geometry/building/walls.ts";
 
 export const cottagePlanParams = {
   massing: t.choice("How the building's volumes are put together", {
-    "a single block": "One simple block under one roof, for code that feels plain and self-contained",
-    "an L": "A main range with a wing jutting out at one end, its gable facing outward, the door in the corner between them, for code that feels companionable and paired",
-    "a T": "A main range with a gabled wing jutting from its middle, for code that feels balanced and formal, facing two ways at once",
-    "a long range": "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn, for code that feels patient, hardworking and long",
-    "a cluster": "A main house with wings and outbuildings joined on all sides, added over the years, for code that feels rambling and gregarious, grown piece by piece",
+    "a single block":
+      "One simple block under one roof, for code that feels plain and self-contained",
+    "an L":
+      "A main range with a wing jutting out at one end, its gable facing outward, the door in the corner between them, for code that feels companionable and paired",
+    "a T":
+      "A main range with a gabled wing jutting from its middle, for code that feels balanced and formal, facing two ways at once",
+    "a long range":
+      "A long run of joined blocks in a line, each a little narrower than the last, like a farmhouse with its byre and barn, for code that feels patient, hardworking and long",
+    "a cluster":
+      "A main house with wings and outbuildings joined on all sides, added over the years, for code that feels rambling and gregarious, grown piece by piece",
   }),
   shape: t.choice("The main body's shape on the ground", {
     long: "A low range longer than it is deep, its door in the long side under the eaves, for code that feels easygoing and unhurried",
     snug: "A small, nearly square body, compact and cosy, for code that feels close and private",
-    "gable-fronted": "A narrow body that faces you with its pointed gable, the door beneath the peak, for code that feels upright and alert",
+    "gable-fronted":
+      "A narrow body that faces you with its pointed gable, the door beneath the peak, for code that feels upright and alert",
   }),
-  size: t.scale("How big the main body is", { tiny: 0.85, modest: 1, roomy: 1.15 }),
-  storeys: t.scale("How many storeys the main body rises: one for code that feels humble and close to the ground, two for code that feels comfortable and settled, three for code that feels lofty and imposing", { "one storey": 1, "two storeys": 2, "three storeys": 3 }),
+  size: t.scale("How big the main body is", {
+    tiny: 0.85,
+    modest: 1,
+    roomy: 1.15,
+  }),
+  storeys: t.scale(
+    "How many storeys the main body rises: one for code that feels humble and close to the ground, two for code that feels comfortable and settled, three for code that feels lofty and imposing",
+    { "one storey": 1, "two storeys": 2, "three storeys": 3 },
+  ),
   heights: t.choice("How the joined parts' heights relate", {
     level: "Every part keeps the main body's storeys, under one eave line",
-    stepped: "Each joined part stands a storey lower than the part it joins, so the roofs step down",
+    stepped:
+      "Each joined part stands a storey lower than the part it joins, so the roofs step down",
   }),
   roof: t.choice("The form of the roofs over the main body and its wings", {
-    gabled: "Two slopes meeting at a ridge, with pointed gable walls at the ends",
-    hipped: "Slopes on every side, so there are no gables and the roof sits low and calm",
-    "half-hipped": "Gables whose tops are cut back into a small hip, like an old farmhouse",
+    gabled:
+      "Two slopes meeting at a ridge, with pointed gable walls at the ends",
+    hipped:
+      "Slopes on every side, so there are no gables and the roof sits low and calm",
+    "half-hipped":
+      "Gables whose tops are cut back into a small hip, like an old farmhouse",
   }),
   roofline: t.scale("How steep the roofs are", {
     "low and spreading": 33,
@@ -47,7 +73,11 @@ export const cottagePlanParams = {
     "lean-to": "A low lean-to shed against a back or end wall, under one slope",
     turret: "A round turret at a corner, a storey taller, under a pointed cone",
   }),
-  windows: t.scale("How many windows it has", { "a few": 1, several: 2, many: 3 }),
+  windows: t.scale("How many windows it has", {
+    "a few": 1,
+    several: 2,
+    many: 3,
+  }),
   base: t.scale("How high the floor sits on its stone base", {
     "low on the ground": 0.22,
     "on a stone plinth": 0.45,
@@ -70,8 +100,10 @@ export const cottagePlan = primitive({
 
 export const timberFrameParams = {
   framing: t.choice("How the timber frame is laid out", {
-    "posts and rails": "Upright posts with a rail at mid height, calm and simple",
-    "crossed braces": "Posts with diagonal braces in the corners, like an old farmhouse",
+    "posts and rails":
+      "Upright posts with a rail at mid height, calm and simple",
+    "crossed braces":
+      "Posts with diagonal braces in the corners, like an old farmhouse",
     "close studding": "Many close upright timbers, tall and rhythmic",
   }),
   plaster: t.scale("How rough the plaster between the timbers is", {
@@ -115,7 +147,10 @@ export const chimneyField = t.choice("Where the chimney stands", {
   none: "No chimney",
 });
 
-export const overhangField = t.scale("How far the roof reaches past the walls", OVERHANGS);
+export const overhangField = t.scale(
+  "How far the roof reaches past the walls",
+  OVERHANGS,
+);
 
 export const thatchParams = {
   thickness: t.scale("How thick the thatch is", THATCH_THICKNESS),
@@ -155,7 +190,11 @@ export const casementsParams = {
     "six panes": "Six small panes",
     "one pane": "A single clear pane",
   }),
-  shutters: t.flag("Do the windows have shutters?", "Painted shutters beside each window", "No shutters"),
+  shutters: t.flag(
+    "Do the windows have shutters?",
+    "Painted shutters beside each window",
+    "No shutters",
+  ),
   door: t.choice("The door's form", {
     plank: "A square-topped door of upright planks",
     arched: "A round-topped plank door, like a storybook",
@@ -193,9 +232,14 @@ export const cottageGarden = primitive({
 });
 
 export const waterwheelParams = {
-  wheel: t.scale("How big the wheel is", { "a small wheel": 1.5, "a tall wheel": 1.9, "a great wheel": 2.35 }),
+  wheel: t.scale("How big the wheel is", {
+    "a small wheel": 1.5,
+    "a tall wheel": 1.9,
+    "a great wheel": 2.35,
+  }),
   drive: t.choice("How the water drives it", {
-    overshot: "Fed from above by a wooden flume on trestles, so it turns away from the flume",
+    overshot:
+      "Fed from above by a wooden flume on trestles, so it turns away from the flume",
     undershot: "Pushed round at its foot by the race running under it",
   }),
 };
@@ -211,10 +255,15 @@ export const waterwheel = primitive({
 });
 
 export const towerParams = {
-  height: t.scale("How far the tower rises above the house's roof", { "a storey above": 2.6, tall: 4.6, soaring: 7 }),
+  height: t.scale("How far the tower rises above the house's roof", {
+    "a storey above": 2.6,
+    tall: 4.6,
+    soaring: 7,
+  }),
   cap: t.choice("What crowns it", {
     pyramid: "A steep four-sided cap with a finial",
-    lantern: "An open lantern room whose lamp burns at night, under a small cap",
+    lantern:
+      "An open lantern room whose lamp burns at night, under a small cap",
   }),
 };
 
@@ -228,8 +277,10 @@ export const tower = primitive({
 
 export const dovecoteParams = {
   cote: t.choice("How the cote stands", {
-    "a round stone cote": "A squat round dovecote of rough stone with a ledge round its middle, its conical roof crowned by a little open lantern",
-    "a cote on a post": "A small painted dovecote raised on a tall post, rows of arched doorways under its pitched roof, each with a little ledge",
+    "a round stone cote":
+      "A squat round dovecote of rough stone with a ledge round its middle, its conical roof crowned by a little open lantern",
+    "a cote on a post":
+      "A small painted dovecote raised on a tall post, rows of arched doorways under its pitched roof, each with a little ledge",
   }),
 };
 
@@ -243,10 +294,16 @@ export const dovecote = primitive({
 
 export const wellParams = {
   head: t.choice("What stands over the well", {
-    "a little roof": "A small shingled roof on two posts over the winch, the bucket hanging on its rope",
-    "a sweep": "A long wooden pole balanced on a forked post, a stone weight at one end and the bucket at the other",
+    "a little roof":
+      "A small shingled roof on two posts over the winch, the bucket hanging on its rope",
+    "a sweep":
+      "A long wooden pole balanced on a forked post, a stone weight at one end and the bucket at the other",
   }),
-  width: t.scale("How wide the well is", { "a narrow well": 0.55, "a wide well": 0.75, "a great well": 0.95 }),
+  width: t.scale("How wide the well is", {
+    "a narrow well": 0.55,
+    "a wide well": 0.75,
+    "a great well": 0.95,
+  }),
 };
 
 export const well = primitive({
@@ -259,10 +316,16 @@ export const well = primitive({
 
 export const bellParams = {
   hanging: t.choice("What the bell hangs in", {
-    "a stone arch": "Two stone piers joined by a round arch under a little gabled roof",
-    "a timber frame": "Two frames of raked timber legs joined by the beam the bell hangs from, under a small shingled roof",
+    "a stone arch":
+      "Two stone piers joined by a round arch under a little gabled roof",
+    "a timber frame":
+      "Two frames of raked timber legs joined by the beam the bell hangs from, under a small shingled roof",
   }),
-  bell: t.scale("How big the bell is", { "a small bell": 0.3, "a chapel bell": 0.42, "a great bell": 0.56 }),
+  bell: t.scale("How big the bell is", {
+    "a small bell": 0.3,
+    "a chapel bell": 0.42,
+    "a great bell": 0.56,
+  }),
 };
 
 export const bell = primitive({
@@ -275,10 +338,16 @@ export const bell = primitive({
 
 export const forgeParams = {
   shelter: t.choice("What shelters the forge", {
-    "an open shed": "An open-fronted shed of timber posts under one sloping roof, the hearth at its back",
-    "open to the sky": "The hearth and its chimney standing alone in the yard, the anvil beside them",
+    "an open shed":
+      "An open-fronted shed of timber posts under one sloping roof, the hearth at its back",
+    "open to the sky":
+      "The hearth and its chimney standing alone in the yard, the anvil beside them",
   }),
-  stack: t.scale("How tall its chimney stands", { "a short stack": 3.3, "a tall stack": 4.1, "a soaring stack": 5 }),
+  stack: t.scale("How tall its chimney stands", {
+    "a short stack": 3.3,
+    "a tall stack": 4.1,
+    "a soaring stack": 5,
+  }),
 };
 
 export const forge = primitive({
@@ -290,7 +359,11 @@ export const forge = primitive({
 });
 
 export const granaryParams = {
-  size: t.scale("How much it holds", { "a small store": 1.9, "a granary": 2.4, "a great granary": 3 }),
+  size: t.scale("How much it holds", {
+    "a small store": 1.9,
+    "a granary": 2.4,
+    "a great granary": 3,
+  }),
   roof: t.choice("How it is roofed", {
     gabled: "Two slopes meeting at a ridge over boarded gables",
     hipped: "Slopes on every side meeting in a short ridge, low and snug",
@@ -305,4 +378,19 @@ export const granary = primitive({
   build: (p, ctx, plan) => buildGranary(p, ctx, plan),
 });
 
-export const STRUCTURE_PRIMITIVES = [cottagePlan, timberFrame, fieldstone, thatch, tiles, casements, cottageGarden, waterwheel, tower, dovecote, well, bell, forge, granary];
+export const STRUCTURE_PRIMITIVES = [
+  cottagePlan,
+  timberFrame,
+  fieldstone,
+  thatch,
+  tiles,
+  casements,
+  cottageGarden,
+  waterwheel,
+  tower,
+  dovecote,
+  well,
+  bell,
+  forge,
+  granary,
+];

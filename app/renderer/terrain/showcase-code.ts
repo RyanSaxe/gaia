@@ -9,7 +9,9 @@ export function showcaseFiles(bundle: string): Map<string, string> {
   let path: string | null = null;
   let lines: string[] = [];
   const keep = (): void => {
-    if (path !== null) files.set(path, `${lines.join("\n").replace(/\n+$/, "")}\n`);
+    if (path !== null) {
+      files.set(path, `${lines.join("\n").replace(/\n+$/, "")}\n`);
+    }
   };
   for (const line of bundle.split(/\r?\n/)) {
     const header = /^=== (.+) ===$/.exec(line);

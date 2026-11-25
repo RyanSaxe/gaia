@@ -6,7 +6,8 @@ without one.
 
 ## Configure the key
 
-Set `OPENROUTER_API_KEY` in the environment before starting Gaia. In Bash, read it without putting it in shell history:
+Set `OPENROUTER_API_KEY` in the environment before starting Gaia. In Bash, read
+it without putting it in shell history:
 
 ```sh
 read -rs -p "OpenRouter key: " OPENROUTER_API_KEY
@@ -33,8 +34,8 @@ environment.
 
 ## Cost and consent
 
-The [README](../../README.md#get-started) gives rough costs for first openings and
-updates. Gaia estimates request cost before sending, prints usage in the
+The [README](../../README.md#get-started) gives rough costs for first openings
+and updates. Gaia estimates request cost before sending, prints usage in the
 terminal and reuses saved answers when requests are unchanged. Composing the
 world's things depends on Jev's first answers, so the estimate prices it at
 about two requests for each thing in the world. Estimates are approximate. The
@@ -54,7 +55,8 @@ exceeds the limit, the waiting screen asks **Go ahead** or **Not now**.
 
 The engine's understanding requests include source code and neighboring
 signatures. World design requests use derived facts and descriptions. See
-[the two Jev paths](../concepts/architecture.md#the-two-jev-paths) for their boundaries.
+[the two Jev paths](../concepts/architecture.md#the-two-jev-paths) for their
+boundaries.
 
 ## Saved answers
 
@@ -67,8 +69,8 @@ The app uses Electron's per-user data folder:
 | macOS | `~/Library/Application Support/Gaia` |
 
 `GAIA_DATA_DIR` overrides the store directory. Each project's answers live in
-`projects/<project>/store.json`. A Git project's ID comes from its root
-commit. On Linux, the engine's command-line fallback directory can differ from
+`projects/<project>/store.json`. A Git project's ID comes from its root commit.
+On Linux, the engine's command-line fallback directory can differ from
 Electron's, so set `GAIA_DATA_DIR` when tools and the app share a store.
 
 To forget a project's answers, remove only that project's directory. The `app`

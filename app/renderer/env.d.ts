@@ -1,3 +1,7 @@
+// Side-effect CSS imports (`import "./style.css"`). Vite bundles them for the
+// app and tools/lab-page.ts inlines them for the one-file lab.
+declare module "*.css";
+
 // `import X from "./file.ts?worker"` returns a constructor for a worker that
 // runs that file. Vite provides it for the app, and tools/lab-page.ts for the
 // one-file lab.
