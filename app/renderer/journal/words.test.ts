@@ -59,11 +59,19 @@ const source = (lines: readonly string[] | undefined): WordsSource => ({
     path === "README.md" ? ["# Demo", "", "Adds numbers."] : lines,
 });
 
+// Each definition's lines in the file, from its first, whatever their indentation.
+const trimmed = (lines: readonly string[]): string[] =>
+  lines.map((l) => l.trim());
+
 describe("what a journal page says", () => {
   it("shows a definition's own code on its page, a nested definition's included", () => {
     const src = source(TEXT);
     const code = (id: string): string[] => {
-      const page = wordsOf(src, src.journal.entry(id)!);
+      const entry = src.journal.entry(id);
+      if (entry === undefined) {
+        throw new Error(`${id} has no journal entry.`);
+      }
+      const page = wordsOf(src, entry);
       if (page.body.kind !== "code") {
         throw new Error(`${id}'s page shows no code.`);
       }
@@ -72,9 +80,6 @@ describe("what a journal page says", () => {
         ...page.body.lines,
       ];
     };
-    // Each definition's lines in the file, from its first, whatever their indentation.
-    const trimmed = (lines: readonly string[]): string[] =>
-      lines.map((l) => l.trim());
     for (const { id, line, lines } of world.symbols) {
       expect(trimmed(code(id)), id).toEqual(
         trimmed(TEXT.slice(line - 1, line - 1 + lines)),

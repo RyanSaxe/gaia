@@ -3,6 +3,7 @@ import type {
   CodeGraph,
   DefNode,
   DirNode,
+  EntityFacts,
   FileNode,
   GraphEdge,
 } from "@gaia/schema";
@@ -98,10 +99,10 @@ const GRAPH: CodeGraph = {
 
 describe("the code facts, read from the engine's graph alone", () => {
   const facts = factsOf(GRAPH);
+  const entity = (path: string): EntityFacts | undefined =>
+    facts.entities.find((x) => x.path === path);
 
   it("gives each entity the entities its code leans on and those that lean on it, from imports a file or a definition in it makes", () => {
-    const entity = (path: string) =>
-      facts.entities.find((x) => x.path === path);
     expect([entity(core)?.dependsOn, entity(core)?.dependents]).toEqual([
       [],
       ["packages/app"],

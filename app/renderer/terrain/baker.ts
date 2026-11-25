@@ -52,17 +52,18 @@ export function createBaker(
     number,
     { worker: Worker; resolve: (reply: BakeReply) => void }
   >();
+  const detach = new WeakMap<Worker, () => void>();
+  const onMessage = (e: MessageEvent<BakeReply>): void => {
+    const job = waiting.get(e.data.id);
+    waiting.delete(e.data.id);
+    job?.resolve(e.data);
+  };
   let nextId = 0;
   const spawn = (): Worker[] =>
     Array.from({ length: threads }, () => {
       const w = new BakeWorker();
-      w.onmessage = (e: MessageEvent<BakeReply>) => {
-        const job = waiting.get(e.data.id);
-        waiting.delete(e.data.id);
-        job?.resolve(e.data);
-      };
       // A thread that dies, such as from running out of memory, fails its jobs, so the bake fails rather than waiting forever.
-      w.onerror = (e) => {
+      const onError = (e: ErrorEvent): void => {
         e.preventDefault();
         for (const [id, job] of waiting) {
           if (job.worker !== w) continue;
@@ -74,6 +75,12 @@ export function createBaker(
           });
         }
       };
+      w.addEventListener("message", onMessage);
+      w.addEventListener("error", onError);
+      detach.set(w, () => {
+        w.removeEventListener("message", onMessage);
+        w.removeEventListener("error", onError);
+      });
       return w;
     });
   // The first bake's workers start with the page, so that bake begins at once.
@@ -136,7 +143,7 @@ export function createBaker(
       const baked = await bakeOn(workers, world, toPlace);
       kept = baked.whole;
       // From here on, the page's land handles the finishing thread's messages.
-      kept.onmessage = null;
+      detach.get(kept)?.();
       return baked;
     } finally {
       for (const w of workers) if (w !== kept) w.terminate();
@@ -200,7 +207,7 @@ export function createBaker(
     };
   }
   return {
-    bake(world, toPlace) {
+    bake(world, toPlace): Promise<Baked> {
       const done = queue.then(() => run(world, toPlace));
       // The queue waits on the bake but keeps no reference to its result, so
       // the world alone decides when to drop a bake's stand and terrain.

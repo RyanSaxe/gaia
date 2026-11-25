@@ -243,6 +243,35 @@ function stoneSpans(
   return out;
 }
 
+function cutRubblePieces(
+  a0: number,
+  a1: number,
+  open: readonly Opening[],
+): [number, number][] {
+  const mid = (a0 + a1) / 2;
+  let pieces: [number, number][] = [[a0, a1]];
+  for (const o of open) {
+    const at = mid + angleDiff(o.along, mid);
+    pieces = pieces.flatMap(([b0, b1]): [number, number][] =>
+      at + o.half <= b0 || at - o.half >= b1
+        ? [[b0, b1]]
+        : (
+            [
+              [b0, at - o.half],
+              [at + o.half, b1],
+            ] as [number, number][]
+          ).filter(([s, e]) => e - s > 0.02),
+    );
+  }
+  return pieces;
+}
+
+function oddTone(odd: number): number {
+  if (odd < 0.14) return -0.2;
+  if (odd < 0.26) return 0.16;
+  return 0;
+}
+
 /**
  * Coursed rubble from `ys`: stones of varied length and depth, some darker and some paler, a few standing proud,
  * dressed quoins paler at a polygon's corners, all set in dark recessed joints and stopping clean at each opening.
@@ -270,21 +299,7 @@ function masonry(
       c % 2 === 1,
       cr,
     )) {
-      const mid = (a0 + a1) / 2;
-      let pieces: [number, number][] = [[a0, a1]];
-      for (const o of open) {
-        const at = mid + angleDiff(o.along, mid);
-        pieces = pieces.flatMap(([b0, b1]): [number, number][] =>
-          at + o.half <= b0 || at - o.half >= b1
-            ? [[b0, b1]]
-            : (
-                [
-                  [b0, at - o.half],
-                  [at + o.half, b1],
-                ] as [number, number][]
-              ).filter(([s, e]) => e - s > 0.02),
-        );
-      }
+      const pieces = cutRubblePieces(a0, a1, open);
       // Every stone has its own tone. One in seven is dark and weathered, and one in eight is pale and fresh.
       const odd = cr.next();
       const shade =
@@ -292,7 +307,7 @@ function masonry(
         0.42 * cr.next() +
         0.08 * (ya / top) -
         (c < 2 ? 0.08 : 0) +
-        (odd < 0.14 ? -0.2 : odd < 0.26 ? 0.16 : 0) +
+        oddTone(odd) +
         (quoin ? 0.14 : 0);
       const wither = 0.4 + 0.45 * cr.next();
       const tint = (cr.next() - 0.5) * 0.08;
@@ -469,12 +484,12 @@ function fantail(
   r: Rand,
 ): void {
   const ch = listing(hub, list, 0.65);
-  const fan: V3 = [0, capY + 1.5, -capR - 1.25];
+  const fanHub: V3 = [0, capY + 1.5, -capR - 1.25];
   for (const x of [-0.35, 0.35]) {
     beam(
       parts.timber,
       [x, capY + 0.1, -capR * 0.75],
-      [x * 0.4, fan[1] - 0.1, fan[2]],
+      [x * 0.4, fanHub[1] - 0.1, fanHub[2]],
       0.1,
       0.1,
       [1, 0, 0],
@@ -484,8 +499,8 @@ function fantail(
   }
   log(
     parts.timber,
-    [-0.3, fan[1], fan[2]],
-    [0.3, fan[1], fan[2]],
+    [-0.3, fanHub[1], fanHub[2]],
+    [0.3, fanHub[1], fanHub[2]],
     0.09,
     0.42,
     ch,
@@ -499,7 +514,7 @@ function fantail(
     const pitched = normalize(addScaled(t, ACROSS, 0.5));
     box(
       parts.cloth,
-      addScaled(fan, e, 0.75),
+      addScaled(fanHub, e, 0.75),
       [e, pitched, normalize(cross(e, pitched))],
       [0.5, 0.17, 0.015],
       0.55,
@@ -507,8 +522,8 @@ function fantail(
     );
     beam(
       parts.timber,
-      fan,
-      addScaled(fan, e, 1.25),
+      fanHub,
+      addScaled(fanHub, e, 1.25),
       0.05,
       0.05,
       ACROSS,
@@ -585,20 +600,18 @@ function dome(
     const a1 = off + ((k + 1) / n) * Math.PI * 2;
     const c = ch(r.next());
     for (let i = 0; i + 1 < profile.length; i++) {
-      const vs = [
+      const corners: readonly (readonly [number, number])[] = [
         [a0, i],
         [a1, i],
         [a1, i + 1],
         [a0, i + 1],
-      ].map(([a, j]) => {
-        const [out, up] = slope(j as number);
-        const face = sides === 0 ? (a as number) : (a0 + a1) / 2;
-        const shade =
-          0.4 +
-          0.18 *
-            ((profile[j as number] as readonly [number, number])[0] as number);
+      ];
+      const vs = corners.map(([a, j]) => {
+        const [out, up] = slope(j);
+        const face = sides === 0 ? a : (a0 + a1) / 2;
+        const shade = 0.4 + 0.18 * (profile[j] as readonly [number, number])[0];
         return parts.roof.vertex(
-          at(a as number, j as number),
+          at(a, j),
           normalize([Math.cos(face) * out, up, Math.sin(face) * out]),
           shade,
           c,
@@ -776,7 +789,7 @@ function towerMill(h: number, m: MillShape, r: Rand): Body {
       y > capY
         ? capR * profileAt(OGEE, (y - capY) / rise)
         : wallAt(y) + (Math.abs(y - stageY - 0.4) < 0.8 ? 1.25 : 0),
-    build(parts, hub, r) {
+    build(parts, hub, br): void {
       const thick = r0 * 0.24;
       const openings: Opening[] = [
         { along: 1.0, course: 0, rows: rowsFor(ys, 0, 2.1), half: 0.5 / r0 },
@@ -785,18 +798,18 @@ function towerMill(h: number, m: MillShape, r: Rand): Body {
       for (
         let c = 5, i = 0;
         c + 3 < courses;
-        c += 4 + Math.floor(r.next() * 2), i++
+        c += 4 + Math.floor(br.next() * 2), i++
       ) {
         const rows = rowsFor(ys, c, 0.95);
         if (c + rows >= stageC - 1 && c <= stageC + 1) continue;
         openings.push({
-          along: (turns[i % turns.length] as number) + (r.next() - 0.5) * 0.3,
+          along: (turns[i % turns.length] as number) + (br.next() - 0.5) * 0.3,
           course: c,
           rows,
           half: 0.32 / wallAt(ys[c] as number),
         });
       }
-      masonry(parts, 0, ys, wallAt, thick, openings, r.fork("courses"));
+      masonry(parts, 0, ys, wallAt, thick, openings, br.fork("courses"));
       openings.forEach((o, i) =>
         fill(
           parts,
@@ -806,10 +819,10 @@ function towerMill(h: number, m: MillShape, r: Rand): Body {
           wallAt(ys[o.course + 1] as number),
           thick,
           i === 0,
-          r,
+          br,
         ),
       );
-      stage(parts, 0, stageY, wallAt(stageY), 1.15, r.fork("stage"));
+      stage(parts, 0, stageY, wallAt(stageY), 1.15, br.fork("stage"));
       curbRing(
         parts.timber,
         0,
@@ -818,7 +831,7 @@ function towerMill(h: number, m: MillShape, r: Rand): Body {
         r1 + 0.12,
         0.45,
         () => still([0, curb, 0], 0.6),
-        r,
+        br,
       );
       fan(
         parts.timber,
@@ -829,9 +842,9 @@ function towerMill(h: number, m: MillShape, r: Rand): Body {
         0.3,
         still([0, curb, 0], 0.6),
       );
-      cap(parts, 0, capY, capR, rise, OGEE, hub, capList(m), r);
-      fantail(parts, capY, capR, hub, capList(m), r);
-      fallen(parts, r0, 16, r.fork("fallen"));
+      cap(parts, 0, capY, capR, rise, OGEE, hub, capList(m), br);
+      fantail(parts, capY, capR, hub, capList(m), br);
+      fallen(parts, r0, 16, br.fork("fallen"));
     },
   };
 }
@@ -844,21 +857,23 @@ function smockMill(h: number, m: MillShape): Body {
   const s1 = h * 0.112 * m.head;
   const smockAt = (y: number): number =>
     s0 + (s1 - s0) * clamp((y - base) / (curb - base), 0, 1);
+  const cornerAt =
+    (a: number) =>
+    (y: number): V3 =>
+      ringPoint(8, a, smockAt(y), y);
   const capY = curb + 0.3;
   const capR = s1 + 0.38;
   const rise = h - capY - 0.9;
   return {
     hubY: capY + rise * 0.3,
     clear: base + 1.7,
-    front: (y) =>
-      y > capY
-        ? capR * profileAt(BONNET, (y - capY) / rise)
-        : y < base + 1.2 && y > base - 1.2
-          ? rb + 1.15
-          : y < base
-            ? rb
-            : smockAt(y),
-    build(parts, hub, r) {
+    front: (y): number => {
+      if (y > capY) return capR * profileAt(BONNET, (y - capY) / rise);
+      if (y < base + 1.2 && y > base - 1.2) return rb + 1.15;
+      if (y < base) return rb;
+      return smockAt(y);
+    },
+    build(parts, hub, r): void {
       // A stone base with a door, and a stage round its head.
       const ys = coursesOf(0, base, COURSE * 0.9, r.fork("base"));
       const door: Opening = {
@@ -872,10 +887,6 @@ function smockMill(h: number, m: MillShape): Body {
       stage(parts, 8, base, rb, 1.05, r.fork("stage"));
       // The smock: eight boarded faces leaning in, a post at every corner.
       const sector = Math.PI / 4;
-      const cornerAt =
-        (a: number) =>
-        (y: number): V3 =>
-          ringPoint(8, a, smockAt(y), y);
       for (let j = 0; j < 8; j++) {
         const mid = j * sector;
         const foot = ringPoint(8, mid, smockAt(base) - 0.3, base);
@@ -962,6 +973,59 @@ function cap(
   dome(parts, sides, y0, rad, rise, profile, ch, r);
 }
 
+const atCorner =
+  (c: V3) =>
+  (y: number): V3 => [c[0], y, c[2]];
+
+function buildPostTrestle(
+  parts: Parts,
+  reach: number,
+  yb: number,
+  crown: V3,
+): void {
+  // The trestle: two cross-trees on four piers, quarter bars up to the post.
+  const diag = [
+    Math.PI / 4,
+    (3 * Math.PI) / 4,
+    (5 * Math.PI) / 4,
+    (7 * Math.PI) / 4,
+  ];
+  for (const a of diag) {
+    const [x, z] = [Math.cos(a) * reach, Math.sin(a) * reach];
+    box(
+      parts.stone,
+      [x, 0.3, z],
+      [[Math.cos(a), 0, Math.sin(a)], UP, [-Math.sin(a), 0, Math.cos(a)]],
+      [0.5, 0.38, 0.45],
+      0.5,
+      still([x, 0, z], 0.6),
+    );
+    beam(
+      parts.timber,
+      [x * 0.9, 0.95, z * 0.9],
+      [x * 0.1, yb * 0.7, z * 0.1],
+      0.26,
+      0.24,
+      UP,
+      0.44,
+      still([x, 0, z], 0.6),
+    );
+  }
+  for (const a of diag.slice(0, 2)) {
+    beam(
+      parts.timber,
+      [Math.cos(a) * reach, 0.8, Math.sin(a) * reach],
+      [-Math.cos(a) * reach, 0.8, -Math.sin(a) * reach],
+      0.34,
+      0.32,
+      UP,
+      0.42,
+      still([0, 0, 0], 0.6),
+    );
+  }
+  log(parts.timber, [0, 0.7, 0], crown, 0.34, 0.42, still([0, 0, 0], 0.6), 8);
+}
+
 function postMill(h: number, m: MillShape): Body {
   const W = h * 0.25 * m.foot;
   const D = h * 0.34 * m.foot;
@@ -969,61 +1033,17 @@ function postMill(h: number, m: MillShape): Body {
   const ye = h * 0.78 * m.curb;
   const reach = h * 0.2 * m.foot;
   const crown: V3 = [0, yb + 0.9, 0];
+  const ridge = (z: number): V3 => [0, h, z];
   return {
     hubY: ye + (h - ye) * 0.3,
     clear: 2.4,
-    front: (y) =>
-      y >= yb - 0.3 ? D / 2 + 0.12 : y < yb * 0.75 ? reach * 0.75 : 0.5,
-    build(parts, _hub, r) {
-      // The trestle: two cross-trees on four piers, quarter bars up to the post.
-      const diag = [
-        Math.PI / 4,
-        (3 * Math.PI) / 4,
-        (5 * Math.PI) / 4,
-        (7 * Math.PI) / 4,
-      ];
-      for (const a of diag) {
-        const [x, z] = [Math.cos(a) * reach, Math.sin(a) * reach];
-        box(
-          parts.stone,
-          [x, 0.3, z],
-          [[Math.cos(a), 0, Math.sin(a)], UP, [-Math.sin(a), 0, Math.cos(a)]],
-          [0.5, 0.38, 0.45],
-          0.5,
-          still([x, 0, z], 0.6),
-        );
-        beam(
-          parts.timber,
-          [x * 0.9, 0.95, z * 0.9],
-          [x * 0.1, yb * 0.7, z * 0.1],
-          0.26,
-          0.24,
-          UP,
-          0.44,
-          still([x, 0, z], 0.6),
-        );
-      }
-      for (const a of diag.slice(0, 2)) {
-        beam(
-          parts.timber,
-          [Math.cos(a) * reach, 0.8, Math.sin(a) * reach],
-          [-Math.cos(a) * reach, 0.8, -Math.sin(a) * reach],
-          0.34,
-          0.32,
-          UP,
-          0.42,
-          still([0, 0, 0], 0.6),
-        );
-      }
-      log(
-        parts.timber,
-        [0, 0.7, 0],
-        crown,
-        0.34,
-        0.42,
-        still([0, 0, 0], 0.6),
-        8,
-      );
+    front: (y): number => {
+      if (y >= yb - 0.3) return D / 2 + 0.12;
+      if (y < yb * 0.75) return reach * 0.75;
+      return 0.5;
+    },
+    build(parts, _hub, r): void {
+      buildPostTrestle(parts, reach, yb, crown);
       // The buck: a boarded body on the post, its gabled roof, windows, a door and ladder behind and a tail pole.
       const ch = (u: number, extra: Partial<Channels> = {}): Channels =>
         listing(crown, capList(m) * (LIST.buck / LIST.cap), 0.65, {
@@ -1036,9 +1056,6 @@ function postMill(h: number, m: MillShape): Body {
         [W / 2, 0, -D / 2],
         [-W / 2, 0, -D / 2],
       ];
-      const at =
-        (c: V3) =>
-        (y: number): V3 => [c[0], y, c[2]];
       box(
         parts.timber,
         [0, yb + 0.1, 0],
@@ -1052,8 +1069,8 @@ function postMill(h: number, m: MillShape): Body {
         boarded(
           parts,
           j,
-          at(c),
-          at(next),
+          atCorner(c),
+          atCorner(next),
           yb + 0.2,
           ye,
           (grain) => ch(r.next(), { rot: 0.5, grain }),
@@ -1077,7 +1094,6 @@ function postMill(h: number, m: MillShape): Body {
         ye - 0.12,
         z,
       ];
-      const ridge = (z: number): V3 => [0, h, z];
       for (const side of [-1, 1]) {
         const n = normalize([side * (h - ye), W / 2 + o, 0]);
         const e0 = eave(side, -D / 2 - o);
@@ -1207,6 +1223,113 @@ function profileAt(profile: Profile, t: number): number {
   return 0;
 }
 
+function emitSailBays(
+  parts: Parts,
+  us: readonly number[],
+  bars: number,
+  trail: number,
+  lead: number,
+  shutters: boolean,
+  e: V3,
+  t: V3,
+  k: number,
+  tint: number,
+  at: (u: number, v: number, lift?: number) => V3,
+  turning: (wither: number, extra?: Partial<Channels>) => Channels,
+): void {
+  for (let j = 0; j < bars; j++) {
+    const [u0, u1] = [us[j] as number, us[j + 1] as number];
+    for (const v of [-trail, -trail / 2]) {
+      beam(
+        parts.lath,
+        at(u0, v, 0.02),
+        at(u1, v, 0.02),
+        0.06,
+        0.05,
+        SHAFT,
+        0.52,
+        turning(0.6, { tint }),
+      );
+    }
+    beam(
+      parts.lath,
+      at(u0, lead * 0.55, 0.02),
+      at(u1, lead * 0.55, 0.02),
+      lead * 0.9,
+      0.04,
+      t,
+      0.55,
+      turning(0.6, { tint }),
+    );
+    if (shutters) {
+      // A shutter across each bay, turned a little open. It goes whole as it rots.
+      const um = (u0 + u1) / 2;
+      const c = at(um, -trail / 2 - 0.06, -0.02);
+      const across = normalize(sub(at(um, -0.12), at(um, -trail)));
+      const face = normalize(cross(e, across));
+      const tilt = normalize(
+        addScaled(scale(e, Math.cos(0.45)), face, Math.sin(0.45)),
+      );
+      box(
+        parts.cloth,
+        c,
+        [across, tilt, normalize(cross(across, tilt))],
+        [(trail - 0.18) / 2, (u1 - u0) * 0.46, 0.02],
+        0.55,
+        turning(0.5, { tint, rot: 0.95, grain: board(k * 3 + 1, j) }),
+      );
+    }
+  }
+}
+
+function emitSailCanvas(
+  parts: Parts,
+  inner: number,
+  R: number,
+  bars: number,
+  trail: number,
+  tint: number,
+  at: (u: number, v: number, lift?: number) => V3,
+  turning: (wither: number, extra?: Partial<Channels>) => Channels,
+): void {
+  // Canvas over the front of the bars, which tears to tatters as vitality falls.
+  const across = 3;
+  const v0 = -trail + 0.04;
+  const v1 = -0.14;
+  for (let j = 0; j < bars; j++) {
+    for (let i = 0; i < across; i++) {
+      const corner = (jj: number, ii: number): V3 => {
+        const f = ii / across;
+        return at(
+          inner + 0.05 + ((R - inner - 0.15) * jj) / bars,
+          v0 + (v1 - v0) * f,
+          0.1,
+        );
+      };
+      const p = [
+        corner(j, i),
+        corner(j, i + 1),
+        corner(j + 1, i + 1),
+        corner(j + 1, i),
+      ] as const;
+      const n = normalize(cross(sub(p[1], p[0]), sub(p[3], p[0])));
+      // A little lighter toward the whip, so a sail looks like cloth, not a flat board.
+      // It stays a little darker than the wall's white, so moonlight does not make the cloth glare.
+      const [s0, s1] = [
+        0.4 + (0.06 * i) / across,
+        0.4 + (0.06 * (i + 1)) / across,
+      ];
+      quad(
+        parts.cloth,
+        p,
+        dot(n, SHAFT) < 0 ? scale(n, -1) : n,
+        [s0, s1, s1, s0],
+        turning(0.85, { tint, rot: 0.85 }),
+      );
+    }
+  }
+}
+
 /**
  * The sails: whips from the hub, each carrying a frame of bars and hemlaths
  * twisted from a steep weather at the heel to a flatter one at the tip, and
@@ -1301,85 +1424,22 @@ function sails(
         turning(0.6, { tint, rot: 0.55, grain: board(k * 3, j) }),
       ),
     );
-    for (let j = 0; j < bars; j++) {
-      const [u0, u1] = [us[j] as number, us[j + 1] as number];
-      for (const v of [-trail, -trail / 2]) {
-        beam(
-          parts.lath,
-          at(u0, v, 0.02),
-          at(u1, v, 0.02),
-          0.06,
-          0.05,
-          SHAFT,
-          0.52,
-          turning(0.6, { tint }),
-        );
-      }
-      beam(
-        parts.lath,
-        at(u0, lead * 0.55, 0.02),
-        at(u1, lead * 0.55, 0.02),
-        lead * 0.9,
-        0.04,
-        t,
-        0.55,
-        turning(0.6, { tint }),
-      );
-      if (shutters) {
-        // A shutter across each bay, turned a little open. It goes whole as it rots.
-        const um = (u0 + u1) / 2;
-        const c = at(um, -trail / 2 - 0.06, -0.02);
-        const across = normalize(sub(at(um, -0.12), at(um, -trail)));
-        const face = normalize(cross(e, across));
-        const tilt = normalize(
-          addScaled(scale(e, Math.cos(0.45)), face, Math.sin(0.45)),
-        );
-        box(
-          parts.cloth,
-          c,
-          [across, tilt, normalize(cross(across, tilt))],
-          [(trail - 0.18) / 2, (u1 - u0) * 0.46, 0.02],
-          0.55,
-          turning(0.5, { tint, rot: 0.95, grain: board(k * 3 + 1, j) }),
-        );
-      }
-    }
-    if (shutters) continue;
-    // Canvas over the front of the bars, which tears to tatters as vitality falls.
-    const across = 3;
-    const v0 = -trail + 0.04;
-    const v1 = -0.14;
-    for (let j = 0; j < bars; j++) {
-      for (let i = 0; i < across; i++) {
-        const corner = (jj: number, ii: number): V3 => {
-          const f = ii / across;
-          return at(
-            inner + 0.05 + ((R - inner - 0.15) * jj) / bars,
-            v0 + (v1 - v0) * f,
-            0.1,
-          );
-        };
-        const p = [
-          corner(j, i),
-          corner(j, i + 1),
-          corner(j + 1, i + 1),
-          corner(j + 1, i),
-        ] as const;
-        const n = normalize(cross(sub(p[1], p[0]), sub(p[3], p[0])));
-        // A little lighter toward the whip, so a sail looks like cloth, not a flat board.
-        // It stays a little darker than the wall's white, so moonlight does not make the cloth glare.
-        const [s0, s1] = [
-          0.4 + (0.06 * i) / across,
-          0.4 + (0.06 * (i + 1)) / across,
-        ];
-        quad(
-          parts.cloth,
-          p,
-          dot(n, SHAFT) < 0 ? scale(n, -1) : n,
-          [s0, s1, s1, s0],
-          turning(0.85, { tint, rot: 0.85 }),
-        );
-      }
+    emitSailBays(
+      parts,
+      us,
+      bars,
+      trail,
+      lead,
+      shutters,
+      e,
+      t,
+      k,
+      tint,
+      at,
+      turning,
+    );
+    if (!shutters) {
+      emitSailCanvas(parts, inner, R, bars, trail, tint, at, turning);
     }
   }
 }
@@ -1400,12 +1460,14 @@ export function buildWindmill(p: MillParams, ctx: BuildContext): Built {
     frame: new PartBuilder("timber"),
   };
   const m = landmarkShape(WINDMILL_SHAPE, p, ctx);
-  const body =
-    p.body === "a stone tower mill"
-      ? towerMill(h, m, r.fork("tower"))
-      : p.body === "a timber smock mill"
-        ? smockMill(h, m)
-        : postMill(h, m);
+  let body: Body;
+  if (p.body === "a stone tower mill") {
+    body = towerMill(h, m, r.fork("tower"));
+  } else if (p.body === "a timber smock mill") {
+    body = smockMill(h, m);
+  } else {
+    body = postMill(h, m);
+  }
   const count = p.sails === "six sails" ? 6 : 4;
   const R = Math.min(h * m.sweep, (body.hubY - body.clear) / Math.cos(TILT));
   // The hub stands far enough out that every sail, at every turn, clears the body behind it.

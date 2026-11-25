@@ -109,12 +109,14 @@ export function createCompass(button: HTMLElement): Compass {
   /** The angle last written to the page, radians. */
   let shown = Number.NaN;
   return {
-    turn(yaw, dt) {
+    turn(yaw, dt): void {
       // The ring's top is the way the person faces, so north lies their yaw clockwise from it.
-      if (!started) {
+      if (started) {
+        swing(needle, yaw, dt);
+      } else {
         needle.angle = yaw;
         started = true;
-      } else swing(needle, yaw, dt);
+      }
       if (Math.abs(needle.angle - shown) < 0.0017) return;
       shown = needle.angle;
       const degrees = ((((needle.angle * 180) / Math.PI) % 360) + 360) % 360;

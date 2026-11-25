@@ -51,16 +51,17 @@ export function createClearings(): Clearings {
   };
   return {
     uniforms,
-    set(list) {
+    set(list): void {
       for (let i = 0; i < MAX_CLEARINGS; i++) {
         const c = list[i];
-        uniforms.uClearings.value[i]?.set(
-          c?.ax ?? 0,
-          c?.az ?? 0,
-          c?.bx ?? 0,
-          c?.bz ?? 0,
-        );
-        uniforms.uClearingRadius.value[i] = c?.radius ?? 0;
+        const vec = uniforms.uClearings.value[i];
+        if (c === undefined) {
+          vec?.set(0, 0, 0, 0);
+          uniforms.uClearingRadius.value[i] = 0;
+        } else {
+          vec?.set(c.ax, c.az, c.bx, c.bz);
+          uniforms.uClearingRadius.value[i] = c.radius;
+        }
       }
     },
   };

@@ -6,10 +6,8 @@
 const TAU = 6.283185307179586;
 
 /** The average direction the wind blows toward, a unit vector over the ground (x, z). */
-const DIR: readonly [number, number] = (() => {
-  const l = Math.hypot(0.94, 0.34);
-  return [0.94 / l, 0.34 / l];
-})();
+const DIR_LEN = Math.hypot(0.94, 0.34);
+const DIR: readonly [number, number] = [0.94 / DIR_LEN, 0.34 / DIR_LEN];
 
 /**
  * The wind is mostly a light, steady breeze that swells and eases over tens of

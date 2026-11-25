@@ -80,6 +80,28 @@ export interface Composed {
   readonly uses?: Readonly<Record<string, string>>;
 }
 
+function targetOf(thing: Composed): Target {
+  return {
+    id: thing.path,
+    state: thing.state,
+    ...(thing.has === undefined ? {} : { has: thing.has }),
+    ...(thing.uses === undefined ? {} : { uses: thing.uses }),
+  };
+}
+
+function detailOptionsOf(
+  stage: number,
+  thing: Composed,
+  earlier: Record<string, Readonly<Record<string, unknown>>> | undefined,
+): Parameters<typeof planDetails>[4] {
+  return {
+    stage,
+    ...(thing.narrow === undefined ? {} : { narrow: thing.narrow }),
+    ...(thing.fixed === undefined ? {} : { fixed: thing.fixed }),
+    ...(earlier === undefined ? {} : { earlier }),
+  };
+}
+
 /** Requests one thing's structure from Jev, then each stage's details, and returns the validated blueprint. */
 export async function composeThing(
   c: Composing,
@@ -88,12 +110,7 @@ export async function composeThing(
 ): Promise<Blueprint> {
   const k = c[thing.as];
   const lib = c.offered?.[thing.as] ?? c.lib;
-  const target: Target = {
-    id: thing.path,
-    state: thing.state,
-    ...(thing.has === undefined ? {} : { has: thing.has }),
-    ...(thing.uses === undefined ? {} : { uses: thing.uses }),
-  };
+  const target = targetOf(thing);
   const structureWave = planStructure(k, lib, target);
   const structure = readStructure(
     k,
@@ -109,12 +126,13 @@ export async function composeThing(
       waves.length === 0
         ? undefined
         : settledParams(assemble(k, lib, structure, waves, answers));
-    const wave = planDetails(k, lib, structure, target, {
-      stage,
-      ...(thing.narrow === undefined ? {} : { narrow: thing.narrow }),
-      ...(thing.fixed === undefined ? {} : { fixed: thing.fixed }),
-      ...(earlier === undefined ? {} : { earlier }),
-    });
+    const wave = planDetails(
+      k,
+      lib,
+      structure,
+      target,
+      detailOptionsOf(stage, thing, earlier),
+    );
     // Skip a stage with no questions and no fixed values. A stage with only fixed values still adds its wave, so
     // `assemble` fills them in.
     if (Object.keys(wave.refs).length === 0) continue;
@@ -164,6 +182,68 @@ export const share = (v: number | null | undefined): number | undefined =>
 export const trim = (text: string, n: number): string =>
   text.length <= n ? text : `${text.slice(0, n - 1)}…`;
 
+function judgedFields(
+  value:
+    | {
+        readonly importance?: number | null;
+        readonly quality?: number | null;
+        readonly concepts?: Readonly<Record<string, number | null | undefined>>;
+      }
+    | undefined,
+): Record<string, unknown> {
+  const importance = share(value?.importance);
+  const quality = share(value?.quality);
+  const concepts = Object.entries(value?.concepts ?? {}).flatMap(([k, v]) =>
+    share(v) === undefined ? [] : [[k, share(v)] as const],
+  );
+  return {
+    ...(importance === undefined ? {} : { importance }),
+    ...(quality === undefined ? {} : { quality }),
+    ...(concepts.length === 0
+      ? {}
+      : { concepts: Object.fromEntries(concepts) }),
+  };
+}
+
+function importantDefinitions(
+  defs: readonly DefNode[],
+): Record<string, unknown>[] {
+  return defs
+    .toSorted(
+      (a, b) =>
+        (b.judged?.value?.importance ?? 0) -
+          (a.judged?.value?.importance ?? 0) || a.id.localeCompare(b.id),
+    )
+    .slice(0, DEFINITIONS)
+    .map((d) => {
+      const importance = share(d.judged?.value?.importance);
+      return {
+        name: d.name,
+        role: d.role,
+        signature: trim(d.signature, 120),
+        ...(d.doc === undefined ? {} : { doc: trim(d.doc, 100) }),
+        ...(importance === undefined ? {} : { importance }),
+      };
+    });
+}
+
+function historyFields(
+  history:
+    | {
+        readonly commits: number;
+        readonly recent: number;
+        readonly authors: number;
+      }
+    | undefined,
+): Record<string, unknown> {
+  if (history === undefined) return {};
+  return {
+    commits: history.commits,
+    recentCommits: history.recent,
+    authors: history.authors,
+  };
+}
+
 /**
  * What the engine graph records about a directory, file or repository. It
  * includes the understanding pass's importance, quality and concept scores,
@@ -171,8 +251,7 @@ export const trim = (text: string, n: number): string =>
  * important definitions.
  */
 function partOf(graph: CodeGraph, path: string): Record<string, unknown> {
-  const inside = (p: string): boolean =>
-    path === "" || p === path || p.startsWith(`${path}/`);
+  const inside = (p: string): boolean => within(path, p);
   const node = graph.nodes.find(
     (n): n is DirNode | FileNode =>
       (n.kind === "dir" || n.kind === "file") && n.path === path,
@@ -184,37 +263,8 @@ function partOf(graph: CodeGraph, path: string): Record<string, unknown> {
   const defs = graph.nodes.filter(
     (n): n is DefNode => n.kind === "def" && fileIds.has(n.file),
   );
-  const value = node?.judged?.value;
-  const concepts = Object.entries(value?.concepts ?? {}).flatMap(([k, v]) =>
-    share(v) === undefined ? [] : [[k, share(v)] as const],
-  );
-  const history = node?.measures.history;
-  const important = [...defs]
-    .sort(
-      (a, b) =>
-        (b.judged?.value?.importance ?? 0) -
-          (a.judged?.value?.importance ?? 0) || a.id.localeCompare(b.id),
-    )
-    .slice(0, DEFINITIONS)
-    .map((d) => ({
-      name: d.name,
-      role: d.role,
-      signature: trim(d.signature, 120),
-      ...(d.doc === undefined ? {} : { doc: trim(d.doc, 100) }),
-      ...(share(d.judged?.value?.importance) === undefined
-        ? {}
-        : { importance: share(d.judged?.value?.importance) }),
-    }));
   return {
-    ...(share(value?.importance) === undefined
-      ? {}
-      : { importance: share(value?.importance) }),
-    ...(share(value?.quality) === undefined
-      ? {}
-      : { quality: share(value?.quality) }),
-    ...(concepts.length === 0
-      ? {}
-      : { concepts: Object.fromEntries(concepts) }),
+    ...judgedFields(node?.judged?.value),
     files: files.length,
     lines:
       node?.measures.lines ?? files.reduce((n, f) => n + f.measures.lines, 0),
@@ -222,23 +272,23 @@ function partOf(graph: CodeGraph, path: string): Record<string, unknown> {
       ...new Set(
         files.flatMap((f) => (f.language === null ? [] : [f.language])),
       ),
-    ].sort(),
+    ].toSorted(),
     folders: graph.nodes.filter(
       (n) => n.kind === "dir" && n.path !== path && inside(n.path),
     ).length,
-    ...(history === undefined
-      ? {}
-      : {
-          commits: history.commits,
-          recentCommits: history.recent,
-          authors: history.authors,
-        }),
-    definitions: important,
+    ...historyFields(node?.measures.history),
+    definitions: importantDefinitions(defs),
   };
 }
 
 const named = (path: string): string =>
   path === "" ? "(the repository's root)" : path;
+
+const within = (path: string, p: string): boolean =>
+  path === "" || p === path || p.startsWith(`${path}/`);
+
+const fileOf = (id: string): string =>
+  id.startsWith("file:") ? id.slice(5) : (id.slice(4).split("#")[0] ?? "");
 
 /**
  * The state for composing an entity: its facts from `factsOf`, including what it depends on and how many entities
@@ -291,10 +341,6 @@ export function definitionState(
   if (node === undefined) {
     return { definition: { name: id.slice(id.indexOf("#") + 1), file } };
   }
-  const value = node.judged?.value;
-  const concepts = Object.entries(value?.concepts ?? {}).flatMap(([k, v]) =>
-    share(v) === undefined ? [] : [[k, share(v)] as const],
-  );
   return {
     definition: {
       name: node.name,
@@ -304,15 +350,7 @@ export function definitionState(
       ...(node.doc === undefined ? {} : { doc: trim(node.doc, 100) }),
       lines: Math.max(1, node.span.end - node.span.start + 1),
       exported: node.exported,
-      ...(share(value?.importance) === undefined
-        ? {}
-        : { importance: share(value?.importance) }),
-      ...(share(value?.quality) === undefined
-        ? {}
-        : { quality: share(value?.quality) }),
-      ...(concepts.length === 0
-        ? {}
-        : { concepts: Object.fromEntries(concepts) }),
+      ...judgedFields(node.judged?.value),
     },
   };
 }
@@ -368,10 +406,6 @@ export function trailState(
         : { quality: share(value?.quality) }),
     };
   };
-  const within = (path: string, p: string): boolean =>
-    path === "" || p === path || p.startsWith(`${path}/`);
-  const fileOf = (id: string): string =>
-    id.startsWith("file:") ? id.slice(5) : (id.slice(4).split("#")[0] ?? "");
   const importing =
     graph === undefined
       ? undefined

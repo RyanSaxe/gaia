@@ -216,7 +216,7 @@ export function solveStream(
   const order =
     course.widths !== undefined || first >= last
       ? [...Array(count).keys()]
-      : [...Array(count).keys()].reverse();
+      : [...Array(count).keys()].toReversed();
   const along: number[] = [0];
   for (let k = 1; k < count; k++) {
     const a = order[k - 1] as number;
@@ -324,6 +324,9 @@ function nearest(
   return best;
 }
 
+const segmentCellKey = (cx: number, cz: number): number =>
+  (cz + 0x8000) * 0x10000 + (cx + 0x8000);
+
 /**
  * Indexes the stream's segments by square cells `reach` wide. Each cell lists,
  * in order, every segment within `reach` of any point in it. Only points that
@@ -336,8 +339,6 @@ function segmentCells(
   reach: number,
 ): { readonly at: (x: number, z: number) => readonly number[] | undefined } {
   const cells = new Map<number, number[]>();
-  const key = (cx: number, cz: number): number =>
-    (cz + 0x8000) * 0x10000 + (cx + 0x8000);
   for (let i = 0; i + 1 < stations.length; i++) {
     const a = stations[i] as Station;
     const b = stations[i + 1] as Station;
@@ -351,7 +352,7 @@ function segmentCells(
         cx <= Math.floor((Math.max(a.x, b.x) + reach) / reach);
         cx++
       ) {
-        const k = key(cx, cz);
+        const k = segmentCellKey(cx, cz);
         const list = cells.get(k);
         if (list === undefined) cells.set(k, [i]);
         else list.push(i);
@@ -359,8 +360,51 @@ function segmentCells(
     }
   }
   return {
-    at: (x, z) => cells.get(key(Math.floor(x / reach), Math.floor(z / reach))),
+    at: (x, z) =>
+      cells.get(segmentCellKey(Math.floor(x / reach), Math.floor(z / reach))),
   };
+}
+
+function carveStreamSample(
+  heights: Float32Array,
+  level: Float32Array,
+  i: number,
+  s: Nearest,
+): void {
+  const h = heights[i] as number;
+  // The channel's walls slope straight from the middle of its bed up through the waterline (`WALL`).
+  const wall = s.halfWidth > 0 ? s.depth / s.halfWidth : CHANNEL_SHAPE;
+  if (s.distance < s.halfWidth) {
+    heights[i] = Math.min(h, s.level - wall * (s.halfWidth - s.distance));
+    level[i] = Math.max(level[i] as number, s.level);
+    return;
+  }
+  if (s.distance >= s.halfWidth + BANK_REACH) return;
+  const out = s.distance - s.halfWidth;
+  const raw = out / BANK;
+  const t = smooth(raw);
+  // The bank climbs from the waterline at no more than BANK_GRADE, then meets natural ground.
+  const cap = s.level + BANK_LIP * t + BANK_GRADE * out;
+  const eased = Math.min(h, cap);
+  // Next to the water the bank rises above the waterline, fading back to
+  // natural ground over the outer bank. The levee starts from the lip's
+  // height, so the ground stays continuous there.
+  const lip = Math.min(h, s.level);
+  const levee =
+    lip + (s.level + BANK_LIP * Math.max(t, 0.35) - lip) * smooth(raw / 0.12);
+  const contain = 1 - smooth((raw - 0.55) / 0.4);
+  const leveed = Math.max(eased, levee);
+  // The wall's slope continues up the bank for `WALL` meters. Past that, the bank climbs or falls to its own
+  // height at no more than `BANK_GRADE`.
+  const top = s.level + wall * Math.min(out, WALL);
+  const past = BANK_GRADE * Math.max(0, out - WALL);
+  const walled = Math.min(
+    top + past,
+    Math.max(top - past, eased + (leveed - eased) * contain),
+  );
+  // Where it meets another stream's water, the bank does not rise into that water.
+  heights[i] = (level[i] as number) > h ? eased : walled;
+  if (raw <= 0.55) level[i] = Math.max(level[i] as number, s.level);
 }
 
 /** Cuts the channel and its banks into `heights`, and records the water level where the banks contain it. */
@@ -402,40 +446,7 @@ export function carveStream(
         worldOf(l, ix),
         worldOfZ(l, iz),
       );
-      const h = heights[i] as number;
-      // The channel's walls slope straight from the middle of its bed up through the waterline (`WALL`).
-      const wall = s.halfWidth > 0 ? s.depth / s.halfWidth : CHANNEL_SHAPE;
-      if (s.distance < s.halfWidth) {
-        heights[i] = Math.min(h, s.level - wall * (s.halfWidth - s.distance));
-        level[i] = Math.max(level[i] as number, s.level);
-      } else if (s.distance < s.halfWidth + BANK_REACH) {
-        const out = s.distance - s.halfWidth;
-        const raw = out / BANK;
-        const t = smooth(raw);
-        // The bank climbs from the waterline at no more than BANK_GRADE, then meets natural ground.
-        const cap = s.level + BANK_LIP * t + BANK_GRADE * out;
-        const eased = Math.min(h, cap);
-        // Next to the water the bank rises above the waterline, fading back to
-        // natural ground over the outer bank. The levee starts from the lip's
-        // height, so the ground stays continuous there.
-        const lip = Math.min(h, s.level);
-        const levee =
-          lip +
-          (s.level + BANK_LIP * Math.max(t, 0.35) - lip) * smooth(raw / 0.12);
-        const contain = 1 - smooth((raw - 0.55) / 0.4);
-        const leveed = Math.max(eased, levee);
-        // The wall's slope continues up the bank for `WALL` meters. Past that, the bank climbs or falls to its own
-        // height at no more than `BANK_GRADE`.
-        const top = s.level + wall * Math.min(out, WALL);
-        const past = BANK_GRADE * Math.max(0, out - WALL);
-        const walled = Math.min(
-          top + past,
-          Math.max(top - past, eased + (leveed - eased) * contain),
-        );
-        // Where it meets another stream's water, the bank does not rise into that water.
-        heights[i] = (level[i] as number) > h ? eased : walled;
-        if (raw <= 0.55) level[i] = Math.max(level[i] as number, s.level);
-      }
+      carveStreamSample(heights, level, i, s);
     }
   }
   for (const head of headsOf(stream)) carveHead(l, heights, level, head);
@@ -474,6 +485,27 @@ function carveHead(
   }
 }
 
+function isRimPointWet(
+  l: Lattice,
+  heights: Float32Array,
+  level: Float32Array,
+  px: number,
+  pz: number,
+  oz: number,
+): boolean {
+  const ix = Math.floor((px - l.origin) / l.spacing);
+  const iz = Math.floor((pz - oz) / l.spacing);
+  for (let dz = 0; dz <= 1; dz++) {
+    for (let dx = 0; dx <= 1; dx++) {
+      const i =
+        Math.min(l.n - 1, Math.max(0, iz + dz)) * l.n +
+        Math.min(l.n - 1, Math.max(0, ix + dx));
+      if ((level[i] as number) > (heights[i] as number)) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Finds the level that fills a pond to `POND_FREEBOARD` under the lowest ground on its rim ring, or null when the hollow
  * cannot hold water. Rim samples where `level`, the water already laid, is above the ground lie in an inflowing stream,
@@ -496,19 +528,8 @@ export function solvePond(
     const px = x + Math.cos(a) * reach;
     const pz = z + Math.sin(a) * reach;
     // A rim sample next to any wet lattice point lies in an inflow's channel.
-    if (level !== undefined) {
-      const ix = Math.floor((px - l.origin) / l.spacing);
-      const iz = Math.floor((pz - oz) / l.spacing);
-      let wet = false;
-      for (let dz = 0; dz <= 1 && !wet; dz++) {
-        for (let dx = 0; dx <= 1 && !wet; dx++) {
-          const i =
-            Math.min(l.n - 1, Math.max(0, iz + dz)) * l.n +
-            Math.min(l.n - 1, Math.max(0, ix + dx));
-          wet = (level[i] as number) > (heights[i] as number);
-        }
-      }
-      if (wet) continue;
+    if (level !== undefined && isRimPointWet(l, heights, level, px, pz, oz)) {
+      continue;
     }
     rim = Math.min(rim, heightAt(l, px, pz, heights));
   }
@@ -611,27 +632,18 @@ export function nearPond(
 export const shoreMargin = (spacing: number): number =>
   Math.ceil(SHORE_CAP / spacing) + 2;
 
-/**
- * Distance in meters from each lattice sample to the water's edge, capped at
- * `SHORE_CAP`. It is 0 in water deep enough for full banks (`BANKED`) and
- * grows about a meter per meter away. Shallow water, such as a stream
- * narrowing at its spring or seep, starts up to `SHALLOW_BANK` meters out, so
- * the banks narrow with it instead of ringing it with sand. Sand banks and the
- * grass edge both read this field, so they agree.
- */
-export function shoreField(
-  l: Lattice,
+function initShoreSeeds(
+  n: number,
+  spacing: number,
   heights: Float32Array,
   level: Float32Array,
-): Float32Array {
-  const { n, spacing } = l;
-  const d = new Float32Array(n * n);
-  const wet = (i: number): boolean =>
-    (level[i] as number) > (heights[i] as number);
+  d: Float32Array,
+): void {
+  const r = Math.floor(1 / spacing);
   for (let iz = 0; iz < n; iz++) {
     for (let ix = 0; ix < n; ix++) {
       const i = iz * n + ix;
-      if (!wet(i)) {
+      if ((level[i] as number) <= (heights[i] as number)) {
         d[i] = SHORE_CAP;
         continue;
       }
@@ -639,7 +651,6 @@ export function shoreField(
       // itself is thin. A coarser level reads only its own sample, so it never finds deeper water than the full
       // lattice does, and its shore never lies nearer the water than the lattice's.
       let deepest = 0;
-      const r = Math.floor(1 / spacing);
       for (let jz = Math.max(0, iz - r); jz <= Math.min(n - 1, iz + r); jz++) {
         for (
           let jx = Math.max(0, ix - r);
@@ -655,70 +666,133 @@ export function shoreField(
       d[i] = SHALLOW_BANK * Math.max(0, 1 - deepest / BANKED);
     }
   }
-  const diag = Math.SQRT2 * spacing;
-  // A dry sample beside water starts at its distance to where the neighbor's water level meets the ground between
-  // them, not a whole step. The edge then follows the water instead of the lattice's staircase.
-  for (let iz = 0; spacing <= EDGE_BETWEEN_AT_MOST && iz < n; iz++) {
-    for (let ix = 0; ix < n; ix++) {
-      const i = iz * n + ix;
-      if (wet(i)) continue;
-      for (let dz = -1; dz <= 1; dz++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const jx = ix + dx;
-          const jz = iz + dz;
-          if (
-            (dx === 0 && dz === 0) ||
-            jx < 0 ||
-            jz < 0 ||
-            jx >= n ||
-            jz >= n
-          ) {
-            continue;
-          }
-          const j = jz * n + jx;
-          if (!wet(j)) continue;
-          const under = (level[j] as number) - (heights[j] as number);
-          const above = (heights[i] as number) - (level[j] as number);
-          const step = dx !== 0 && dz !== 0 ? diag : spacing;
-          // At least 0.01, so only wet samples are 0.
-          d[i] = Math.min(
-            d[i] as number,
-            (d[j] as number) +
-              Math.max(
-                0.01,
-                (step * Math.max(0, above)) / (under + Math.max(0, above)),
-              ),
-          );
-        }
-      }
+}
+
+function seedDryBorderSample(
+  n: number,
+  spacing: number,
+  diag: number,
+  heights: Float32Array,
+  level: Float32Array,
+  d: Float32Array,
+  ix: number,
+  iz: number,
+): void {
+  const i = iz * n + ix;
+  const jz0 = Math.max(0, iz - 1);
+  const jz1 = Math.min(n - 1, iz + 1);
+  const jx0 = Math.max(0, ix - 1);
+  const jx1 = Math.min(n - 1, ix + 1);
+  for (let jz = jz0; jz <= jz1; jz++) {
+    for (let jx = jx0; jx <= jx1; jx++) {
+      if (jx === ix && jz === iz) continue;
+      const j = jz * n + jx;
+      const under = (level[j] as number) - (heights[j] as number);
+      if (under <= 0) continue;
+      const above = Math.max(0, (heights[i] as number) - (level[j] as number));
+      const step = jx !== ix && jz !== iz ? diag : spacing;
+      // At least 0.01, so only wet samples are 0.
+      d[i] = Math.min(
+        d[i] as number,
+        (d[j] as number) + Math.max(0.01, (step * above) / (under + above)),
+      );
     }
   }
-  // Two chamfer passes. A straight step costs one spacing and a diagonal step √2 spacings.
-  const relax = (i: number, j: number, cost: number): void => {
-    const v = (d[j] as number) + cost;
-    if (v < (d[i] as number)) d[i] = v;
-  };
+}
+
+function seedSubSampleShore(
+  n: number,
+  spacing: number,
+  diag: number,
+  heights: Float32Array,
+  level: Float32Array,
+  d: Float32Array,
+): void {
+  if (spacing > EDGE_BETWEEN_AT_MOST) return;
+  // A dry sample beside water starts at its distance to where the neighbor's water level meets the ground between
+  // them, not a whole step. The edge then follows the water instead of the lattice's staircase.
   for (let iz = 0; iz < n; iz++) {
     for (let ix = 0; ix < n; ix++) {
       const i = iz * n + ix;
-      if (ix > 0) relax(i, i - 1, spacing);
-      if (iz > 0) {
-        relax(i, i - n, spacing);
-        if (ix > 0) relax(i, i - n - 1, diag);
-        if (ix < n - 1) relax(i, i - n + 1, diag);
+      if ((level[i] as number) <= (heights[i] as number)) {
+        seedDryBorderSample(n, spacing, diag, heights, level, d, ix, iz);
       }
     }
   }
+}
+
+function relaxShore(d: Float32Array, i: number, j: number, cost: number): void {
+  const v = (d[j] as number) + cost;
+  if (v < (d[i] as number)) d[i] = v;
+}
+
+function chamferForward(
+  d: Float32Array,
+  n: number,
+  spacing: number,
+  diag: number,
+): void {
+  for (let iz = 0; iz < n; iz++) {
+    for (let ix = 0; ix < n; ix++) {
+      const i = iz * n + ix;
+      if (ix > 0) relaxShore(d, i, i - 1, spacing);
+      if (iz > 0) {
+        relaxShore(d, i, i - n, spacing);
+        if (ix > 0) relaxShore(d, i, i - n - 1, diag);
+        if (ix < n - 1) relaxShore(d, i, i - n + 1, diag);
+      }
+    }
+  }
+}
+
+function chamferBackward(
+  d: Float32Array,
+  n: number,
+  spacing: number,
+  diag: number,
+): void {
   for (let iz = n - 1; iz >= 0; iz--) {
     for (let ix = n - 1; ix >= 0; ix--) {
       const i = iz * n + ix;
-      if (ix < n - 1) relax(i, i + 1, spacing);
+      if (ix < n - 1) relaxShore(d, i, i + 1, spacing);
       if (iz < n - 1) {
-        relax(i, i + n, spacing);
-        if (ix < n - 1) relax(i, i + n + 1, diag);
-        if (ix > 0) relax(i, i + n - 1, diag);
+        relaxShore(d, i, i + n, spacing);
+        if (ix < n - 1) relaxShore(d, i, i + n + 1, diag);
+        if (ix > 0) relaxShore(d, i, i + n - 1, diag);
       }
     }
   }
+}
+
+function chamferShore(
+  d: Float32Array,
+  n: number,
+  spacing: number,
+  diag: number,
+): void {
+  chamferForward(d, n, spacing, diag);
+  chamferBackward(d, n, spacing, diag);
+}
+
+/**
+ * Distance in meters from each lattice sample to the water's edge, capped at
+ * `SHORE_CAP`. It is 0 in water deep enough for full banks (`BANKED`) and
+ * grows about a meter per meter away. Shallow water, such as a stream
+ * narrowing at its spring or seep, starts up to `SHALLOW_BANK` meters out, so
+ * the banks narrow with it instead of ringing it with sand. Sand banks and the
+ * grass edge both read this field, so they agree.
+ */
+export function shoreField(
+  l: Lattice,
+  heights: Float32Array,
+  level: Float32Array,
+): Float32Array {
+  const { n, spacing } = l;
+  const d = new Float32Array(n * n);
+  const diag = Math.SQRT2 * spacing;
+  initShoreSeeds(n, spacing, heights, level, d);
+  seedSubSampleShore(n, spacing, diag, heights, level, d);
+  // Two chamfer passes. A straight step costs one spacing and a diagonal step √2 spacings.
+  chamferShore(d, n, spacing, diag);
   return d;
 }

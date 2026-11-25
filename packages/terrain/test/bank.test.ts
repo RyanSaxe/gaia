@@ -79,14 +79,14 @@ const built = realize(
   { seed: 7, facts: { size: 0.7, floors: 1 } },
 );
 const plan = built.slots.get("footprint")?.output as BuildingPlan;
-const beside = extentOf(
-  built.slots.get("feature")?.output as Built | undefined,
-)!;
-const turning = turningExtent(
-  built.slots.get("feature")?.output as Built | undefined,
-)!;
+const feature = built.slots.get("feature")?.output as Built | undefined;
+const beside = extentOf(feature);
+const turning = turningExtent(feature);
+if (beside === null || turning === null) {
+  throw new Error("mill feature has no wheel extent");
+}
 /** The wheel: its center in the house's frame, and the lowest its paddles reach below the floor. */
-const wheel = (() => {
+const wheel = ((): { x: number; z: number; lowest: number } => {
   let x = 0;
   let z = 0;
   let n = 0;
@@ -105,15 +105,16 @@ const wheel = (() => {
   return { x: x / n, z: z / n, lowest };
 })();
 
+/** Whether a region's land runs water: a valley with a stream that is not a dry bed. */
+const running = (r: WorldSpec["regions"][number]): boolean => {
+  const relief = r.biome.slots.relief;
+  const stream = (relief?.params as { stream?: string } | undefined)?.stream;
+  return (
+    relief?.use === "valley@1" && stream !== undefined && stream !== "dry bed"
+  );
+};
+
 describe("a building whose wheel needs running water", () => {
-  /** Whether a region's land runs water: a valley with a stream that is not a dry bed. */
-  const running = (r: WorldSpec["regions"][number]): boolean => {
-    const relief = r.biome.slots.relief;
-    const stream = (relief?.params as { stream?: string } | undefined)?.stream;
-    return (
-      relief?.use === "valley@1" && stream !== undefined && stream !== "dry bed"
-    );
-  };
   // Of fifty random worlds, bakes only the score or so with running water and searches their banks. It takes well under
   // a minute alone, more when other work shares the machine.
   it("finds a bank in every region given running water, in fifty random worlds, its house dry and its wheel in the stream", () => {

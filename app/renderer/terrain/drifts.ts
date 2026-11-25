@@ -339,8 +339,31 @@ export interface Drifts {
   >;
 }
 
+interface FormUniforms {
+  readonly uCarried: { value: THREE.Vector2 };
+  readonly uPixels: { value: number };
+  readonly uSize: { value: number };
+  readonly uFall: { value: number };
+  readonly uLow: { value: number };
+  readonly uHigh: { value: number };
+  readonly uWander: { value: number };
+  readonly uDusk: { value: number };
+  readonly uFromTrees: { value: number };
+  readonly uFill: { value: THREE.DataTexture };
+  readonly uFillMap: { value: THREE.Vector4 };
+  readonly uFull: { value: number };
+  readonly uCrownAt: { value: THREE.Vector4[] };
+  readonly uCrownOf: { value: THREE.Vector4[] };
+  readonly uColor: { value: THREE.Vector3 };
+  readonly uGlow: { value: number };
+  readonly uShape: { value: number };
+  readonly uBlink: { value: number };
+  readonly uOpacity: { value: number };
+  readonly uHalo: { value: number };
+}
+
 /** The uniforms that set how one form's drifts move and draw. */
-function formUniforms(form: AccentForm, carried: THREE.Vector2) {
+function formUniforms(form: AccentForm, carried: THREE.Vector2): FormUniforms {
   const b = DRIFT_FORMS[form];
   return {
     uCarried: { value: carried },
@@ -552,7 +575,7 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     const held = new Set(f.slots);
     const waiting = mine
       .filter((c) => !held.has(c.id))
-      .sort(
+      .toSorted(
         (a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z),
       );
     for (const c of waiting) {
@@ -571,7 +594,7 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
 
   return {
     object,
-    regions(land, drifts) {
+    regions(land, drifts): void {
       world = land;
       weights = new Float64Array(land.regions.length);
       FORMS.forEach((form, k) => {
@@ -622,7 +645,7 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
             },
           ]),
       ),
-    follow(crowns, focal) {
+    follow(crowns, focal): void {
       // The wind moves the air as the world's clock runs, and not while the clock is frozen.
       const t = light.uTime.value;
       const dt = Math.max(0, t - lastTime);

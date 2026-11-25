@@ -90,7 +90,7 @@ export const t = {
     requireAsk(ask);
     const sorted = (Object.entries(levels) as [W, number][])
       .map(([words, value]) => ({ words, value }))
-      .sort((a, b) => a.value - b.value);
+      .toSorted((a, b) => a.value - b.value);
     if (sorted.length < MIN_LEVELS || sorted.length > MAX_LEVELS) {
       throw new Error(
         `A scale needs ${MIN_LEVELS} to ${MAX_LEVELS} levels; "${ask}" has ${sorted.length}.`,
@@ -157,5 +157,7 @@ export function isStoredValue(field: Field, value: unknown): boolean {
         Array.isArray(value) &&
         value.every((m) => typeof m === "string" && m in field.members)
       );
+    default:
+      return false;
   }
 }

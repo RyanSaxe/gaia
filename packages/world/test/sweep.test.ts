@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type AnyKind, type Blueprint, Library } from "@gaia/schema";
+import {
+  type AnyKind,
+  type AnyPrimitive,
+  type Blueprint,
+  type Field,
+  Library,
+} from "@gaia/schema";
 import { BUSH_PRIMITIVES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
 import {
   biome,
@@ -49,25 +55,28 @@ function covered(
   return [...out];
 }
 
+function fieldKeys(f: Field): string[] {
+  if (f.type === "choice") return Object.keys(f.options);
+  if (f.type === "scale") return f.levels.map((l) => l.words);
+  if (f.type === "flag") return ["false", "true"];
+  return Object.keys(f.members);
+}
+
+function primitiveKeys(name: string, p: AnyPrimitive): string[] {
+  const out = [`${name}: ${p.id}`];
+  for (const [param, f] of Object.entries(p.params)) {
+    for (const v of fieldKeys(f)) {
+      out.push(`${name}: ${p.id} ${param} "${v}"`);
+    }
+  }
+  return out;
+}
+
 /** Every part, option and absence a kind's blueprints could contain, read from the kind and the library. */
 function possible(k: AnyKind, lib: Library): string[] {
   return Object.entries(k.slots).flatMap(([name, s]) => [
     ...(s.optional ? [`${name} left out`] : []),
-    ...lib
-      .forRole(s.role)
-      .flatMap((p) => [
-        `${name}: ${p.id}`,
-        ...Object.entries(p.params).flatMap(([param, f]) =>
-          (f.type === "choice"
-            ? Object.keys(f.options)
-            : f.type === "scale"
-              ? f.levels.map((l) => l.words)
-              : f.type === "flag"
-                ? ["false", "true"]
-                : Object.keys(f.members)
-          ).map((v) => `${name}: ${p.id} ${param} "${v}"`),
-        ),
-      ]),
+    ...lib.forRole(s.role).flatMap((p) => primitiveKeys(name, p)),
   ]);
 }
 

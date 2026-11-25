@@ -5,6 +5,7 @@ import type {
   JevAnswer,
   JevClient,
   JevRequest,
+  JevResponse,
   Library,
 } from "@gaia/schema";
 
@@ -29,26 +30,26 @@ export const SCANNER: FileFacts = {
 export function fakeJev(
   request: JevRequest,
   prefer: Readonly<Record<string, string | number | boolean>> = {},
-) {
+): Record<string, JevAnswer> {
   const answers: Record<string, JevAnswer> = {};
   for (const [id, q] of Object.entries(request.questions)) {
+    const preferred = prefer[id];
     if (q.type === "noul") {
-      const want = prefer[id];
-      answers[id] = { type: "noul", noul: want === false ? 0.2 : 0.8 };
+      answers[id] = { type: "noul", noul: preferred === false ? 0.2 : 0.8 };
     } else if (q.type === "choice") {
       const keys = Object.keys(q.criteria);
       const choice =
-        typeof prefer[id] === "string" && keys.includes(prefer[id] as string)
-          ? (prefer[id] as string)
-          : keys.sort()[0]!;
+        typeof preferred === "string" && keys.includes(preferred)
+          ? preferred
+          : (keys.toSorted()[0] ?? "");
       const probabilities = Object.fromEntries(
         keys.map((k) => [k, k === choice ? 0.7 : 0.3 / (keys.length - 1)]),
       );
       answers[id] = { type: "choice", choice, probabilities, confidence: 0.6 };
     } else {
       const level =
-        typeof prefer[id] === "number"
-          ? (prefer[id] as number)
+        typeof preferred === "number"
+          ? preferred
           : Math.floor((q.criteria.length - 1) / 2);
       const probabilities = Object.fromEntries(
         q.criteria.map((_, i) => [
@@ -99,7 +100,7 @@ export function fakeJevClient(
   prefer: Readonly<Record<string, string | number | boolean>> = {},
 ): JevClient {
   return {
-    async ask(request) {
+    async ask(request): Promise<JevResponse> {
       return {
         answers: fakeJev(request, prefer),
         model: "fake",

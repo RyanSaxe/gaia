@@ -70,7 +70,9 @@ describe("what is placed on the land, tile by tile", () => {
     tiles.open(spec);
     const warn = console.warn;
     const warned: unknown[] = [];
-    console.warn = (...args: unknown[]) => void warned.push(args);
+    console.warn = (...args: unknown[]): void => {
+      warned.push(args);
+    };
     try {
       // The fetch resolves even though a tile failed, and the failure is logged.
       await tiles.fetch(0, 0);

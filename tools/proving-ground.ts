@@ -37,6 +37,8 @@ const FILES = {
   key: "proving.key",
 } as const;
 
+const at = (file: string): string => join(fixtures, file);
+
 /** Writes `text` to `file` whole or not at all, so a build reading it meanwhile never reads half of it. */
 function writeWhole(file: string, text: string): void {
   writeFileSync(`${file}.part`, text);
@@ -61,7 +63,6 @@ export async function provingGround(): Promise<{
   });
   const plan = bundled.outputFiles[0]?.text ?? "";
   const key = createHash("sha256").update(plan).digest("hex");
-  const at = (file: string): string => join(fixtures, file);
   const made =
     existsSync(at(FILES.key)) &&
     readFileSync(at(FILES.key), "utf8") === key &&
@@ -127,7 +128,7 @@ export function provingGroundVite(): {
   return {
     name: "proving-ground",
     resolveId: (source) => (source === MODULE ? resolved : null),
-    async load(id) {
+    async load(id): Promise<string | null> {
       if (id !== resolved) return null;
       const { code, inputs } = await provingGround();
       for (const file of inputs) this.addWatchFile(file);

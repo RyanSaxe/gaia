@@ -25,21 +25,25 @@ const isPainting = (painting: unknown): painting is string =>
 
 const finite = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v);
+const isSpotAnchor = (by: unknown): boolean => {
+  if (by === null) return true;
+  if (typeof by !== "object") return false;
+  const { path, x, z } = by as { path?: unknown; x?: unknown; z?: unknown };
+  return typeof path === "string" && finite(x) && finite(z);
+};
+
 /** Whether a value is a valid `LastSpot`. */
 const isLastSpot = (s: unknown): s is LastSpot => {
   if (typeof s !== "object" || s === null) return false;
   const { x, z, yaw, layout, by } = s as Partial<
     Record<keyof LastSpot, unknown>
   >;
-  const byOk =
-    by === null ||
-    (typeof by === "object" &&
-      by !== null &&
-      typeof (by as { path?: unknown }).path === "string" &&
-      finite((by as { x?: unknown }).x) &&
-      finite((by as { z?: unknown }).z));
   return (
-    finite(x) && finite(z) && finite(yaw) && typeof layout === "string" && byOk
+    finite(x) &&
+    finite(z) &&
+    finite(yaw) &&
+    typeof layout === "string" &&
+    isSpotAnchor(by)
   );
 };
 

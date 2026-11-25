@@ -67,6 +67,17 @@ const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
  */
 const MARK = { keep: EDGE.bare + EDGE.fade, gap: 3, under: 30 } as const;
 
+const within = (v: number, least: number, most: number): number =>
+  Math.max(least, Math.min(most, v));
+
+const smooth = (a: number, b: number, v: number): number => {
+  const u = Math.max(0, Math.min(1, (v - a) / (b - a)));
+  return u * u * (3 - 2 * u);
+};
+
+// Rounds to a quarter pixel, which is too small to see. Most frames of a straight walk then write no style.
+const quarterPx = (v: number): string => (Math.round(v * 4) / 4).toFixed(2);
+
 /**
  * Chooses which area the minimap letters as the person walks. It letters the
  * first place at once. After that it letters a new area only once the person
@@ -83,7 +94,7 @@ export function createNamer(settle = SETTLE): {
   let candidate: string | null = null;
   let held = 0;
   return {
-    next(area, dt) {
+    next(area, dt): PlaceArea | null | undefined {
       const key = `${area.depth}:${area.path}`;
       if (key === announced) {
         candidate = null;
@@ -102,7 +113,7 @@ export function createNamer(settle = SETTLE): {
       candidate = null;
       return area.depth < 0 ? null : area;
     },
-    reset() {
+    reset(): void {
       announced = null;
       candidate = null;
     },
@@ -138,8 +149,6 @@ export function markAt(
   h: number,
   side = SIDE,
 ): { ring: [number, number]; name: [number, number] } {
-  const within = (v: number, least: number, most: number): number =>
-    Math.max(least, Math.min(most, v));
   const rx = within(x, MARK.keep + r, side - MARK.keep - r);
   const ry = within(y, MARK.keep + r, side - MARK.keep - r);
   const above = ry - r - MARK.gap - h;
@@ -183,10 +192,6 @@ function paintMask(dpr: number): string {
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
   const image = ctx.createImageData(n, n);
   const round = EDGE.bare + EDGE.fade + 4;
-  const smooth = (a: number, b: number, v: number): number => {
-    const u = Math.max(0, Math.min(1, (v - a) / (b - a)));
-    return u * u * (3 - 2 * u);
-  };
   for (let py = 0; py < n; py++) {
     for (let px = 0; px < n; px++) {
       const x = (px + 0.5) / dpr;
@@ -312,11 +317,10 @@ export function createMinimap(
   function place(): void {
     // Rounds to a quarter pixel and a twentieth of a degree, which are too small to see. Most frames of a straight
     // walk then write no style.
-    const q = (v: number): string => (Math.round(v * 4) / 4).toFixed(2);
     const degrees = ((((person.yaw * 180) / Math.PI) % 360) + 360) % 360;
     const ox = span / 2 + (person.x - anchor.x) * SCALE;
     const oz = span / 2 + (person.z - anchor.z) * SCALE;
-    const land = `translate(${HERE.x * SIDE}px, ${HERE.y * SIDE}px) rotate(${(Math.round(degrees * 20) / 20).toFixed(2)}deg) translate(${q(-ox)}px, ${q(-oz)}px)`;
+    const land = `translate(${HERE.x * SIDE}px, ${HERE.y * SIDE}px) rotate(${(Math.round(degrees * 20) / 20).toFixed(2)}deg) translate(${quarterPx(-ox)}px, ${quarterPx(-oz)}px)`;
     if (land !== last.land) canvas.style.transform = last.land = land;
     if (marked !== null) {
       // The thing rotates with the land. When it is off the scrap, `markAt` keeps the ring and name at the edge toward it.
@@ -331,9 +335,9 @@ export function createMinimap(
         markSize.w,
         markSize.h,
       );
-      const at = `translate(${q(ring[0])}px, ${q(ring[1])}px)`;
+      const at = `translate(${quarterPx(ring[0])}px, ${quarterPx(ring[1])}px)`;
       if (at !== last.mark) mark.style.transform = last.mark = at;
-      const by = `translate(${q(name[0] - ring[0])}px, ${q(name[1] - ring[1])}px)`;
+      const by = `translate(${quarterPx(name[0] - ring[0])}px, ${quarterPx(name[1] - ring[1])}px)`;
       if (by !== last.name) markName.style.transform = last.name = by;
     }
   }
@@ -427,7 +431,7 @@ export function createMinimap(
   }
 
   return {
-    frame(x, z, yaw, at, dt) {
+    frame(x, z, yaw, at, dt): void {
       person.x = x;
       person.z = z;
       person.yaw = yaw;
@@ -436,26 +440,27 @@ export function createMinimap(
       // 85% it redraws at once.
       const off =
         Math.max(Math.abs(x - anchor.x), Math.abs(z - anchor.z)) * SCALE;
-      if (!(off < SLACK * 0.85)) redraw();
-      else {
+      if (off < SLACK * 0.85) {
         if (off > SLACK * 0.45 && idle === 0) {
           idle = window.requestIdleCallback(() => ((idle = 0), redraw()), {
             timeout: 2000,
           });
         }
         place();
+      } else {
+        redraw();
       }
       const lettered = namer.next(at.area, dt);
       if (lettered !== undefined) write(lettered);
     },
-    show(on) {
+    show(on): void {
       shown = on;
       scrap.classList.toggle("on", on);
       namer.reset();
       if (on) redraw();
     },
     tuck,
-    heading(thing) {
+    heading(thing): void {
       marked = thing;
       mark.classList.remove("on");
       if (thing === null) return;
@@ -477,7 +482,7 @@ export function createMinimap(
         ),
       );
     },
-    state: () => {
+    state: (): ReturnType<Minimap["state"]> => {
       const lettered = names.find((n) => n.classList.contains("on"));
       return {
         area: lettered?.querySelector(".minimap-area")?.textContent ?? null,

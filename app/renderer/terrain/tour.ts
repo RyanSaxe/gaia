@@ -76,16 +76,13 @@ export interface TourStop {
 }
 
 /** A word for a vitality band, for stop names. */
-export const healthOf = (v: number): string =>
-  v >= 0.85
-    ? "thriving"
-    : v >= 0.6
-      ? "well"
-      : v >= 0.35
-        ? "tired"
-        : v >= 0.12
-          ? "failing"
-          : "ruin";
+export const healthOf = (v: number): string => {
+  if (v >= 0.85) return "thriving";
+  if (v >= 0.6) return "well";
+  if (v >= 0.35) return "tired";
+  if (v >= 0.12) return "failing";
+  return "ruin";
+};
 
 const DEG = Math.PI / 180;
 const yawToward = (x: number, z: number, tx: number, tz: number): number =>
@@ -135,16 +132,18 @@ function stop(
   };
 }
 
-/** Every stop in a world: the things by kind and vitality, then crossings, cairns, ponds, groves and areas. */
-export function tourStops(w: TourWorld): TourStop[] {
-  const stops: TourStop[] = [];
-  const named = new Map<string, number>();
-  const add = (s: TourStop): void => {
-    const n = (named.get(s.name) ?? 0) + 1;
-    named.set(s.name, n);
-    stops.push(n === 1 ? s : { ...s, name: `${s.name} ${n}` });
-  };
+function compareThings(a: TourThing, b: TourThing): number {
+  if (a.kind !== b.kind) return a.kind < b.kind ? -1 : 1;
+  return b.vitality - a.vitality;
+}
 
+function largestGrove(groves: readonly TourGrove[]): TourGrove | undefined {
+  return groves.toSorted(
+    (a, b) => b.trees - a.trees || (a.path < b.path ? -1 : 1),
+  )[0];
+}
+
+function addThingStops(w: TourWorld, add: (s: TourStop) => void): void {
   // Each building from in front of it, each landmark from a little farther, looking up at it.
   const seeThing = (t: TourThing): TourStop => {
     const prefer =
@@ -166,14 +165,11 @@ export function tourStops(w: TourWorld): TourStop[] {
       t.as === "building" ? 4 : 9,
     );
   };
-  const things = [...w.things].sort((a, b) =>
-    a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : b.vitality - a.vitality,
-  );
-  for (const t of things) add(seeThing(t));
+  for (const t of w.things.toSorted(compareThings)) add(seeThing(t));
   for (const as of ["building", "landmark"] as const) {
     const all = w.things
       .filter((t) => t.as === as)
-      .sort((a, b) => a.vitality - b.vitality);
+      .toSorted((a, b) => a.vitality - b.vitality);
     const worst = all[0];
     const best = all[all.length - 1];
     if (worst !== undefined && worst.vitality < 0.35) {
@@ -183,7 +179,9 @@ export function tourStops(w: TourWorld): TourStop[] {
       add({ ...seeThing(best), name: `thriving ${as}` });
     }
   }
+}
 
+function addCrossingStops(w: TourWorld, add: (s: TourStop) => void): void {
   // Each crossing from its way, a few meters back along the trail, looking across.
   const crossings = w.network.ways.flatMap((way, i) =>
     way.crossings.map((c) => {
@@ -225,7 +223,7 @@ export function tourStops(w: TourWorld): TourStop[] {
   for (const kind of ["footbridge", "stepping-stones"] as const) {
     const all = crossings
       .filter((c) => c.kind === kind)
-      .sort((a, b) => b.vitality - a.vitality);
+      .toSorted((a, b) => b.vitality - a.vitality);
     const label = kind === "footbridge" ? "bridge" : "stepping stones";
     const what = (c: (typeof all)[number]): string =>
       `${kind === "footbridge" ? "A footbridge" : "Stepping stones"} across ${c.span.toFixed(0)} m of water, vitality ${c.vitality.toFixed(2)}`;
@@ -238,7 +236,9 @@ export function tourStops(w: TourWorld): TourStop[] {
       add(stop(`ruined ${label}`, what(worst), worst.from, worst.at, -6));
     }
   }
+}
 
+function addCairnStops(w: TourWorld, add: (s: TourStop) => void): void {
   // A junction's cairn, close enough to see its stones.
   const cairns = w.network.junctions
     .flatMap((j) =>
@@ -252,7 +252,7 @@ export function tourStops(w: TourWorld): TourStop[] {
             },
           ],
     )
-    .sort((a, b) => b.vitality - a.vitality);
+    .toSorted((a, b) => b.vitality - a.vitality);
   const cairnStop = (c: (typeof cairns)[number], name: string): TourStop =>
     stop(
       name,
@@ -271,19 +271,9 @@ export function tourStops(w: TourWorld): TourStop[] {
   ) {
     add(cairnStop(worstCairn, "ruined cairn"));
   }
+}
 
-  for (const p of w.ponds) {
-    add(
-      stop(
-        "pond",
-        `A pond ${(p.reach * 2).toFixed(0)} m across`,
-        viewpoint(w, p.x, p.z, p.reach + 5, outward(p.x, p.z)),
-        p,
-        -4,
-      ),
-    );
-  }
-
+function addGroveStops(w: TourWorld, add: (s: TourStop) => void): void {
   // The largest grove with vitality of at least 0.85, and the largest below 0.35.
   const groveStop = (g: TourGrove, name: string): TourStop =>
     stop(
@@ -293,17 +283,17 @@ export function tourStops(w: TourWorld): TourStop[] {
       g,
       6,
     );
-  const largest = (groves: readonly TourGrove[]): TourGrove | undefined =>
-    [...groves].sort(
-      (a, b) => b.trees - a.trees || (a.path < b.path ? -1 : 1),
-    )[0];
-  const thrivingGrove = largest(w.groves.filter((g) => g.vitality >= 0.85));
-  const failingGrove = largest(w.groves.filter((g) => g.vitality < 0.35));
+  const thrivingGrove = largestGrove(
+    w.groves.filter((g) => g.vitality >= 0.85),
+  );
+  const failingGrove = largestGrove(w.groves.filter((g) => g.vitality < 0.35));
   if (thrivingGrove !== undefined) {
     add(groveStop(thrivingGrove, "thriving grove"));
   }
   if (failingGrove !== undefined) add(groveStop(failingGrove, "failing grove"));
+}
 
+function addAreaStops(w: TourWorld, add: (s: TourStop) => void): void {
   // Areas: the most and least vital of any size, the largest, the smallest and the most deeply nested.
   const areaStop = (a: TourArea, name: string): TourStop =>
     stop(
@@ -315,33 +305,61 @@ export function tourStops(w: TourWorld): TourStop[] {
     );
   const sizable = w.areas
     .filter((a) => a.depth === 1)
-    .sort((a, b) => b.vitality - a.vitality || b.ground - a.ground);
+    .toSorted((a, b) => b.vitality - a.vitality || b.ground - a.ground);
+  const lastSizable = sizable[sizable.length - 1];
   const pick: [string, TourArea | undefined][] = [
     ["thriving area", sizable[0]],
     [
       "failing area",
-      sizable[sizable.length - 1]?.vitality !== undefined &&
-      (sizable[sizable.length - 1]?.vitality ?? 1) < 0.35
-        ? sizable[sizable.length - 1]
+      lastSizable !== undefined && lastSizable.vitality < 0.35
+        ? lastSizable
         : undefined,
     ],
     [
       "large area",
-      [...w.areas]
+      w.areas
         .filter((a) => a.depth === 1)
-        .sort((a, b) => b.ground - a.ground)[0],
+        .toSorted((a, b) => b.ground - a.ground)[0],
     ],
     [
       "tiny area",
-      [...w.areas]
+      w.areas
         .filter((a) => a.depth >= 1)
-        .sort((a, b) => a.ground - b.ground)[0],
+        .toSorted((a, b) => a.ground - b.ground)[0],
     ],
     [
       "deep nesting",
-      [...w.areas].sort((a, b) => b.depth - a.depth || a.ground - b.ground)[0],
+      w.areas.toSorted((a, b) => b.depth - a.depth || a.ground - b.ground)[0],
     ],
   ];
   for (const [name, a] of pick) if (a !== undefined) add(areaStop(a, name));
+}
+
+/** Every stop in a world: the things by kind and vitality, then crossings, cairns, ponds, groves and areas. */
+export function tourStops(w: TourWorld): TourStop[] {
+  const stops: TourStop[] = [];
+  const named = new Map<string, number>();
+  const add = (s: TourStop): void => {
+    const n = (named.get(s.name) ?? 0) + 1;
+    named.set(s.name, n);
+    stops.push(n === 1 ? s : { ...s, name: `${s.name} ${n}` });
+  };
+
+  addThingStops(w, add);
+  addCrossingStops(w, add);
+  addCairnStops(w, add);
+  for (const p of w.ponds) {
+    add(
+      stop(
+        "pond",
+        `A pond ${(p.reach * 2).toFixed(0)} m across`,
+        viewpoint(w, p.x, p.z, p.reach + 5, outward(p.x, p.z)),
+        p,
+        -4,
+      ),
+    );
+  }
+  addGroveStops(w, add);
+  addAreaStops(w, add);
   return stops;
 }

@@ -373,12 +373,10 @@ export interface Ruin {
 
 export function ruinOf(plan: BuildingPlan): Ruin {
   const door = plan.openings.find((o) => o.kind === "door");
-  const side =
-    door !== undefined && Math.abs(door.position[0]) > 0.05
-      ? -Math.sign(door.position[0])
-      : plan.width > plan.depth
-        ? 1
-        : -1;
+  let side = plan.width > plan.depth ? 1 : -1;
+  if (door !== undefined && Math.abs(door.position[0]) > 0.05) {
+    side = -Math.sign(door.position[0]);
+  }
   // The corner of whichever mass reaches farthest toward that front corner.
   let best = { x: (side * plan.width) / 2, z: plan.depth / 2, d: Infinity };
   for (const m of plan.masses) {

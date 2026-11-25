@@ -17,7 +17,37 @@ const vectors = <T>(make: () => T): { value: T[] } => ({
   value: Array.from({ length: MAX_REGIONS }, make),
 });
 
-export function createRegionCovers() {
+function setRgb(
+  slot: THREE.Vector3 | undefined,
+  color: readonly [number, number, number],
+): void {
+  slot?.set(...color);
+}
+
+export interface RegionCovers {
+  readonly uniforms: {
+    readonly uRegionCount: { value: number };
+    readonly uCoverReach: { value: number };
+    readonly uCoverForm: { value: THREE.Vector3[] };
+    readonly uCoverLow: { value: THREE.Vector3[] };
+    readonly uCoverHigh: { value: THREE.Vector3[] };
+    readonly uCoverTip: { value: THREE.Vector3[] };
+    readonly uCoverSoil: { value: THREE.Vector3[] };
+    readonly uCoverShape: { value: THREE.Vector4[] };
+    readonly uCoverFlowers: { value: number[] };
+    readonly uFlowerA: { value: THREE.Vector3[] };
+    readonly uFlowerB: { value: THREE.Vector3[] };
+    readonly uFlowerC: { value: THREE.Vector3[] };
+  };
+  update(
+    spec: WorldSpec,
+    covers: readonly GroundSpec[],
+    terrain: Terrain,
+  ): void;
+  wild(covers: readonly [GroundSpec, GroundSpec]): void;
+}
+
+export function createRegionCovers(): RegionCovers {
   const uniforms = {
     uRegionCount: { value: 0 },
     /** Past this radius, in the wild land, covers continue outward from the land's edge. */
@@ -37,15 +67,15 @@ export function createRegionCovers() {
   };
   const setSlot = (i: number, c: GroundSpec): void => {
     uniforms.uCoverForm.value[i]?.set(c.lean, c.round, c.bend);
-    uniforms.uCoverLow.value[i]?.set(...c.low);
-    uniforms.uCoverHigh.value[i]?.set(...c.high);
-    uniforms.uCoverTip.value[i]?.set(...c.tip);
-    uniforms.uCoverSoil.value[i]?.set(...c.soil);
+    setRgb(uniforms.uCoverLow.value[i], c.low);
+    setRgb(uniforms.uCoverHigh.value[i], c.high);
+    setRgb(uniforms.uCoverTip.value[i], c.tip);
+    setRgb(uniforms.uCoverSoil.value[i], c.soil);
     uniforms.uCoverShape.value[i]?.set(c.height, c.width, c.density, c.clump);
     uniforms.uCoverFlowers.value[i] = c.flowers;
-    uniforms.uFlowerA.value[i]?.set(...(c.flowerColors[0] ?? c.tip));
-    uniforms.uFlowerB.value[i]?.set(...(c.flowerColors[1] ?? c.tip));
-    uniforms.uFlowerC.value[i]?.set(...(c.flowerColors[2] ?? c.tip));
+    setRgb(uniforms.uFlowerA.value[i], c.flowerColors[0] ?? c.tip);
+    setRgb(uniforms.uFlowerB.value[i], c.flowerColors[1] ?? c.tip);
+    setRgb(uniforms.uFlowerC.value[i], c.flowerColors[2] ?? c.tip);
   };
   return {
     uniforms,
@@ -76,8 +106,6 @@ export function createRegionCovers() {
     },
   };
 }
-
-export type RegionCovers = ReturnType<typeof createRegionCovers>;
 
 /** GLSL that reads the covers from the land's clipmap. Declare the ground texture's uniforms (`GROUND_SAMPLE_GLSL`) first. */
 export const REGIONS_GLSL = /* glsl */ `

@@ -339,6 +339,55 @@ function settles(f: RoofFrame, base: V3, rot: number): Partial<Channels> {
   return f.m.roof === "lean-to" ? {} : { loss: 0.05 + 0.3 * rot, pivot: base };
 }
 
+interface ChimneySpec {
+  readonly where: "gable" | "ridge";
+  readonly base: V3;
+  readonly foot: number;
+  readonly width: number;
+  readonly deep: number;
+  readonly topple: V3;
+}
+
+function chimneySpec(
+  plan: BuildingPlan,
+  f: RoofFrame,
+  wanted: "gable" | "ridge",
+  r: Rand,
+): ChimneySpec {
+  const end = chimneyEnd(plan);
+  if (wanted === "gable" && end !== 0) {
+    // Against the outside face of the free gable. It topples back over the roof.
+    return {
+      where: "gable",
+      base: roofPoint(f, end * (f.halfLength + 0.34), 0, 0),
+      topple: [-end * f.ax[0], 0, -end * f.ax[2]],
+      foot: -0.4,
+      width: 1.15,
+      deep: 0.68,
+    };
+  }
+  // Through the ridge, inside its hipped ends.
+  const sign = r.next() < 0.5 ? -1 : 1;
+  return {
+    where: "ridge",
+    base: roofPoint(
+      f,
+      sign *
+        Math.min(
+          f.halfLength * 0.48,
+          Math.max(0, f.halfLength - f.halfSpan) * 0.8 + 0.2,
+        ),
+      0,
+      0,
+    ),
+    // It topples along the ridge toward the middle of the roof, where the covering never sags.
+    topple: [-sign * f.ax[0], 0, -sign * f.ax[2]],
+    foot: f.top - 0.2,
+    width: 0.78,
+    deep: 0.66,
+  };
+}
+
 /** The chimney, its cap and pot, and where its smoke rises from. A gable stack needs a free gable end. Otherwise it rises through the ridge. */
 function chimney(
   stack: PartBuilder,
@@ -348,42 +397,14 @@ function chimney(
   r: Rand,
 ): V3 | null {
   if (wanted === "none") return null;
-  const end = chimneyEnd(plan);
-  const where = wanted === "gable" && end !== 0 ? "gable" : "ridge";
+  const { where, base, foot, width, deep, topple } = chimneySpec(
+    plan,
+    f,
+    wanted,
+    r,
+  );
   const top = f.top;
   const ridgeY = top + f.rise;
-  let base: V3;
-  let foot: number;
-  let width: number;
-  let deep: number;
-  let topple: V3;
-  if (where === "gable") {
-    // Against the outside face of the free gable. It topples back over the roof.
-    const sign = end;
-    base = roofPoint(f, sign * (f.halfLength + 0.34), 0, 0);
-    topple = [-sign * f.ax[0], 0, -sign * f.ax[2]];
-    foot = -0.4;
-    width = 1.15;
-    deep = 0.68;
-  } else {
-    // Through the ridge, inside its hipped ends.
-    const sign = r.next() < 0.5 ? -1 : 1;
-    base = roofPoint(
-      f,
-      sign *
-        Math.min(
-          f.halfLength * 0.48,
-          Math.max(0, f.halfLength - f.halfSpan) * 0.8 + 0.2,
-        ),
-      0,
-      0,
-    );
-    // It topples along the ridge toward the middle of the roof, where the covering never sags.
-    topple = [-sign * f.ax[0], 0, -sign * f.ax[2]];
-    foot = top - 0.2;
-    width = 0.78;
-    deep = 0.66;
-  }
   const crown = ridgeY + 0.95;
   const lean = plan.settle * 0.05 * (r.next() - 0.5);
   const courses = Math.max(3, Math.round((crown - foot) / 0.42));
@@ -415,17 +436,16 @@ function chimney(
   for (let k = 0; k < courses; k++) {
     const y0 = foot + ((crown - foot) * k) / courses;
     const y1 = foot + ((crown - foot) * (k + 1)) / courses;
-    const narrow = y0 >= shoulder ? 0.66 : 1;
+    const aboveShoulder = y0 >= shoulder;
+    const narrow = aboveShoulder ? 0.66 : 1;
     const w = width * narrow + 0.03 * (r.next() - 0.5);
-    const d =
-      (where === "gable" && y0 >= shoulder ? deep * 0.8 : deep) +
-      0.02 * r.next();
+    const gableUpper = where === "gable" && aboveShoulder;
+    const d = (gableUpper ? deep * 0.8 : deep) + 0.02 * r.next();
     const c = addScaled(
       addScaled(
         base,
         f.ax,
-        lean * (y0 - foot) +
-          (where === "gable" && y0 >= shoulder ? Math.sign(center) * 0.06 : 0),
+        lean * (y0 - foot) + (gableUpper ? Math.sign(center) * 0.06 : 0),
       ),
       UP,
       (y0 + y1) / 2,
@@ -498,6 +518,134 @@ export function smoke(b: PartBuilder, at: V3, r: Rand): void {
   }
 }
 
+function hipStartOf(f: RoofFrame): number {
+  if (f.m.roof === "hip") return Math.max(0, f.halfLength - f.halfSpan);
+  if (f.m.roof === "half-hip") {
+    return f.halfLength - (0.45 * f.rise) / hipSlope(f.m);
+  }
+  return Infinity;
+}
+
+function addHipRafters(
+  f: RoofFrame,
+  reach: number,
+  a0: number,
+  a1: number,
+  start: number,
+  hipped: (a: number) => boolean,
+  hipA: (bv: number) => number,
+  hipB: (a: number) => number,
+  at: (a: number, bv: number) => V3,
+  timber: (head: V3, foot: V3) => void,
+): void {
+  for (const s of [-1, 1]) {
+    if (!hipped(s) || !Number.isFinite(start)) continue;
+    const foot = Math.abs(s < 0 ? a0 : a1) - 0.06;
+    // Hip rafters from the ridge's end down each hip, to the eave's corner or to where a half-hip's gable takes over.
+    const most = Math.min(reach - 0.06, hipB(foot));
+    for (const side of [-1, 1]) {
+      timber(at(s * start, 0), at(s * hipA(most), side * most));
+    }
+    // Jack rafters up the end from its eave to the hips, a rafter's spacing apart.
+    const n = Math.max(1, Math.round((reach - 0.1) / 0.62));
+    for (let k = -n; k <= n; k++) {
+      const bv = ((reach - 0.1) * k) / n;
+      if (hipOf(f, s * foot, bv).drop <= 0 || foot - hipA(bv) < 0.3) continue;
+      timber(at(s * hipA(bv), bv), at(s * foot, bv));
+    }
+  }
+}
+
+function addRidgeAndPurlins(
+  frame: PartBuilder,
+  f: RoofFrame,
+  under: (b: number) => number,
+  a0: number,
+  a1: number,
+  start: number,
+  lean: boolean,
+  hipped: (a: number) => boolean,
+): void {
+  // The ridge beam and purlins run between the hipped ends.
+  const r0 = hipped(-1) ? Math.max(a0, -start) : a0;
+  const r1 = hipped(1) ? Math.min(a1, start) : a1;
+  const ridgeB = lean ? -f.m.fall * (f.halfSpan - 0.08) : 0;
+  if (r1 - r0 > 0.2) {
+    beam(
+      frame,
+      roofPoint(f, r0 + 0.05, ridgeB, under(ridgeB) - 0.1),
+      roofPoint(f, r1 - 0.05, ridgeB, under(ridgeB) - 0.1),
+      0.16,
+      0.16,
+      UP,
+      0.42,
+      still(hingeOf(f, 0), 0.55),
+    );
+  }
+  // Purlins carry the rafters across the slopes, notched a little into them.
+  const purlins = lean ? [0] : [-f.halfSpan * 0.5, f.halfSpan * 0.5];
+  if (r1 - r0 <= 0.4) return;
+  for (const bv of purlins) {
+    const y = under(bv) - 0.17;
+    beam(
+      frame,
+      roofPoint(f, r0 + 0.1, bv, y),
+      roofPoint(f, r1 - 0.1, bv, y),
+      0.12,
+      0.12,
+      UP,
+      0.4,
+      still(hingeOf(f, 0), 0.55),
+    );
+  }
+}
+
+function addRoofDebris(
+  debris: PartBuilder,
+  f: RoofFrame,
+  ruin: Ruin,
+  reach: number,
+  a0: number,
+  a1: number,
+  lean: boolean,
+  r: Rand,
+): void {
+  // Below the collapsed eaves, fallen covering lies on the ground.
+  const corner = {
+    a: (ruin.x - f.m.x) * f.ax[0] + (ruin.z - f.m.z) * f.ax[2],
+    b: (ruin.x - f.m.x) * f.bx[0] + (ruin.z - f.m.z) * f.bx[2],
+  };
+  let sign = corner.b >= 0 ? 1 : -1;
+  if (lean) sign = f.m.fall;
+  for (let i = 0; i < 6; i++) {
+    const a = corner.a + (r.next() - 0.5) * 3.2;
+    const p = roofPoint(
+      f,
+      clamp(a, a0, a1),
+      sign * (reach + 0.2 + r.next() * 1.4),
+      0,
+    );
+    const zone = ruinAt(ruin, p);
+    const size = 0.22 + 0.2 * r.next();
+    lump(
+      debris,
+      [p[0], size * 0.02, p[2]],
+      [size, size * 0.3, size * 0.7],
+      r.next() * Math.PI,
+      0.45,
+      {
+        loss: 0,
+        droop: 0,
+        wither: 0.7,
+        glow: 0,
+        pivot: [p[0], 0, p[2]],
+        grow: clamp(0.1 + 0.25 * zone * r.next(), 0.06, 0.4),
+      },
+      r,
+    );
+  }
+}
+
 /**
  * The frame under a roof's covering: rafters down each slope, hip rafters
  * along a hipped end's hips with jack rafters up it from its eave, a ridge
@@ -519,12 +667,7 @@ function rafters(
   const hipped = (a: number): boolean =>
     (f.m.roof === "hip" || f.m.roof === "half-hip") && f.m.ends[a < 0 ? 0 : 1];
   // A hipped end's plane begins `start` along the ridge from the middle, and meets a slope `b` across at its hip.
-  const start =
-    f.m.roof === "hip"
-      ? Math.max(0, f.halfLength - f.halfSpan)
-      : f.m.roof === "half-hip"
-        ? f.halfLength - (0.45 * f.rise) / hipSlope(f.m)
-        : Infinity;
+  const start = hipStartOf(f);
   const hipA = (bv: number): number =>
     start + (slopeOf(f) * Math.abs(bv)) / hipSlope(f.m);
   const hipB = (a: number): number =>
@@ -575,87 +718,9 @@ function rafters(
       if (Math.abs(b1) - Math.abs(head) > 0.3) timber(at(a, head), at(a, b1));
     }
   }
-  for (const s of [-1, 1]) {
-    if (!hipped(s) || !Number.isFinite(start)) continue;
-    const foot = Math.abs(s < 0 ? a0 : a1) - 0.06;
-    // Hip rafters from the ridge's end down each hip, to the eave's corner or to where a half-hip's gable takes over.
-    const most = Math.min(reach - 0.06, hipB(foot));
-    for (const side of [-1, 1]) {
-      timber(at(s * start, 0), at(s * hipA(most), side * most));
-    }
-    // Jack rafters up the end from its eave to the hips, a rafter's spacing apart.
-    const n = Math.max(1, Math.round((reach - 0.1) / 0.62));
-    for (let k = -n; k <= n; k++) {
-      const bv = ((reach - 0.1) * k) / n;
-      if (hipOf(f, s * foot, bv).drop <= 0 || foot - hipA(bv) < 0.3) continue;
-      timber(at(s * hipA(bv), bv), at(s * foot, bv));
-    }
-  }
-  // The ridge beam and purlins run between the hipped ends.
-  const r0 = hipped(-1) ? Math.max(a0, -start) : a0;
-  const r1 = hipped(1) ? Math.min(a1, start) : a1;
-  const ridgeB = lean ? -f.m.fall * (f.halfSpan - 0.08) : 0;
-  if (r1 - r0 > 0.2) {
-    beam(
-      frame,
-      roofPoint(f, r0 + 0.05, ridgeB, under(ridgeB) - 0.1),
-      roofPoint(f, r1 - 0.05, ridgeB, under(ridgeB) - 0.1),
-      0.16,
-      0.16,
-      UP,
-      0.42,
-      still(hingeOf(f, 0), 0.55),
-    );
-  }
-  // Purlins carry the rafters across the slopes, notched a little into them.
-  for (const bv of lean ? [0] : [-f.halfSpan * 0.5, f.halfSpan * 0.5]) {
-    const y = under(bv) - 0.17;
-    if (r1 - r0 > 0.4) {
-      beam(
-        frame,
-        roofPoint(f, r0 + 0.1, bv, y),
-        roofPoint(f, r1 - 0.1, bv, y),
-        0.12,
-        0.12,
-        UP,
-        0.4,
-        still(hingeOf(f, 0), 0.55),
-      );
-    }
-  }
-  // Below the collapsed eaves, fallen covering lies on the ground.
-  const corner = {
-    a: (ruin.x - f.m.x) * f.ax[0] + (ruin.z - f.m.z) * f.ax[2],
-    b: (ruin.x - f.m.x) * f.bx[0] + (ruin.z - f.m.z) * f.bx[2],
-  };
-  for (let i = 0; i < 6; i++) {
-    const a = corner.a + (r.next() - 0.5) * 3.2;
-    const sign = lean ? f.m.fall : corner.b >= 0 ? 1 : -1;
-    const p = roofPoint(
-      f,
-      clamp(a, a0, a1),
-      sign * (reach + 0.2 + r.next() * 1.4),
-      0,
-    );
-    const zone = ruinAt(ruin, p);
-    const size = 0.22 + 0.2 * r.next();
-    lump(
-      debris,
-      [p[0], size * 0.02, p[2]],
-      [size, size * 0.3, size * 0.7],
-      r.next() * Math.PI,
-      0.45,
-      {
-        loss: 0,
-        droop: 0,
-        wither: 0.7,
-        glow: 0,
-        pivot: [p[0], 0, p[2]],
-        grow: clamp(0.1 + 0.25 * zone * r.next(), 0.06, 0.4),
-      },
-      r,
-    );
-  }
+  addHipRafters(f, reach, a0, a1, start, hipped, hipA, hipB, at, timber);
+  addRidgeAndPurlins(frame, f, under, a0, a1, start, lean, hipped);
+  addRoofDebris(debris, f, ruin, reach, a0, a1, lean, r);
 }
 
 /**
@@ -793,6 +858,35 @@ class Following extends PartBuilder {
 /** A thatch bundle's width along the ridge, in meters. The straw rots a bundle at a time. */
 const BUNDLE = 0.22;
 /** A tile's width round a cone, in meters. A cone rots a tile at a time. */
+function toDoorCoords(d: Opening, p: V3): { out: number; along: number } {
+  const dx = p[0] - d.position[0];
+  const dz = p[2] - d.position[2];
+  return {
+    out: dx * d.normal[0] + dz * d.normal[2],
+    along: Math.abs(dx * d.normal[2] - dz * d.normal[0]),
+  };
+}
+
+function openingTop(d: Opening): number {
+  return d.position[1] + d.height;
+}
+
+function tileCourseHeight(
+  covering: Resolved<typeof tilesParams>["covering"],
+): number {
+  if (covering === "slates") return 0.26;
+  if (covering === "shingles") return 0.3;
+  return 0.34;
+}
+
+function tileWidthOf(
+  covering: Resolved<typeof tilesParams>["covering"],
+): number {
+  if (covering === "pantiles") return 0.3;
+  if (covering === "slates") return 0.36;
+  return 0.22;
+}
+
 /**
  * Where a slope's eave would come down in front of a door, lower than `DOOR_HEADROOM` over its top, the slope lifts it
  * into a small gable over the door: at least that high over the door's top, peaking half a meter higher over its
@@ -806,21 +900,12 @@ function doorGable(
   a1: number,
   place: (a: number, pt: ProfilePoint, normal: readonly [number, number]) => V3,
 ): (p: V3) => number {
-  const toDoor = (d: Opening, p: V3): { out: number; along: number } => {
-    const dx = p[0] - d.position[0];
-    const dz = p[2] - d.position[2];
-    return {
-      out: dx * d.normal[0] + dz * d.normal[2],
-      along: Math.abs(dx * d.normal[2] - dz * d.normal[0]),
-    };
-  };
-  const top = (d: Opening): number => d.position[1] + d.height;
   const low = (d: Opening): number => {
     let y = Infinity;
     for (let a = a0; a <= a1 + 1e-6; a += 0.1) {
       for (const pt of profile) {
         const p = place(a, pt, [0, 0]);
-        const { out, along } = toDoor(d, p);
+        const { out, along } = toDoorCoords(d, p);
         if (out > 0 && out < 1.5 && along < d.width / 2 + 0.2) {
           y = Math.min(y, p[1]);
         }
@@ -829,16 +914,17 @@ function doorGable(
     return y;
   };
   const doors = plan.openings.filter(
-    (o) => o.kind === "door" && low(o) < top(o) + DOOR_HEADROOM,
+    (o) => o.kind === "door" && low(o) < openingTop(o) + DOOR_HEADROOM,
   );
   if (doors.length === 0) return () => 0;
   return (p) => {
     let up = 0;
     for (const d of doors) {
-      const { out, along } = toDoor(d, p);
+      const { out, along } = toDoorCoords(d, p);
       const fade = along < 1 ? 1 : Math.max(0, 1 - (along - 1) / 0.3);
       const ramp = clamp((out + 1.2) / 1.2, 0, 1);
-      const target = top(d) + DOOR_HEADROOM + 0.5 * Math.max(0, 1 - along);
+      const target =
+        openingTop(d) + DOOR_HEADROOM + 0.5 * Math.max(0, 1 - along);
       up = Math.max(up, Math.max(0, target - p[1]) * fade * ramp);
     }
     return up;
@@ -902,7 +988,7 @@ function thatchSlab(
         crease: c < n - 1,
       });
     }
-    return sign > 0 ? pts : pts.reverse();
+    return sign > 0 ? pts : pts.toReversed();
   };
   // The ridge roll over the apex.
   const roll = (): ProfilePoint[] => {
@@ -943,14 +1029,14 @@ function thatchSlab(
     // it as a flat board the thatch's full thickness tall. It rounds over to its eave instead, leaving the cut no
     // thicker than the lip.
     const hipped = f.m.roof === "hip" && f.m.ends[a < 0 ? 0 : 1];
-    const round =
-      pt.top !== true
-        ? 0
-        : hipped
-          ? end * end * Math.max(0, pt.y - under(pt.b) - lip)
-          : f.m.roof !== "hip"
-            ? end * end * T * 0.35
-            : 0;
+    let round = 0;
+    if (pt.top === true) {
+      if (hipped) {
+        round = end * end * Math.max(0, pt.y - under(pt.b) - lip);
+      } else if (f.m.roof !== "hip") {
+        round = end * end * T * 0.35;
+      }
+    }
     // A settled roof dips mid-ridge, and hipped ends fall away.
     const dip =
       plan.settle *
@@ -966,8 +1052,8 @@ function thatchSlab(
     pt: ProfilePoint,
     normal: readonly [number, number],
   ): V3 => {
-    const p = flat(a, pt, normal);
-    return [p[0], p[1] + lift(p), p[2]];
+    const q = flat(a, pt, normal);
+    return [q[0], q[1] + lift(q), q[2]];
   };
   extrudeRoof(
     roof,
@@ -1031,8 +1117,7 @@ function tileSlab(
     return plane(b) + kick * kick * k * 0.35;
   };
   const surface = (b: number): number => under(b) + T * secant;
-  const course =
-    p.covering === "slates" ? 0.26 : p.covering === "shingles" ? 0.3 : 0.34;
+  const course = tileCourseHeight(p.covering);
   const step = p.covering === "slates" ? 0.018 : 0.03;
   const courses = (sign: number, stop: number): ProfilePoint[] => {
     const at = (bv: number): number => sign * bv;
@@ -1061,7 +1146,7 @@ function tileSlab(
         crease: true,
       });
     }
-    return sign > 0 ? pts : pts.reverse();
+    return sign > 0 ? pts : pts.toReversed();
   };
   const roll = (): ProfilePoint[] => {
     const rr = 0.13;
@@ -1078,8 +1163,7 @@ function tileSlab(
   const overGable = overEnd(f, reach, p.overhang * 0.6 + 0.12);
   const a0 = -f.halfLength - overGable;
   const a1 = f.halfLength + overGable;
-  const tileW =
-    p.covering === "pantiles" ? 0.3 : p.covering === "slates" ? 0.36 : 0.22;
+  const tileW = tileWidthOf(p.covering);
   // Pantiles need a few segments per tile for their roll. Each slope keeps to its share of the roofs' triangles.
   const wanted = Math.round(
     (a1 - a0) / (p.covering === "pantiles" ? tileW / 4 : tileW),
@@ -1450,8 +1534,7 @@ export function buildTiles(
   plan: BuildingPlan,
 ): Built {
   const r = ctx.rand.fork("tiles");
-  const course =
-    p.covering === "slates" ? 0.26 : p.covering === "shingles" ? 0.3 : 0.34;
+  const course = tileCourseHeight(p.covering);
   return roofs(
     plan,
     r,

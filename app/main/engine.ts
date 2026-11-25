@@ -75,7 +75,7 @@ export function superviseEngine(
   start();
 
   return {
-    send(line) {
+    send(line): boolean {
       const stdin = child?.stdin;
       if (stdin === null || stdin === undefined || !stdin.writable) {
         return false;
@@ -83,7 +83,7 @@ export function superviseEngine(
       stdin.write(`${line}\n`);
       return true;
     },
-    stop() {
+    stop(): void {
       stopped = true;
       clearTimeout(timer);
       child?.kill();

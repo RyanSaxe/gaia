@@ -21,27 +21,44 @@ const build = daylight.build as unknown as Erased;
 
 const ends = (s: ScaleField): number[] =>
   s.levels.flatMap((l) => [0, 0.999].map((u) => resolveScale(s, l.words, u)));
+const choices = (c: ChoiceField): string[] => Object.keys(c.options);
 /** Every sun path daylight@1 allows: each level of its `path` at both ends. */
-const PATHS = ends(daylight.params.path as ScaleField);
+const PATHS = ends(daylight.params.path);
 
-/** Every daylight@1 blueprint, with each scale at both ends of its level. */
-const days: DaySpec[] = (() => {
-  const f = daylight.params;
-  const choices = (c: ChoiceField): string[] => Object.keys(c.options);
-  const out: DaySpec[] = [];
-  for (const path of PATHS) {
-    for (const warmth of choices(f.warmth as ChoiceField)) {
-      for (const brush of choices(f.brush as ChoiceField)) {
-        for (const moon of choices(f.moon as ChoiceField)) {
-          for (const stars of ends(f.stars as ScaleField)) {
-            out.push(build({ path, warmth, brush, moon, stars }));
-          }
+function pushDaysForPath(
+  path: number,
+  warmths: readonly string[],
+  brushes: readonly string[],
+  moons: readonly string[],
+  starLevels: readonly number[],
+  out: DaySpec[],
+): void {
+  for (const warmth of warmths) {
+    for (const brush of brushes) {
+      for (const moon of moons) {
+        for (const stars of starLevels) {
+          out.push(build({ path, warmth, brush, moon, stars }));
         }
       }
     }
   }
+}
+
+function buildDays(): DaySpec[] {
+  const f = daylight.params;
+  const warmths = choices(f.warmth);
+  const brushes = choices(f.brush);
+  const moons = choices(f.moon);
+  const starLevels = ends(f.stars);
+  const out: DaySpec[] = [];
+  for (const path of PATHS) {
+    pushDaysForPath(path, warmths, brushes, moons, starLevels, out);
+  }
   return out;
-})();
+}
+
+/** Every daylight@1 blueprint, with each scale at both ends of its level. */
+const days: DaySpec[] = buildDays();
 
 /** Every number in a light, in a fixed order. */
 const numbers = (l: LightSpec): number[] =>

@@ -86,6 +86,20 @@ export interface BuiltSlot {
   readonly output: unknown;
 }
 
+function slotInput(
+  slot: AnyKind["slots"][string],
+  built: ReadonlyMap<string, BuiltSlot>,
+): { readonly ready: boolean; readonly input: unknown } {
+  if (slot.on === undefined) return { ready: true, input: null };
+  const source = built.get(slot.on)?.output;
+  // An optional source that is absent leaves its dependents unbuilt.
+  if (source === undefined) return { ready: false, input: null };
+  return {
+    ready: true,
+    input: slot.role === "Ornament" ? anchorsOf(source) : source,
+  };
+}
+
 /**
  * Builds every filled slot of a blueprint in dependency order, feeding each
  * slot its `on` slot's output. Kinds then collect the outputs they need.
@@ -114,13 +128,8 @@ export function buildSlots(
     if (p.role !== slot.role) {
       throw new Error(`${name} needs a ${slot.role}, not ${p.id}.`);
     }
-    let input: unknown = null;
-    if (slot.on !== undefined) {
-      const source = built.get(slot.on)?.output;
-      // An optional source that is absent leaves its dependents unbuilt.
-      if (source === undefined) continue;
-      input = slot.role === "Ornament" ? anchorsOf(source) : source;
-    }
+    const { ready, input } = slotInput(slot, built);
+    if (!ready) continue;
     const params = resolveParams(p, filled.params, root.fork("params"), name);
     const ctx: BuildContext = { rand: root.fork(name), facts: opts.facts };
     built.set(name, {
@@ -216,17 +225,17 @@ export function mergeParts(parts: readonly Part[]): Part[] {
       tint: join((p) => p.tint),
       cutout: join((p) => p.cutout),
       // Each joined part's piece numbers continue from the previous part's.
-      piece: (() => {
+      piece: ((): Float32Array => {
         const out = join((p) => p.piece);
-        let at = 0;
+        let cursor = 0;
         let offset = 0;
         for (const p of list) {
           let top = -1;
           for (let i = 0; i < p.piece.length; i += 2) {
-            out[at + i] = (p.piece[i] as number) + offset;
+            out[cursor + i] = (p.piece[i] as number) + offset;
             top = Math.max(top, p.piece[i] as number);
           }
-          at += p.piece.length;
+          cursor += p.piece.length;
           offset += top + 1;
         }
         return out;

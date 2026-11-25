@@ -9,7 +9,7 @@ import type { WorldPlaces } from "@gaia/schema";
 import { heightAt } from "./lattice.ts";
 import { placeAt } from "./places.ts";
 import { EYE_HEIGHT } from "./sight.ts";
-import { waterDepthAt } from "./walk.ts";
+import { waterDepthAt } from "./wilds.ts";
 import { surfaceHalfWidth } from "./water.ts";
 import type { Terrain } from "./world.ts";
 
@@ -150,6 +150,84 @@ function better(a: Weighed, b: Weighed): boolean {
   return a.far < b.far;
 }
 
+function collectBanksForStream(
+  st: Terrain["streams"][number]["stations"],
+  world: WorldPlaces & CodePositions,
+  dryAmong: (x: number, z: number) => boolean,
+  banks: OpeningSpot[],
+): void {
+  const start = st[0];
+  const end = st[st.length - 1];
+  if (start === undefined || end === undefined) return;
+  // A stream shorter than `OPENING.ahead` is looked along whole, from its spring.
+  const run = Math.min(
+    OPENING.ahead,
+    Math.hypot(end.x - start.x, end.z - start.z),
+  );
+  if (run === 0) return;
+  for (let k = 0; k < st.length; k += OPENING.every) {
+    const here = st[k] as (typeof st)[number];
+    // Skip stations without `run` meters of stream left downstream to look along.
+    if (
+      !amongCode(world, here.x, here.z) ||
+      Math.hypot(end.x - here.x, end.z - here.z) < run
+    ) {
+      continue;
+    }
+    let ahead = k;
+    while (
+      Math.hypot(
+        (st[ahead] as typeof here).x - here.x,
+        (st[ahead] as typeof here).z - here.z,
+      ) < run
+    ) {
+      ahead++;
+    }
+    const there = st[ahead] as typeof here;
+    const along = Math.atan2(-(there.x - here.x), -(there.z - here.z));
+    const out = surfaceHalfWidth(here) + OPENING.bank;
+    // Try both banks, each facing the point `run` downstream, so a stream that bends away still runs into the view.
+    for (const side of [1, -1]) {
+      const x = here.x + Math.cos(along) * out * side;
+      const z = here.z - Math.sin(along) * out * side;
+      if (dryAmong(x, z)) {
+        banks.push({ x, z, yaw: Math.atan2(-(there.x - x), -(there.z - z)) });
+      }
+    }
+  }
+}
+
+function collectStreamBanks(
+  t: Terrain,
+  world: WorldPlaces & CodePositions,
+  dryAmong: (x: number, z: number) => boolean,
+): OpeningSpot[] {
+  const banks: OpeningSpot[] = [];
+  for (const stream of t.streams) {
+    collectBanksForStream(stream.stations, world, dryAmong, banks);
+  }
+  return banks;
+}
+
+function weighFallbackRings(
+  root: { readonly x: number; readonly z: number },
+  dryAmong: (x: number, z: number) => boolean,
+  weigh: (x: number, z: number, yaw: number) => void,
+): void {
+  for (let r = 0; r <= OPENING.around; r += OPENING.ring) {
+    const count = r === 0 ? 1 : Math.round((Math.PI * 2 * r) / OPENING.ring);
+    for (let k = 0; k < count; k++) {
+      const a = (k / count) * Math.PI * 2;
+      const x = root.x + Math.cos(a) * r;
+      const z = root.z + Math.sin(a) * r;
+      if (!dryAmong(x, z)) continue;
+      for (let w = 0; w < OPENING.ways; w++) {
+        weigh(x, z, (w / OPENING.ways) * Math.PI * 2);
+      }
+    }
+  }
+}
+
 export function openingSpot(
   t: Terrain,
   world: WorldPlaces & CodePositions,
@@ -171,49 +249,7 @@ export function openingSpot(
     };
     if (best === null || better(view, best)) best = view;
   };
-  const banks: OpeningSpot[] = [];
-  for (const stream of t.streams) {
-    const st = stream.stations;
-    const start = st[0];
-    const end = st[st.length - 1];
-    if (start === undefined || end === undefined) continue;
-    // A stream shorter than `OPENING.ahead` is looked along whole, from its spring.
-    const run = Math.min(
-      OPENING.ahead,
-      Math.hypot(end.x - start.x, end.z - start.z),
-    );
-    for (let k = 0; k < st.length; k += OPENING.every) {
-      const here = st[k] as (typeof st)[number];
-      // Skip stations without `run` meters of stream left downstream to look along.
-      if (
-        run === 0 ||
-        !amongCode(world, here.x, here.z) ||
-        Math.hypot(end.x - here.x, end.z - here.z) < run
-      ) {
-        continue;
-      }
-      let ahead = k;
-      while (
-        Math.hypot(
-          (st[ahead] as typeof here).x - here.x,
-          (st[ahead] as typeof here).z - here.z,
-        ) < run
-      ) {
-        ahead++;
-      }
-      const there = st[ahead] as typeof here;
-      const along = Math.atan2(-(there.x - here.x), -(there.z - here.z));
-      const out = surfaceHalfWidth(here) + OPENING.bank;
-      // Try both banks, each facing the point `run` downstream, so a stream that bends away still runs into the view.
-      for (const side of [1, -1]) {
-        const x = here.x + Math.cos(along) * out * side;
-        const z = here.z - Math.sin(along) * out * side;
-        if (dryAmong(x, z)) {
-          banks.push({ x, z, yaw: Math.atan2(-(there.x - x), -(there.z - z)) });
-        }
-      }
-    }
-  }
+  const banks = collectStreamBanks(t, world, dryAmong);
   const nearest = Math.min(
     ...banks.map((b) => Math.hypot(b.x - root.x, b.z - root.z)),
   );
@@ -222,21 +258,7 @@ export function openingSpot(
       weigh(b.x, b.z, b.yaw);
     }
   }
-  if (best === null) {
-    for (let r = 0; r <= OPENING.around; r += OPENING.ring) {
-      const count = r === 0 ? 1 : Math.round((Math.PI * 2 * r) / OPENING.ring);
-      for (let k = 0; k < count; k++) {
-        const a = (k / count) * Math.PI * 2;
-        const x = root.x + Math.cos(a) * r;
-        const z = root.z + Math.sin(a) * r;
-        if (dryAmong(x, z)) {
-          for (let w = 0; w < OPENING.ways; w++) {
-            weigh(x, z, (w / OPENING.ways) * Math.PI * 2);
-          }
-        }
-      }
-    }
-  }
+  if (best === null) weighFallbackRings(root, dryAmong, weigh);
   const chosen = best as Weighed | null;
   return chosen === null
     ? { x: root.x, z: root.z, yaw: 0 }
@@ -286,6 +308,9 @@ export interface Return {
   readonly exact: boolean;
 }
 
+const formatCm = (x: number, z: number): string =>
+  `${Math.round(x * 100)},${Math.round(z * 100)};`;
+
 /** A key for a world's layout. The same layout gives the same key, and an edit that moves anything or reshapes the land gives a different one. */
 export function layoutKey(world: CodeMarks): string {
   // FNV-1a over the layout as text, with positions to the centimeter.
@@ -295,11 +320,9 @@ export function layoutKey(world: CodeMarks): string {
       h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
     }
   };
-  const at = (x: number, z: number): string =>
-    `${Math.round(x * 100)},${Math.round(z * 100)};`;
   add(`${world.size};`);
-  for (const t of world.things) add(t.path + at(t.x, t.z));
-  for (const s of world.symbols) add(s.id + at(s.x, s.z));
+  for (const t of world.things) add(t.path + formatCm(t.x, t.z));
+  for (const s of world.symbols) add(s.id + formatCm(s.x, s.z));
   add(JSON.stringify(world.regions));
   return (h >>> 0).toString(16).padStart(8, "0");
 }

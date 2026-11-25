@@ -4,6 +4,7 @@
 // evenly spread sites in place of a layout from code.
 
 import {
+  type Blueprint,
   type FilledSlot,
   type Library,
   type PrimitiveId,
@@ -115,7 +116,7 @@ const biome = (
   use: string,
   params: FilledSlot["params"],
   cover = "lush grass",
-) =>
+): Blueprint =>
   blueprintOf("biome", {
     relief: { use: use as PrimitiveId, params },
     cover: {
@@ -348,7 +349,7 @@ export function sampleWorld(scale: WorldScale = SMALL_WORLD): WorldSpec {
     regions: sites.map((s, i) => ({
       id: NAMES[i] ?? `region-${i}`,
       ...s,
-      biome: SAMPLE_BIOMES[i % SAMPLE_BIOMES.length]!,
+      biome: SAMPLE_BIOMES[i % SAMPLE_BIOMES.length] as Blueprint,
     })),
   };
 }

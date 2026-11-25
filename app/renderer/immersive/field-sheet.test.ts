@@ -15,16 +15,21 @@ import {
 } from "./map-names.ts";
 import { healthField } from "./map-styles.ts";
 
+const run = <T>(steps: Generator<void, T>): T => {
+  for (;;) {
+    const step = steps.next();
+    if (step.done === true) return step.value;
+  }
+};
+
+// Approximates a capital's width from the font size and spacing, since the test has no browser to measure with.
+const measure: Measure = (text, font, spacing) =>
+  text.length * (0.72 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
+
+const hits = (a: Box, b: Box): boolean =>
+  a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+
 describe("where the sheets letter areas' names", () => {
-  const run = <T>(steps: Generator<void, T>): T => {
-    for (;;) {
-      const step = steps.next();
-      if (step.done === true) return step.value;
-    }
-  };
-  // Approximates a capital's width from the font size and spacing, since the test has no browser to measure with.
-  const measure: Measure = (text, font, spacing) =>
-    text.length * (0.72 * Number(/([\d.]+)px/.exec(font)?.[1] ?? 0) + spacing);
   // The proving ground's land as the world service sends it before Jev judges anything: every area's outline and
   // every lot for a building or landmark. Laid out once and only read.
   const world = layoutWorld(provingFacts, provingJudged, undefined, 1);
@@ -41,17 +46,17 @@ describe("where the sheets letter areas' names", () => {
       ];
       return [x + p.box[0], y + p.box[1], x + p.box[2], y + p.box[3]];
     });
-  const hits = (a: Box, b: Box): boolean =>
-    a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
   it("letters every area with ground of its own once, and not the root, which is the whole sheet", () => {
     const areas = land.labels
       .filter((l) => l.area.depth > 0)
       .map((l) => l.area.path)
-      .sort();
+      .toSorted();
     expect(areas).not.toEqual([]);
     for (const placed of sheets) {
-      expect(placed.places.map((p) => p.label.area.path).sort()).toEqual(areas);
+      expect(placed.places.map((p) => p.label.area.path).toSorted()).toEqual(
+        areas,
+      );
     }
     // When lots are so dense that no ground is clear of them, every name is still lettered, over the marks.
     const lots: LotPlace[] = [];
@@ -61,7 +66,9 @@ describe("where the sheets letter areas' names", () => {
       }
     }
     const crowded = run(placeNames(landWith(lots), 800, measure));
-    expect(crowded.places.map((p) => p.label.area.path).sort()).toEqual(areas);
+    expect(crowded.places.map((p) => p.label.area.path).toSorted()).toEqual(
+      areas,
+    );
   });
 
   it("never lets one name cover another", () => {

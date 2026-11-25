@@ -10,11 +10,13 @@ import {
   lastSpotIn,
 } from "./recent.ts";
 
-/**
- * A fake engine whose in-memory store holds `recent` as the recent worlds. `checkedOut` gives each folder's current
- * commit, and any other folder is read from disk. `since[from]` gives the number of commits from `from` to the current
- * commit, and any other commit is not in the history.
- */
+interface StoreCallParams {
+  key?: string;
+  root?: string;
+  from?: string;
+  writes?: { key: string; value: unknown }[];
+}
+
 function storeEngine(
   recent?: unknown,
   checkedOut: Record<string, string> = {},
@@ -23,33 +25,26 @@ function storeEngine(
   const settings = new Map<string, unknown>(
     recent === undefined ? [] : [[RECENT_KEY, recent]],
   );
-  return {
-    call: async (
-      method: string,
-      params: {
-        key?: string;
-        root?: string;
-        from?: string;
-        writes?: { key: string; value: unknown }[];
-      },
-    ) => {
-      if (method === "store.get") {
-        return settings.has(params.key ?? "")
-          ? { value: settings.get(params.key ?? "") }
-          : null;
-      }
-      if (method === "store.put") {
-        for (const w of params.writes ?? []) settings.set(w.key, w.value);
-      }
-      if (method === "project.commit") {
-        return { commit: checkedOut[params.root ?? ""] ?? null };
-      }
-      if (method === "project.commits") {
-        return { commits: since[params.from ?? ""] ?? null };
-      }
+  const handlers: Record<string, (params: StoreCallParams) => unknown> = {
+    "store.get": (params) => {
+      const key = params.key ?? "";
+      return settings.has(key) ? { value: settings.get(key) } : null;
+    },
+    "store.put": (params) => {
+      for (const w of params.writes ?? []) settings.set(w.key, w.value);
       return { ok: true };
     },
-    on: () => () => {},
+    "project.commit": (params) => ({
+      commit: checkedOut[params.root ?? ""] ?? null,
+    }),
+    "project.commits": (params) => ({
+      commits: since[params.from ?? ""] ?? null,
+    }),
+  };
+  return {
+    call: async (method: string, params: StoreCallParams): Promise<unknown> =>
+      handlers[method]?.(params) ?? { ok: true },
+    on: (): (() => void) => (): void => {},
   } as unknown as EngineClient;
 }
 

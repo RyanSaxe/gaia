@@ -22,7 +22,7 @@ function disagreements(code: OpenedWorld): string[] {
     journal,
     world,
     vitality: pageVitality(world),
-    lines: () => undefined,
+    lines: (): undefined => undefined,
   };
   /** The vitality the journal's page for `id` shows, opened as a tap on the thing opens it. */
   const page = (id: string): number | undefined => {
@@ -58,12 +58,9 @@ function disagreements(code: OpenedWorld): string[] {
   for (const a of world.areas) {
     // The whole world's is its contents page's.
     const chapter = journal.entry(a.path);
-    const shown =
-      a.path === ""
-        ? contentsWords(src).vitality
-        : chapter === undefined
-          ? undefined
-          : wordsOf(src, chapter).vitality;
+    let shown: number | undefined;
+    if (a.path === "") shown = contentsWords(src).vitality;
+    else if (chapter !== undefined) shown = wordsOf(src, chapter).vitality;
     compare("folder", a.path, shown, pooled.get(a.path) ?? 1);
   }
   // The marks: each thing worn by the vitality the world gives what it represents.

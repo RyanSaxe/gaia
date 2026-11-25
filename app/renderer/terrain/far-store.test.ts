@@ -2,7 +2,14 @@ import { IDBFactory } from "fake-indexeddb";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { contentHash, openFarStore } from "./far-store.ts";
 
-const part = (lift: number) => ({
+const part = (
+  lift: number,
+): {
+  readonly swatch: string;
+  readonly positions: Float32Array;
+  readonly indices: Uint32Array;
+  readonly channels: { readonly decline: Float32Array };
+} => ({
   swatch: "leaf",
   positions: new Float32Array([0, lift, 0, 1, 2, 3]),
   indices: new Uint32Array([0, 1, 2]),

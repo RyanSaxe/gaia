@@ -299,6 +299,40 @@ function inkedLine(
   return text;
 }
 
+function fillProseRow(
+  row: HTMLElement,
+  line: string,
+  n: number,
+  isPre: boolean,
+): void {
+  // A Markdown heading is styled as a heading without its # marks, and a fenced block's lines as code.
+  const heading = isPre ? null : /^(#{1,6})\s+(.*)$/.exec(line);
+  if (heading !== null) {
+    row.classList.add(`h${(heading[1] as string).length}`);
+  }
+  if (isPre) row.classList.add("pre");
+  else if (line === "") row.classList.add("gap");
+  row.append(
+    el("span", "jp-ln", String(n)),
+    el("span", "jp-text", heading === null ? line : (heading[2] as string)),
+  );
+}
+
+function fillCodeRow(
+  row: HTMLElement,
+  line: string,
+  n: number,
+  base: number,
+  pieces: readonly Piece[] | undefined,
+): void {
+  const text = inkedLine(pieces, line);
+  text.style.setProperty(
+    "--ind",
+    String(Number.isFinite(base) ? indentOf(line) - base : 0),
+  );
+  row.append(el("span", "jp-ln", String(n)), text);
+}
+
 function codeOf(
   at: readonly number[],
   body: Full,
@@ -318,25 +352,9 @@ function codeOf(
       row.dataset.label = MARK_LABEL[mark.kind];
     }
     if (body.prose === true) {
-      // A Markdown heading is styled as a heading without its # marks, and a fenced block's lines as code.
-      const heading =
-        body.pre?.[k] === true ? null : /^(#{1,6})\s+(.*)$/.exec(line);
-      if (heading !== null) {
-        row.classList.add(`h${(heading[1] as string).length}`);
-      }
-      if (body.pre?.[k] === true) row.classList.add("pre");
-      else if (line === "") row.classList.add("gap");
-      row.append(
-        el("span", "jp-ln", String(n)),
-        el("span", "jp-text", heading === null ? line : (heading[2] as string)),
-      );
+      fillProseRow(row, line, n, body.pre?.[k] === true);
     } else {
-      const text = inkedLine(pieces[k], line);
-      text.style.setProperty(
-        "--ind",
-        String(Number.isFinite(base) ? indentOf(line) - base : 0),
-      );
-      row.append(el("span", "jp-ln", String(n)), text);
+      fillCodeRow(row, line, n, base, pieces[k]);
     }
     code.append(row);
   }
@@ -376,6 +394,109 @@ export interface InFull {
   readonly folio: string;
 }
 
+function renderPageHead(
+  words: PageWords,
+  turnTo: (of: string) => void,
+  rows: { readonly from: number; readonly to: number } | undefined,
+  inFull: (() => void) | undefined,
+): HTMLElement {
+  const head = el("div", "jp-head");
+  if (rows !== undefined && rows.from > 0) {
+    head.append(
+      el("div", "jp-running", [...words.path, words.name].join(" / ")),
+    );
+    return head;
+  }
+  if (words.path.length > 0) head.append(whereOf(words.path, turnTo));
+  const title = el("div", "jp-title");
+  // A definition's name turns to it in full, in the appendix.
+  const name = el(
+    inFull === undefined ? "span" : "button",
+    "jp-name",
+    words.name,
+  );
+  if (inFull !== undefined) {
+    (name as HTMLButtonElement).type = "button";
+    name.addEventListener("click", (e) => {
+      e.stopPropagation();
+      inFull();
+    });
+  }
+  title.append(name, numbersOf(words));
+  head.append(title);
+  if (words.signature !== undefined) {
+    head.append(signatureOf(words.signature, words.path.join("/")));
+  }
+  head.append(el("div", "jp-rule"));
+  return head;
+}
+
+function appendRowsBody(
+  body: HTMLElement,
+  words: PageWords,
+  rowsBody: Extract<PageWords["body"], { kind: "rows" }>,
+  turnTo: (of: string) => void,
+  rows: { readonly from: number; readonly to: number } | undefined,
+  fullOf: ((of: string) => InFull) | undefined,
+): void {
+  const isFirst = rows === undefined || rows.from === 0;
+  if (rowsBody.lead !== undefined && isFirst) {
+    body.append(leadOf(rowsBody.lead, words.path.join("/"), turnTo, fullOf));
+  }
+  body.append(
+    rowsOf(
+      rows === undefined
+        ? rowsBody.rows
+        : rowsBody.rows.slice(rows.from, rows.to),
+      turnTo,
+    ),
+  );
+  if (words.trails !== undefined && isFirst) {
+    body.append(trailsOf(words.trails, turnTo));
+  }
+}
+
+function appendCodeBody(
+  body: HTMLElement,
+  words: PageWords,
+  codeBody: Extract<PageWords["body"], { kind: "code" }>,
+  turnTo: (of: string) => void,
+  full: InFull | undefined,
+): void {
+  // Starts at `opensAt` and folds the lines above it.
+  const { opensAt, kind: _, ...code } = codeBody;
+  const skipped = opensAt - code.first;
+  const shown: Full = {
+    ...code,
+    kind: "full",
+    first: opensAt,
+    lines: code.lines.slice(skipped),
+  };
+  if (skipped > 0 && full !== undefined) {
+    body.append(foldOf(linesOf(skipped), full.turn));
+  }
+  setItems(
+    body,
+    shown,
+    fullItems(shown),
+    baseIndent(code.lines),
+    piecesOf(shown, words),
+    turnTo,
+  );
+  // A fold at the end of a long definition's page. `finish` in book.ts shows it with the count of remaining lines when some are left over.
+  if (full !== undefined) {
+    body.append(foldOf("", full.turn, "after"));
+    // A tap on the code turns to it in full, and the reference at the page's foot gives the page.
+    for (const block of body.querySelectorAll<HTMLElement>(".jp-code")) {
+      block.classList.add("jp-tapcode");
+      block.addEventListener("click", (e) => {
+        e.stopPropagation();
+        full.turn();
+      });
+    }
+  }
+}
+
 /**
  * Builds a page from its words. `turnTo` turns the book to a row's page, and
  * `folio` is the page's number. A list too long for one page is drawn a slice
@@ -393,89 +514,15 @@ export function renderPage(
   full?: InFull,
   fullOf?: (of: string) => InFull,
 ): HTMLElement {
-  const inFull = full?.turn;
   const page = el("div", "jp");
   page.style.setProperty("--health", healthColor(words.vitality));
-  const head = el("div", "jp-head");
-  if (rows !== undefined && rows.from > 0) {
-    head.append(
-      el("div", "jp-running", [...words.path, words.name].join(" / ")),
-    );
-  } else {
-    if (words.path.length > 0) head.append(whereOf(words.path, turnTo));
-    const title = el("div", "jp-title");
-    // A definition's name turns to it in full, in the appendix.
-    const name = el(
-      inFull === undefined ? "span" : "button",
-      "jp-name",
-      words.name,
-    );
-    if (inFull !== undefined) {
-      (name as HTMLButtonElement).type = "button";
-      name.addEventListener("click", (e) => {
-        e.stopPropagation();
-        inFull();
-      });
-    }
-    title.append(name, numbersOf(words));
-    head.append(title);
-    if (words.signature !== undefined) {
-      head.append(signatureOf(words.signature, words.path.join("/")));
-    }
-    head.append(el("div", "jp-rule"));
-  }
+  const head = renderPageHead(words, turnTo, rows, full?.turn);
   const body = el("div", "jp-body");
-  if (
-    words.body.kind === "rows" &&
-    words.body.lead !== undefined &&
-    (rows === undefined || rows.from === 0)
-  ) {
-    body.append(leadOf(words.body.lead, words.path.join("/"), turnTo, fullOf));
-  }
   if (words.body.kind === "rows") {
-    body.append(
-      rowsOf(
-        rows === undefined
-          ? words.body.rows
-          : words.body.rows.slice(rows.from, rows.to),
-        turnTo,
-      ),
-    );
-    if (words.trails !== undefined && (rows === undefined || rows.from === 0)) {
-      body.append(trailsOf(words.trails, turnTo));
-    }
+    appendRowsBody(body, words, words.body, turnTo, rows, fullOf);
   } else if (words.body.kind === "code") {
-    // Starts at `opensAt` and folds the lines above it.
-    const { opensAt, kind: _, ...code } = words.body;
-    const skipped = opensAt - code.first;
-    const shown: Full = {
-      ...code,
-      kind: "full",
-      first: opensAt,
-      lines: code.lines.slice(skipped),
-    };
-    if (skipped > 0 && inFull !== undefined) {
-      body.append(foldOf(linesOf(skipped), inFull));
-    }
-    setItems(
-      body,
-      shown,
-      fullItems(shown),
-      baseIndent(code.lines),
-      piecesOf(shown, words),
-      turnTo,
-    );
-    // A fold at the end of a long definition's page. `finish` in book.ts shows it with the count of remaining lines when some are left over.
+    appendCodeBody(body, words, words.body, turnTo, full);
     if (full !== undefined) {
-      body.append(foldOf("", full.turn, "after"));
-      // A tap on the code turns to it in full, and the reference at the page's foot gives the page.
-      for (const code of body.querySelectorAll<HTMLElement>(".jp-code")) {
-        code.classList.add("jp-tapcode");
-        code.addEventListener("click", (e) => {
-          e.stopPropagation();
-          full.turn();
-        });
-      }
       page.append(
         head,
         body,
@@ -504,10 +551,12 @@ export function fullItems(body: Full): FullItem[] {
   for (let k = 0; k < body.lines.length; k++) {
     // A definition with its own page becomes one fold line that turns to it.
     const fold = folds.get(body.first + k);
-    if (fold !== undefined) {
+    if (fold === undefined) {
+      items.push({ kind: "line", at: k });
+    } else {
       items.push({ kind: "fold", fold });
       k += fold.to - fold.from;
-    } else items.push({ kind: "line", at: k });
+    }
   }
   if (body.rest !== undefined) items.push({ kind: "rest", lines: body.rest });
   return items;
@@ -546,7 +595,16 @@ export function renderFullPage(
     });
     return e;
   };
-  if (!first) {
+  if (first) {
+    if (words.path.length > 0) head.append(whereOf(words.path, turnTo));
+    const title = el("div", "jp-title");
+    title.append(backTo(el("button", "jp-name", words.name)), numbersOf(words));
+    head.append(title);
+    if (words.signature !== undefined) {
+      head.append(signatureOf(words.signature, words.path.join("/")));
+    }
+    head.append(el("div", "jp-rule"));
+  } else {
     head.append(
       backTo(
         el(
@@ -556,15 +614,6 @@ export function renderFullPage(
         ),
       ),
     );
-  } else {
-    if (words.path.length > 0) head.append(whereOf(words.path, turnTo));
-    const title = el("div", "jp-title");
-    title.append(backTo(el("button", "jp-name", words.name)), numbersOf(words));
-    head.append(title);
-    if (words.signature !== undefined) {
-      head.append(signatureOf(words.signature, words.path.join("/")));
-    }
-    head.append(el("div", "jp-rule"));
   }
   const content = el("div", "jp-body");
   setItems(
@@ -691,19 +740,19 @@ export function renderTitle(
       k === 0 ? [piece] : [document.createElement("wbr"), piece],
     ),
   );
-  measure ??= canvasMeasure(
+  titleMeasure ??= canvasMeasure(
     document
       .createElement("canvas")
       .getContext("2d") as CanvasRenderingContext2D,
   );
-  lettering.style.fontSize = `${titleSize(name, measure).toFixed(1)}px`;
+  lettering.style.fontSize = `${titleSize(name, titleMeasure).toFixed(1)}px`;
   lettered.append(lettering);
   page.append(painting, lettered, el("div", "jp-folio", folio));
   return page;
 }
 
 /** The title lettering's measure, created on first use. */
-let measure: Measure | null = null;
+let titleMeasure: Measure | null = null;
 
 /** The font size in px for `name` on the title page (`TITLE`), measured with `measure`. */
 export function titleSize(name: string, measure: Measure): number {
@@ -806,6 +855,8 @@ export const pagePx = (
   py: (e.offsetY * PAGE_H) / (picture.offsetHeight || PAGE_H),
 });
 
+const tapHandlers = new WeakMap<HTMLElement, (e: MouseEvent) => void>();
+
 /**
  * A left-hand page: its picture, caption and folio. `onTap`, if given,
  * receives a tap on the picture as a point in the page's pixels.
@@ -821,12 +872,16 @@ export function renderPicture(
     page.append(picture);
     if (onTap !== undefined) {
       picture.classList.add("jp-tap");
-      // Uses `onclick` so a redraw replaces the handler, since a map or painting is the same element on every redraw.
-      picture.onclick = (e) => {
+      // Replaces any previous handler, since a map or painting is the same element on every redraw.
+      const prev = tapHandlers.get(picture);
+      if (prev !== undefined) picture.removeEventListener("click", prev);
+      const onClick = (e: MouseEvent): void => {
         e.stopPropagation();
         const at = pagePx(picture, e);
         onTap(at.px, at.py);
       };
+      tapHandlers.set(picture, onClick);
+      picture.addEventListener("click", onClick);
     }
   }
   if (caption.length > 0) {

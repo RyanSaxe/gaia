@@ -253,37 +253,22 @@ function freeArcs(
   return out;
 }
 
-function roundCote(r: Rand, plan: BuildingPlan): Built {
-  const R = 1.15;
-  const H = 3.4;
-  const Y = yard(plan, 1.0 + R, -plan.depth * 0.18);
-  const stone = new PartBuilder("masonry", "solid");
-  const mortar = new PartBuilder("wall", "solid");
-  const wood = new PartBuilder("timber", "solid");
-  const roof = new PartBuilder("roof", "solid");
-  const moss = new PartBuilder("moss");
-  const weed = new PartBuilder("leaf");
-  const seed = Math.floor(r.next() * 1e6);
+function buildRoundCoteStones(
+  stone: PartBuilder,
+  Y: Yard,
+  R: number,
+  rows: number,
+  rowH: number,
+  doorTop: number,
+  doorHalf: number,
+  holeHalf: number,
+  holes: readonly { a: number; y: number }[],
+  r: Rand,
+): void {
   const ring = (a: number, d: number, y: number): V3 =>
     Y.at(Math.cos(a) * d, y, Math.sin(a) * d);
   const radial = (a: number): V3 => Y.dir(Math.cos(a), 0, Math.sin(a));
   const tangent = (a: number): V3 => Y.dir(-Math.sin(a), 0, Math.cos(a));
-
-  // Rows of rough stones round a mortar core. The door faces out from the house, and two rings of flight holes run under the eaves.
-  const rows = 12;
-  const rowH = (H + 0.6) / rows;
-  const doorTop = -0.6 + rowH * Math.round(1.75 / rowH);
-  const doorHalf = 0.34 / R;
-  const holeHalf = 0.1 / R;
-  const holes: { a: number; y: number }[] = [];
-  for (const [shift, y] of [
-    [0, H - 0.5],
-    [0.5, H - 1.0],
-  ] as const) {
-    for (let k = 0; k < 7; k++) {
-      holes.push({ a: ((k + shift) / 7) * TAU + 0.22, y });
-    }
-  }
   for (let j = 0; j < rows; j++) {
     const y0 = -0.6 + j * rowH;
     const y1 = y0 + rowH;
@@ -316,19 +301,33 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
       }
     }
   }
-  // A point's angle round the cote, taking the turn nearest `near`, so a face across the 0 to 2π seam gets consistent angles.
-  const centre = Y.at(0, 0, 0);
-  const angleOf = (p: Vec3, near: number): number => {
-    const d = sub(p, centre);
-    const a = Math.atan2(
-      d[0] * Y.axes[2][0] + d[2] * Y.axes[2][2],
-      d[0] * Y.axes[0][0] + d[2] * Y.axes[0][2],
-    );
-    return a + TAU * Math.round((near - a) / TAU);
-  };
+}
+
+function buildRoundCoteCoreAndDetails(
+  stone: PartBuilder,
+  mortar: PartBuilder,
+  wood: PartBuilder,
+  plan: BuildingPlan,
+  Y: Yard,
+  R: number,
+  H: number,
+  rows: number,
+  rowH: number,
+  doorTop: number,
+  doorHalf: number,
+  holeHalf: number,
+  holes: readonly { a: number; y: number }[],
+  sides: number,
+  seed: number,
+  angleOf: (p: Vec3, near: number) => number,
+  r: Rand,
+): void {
+  const ring = (a: number, d: number, y: number): V3 =>
+    Y.at(Math.cos(a) * d, y, Math.sin(a) * d);
+  const radial = (a: number): V3 => Y.dir(Math.cos(a), 0, Math.sin(a));
+  const tangent = (a: number): V3 => Y.dir(-Math.sin(a), 0, Math.cos(a));
   // The mortar core behind the stones, rotting through from the top a block at a time, each row after the one above
   // it. The flight holes and the doorway show dark in it.
-  const sides = 16;
   const blocks = Math.round((TAU * (R - 0.06)) / (STONE[0] as number));
   for (let j = 0; j < rows; j++) {
     const y0 = -0.6 + j * rowH;
@@ -428,7 +427,20 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
       );
     }
   }
+}
 
+function buildRoundCoteRoof(
+  roof: PartBuilder,
+  wood: PartBuilder,
+  Y: Yard,
+  R: number,
+  H: number,
+  sides: number,
+  angleOf: (p: Vec3, near: number) => number,
+): void {
+  const ring = (a: number, d: number, y: number): V3 =>
+    Y.at(Math.cos(a) * d, y, Math.sin(a) * d);
+  const radial = (a: number): V3 => Y.dir(Math.cos(a), 0, Math.sin(a));
   // A cone of courses that rots through and sags at its eaves, an open
   // lantern on top, and a finial that leans and falls.
   const eave = R + 0.32;
@@ -564,6 +576,78 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
     0.5,
     finial,
   );
+}
+
+function roundCote(r: Rand, plan: BuildingPlan): Built {
+  const R = 1.15;
+  const H = 3.4;
+  const Y = yard(plan, 1.0 + R, -plan.depth * 0.18);
+  const stone = new PartBuilder("masonry", "solid");
+  const mortar = new PartBuilder("wall", "solid");
+  const wood = new PartBuilder("timber", "solid");
+  const roof = new PartBuilder("roof", "solid");
+  const moss = new PartBuilder("moss");
+  const weed = new PartBuilder("leaf");
+  const seed = Math.floor(r.next() * 1e6);
+
+  // Rows of rough stones round a mortar core. The door faces out from the house, and two rings of flight holes run under the eaves.
+  const rows = 12;
+  const rowH = (H + 0.6) / rows;
+  const doorTop = -0.6 + rowH * Math.round(1.75 / rowH);
+  const doorHalf = 0.34 / R;
+  const holeHalf = 0.1 / R;
+  const holes: { a: number; y: number }[] = [];
+  for (const [shift, y] of [
+    [0, H - 0.5],
+    [0.5, H - 1.0],
+  ] as const) {
+    for (let k = 0; k < 7; k++) {
+      holes.push({ a: ((k + shift) / 7) * TAU + 0.22, y });
+    }
+  }
+  buildRoundCoteStones(
+    stone,
+    Y,
+    R,
+    rows,
+    rowH,
+    doorTop,
+    doorHalf,
+    holeHalf,
+    holes,
+    r,
+  );
+  // A point's angle round the cote, taking the turn nearest `near`, so a face across the 0 to 2π seam gets consistent angles.
+  const centre = Y.at(0, 0, 0);
+  const angleOf = (p: Vec3, near: number): number => {
+    const d = sub(p, centre);
+    const a = Math.atan2(
+      d[0] * Y.axes[2][0] + d[2] * Y.axes[2][2],
+      d[0] * Y.axes[0][0] + d[2] * Y.axes[0][2],
+    );
+    return a + TAU * Math.round((near - a) / TAU);
+  };
+  const sides = 16;
+  buildRoundCoteCoreAndDetails(
+    stone,
+    mortar,
+    wood,
+    plan,
+    Y,
+    R,
+    H,
+    rows,
+    rowH,
+    doorTop,
+    doorHalf,
+    holeHalf,
+    holes,
+    sides,
+    seed,
+    angleOf,
+    r,
+  );
+  buildRoundCoteRoof(roof, wood, Y, R, H, sides, angleOf);
 
   const cote = roundPlan(Y, (R * 2 * Math.cos(Math.PI / 8)) / 2 + 0.02, H);
   ivy(moss, cote, ruinOf(cote), r.fork("ivy"));
@@ -572,6 +656,68 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
     .filter((b) => b.triangleCount > 0)
     .map((b) => b.part());
   return { parts, anchors: [] };
+}
+
+function buildPostCoteDoorways(
+  wood: PartBuilder,
+  Y: Yard,
+  Z: V3,
+  hx: number,
+  hz: number,
+  y0: number,
+  held: (wither: number, extra?: Partial<Channels>) => Channels,
+): void {
+  for (const s of [-1, 1]) {
+    const n = Y.dir(s, 0, 0);
+    for (const [y, zs] of [
+      [y0 + 0.18, [-2 / 3, 0, 2 / 3]],
+      [y0 + 0.52, [-1 / 3, 1 / 3]],
+    ] as const) {
+      for (const zf of zs) {
+        const c = Y.at(s * (hx + 0.006), y, zf * hz);
+        const w = 0.075;
+        const arch: V3[] = [];
+        for (let q = 0; q <= 4; q++) {
+          arch.push(
+            addScaled(
+              addScaled(c, Z, Math.cos((q / 4) * Math.PI) * w),
+              UP,
+              0.09 + Math.sin((q / 4) * Math.PI) * w,
+            ),
+          );
+        }
+        quad(
+          wood,
+          [
+            addScaled(c, Z, -w),
+            addScaled(c, Z, w),
+            arch[0] as V3,
+            arch[4] as V3,
+          ],
+          n,
+          0,
+          held(0.3),
+        );
+        for (let q = 0; q < 4; q++) {
+          tri(
+            wood,
+            [addScaled(c, UP, 0.09), arch[q] as V3, arch[q + 1] as V3],
+            n,
+            0,
+            held(0.3),
+          );
+        }
+        box(
+          wood,
+          addScaled(addScaled(c, n, 0.07), UP, -0.02),
+          [Z, UP, n],
+          [w + 0.04, 0.015, 0.08],
+          0.5,
+          held(0.55),
+        );
+      }
+    }
+  }
 }
 
 function postCote(r: Rand, plan: BuildingPlan): Built {
@@ -663,57 +809,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
       Y.at(0, y0 + h, 0),
     );
   }
-  for (const s of [-1, 1]) {
-    const n = Y.dir(s, 0, 0);
-    for (const [y, zs] of [
-      [y0 + 0.18, [-2 / 3, 0, 2 / 3]],
-      [y0 + 0.52, [-1 / 3, 1 / 3]],
-    ] as const) {
-      for (const zf of zs) {
-        const c = Y.at(s * (hx + 0.006), y, zf * hz);
-        const w = 0.075;
-        const arch: V3[] = [];
-        for (let q = 0; q <= 4; q++) {
-          arch.push(
-            addScaled(
-              addScaled(c, Z, Math.cos((q / 4) * Math.PI) * w),
-              UP,
-              0.09 + Math.sin((q / 4) * Math.PI) * w,
-            ),
-          );
-        }
-        quad(
-          wood,
-          [
-            addScaled(c, Z, -w),
-            addScaled(c, Z, w),
-            arch[0] as V3,
-            arch[4] as V3,
-          ],
-          n,
-          0,
-          held(0.3),
-        );
-        for (let q = 0; q < 4; q++) {
-          tri(
-            wood,
-            [addScaled(c, UP, 0.09), arch[q] as V3, arch[q + 1] as V3],
-            n,
-            0,
-            held(0.3),
-          );
-        }
-        box(
-          wood,
-          addScaled(addScaled(c, n, 0.07), UP, -0.02),
-          [Z, UP, n],
-          [w + 0.04, 0.015, 0.08],
-          0.5,
-          held(0.55),
-        );
-      }
-    }
-  }
+  buildPostCoteDoorways(wood, Y, Z, hx, hz, y0, held);
   const eaveY = y0 + h - 0.06;
   const over = 0.16;
   for (const s of [-1, 1]) {
@@ -799,28 +895,28 @@ function stoneBlock(
     {
       n: X,
       u: Z,
-      at: (s: number, y: number, d: number) => Y.at(x1 - d, y, s),
+      at: (s: number, y: number, d: number): V3 => Y.at(x1 - d, y, s),
       from: z0,
       to: z1,
     },
     {
       n: scale(X, -1),
       u: Z,
-      at: (s: number, y: number, d: number) => Y.at(x0 + d, y, s),
+      at: (s: number, y: number, d: number): V3 => Y.at(x0 + d, y, s),
       from: z0,
       to: z1,
     },
     {
       n: Z,
       u: X,
-      at: (s: number, y: number, d: number) => Y.at(s, y, z1 - d),
+      at: (s: number, y: number, d: number): V3 => Y.at(s, y, z1 - d),
       from: x0 + 2 * deep,
       to: x1 - 2 * deep,
     },
     {
       n: scale(Z, -1),
       u: X,
-      at: (s: number, y: number, d: number) => Y.at(s, y, z0 + d),
+      at: (s: number, y: number, d: number): V3 => Y.at(s, y, z0 + d),
       from: x0 + 2 * deep,
       to: x1 - 2 * deep,
     },
@@ -918,6 +1014,207 @@ function bucket(b: PartBuilder, c: V3, ch: Channels): void {
     beam(b, last, p, 0.018, 0.018, [0, 0, 1], 0.3, ch);
     last = p;
   }
+}
+
+function buildWellSweep(
+  wood: PartBuilder,
+  stone: PartBuilder,
+  Y: Yard,
+  plan: BuildingPlan,
+  outer: number,
+  lost: Channels,
+  r: Rand,
+): void {
+  // A forked post beside the well carries a long pole, its bucket end lowered over the shaft and a stone weight at the other.
+  const postX = outer + 0.95;
+  log(
+    wood,
+    Y.at(postX, -0.6, 0),
+    Y.at(postX, 1.95, 0),
+    0.12,
+    0.42,
+    still(Y.at(postX, 0, 0), 0.55, { rot: 0.3 }),
+    8,
+  );
+  for (const s of [-1, 1]) {
+    log(
+      wood,
+      Y.at(postX, 1.85, 0),
+      Y.at(postX, 2.3, s * 0.13),
+      0.06,
+      0.42,
+      still(Y.at(postX, 1.9, 0), 0.55),
+      6,
+    );
+  }
+  const pin = Y.at(postX, 2.15, 0);
+  log(
+    wood,
+    addScaled(pin, [0, 0, 1], -0.16),
+    addScaled(pin, [0, 0, 1], 0.16),
+    0.03,
+    0.3,
+    still(pin, 0.5),
+    6,
+  );
+  const tip = Y.at(0, 1.75, 0);
+  const along = normalize(sub(pin, tip));
+  const far = addScaled(pin, along, 1.9);
+  // As vitality falls the pole tips its bucket end down to the coping, after the bucket has gone.
+  const tipped = {
+    loss: 0,
+    droop: 0,
+    wither: 0.55,
+    glow: 0,
+    pivot: pin,
+    fall: [0, 0, 0.26 * featureSide(plan), 0.24] as const,
+  };
+  log(wood, addScaled(tip, along, -0.08), far, 0.07, 0.45, tipped, 7);
+  lump(
+    stone,
+    addScaled(far, UP, -0.32),
+    [0.24, 0.2, 0.22],
+    r.next() * Math.PI,
+    0.45,
+    tipped,
+    r,
+  );
+  beam(
+    wood,
+    far,
+    addScaled(far, UP, -0.2),
+    0.025,
+    0.025,
+    [1, 0, 0],
+    0.3,
+    tipped,
+  );
+  beam(wood, tip, Y.at(0, 1.3, 0), 0.025, 0.025, [1, 0, 0], 0.32, {
+    ...lost,
+    pivot: tip,
+  });
+}
+
+function buildWellRoofHead(
+  wood: PartBuilder,
+  roof: PartBuilder,
+  Y: Yard,
+  outer: number,
+  lost: Channels,
+  r: Rand,
+): void {
+  // Two posts carry a little shingled roof over a winch, its crank at one end.
+  const postZ = outer + 0.09;
+  const ridgeY = 2.6;
+  for (const s of [-1, 1]) {
+    const base = Y.at(0, -0.45, s * postZ);
+    beam(
+      wood,
+      base,
+      Y.at(0, ridgeY - 0.05, s * postZ),
+      0.14,
+      0.14,
+      [1, 0, 0],
+      0.42,
+      still(base, 0.55, { rot: 0.3 }),
+    );
+  }
+  const winch = 1.5;
+  log(
+    wood,
+    Y.at(0, winch, -postZ),
+    Y.at(0, winch, postZ),
+    0.085,
+    0.42,
+    still(Y.at(0, winch, 0), 0.55),
+    8,
+  );
+  const crank = Y.at(0, winch, postZ + 0.16);
+  log(
+    wood,
+    Y.at(0, winch, postZ - 0.05),
+    crank,
+    0.03,
+    0.35,
+    still(crank, 0.5),
+    6,
+  );
+  beam(
+    wood,
+    crank,
+    addScaled(crank, Y.dir(0.3, -0.25, 0), 1),
+    0.04,
+    0.04,
+    [0, 0, 1],
+    0.35,
+    still(crank, 0.5, { fall: [0, 0, 0.9, 0.25] }),
+  );
+  beam(
+    wood,
+    Y.at(0, winch - 0.08, 0),
+    Y.at(0, 1.3, 0),
+    0.025,
+    0.025,
+    [1, 0, 0],
+    0.32,
+    { ...lost, pivot: Y.at(0, winch, 0) },
+  );
+  const eaveX = outer * 0.75 + 0.25;
+  const eaveY = 1.85;
+  const endZ = postZ + 0.32;
+  const sag = (q: V3): Channels => ({
+    loss: 0,
+    droop: 0.06,
+    wither: 0.6,
+    glow: 0,
+    pivot: Y.at(0, ridgeY, 0),
+    rot: clamp(0.35 + 0.35 * r.next() + 0.25 * (ridgeY - q[1]), 0, 1),
+  });
+  for (const s of [-1, 1]) {
+    slope(
+      roof,
+      Y.at(s * eaveX, eaveY, -endZ),
+      Y.at(s * eaveX, eaveY, endZ),
+      Y.at(0, ridgeY, endZ),
+      Y.at(0, ridgeY, -endZ),
+      3,
+      Y.dir(s, 1, 0),
+      sag,
+      r,
+    );
+    for (const z of [-endZ, endZ]) {
+      beam(
+        wood,
+        Y.at(0, ridgeY + 0.02, z),
+        Y.at(s * (eaveX + 0.04), eaveY - 0.02, z),
+        0.12,
+        0.035,
+        [0, 0, 1],
+        0.45,
+        still(Y.at(0, ridgeY, z), 0.55, { droop: 0.04 }),
+      );
+    }
+    beam(
+      wood,
+      Y.at(-eaveX + 0.1, eaveY - 0.1, s * postZ),
+      Y.at(eaveX - 0.1, eaveY - 0.1, s * postZ),
+      0.1,
+      0.1,
+      UP,
+      0.42,
+      still(Y.at(0, eaveY, s * postZ), 0.55),
+    );
+  }
+  beam(
+    wood,
+    Y.at(0, ridgeY + 0.04, -endZ - 0.03),
+    Y.at(0, ridgeY + 0.04, endZ + 0.03),
+    0.08,
+    0.1,
+    UP,
+    0.48,
+    still(Y.at(0, ridgeY, 0), 0.5),
+  );
 }
 
 export function buildWell(
@@ -1023,189 +1320,17 @@ export function buildWell(
   }
 
   const falls = Y.at(0, -1.0, 0);
-  const lost = { loss: 0.33, droop: 0, wither: 0.55, glow: 0, pivot: falls };
+  const lost: Channels = {
+    loss: 0.33,
+    droop: 0,
+    wither: 0.55,
+    glow: 0,
+    pivot: falls,
+  };
   if (p.head === "a sweep") {
-    // A forked post beside the well carries a long pole, its bucket end lowered over the shaft and a stone weight at the other.
-    const postX = outer + 0.95;
-    log(
-      wood,
-      Y.at(postX, -0.6, 0),
-      Y.at(postX, 1.95, 0),
-      0.12,
-      0.42,
-      still(Y.at(postX, 0, 0), 0.55, { rot: 0.3 }),
-      8,
-    );
-    for (const s of [-1, 1]) {
-      log(
-        wood,
-        Y.at(postX, 1.85, 0),
-        Y.at(postX, 2.3, s * 0.13),
-        0.06,
-        0.42,
-        still(Y.at(postX, 1.9, 0), 0.55),
-        6,
-      );
-    }
-    const pin = Y.at(postX, 2.15, 0);
-    log(
-      wood,
-      addScaled(pin, [0, 0, 1], -0.16),
-      addScaled(pin, [0, 0, 1], 0.16),
-      0.03,
-      0.3,
-      still(pin, 0.5),
-      6,
-    );
-    const tip = Y.at(0, 1.75, 0);
-    const along = normalize(sub(pin, tip));
-    const far = addScaled(pin, along, 1.9);
-    // As vitality falls the pole tips its bucket end down to the coping, after the bucket has gone.
-    const tipped = {
-      loss: 0,
-      droop: 0,
-      wither: 0.55,
-      glow: 0,
-      pivot: pin,
-      fall: [0, 0, 0.26 * featureSide(plan), 0.24] as const,
-    };
-    log(wood, addScaled(tip, along, -0.08), far, 0.07, 0.45, tipped, 7);
-    lump(
-      stone,
-      addScaled(far, UP, -0.32),
-      [0.24, 0.2, 0.22],
-      r.next() * Math.PI,
-      0.45,
-      tipped,
-      r,
-    );
-    beam(
-      wood,
-      far,
-      addScaled(far, UP, -0.2),
-      0.025,
-      0.025,
-      [1, 0, 0],
-      0.3,
-      tipped,
-    );
-    beam(wood, tip, Y.at(0, 1.3, 0), 0.025, 0.025, [1, 0, 0], 0.32, {
-      ...lost,
-      pivot: tip,
-    });
+    buildWellSweep(wood, stone, Y, plan, outer, lost, r);
   } else {
-    // Two posts carry a little shingled roof over a winch, its crank at one end.
-    const postZ = outer + 0.09;
-    const ridgeY = 2.6;
-    for (const s of [-1, 1]) {
-      const base = Y.at(0, -0.45, s * postZ);
-      beam(
-        wood,
-        base,
-        Y.at(0, ridgeY - 0.05, s * postZ),
-        0.14,
-        0.14,
-        [1, 0, 0],
-        0.42,
-        still(base, 0.55, { rot: 0.3 }),
-      );
-    }
-    const winch = 1.5;
-    log(
-      wood,
-      Y.at(0, winch, -postZ),
-      Y.at(0, winch, postZ),
-      0.085,
-      0.42,
-      still(Y.at(0, winch, 0), 0.55),
-      8,
-    );
-    const crank = Y.at(0, winch, postZ + 0.16);
-    log(
-      wood,
-      Y.at(0, winch, postZ - 0.05),
-      crank,
-      0.03,
-      0.35,
-      still(crank, 0.5),
-      6,
-    );
-    beam(
-      wood,
-      crank,
-      addScaled(crank, Y.dir(0.3, -0.25, 0), 1),
-      0.04,
-      0.04,
-      [0, 0, 1],
-      0.35,
-      still(crank, 0.5, { fall: [0, 0, 0.9, 0.25] }),
-    );
-    beam(
-      wood,
-      Y.at(0, winch - 0.08, 0),
-      Y.at(0, 1.3, 0),
-      0.025,
-      0.025,
-      [1, 0, 0],
-      0.32,
-      { ...lost, pivot: Y.at(0, winch, 0) },
-    );
-    const eaveX = outer * 0.75 + 0.25;
-    const eaveY = 1.85;
-    const endZ = postZ + 0.32;
-    const sag = (q: V3): Channels => ({
-      loss: 0,
-      droop: 0.06,
-      wither: 0.6,
-      glow: 0,
-      pivot: Y.at(0, ridgeY, 0),
-      rot: clamp(0.35 + 0.35 * r.next() + 0.25 * (ridgeY - q[1]), 0, 1),
-    });
-    for (const s of [-1, 1]) {
-      slope(
-        roof,
-        Y.at(s * eaveX, eaveY, -endZ),
-        Y.at(s * eaveX, eaveY, endZ),
-        Y.at(0, ridgeY, endZ),
-        Y.at(0, ridgeY, -endZ),
-        3,
-        Y.dir(s, 1, 0),
-        sag,
-        r,
-      );
-      for (const z of [-endZ, endZ]) {
-        beam(
-          wood,
-          Y.at(0, ridgeY + 0.02, z),
-          Y.at(s * (eaveX + 0.04), eaveY - 0.02, z),
-          0.12,
-          0.035,
-          [0, 0, 1],
-          0.45,
-          still(Y.at(0, ridgeY, z), 0.55, { droop: 0.04 }),
-        );
-      }
-      beam(
-        wood,
-        Y.at(-eaveX + 0.1, eaveY - 0.1, s * postZ),
-        Y.at(eaveX - 0.1, eaveY - 0.1, s * postZ),
-        0.1,
-        0.1,
-        UP,
-        0.42,
-        still(Y.at(0, eaveY, s * postZ), 0.55),
-      );
-    }
-    beam(
-      wood,
-      Y.at(0, ridgeY + 0.04, -endZ - 0.03),
-      Y.at(0, ridgeY + 0.04, endZ + 0.03),
-      0.08,
-      0.1,
-      UP,
-      0.48,
-      still(Y.at(0, ridgeY, 0), 0.5),
-    );
+    buildWellRoofHead(wood, roof, Y, outer, lost, r);
   }
   bucket(wood, Y.at(0, 0.98, 0), lost);
 
@@ -1343,199 +1468,211 @@ function castBell(b: PartBuilder, hang: V3, B: number, ch: Channels): void {
   );
 }
 
-export function buildBell(
-  p: Resolved<typeof bellParams>,
-  ctx: BuildContext,
-  plan: BuildingPlan,
-): Built {
-  const r = ctx.rand.fork("bell");
-  const B = p.bell;
-  // Turned so its arch faces the front, the way a person walks up.
-  const Y = turned(yard(plan, 2.4, -plan.depth * 0.18));
-  const stone = new PartBuilder("masonry", "solid");
-  const wood = new PartBuilder("timber", "solid");
-  const roof = new PartBuilder("roof", "solid");
-  const metal = new PartBuilder("glass");
-  const weed = new PartBuilder("leaf");
-  const [X, , Z] = Y.axes;
-  const half = B + 0.3;
-  const spring = 2.05;
-  const hang = Y.at(0, spring + 0.02, 0);
-  // As vitality falls the bell hangs askew from one strap, then goes.
-  const askew = 0.5 * featureSide(plan);
-  const along = Y.dir(0, 0, askew);
-  const swung = (wither: number): Channels => ({
-    loss: 0.14,
-    droop: 0,
-    wither,
-    glow: 0,
-    pivot: hang,
-    fall: [along[0], along[1], along[2], 0.4],
-  });
-  let ridgeY: number;
-  let span: number;
-  let eaveX: number;
-  if (p.hanging === "a timber frame") {
-    // Two A-frames of raked legs joined by the headstock, braced low and high.
-    const legZ = half + 0.2;
-    for (const s of [-1, 1]) {
-      for (const lx of [-1, 1]) {
-        const base = Y.at(lx * 0.62, -0.4, s * legZ);
-        beam(
-          wood,
-          base,
-          Y.at(lx * 0.07, spring + 0.12, s * legZ),
-          0.13,
-          0.13,
-          Z,
-          0.42 + 0.05 * r.next(),
-          still(base, 0.55, { rot: 0.35 }),
-        );
-      }
-      beam(
-        wood,
-        Y.at(-0.5, 0.75, s * legZ),
-        Y.at(0.5, 0.75, s * legZ),
-        0.1,
-        0.08,
-        UP,
-        0.42,
-        still(Y.at(0, 0.75, s * legZ), 0.55, { loss: s > 0 ? 0.2 : 0 }),
-      );
-      beam(
-        wood,
-        Y.at(-0.26, spring - 0.45, s * legZ),
-        Y.at(0.26, spring - 0.45, s * legZ),
-        0.09,
-        0.08,
-        UP,
-        0.42,
-        still(Y.at(0, spring - 0.45, s * legZ), 0.55),
-      );
-      // A king post from the headstock up to the ridge.
-      beam(
-        wood,
-        Y.at(0, spring + 0.12, s * legZ),
-        Y.at(0, spring + 0.85, s * legZ),
-        0.1,
-        0.1,
-        Z,
-        0.42,
-        still(Y.at(0, spring, s * legZ), 0.55),
-      );
-    }
+interface BellRoofSpan {
+  readonly ridgeY: number;
+  readonly span: number;
+  readonly eaveX: number;
+}
+
+function buildBellTimberFrame(
+  wood: PartBuilder,
+  Y: Yard,
+  half: number,
+  spring: number,
+  hang: V3,
+  r: Rand,
+): BellRoofSpan {
+  const Z = Y.axes[2];
+  // Two A-frames of raked legs joined by the headstock, braced low and high.
+  const legZ = half + 0.2;
+  for (const s of [-1, 1]) {
     for (const lx of [-1, 1]) {
+      const base = Y.at(lx * 0.62, -0.4, s * legZ);
       beam(
         wood,
-        Y.at(lx * 0.53, 0.6, -legZ),
-        Y.at(lx * 0.53, 0.6, legZ),
-        0.09,
-        0.08,
-        UP,
-        0.42,
-        still(Y.at(lx * 0.53, 0.6, 0), 0.55, { rot: 0.3 }),
+        base,
+        Y.at(lx * 0.07, spring + 0.12, s * legZ),
+        0.13,
+        0.13,
+        Z,
+        0.42 + 0.05 * r.next(),
+        still(base, 0.55, { rot: 0.35 }),
       );
     }
     beam(
       wood,
-      Y.at(0, spring + 0.12, -legZ - 0.1),
-      Y.at(0, spring + 0.12, legZ + 0.1),
-      0.16,
-      0.14,
-      UP,
-      0.45,
-      still(hang, 0.55),
-    );
-    ridgeY = spring + 0.85;
-    span = legZ + 0.32;
-    eaveX = 0.62;
-  } else {
-    // Two stone piers and a round arch of voussoirs, the walling above it up to a little roof.
-    const pier = 0.46;
-    for (const s of [-1, 1]) {
-      const z0 = s > 0 ? half : -half - pier;
-      stoneBlock(
-        stone,
-        Y,
-        -pier / 2,
-        pier / 2,
-        z0,
-        z0 + pier,
-        -0.5,
-        spring,
-        8,
-        r,
-        (_, c) =>
-          still(c, 0.35 + 0.3 * r.next(), { tint: (r.next() - 0.5) * 0.05 }),
-      );
-    }
-    const arch = 7;
-    const rise = half + 0.16;
-    for (let k = 0; k < arch; k++) {
-      const a0 = (k / arch) * Math.PI;
-      const a1 = ((k + 1) / arch) * Math.PI;
-      const from = Y.at(0, spring + Math.sin(a0) * rise, Math.cos(a0) * rise);
-      const to = Y.at(0, spring + Math.sin(a1) * rise, Math.cos(a1) * rise);
-      beam(
-        stone,
-        from,
-        to,
-        pier,
-        0.3,
-        X,
-        0.56 + 0.08 * r.next(),
-        still(Y.at(0, spring, 0), 0.4),
-      );
-    }
-    // Courses over the arch, cut back to its curve.
-    const wallTop = spring + rise + 0.32;
-    const outerZ = half + pier;
-    for (let y = spring; y < wallTop - 0.02; y += 0.26) {
-      const y1 = Math.min(wallTop, y + 0.26);
-      const dy = (y + y1) / 2 - spring;
-      const open =
-        dy < rise + 0.14
-          ? Math.sqrt(Math.max(0, (rise + 0.15) ** 2 - dy * dy))
-          : 0;
-      const runs: [number, number][] =
-        open > 0.05
-          ? [
-              [-outerZ, -open],
-              [open, outerZ],
-            ]
-          : [[-outerZ, outerZ]];
-      for (const [z0, z1] of runs) {
-        if (z1 - z0 < 0.08) continue;
-        const pieces = Math.max(1, Math.round((z1 - z0) / 0.4));
-        for (let k = 0; k < pieces; k++) {
-          const a = z0 + ((z1 - z0) * k) / pieces;
-          const bz = z0 + ((z1 - z0) * (k + 1)) / pieces;
-          const c = Y.at(0, (y + y1) / 2, (a + bz) / 2);
-          box(
-            stone,
-            c,
-            [Z, UP, X],
-            [(bz - a) / 2 - 0.012, (y1 - y) / 2 - 0.01, pier / 2 - 0.02],
-            0.42 + 0.22 * r.next(),
-            still(c, 0.35 + 0.3 * r.next(), { tint: (r.next() - 0.5) * 0.05 }),
-          );
-        }
-      }
-    }
-    beam(
-      wood,
-      Y.at(0, spring + 0.02, -half - 0.1),
-      Y.at(0, spring + 0.02, half + 0.1),
-      0.14,
-      0.14,
+      Y.at(-0.5, 0.75, s * legZ),
+      Y.at(0.5, 0.75, s * legZ),
+      0.1,
+      0.08,
       UP,
       0.42,
-      still(hang, 0.55),
+      still(Y.at(0, 0.75, s * legZ), 0.55, { loss: s > 0 ? 0.2 : 0 }),
     );
-    ridgeY = wallTop + 0.55;
-    span = outerZ + 0.18;
-    eaveX = pier / 2 + 0.3;
+    beam(
+      wood,
+      Y.at(-0.26, spring - 0.45, s * legZ),
+      Y.at(0.26, spring - 0.45, s * legZ),
+      0.09,
+      0.08,
+      UP,
+      0.42,
+      still(Y.at(0, spring - 0.45, s * legZ), 0.55),
+    );
+    // A king post from the headstock up to the ridge.
+    beam(
+      wood,
+      Y.at(0, spring + 0.12, s * legZ),
+      Y.at(0, spring + 0.85, s * legZ),
+      0.1,
+      0.1,
+      Z,
+      0.42,
+      still(Y.at(0, spring, s * legZ), 0.55),
+    );
   }
+  for (const lx of [-1, 1]) {
+    beam(
+      wood,
+      Y.at(lx * 0.53, 0.6, -legZ),
+      Y.at(lx * 0.53, 0.6, legZ),
+      0.09,
+      0.08,
+      UP,
+      0.42,
+      still(Y.at(lx * 0.53, 0.6, 0), 0.55, { rot: 0.3 }),
+    );
+  }
+  beam(
+    wood,
+    Y.at(0, spring + 0.12, -legZ - 0.1),
+    Y.at(0, spring + 0.12, legZ + 0.1),
+    0.16,
+    0.14,
+    UP,
+    0.45,
+    still(hang, 0.55),
+  );
+  return { ridgeY: spring + 0.85, span: legZ + 0.32, eaveX: 0.62 };
+}
+
+function buildBellArchWalling(
+  stone: PartBuilder,
+  Y: Yard,
+  spring: number,
+  rise: number,
+  pier: number,
+  outerZ: number,
+  wallTop: number,
+  r: Rand,
+): void {
+  const [X, , Z] = Y.axes;
+  for (let y = spring; y < wallTop - 0.02; y += 0.26) {
+    const y1 = Math.min(wallTop, y + 0.26);
+    const dy = (y + y1) / 2 - spring;
+    const open =
+      dy < rise + 0.14
+        ? Math.sqrt(Math.max(0, (rise + 0.15) ** 2 - dy * dy))
+        : 0;
+    const runs: [number, number][] =
+      open > 0.05
+        ? [
+            [-outerZ, -open],
+            [open, outerZ],
+          ]
+        : [[-outerZ, outerZ]];
+    for (const [z0, z1] of runs) {
+      if (z1 - z0 < 0.08) continue;
+      const pieces = Math.max(1, Math.round((z1 - z0) / 0.4));
+      for (let k = 0; k < pieces; k++) {
+        const a = z0 + ((z1 - z0) * k) / pieces;
+        const bz = z0 + ((z1 - z0) * (k + 1)) / pieces;
+        const c = Y.at(0, (y + y1) / 2, (a + bz) / 2);
+        box(
+          stone,
+          c,
+          [Z, UP, X],
+          [(bz - a) / 2 - 0.012, (y1 - y) / 2 - 0.01, pier / 2 - 0.02],
+          0.42 + 0.22 * r.next(),
+          still(c, 0.35 + 0.3 * r.next(), { tint: (r.next() - 0.5) * 0.05 }),
+        );
+      }
+    }
+  }
+}
+
+function buildBellStoneArch(
+  stone: PartBuilder,
+  wood: PartBuilder,
+  Y: Yard,
+  half: number,
+  spring: number,
+  hang: V3,
+  r: Rand,
+): BellRoofSpan {
+  const X = Y.axes[0];
+  // Two stone piers and a round arch of voussoirs, the walling above it up to a little roof.
+  const pier = 0.46;
+  for (const s of [-1, 1]) {
+    const z0 = s > 0 ? half : -half - pier;
+    stoneBlock(
+      stone,
+      Y,
+      -pier / 2,
+      pier / 2,
+      z0,
+      z0 + pier,
+      -0.5,
+      spring,
+      8,
+      r,
+      (_, c) =>
+        still(c, 0.35 + 0.3 * r.next(), { tint: (r.next() - 0.5) * 0.05 }),
+    );
+  }
+  const arch = 7;
+  const rise = half + 0.16;
+  for (let k = 0; k < arch; k++) {
+    const a0 = (k / arch) * Math.PI;
+    const a1 = ((k + 1) / arch) * Math.PI;
+    const from = Y.at(0, spring + Math.sin(a0) * rise, Math.cos(a0) * rise);
+    const to = Y.at(0, spring + Math.sin(a1) * rise, Math.cos(a1) * rise);
+    beam(
+      stone,
+      from,
+      to,
+      pier,
+      0.3,
+      X,
+      0.56 + 0.08 * r.next(),
+      still(Y.at(0, spring, 0), 0.4),
+    );
+  }
+  // Courses over the arch, cut back to its curve.
+  const wallTop = spring + rise + 0.32;
+  const outerZ = half + pier;
+  buildBellArchWalling(stone, Y, spring, rise, pier, outerZ, wallTop, r);
+  beam(
+    wood,
+    Y.at(0, spring + 0.02, -half - 0.1),
+    Y.at(0, spring + 0.02, half + 0.1),
+    0.14,
+    0.14,
+    UP,
+    0.42,
+    still(hang, 0.55),
+  );
+  return { ridgeY: wallTop + 0.55, span: outerZ + 0.18, eaveX: pier / 2 + 0.3 };
+}
+
+function buildBellRoof(
+  roof: PartBuilder,
+  wood: PartBuilder,
+  Y: Yard,
+  { ridgeY, span, eaveX }: BellRoofSpan,
+  r: Rand,
+): void {
+  const Z = Y.axes[2];
   // A little roof over it all, rotting through and sagging as vitality falls.
   const eaveY = ridgeY - 0.55;
   const sag = (q: V3): Channels => ({
@@ -1592,6 +1729,42 @@ export function buildBell(
       Y.at(0, eaveY, 0),
     );
   }
+}
+
+export function buildBell(
+  p: Resolved<typeof bellParams>,
+  ctx: BuildContext,
+  plan: BuildingPlan,
+): Built {
+  const r = ctx.rand.fork("bell");
+  const B = p.bell;
+  // Turned so its arch faces the front, the way a person walks up.
+  const Y = turned(yard(plan, 2.4, -plan.depth * 0.18));
+  const stone = new PartBuilder("masonry", "solid");
+  const wood = new PartBuilder("timber", "solid");
+  const roof = new PartBuilder("roof", "solid");
+  const metal = new PartBuilder("glass");
+  const weed = new PartBuilder("leaf");
+  const Z = Y.axes[2];
+  const half = B + 0.3;
+  const spring = 2.05;
+  const hang = Y.at(0, spring + 0.02, 0);
+  // As vitality falls the bell hangs askew from one strap, then goes.
+  const askew = 0.5 * featureSide(plan);
+  const along = Y.dir(0, 0, askew);
+  const swung = (wither: number): Channels => ({
+    loss: 0.14,
+    droop: 0,
+    wither,
+    glow: 0,
+    pivot: hang,
+    fall: [along[0], along[1], along[2], 0.4],
+  });
+  const roofSpan =
+    p.hanging === "a timber frame"
+      ? buildBellTimberFrame(wood, Y, half, spring, hang, r)
+      : buildBellStoneArch(stone, wood, Y, half, spring, hang, r);
+  buildBellRoof(roof, wood, Y, roofSpan, r);
 
   castBell(metal, hang, B, swung(0.2));
   // A lever on the headstock and a rope down from it, to ring the bell by.
@@ -1617,26 +1790,21 @@ export function buildBell(
 
 // ---------- forge ----------
 
-export function buildForge(
-  p: Resolved<typeof forgeParams>,
-  ctx: BuildContext,
-  plan: BuildingPlan,
-): Built {
-  const r = ctx.rand.fork("forge");
-  const Y = yard(plan, 0, -plan.depth * 0.2);
-  const [X, , Z] = Y.axes;
-  const stone = new PartBuilder("masonry", "solid");
-  const plaster = new PartBuilder("wall", "solid");
-  const wood = new PartBuilder("timber", "solid");
-  const roof = new PartBuilder("roof", "solid");
-  const iron = new PartBuilder("glass");
-  const puffs = new PartBuilder("smoke");
-  const weed = new PartBuilder("leaf");
+function buildForgeHearth(
+  stone: PartBuilder,
+  plaster: PartBuilder,
+  wood: PartBuilder,
+  iron: PartBuilder,
+  puffs: PartBuilder,
+  Y: Yard,
+  stack: number,
+  r: Rand,
+): void {
+  const Z = Y.axes[2];
   const stoneCh = (_: number, c: V3): Channels =>
     still(c, 0.35 + 0.35 * r.next(), { tint: (r.next() - 0.5) * 0.05 });
 
   // The chimney stack nearest the house, the hearth in front of it at working height, and the plastered hood between them.
-  const stack = p.stack;
   stoneBlock(
     stone,
     Y,
@@ -1754,7 +1922,16 @@ export function buildForge(
       still(Y.at(lipX, hearthTop, s * 0.6), 0.55),
     );
   }
+}
 
+function buildForgeTools(
+  wood: PartBuilder,
+  iron: PartBuilder,
+  stone: PartBuilder,
+  Y: Yard,
+  r: Rand,
+): void {
+  const [X, , Z] = Y.axes;
   // The anvil on its stump, tongs leaning against it, a hammer on its face, and a quench trough by the hearth.
   const stumpAt = Y.at(3.35, 0, -0.35);
   log(
@@ -1853,89 +2030,118 @@ export function buildForge(
       r,
     );
   }
+}
 
-  if (p.shelter === "an open shed") {
-    // Four posts carry plates and rafters under one slope falling away from
-    // the house. As vitality falls the covering rots and falls in, then the
-    // rafters and plates, and last the outer posts lean and fall.
-    const inX = 0.9;
-    const outX = 4.05;
-    const edge = 1.45;
-    const hiY = 2.85;
-    const loY = 2.2;
-    for (const [x, y] of [
-      [inX, hiY],
-      [outX, loY],
-    ] as const) {
-      for (const s of [-1, 1]) {
-        const base = Y.at(x, -0.4, s * edge);
-        // An outer post tips out, away from the house, about the axis up × out.
-        const falls =
-          x === outX
-            ? { fall: [0, s * 0.3, -featureSide(plan) * 1.25, 0.13] as const }
-            : {};
-        beam(
-          wood,
-          base,
-          Y.at(x, y, s * edge),
-          0.15,
-          0.15,
-          X,
-          0.42 + 0.05 * r.next(),
-          still(Y.at(x, 0, s * edge), 0.55, { rot: 0.3, ...falls }),
-        );
-      }
+function buildForgeShed(
+  wood: PartBuilder,
+  roof: PartBuilder,
+  Y: Yard,
+  plan: BuildingPlan,
+  r: Rand,
+): void {
+  const X = Y.axes[0];
+  // Four posts carry plates and rafters under one slope falling away from
+  // the house. As vitality falls the covering rots and falls in, then the
+  // rafters and plates, and last the outer posts lean and fall.
+  const inX = 0.9;
+  const outX = 4.05;
+  const edge = 1.45;
+  const hiY = 2.85;
+  const loY = 2.2;
+  for (const [x, y] of [
+    [inX, hiY],
+    [outX, loY],
+  ] as const) {
+    for (const s of [-1, 1]) {
+      const base = Y.at(x, -0.4, s * edge);
+      // An outer post tips out, away from the house, about the axis up × out.
+      const falls =
+        x === outX
+          ? { fall: [0, s * 0.3, -featureSide(plan) * 1.25, 0.13] as const }
+          : {};
       beam(
         wood,
-        Y.at(x, y + 0.06, -edge - 0.2),
-        Y.at(x, y + 0.06, edge + 0.2),
-        0.13,
+        base,
+        Y.at(x, y, s * edge),
         0.15,
-        UP,
-        0.44,
-        still(Y.at(x, 0, 0), 0.55, { loss: 0.16 }),
+        0.15,
+        X,
+        0.42 + 0.05 * r.next(),
+        still(Y.at(x, 0, s * edge), 0.55, { rot: 0.3, ...falls }),
       );
     }
-    const rise = (x: number): number =>
-      hiY + 0.14 + ((loY - hiY) * (x - inX)) / (outX - inX);
-    for (const z of [-edge, -edge / 3, edge / 3, edge]) {
-      beam(
-        wood,
-        Y.at(inX - 0.2, rise(inX - 0.2), z),
-        Y.at(outX + 0.25, rise(outX + 0.25), z),
-        0.12,
-        0.08,
-        UP,
-        0.42,
-        still(Y.at(2.4, 0, z), 0.55, { loss: 0.16 }),
-      );
-    }
-    const covering = (q: V3): Channels => ({
-      loss: lossThreshold(r.next(), 0.36, 0.24),
-      droop: 0.05,
-      wither: 0.6,
-      glow: 0,
-      pivot: [q[0], 0, q[2]],
-      rot: clamp(0.3 + 0.4 * r.next(), 0, 1),
-    });
-    const span = edge + 0.25;
-    for (const [z0, z1] of [
-      [-span, -span / 3],
-      [-span / 3, span / 3],
-      [span / 3, span],
-    ] as const) {
-      slope(
-        roof,
-        Y.at(outX + 0.3, rise(outX + 0.3) + 0.05, z0),
-        Y.at(outX + 0.3, rise(outX + 0.3) + 0.05, z1),
-        Y.at(inX - 0.25, rise(inX - 0.25) + 0.05, z1),
-        Y.at(inX - 0.25, rise(inX - 0.25) + 0.05, z0),
-        4,
-        UP,
-        covering,
-        r,
-      );
-    }
+    beam(
+      wood,
+      Y.at(x, y + 0.06, -edge - 0.2),
+      Y.at(x, y + 0.06, edge + 0.2),
+      0.13,
+      0.15,
+      UP,
+      0.44,
+      still(Y.at(x, 0, 0), 0.55, { loss: 0.16 }),
+    );
+  }
+  const rise = (x: number): number =>
+    hiY + 0.14 + ((loY - hiY) * (x - inX)) / (outX - inX);
+  for (const z of [-edge, -edge / 3, edge / 3, edge]) {
+    beam(
+      wood,
+      Y.at(inX - 0.2, rise(inX - 0.2), z),
+      Y.at(outX + 0.25, rise(outX + 0.25), z),
+      0.12,
+      0.08,
+      UP,
+      0.42,
+      still(Y.at(2.4, 0, z), 0.55, { loss: 0.16 }),
+    );
+  }
+  const covering = (q: V3): Channels => ({
+    loss: lossThreshold(r.next(), 0.36, 0.24),
+    droop: 0.05,
+    wither: 0.6,
+    glow: 0,
+    pivot: [q[0], 0, q[2]],
+    rot: clamp(0.3 + 0.4 * r.next(), 0, 1),
+  });
+  const span = edge + 0.25;
+  for (const [z0, z1] of [
+    [-span, -span / 3],
+    [-span / 3, span / 3],
+    [span / 3, span],
+  ] as const) {
+    slope(
+      roof,
+      Y.at(outX + 0.3, rise(outX + 0.3) + 0.05, z0),
+      Y.at(outX + 0.3, rise(outX + 0.3) + 0.05, z1),
+      Y.at(inX - 0.25, rise(inX - 0.25) + 0.05, z1),
+      Y.at(inX - 0.25, rise(inX - 0.25) + 0.05, z0),
+      4,
+      UP,
+      covering,
+      r,
+    );
+  }
+}
+
+export function buildForge(
+  p: Resolved<typeof forgeParams>,
+  ctx: BuildContext,
+  plan: BuildingPlan,
+): Built {
+  const r = ctx.rand.fork("forge");
+  const Y = yard(plan, 0, -plan.depth * 0.2);
+  const stone = new PartBuilder("masonry", "solid");
+  const plaster = new PartBuilder("wall", "solid");
+  const wood = new PartBuilder("timber", "solid");
+  const roof = new PartBuilder("roof", "solid");
+  const iron = new PartBuilder("glass");
+  const puffs = new PartBuilder("smoke");
+  const weed = new PartBuilder("leaf");
+
+  buildForgeHearth(stone, plaster, wood, iron, puffs, Y, p.stack, r);
+  buildForgeTools(wood, iron, stone, Y, r);
+  if (p.shelter === "an open shed") {
+    buildForgeShed(wood, roof, Y, plan, r);
   }
   weedsAbout(weed, Y, 0.1, 0.9, 6, r.fork("weeds"));
   for (let k = 0; k < 8; k++) {
@@ -2040,6 +2246,330 @@ function staddle(b: PartBuilder, foot: V3, ch: Channels, r: Rand): void {
   }
 }
 
+interface GranaryFace {
+  readonly n: V3;
+  readonly u: V3;
+  readonly half: number;
+  readonly out: number;
+  readonly door: boolean;
+}
+
+function buildGranaryFace(
+  wood: PartBuilder,
+  center: V3,
+  f: GranaryFace,
+  floor: number,
+  eave: number,
+  rows: number,
+  rowH: number,
+  doorHalf: number,
+  doorTop: number,
+  body: (wither: number, extra?: Partial<Channels>) => Channels,
+  boardRot: (q: V3) => number,
+  r: Rand,
+): void {
+  for (let j = 0; j < rows; j++) {
+    const y = floor + rowH * (j + 0.5);
+    const runs: [number, number][] =
+      f.door && y - rowH / 2 < doorTop
+        ? [
+            [-f.half - 0.02, -doorHalf - 0.06],
+            [doorHalf + 0.06, f.half + 0.02],
+          ]
+        : [[-f.half - 0.02, f.half + 0.02]];
+    for (const [s0, s1] of runs) {
+      const c = addScaled(
+        addScaled(
+          addScaled(center, f.n, f.out + 0.018 + 0.006 * (j % 2)),
+          f.u,
+          (s0 + s1) / 2,
+        ),
+        UP,
+        y,
+      );
+      // A board goes a length at a time, each length from its top edge down.
+      const grain = (q: Vec3): Vec3 => [
+        ((q[0] - center[0]) * f.u[0] + (q[2] - center[2]) * f.u[2]) / BOARD +
+          50,
+        j + clamp((y + rowH / 2 - q[1]) / rowH, 0, 0.999),
+        GRAIN.boards,
+      ];
+      box(
+        wood,
+        c,
+        [f.u, UP, f.n],
+        [(s1 - s0) / 2, rowH / 2 + 0.012, 0.016],
+        0.46 + 0.07 * (j % 2) + 0.04 * r.next(),
+        body(0.6, { rot: boardRot(c), grain }),
+      );
+    }
+  }
+  // Its dark inside, which shows where the boards have rotted through.
+  const inside = (s: number, y: number): V3 =>
+    addScaled(addScaled(addScaled(center, f.n, f.out - 0.03), f.u, s), UP, y);
+  quad(
+    wood,
+    [
+      inside(-f.half, floor),
+      inside(f.half, floor),
+      inside(f.half, eave),
+      inside(-f.half, eave),
+    ],
+    scale(f.n, -1),
+    0.04,
+    body(0.3),
+  );
+}
+
+function buildGranaryWalls(
+  wood: PartBuilder,
+  paint: PartBuilder,
+  stone: PartBuilder,
+  Y: Yard,
+  W: number,
+  L: number,
+  floor: number,
+  eave: number,
+  rows: number,
+  rowH: number,
+  body: (wither: number, extra?: Partial<Channels>) => Channels,
+  boardRot: (q: V3) => number,
+  r: Rand,
+): void {
+  const [X, , Z] = Y.axes;
+  const doorHalf = 0.36;
+  const doorTop = floor + 1.15;
+  const faces: readonly GranaryFace[] = [
+    { n: X, u: Z, half: L / 2, out: W / 2, door: true },
+    { n: scale(X, -1), u: Z, half: L / 2, out: W / 2, door: false },
+    { n: Z, u: X, half: W / 2, out: L / 2, door: false },
+    { n: scale(Z, -1), u: X, half: W / 2, out: L / 2, door: false },
+  ];
+  const center = Y.at(0, 0, 0);
+  for (const f of faces) {
+    buildGranaryFace(
+      wood,
+      center,
+      f,
+      floor,
+      eave,
+      rows,
+      rowH,
+      doorHalf,
+      doorTop,
+      body,
+      boardRot,
+      r,
+    );
+  }
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      box(
+        paint,
+        Y.at(sx * (W / 2 + 0.03), (floor + eave) / 2, sz * (L / 2 + 0.03)),
+        Y.axes,
+        [0.06, (eave - floor) / 2 + 0.02, 0.06],
+        0.55,
+        body(0.6, { rot: 0.4 }),
+      );
+    }
+  }
+  for (let k = 0; k < 3; k++) {
+    const z = -doorHalf + ((k + 0.5) / 3) * doorHalf * 2;
+    box(
+      wood,
+      Y.at(W / 2 + 0.01, (floor + doorTop) / 2, z),
+      [Z, UP, X],
+      [doorHalf / 3 - 0.008, (doorTop - floor) / 2, 0.02],
+      0.32 + 0.06 * r.next(),
+      body(0.6, { rot: 0.5 }),
+    );
+  }
+  for (const sz of [-1, 1]) {
+    box(
+      paint,
+      Y.at(W / 2 + 0.04, (floor + doorTop) / 2 + 0.03, sz * (doorHalf + 0.03)),
+      Y.axes,
+      [0.025, (doorTop - floor) / 2 + 0.03, 0.04],
+      0.55,
+      body(0.6),
+    );
+  }
+  box(
+    paint,
+    Y.at(W / 2 + 0.04, doorTop + 0.06, 0),
+    Y.axes,
+    [0.025, 0.04, doorHalf + 0.08],
+    0.58,
+    body(0.6),
+  );
+  // Stone steps up toward the door, stopping short of it so rats cannot climb in.
+  for (let k = 0; k < 3; k++) {
+    const top = 0.62 - k * 0.2;
+    const c = Y.at(W / 2 + 0.32 + 0.3 * k, (top - 0.35) / 2, 0);
+    box(
+      stone,
+      c,
+      Y.axes,
+      [0.15, (top + 0.35) / 2, 0.42],
+      0.5 + 0.1 * r.next(),
+      still(c, 0.45),
+    );
+  }
+}
+
+function buildGranaryHippedRoof(
+  roof: PartBuilder,
+  wood: PartBuilder,
+  Y: Yard,
+  W: number,
+  L: number,
+  ex: number,
+  ey: number,
+  ridgeY: number,
+  over: number,
+  body: (wither: number, extra?: Partial<Channels>) => Channels,
+  covering: (q: V3) => Channels,
+  rafter: Channels,
+  r: Rand,
+): void {
+  const [X, , Z] = Y.axes;
+  const half = Math.max(0, L / 2 - W / 2);
+  const ez = L / 2 + over;
+  for (const s of [-1, 1]) {
+    slope(
+      roof,
+      Y.at(s * ex, ey, -ez),
+      Y.at(s * ex, ey, ez),
+      Y.at(0, ridgeY, half),
+      Y.at(0, ridgeY, -half),
+      4,
+      Y.dir(s, 1, 0),
+      covering,
+      r,
+    );
+    slope(
+      roof,
+      Y.at(-ex, ey, s * ez),
+      Y.at(ex, ey, s * ez),
+      Y.at(0, ridgeY, s * half),
+      Y.at(0, ridgeY, s * half),
+      4,
+      Y.dir(0, 1, s),
+      covering,
+      r,
+    );
+    slopeFrame(
+      wood,
+      Y.at(s * ex, ey, -ez),
+      Y.at(s * ex, ey, ez),
+      Y.at(0, ridgeY, half),
+      Y.at(0, ridgeY, -half),
+      Y.dir(s, 1, 0),
+      rafter,
+    );
+    slopeFrame(
+      wood,
+      Y.at(-ex, ey, s * ez),
+      Y.at(ex, ey, s * ez),
+      Y.at(0, ridgeY, s * half),
+      Y.at(0, ridgeY, s * half),
+      Y.dir(0, 1, s),
+      rafter,
+    );
+  }
+  if (half > 0.05) {
+    box(
+      roof,
+      Y.at(0, ridgeY + 0.03, 0),
+      [Z, UP, X],
+      [half + 0.04, 0.05, 0.09],
+      0.5,
+      body(0.6),
+    );
+  }
+}
+
+function buildGranaryGabledRoof(
+  roof: PartBuilder,
+  wood: PartBuilder,
+  Y: Yard,
+  W: number,
+  L: number,
+  ex: number,
+  ey: number,
+  eave: number,
+  ridgeY: number,
+  verge: number,
+  rowH: number,
+  body: (wither: number, extra?: Partial<Channels>) => Channels,
+  covering: (q: V3) => Channels,
+  rafter: Channels,
+  boardRot: (q: V3) => number,
+  r: Rand,
+): void {
+  const [X, , Z] = Y.axes;
+  const ez = L / 2 + verge;
+  for (const s of [-1, 1]) {
+    slope(
+      roof,
+      Y.at(s * ex, ey, -ez),
+      Y.at(s * ex, ey, ez),
+      Y.at(0, ridgeY, ez),
+      Y.at(0, ridgeY, -ez),
+      4,
+      Y.dir(s, 1, 0),
+      covering,
+      r,
+    );
+    slopeFrame(
+      wood,
+      Y.at(s * ex, ey, -ez),
+      Y.at(s * ex, ey, ez),
+      Y.at(0, ridgeY, ez),
+      Y.at(0, ridgeY, -ez),
+      Y.dir(s, 1, 0),
+      rafter,
+    );
+    for (const z of [-ez, ez]) {
+      beam(
+        wood,
+        Y.at(0, ridgeY + 0.03, z),
+        Y.at(s * (ex + 0.04), ey - 0.03, z),
+        0.14,
+        0.035,
+        Z,
+        0.45,
+        body(0.55, { droop: 0.04 }),
+      );
+    }
+  }
+  box(
+    roof,
+    Y.at(0, ridgeY + 0.03, 0),
+    [Z, UP, X],
+    [ez + 0.03, 0.05, 0.09],
+    0.5,
+    body(0.6),
+  );
+  for (const sz of [-1, 1]) {
+    for (let y = eave; y < ridgeY - 0.12; y += rowH) {
+      const h = Math.min(rowH, ridgeY - 0.12 - y);
+      const reach = (W / 2 + 0.02) * (1 - (y + h / 2 - ey) / (ridgeY - ey));
+      if (reach < 0.06) continue;
+      const c = Y.at(0, y + h / 2, sz * (L / 2 + 0.018));
+      box(
+        wood,
+        c,
+        Y.axes,
+        [reach, h / 2 + 0.01, 0.016],
+        0.48 + 0.05 * r.next(),
+        body(0.6, { rot: boardRot(c) }),
+      );
+    }
+  }
+}
+
 export function buildGranary(
   p: Resolved<typeof granaryParams>,
   ctx: BuildContext,
@@ -2049,7 +2579,6 @@ export function buildGranary(
   const L = p.size;
   const W = clamp(L * 0.72, 1.5, 2.1);
   const Y = yard(plan, 1.6 + W / 2, -plan.depth * 0.12);
-  const [X, , Z] = Y.axes;
   const side = featureSide(plan);
   const stone = new PartBuilder("masonry", "solid");
   const wood = new PartBuilder("timber", "solid");
@@ -2114,8 +2643,6 @@ export function buildGranary(
   // Walls of lapped weatherboards that rot through from the top, painted corner boards, and a plank door facing out.
   const floor = 0.92;
   const eave = floor + 1.45;
-  const doorHalf = 0.36;
-  const doorTop = floor + 1.15;
   const rows = 7;
   const rowH = (eave - floor) / rows;
   const boardRot = (q: V3): number =>
@@ -2126,120 +2653,21 @@ export function buildGranary(
       0,
       1,
     );
-  const faces = [
-    { n: X, u: Z, half: L / 2, out: W / 2, door: true },
-    { n: scale(X, -1), u: Z, half: L / 2, out: W / 2, door: false },
-    { n: Z, u: X, half: W / 2, out: L / 2, door: false },
-    { n: scale(Z, -1), u: X, half: W / 2, out: L / 2, door: false },
-  ];
-  const center = Y.at(0, 0, 0);
-  for (const f of faces) {
-    for (let j = 0; j < rows; j++) {
-      const y = floor + rowH * (j + 0.5);
-      const runs: [number, number][] =
-        f.door && y - rowH / 2 < doorTop
-          ? [
-              [-f.half - 0.02, -doorHalf - 0.06],
-              [doorHalf + 0.06, f.half + 0.02],
-            ]
-          : [[-f.half - 0.02, f.half + 0.02]];
-      for (const [s0, s1] of runs) {
-        const c = addScaled(
-          addScaled(
-            addScaled(center, f.n, f.out + 0.018 + 0.006 * (j % 2)),
-            f.u,
-            (s0 + s1) / 2,
-          ),
-          UP,
-          y,
-        );
-        // A board goes a length at a time, each length from its top edge down.
-        const grain = (q: Vec3): Vec3 => [
-          ((q[0] - center[0]) * f.u[0] + (q[2] - center[2]) * f.u[2]) / BOARD +
-            50,
-          j + clamp((y + rowH / 2 - q[1]) / rowH, 0, 0.999),
-          GRAIN.boards,
-        ];
-        box(
-          wood,
-          c,
-          [f.u, UP, f.n],
-          [(s1 - s0) / 2, rowH / 2 + 0.012, 0.016],
-          0.46 + 0.07 * (j % 2) + 0.04 * r.next(),
-          body(0.6, { rot: boardRot(c), grain }),
-        );
-      }
-    }
-    // Its dark inside, which shows where the boards have rotted through.
-    const inside = (s: number, y: number): V3 =>
-      addScaled(addScaled(addScaled(center, f.n, f.out - 0.03), f.u, s), UP, y);
-    quad(
-      wood,
-      [
-        inside(-f.half, floor),
-        inside(f.half, floor),
-        inside(f.half, eave),
-        inside(-f.half, eave),
-      ],
-      scale(f.n, -1),
-      0.04,
-      body(0.3),
-    );
-  }
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      box(
-        paint,
-        Y.at(sx * (W / 2 + 0.03), (floor + eave) / 2, sz * (L / 2 + 0.03)),
-        Y.axes,
-        [0.06, (eave - floor) / 2 + 0.02, 0.06],
-        0.55,
-        body(0.6, { rot: 0.4 }),
-      );
-    }
-  }
-  for (let k = 0; k < 3; k++) {
-    const z = -doorHalf + ((k + 0.5) / 3) * doorHalf * 2;
-    box(
-      wood,
-      Y.at(W / 2 + 0.01, (floor + doorTop) / 2, z),
-      [Z, UP, X],
-      [doorHalf / 3 - 0.008, (doorTop - floor) / 2, 0.02],
-      0.32 + 0.06 * r.next(),
-      body(0.6, { rot: 0.5 }),
-    );
-  }
-  for (const sz of [-1, 1]) {
-    box(
-      paint,
-      Y.at(W / 2 + 0.04, (floor + doorTop) / 2 + 0.03, sz * (doorHalf + 0.03)),
-      Y.axes,
-      [0.025, (doorTop - floor) / 2 + 0.03, 0.04],
-      0.55,
-      body(0.6),
-    );
-  }
-  box(
+  buildGranaryWalls(
+    wood,
     paint,
-    Y.at(W / 2 + 0.04, doorTop + 0.06, 0),
-    Y.axes,
-    [0.025, 0.04, doorHalf + 0.08],
-    0.58,
-    body(0.6),
+    stone,
+    Y,
+    W,
+    L,
+    floor,
+    eave,
+    rows,
+    rowH,
+    body,
+    boardRot,
+    r,
   );
-  // Stone steps up toward the door, stopping short of it so rats cannot climb in.
-  for (let k = 0; k < 3; k++) {
-    const top = 0.62 - k * 0.2;
-    const c = Y.at(W / 2 + 0.32 + 0.3 * k, (top - 0.35) / 2, 0);
-    box(
-      stone,
-      c,
-      Y.axes,
-      [0.15, (top + 0.35) / 2, 0.42],
-      0.5 + 0.1 * r.next(),
-      still(c, 0.45),
-    );
-  }
 
   // The roof, gabled or hipped, rotting through and sagging, with boarded gables under a gabled one.
   const over = 0.28;
@@ -2256,120 +2684,40 @@ export function buildGranary(
   const ex = W / 2 + over;
   const ey = eave - 0.08;
   if (p.roof === "hipped") {
-    const half = Math.max(0, L / 2 - W / 2);
-    const ez = L / 2 + over;
-    for (const s of [-1, 1]) {
-      slope(
-        roof,
-        Y.at(s * ex, ey, -ez),
-        Y.at(s * ex, ey, ez),
-        Y.at(0, ridgeY, half),
-        Y.at(0, ridgeY, -half),
-        4,
-        Y.dir(s, 1, 0),
-        covering,
-        r,
-      );
-      slope(
-        roof,
-        Y.at(-ex, ey, s * ez),
-        Y.at(ex, ey, s * ez),
-        Y.at(0, ridgeY, s * half),
-        Y.at(0, ridgeY, s * half),
-        4,
-        Y.dir(0, 1, s),
-        covering,
-        r,
-      );
-      slopeFrame(
-        wood,
-        Y.at(s * ex, ey, -ez),
-        Y.at(s * ex, ey, ez),
-        Y.at(0, ridgeY, half),
-        Y.at(0, ridgeY, -half),
-        Y.dir(s, 1, 0),
-        rafter,
-      );
-      slopeFrame(
-        wood,
-        Y.at(-ex, ey, s * ez),
-        Y.at(ex, ey, s * ez),
-        Y.at(0, ridgeY, s * half),
-        Y.at(0, ridgeY, s * half),
-        Y.dir(0, 1, s),
-        rafter,
-      );
-    }
-    if (half > 0.05) {
-      box(
-        roof,
-        Y.at(0, ridgeY + 0.03, 0),
-        [Z, UP, X],
-        [half + 0.04, 0.05, 0.09],
-        0.5,
-        body(0.6),
-      );
-    }
-  } else {
-    const ez = L / 2 + verge;
-    for (const s of [-1, 1]) {
-      slope(
-        roof,
-        Y.at(s * ex, ey, -ez),
-        Y.at(s * ex, ey, ez),
-        Y.at(0, ridgeY, ez),
-        Y.at(0, ridgeY, -ez),
-        4,
-        Y.dir(s, 1, 0),
-        covering,
-        r,
-      );
-      slopeFrame(
-        wood,
-        Y.at(s * ex, ey, -ez),
-        Y.at(s * ex, ey, ez),
-        Y.at(0, ridgeY, ez),
-        Y.at(0, ridgeY, -ez),
-        Y.dir(s, 1, 0),
-        rafter,
-      );
-      for (const z of [-ez, ez]) {
-        beam(
-          wood,
-          Y.at(0, ridgeY + 0.03, z),
-          Y.at(s * (ex + 0.04), ey - 0.03, z),
-          0.14,
-          0.035,
-          Z,
-          0.45,
-          body(0.55, { droop: 0.04 }),
-        );
-      }
-    }
-    box(
+    buildGranaryHippedRoof(
       roof,
-      Y.at(0, ridgeY + 0.03, 0),
-      [Z, UP, X],
-      [ez + 0.03, 0.05, 0.09],
-      0.5,
-      body(0.6),
+      wood,
+      Y,
+      W,
+      L,
+      ex,
+      ey,
+      ridgeY,
+      over,
+      body,
+      covering,
+      rafter,
+      r,
     );
-    for (const sz of [-1, 1]) {
-      for (let y = eave; y < ridgeY - 0.12; y += rowH) {
-        const h = Math.min(rowH, ridgeY - 0.12 - y);
-        const reach = (W / 2 + 0.02) * (1 - (y + h / 2 - ey) / (ridgeY - ey));
-        if (reach < 0.06) continue;
-        const c = Y.at(0, y + h / 2, sz * (L / 2 + 0.018));
-        box(
-          wood,
-          c,
-          Y.axes,
-          [reach, h / 2 + 0.01, 0.016],
-          0.48 + 0.05 * r.next(),
-          body(0.6, { rot: boardRot(c) }),
-        );
-      }
-    }
+  } else {
+    buildGranaryGabledRoof(
+      roof,
+      wood,
+      Y,
+      W,
+      L,
+      ex,
+      ey,
+      eave,
+      ridgeY,
+      verge,
+      rowH,
+      body,
+      covering,
+      rafter,
+      boardRot,
+      r,
+    );
   }
   weedsAbout(weed, Y, 0.2, Math.max(W, L) / 2 + 0.7, 14, r.fork("weeds"));
   const parts = [stone, wood, paint, roof, weed]

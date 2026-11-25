@@ -111,6 +111,8 @@ function blurred(
   return out;
 }
 
+const smoothstep = (t: number): number => t * t * (3 - 2 * t);
+
 /** Smooth noise in -1..1 on a lattice `cell` pixels apart. */
 function valueNoise(
   w: number,
@@ -122,14 +124,13 @@ function valueNoise(
   const gh = Math.ceil(h / cell) + 2;
   const g = new Float32Array(gw * gh);
   for (let i = 0; i < g.length; i++) g[i] = r() * 2 - 1;
-  const sm = (t: number): number => t * t * (3 - 2 * t);
   return (x, y) => {
     const gx = Math.max(0, x) / cell;
     const gy = Math.max(0, y) / cell;
     const x0 = Math.min(gw - 2, gx | 0);
     const y0 = Math.min(gh - 2, gy | 0);
-    const tx = sm(Math.min(1, gx - x0));
-    const ty = sm(Math.min(1, gy - y0));
+    const tx = smoothstep(Math.min(1, gx - x0));
+    const ty = smoothstep(Math.min(1, gy - y0));
     const v = (i: number, j: number): number =>
       g[(y0 + j) * gw + x0 + i] as number;
     return (
@@ -143,65 +144,68 @@ const clamp255 = (v: number): number => Math.max(0, Math.min(255, v)) | 0;
 const rgb = (c: RGB): string =>
   `rgb(${clamp255(c[0])},${clamp255(c[1])},${clamp255(c[2])})`;
 
-export function paint(job: PaintJob): OffscreenCanvas {
-  const { w, h } = job;
-  const r = rng(job.seed);
-  const canvas = (cw: number, ch: number): [OffscreenCanvas, Ctx] => {
-    const c = new OffscreenCanvas(cw, ch);
-    return [c, c.getContext("2d", { willReadFrequently: true }) as Ctx];
-  };
-  const source = (px: Pixels): OffscreenCanvas => {
-    const [c, x] = canvas(px.width, px.height);
-    x.putImageData(
-      new ImageData(new Uint8ClampedArray(px.data), px.width, px.height),
-      0,
-      0,
-    );
-    return c;
-  };
-  const color = source(job.color);
-  const mask = source(job.mask);
-  /**
-   * Scales an image to `cw` by `ch` and blurs it by about `blur` pixels. A
-   * heavily blurred image has no fine detail, so it is stored smaller, with
-   * `s` painting pixels per image pixel.
-   */
-  const grab = (im: OffscreenCanvas, blur: number, cw = w, ch = h): Img => {
-    const s = Math.max(1, Math.min(4, Math.floor(blur / 3)));
-    const [iw, ih] = [Math.ceil(cw / s), Math.ceil(ch / s)];
-    const [, x] = canvas(iw, ih);
-    x.imageSmoothingQuality = "high";
-    x.drawImage(im, 0, 0, iw, ih);
-    return {
-      data: blurred(x.getImageData(0, 0, iw, ih).data, iw, ih, blur / s),
-      w: iw,
-      h: ih,
-      s,
-    };
-  };
-  const at = (img: Img, x: number, y: number): RGB => {
-    const i =
-      (Math.max(0, Math.min(img.h - 1, (y / img.s) | 0)) * img.w +
-        Math.max(0, Math.min(img.w - 1, (x / img.s) | 0))) *
-      4;
-    return [
-      img.data[i] as number,
-      img.data[i + 1] as number,
-      img.data[i + 2] as number,
-    ];
-  };
-  const differ = (a: RGB, b: RGB): number =>
-    Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
-  const thingMask = grab(mask, 2);
-  const isThing = (x: number, y: number): boolean =>
-    at(thingMask, x, y)[0] > 120;
+function makeCanvas(cw: number, ch: number): [OffscreenCanvas, Ctx] {
+  const c = new OffscreenCanvas(cw, ch);
+  return [c, c.getContext("2d", { willReadFrequently: true }) as Ctx];
+}
 
+function pixelSource(px: Pixels): OffscreenCanvas {
+  const [c, x] = makeCanvas(px.width, px.height);
+  x.putImageData(
+    new ImageData(new Uint8ClampedArray(px.data), px.width, px.height),
+    0,
+    0,
+  );
+  return c;
+}
+
+function sampleAt(img: Img, x: number, y: number): RGB {
+  const i =
+    (Math.max(0, Math.min(img.h - 1, (y / img.s) | 0)) * img.w +
+      Math.max(0, Math.min(img.w - 1, (x / img.s) | 0))) *
+    4;
+  return [
+    img.data[i] as number,
+    img.data[i + 1] as number,
+    img.data[i + 2] as number,
+  ];
+}
+
+function colorDiff(a: RGB, b: RGB): number {
+  return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+}
+
+function grabImage(
+  im: OffscreenCanvas,
+  blur: number,
+  cw: number,
+  ch: number,
+): Img {
+  const s = Math.max(1, Math.min(4, Math.floor(blur / 3)));
+  const [iw, ih] = [Math.ceil(cw / s), Math.ceil(ch / s)];
+  const [, x] = makeCanvas(iw, ih);
+  x.imageSmoothingQuality = "high";
+  x.drawImage(im, 0, 0, iw, ih);
+  return {
+    data: blurred(x.getImageData(0, 0, iw, ih).data, iw, ih, blur / s),
+    w: iw,
+    h: ih,
+    s,
+  };
+}
+
+function buildDirectionField(
+  color: OffscreenCanvas,
+  w: number,
+  h: number,
+  r: () => number,
+): (x: number, y: number) => Point {
   // The direction field. Strokes run along shapes (the structure tensor's minor direction). Where there is no clear
   // direction, they follow one gentle diagonal with slow drift.
   const q = 4;
   const fw = Math.ceil(w / q);
   const fh = Math.ceil(h / q);
-  const small = grab(color, 3, fw, fh).data;
+  const small = grabImage(color, 3, fw, fh).data;
   const lum = new Float32Array(fw * fh);
   for (let i = 0; i < fw * fh; i++) {
     lum[i] =
@@ -232,7 +236,7 @@ export function paint(job: PaintJob): OffscreenCanvas {
     return out;
   }) as [Float32Array, Float32Array, Float32Array];
   const drift = valueNoise(w, h, 260, r);
-  const dirAt = (x: number, y: number): Point => {
+  return (x, y) => {
     const i =
       Math.max(0, Math.min(fh - 1, (y / q) | 0)) * fw +
       Math.max(0, Math.min(fw - 1, (x / q) | 0));
@@ -250,8 +254,134 @@ export function paint(job: PaintJob): OffscreenCanvas {
     const t = 0.5 * Math.atan2(vy, vx);
     return [Math.cos(t), Math.sin(t)];
   };
+}
 
-  const [painting, ctx] = canvas(w, h);
+function sampleCell(
+  gx: number,
+  gy: number,
+  step: number,
+  ref: Img,
+  cur: Img,
+  r: () => number,
+): { best: Point; mean: number } {
+  let best: Point = [gx, gy];
+  let worst = -1;
+  let sum = 0;
+  for (let k = 0; k < 5; k++) {
+    const x = gx + r() * step;
+    const y = gy + r() * step;
+    const e = colorDiff(sampleAt(ref, x, y), sampleAt(cur, x, y));
+    sum += e;
+    if (e > worst) {
+      worst = e;
+      best = [x, y];
+    }
+  }
+  return { best, mean: sum / 5 };
+}
+
+function pickSpots(
+  w: number,
+  h: number,
+  layer: (typeof LAYERS)[number],
+  ref: Img,
+  cur: Img,
+  isThing: (x: number, y: number) => boolean,
+  r: () => number,
+): Point[] {
+  const spots: Point[] = [];
+  // In each grid cell, a stroke goes at the sampled point where the painting differs most from the view, if the cell's mean difference exceeds `stray`.
+  const step = layer.r * layer.spacing;
+  for (let gy = 0; gy < h; gy += step) {
+    for (let gx = 0; gx < w; gx += step) {
+      const { best, mean } = sampleCell(gx, gy, step, ref, cur, r);
+      if (layer.thing && !isThing(best[0], best[1])) continue;
+      if (mean > layer.stray) spots.push(best);
+    }
+  }
+  for (let i = spots.length - 1; i > 0; i--) {
+    const j = (r() * (i + 1)) | 0;
+    [spots[i], spots[j]] = [spots[j] as Point, spots[i] as Point];
+  }
+  return spots;
+}
+
+function strokeBaseColor(
+  layer: (typeof LAYERS)[number],
+  ref: Img,
+  coarse: Img,
+  x0: number,
+  y0: number,
+): RGB {
+  const seen = sampleAt(ref, x0, y0);
+  const around = sampleAt(coarse, x0, y0);
+  // Off the thing, mixes the color 40% toward the coarse view, which damps specks such as petals and glints.
+  return layer.thing
+    ? seen
+    : [
+        seen[0] * 0.6 + around[0] * 0.4,
+        seen[1] * 0.6 + around[1] * 0.4,
+        seen[2] * 0.6 + around[2] * 0.4,
+      ];
+}
+
+function extendStrokeSide(
+  path: Point[],
+  x0: number,
+  y0: number,
+  sgn: 1 | -1,
+  layer: (typeof LAYERS)[number],
+  ref: Img,
+  c0: RGB,
+  isThing: (x: number, y: number) => boolean,
+  dirAt: (x: number, y: number) => Point,
+): void {
+  let [x, y] = [x0, y0];
+  let [px, py] = dirAt(x0, y0);
+  px *= sgn;
+  py *= sgn;
+  for (let k = 0; k < layer.steps; k++) {
+    let [dx, dy] = dirAt(x, y);
+    if (dx * px + dy * py < 0) [dx, dy] = [-dx, -dy];
+    x += dx * layer.r * 0.55;
+    y += dy * layer.r * 0.55;
+    [px, py] = [dx, dy];
+    if (colorDiff(sampleAt(ref, x, y), c0) > 70) break;
+    if (layer.thing && !isThing(x, y)) break;
+    if (sgn > 0) path.push([x, y]);
+    else path.unshift([x, y]);
+  }
+}
+
+function applyPaperTexture(
+  ctx: Ctx,
+  w: number,
+  h: number,
+  r: () => number,
+): void {
+  // Darkens each pixel by up to 5% at random, for the paper's texture.
+  const g = ctx.getImageData(0, 0, w, h);
+  const d = g.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const n = 1 - r() * 0.05;
+    d[i] = (d[i] as number) * n;
+    d[i + 1] = (d[i + 1] as number) * n;
+    d[i + 2] = (d[i + 2] as number) * n;
+  }
+  ctx.putImageData(g, 0, 0);
+}
+
+export function paint(job: PaintJob): OffscreenCanvas {
+  const { w, h } = job;
+  const r = rng(job.seed);
+  const color = pixelSource(job.color);
+  const mask = pixelSource(job.mask);
+  const thingMask = grabImage(mask, 2, w, h);
+  const isThing = (x: number, y: number): boolean =>
+    sampleAt(thingMask, x, y)[0] > 120;
+  const dirAt = buildDirectionField(color, w, h, r);
+
+  const [painting, ctx] = makeCanvas(w, h);
   ctx.fillStyle = GROUND;
   ctx.fillRect(0, 0, w, h);
   ctx.lineCap = "round";
@@ -330,48 +460,14 @@ export function paint(job: PaintJob): OffscreenCanvas {
     ctx.globalAlpha = 1;
   }
 
-  const coarse = grab(color, 20);
+  const coarse = grabImage(color, 20, w, h);
   for (const layer of LAYERS) {
-    const ref = grab(color, layer.blur);
+    const ref = grabImage(color, layer.blur, w, h);
     const cur: Img = { data: ctx.getImageData(0, 0, w, h).data, w, h, s: 1 };
     const rad = layer.r;
-    const spots: Point[] = [];
-    // In each grid cell, a stroke goes at the sampled point where the painting differs most from the view, if the cell's mean difference exceeds `stray`.
-    const step = rad * layer.spacing;
-    for (let gy = 0; gy < h; gy += step) {
-      for (let gx = 0; gx < w; gx += step) {
-        let best: Point = [gx, gy];
-        let worst = -1;
-        let sum = 0;
-        for (let k = 0; k < 5; k++) {
-          const x = gx + r() * step;
-          const y = gy + r() * step;
-          const e = differ(at(ref, x, y), at(cur, x, y));
-          sum += e;
-          if (e > worst) {
-            worst = e;
-            best = [x, y];
-          }
-        }
-        if (layer.thing && !isThing(best[0], best[1])) continue;
-        if (sum / 5 > layer.stray) spots.push(best);
-      }
-    }
-    for (let i = spots.length - 1; i > 0; i--) {
-      const j = (r() * (i + 1)) | 0;
-      [spots[i], spots[j]] = [spots[j] as Point, spots[i] as Point];
-    }
+    const spots = pickSpots(w, h, layer, ref, cur, isThing, r);
     for (const [x0, y0] of spots) {
-      const seen = at(ref, x0, y0);
-      const around = at(coarse, x0, y0);
-      // Off the thing, mixes the color 40% toward the coarse view, which damps specks such as petals and glints.
-      const c0: RGB = layer.thing
-        ? seen
-        : [
-            seen[0] * 0.6 + around[0] * 0.4,
-            seen[1] * 0.6 + around[1] * 0.4,
-            seen[2] * 0.6 + around[2] * 0.4,
-          ];
+      const c0 = strokeBaseColor(layer, ref, coarse, x0, y0);
       // Raises saturation by 18% and adds a random brightness shift, so neighboring strokes differ a little.
       const m = (c0[0] + c0[1] + c0[2]) / 3;
       const jit = (r() - 0.5) * 16;
@@ -379,37 +475,13 @@ export function paint(job: PaintJob): OffscreenCanvas {
         Math.max(0, Math.min(255, m + (v - m) * 1.18 + jit)),
       ) as RGB;
       const path: Point[] = [[x0, y0]];
-      for (const sgn of [1, -1]) {
-        let [x, y] = [x0, y0];
-        let [px, py] = dirAt(x0, y0);
-        px *= sgn;
-        py *= sgn;
-        for (let k = 0; k < layer.steps; k++) {
-          let [dx, dy] = dirAt(x, y);
-          if (dx * px + dy * py < 0) [dx, dy] = [-dx, -dy];
-          x += dx * rad * 0.55;
-          y += dy * rad * 0.55;
-          [px, py] = [dx, dy];
-          if (differ(at(ref, x, y), c0) > 70) break;
-          if (layer.thing && !isThing(x, y)) break;
-          if (sgn > 0) path.push([x, y]);
-          else path.unshift([x, y]);
-        }
-      }
+      extendStrokeSide(path, x0, y0, 1, layer, ref, c0, isThing, dirAt);
+      extendStrokeSide(path, x0, y0, -1, layer, ref, c0, isThing, dirAt);
       if (path.length < 2) path.push([x0 + rad * 0.4, y0 - rad * 0.15]);
       stroke(path, rad, col, layer.thing ? 0.95 : 0.9);
     }
   }
 
-  // Darkens each pixel by up to 5% at random, for the paper's texture.
-  const g = ctx.getImageData(0, 0, w, h);
-  const d = g.data;
-  for (let i = 0; i < d.length; i += 4) {
-    const n = 1 - r() * 0.05;
-    d[i] = (d[i] as number) * n;
-    d[i + 1] = (d[i + 1] as number) * n;
-    d[i + 2] = (d[i + 2] as number) * n;
-  }
-  ctx.putImageData(g, 0, 0);
+  applyPaperTexture(ctx, w, h, r);
   return painting;
 }

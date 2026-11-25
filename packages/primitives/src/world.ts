@@ -329,7 +329,7 @@ export const daylight = primitive({
     };
     const keys = (Object.values(HOURS) as Hour[])
       .map(keyOf)
-      .sort((a, b) => a.hour - b.hour);
+      .toSorted((a, b) => a.hour - b.hour);
     return {
       keys,
       moon: { color: hex(moon.disc), size: moon.size, phase: moon.phase },

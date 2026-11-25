@@ -39,7 +39,7 @@ export function streamFlow(stream: SolvedStream): Float32Array {
   const n = st.length;
   const out = new Float32Array(n * 2);
   const typical =
-    [...st].map(flowSection).sort((a, b) => a - b)[Math.floor(n / 2)] ?? 1;
+    [...st].map(flowSection).toSorted((a, b) => a - b)[Math.floor(n / 2)] ?? 1;
   const at = (i: number): Station =>
     st[Math.max(0, Math.min(n - 1, i))] as Station;
   for (let i = 0; i < n; i++) {

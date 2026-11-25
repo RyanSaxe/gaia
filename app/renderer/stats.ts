@@ -52,8 +52,15 @@ export interface Stats {
   count(on: boolean): void;
 }
 
+const round = (v: number): number => Math.round(v * 10) / 10;
+
+interface Probe {
+  push(now: number, ms: number): void;
+  read(now: number): Smoothness;
+}
+
 /** Frame intervals and long tasks over a sliding window. */
-function createProbe() {
+function createProbe(): Probe {
   // Times and intervals live in parallel ring buffers, so a frame never allocates.
   const size = 4096;
   const at = new Float64Array(size);
@@ -90,7 +97,7 @@ function createProbe() {
         sorted[n++] = interval[i] as number;
         first = at[i] as number;
       }
-      const view = sorted.subarray(0, n).sort();
+      const view = sorted.subarray(0, n).toSorted();
       const q = (p: number): number =>
         n === 0 ? 0 : (view[Math.min(n - 1, Math.floor(p * n))] as number);
       const median = q(0.5);
@@ -101,7 +108,6 @@ function createProbe() {
       while (long.length > 0 && now - (long[0] as { at: number }).at > WINDOW) {
         long.shift();
       }
-      const round = (v: number): number => Math.round(v * 10) / 10;
       return {
         seconds: round((now - first) / 1000),
         frames: n,
@@ -127,7 +133,7 @@ export function createStats(): Stats {
   const now = { frameMs: 0, cpuMs: 0, calls: 0, triangles: 0 };
 
   return {
-    begin(renderer) {
+    begin(renderer): void {
       start = performance.now();
       counting = asked || reporting;
       if (!counting) {
@@ -140,7 +146,7 @@ export function createStats(): Stats {
         renderer.info.reset();
       }
     },
-    end(renderer, dt) {
+    end(renderer, dt): void {
       const t = performance.now();
       probe.push(t, dt * 1000);
       if (!counting) return;
@@ -150,14 +156,14 @@ export function createStats(): Stats {
       now.calls = renderer?.info.render.calls ?? 0;
       now.triangles = renderer?.info.render.triangles ?? 0;
     },
-    read() {
+    read(): FrameStats {
       asked = true;
       return { ...now, smooth: probe.read(performance.now()) };
     },
     smoothness: () => probe.read(performance.now()),
     passes: () =>
       counting ? { calls: now.calls, triangles: now.triangles } : null,
-    count(next) {
+    count(next): void {
       reporting = next;
     },
   };

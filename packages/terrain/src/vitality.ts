@@ -109,6 +109,66 @@ function bucketsOf(sites: readonly OwnedSite[]): Buckets {
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
+function wildShareAtEdge(past: number, half: number): number {
+  if (past <= -half) return 0;
+  if (past >= half) return 1;
+  return smooth((past + half) / (2 * half));
+}
+
+function recordOwnerDistance(
+  owners: Int32Array,
+  shares: Float64Array,
+  count: number,
+  owner: number,
+  d: number,
+): number {
+  let k = 0;
+  while (k < count && owners[k] !== owner) k++;
+  if (k < count) {
+    if (d < (shares[k] as number)) shares[k] = d;
+    return count;
+  }
+  if (count === MOST) return count;
+  owners[count] = owner;
+  shares[count] = d;
+  return count + 1;
+}
+
+function collectBucketOwners(
+  sites: readonly OwnedSite[],
+  b: Buckets,
+  wx: number,
+  wz: number,
+  dMin: number,
+  cut: number,
+  owners: Int32Array,
+  shares: Float64Array,
+): number {
+  const r = dMin + cut + b.reach;
+  let count = 1;
+  const j0 = Math.max(0, Math.floor((wz - r - b.z0) / BUCKET));
+  const j1 = Math.min(b.nz - 1, Math.floor((wz + r - b.z0) / BUCKET));
+  const i0 = Math.max(0, Math.floor((wx - r - b.x0) / BUCKET));
+  const i1 = Math.min(b.nx - 1, Math.floor((wx + r - b.x0) / BUCKET));
+  for (let j = j0; j <= j1; j++) {
+    for (let i = i0; i <= i1; i++) {
+      const c = j * b.nx + i;
+      for (
+        let n = b.starts[c] as number;
+        n < (b.starts[c + 1] as number);
+        n++
+      ) {
+        const s = sites[b.ids[n] as number] as OwnedSite;
+        const d = Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0) - dMin;
+        if (d < cut) {
+          count = recordOwnerDistance(owners, shares, count, s.owner, d);
+        }
+      }
+    }
+  }
+  return count;
+}
+
 /** Fills `owners` and `shares` with the owners of (x, z) as `groundOwners` computes them, unsorted, and returns the count. */
 function ownersInto(
   sites: readonly OwnedSite[],
@@ -119,10 +179,10 @@ function ownersInto(
   owners: Int32Array,
   shares: Float64Array,
 ): number {
-  const half = GROUND_VITALITY.rim / 2;
-  const past = pastTheEdge(land, x, z);
-  const wild =
-    past <= -half ? 0 : past >= half ? 1 : smooth((past + half) / (2 * half));
+  const wild = wildShareAtEdge(
+    pastTheEdge(land, x, z),
+    GROUND_VITALITY.rim / 2,
+  );
   if (wild >= 1 || sites.length === 0) {
     owners[0] = WILD_OWNER;
     shares[0] = 1;
@@ -132,45 +192,19 @@ function ownersInto(
   const nearest = sites[nearestSite(sites, wx, wz)] as OwnedSite;
   const dMin =
     Math.hypot(wx - nearest.x, wz - nearest.z) - (nearest.reach ?? 0);
-  const cut = GROUND_VITALITY.cut * soft;
-  // Visit every site that could lie within `cut` of the nearest. Each owner keeps its nearest site's distance.
-  const b = bucketsOf(sites);
-  const r = dMin + cut + b.reach;
   // Put the nearest site's owner first, so the `MOST` cap never drops it.
   owners[0] = nearest.owner;
   shares[0] = 0;
-  let count = 1;
-  const j1 = Math.min(b.nz - 1, Math.floor((wz + r - b.z0) / BUCKET));
-  const i1 = Math.min(b.nx - 1, Math.floor((wx + r - b.x0) / BUCKET));
-  for (
-    let j = Math.max(0, Math.floor((wz - r - b.z0) / BUCKET));
-    j <= j1;
-    j++
-  ) {
-    for (
-      let i = Math.max(0, Math.floor((wx - r - b.x0) / BUCKET));
-      i <= i1;
-      i++
-    ) {
-      const c = j * b.nx + i;
-      for (
-        let n = b.starts[c] as number;
-        n < (b.starts[c + 1] as number);
-        n++
-      ) {
-        const s = sites[b.ids[n] as number] as OwnedSite;
-        const d = Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0) - dMin;
-        if (d >= cut) continue;
-        let k = 0;
-        while (k < count && owners[k] !== s.owner) k++;
-        if (k === count) {
-          if (count === MOST) continue;
-          owners[count] = s.owner;
-          shares[count++] = d;
-        } else if (d < (shares[k] as number)) shares[k] = d;
-      }
-    }
-  }
+  let count = collectBucketOwners(
+    sites,
+    bucketsOf(sites),
+    wx,
+    wz,
+    dMin,
+    GROUND_VITALITY.cut * soft,
+    owners,
+    shares,
+  );
   // Each owner's share falls off with how much farther its nearest site lies, and reaches 0 at the cut without a step.
   const floor = Math.exp(-GROUND_VITALITY.cut);
   let total = 0;
@@ -209,7 +243,7 @@ export function groundOwners(
   return Array.from({ length: count }, (_, k) => ({
     owner: owners[k] as number,
     share: shares[k] as number,
-  })).sort((p, q) => q.share - p.share || p.owner - q.owner);
+  })).toSorted((p, q) => q.share - p.share || p.owner - q.owner);
 }
 
 /** The sample grid for the ownership of a world `extent` meters across, centered on the world. */
@@ -219,6 +253,51 @@ export function ownershipGrid(
 ): { readonly n: number; readonly origin: number; readonly spacing: number } {
   const n = Math.round(extent / spacing) + 1;
   return { n, origin: (-(n - 1) * spacing) / 2, spacing };
+}
+
+function selectTopOwners(
+  who: Int32Array,
+  much: Float64Array,
+  count: number,
+  kept: number,
+): number {
+  let total = 0;
+  for (let t = 0; t < kept; t++) {
+    let best = t;
+    for (let j = t + 1; j < count; j++) {
+      const d = (much[j] as number) - (much[best] as number);
+      if (d > 0 || (d === 0 && (who[j] as number) < (who[best] as number))) {
+        best = j;
+      }
+    }
+    [who[t], who[best]] = [who[best] as number, who[t] as number];
+    [much[t], much[best]] = [much[best] as number, much[t] as number];
+    total += much[t] as number;
+  }
+  return total;
+}
+
+function writeSampleTaps(
+  owners: Uint16Array,
+  shares: Uint8Array,
+  at: number,
+  who: Int32Array,
+  much: Float64Array,
+  count: number,
+  taps: number,
+): void {
+  const kept = Math.min(taps, count);
+  const total = selectTopOwners(who, much, count, kept);
+  let left = 255;
+  for (let t = 0; t < kept; t++) {
+    const q =
+      t === kept - 1
+        ? left
+        : Math.min(left, Math.round(((much[t] as number) / total) * 255));
+    owners[at + t] = who[t] === WILD_OWNER ? WILD_TAP : (who[t] as number);
+    shares[at + t] = q;
+    left -= q;
+  }
 }
 
 /**
@@ -263,35 +342,15 @@ export function ownershipRows(
         who,
         much,
       );
-      // Select the largest shares first, with ties going to the lower owner.
-      const kept = Math.min(taps, count);
-      let total = 0;
-      for (let t = 0; t < kept; t++) {
-        let best = t;
-        for (let j = t + 1; j < count; j++) {
-          const d = (much[j] as number) - (much[best] as number);
-          if (
-            d > 0 ||
-            (d === 0 && (who[j] as number) < (who[best] as number))
-          ) {
-            best = j;
-          }
-        }
-        [who[t], who[best]] = [who[best] as number, who[t] as number];
-        [much[t], much[best]] = [much[best] as number, much[t] as number];
-        total += much[t] as number;
-      }
-      const at = ((k - k0) * n + i) * taps;
-      let left = 255;
-      for (let t = 0; t < kept; t++) {
-        const q =
-          t === kept - 1
-            ? left
-            : Math.min(left, Math.round(((much[t] as number) / total) * 255));
-        owners[at + t] = who[t] === WILD_OWNER ? WILD_TAP : (who[t] as number);
-        shares[at + t] = q;
-        left -= q;
-      }
+      writeSampleTaps(
+        owners,
+        shares,
+        ((k - k0) * n + i) * taps,
+        who,
+        much,
+        count,
+        taps,
+      );
     }
   }
   return { owners, shares };
@@ -334,7 +393,7 @@ export function vitalityOver<T extends Uint8Array | Float32Array>(
       if (q === 0) continue;
       const o = owners[t + j] as number;
       const v = o === WILD_TAP ? 1 : (vitality[o] ?? 1);
-      sum += q * (v < 0 ? 0 : v > 1 ? 1 : v);
+      sum += q * Math.max(0, Math.min(1, v));
     }
     into[p * stride + offset] = whole ? Math.round(sum) : sum;
   }

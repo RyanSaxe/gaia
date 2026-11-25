@@ -40,7 +40,7 @@ export function createEngineClient(send: (line: string) => void): LineClient {
         send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
       });
     },
-    receive(line) {
+    receive(line): void {
       let message: Response;
       try {
         message = JSON.parse(line) as Response;
@@ -54,13 +54,15 @@ export function createEngineClient(send: (line: string) => void): LineClient {
         typeof message.id === "number" ? pending.get(message.id) : undefined;
       if (call === undefined) return;
       pending.delete(message.id as number);
-      if (message.error !== undefined) {
+      if (message.error === undefined) {
+        call.resolve(message.result);
+      } else {
         call.reject(
           new Error(`${message.error.message} (${message.error.code})`),
         );
-      } else call.resolve(message.result);
+      }
     },
-    disconnect(reason) {
+    disconnect(reason): void {
       for (const call of pending.values()) call.reject(new Error(reason));
       pending.clear();
     },

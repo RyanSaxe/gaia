@@ -3,11 +3,10 @@
 // a tapped point plans a way around solids, and no boundary stops a walk,
 // since the wild land continues past the codebase's land.
 
-import { heightAt } from "./lattice.ts";
 import { EYE_HEIGHT } from "./sight.ts";
 import { type Edge, type Solids, nearestEdge } from "./solids.ts";
-import { groundHeightAt, inWilds } from "./wilds.ts";
-import { DRY, type Terrain } from "./world.ts";
+import { groundHeightAt, waterDepthAt } from "./wilds.ts";
+import type { Terrain } from "./world.ts";
 
 export const WADE = {
   /** Speed falls by up to this share as the water deepens from `slowFrom` to `slowTo` meters. */
@@ -41,57 +40,6 @@ export interface Intent {
   readonly dx: number;
   readonly dz: number;
   readonly speed: number;
-}
-
-/** The water's depth at lattice sample i, 0 where it is dry. */
-const sampleDepth = (t: Terrain, i: number): number => {
-  const level = t.waterLevel[i] as number;
-  return level > DRY / 2
-    ? Math.max(0, level - (t.lattice.heights[i] as number))
-    : 0;
-};
-
-/**
- * Water depth at a point: the water surface minus the ground, never below 0,
- * and 0 in the wild. It reads the land's arrays on every call, so a land
- * whose arrays change in place, such as the page's moving window, is always
- * read as it is now. Past a land's window it reads the finest level that
- * holds the point (`Lattice.beyond`).
- */
-export function waterDepthAt(t: Terrain, x: number, z: number): number {
-  if (inWilds(t, x, z)) return 0;
-  const l = t.lattice;
-  const ux = (x - l.origin) / l.spacing;
-  const uz = (z - (l.originZ ?? l.origin)) / l.spacing;
-  if (
-    l.beyond !== undefined &&
-    (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)
-  ) {
-    const level = heightAt(l, x, z, t.waterLevel);
-    return level > DRY / 2 ? Math.max(0, level - heightAt(l, x, z)) : 0;
-  }
-  // Interpolate the cell's corner depths with the same triangles as the ground.
-  const gx = Math.min(l.n - 1.000001, Math.max(0, ux));
-  const gz = Math.min(l.n - 1.000001, Math.max(0, uz));
-  const ix = Math.floor(gx);
-  const iz = Math.floor(gz);
-  const fx = gx - ix;
-  const fz = gz - iz;
-  const i = iz * l.n + ix;
-  if (fx + fz <= 1) {
-    const d00 = sampleDepth(t, i);
-    return (
-      d00 +
-      fx * (sampleDepth(t, i + 1) - d00) +
-      fz * (sampleDepth(t, i + l.n) - d00)
-    );
-  }
-  const d11 = sampleDepth(t, i + l.n + 1);
-  return (
-    d11 +
-    (1 - fx) * (sampleDepth(t, i + l.n) - d11) +
-    (1 - fz) * (sampleDepth(t, i + 1) - d11)
-  );
 }
 
 const smoothstep = (lo: number, hi: number, x: number): number => {
@@ -272,6 +220,126 @@ export function planWalk(
   return { target: way[way.length - 1] as Walker, way, leg: 0 };
 }
 
+function heapPush(heap: number[], f: Float32Array, i: number): void {
+  let c = heap.length;
+  heap.push(i);
+  while (c > 0) {
+    const p = (c - 1) >> 1;
+    if ((f[heap[p] as number] as number) <= (f[i] as number)) break;
+    heap[c] = heap[p] as number;
+    c = p;
+  }
+  heap[c] = i;
+}
+
+function heapPop(heap: number[], f: Float32Array): number {
+  const top = heap[0] as number;
+  const last = heap.pop() as number;
+  if (heap.length > 0) {
+    let c = 0;
+    for (;;) {
+      const l = c * 2 + 1;
+      if (l >= heap.length) break;
+      const r = l + 1;
+      const m =
+        r < heap.length &&
+        (f[heap[r] as number] as number) < (f[heap[l] as number] as number)
+          ? r
+          : l;
+      if ((f[heap[m] as number] as number) >= (f[last] as number)) break;
+      heap[c] = heap[m] as number;
+      c = m;
+    }
+    heap[c] = last;
+  }
+  return top;
+}
+
+interface WalkGrid {
+  readonly nu: number;
+  readonly nv: number;
+  readonly gu: number;
+  readonly gv: number;
+  readonly open: (i: number) => boolean;
+  readonly done: Uint8Array;
+  readonly g: Float32Array;
+  readonly f: Float32Array;
+  readonly parent: Int32Array;
+  readonly heap: number[];
+}
+
+function canStepTo(
+  grid: WalkGrid,
+  iu: number,
+  iv: number,
+  u: number,
+  v: number,
+  diagonal: boolean,
+): boolean {
+  if (u < 0 || u >= grid.nu || v < 0 || v >= grid.nv) return false;
+  const j = v * grid.nu + u;
+  if (grid.done[j] === 1 || !grid.open(j)) return false;
+  // Do not cut a corner between two closed cells.
+  if (!diagonal) return true;
+  return grid.open(iv * grid.nu + u) && grid.open(v * grid.nu + iu);
+}
+
+function tryWalkStep(
+  grid: WalkGrid,
+  i: number,
+  iu: number,
+  iv: number,
+  du: number,
+  dv: number,
+): void {
+  if (du === 0 && dv === 0) return;
+  const u = iu + du;
+  const v = iv + dv;
+  const diagonal = du !== 0 && dv !== 0;
+  if (!canStepTo(grid, iu, iv, u, v, diagonal)) return;
+  const j = v * grid.nu + u;
+  const cost = (grid.g[i] as number) + (diagonal ? Math.SQRT2 : 1);
+  if (cost >= (grid.g[j] as number)) return;
+  grid.g[j] = cost;
+  grid.parent[j] = i;
+  grid.f[j] = cost + Math.hypot(u - grid.gu, v - grid.gv) * 1.1;
+  heapPush(grid.heap, grid.f, j);
+}
+
+function pullWayTaut(
+  solids: Solids,
+  from: Walker,
+  points: readonly Walker[],
+): Walker[] {
+  // Pull the way taut by going straight from each corner to the farthest point with a clear line.
+  const way: Walker[] = [from];
+  for (let a = 0; a < points.length - 1;) {
+    const p = points[a] as Walker;
+    let lo = a + 1;
+    let hi = points.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      const q = points[mid] as Walker;
+      if (
+        clearWay(
+          solids,
+          p.x,
+          p.z,
+          q.x,
+          q.z,
+          BODY_RADIUS + WALK_TO.clearance / 2,
+        )
+      ) {
+        lo = mid;
+      } else hi = mid - 1;
+    }
+    way.push(points[lo] as Walker);
+    a = lo;
+  }
+  if (way.length < 2) way.push(from);
+  return way;
+}
+
 /** A* on a grid aligned with the walk, with cells closed where a solid is nearer than the body plus its clearance, then pulled taut. */
 function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
   const length = Math.hypot(to.x - from.x, to.z - from.z);
@@ -311,119 +379,46 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
   const gv = Math.floor(goal / nu);
   const toGoal = (i: number): number =>
     Math.hypot((i % nu) - gu, Math.floor(i / nu) - gv);
-  const g = new Float32Array(count).fill(Infinity);
-  const f = new Float32Array(count);
-  const parent = new Int32Array(count).fill(-1);
-  const done = new Uint8Array(count);
-  const heap: number[] = [];
-  const push = (i: number): void => {
-    let c = heap.length;
-    heap.push(i);
-    while (c > 0) {
-      const p = (c - 1) >> 1;
-      if ((f[heap[p] as number] as number) <= (f[i] as number)) break;
-      heap[c] = heap[p] as number;
-      c = p;
-    }
-    heap[c] = i;
+  const grid: WalkGrid = {
+    nu,
+    nv,
+    gu,
+    gv,
+    open,
+    done: new Uint8Array(count),
+    g: new Float32Array(count).fill(Infinity),
+    f: new Float32Array(count),
+    parent: new Int32Array(count).fill(-1),
+    heap: [],
   };
-  const pop = (): number => {
-    const top = heap[0] as number;
-    const last = heap.pop() as number;
-    if (heap.length > 0) {
-      let c = 0;
-      for (;;) {
-        const l = c * 2 + 1;
-        if (l >= heap.length) break;
-        const r = l + 1;
-        const m =
-          r < heap.length &&
-          (f[heap[r] as number] as number) < (f[heap[l] as number] as number)
-            ? r
-            : l;
-        if ((f[heap[m] as number] as number) >= (f[last] as number)) break;
-        heap[c] = heap[m] as number;
-        c = m;
-      }
-      heap[c] = last;
-    }
-    return top;
-  };
-  g[start] = 0;
-  f[start] = toGoal(start);
-  push(start);
+  grid.g[start] = 0;
+  grid.f[start] = toGoal(start);
+  heapPush(grid.heap, grid.f, start);
   let best = start;
   for (
     let expanded = 0;
-    heap.length > 0 && expanded < PLAN.expansions;
+    grid.heap.length > 0 && expanded < PLAN.expansions;
     expanded++
   ) {
-    const i = pop();
-    if (done[i] === 1) continue;
-    done[i] = 1;
+    const i = heapPop(grid.heap, grid.f);
+    if (grid.done[i] === 1) continue;
+    grid.done[i] = 1;
     if (toGoal(i) < toGoal(best)) best = i;
     if (i === goal) break;
     const iu = i % nu;
     const iv = Math.floor(i / nu);
     for (let dv = -1; dv <= 1; dv++) {
-      for (let du = -1; du <= 1; du++) {
-        const u = iu + du;
-        const v = iv + dv;
-        if ((du === 0 && dv === 0) || u < 0 || u >= nu || v < 0 || v >= nv) {
-          continue;
-        }
-        const j = v * nu + u;
-        if (done[j] === 1 || !open(j)) continue;
-        // Do not cut a corner between two closed cells.
-        if (
-          du !== 0 &&
-          dv !== 0 &&
-          (!open(iv * nu + u) || !open(v * nu + iu))
-        ) {
-          continue;
-        }
-        const cost = (g[i] as number) + (du !== 0 && dv !== 0 ? Math.SQRT2 : 1);
-        if (cost >= (g[j] as number)) continue;
-        g[j] = cost;
-        parent[j] = i;
-        f[j] = cost + toGoal(j) * 1.1;
-        push(j);
-      }
+      for (let du = -1; du <= 1; du++) tryWalkStep(grid, i, iu, iv, du, dv);
     }
   }
   const cells: number[] = [];
-  for (let i = best; i !== -1; i = parent[i] as number) cells.push(i);
-  cells.reverse();
-  const points: Walker[] = cells.map((i) => ({ x: xAt(i), z: zAt(i) }));
+  for (let i = best; i !== -1; i = grid.parent[i] as number) cells.push(i);
+  const points: Walker[] = cells
+    .toReversed()
+    .map((i) => ({ x: xAt(i), z: zAt(i) }));
   points[0] = from;
   if (best === goal) points[points.length - 1] = to;
-  // Pull the way taut by going straight from each corner to the farthest point with a clear line.
-  const way: Walker[] = [from];
-  for (let a = 0; a < points.length - 1;) {
-    const p = points[a] as Walker;
-    let lo = a + 1;
-    let hi = points.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      const q = points[mid] as Walker;
-      if (
-        clearWay(
-          solids,
-          p.x,
-          p.z,
-          q.x,
-          q.z,
-          BODY_RADIUS + WALK_TO.clearance / 2,
-        )
-      ) {
-        lo = mid;
-      } else hi = mid - 1;
-    }
-    way.push(points[lo] as Walker);
-    a = lo;
-  }
-  if (way.length < 2) way.push(from);
-  return way;
+  return pullWayTaut(solids, from, points);
 }
 
 /** The point `ahead` meters along the way past the walker's projection on it. Advances to the next leg once the walker passes a leg's end. */

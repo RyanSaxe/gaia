@@ -99,10 +99,147 @@ const code: CodeLayout = {
     },
   ],
   trails: [
-    { from: "packages/a", to: "packages/b", want: 0.9, style: styles[0]! },
-    { from: "packages/a", to: "packages/c", want: 0.8, style: styles[1]! },
+    {
+      from: "packages/a",
+      to: "packages/b",
+      want: 0.9,
+      style: must(styles[0], "first trail style"),
+    },
+    {
+      from: "packages/a",
+      to: "packages/c",
+      want: 0.8,
+      style: must(styles[1], "second trail style"),
+    },
   ],
 };
+
+function must<T>(value: T | undefined, what = "value"): T {
+  if (value === undefined) throw new Error(`Missing ${what}.`);
+  return value;
+}
+
+interface TileDiffs {
+  heights: number;
+  water: number;
+  shore: number;
+  nearPond: number;
+  field: number;
+  places: number;
+}
+
+function compareTileSample(
+  tile: ReturnType<typeof bakeEditedTile>,
+  t: typeof baked,
+  field: Float32Array,
+  places: Float32Array,
+  k: number,
+  w: number,
+  differ: TileDiffs,
+): void {
+  if (tile.heights[k] !== t.lattice.heights[w]) differ.heights++;
+  if (tile.waterLevel[k] !== t.waterLevel[w]) differ.water++;
+  if (tile.shore[k] !== t.shore[w]) differ.shore++;
+  if (tile.nearPond[k] !== t.nearPond[w]) differ.nearPond++;
+  if (tile.trailField[k] !== field[w]) differ.field++;
+  if (
+    tile.trailPlaces[k * 2] !== places[w * 2] ||
+    tile.trailPlaces[k * 2 + 1] !== places[w * 2 + 1]
+  ) {
+    differ.places++;
+  }
+}
+
+function expectTilesMatchWorld(
+  t: typeof baked,
+  plan: ReturnType<typeof planTerrain>,
+  placed: ReturnType<typeof placeWorld>,
+): void {
+  const size = 64;
+  const { n } = t.lattice;
+  const field = trailField(t, placed.network.ways);
+  const places = trailPlaces(t, placed.network.ways);
+  const differ: TileDiffs = {
+    heights: 0,
+    water: 0,
+    shore: 0,
+    nearPond: 0,
+    field: 0,
+    places: 0,
+  };
+  for (let z0 = 0; z0 < n; z0 += size) {
+    for (let x0 = 0; x0 < n; x0 += size) {
+      const tile = bakeEditedTile(
+        plan,
+        placed.edits,
+        placed.network.ways,
+        x0,
+        z0,
+        size,
+      );
+      const h = Math.min(size, n - z0);
+      const w = Math.min(size, n - x0);
+      for (let j = 0; j < h; j++) {
+        for (let i = 0; i < w; i++) {
+          compareTileSample(
+            tile,
+            t,
+            field,
+            places,
+            j * size + i,
+            (z0 + j) * n + x0 + i,
+            differ,
+          );
+        }
+      }
+    }
+  }
+  expect(differ).toEqual({
+    heights: 0,
+    water: 0,
+    shore: 0,
+    nearPond: 0,
+    field: 0,
+    places: 0,
+  });
+}
+
+function expectCoarseStrideMatches(
+  t: typeof baked,
+  plan: ReturnType<typeof planTerrain>,
+  placed: ReturnType<typeof placeWorld>,
+  stride: number,
+): void {
+  const { n } = t.lattice;
+  const side = Math.ceil(n / stride);
+  const tile = bakeEditedTile(
+    plan,
+    placed.edits,
+    placed.network.ways,
+    0,
+    0,
+    side,
+    stride,
+  );
+  let wet = 0;
+  const coarse = { water: 0, region: 0, dryHeights: 0 };
+  for (let j = 0; j * stride < n; j++) {
+    for (let i = 0; i * stride < n; i++) {
+      const w = j * stride * n + i * stride;
+      const k = j * side + i;
+      if (tile.waterLevel[k] !== t.waterLevel[w]) coarse.water++;
+      if (tile.region[k] !== t.region[w]) coarse.region++;
+      if ((t.shore[w] as number) < SHORE_CAP) wet++;
+      else if (tile.heights[k] !== t.lattice.heights[w]) coarse.dryHeights++;
+    }
+  }
+  expect(coarse, `stride ${stride}`).toEqual({
+    water: 0,
+    region: 0,
+    dryHeights: 0,
+  });
+  expect(wet).toBeGreaterThan(0);
+}
 const request: PlaceRequest = {
   buildings: houses.slice(0, 2).map((blueprint, i) => ({
     name: `home-${i}`,
@@ -157,7 +294,7 @@ describe("placing a world's things on a bake", () => {
       };
     });
     // One center for all four, with the lots the layout gives a building and a landmark.
-    const code: CodeLayout = {
+    const crowdedCode: CodeLayout = {
       lots: buildings.map((b) => ({ id: b.name, x: -40, z: 30, radius: 5.4 })),
       landmarks: [
         { landmark: 0, lot: { id: "tower", x: -40, z: 30, radius: 4.2 } },
@@ -167,27 +304,31 @@ describe("placing a world's things on a bake", () => {
       symbols: [],
       trails: [],
     };
-    const placed = placeWorld(forOneLot, { ...request, buildings, code });
+    const placed = placeWorld(forOneLot, {
+      ...request,
+      buildings,
+      code: crowdedCode,
+    });
     const pads = placed.edits.pads;
-    pads.forEach((a, i) =>
-      pads.forEach((b, k) =>
-        expect(k > i && yardsMeet(a, b), `${i} and ${k}`).toBe(false),
-      ),
-    );
+    for (const [i, a] of pads.entries()) {
+      for (const [k, b] of pads.entries()) {
+        expect(k > i && yardsMeet(a, b), `${i} and ${k}`).toBe(false);
+      }
+    }
     const [tower] = placed.landmarks;
     expect(tower).toBeDefined();
+    const towerSite = must(tower, "tower").site;
+    const firstLandmark = must(request.landmarks[0], "landmark");
     // Its ground stays clear of each house's, measured the way its site is found.
-    buildings.forEach((b, k) =>
+    buildings.forEach((b, k) => {
+      const site = must(placed.sites[k], "building site");
       expect(
-        Math.hypot(
-          placed.sites[k]!.x - tower!.site.x,
-          placed.sites[k]!.z - tower!.site.z,
-        ),
+        Math.hypot(site.x - towerSite.x, site.z - towerSite.z),
         b.name,
       ).toBeGreaterThanOrEqual(
-        houseGround(b) + landmarkGround(request.landmarks[0]!.base),
-      ),
-    );
+        houseGround(b) + landmarkGround(firstLandmark.base),
+      );
+    });
   });
 
   // Bakes and levels every 64-sample tile of the land, and the land twice more at coarser strides: about 4 s alone, and
@@ -201,88 +342,11 @@ describe("placing a world's things on a bake", () => {
       expect(placed.edits.pads.length).toBe(request.buildings.length);
       expect(placed.edits.ways.length).toBeGreaterThan(0);
       const plan = planTerrain(t.spec, t.landforms);
-      const size = 64;
-      const { n } = t.lattice;
-      const field = trailField(t, placed.network.ways);
-      const places = trailPlaces(t, placed.network.ways);
-      const differ = {
-        heights: 0,
-        water: 0,
-        shore: 0,
-        nearPond: 0,
-        field: 0,
-        places: 0,
-      };
-      for (let z0 = 0; z0 < n; z0 += size) {
-        for (let x0 = 0; x0 < n; x0 += size) {
-          const tile = bakeEditedTile(
-            plan,
-            placed.edits,
-            placed.network.ways,
-            x0,
-            z0,
-            size,
-          );
-          for (let j = 0; j < Math.min(size, n - z0); j++) {
-            for (let i = 0; i < Math.min(size, n - x0); i++) {
-              const w = (z0 + j) * n + x0 + i;
-              const k = j * size + i;
-              if (tile.heights[k] !== t.lattice.heights[w]) differ.heights++;
-              if (tile.waterLevel[k] !== t.waterLevel[w]) differ.water++;
-              if (tile.shore[k] !== t.shore[w]) differ.shore++;
-              if (tile.nearPond[k] !== t.nearPond[w]) differ.nearPond++;
-              if (tile.trailField[k] !== field[w]) differ.field++;
-              if (
-                tile.trailPlaces[k * 2] !== places[w * 2] ||
-                tile.trailPlaces[k * 2 + 1] !== places[w * 2 + 1]
-              ) {
-                differ.places++;
-              }
-            }
-          }
-        }
-      }
-      expect(differ).toEqual({
-        heights: 0,
-        water: 0,
-        shore: 0,
-        nearPond: 0,
-        field: 0,
-        places: 0,
-      });
+      expectTilesMatchWorld(t, plan, placed);
       // A coarser level takes every stride-th sample. It is the same land except for the shore, which it measures
       // between its own samples, and the treads it eases by that shore, all close to the water.
       for (const stride of [2, 4]) {
-        const side = Math.ceil(n / stride);
-        const tile = bakeEditedTile(
-          plan,
-          placed.edits,
-          placed.network.ways,
-          0,
-          0,
-          side,
-          stride,
-        );
-        let wet = 0;
-        const coarse = { water: 0, region: 0, dryHeights: 0 };
-        for (let j = 0; j * stride < n; j++) {
-          for (let i = 0; i * stride < n; i++) {
-            const w = j * stride * n + i * stride;
-            const k = j * side + i;
-            if (tile.waterLevel[k] !== t.waterLevel[w]) coarse.water++;
-            if (tile.region[k] !== t.region[w]) coarse.region++;
-            if ((t.shore[w] as number) < SHORE_CAP) wet++;
-            else if (tile.heights[k] !== t.lattice.heights[w]) {
-              coarse.dryHeights++;
-            }
-          }
-        }
-        expect(coarse, `stride ${stride}`).toEqual({
-          water: 0,
-          region: 0,
-          dryHeights: 0,
-        });
-        expect(wet).toBeGreaterThan(0);
+        expectCoarseStrideMatches(t, plan, placed, stride);
       }
     },
   );

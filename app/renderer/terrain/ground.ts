@@ -94,7 +94,7 @@ function clipTexture(
   texture.magFilter = THREE.NearestFilter;
   texture.generateMipmaps = false;
   // Three uploads only the layers marked since the last upload. A new world marks none and uploads all.
-  texture.onUpdate = () => texture.clearLayerUpdates();
+  texture.onUpdate = (): void => texture.clearLayerUpdates();
   return texture;
 }
 
@@ -141,7 +141,7 @@ export function createGroundTexture(land: PageLand): GroundTexture {
     (origins[k] as THREE.Vector2).set(o.x, o.z);
     layers[k] = land.layers[k] as number;
   };
-  land.onMoved = (k, fresh) => {
+  land.onMoved = (k, fresh): void => {
     show(k);
     if (!fresh) return;
     for (const t of textures) {
@@ -152,7 +152,7 @@ export function createGroundTexture(land: PageLand): GroundTexture {
   return {
     texture: ground,
     uniforms,
-    update(t) {
+    update(t): void {
       const world = frameOf(t.spec);
       uniforms.uGroundN.value = world.n;
       uniforms.uGroundOrigin.value = world.origin;
@@ -817,12 +817,12 @@ export function createGround(
     wilds,
     material,
     update,
-    aerial() {
+    aerial(): void {
       if (aerial) return;
       aerial = true;
       fillAerial();
     },
-    follow(x, z) {
+    follow(x, z): void {
       ringUniforms.uViewer.value.set(x, z);
       ringUniforms.uCenter.value.set(
         Math.round(x / snap) * snap,

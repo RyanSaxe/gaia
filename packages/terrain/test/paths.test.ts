@@ -59,6 +59,63 @@ function everyPair(t: Terrain): TrailRequest[] {
   return out;
 }
 
+function meet(
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+  cx: number,
+  cz: number,
+  dx: number,
+  dz: number,
+): readonly [number, number] | null {
+  const den = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
+  if (den === 0) return null;
+  const u = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / den;
+  const v = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / den;
+  return u >= 0 && u <= 1 && v >= 0 && v <= 1
+    ? [ax + (bx - ax) * u, az + (bz - az) * u]
+    : null;
+}
+
+function deck(c: Crossing, s: number): readonly [number, number] {
+  return [c.x + Math.cos(-c.yaw) * s, c.z + Math.sin(-c.yaw) * s];
+}
+
+function onDeck(c: Crossing, [x, z]: readonly [number, number]): boolean {
+  const [ax, az] = deck(c, -c.span / 2);
+  const [bx, bz] = deck(c, c.span / 2);
+  const u = Math.max(
+    0,
+    Math.min(
+      1,
+      ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / (c.span * c.span),
+    ),
+  );
+  return Math.hypot(x - (ax + (bx - ax) * u), z - (az + (bz - az) * u)) < 1.5;
+}
+
+function streamCrossings(t: Terrain, way: Way): (readonly [number, number])[] {
+  const over: (readonly [number, number])[] = [];
+  const p = way.points;
+  for (let k = 0; k + 1 < p.length / 2; k++) {
+    const ax = p[k * 2] as number;
+    const az = p[k * 2 + 1] as number;
+    const bx = p[k * 2 + 2] as number;
+    const bz = p[k * 2 + 3] as number;
+    for (const stream of t.streams) {
+      const st = stream.stations;
+      for (let j = 0; j + 1 < st.length; j++) {
+        const c = st[j] as (typeof st)[number];
+        const d = st[j + 1] as (typeof st)[number];
+        const hit = meet(ax, az, bx, bz, c.x, c.z, d.x, d.z);
+        if (hit !== null) over.push(hit);
+      }
+    }
+  }
+  return over;
+}
+
 // Some tests here bake a world or plan a network. Each takes up to a second alone, and several when other work shares the machine.
 describe("trails", { timeout: 20_000 }, () => {
   // Planned once and only read.
@@ -85,7 +142,7 @@ describe("trails", { timeout: 20_000 }, () => {
         requests.length,
       );
       for (const d of network.dropped) expect(d.reason).not.toBe("");
-      network.trails.forEach((tr, i) => {
+      for (const [i, tr] of network.trails.entries()) {
         let at = tr.from;
         for (const step of tr.ways) {
           const w = network.ways[step.way] as Way;
@@ -94,7 +151,7 @@ describe("trails", { timeout: 20_000 }, () => {
           expect(w.carries.some((c) => c.trail === i)).toBe(true);
         }
         expect(at).toBe(tr.to);
-      });
+      }
     }
   });
 
@@ -123,72 +180,13 @@ describe("trails", { timeout: 20_000 }, () => {
   });
 
   it("crosses a stream on a bridge or stones wherever its tread crosses its water, each spanning the water from dry bank to dry bank", () => {
-    /** Where two segments meet, if they do. */
-    const meet = (
-      ax: number,
-      az: number,
-      bx: number,
-      bz: number,
-      cx: number,
-      cz: number,
-      dx: number,
-      dz: number,
-    ): readonly [number, number] | null => {
-      const den = (bx - ax) * (dz - cz) - (bz - az) * (dx - cx);
-      if (den === 0) return null;
-      const u = ((cx - ax) * (dz - cz) - (cz - az) * (dx - cx)) / den;
-      const v = ((cx - ax) * (bz - az) - (cz - az) * (bx - ax)) / den;
-      return u >= 0 && u <= 1 && v >= 0 && v <= 1
-        ? [ax + (bx - ax) * u, az + (bz - az) * u]
-        : null;
-    };
     let crossings = 0;
     for (const { t, network } of planned) {
       for (const way of network.ways) {
         // Every point where the tread crosses a stream's course.
-        const over: (readonly [number, number])[] = [];
-        const p = way.points;
-        for (let k = 0; k + 1 < p.length / 2; k++) {
-          for (const stream of t.streams) {
-            const st = stream.stations;
-            for (let j = 0; j + 1 < st.length; j++) {
-              const at = meet(
-                p[k * 2]!,
-                p[k * 2 + 1]!,
-                p[k * 2 + 2]!,
-                p[k * 2 + 3]!,
-                st[j]!.x,
-                st[j]!.z,
-                st[j + 1]!.x,
-                st[j + 1]!.z,
-              );
-              if (at !== null) over.push(at);
-            }
-          }
-        }
-        const deck = (c: Crossing, s: number): readonly [number, number] => [
-          c.x + Math.cos(-c.yaw) * s,
-          c.z + Math.sin(-c.yaw) * s,
-        ];
-        const onDeck = (
-          c: Crossing,
-          [x, z]: readonly [number, number],
-        ): boolean => {
-          const [ax, az] = deck(c, -c.span / 2);
-          const [bx, bz] = deck(c, c.span / 2);
-          const u = Math.max(
-            0,
-            Math.min(
-              1,
-              ((x - ax) * (bx - ax) + (z - az) * (bz - az)) / (c.span * c.span),
-            ),
-          );
-          return (
-            Math.hypot(x - (ax + (bx - ax) * u), z - (az + (bz - az) * u)) < 1.5
-          );
-        };
+        const over = streamCrossings(t, way);
         // Check only where there is water to cross. A course's dry spring or seep needs no crossing.
-        for (const at of over.filter((at) => waterDepthAt(t, ...at) > 0.1)) {
+        for (const at of over.filter((pt) => waterDepthAt(t, ...pt) > 0.1)) {
           expect(
             way.crossings.some((c) => onDeck(c, at)),
             `${way.id} crosses a stream at ${at.map((v) => v.toFixed(1)).join(", ")} with nothing to cross on`,
@@ -198,7 +196,7 @@ describe("trails", { timeout: 20_000 }, () => {
           crossings++;
           const where = `${way.id}'s crossing at ${c.x.toFixed(1)}, ${c.z.toFixed(1)}`;
           expect(
-            over.some((at) => onDeck(c, at)),
+            over.some((pt) => onDeck(c, pt)),
             `${where} crosses a stream`,
           ).toBe(true);
           for (const end of [-c.span / 2, c.span / 2]) {
@@ -279,7 +277,7 @@ describe("trails", { timeout: 20_000 }, () => {
     failing.forEach((w, s) => expect(w).toBeLessThan(both[s] as number));
     // A lone trail's way wears exactly as that trail does.
     const c = way.carries[0] as WayCarry;
-    const tr = network.trails[c.trail]!;
+    const tr = network.trails[c.trail] as (typeof network.trails)[number];
     expect(wayWearAt(first, 0)).toBeCloseTo(
       trailWearAt(tr.style.wear, vitality(tr.from), vitality(tr.to), c.from),
       5,

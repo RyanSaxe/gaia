@@ -52,6 +52,64 @@ const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
   namespace: "module",
 };
 
+function definitionsFromFacts(
+  files: ReadonlyMap<string, CodeFacts["files"][number]>,
+): Map<string, PlacedDef[]> {
+  const out = new Map<string, PlacedDef[]>();
+  for (const f of files.values()) {
+    const defs = f.symbols.map((s): PlacedDef => ({
+      id: `${f.path}#${s.name}`,
+      file: f.path,
+      name: s.name,
+      kind: s.kind,
+      exported: s.exported,
+      line: s.line ?? 0,
+      lines: s.lines ?? 1,
+    }));
+    if (defs.length > 0) {
+      out.set(
+        f.path,
+        defs.toSorted((a, b) => a.line - b.line || (a.id < b.id ? -1 : 1)),
+      );
+    }
+  }
+  return out;
+}
+
+function nearestPlacedParent(
+  node: DefNode,
+  kept: ReadonlySet<string>,
+  every: ReadonlyMap<string, DefNode>,
+): string | undefined {
+  // A definition inside an unplaced one, such as an arrow function assigned to a constant, takes the nearest placed ancestor as parent.
+  let parent = node.parent;
+  while (parent !== undefined && !kept.has(parent)) {
+    parent = every.get(parent)?.parent;
+  }
+  return parent;
+}
+
+function placedDefFromNode(
+  n: DefNode,
+  path: string,
+  parentId: string | undefined,
+  id: string,
+): PlacedDef {
+  const importance = n.judged?.value?.importance ?? undefined;
+  return {
+    id,
+    file: path,
+    ...(parentId === undefined ? {} : { parent: parentId }),
+    name: n.name,
+    kind: KIND_OF_ROLE[n.role] ?? "function",
+    exported: n.exported,
+    line: n.span.start,
+    lines: Math.max(1, n.span.end - n.span.start + 1),
+    ...(n.doc === undefined ? {} : { doc: n.doc }),
+    ...(importance === undefined ? {} : { importance }),
+  };
+}
+
 /**
  * Each file's placed definitions by path, in source order, with each
  * definition before the ones inside it. With a graph, every definition in it
@@ -62,27 +120,8 @@ export function definitionsOf(
   graph?: CodeGraph,
 ): ReadonlyMap<string, readonly PlacedDef[]> {
   const files = new Map(facts.files.map((f) => [f.path, f]));
+  if (graph === undefined) return definitionsFromFacts(files);
   const out = new Map<string, PlacedDef[]>();
-  if (graph === undefined) {
-    for (const f of files.values()) {
-      const defs = f.symbols.map((s): PlacedDef => ({
-        id: `${f.path}#${s.name}`,
-        file: f.path,
-        name: s.name,
-        kind: s.kind,
-        exported: s.exported,
-        line: s.line ?? 0,
-        lines: s.lines ?? 1,
-      }));
-      if (defs.length > 0) {
-        out.set(
-          f.path,
-          defs.sort((a, b) => a.line - b.line || (a.id < b.id ? -1 : 1)),
-        );
-      }
-    }
-    return out;
-  }
   const pathOf = new Map(
     graph.nodes.flatMap((n) =>
       n.kind === "file" ? [[n.id, n.path] as const] : [],
@@ -98,30 +137,14 @@ export function definitionsOf(
   const idOf = (n: DefNode): string =>
     `${pathOf.get(n.file) as string}#${n.id.slice(n.id.indexOf("#") + 1)}`;
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  for (const n of nodes.sort(
+  for (const n of nodes.toSorted(
     (a, b) => a.span.start - b.span.start || (a.id < b.id ? -1 : 1),
   )) {
     const path = pathOf.get(n.file) as string;
-    // A definition inside an unplaced one, such as an arrow function assigned to a constant, takes the nearest placed ancestor as parent.
-    let parent = n.parent;
-    while (parent !== undefined && !kept.has(parent)) {
-      parent = every.get(parent)?.parent;
-    }
-    const importance = n.judged?.value?.importance ?? undefined;
-    const def: PlacedDef = {
-      id: idOf(n),
-      file: path,
-      ...(parent === undefined
-        ? {}
-        : { parent: idOf(byId.get(parent) as DefNode) }),
-      name: n.name,
-      kind: KIND_OF_ROLE[n.role] ?? "function",
-      exported: n.exported,
-      line: n.span.start,
-      lines: Math.max(1, n.span.end - n.span.start + 1),
-      ...(n.doc === undefined ? {} : { doc: n.doc }),
-      ...(importance === undefined ? {} : { importance }),
-    };
+    const parent = nearestPlacedParent(n, kept, every);
+    const parentId =
+      parent === undefined ? undefined : idOf(byId.get(parent) as DefNode);
+    const def = placedDefFromNode(n, path, parentId, idOf(n));
     const list = out.get(path);
     if (list === undefined) out.set(path, [def]);
     else list.push(def);

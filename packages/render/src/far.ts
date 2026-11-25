@@ -60,6 +60,122 @@ export interface DroopField {
   readonly reach: number;
 }
 
+const DROOP_NEIGHBORS = [
+  [1, 0, 0],
+  [-1, 0, 0],
+  [0, 1, 0],
+  [0, -1, 0],
+  [0, 0, 1],
+  [0, 0, -1],
+] as const;
+
+const inDroopGrid = (x: number, y: number, z: number, n: number): boolean =>
+  x >= 0 && y >= 0 && z >= 0 && x < n && y < n && z < n;
+
+function accumulatePartDroop(
+  part: Part,
+  center: THREE.Vector3,
+  radius: number,
+  sums: Float64Array,
+): number {
+  const n = DROOP_CELLS;
+  const cellOf = (v: number, c: number): number =>
+    Math.floor(((v - c) / (2 * radius) + 0.5) * n);
+  const p = part.positions;
+  const { droop, bough } = part.channels;
+  let reach = 0;
+  for (let i = 0; i < p.length / 3; i++) {
+    const x = p[i * 3] as number;
+    const y = p[i * 3 + 1] as number;
+    const z = p[i * 3 + 2] as number;
+    const gx = cellOf(x, center.x);
+    const gy = cellOf(y, center.y);
+    const gz = cellOf(z, center.z);
+    if (!inDroopGrid(gx, gy, gz, n)) continue;
+    const s = droop[i] ?? 0;
+    const at = ((gz * n + gy) * n + gx) * 4;
+    sums[at + 3] = (sums[at + 3] as number) + 1;
+    if (s <= 0) continue;
+    const ox = x - (bough[i * 3] as number);
+    const oy = y - (bough[i * 3 + 1] as number);
+    const oz = z - (bough[i * 3 + 2] as number);
+    const d = Math.hypot(ox, oy, oz);
+    if (d <= 1e-5) continue;
+    const ly = oy - s * d * CHANNEL_MATH.sag;
+    const k = d / Math.hypot(ox, ly, oz);
+    const moved = [ox * k - ox, ly * k - oy, oz * k - oz] as const;
+    reach = Math.max(reach, Math.hypot(...moved));
+    for (let a = 0; a < 3; a++) {
+      sums[at + a] = (sums[at + a] as number) + (moved[a] as number);
+    }
+  }
+  return reach;
+}
+
+function fillEmptyDroopCell(
+  c: number,
+  n: number,
+  field: Float32Array,
+  was: Uint8Array,
+): boolean {
+  const gx = c % n;
+  const gy = Math.floor(c / n) % n;
+  const gz = Math.floor(c / (n * n));
+  let count = 0;
+  const mean = [0, 0, 0];
+  for (const [dx, dy, dz] of DROOP_NEIGHBORS) {
+    const x = gx + dx;
+    const y = gy + dy;
+    const z = gz + dz;
+    if (!inDroopGrid(x, y, z, n)) continue;
+    const o = (z * n + y) * n + x;
+    if (was[o] !== 1) continue;
+    for (let a = 0; a < 3; a++) {
+      mean[a] = (mean[a] as number) + (field[o * 3 + a] as number);
+    }
+    count++;
+  }
+  if (count === 0) return false;
+  for (let a = 0; a < 3; a++) {
+    field[c * 3 + a] = (mean[a] as number) / count;
+  }
+  return true;
+}
+
+function spreadDroopField(
+  field: Float32Array,
+  filled: Uint8Array,
+  n: number,
+): void {
+  // Empty cells take the mean of their filled neighbors, a ring at a time outward.
+  for (let ring = 0; ring < n && filled.includes(0); ring++) {
+    const was = filled.slice();
+    for (let c = 0; c < n * n * n; c++) {
+      if (was[c] !== 1 && fillEmptyDroopCell(c, n, field, was)) {
+        filled[c] = 1;
+      }
+    }
+  }
+}
+
+function packDroopCells(
+  field: Float32Array,
+  n: number,
+): { readonly cells: Uint8Array; readonly scale: number } {
+  const scale = field.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  const cells = new Uint8Array(n * n * n * 4);
+  for (let c = 0; c < n * n * n; c++) {
+    for (let a = 0; a < 3; a++) {
+      cells[c * 4 + a] =
+        scale > 0
+          ? Math.round(((field[c * 3 + a] as number) / scale) * 127.5 + 127.5)
+          : 128;
+    }
+    cells[c * 4 + 3] = 255;
+  }
+  return { cells, scale };
+}
+
 /**
  * The droop field of `parts` over the cube of half-side `radius` about
  * `center`. Droop bends each bough about its joint (`applyDroop` in
@@ -75,37 +191,9 @@ export function droopField(
 ): DroopField {
   const n = DROOP_CELLS;
   const sums = new Float64Array(n * n * n * 4);
-  const cellOf = (v: number, c: number): number =>
-    Math.floor(((v - c) / (2 * radius) + 0.5) * n);
   let reach = 0;
   for (const part of parts) {
-    const p = part.positions;
-    const { droop, bough } = part.channels;
-    for (let i = 0; i < p.length / 3; i++) {
-      const x = p[i * 3] as number;
-      const y = p[i * 3 + 1] as number;
-      const z = p[i * 3 + 2] as number;
-      const gx = cellOf(x, center.x);
-      const gy = cellOf(y, center.y);
-      const gz = cellOf(z, center.z);
-      if (gx < 0 || gy < 0 || gz < 0 || gx >= n || gy >= n || gz >= n) continue;
-      const s = droop[i] ?? 0;
-      const at = ((gz * n + gy) * n + gx) * 4;
-      sums[at + 3] = (sums[at + 3] as number) + 1;
-      if (s <= 0) continue;
-      const ox = x - (bough[i * 3] as number);
-      const oy = y - (bough[i * 3 + 1] as number);
-      const oz = z - (bough[i * 3 + 2] as number);
-      const d = Math.hypot(ox, oy, oz);
-      if (d <= 1e-5) continue;
-      const ly = oy - s * d * CHANNEL_MATH.sag;
-      const k = d / Math.hypot(ox, ly, oz);
-      const moved = [ox * k - ox, ly * k - oy, oz * k - oz] as const;
-      reach = Math.max(reach, Math.hypot(...moved));
-      for (let a = 0; a < 3; a++) {
-        sums[at + a] = (sums[at + a] as number) + (moved[a] as number);
-      }
-    }
+    reach = Math.max(reach, accumulatePartDroop(part, center, radius, sums));
   }
   const field = new Float32Array(n * n * n * 3);
   const filled = new Uint8Array(n * n * n);
@@ -117,51 +205,8 @@ export function droopField(
     }
     filled[c] = 1;
   }
-  // Empty cells take the mean of their filled neighbors, a ring at a time outward.
-  for (let ring = 0; ring < n && filled.includes(0); ring++) {
-    const was = filled.slice();
-    for (let c = 0; c < n * n * n; c++) {
-      if (was[c] === 1) continue;
-      const gx = c % n;
-      const gy = Math.floor(c / n) % n;
-      const gz = Math.floor(c / (n * n));
-      let count = 0;
-      const mean = [0, 0, 0];
-      for (const [dx, dy, dz] of [
-        [1, 0, 0],
-        [-1, 0, 0],
-        [0, 1, 0],
-        [0, -1, 0],
-        [0, 0, 1],
-        [0, 0, -1],
-      ] as const) {
-        const [x, y, z] = [gx + dx, gy + dy, gz + dz];
-        if (x < 0 || y < 0 || z < 0 || x >= n || y >= n || z >= n) continue;
-        const o = (z * n + y) * n + x;
-        if (was[o] !== 1) continue;
-        for (let a = 0; a < 3; a++) {
-          mean[a] = (mean[a] as number) + (field[o * 3 + a] as number);
-        }
-        count++;
-      }
-      if (count === 0) continue;
-      for (let a = 0; a < 3; a++) {
-        field[c * 3 + a] = (mean[a] as number) / count;
-      }
-      filled[c] = 1;
-    }
-  }
-  const scale = field.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
-  const cells = new Uint8Array(n * n * n * 4);
-  for (let c = 0; c < n * n * n; c++) {
-    for (let a = 0; a < 3; a++) {
-      cells[c * 4 + a] =
-        scale > 0
-          ? Math.round(((field[c * 3 + a] as number) / scale) * 127.5 + 127.5)
-          : 128;
-    }
-    cells[c * 4 + 3] = 255;
-  }
+  spreadDroopField(field, filled, n);
+  const { cells, scale } = packDroopCells(field, n);
   return { cells, scale, reach };
 }
 
@@ -402,6 +447,13 @@ export interface FarBake {
   cancel(): void;
 }
 
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) =>
+    typeof requestAnimationFrame === "function"
+      ? requestAnimationFrame(() => resolve())
+      : setTimeout(resolve, 0),
+  );
+
 /**
  * Starts baking `plant` into its far form, each view `framePx` texels
  * across. `framePx` is the crown span on screen in device pixels at which
@@ -427,11 +479,7 @@ export function startFarBake(
     const p = part.positions;
     for (let i = 0; i < p.length; i += 3) {
       box.expandByPoint(
-        point.set(
-          p[i] as number,
-          Math.max(0, p[i + 1] as number),
-          p[i + 2] as number,
-        ),
+        point.set(p[i] as number, Math.max(0, p[i + 1] as number), p[i + 2]),
       );
     }
   }
@@ -580,12 +628,6 @@ export function startFarBake(
   );
   camera.lookAt(sphere.center);
 
-  const nextFrame = (): Promise<void> =>
-    new Promise((resolve) =>
-      typeof requestAnimationFrame === "function"
-        ? requestAnimationFrame(() => resolve())
-        : setTimeout(resolve, 0),
-    );
   // Compiling ahead is not enough. Each output's first draw into the
   // multisampled target sets up GPU state, so each output is drawn once, one
   // pixel across, a frame apart, before the bake steps.
@@ -695,7 +737,7 @@ export function startFarBake(
         frequency: plant.motion.frequency,
         targets: layers,
       },
-      dispose: () => {
+      dispose: (): void => {
         for (const l of layers) l.dispose();
       },
     };
@@ -703,7 +745,7 @@ export function startFarBake(
   let cancelled = false;
   return {
     ready,
-    step(budgetMs, views = Number.POSITIVE_INFINITY) {
+    step(budgetMs, views = Number.POSITIVE_INFINITY): FarForm | null {
       if (done !== null || cancelled) return done;
       const t0 = performance.now();
       const was = {
@@ -728,7 +770,7 @@ export function startFarBake(
       if (done !== null) (done as { ms: number }).ms = spent;
       return done;
     },
-    cancel() {
+    cancel(): void {
       if (done !== null || cancelled) return;
       cancelled = true;
       free();
@@ -831,8 +873,8 @@ export function farFormFrom(data: FarFormData): FarForm | null {
     // Once the GPU has the atlas, drop the page's copy. The form stays in the
     // far store, so dropping it loses nothing, and a copy of every atlas would
     // take some 300 MB.
-    t.onUpdate = () => {
-      t.image = { data: null as unknown as Uint8Array, width, height };
+    t.onUpdate = (): void => {
+      t.image = { data: null, width, height };
       t.onUpdate = null;
     };
     return t;
@@ -853,7 +895,7 @@ export function farFormFrom(data: FarFormData): FarForm | null {
       sway: data.sway,
       frequency: data.frequency,
     },
-    dispose: () => {
+    dispose: (): void => {
       for (const t of layers) t.dispose();
     },
   };
@@ -917,7 +959,9 @@ export function farChoice(
   const f = farness(px, swapPx, turn.band);
   const leavePx = ortho ? swapPx : swapPx / turn.leave;
   const full = f < 1 || px > leavePx;
-  return { full, card: f > 0 ? (full ? Math.min(f, OVER) : 1) : 0 };
+  let card = 0;
+  if (f > 0) card = full ? Math.min(f, OVER) : 1;
+  return { full, card };
 }
 
 /**
@@ -1720,10 +1764,10 @@ export function createFarCards(
 
   return {
     object,
-    get slots() {
+    get slots(): number {
       return slots;
     },
-    fit(count) {
+    fit(count): void {
       if (layers !== null) {
         throw new Error(
           "A set's far cards are fitted before any form fills a slot.",
@@ -1743,10 +1787,10 @@ export function createFarCards(
       uniforms.uSlots.value = slotTable;
       uniforms.uDroopSlots.value = slots;
     },
-    get bytes() {
+    get bytes(): number {
       return layers === null ? 0 : farSlotBytes(frame, turn.gone.end, slots);
     },
-    fill(renderer, slot, form, layer) {
+    fill(renderer, slot, form, layer): void {
       if (!(slot >= 0 && slot < slots)) {
         throw new Error(`No slot ${slot}; the set holds ${slots}.`);
       }
@@ -1842,13 +1886,13 @@ export function createFarCards(
       );
       slotTable.needsUpdate = true;
     },
-    turnAt(slot, swapPx) {
+    turnAt(slot, swapPx): void {
       const at = (slots + slot) * 4 + 3;
       if (slotData[at] === swapPx) return;
       slotData[at] = swapPx;
       slotTable.needsUpdate = true;
     },
-    copies(anchor) {
+    copies(anchor): FarCopies {
       const m: Member = {
         index: takeIndex(),
         anchor,
@@ -1879,7 +1923,7 @@ export function createFarCards(
         return m.easing.size > 0;
       };
       return {
-        place(places, crowns) {
+        place(places, crowns): void {
           m.places = places;
           m.crowns = crowns;
           m.count = places.length / PLACE_STRIDE;
@@ -1890,7 +1934,7 @@ export function createFarCards(
             pack();
           } else writeCopies(m);
         },
-        setVitalityAt(index, v) {
+        setVitalityAt(index, v): void {
           const shown = attribute("aMore").array[
             (m.offset + index) * 4 + 1
           ] as number;
@@ -1898,13 +1942,13 @@ export function createFarCards(
           m.easing.set(index, { ...from, target: shownVitality(v) });
           closeEachFrame(close);
         },
-        useDepth(on) {
+        useDepth(on): void {
           if (on === m.depth) return;
           m.depth = on;
           depths += on ? 1 : -1;
           showMeshes();
         },
-        get slot() {
+        get slot(): number {
           return m.slot;
         },
         set slot(s: number) {
@@ -1912,7 +1956,7 @@ export function createFarCards(
           m.slot = s;
           writeRecord(m);
         },
-        dispose() {
+        dispose(): void {
           const k = members.indexOf(m);
           if (k < 0) return;
           members.splice(k, 1);
@@ -1926,7 +1970,7 @@ export function createFarCards(
         },
       };
     },
-    pass(focal, ortho) {
+    pass(focal, ortho): void {
       pass.uFarPass.value.set(focal, ortho ? 1 : 0);
       anyShown = false;
       for (const m of members) {
@@ -1939,15 +1983,15 @@ export function createFarCards(
       }
       showMeshes();
     },
-    show(on) {
+    show(on): void {
       shownOn = on;
       showMeshes();
     },
-    warm() {
+    warm(): void {
       anyShown = true;
       showMeshes();
     },
-    dispose() {
+    dispose(): void {
       geometry.dispose();
       card.dispose();
       for (const m of [solidMaterial, fadingMaterial, depthMaterial]) {

@@ -42,7 +42,7 @@ export function createSourceText(
     }
   });
   return {
-    lines(path) {
+    lines(path): readonly string[] | null | undefined {
       const had = files.get(path);
       if (had !== undefined) return had === "asked" ? undefined : had;
       if (carried !== null || service === null) {
@@ -54,7 +54,7 @@ export function createSourceText(
       return undefined;
     },
     onArrive: (listener) => listeners.push(listener),
-    when(path) {
+    when(path): Promise<void> {
       if (this.lines(path) !== undefined) return Promise.resolve();
       return new Promise((resolve) =>
         waiting.set(path, [...(waiting.get(path) ?? []), resolve]),

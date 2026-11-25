@@ -76,8 +76,11 @@ const JOIN_BEFORE = 1;
 /** For `phrases`: seconds from the start to the first phrase, and the range of rest between one phrase's end and the next. */
 const REST = { first: 6, between: [45, 100] } as const;
 
-const suits = (p: Phrase): Moment =>
-  p.startsWith("night") ? "night" : p.startsWith("ruin") ? "ruin" : "day";
+function suits(p: Phrase): Moment {
+  if (p.startsWith("night")) return "night";
+  if (p.startsWith("ruin")) return "ruin";
+  return "day";
+}
 
 function moment(ear: Earshot): Moment {
   if (failing(ear.decline) > 0.5) return "ruin";
@@ -98,7 +101,7 @@ export function createMusic(
     let next = start + REST.first;
     let chosen: Phrase | null = null;
     return {
-      at(t, ear) {
+      at(t, ear): void {
         if (t < next) return;
         if (chosen === null) {
           const fitting = PHRASES.filter((p) => suits(p) === moment(ear));
@@ -115,7 +118,9 @@ export function createMusic(
         source.connect(gain).connect(out);
         source.start(t);
         const played = chosen;
-        source.onended = () => bank.phrases.put(played);
+        source.addEventListener("ended", (): void => {
+          bank.phrases.put(played);
+        });
         next =
           t +
           buffer.duration +
@@ -177,11 +182,11 @@ export function createMusic(
       source.buffer = buffer;
       source.connect(part.gain);
       source.start(at, margin + into, seconds - into);
-      source.onended = () => {
+      source.addEventListener("ended", (): void => {
         part.playing.delete(source);
         source.disconnect();
         bank.chunks.put(name);
-      };
+      });
       part.playing.add(source);
       part.next = n + 1;
       part.from = begins + seconds;
@@ -207,7 +212,7 @@ export function createMusic(
     part.gain.gain.setTargetAtTime(v * base, t, SWELL);
   };
   return {
-    at(t, ear) {
+    at(t, ear): void {
       const night = smooth(0.35, 0.75, ear.night);
       const ruin = plan === "layers" ? failing(ear.decline) : 0;
       if (plan === "layers") {

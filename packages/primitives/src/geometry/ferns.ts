@@ -193,36 +193,14 @@ function stationsOf(f: Frond): Station[] {
 const leafletLength = (t: number): number =>
   Math.sin(Math.PI * Math.pow(clamp((t - 0.07) / 1.12, 0, 1), 0.75));
 
-function emitFrond(out: PartBuilder, f: Frond): void {
-  const stations = stationsOf(f);
-  const pairs = Math.max(6, Math.round(f.length / (0.036 + 0.02 * f.length)));
-  // Stalk rings: one at the foot, one at each leaflet pair, more round the coil, and one at the tip.
-  const leaflets = Array.from(
-    { length: pairs },
-    (_, j) => FIRST_LEAFLET + (1 - FIRST_LEAFLET) * Math.pow(j / pairs, 0.92),
-  );
-  const coiling = f.unrolled < 0.98 ? Math.ceil(26 * (1 - f.unrolled)) : 0;
-  const coilRings = Array.from(
-    { length: coiling },
-    (_, k) => f.unrolled + ((1 - f.unrolled) * (k + 0.5)) / coiling,
-  );
-  const ts = [...new Set([0, ...leaflets, ...coilRings, 1])].sort(
-    (a, b) => a - b,
-  );
+function emitStalk(
+  out: PartBuilder,
+  f: Frond,
+  stations: readonly Station[],
+  ts: readonly number[],
+  fold: (p: V3) => number,
+): { readonly rings: number[]; readonly corners: V3[] } {
   const radius = 0.004 + 0.006 * f.length;
-  // At vitality 0, each point's droop lowers it to under a third of its height above the frond's foot, so the frond slumps low over the soil but never through it.
-  const fold = (p: V3): number => {
-    const o = sub(p, f.foot);
-    const d = Math.hypot(o[0], o[1], o[2]);
-    if (d < 1e-4) return 0;
-    const rise = Math.asin(clamp(o[1] / d, -1, 1));
-    return clamp(
-      (Math.sin(rise) - Math.cos(rise) * Math.tan(0.3 * rise + 0.03)) /
-        CHANNEL_SAG,
-      0,
-      1,
-    );
-  };
   const rings: number[] = [];
   const corners: V3[] = [];
   for (const t of ts) {
@@ -258,6 +236,39 @@ function emitFrond(out: PartBuilder, f: Frond): void {
       out.triangle(b, b + 3, a + 3);
     }
   }
+  return { rings, corners };
+}
+
+function emitFrond(out: PartBuilder, f: Frond): void {
+  const stations = stationsOf(f);
+  const pairs = Math.max(6, Math.round(f.length / (0.036 + 0.02 * f.length)));
+  // Stalk rings: one at the foot, one at each leaflet pair, more round the coil, and one at the tip.
+  const leaflets = Array.from(
+    { length: pairs },
+    (_, j) => FIRST_LEAFLET + (1 - FIRST_LEAFLET) * Math.pow(j / pairs, 0.92),
+  );
+  const coiling = f.unrolled < 0.98 ? Math.ceil(26 * (1 - f.unrolled)) : 0;
+  const coilRings = Array.from(
+    { length: coiling },
+    (_, k) => f.unrolled + ((1 - f.unrolled) * (k + 0.5)) / coiling,
+  );
+  const ts = [...new Set([0, ...leaflets, ...coilRings, 1])].toSorted(
+    (a, b) => a - b,
+  );
+  // At vitality 0, each point's droop lowers it to under a third of its height above the frond's foot, so the frond slumps low over the soil but never through it.
+  const fold = (p: V3): number => {
+    const o = sub(p, f.foot);
+    const d = Math.hypot(o[0], o[1], o[2]);
+    if (d < 1e-4) return 0;
+    const rise = Math.asin(clamp(o[1] / d, -1, 1));
+    return clamp(
+      (Math.sin(rise) - Math.cos(rise) * Math.tan(0.3 * rise + 0.03)) /
+        CHANNEL_SAG,
+      0,
+      1,
+    );
+  };
+  const { rings, corners } = emitStalk(out, f, stations, ts, fold);
   // Leaflets in pairs, rooted on the stalk's lower corners so the frond stays one piece.
   const top = 0.28 * f.length;
   for (const t of leaflets) {

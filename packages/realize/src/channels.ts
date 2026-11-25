@@ -77,9 +77,20 @@ const smoothstep = (e0: number, e1: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+
 /** The integral of smoothstep(0, 1, t) from 0 to t. */
-const smoothRise = (t: number): number =>
-  t <= 0 ? 0 : t >= 1 ? t - 0.5 : t * t * t * (1 - 0.5 * t);
+const smoothRise = (t: number): number => {
+  if (t <= 0) return 0;
+  if (t >= 1) return t - 0.5;
+  return t * t * t * (1 - 0.5 * t);
+};
+
+const clampRise = (u: number): number => {
+  if (u <= 0) return 0;
+  if (u >= 1) return u - 0.5;
+  return 0.5 * u * u;
+};
 
 /**
  * smoothstep(e0, e1, v) averaged over the shown vitality from `v + lag` to
@@ -103,10 +114,8 @@ export function easedStep(
 
 /** clamp(u, 0, 1) averaged as u runs evenly from `was` to `now` (the plant shader's `easedClamp`). */
 export function easedClamp(now: number, was: number): number {
-  if (Math.abs(now - was) < 1e-4) return Math.min(1, Math.max(0, now));
-  const rise = (u: number): number =>
-    u <= 0 ? 0 : u >= 1 ? u - 0.5 : 0.5 * u * u;
-  return (rise(now) - rise(was)) / (now - was);
+  if (Math.abs(now - was) < 1e-4) return clamp01(now);
+  return (clampRise(now) - clampRise(was)) / (now - was);
 }
 
 /** A neutral swatch for tests that only care whether colors move. */
@@ -130,11 +139,10 @@ export function hueRotate(
   const a = turns * 2 * Math.PI;
   const i2 = i * Math.cos(a) - q * Math.sin(a);
   const q2 = i * Math.sin(a) + q * Math.cos(a);
-  const c = (x: number): number => Math.min(1, Math.max(0, x));
   return [
-    c(y + 0.956 * i2 + 0.621 * q2),
-    c(y - 0.272 * i2 - 0.647 * q2),
-    c(y - 1.106 * i2 + 1.703 * q2),
+    clamp01(y + 0.956 * i2 + 0.621 * q2),
+    clamp01(y - 0.272 * i2 - 0.647 * q2),
+    clamp01(y - 1.106 * i2 + 1.703 * q2),
   ];
 }
 
@@ -181,6 +189,96 @@ export interface InWind {
  * moment ago while a change eases in. Each step is averaged over that lag, and
  * anything linear in vitality uses the midpoint.
  */
+const readChannel = (
+  arr: Float32Array | undefined,
+  index: number,
+  fallback = 0,
+): number => arr?.[index] ?? fallback;
+
+function keepFactor(part: Part, i: number, v: number, lag: number): number {
+  const m = CHANNEL_MATH;
+  // A spray's leaves drop in place, cut away per fragment. Every other piece collapses onto its pivot.
+  const threshold = SPRAYS.has(Math.floor(readChannel(part.cutout, i * 3 + 2)))
+    ? 0
+    : readChannel(part.channels.loss, i);
+  const grows = readChannel(part.channels.grow, i);
+  const keepLoss =
+    threshold > 0 ? easedStep(threshold, threshold + m.lossBand, v, lag) : 1;
+  const keepGrow =
+    grows > 0 ? 1 - easedStep(grows, grows + m.lossBand, v, lag) : 1;
+  return keepLoss * keepGrow;
+}
+
+function fallOffset(
+  ox: number,
+  oy: number,
+  oz: number,
+  fall: Float32Array | undefined,
+  i: number,
+  v: number,
+  lag: number,
+): [number, number, number] {
+  const from = readChannel(fall, i * 4 + 3);
+  if (fall === undefined || from <= 0) return [ox, oy, oz];
+  const ax = readChannel(fall, i * 4);
+  const ay = readChannel(fall, i * 4 + 1);
+  const az = readChannel(fall, i * 4 + 2);
+  const most = Math.hypot(ax, ay, az);
+  const angle =
+    most * (1 - easedStep(from - CHANNEL_MATH.fallBand, from, v, lag));
+  if (most <= 1e-6 || angle === 0) return [ox, oy, oz];
+  return turn([ox, oy, oz], [ax / most, ay / most, az / most], angle);
+}
+
+function writeVertexColor(
+  colors: Float32Array,
+  emission: Float32Array,
+  part: Part,
+  i: number,
+  mid: number,
+  swatch: Swatch,
+): void {
+  const m = CHANNEL_MATH;
+  const w = readChannel(part.channels.wither, i) * (1 - mid);
+  const bright =
+    m.shadeLow + (m.shadeHigh - m.shadeLow) * readChannel(part.shade, i, 0.5);
+  const g = readChannel(part.channels.glow, i) * mid * m.glowStrength;
+  // Tint varies only the healthy color, so decline reads the same across a canopy.
+  const tinted = hueRotate(swatch.healthy, readChannel(part.tint, i));
+  for (let c = 0; c < 3; c++) {
+    const healthy = tinted[c] ?? 0;
+    const decline = swatch.decline[c] ?? 0;
+    colors[i * 3 + c] = (healthy + (decline - healthy) * w) * bright;
+    emission[i * 3 + c] = healthy * g;
+  }
+}
+
+function applyDroop(
+  positions: Float32Array,
+  droop: Float32Array,
+  bough: Float32Array,
+  count: number,
+  mid: number,
+): void {
+  for (let i = 0; i < count; i++) {
+    const s = readChannel(droop, i) * (1 - mid);
+    if (s <= 0) continue;
+    const bx = readChannel(bough, i * 3);
+    const by = readChannel(bough, i * 3 + 1);
+    const bz = readChannel(bough, i * 3 + 2);
+    const dx = readChannel(positions, i * 3) - bx;
+    const dy = readChannel(positions, i * 3 + 1) - by;
+    const dz = readChannel(positions, i * 3 + 2) - bz;
+    const d = Math.hypot(dx, dy, dz);
+    if (d <= 1e-5) continue;
+    const ly = dy - s * d * CHANNEL_MATH.sag;
+    const bl = Math.hypot(dx, ly, dz);
+    positions[i * 3] = bx + (dx / bl) * d;
+    positions[i * 3 + 1] = by + (ly / bl) * d;
+    positions[i * 3 + 2] = bz + (dz / bl) * d;
+  }
+}
+
 export function applyVitality(
   part: Part,
   vitality: number,
@@ -188,89 +286,38 @@ export function applyVitality(
   wind?: InWind,
   lag = 0,
 ): VitalityView {
-  const v = Math.min(1, Math.max(0, vitality));
+  const v = clamp01(vitality);
   const mid = v + 0.5 * lag;
-  const { loss, droop, wither, glow, pivot, bough } = part.channels;
+  const { droop, pivot, bough } = part.channels;
   const count = part.shade.length;
   const collapsed = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const emission = new Float32Array(count * 3);
-  const m = CHANNEL_MATH;
   for (let i = 0; i < count; i++) {
-    const px = pivot[i * 3] ?? 0;
-    const py = pivot[i * 3 + 1] ?? 0;
-    const pz = pivot[i * 3 + 2] ?? 0;
-    let ox = (part.positions[i * 3] ?? 0) - px;
-    let oy = (part.positions[i * 3 + 1] ?? 0) - py;
-    let oz = (part.positions[i * 3 + 2] ?? 0) - pz;
-    // A spray's leaves drop in place, cut away per fragment. Every other piece collapses onto its pivot.
-    const threshold = SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0))
-      ? 0
-      : (loss[i] ?? 0);
-    const grows = part.channels.grow?.[i] ?? 0;
-    const keep =
-      (threshold > 0
-        ? easedStep(threshold, threshold + m.lossBand, v, lag)
-        : 1) *
-      (grows > 0 ? 1 - easedStep(grows, grows + m.lossBand, v, lag) : 1);
-    ox *= keep;
-    oy *= keep;
-    oz *= keep;
+    const px = readChannel(pivot, i * 3);
+    const py = readChannel(pivot, i * 3 + 1);
+    const pz = readChannel(pivot, i * 3 + 2);
+    const keep = keepFactor(part, i, v, lag);
     // A spinning piece stays at its starting angle here. The shader adds the turning.
-    const fall = part.channels.fall;
-    const from = fall?.[i * 4 + 3] ?? 0;
-    if (fall !== undefined && from > 0) {
-      const ax = fall[i * 4] ?? 0;
-      const ay = fall[i * 4 + 1] ?? 0;
-      const az = fall[i * 4 + 2] ?? 0;
-      const most = Math.hypot(ax, ay, az);
-      const angle = most * (1 - easedStep(from - m.fallBand, from, v, lag));
-      if (most > 1e-6 && angle !== 0) {
-        [ox, oy, oz] = turn(
-          [ox, oy, oz],
-          [ax / most, ay / most, az / most],
-          angle,
-        );
-      }
-    }
+    const [ox, oy, oz] = fallOffset(
+      (readChannel(part.positions, i * 3) - px) * keep,
+      (readChannel(part.positions, i * 3 + 1) - py) * keep,
+      (readChannel(part.positions, i * 3 + 2) - pz) * keep,
+      part.channels.fall,
+      i,
+      v,
+      lag,
+    );
     collapsed[i * 3] = px + ox;
     collapsed[i * 3 + 1] = py + oy;
     collapsed[i * 3 + 2] = pz + oz;
-
-    const w = (wither[i] ?? 0) * (1 - mid);
-    const bright =
-      m.shadeLow + (m.shadeHigh - m.shadeLow) * (part.shade[i] ?? 0.5);
-    const g = (glow[i] ?? 0) * mid * m.glowStrength;
-    // Tint varies only the healthy color, so decline reads the same across a canopy.
-    const tinted = hueRotate(swatch.healthy, part.tint[i] ?? 0);
-    for (let c = 0; c < 3; c++) {
-      const healthy = tinted[c] ?? 0;
-      const decline = swatch.decline[c] ?? 0;
-      colors[i * 3 + c] = (healthy + (decline - healthy) * w) * bright;
-      emission[i * 3 + c] = healthy * g;
-    }
+    writeVertexColor(colors, emission, part, i, mid, swatch);
   }
   const positions =
     wind === undefined
       ? collapsed
       : swayAt(part, collapsed, wind.state, wind.flutter);
   // Droop bends the whole bough down about its joint, keeping each point's distance from it.
-  for (let i = 0; i < count; i++) {
-    const s = (droop[i] ?? 0) * (1 - mid);
-    if (s <= 0) continue;
-    const bx = bough[i * 3] ?? 0;
-    const by = bough[i * 3 + 1] ?? 0;
-    const bz = bough[i * 3 + 2] ?? 0;
-    const dx = (positions[i * 3] ?? 0) - bx;
-    const dy = (positions[i * 3 + 1] ?? 0) - by;
-    const dz = (positions[i * 3 + 2] ?? 0) - bz;
-    const d = Math.hypot(dx, dy, dz);
-    if (d <= 1e-5) continue;
-    const ly = dy - s * d * m.sag;
-    const bl = Math.hypot(dx, ly, dz);
-    positions[i * 3] = bx + (dx / bl) * d;
-    positions[i * 3 + 1] = by + (ly / bl) * d;
-    positions[i * 3 + 2] = bz + (dz / bl) * d;
-  }
+  applyDroop(positions, droop, bough, count, mid);
   return { positions, colors, emission };
 }

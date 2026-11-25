@@ -154,7 +154,7 @@ describe("the clearings' mask", () => {
       for (const [x, z] of spots) {
         // The shapes near the grass's center are in the window.
         expect(
-          holds(clearings, x, z, (x, z) => cleared(x, z, wild)).bare,
+          holds(clearings, x, z, (px, pz) => cleared(px, pz, wild)).bare,
         ).toBeGreaterThan(40);
       }
     },

@@ -57,7 +57,10 @@ const PACE = {
 const eye = new THREE.Vector3();
 
 /** Four forms sharing two slots, weighted by `weights`, and a stream over them. */
-function streamOf(weights: number[]) {
+function streamOf(weights: number[]): {
+  readonly forms: ReturnType<typeof createFarForms>;
+  readonly stream: ReturnType<typeof createFarStream>;
+} {
   const forms = createFarForms(createSceneLight(), 2);
   for (const k of weights.keys()) {
     const { form } = forms.add(plant, () => Promise.resolve(plant));

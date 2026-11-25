@@ -20,7 +20,64 @@ const file = (
   z: number,
   radius: number,
   vitality = 0.8,
-) => ({ path, name: path.split("/").pop() ?? path, x, z, radius, vitality });
+): {
+  path: string;
+  name: string;
+  x: number;
+  z: number;
+  radius: number;
+  vitality: number;
+} => ({ path, name: path.split("/").pop() ?? path, x, z, radius, vitality });
+
+function nearestCell(
+  cells: WorldPlaces["cells"],
+  wx: number,
+  wz: number,
+): WorldPlaces["cells"][number] {
+  let best = cells[0] as WorldPlaces["cells"][number];
+  let bestDist = Math.hypot(wx - best.x, wz - best.z);
+  for (const cell of cells.slice(1)) {
+    const dist = Math.hypot(wx - cell.x, wz - cell.z);
+    if (dist < bestDist) {
+      best = cell;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function siteOwner(x: number, z: number): number {
+  if (Math.hypot(x + 72, z) < 20) return 2;
+  return x < 0 ? 0 : 1;
+}
+
+const NEIGHBORS: readonly (readonly [number, number])[] = [
+  [12, 0],
+  [-12, 0],
+  [0, 12],
+  [0, -12],
+  [8.5, 8.5],
+  [-8.5, 8.5],
+  [8.5, -8.5],
+  [-8.5, -8.5],
+];
+
+function checkPlaceGrid(world: WorldPlaces): Set<string> {
+  const seen = new Set<string>();
+  for (let x = -120; x <= 120; x += 6) {
+    for (let z = -120; z <= 120; z += 6) {
+      const here = placeAt(world, x, z);
+      if (here.area.depth < 0) continue;
+      const [wx, wz] = warpPoint(x, z);
+      const nearest = nearestCell(world.cells, wx, wz);
+      const filePath = here.file?.path ?? null;
+      expect(here.area.path).toBe(nearest.area);
+      expect(filePath).toBe(nearest.file);
+      seen.add(filePath ?? "lot");
+    }
+  }
+  return seen;
+}
 
 describe("where a person is", () => {
   it("names the area and the file whose cell holds a point, a lot's ground as its area's own, and the wild past the land", () => {
@@ -43,26 +100,12 @@ describe("where a person is", () => {
       ],
     };
     // Every point names the area and file of the cell whose site is nearest its warped point, and every cell is found.
-    const seen = new Set<string>();
-    for (let x = -120; x <= 120; x += 6) {
-      for (let z = -120; z <= 120; z += 6) {
-        const here = placeAt(world, x, z);
-        if (here.area.depth < 0) continue;
-        const [wx, wz] = warpPoint(x, z);
-        const nearest = world.cells.reduce(
-          (b, c, i) =>
-            Math.hypot(wx - c.x, wz - c.z) <
-            Math.hypot(wx - world.cells[b]!.x, wz - world.cells[b]!.z)
-              ? i
-              : b,
-          0,
-        );
-        expect(here.area.path).toBe(world.cells[nearest]!.area);
-        expect(here.file?.path ?? null).toBe(world.cells[nearest]!.file);
-        seen.add(here.file?.path ?? "lot");
-      }
-    }
-    expect([...seen].sort()).toEqual(["lot", "src/main.ts", "src/ui/menu.ts"]);
+    const seen = checkPlaceGrid(world);
+    expect([...seen].toSorted()).toEqual([
+      "lot",
+      "src/main.ts",
+      "src/ui/menu.ts",
+    ]);
     expect(placeAt(world, 50, 0).file?.vitality ?? 0.4).toBe(0.4);
     for (const [x, z] of [
       [140, 0],
@@ -74,10 +117,9 @@ describe("where a person is", () => {
     }
     // Each area's outline includes its subdirectories, and each patch's outline is its own cell.
     const lines = outlinesOf(world, 4);
-    const ring = (path: string, list: typeof lines.areas) =>
-      list.find((o) => o.path === path)!.rings.flat().length;
-    expect(ring("", lines.areas)).toBeGreaterThan(0);
-    expect(lines.patches.map((p) => p.path).sort()).toEqual([
+    const rootOutline = lines.areas.find((o) => o.path === "");
+    expect(rootOutline?.rings.flat().length ?? 0).toBeGreaterThan(0);
+    expect(lines.patches.map((p) => p.path).toSorted()).toEqual([
       "src/main.ts",
       "src/ui/menu.ts",
     ]);
@@ -94,7 +136,7 @@ describe("whose ground a point is, and how alive it is", () => {
         sites.push({
           x,
           z,
-          owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1,
+          owner: siteOwner(x, z),
         });
       }
     }
@@ -102,27 +144,20 @@ describe("whose ground a point is, and how alive it is", () => {
     const own = ownershipOf(sites, { size }, size + 80);
     const values = vitalityOver(own, vitality);
     const ownerAt = (x: number, z: number): number =>
-      sites[siteAt(sites, x, z)]!.owner;
+      (sites[siteAt(sites, x, z)] as OwnedSite).owner;
 
     // Wherever a point's whole neighborhood is one owner's ground, well inside the land, it has that owner's vitality.
     let inside = 0;
     for (let x = -120; x <= 120; x += 6) {
       for (let z = -120; z <= 120; z += 6) {
         const owner = ownerAt(x, z);
-        const around = [
-          [12, 0],
-          [-12, 0],
-          [0, 12],
-          [0, -12],
-          [8.5, 8.5],
-          [-8.5, 8.5],
-          [8.5, -8.5],
-          [-8.5, -8.5],
-        ].every(([dx, dz]) => ownerAt(x + dx!, z + dz!) === owner);
+        const around = NEIGHBORS.every(
+          ([dx, dz]) => ownerAt(x + dx, z + dz) === owner,
+        );
         if (!around) continue;
         inside++;
         expect(
-          Math.abs(vitalityAt(own, values, x, z) - vitality[owner]!),
+          Math.abs(vitalityAt(own, values, x, z) - (vitality[owner] as number)),
         ).toBeLessThan(0.01);
       }
     }

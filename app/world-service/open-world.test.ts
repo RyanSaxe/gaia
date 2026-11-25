@@ -18,7 +18,29 @@ import { fakeJevClient } from "@gaia/world/testing";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { facts as provingFacts } from "virtual:proving-ground";
 import { LIMIT_KEY, refreshWorld, openWorld } from "./open-world.ts";
-import type { Opening } from "./protocol.ts";
+import type { Opening, WorldDocument } from "./protocol.ts";
+
+const noop = (): void => {};
+const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+function openProving(engine: EngineClient): Promise<WorldDocument> {
+  return openWorld({
+    engine,
+    root: "proving",
+    consent: async () => true,
+    progress: noop,
+  });
+}
+
+function shiftWheelLine(wheel: string, n: GraphNode): GraphNode {
+  if (n.kind === "file" && n.path === wheel) {
+    return { ...n, measures: { ...n.measures, lines: n.measures.lines + 1 } };
+  }
+  if (n.kind === "def" && n.file === `file:${wheel}`) {
+    return { ...n, span: { start: n.span.start + 1, end: n.span.end + 1 } };
+  }
+  return n;
+}
 
 /** Builds the engine's graph of the proving ground at commit "c0ffee": its directories, entities, files, definitions and imports. */
 function graphOf(m: CodeFacts): CodeGraph {
@@ -154,7 +176,7 @@ function heldEngine(): { engine: EngineClient; held: (() => void)[] } {
         responses: await Promise.all(params.requests.map((r) => fake.ask(r))),
       };
     },
-    on: () => () => {},
+    on: (): (() => void) => noop,
   } as unknown as EngineClient;
   return { engine, held };
 }
@@ -235,7 +257,7 @@ function engineWith(
         ),
       };
     },
-    on: () => () => {},
+    on: (): (() => void) => noop,
   } as unknown as EngineClient;
   return { engine, batches };
 }
@@ -255,14 +277,15 @@ describe("opening a world", () => {
     async () => {
       const shown: Opening[] = [];
       const { engine, held } = heldEngine();
-      let done = false;
+      const state = { done: false };
       const opened = openWorld({
         engine,
         root: "proving",
         consent: async () => true,
         progress: (o) => shown.push(o),
-      }).finally(() => (done = true));
-      const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+      }).finally(() => {
+        state.done = true;
+      });
       while (held.length === 0) await tick();
 
       // Before any answer, the land has arrived with every file's patch as the finished world lays it out. No `health`
@@ -273,15 +296,15 @@ describe("opening a world", () => {
       );
       expect(named(shown)).toEqual([]);
 
-      while (!done) {
+      while (!state.done) {
         for (const release of held.splice(0)) release();
         await tick();
       }
       const document = await opened;
       // Every file appears once, with its vitality in the finished world, before the document.
       const all = named(shown);
-      expect(all.map(([path]) => path).sort()).toEqual(
-        document.world.patches.map((p) => p.path).sort(),
+      expect(all.map(([path]) => path).toSorted()).toEqual(
+        document.world.patches.map((p) => p.path).toSorted(),
       );
       expect(Object.fromEntries(all)).toEqual(
         Object.fromEntries(
@@ -376,7 +399,15 @@ function judgedAt(
   quality: Readonly<Record<string, number>> = {},
   from: CodeGraph = graph,
 ): CodeGraph {
-  const judged = (id: string) => ({
+  const judged = (
+    id: string,
+  ): {
+    value: {
+      importance: number;
+      quality: number;
+      concepts: { readability: number };
+    };
+  } => ({
     value: {
       importance: 0.5,
       quality: quality[id] ?? 0.6,
@@ -452,20 +483,13 @@ function keepingEngine(at: { graph: CodeGraph }): {
         responses: await Promise.all(params.requests.map((r) => jev.ask(r))),
       };
     },
-    on: () => () => {},
+    on: (): (() => void) => noop,
   } as unknown as EngineClient;
   return { engine, asked };
 }
 
 describe("refreshing an open world", () => {
   const wheel = "crossings/mill/wheel.ts";
-  const open = (engine: EngineClient) =>
-    openWorld({
-      engine,
-      root: "proving",
-      consent: async () => true,
-      progress: () => {},
-    });
 
   // Each opening lays the proving ground out twice, about a second on a busy machine, and this test opens it three times.
   it(
@@ -474,7 +498,7 @@ describe("refreshing an open world", () => {
     async () => {
       const at = { graph: judgedAt("c0ffee") };
       const { engine, asked } = keepingEngine(at);
-      const shown = await open(engine);
+      const shown = await openProving(engine);
       const before = new Set(asked);
       // The new commit improves the mill's wheel, so the understanding pass raises its quality to 0.9 and the mill's to 0.8.
       at.graph = judgedAt("beef", {
@@ -486,12 +510,12 @@ describe("refreshing an open world", () => {
 
       // The refresh asks exactly what a fresh opening of the new commit asks, minus what the first opening asked.
       const fresh = keepingEngine({ graph: at.graph });
-      await open(fresh.engine);
+      await openProving(fresh.engine);
       const changed = [...new Set(fresh.asked)].filter(
         (key) => !before.has(key),
       );
       expect(changed.length).toBeGreaterThan(0);
-      expect([...new Set(asked)].sort()).toEqual(changed.sort());
+      expect([...new Set(asked)].toSorted()).toEqual(changed.toSorted());
 
       // Only the wheel's and the mill's vitality changed, because the wheel's definitions keep their own quality. The
       // refresh sends only those, with the new judgments and the commit the journal now reads.
@@ -532,19 +556,16 @@ describe("refreshing an open world", () => {
     async () => {
       const at = { graph: judgedAt("c0ffee") };
       const { engine } = keepingEngine(at);
-      const shown = await open(engine);
+      const shown = await openProving(engine);
       // The commit adds a line at the top of the wheel, so its file is a line longer and every definition in it starts a
       // line lower.
-      const lower = (n: GraphNode): GraphNode =>
-        n.kind === "file" && n.path === wheel
-          ? { ...n, measures: { ...n.measures, lines: n.measures.lines + 1 } }
-          : n.kind === "def" && n.file === `file:${wheel}`
-            ? { ...n, span: { start: n.span.start + 1, end: n.span.end + 1 } }
-            : n;
       at.graph = judgedAt(
         "beef",
         {},
-        { ...graph, nodes: graph.nodes.map(lower) },
+        {
+          ...graph,
+          nodes: graph.nodes.map((n) => shiftWheelLine(wheel, n)),
+        },
       );
       const refreshed = await refreshWorld(engine, shown);
 
@@ -574,7 +595,7 @@ describe("refreshing an open world", () => {
     async () => {
       const at = { graph: judgedAt("c0ffee") };
       const { engine } = keepingEngine(at);
-      const shown = await open(engine);
+      const shown = await openProving(engine);
       // The commit adds a file beside the wheel, which changes the land's division, and improves the wheel.
       const sluice = "crossings/mill/sluice.ts";
       const added: GraphNode = {

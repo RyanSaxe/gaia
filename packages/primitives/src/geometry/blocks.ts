@@ -57,6 +57,13 @@ export function tri(
   else b.triangle(i0, i2, i1);
 }
 
+function faceLift(n: Vec3): number {
+  const up = dot(n, UP);
+  if (up > 0.7) return 0.08;
+  if (up < -0.7) return -0.12;
+  return 0;
+}
+
 /**
  * An oriented box from a center, three unit axes and half sizes. Top faces
  * are a little lighter and undersides a little darker, like painted wood.
@@ -81,11 +88,32 @@ export function box(
       const h1 = half[(i + 1) % 3] as number;
       const h2 = half[(i + 2) % 3] as number;
       const center = addScaled(c, n, half[i] as number);
-      const lift = dot(n, UP) > 0.7 ? 0.08 : dot(n, UP) < -0.7 ? -0.12 : 0;
+      const lift = faceLift(n);
       const p = (u: number, v: number): V3 =>
         addScaled(addScaled(center, t1, u * h1), t2, v * h2);
       quad(b, [p(-1, -1), p(1, -1), p(1, 1), p(-1, 1)], n, shade + lift, ch);
     }
+  }
+}
+
+function emitBeamEnds(
+  b: PartBuilder,
+  at: (t: number, u: number, w: number) => V3,
+  a: Vec3,
+  shade: number,
+  ch: Channels,
+): void {
+  for (const [t, n] of [
+    [0, scale(a, -1)],
+    [1, a],
+  ] as const) {
+    quad(
+      b,
+      [at(t, -1, -1), at(t, 1, -1), at(t, 1, 1), at(t, -1, 1)],
+      n,
+      shade,
+      ch,
+    );
   }
 }
 
@@ -141,7 +169,7 @@ export function beam(
     [side, 1, 1, -1, 1],
     [scale(side, -1), -1, -1, 1, -1],
   ] as const) {
-    const lift = dot(n, UP) > 0.7 ? 0.08 : dot(n, UP) < -0.7 ? -0.12 : 0;
+    const lift = faceLift(n);
     for (let k = 0; k < pieces; k++) {
       const t0 = k / pieces;
       const t1 = (k + 1) / pieces;
@@ -154,20 +182,7 @@ export function beam(
       );
     }
   }
-  if (!open) {
-    for (const [t, n] of [
-      [0, scale(a, -1)],
-      [1, a],
-    ] as const) {
-      quad(
-        b,
-        [at(t, -1, -1), at(t, 1, -1), at(t, 1, 1), at(t, -1, 1)],
-        n,
-        shade,
-        ch,
-      );
-    }
-  }
+  if (!open) emitBeamEnds(b, at, a, shade, ch);
 }
 
 /** A log: a six-sided cylinder with lighter end grain. */

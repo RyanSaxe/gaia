@@ -47,19 +47,19 @@ export function createShelf<K extends string>(
     return loading;
   };
   return {
-    take(name) {
+    take(name): AudioBuffer | null {
       const buffer = decoded.get(name);
       if (buffer !== undefined) return buffer;
       void load(name);
       return null;
     },
-    put(name) {
+    put(name): void {
       if (keep) return;
       decoded.delete(name);
       decoding.delete(name);
     },
     held: () => [...decoded.values()].reduce((sum, b) => sum + sizeOf(b), 0),
-    async ready(names) {
+    async ready(names): Promise<void> {
       await Promise.all(
         names.map((n) => (decoded.has(n) ? Promise.resolve() : load(n))),
       );

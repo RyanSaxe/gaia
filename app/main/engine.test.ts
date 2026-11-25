@@ -5,9 +5,11 @@ import { type Engine, superviseEngine } from "./engine.ts";
 const ECHO =
   "require('readline').createInterface({ input: process.stdin }).on('line', (l) => (l === 'quit' ? process.exit(3) : console.log(l)))";
 
+const noop = (): void => {};
+
 /** Returns a promise and the function that resolves it. */
 function signal(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = (): void => {};
+  let resolve = noop;
   const promise = new Promise<void>((r) => (resolve = r));
   return { promise, resolve };
 }

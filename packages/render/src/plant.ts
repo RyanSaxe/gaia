@@ -974,7 +974,6 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
     ),
   );
   if (hasRuin(part)) {
-    const n = part.shade.length;
     const c = part.channels;
     g.setAttribute(
       "aFall",
@@ -1013,6 +1012,12 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
   return g;
 }
 
+const letGoBuffer = (a: THREE.BufferAttribute): void => {
+  a.onUpload(() => {
+    (a as unknown as { array: null }).array = null;
+  });
+};
+
 /**
  * Frees the page's copy of each of `geometry`'s buffers once the GPU has it, except those named in `keep` ("index"
  * for the index). A plant's geometry never changes once built, and three reads a buffer's array only to upload it. A
@@ -1022,15 +1027,14 @@ export function letGoOnUpload(
   geometry: THREE.BufferGeometry,
   keep: readonly string[] = [],
 ): void {
-  const letGo = (a: THREE.BufferAttribute): void => {
-    a.onUpload(() => {
-      (a as unknown as { array: null }).array = null;
-    });
-  };
   for (const [name, a] of Object.entries(geometry.attributes)) {
-    if (!keep.includes(name) && a instanceof THREE.BufferAttribute) letGo(a);
+    if (!keep.includes(name) && a instanceof THREE.BufferAttribute) {
+      letGoBuffer(a);
+    }
   }
-  if (geometry.index !== null && !keep.includes("index")) letGo(geometry.index);
+  if (geometry.index !== null && !keep.includes("index")) {
+    letGoBuffer(geometry.index);
+  }
 }
 
 /** Foliage amount per swatch, from 0 for solid to 1 for thin. Bark, stone and a building's fabric are solid. Leaves, moss and blooms are thin and scatter light. Fruit and berries are solid under a waxy skin. */
@@ -1056,6 +1060,19 @@ export const FOLIAGE: Readonly<Record<string, number>> = {
   trim: 0,
   glass: 0,
 };
+const pickHealthy = (
+  swatches: Realized["palette"]["swatches"],
+  primary: string,
+  secondary: string | undefined,
+  fallback: readonly [number, number, number],
+): THREE.Vector3 => {
+  const first = swatches[primary]?.healthy;
+  if (first !== undefined) return vec3Of(first);
+  const second =
+    secondary === undefined ? undefined : swatches[secondary]?.healthy;
+  return vec3Of(second ?? fallback);
+};
+
 /** The colors a spray uses: the bark's for its stalks, the family's bloom for a blossom spray's petals, and stem green for its few fresh leaves. */
 export const sprayColors = (
   plant: Pick<Realized, "palette">,
@@ -1065,19 +1082,18 @@ export const sprayColors = (
   uBloomColor: { value: THREE.Vector3 };
 } => ({
   uBark: {
-    value: vec3Of(plant.palette.swatches.bark?.healthy ?? [0.4, 0.33, 0.3]),
+    value: pickHealthy(
+      plant.palette.swatches,
+      "bark",
+      undefined,
+      [0.4, 0.33, 0.3],
+    ),
   },
   uStem: {
-    value: vec3Of(
-      plant.palette.swatches.stem?.healthy ??
-        plant.palette.swatches.leaf?.healthy ?? [0.4, 0.6, 0.3],
-    ),
+    value: pickHealthy(plant.palette.swatches, "stem", "leaf", [0.4, 0.6, 0.3]),
   },
   uBloomColor: {
-    value: vec3Of(
-      plant.palette.swatches.bloom?.healthy ??
-        plant.palette.swatches.leaf?.healthy ?? [1, 0.9, 0.92],
-    ),
+    value: pickHealthy(plant.palette.swatches, "bloom", "leaf", [1, 0.9, 0.92]),
   },
 });
 /** Swatches lit from inside at night, like window glass. */
@@ -1221,10 +1237,10 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
     height,
     radius,
     triangles: plant.parts.reduce((n, p) => n + p.indices.length / 3, 0),
-    get vitality() {
+    get vitality(): number {
       return vitality;
     },
-    setVitality(v) {
+    setVitality(v): void {
       vitality = Math.min(1, Math.max(0, v));
       target = shownVitality(vitality);
       // The shown vitality eases toward it from where it is.
@@ -1235,11 +1251,11 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
         closeEachFrame(closeMine);
       }
     },
-    useDepth(on) {
+    useDepth(on): void {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;
       for (const v of veils) v.visible = !on;
     },
-    dispose() {
+    dispose(): void {
       for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();
       object.removeFromParent();

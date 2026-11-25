@@ -139,12 +139,7 @@ export interface Floor {
 /** A surface above the ground to walk on: a footbridge's deck or a built floor. */
 export type Footbed = Deck | Floor;
 
-/**
- * The floor that a built thing's walkable parts make, placed at (x, y, z) and turned by `yaw` as Three turns it. It
- * holds the tops of their upward faces, which a walk climbs as it climbs the ground. They block no walk, since
- * `piecesShapes` reads only solid parts. Null when there are none.
- */
-export function floorOf(
+function collectWalkableTris(
   parts: readonly Part[],
   at: {
     readonly x: number;
@@ -152,7 +147,7 @@ export function floorOf(
     readonly z: number;
     readonly yaw: number;
   },
-): Floor | null {
+): number[] {
   const c = Math.cos(at.yaw);
   const s = Math.sin(at.yaw);
   const tris: number[] = [];
@@ -180,61 +175,60 @@ export function floorOf(
       }
     }
   }
-  if (tris.length === 0) return null;
-  let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
-  for (let k = 0; k < tris.length; k += 3) {
-    x0 = Math.min(x0, tris[k] as number);
-    x1 = Math.max(x1, tris[k] as number);
-    z0 = Math.min(z0, tris[k + 2] as number);
-    z1 = Math.max(z1, tris[k + 2] as number);
-  }
-  const cols = Math.ceil((x1 - x0) / FLOOR_CELL) + 1;
-  const rows = Math.ceil((z1 - z0) / FLOOR_CELL) + 1;
-  const tops = new Float32Array(cols * rows).fill(-Infinity);
-  // Sample each upward face's height at the center of every cell it covers. The highest face over a cell is its top.
-  for (let k = 0; k < tris.length; k += 9) {
-    const [ax, ay, az, bx, by, bz, qx, qy, qz] = tris.slice(k, k + 9) as [
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-    ];
-    const area = (bx - ax) * (qz - az) - (qx - ax) * (bz - az);
-    if (Math.abs(area) < 1e-9) continue;
-    const i0 = Math.max(
-      0,
-      Math.floor((Math.min(ax, bx, qx) - x0) / FLOOR_CELL),
-    );
-    const i1 = Math.min(
-      cols - 1,
-      Math.ceil((Math.max(ax, bx, qx) - x0) / FLOOR_CELL),
-    );
-    const j0 = Math.max(
-      0,
-      Math.floor((Math.min(az, bz, qz) - z0) / FLOOR_CELL),
-    );
-    const j1 = Math.min(
-      rows - 1,
-      Math.ceil((Math.max(az, bz, qz) - z0) / FLOOR_CELL),
-    );
-    for (let j = j0; j <= j1; j++) {
-      for (let i = i0; i <= i1; i++) {
-        const px = x0 + (i + 0.5) * FLOOR_CELL;
-        const pz = z0 + (j + 0.5) * FLOOR_CELL;
-        const u = ((qx - bx) * (pz - bz) - (px - bx) * (qz - bz)) / area;
-        const v = ((ax - qx) * (pz - qz) - (px - qx) * (az - qz)) / area;
-        const w = 1 - u - v;
-        if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
-        const y = u * ay + v * by + w * qy;
-        if (y > (tops[j * cols + i] as number)) tops[j * cols + i] = y;
-      }
+  return tris;
+}
+
+function rasterizeFloorTri(
+  tops: Float32Array,
+  cols: number,
+  rows: number,
+  x0: number,
+  z0: number,
+  tris: readonly number[],
+  k: number,
+): void {
+  const [ax, ay, az, bx, by, bz, qx, qy, qz] = tris.slice(k, k + 9) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  const area = (bx - ax) * (qz - az) - (qx - ax) * (bz - az);
+  if (Math.abs(area) < 1e-9) return;
+  const i0 = Math.max(0, Math.floor((Math.min(ax, bx, qx) - x0) / FLOOR_CELL));
+  const i1 = Math.min(
+    cols - 1,
+    Math.ceil((Math.max(ax, bx, qx) - x0) / FLOOR_CELL),
+  );
+  const j0 = Math.max(0, Math.floor((Math.min(az, bz, qz) - z0) / FLOOR_CELL));
+  const j1 = Math.min(
+    rows - 1,
+    Math.ceil((Math.max(az, bz, qz) - z0) / FLOOR_CELL),
+  );
+  for (let j = j0; j <= j1; j++) {
+    for (let i = i0; i <= i1; i++) {
+      const px = x0 + (i + 0.5) * FLOOR_CELL;
+      const pz = z0 + (j + 0.5) * FLOOR_CELL;
+      const u = ((qx - bx) * (pz - bz) - (px - bx) * (qz - bz)) / area;
+      const v = ((ax - qx) * (pz - qz) - (px - qx) * (az - qz)) / area;
+      const w = 1 - u - v;
+      if (u < -1e-6 || v < -1e-6 || w < -1e-6) continue;
+      const y = u * ay + v * by + w * qy;
+      if (y > (tops[j * cols + i] as number)) tops[j * cols + i] = y;
     }
   }
+}
+
+function fillFloorJoints(
+  tops: Float32Array,
+  cols: number,
+  rows: number,
+): Float32Array {
   // A joint between paving stones can be narrower than a cell. A cell that misses every face but has floor on both
   // sides takes the lower side's height, so a walk never drops into a joint.
   const filled = tops.slice();
@@ -251,7 +245,43 @@ export function floorOf(
       if (side > -Infinity) filled[k] = side;
     }
   }
-  return { x0, z0, cols, rows, tops: filled };
+  return filled;
+}
+
+/**
+ * The floor that a built thing's walkable parts make, placed at (x, y, z) and turned by `yaw` as Three turns it. It
+ * holds the tops of their upward faces, which a walk climbs as it climbs the ground. They block no walk, since
+ * `piecesShapes` reads only solid parts. Null when there are none.
+ */
+export function floorOf(
+  parts: readonly Part[],
+  at: {
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+    readonly yaw: number;
+  },
+): Floor | null {
+  const tris = collectWalkableTris(parts, at);
+  if (tris.length === 0) return null;
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let z0 = Infinity;
+  let z1 = -Infinity;
+  for (let k = 0; k < tris.length; k += 3) {
+    x0 = Math.min(x0, tris[k] as number);
+    x1 = Math.max(x1, tris[k] as number);
+    z0 = Math.min(z0, tris[k + 2] as number);
+    z1 = Math.max(z1, tris[k + 2] as number);
+  }
+  const cols = Math.ceil((x1 - x0) / FLOOR_CELL) + 1;
+  const rows = Math.ceil((z1 - z0) / FLOOR_CELL) + 1;
+  const tops = new Float32Array(cols * rows).fill(-Infinity);
+  // Sample each upward face's height at the center of every cell it covers. The highest face over a cell is its top.
+  for (let k = 0; k < tris.length; k += 9) {
+    rasterizeFloorTri(tops, cols, rows, x0, z0, tris, k);
+  }
+  return { x0, z0, cols, rows, tops: fillFloorJoints(tops, cols, rows) };
 }
 
 /** The highest deck's or floor's top over a point, or -Infinity off every one. */

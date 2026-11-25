@@ -128,6 +128,77 @@ const PASSES = 24;
  * weights for fixed sites are unique up to a constant. Equal inputs therefore
  * give equal divisions, and nearby inputs give nearby divisions.
  */
+function recenterUnpinned(
+  k: number,
+  count: Float64Array,
+  mx: Float64Array,
+  mz: Float64Array,
+  sx: Float64Array,
+  sz: Float64Array,
+  pinned: readonly boolean[],
+): void {
+  for (let j = 0; j < k; j++) {
+    const n = count[j] as number;
+    if (n === 0 || pinned[j] === true) continue;
+    sx[j] = (mx[j] as number) / n;
+    sz[j] = (mz[j] as number) / n;
+  }
+}
+
+function countsSettled(
+  k: number,
+  count: Float64Array,
+  targets: Float64Array,
+): boolean {
+  for (let j = 0; j < k; j++) {
+    if (
+      Math.abs((count[j] as number) - (targets[j] as number)) >
+      Math.max(1, 0.005 * (targets[j] as number))
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function tryWeightStep(
+  weight: Float64Array<ArrayBuffer>,
+  step: Float64Array,
+  fits: number,
+  off: number,
+  assign: (w: Float64Array) => number,
+): { weight: Float64Array<ArrayBuffer>; off: number; better: boolean } {
+  for (let scale = fits; scale > fits / 20; scale /= 2) {
+    const tried = Float64Array.from(
+      weight,
+      (w, j) => w + scale * (step[j] as number),
+    );
+    const now = assign(tried);
+    if (now < off) return { weight: tried, off: now, better: true };
+  }
+  return { weight, off, better: false };
+}
+
+function stepScaleLimit(
+  k: number,
+  targets: Float64Array,
+  count: Float64Array,
+  step: Float64Array,
+  cellArea: number,
+): number {
+  let fits = 1;
+  for (let j = 0; j < k; j++) {
+    fits = Math.min(
+      fits,
+      ((0.5 * Math.max(targets[j] as number, count[j] as number) + 2) *
+        cellArea) /
+        Math.PI /
+        Math.max(1e-9, Math.abs(step[j] as number)),
+    );
+  }
+  return fits;
+}
+
 function settle(
   r: Raster,
   cells: Int32Array,
@@ -204,24 +275,12 @@ function settle(
   let off = assign(weight);
   for (let pass = 0; ; pass++) {
     if (pass < MOVES) {
-      for (let j = 0; j < k; j++) {
-        const n = count[j] as number;
-        if (n === 0 || pinned[j] === true) continue;
-        sx[j] = (mx[j] as number) / n;
-        sz[j] = (mz[j] as number) / n;
-      }
+      recenterUnpinned(k, count, mx, mz, sx, sz, pinned);
       off = assign(weight);
     }
-    let settled = pass >= MOVES;
-    for (let j = 0; j < k && settled; j++) {
-      if (
-        Math.abs((count[j] as number) - (targets[j] as number)) >
-        Math.max(1, 0.005 * (targets[j] as number))
-      ) {
-        settled = false;
-      }
+    if ((pass >= MOVES && countsSettled(k, count, targets)) || pass >= PASSES) {
+      return;
     }
-    if (settled || pass >= PASSES) return;
     const step = newtonStep(
       trade,
       Float64Array.from(targets, (t, j) => t - (count[j] as number)),
@@ -229,30 +288,13 @@ function settle(
     );
     // Scale the step so no weight changes by more than a lone disc's weight for half of max(target, count) plus two
     // cells. Then halve it until the counts move closer to their targets, and give up below 1/20 of that scale.
-    let fits = 1;
-    for (let j = 0; j < k; j++) {
-      fits = Math.min(
-        fits,
-        ((0.5 * Math.max(targets[j] as number, count[j] as number) + 2) *
-          cellArea) /
-          Math.PI /
-          Math.max(1e-9, Math.abs(step[j] as number)),
-      );
+    const fits = stepScaleLimit(k, targets, count, step, cellArea);
+    const moved = tryWeightStep(weight, step, fits, off, assign);
+    if (moved.better) {
+      weight = moved.weight;
+      off = moved.off;
+      continue;
     }
-    let better = false;
-    for (let scale = fits; scale > fits / 20 && !better; scale /= 2) {
-      const tried = Float64Array.from(
-        weight,
-        (w, j) => w + scale * (step[j] as number),
-      );
-      const now = assign(tried);
-      if (now < off) {
-        weight = tried;
-        off = now;
-        better = true;
-      }
-    }
-    if (better) continue;
     // No scaled step reduced the error. Reassign under the kept weights, since the trials overwrote `owner`, and stop
     // once the sites have finished moving.
     off = assign(weight);
@@ -325,15 +367,10 @@ const SPACING = 48;
  * depend on the cells only through their centroid and second moments, so a
  * small change in ground moves them a little.
  */
-function spaceSites(
+function cellStretch(
   r: Raster,
   cells: Int32Array,
-  kids: readonly LandNode[],
-  targets: Float64Array,
-  sx: Float64Array,
-  sz: Float64Array,
-): void {
-  const k = kids.length;
+): { cx: number; cz: number; lxx: number; lxz: number; lzz: number } {
   let cx = 0;
   let cz = 0;
   for (const q of cells) {
@@ -360,20 +397,21 @@ function spaceSites(
   // A disc of radius R has second moment R^2 / 4 on each axis. The stretch is twice the matrix square root of the moments.
   const det = Math.sqrt(a * d - b * b);
   const tr = Math.sqrt(a + d + 2 * det);
-  const lxx = (2 * (a + det)) / tr;
-  const lxz = (2 * b) / tr;
-  const lzz = (2 * (d + det)) / tr;
-  const total = targets.reduce((n, t) => n + t, 0) || 1;
-  const radius = Float64Array.from(targets, (t) => 0.9 * Math.sqrt(t / total));
-  const px = new Float64Array(k);
-  const pz = new Float64Array(k);
-  kids.forEach((kid, j) => {
-    const h = rand(seedOf(kid.id));
-    const angle = h.next() * Math.PI * 2;
-    const far = kid.center === true ? 0 : 0.3 + 0.55 * Math.sqrt(h.next());
-    px[j] = Math.cos(angle) * far;
-    pz[j] = Math.sin(angle) * far;
-  });
+  return {
+    cx,
+    cz,
+    lxx: (2 * (a + det)) / tr,
+    lxz: (2 * b) / tr,
+    lzz: (2 * (d + det)) / tr,
+  };
+}
+
+function spaceDiscs(
+  px: Float64Array,
+  pz: Float64Array,
+  radius: Float64Array,
+): void {
+  const k = px.length;
   const mx = new Float64Array(k);
   const mz = new Float64Array(k);
   for (let pass = 0; pass < SPACING; pass++) {
@@ -414,9 +452,95 @@ function spaceSites(
       pz[j] = z;
     }
   }
+}
+
+function spaceSites(
+  r: Raster,
+  cells: Int32Array,
+  kids: readonly LandNode[],
+  targets: Float64Array,
+  sx: Float64Array,
+  sz: Float64Array,
+): void {
+  const k = kids.length;
+  const { cx, cz, lxx, lxz, lzz } = cellStretch(r, cells);
+  const total = targets.reduce((n, t) => n + t, 0) || 1;
+  const radius = Float64Array.from(targets, (t) => 0.9 * Math.sqrt(t / total));
+  const px = new Float64Array(k);
+  const pz = new Float64Array(k);
+  kids.forEach((kid, j) => {
+    const h = rand(seedOf(kid.id));
+    const angle = h.next() * Math.PI * 2;
+    const far = kid.center === true ? 0 : 0.3 + 0.55 * Math.sqrt(h.next());
+    px[j] = Math.cos(angle) * far;
+    pz[j] = Math.sin(angle) * far;
+  });
+  spaceDiscs(px, pz, radius);
   for (let j = 0; j < k; j++) {
     sx[j] = cx + lxx * (px[j] as number) + lxz * (pz[j] as number);
     sz[j] = cz + lxz * (px[j] as number) + lzz * (pz[j] as number);
+  }
+}
+
+function relocateEmptySite(
+  r: Raster,
+  cells: Int32Array,
+  owner: Int32Array,
+  sx: Float64Array,
+  sz: Float64Array,
+  j: number,
+  kidCount: number,
+  spare: (o: number) => number,
+): void {
+  let richest = -1;
+  for (let o = 0; o < kidCount; o++) {
+    if (o !== j && (richest < 0 || spare(o) > spare(richest))) richest = o;
+  }
+  let far = -1;
+  for (let c = 0; c < cells.length; c++) {
+    if (owner[c] !== richest) continue;
+    const q = cells[c] as number;
+    const d =
+      ((r.wx[q] as number) - (sx[richest] as number)) ** 2 +
+      ((r.wz[q] as number) - (sz[richest] as number)) ** 2;
+    if (d > far) {
+      far = d;
+      sx[j] = r.wx[q] as number;
+      sz[j] = r.wz[q] as number;
+    }
+  }
+}
+
+function claimNearestCells(
+  r: Raster,
+  cells: Int32Array,
+  owner: Int32Array,
+  held: Int32Array,
+  leaves: readonly number[],
+  sx: Float64Array,
+  sz: Float64Array,
+  j: number,
+  wantCount: number,
+): void {
+  let want = wantCount;
+  const near = Array.from(cells.keys())
+    .map(
+      (c) =>
+        [
+          c,
+          ((r.wx[cells[c] as number] as number) - (sx[j] as number)) ** 2 +
+            ((r.wz[cells[c] as number] as number) - (sz[j] as number)) ** 2,
+        ] as const,
+    )
+    .toSorted((a, b) => a[1] - b[1] || a[0] - b[0]);
+  for (const [c] of near) {
+    if (want === 0) break;
+    const o = owner[c] as number;
+    if (o === j || (held[o] as number) <= (leaves[o] as number)) continue;
+    owner[c] = j;
+    held[o] = (held[o] as number) - 1;
+    held[j] = (held[j] as number) + 1;
+    want--;
   }
 }
 
@@ -465,47 +589,13 @@ function divide(
     const need = leaves[j] as number;
     if ((held[j] as number) >= need) return;
     if ((held[j] as number) === 0) {
-      let richest = -1;
-      for (let o = 0; o < kids.length; o++) {
-        if (o !== j && (richest < 0 || spare(o) > spare(richest))) richest = o;
-      }
-      let far = -1;
-      for (let c = 0; c < cells.length; c++) {
-        if (owner[c] !== richest) continue;
-        const q = cells[c] as number;
-        const d =
-          ((r.wx[q] as number) - (sx[richest] as number)) ** 2 +
-          ((r.wz[q] as number) - (sz[richest] as number)) ** 2;
-        if (d > far) {
-          far = d;
-          sx[j] = r.wx[q] as number;
-          sz[j] = r.wz[q] as number;
-        }
-      }
+      relocateEmptySite(r, cells, owner, sx, sz, j, kids.length, spare);
     }
-    let want =
+    const want =
       (held[j] as number) === 0
         ? Math.max(need, Math.round(targets[j] as number))
         : need - (held[j] as number);
-    const near = Array.from(cells.keys())
-      .map(
-        (c) =>
-          [
-            c,
-            ((r.wx[cells[c] as number] as number) - (sx[j] as number)) ** 2 +
-              ((r.wz[cells[c] as number] as number) - (sz[j] as number)) ** 2,
-          ] as const,
-      )
-      .sort((a, b) => a[1] - b[1] || a[0] - b[0]);
-    for (const [c] of near) {
-      if (want === 0) break;
-      const o = owner[c] as number;
-      if (o === j || (held[o] as number) <= (leaves[o] as number)) continue;
-      owner[c] = j;
-      held[o] = (held[o] as number) - 1;
-      held[j] = (held[j] as number) + 1;
-      want--;
-    }
+    claimNearestCells(r, cells, owner, held, leaves, sx, sz, j, want);
   });
   const parts: number[][] = kids.map(() => []);
   owner.forEach((o, c) => (parts[o] as number[]).push(cells[c] as number));
@@ -532,6 +622,66 @@ const SITE_SPACING = 16;
  * Nearest-site division over these sites matches the nested division to
  * within a few meters, and every leaf with cells keeps at least one.
  */
+function nearestCellToCentroid(
+  r: Raster,
+  cells: Int32Array | readonly number[],
+): number {
+  let x = 0;
+  let z = 0;
+  for (const q of cells) {
+    x += r.px[q] as number;
+    z += r.pz[q] as number;
+  }
+  x /= Math.max(1, cells.length);
+  z /= Math.max(1, cells.length);
+  let best = cells[0] as number;
+  let near = Infinity;
+  for (const q of cells) {
+    const d = ((r.px[q] as number) - x) ** 2 + ((r.pz[q] as number) - z) ** 2;
+    if (d < near) {
+      near = d;
+      best = q;
+    }
+  }
+  return best;
+}
+
+function pickBlockSites(
+  cells: Int32Array,
+  m: number,
+  blocks: number,
+  cellOf: (q: number) => [number, number],
+): number[] {
+  const byBlock = new Map<number, number[]>();
+  for (const q of cells) {
+    const [i, j] = cellOf(q);
+    const key = Math.floor(j / m) * blocks + Math.floor(i / m);
+    const list = byBlock.get(key);
+    if (list === undefined) byBlock.set(key, [q]);
+    else list.push(q);
+  }
+  const picks: number[] = [];
+  for (const key of [...byBlock.keys()].toSorted((a, b) => a - b)) {
+    const list = byBlock.get(key) as number[];
+    if (list.length * 4 < m * m) continue;
+    const h = rand(seedOf(`site:${key}`));
+    const bx = ((key % blocks) + 0.2 + 0.6 * h.next()) * m;
+    const bz = (Math.floor(key / blocks) + 0.2 + 0.6 * h.next()) * m;
+    let best = list[0] as number;
+    let near = Infinity;
+    for (const q of list) {
+      const [i, j] = cellOf(q);
+      const d = (i - bx) ** 2 + (j - bz) ** 2;
+      if (d < near) {
+        near = d;
+        best = q;
+      }
+    }
+    picks.push(best);
+  }
+  return picks;
+}
+
 function sitesOf(
   r: Raster,
   leaves: readonly LandNode[],
@@ -547,54 +697,8 @@ function sitesOf(
   leaves.forEach((leaf, li) => {
     const cells = shares.get(leaf.id) ?? new Int32Array(0);
     if (cells.length === 0) return;
-    const byBlock = new Map<number, number[]>();
-    for (const q of cells) {
-      const [i, j] = cellOf(q);
-      const key = Math.floor(j / m) * blocks + Math.floor(i / m);
-      const list = byBlock.get(key);
-      if (list === undefined) byBlock.set(key, [q]);
-      else list.push(q);
-    }
-    const picks: number[] = [];
-    for (const key of [...byBlock.keys()].sort((a, b) => a - b)) {
-      const list = byBlock.get(key) as number[];
-      if (list.length * 4 < m * m) continue;
-      const h = rand(seedOf(`site:${key}`));
-      const bx = ((key % blocks) + 0.2 + 0.6 * h.next()) * m;
-      const bz = (Math.floor(key / blocks) + 0.2 + 0.6 * h.next()) * m;
-      let best = list[0] as number;
-      let near = Infinity;
-      for (const q of list) {
-        const [i, j] = cellOf(q);
-        const d = (i - bx) ** 2 + (j - bz) ** 2;
-        if (d < near) {
-          near = d;
-          best = q;
-        }
-      }
-      picks.push(best);
-    }
-    if (picks.length === 0) {
-      let x = 0;
-      let z = 0;
-      for (const q of cells) {
-        x += r.px[q] as number;
-        z += r.pz[q] as number;
-      }
-      x /= cells.length;
-      z /= cells.length;
-      let best = cells[0] as number;
-      let near = Infinity;
-      for (const q of cells) {
-        const d =
-          ((r.px[q] as number) - x) ** 2 + ((r.pz[q] as number) - z) ** 2;
-        if (d < near) {
-          near = d;
-          best = q;
-        }
-      }
-      picks.push(best);
-    }
+    const picks = pickBlockSites(cells, m, blocks, cellOf);
+    if (picks.length === 0) picks.push(nearestCellToCentroid(r, cells));
     for (const q of picks) {
       out.push({
         site: {
@@ -606,6 +710,55 @@ function sitesOf(
     }
   });
   return out;
+}
+
+function isInnerCell(
+  r: Raster,
+  owner: Int32Array,
+  q: number,
+  leafIndex: number,
+  step: number,
+): boolean {
+  const i = Math.round(((r.px[q] as number) + r.half) / step - 0.5);
+  const jj = Math.round(((r.pz[q] as number) + r.half) / step - 0.5);
+  for (let dj = -1; dj <= 1; dj++) {
+    for (let di = -1; di <= 1; di++) {
+      const ii = i + di;
+      const kk = jj + dj;
+      if (ii < 0 || kk < 0 || ii >= r.n || kk >= r.n) return false;
+      const o = r.at[kk * r.n + ii] as number;
+      if (o < 0 || owner[o] !== leafIndex) return false;
+    }
+  }
+  return true;
+}
+
+function buildLeafLand(
+  r: Raster,
+  leaf: LandNode,
+  leafIndex: number,
+  mine: readonly number[],
+  owner: Int32Array,
+  drawn: readonly { site: LandSite; leaf: number }[],
+  step: number,
+): LeafLand {
+  // Use the leaf's cell nearest its centroid, since a curved leaf's centroid can lie outside it.
+  const centerCell = mine.length > 0 ? nearestCellToCentroid(r, mine) : -1;
+  const inner: [number, number][] = [];
+  for (const q of mine) {
+    if (isInnerCell(r, owner, q, leafIndex, step)) {
+      inner.push([r.px[q] as number, r.pz[q] as number]);
+    }
+  }
+  const own = drawn.filter((d) => d.leaf === leafIndex).map((d) => d.site);
+  return {
+    id: leaf.id,
+    sites: own,
+    ground: mine.length * step * step,
+    x: centerCell >= 0 ? (r.px[centerCell] as number) : (own[0]?.x ?? 0),
+    z: centerCell >= 0 ? (r.pz[centerCell] as number) : (own[0]?.z ?? 0),
+    inner,
+  };
 }
 
 /** Divides the land among the leaves of `root` in proportion to their ground, rounded up by `rung`. */
@@ -630,56 +783,9 @@ export function divideLand(root: LandNode, land: LandOutline): Land {
   }
   const cells: number[][] = leaves.map(() => []);
   owner.forEach((o, q) => (cells[o] as number[]).push(q));
-  const out: LeafLand[] = leaves.map((leaf, j) => {
-    const mine = cells[j] as number[];
-    let x = 0;
-    let z = 0;
-    for (const q of mine) {
-      x += r.px[q] as number;
-      z += r.pz[q] as number;
-    }
-    x /= Math.max(1, mine.length);
-    z /= Math.max(1, mine.length);
-    // Use the leaf's cell nearest its centroid, since a curved leaf's centroid can lie outside it.
-    let hx = x;
-    let hz = z;
-    let near = Infinity;
-    for (const q of mine) {
-      const d = ((r.px[q] as number) - x) ** 2 + ((r.pz[q] as number) - z) ** 2;
-      if (d < near) {
-        near = d;
-        hx = r.px[q] as number;
-        hz = r.pz[q] as number;
-      }
-    }
-    const inner: [number, number][] = [];
-    for (const q of mine) {
-      const i = Math.round(((r.px[q] as number) + r.half) / step - 0.5);
-      const jj = Math.round(((r.pz[q] as number) + r.half) / step - 0.5);
-      let whole = true;
-      for (let dj = -1; dj <= 1 && whole; dj++) {
-        for (let di = -1; di <= 1 && whole; di++) {
-          const ii = i + di;
-          const kk = jj + dj;
-          const o =
-            ii < 0 || kk < 0 || ii >= r.n || kk >= r.n
-              ? -1
-              : (r.at[kk * r.n + ii] as number);
-          if (o < 0 || owner[o] !== j) whole = false;
-        }
-      }
-      if (whole) inner.push([r.px[q] as number, r.pz[q] as number]);
-    }
-    const own = drawn.filter((d) => d.leaf === j).map((d) => d.site);
-    return {
-      id: leaf.id,
-      sites: own,
-      ground: mine.length * step * step,
-      x: mine.length > 0 ? hx : (own[0]?.x ?? 0),
-      z: mine.length > 0 ? hz : (own[0]?.z ?? 0),
-      inner,
-    };
-  });
+  const out: LeafLand[] = leaves.map((leaf, j) =>
+    buildLeafLand(r, leaf, j, cells[j] as number[], owner, drawn, step),
+  );
   return { step, leaves: out };
 }
 

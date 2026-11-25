@@ -41,6 +41,45 @@ const decoded = async (src: string): Promise<HTMLImageElement> => {
   return image;
 };
 
+const placeHit = (el: HTMLElement, r: Rect): void => {
+  el.style.transform = `translate(${r.x.toFixed(1)}px, ${r.y.toFixed(1)}px)`;
+  el.style.width = `${r.w.toFixed(1)}px`;
+  el.style.height = `${r.h.toFixed(1)}px`;
+};
+
+/** Draws the tally of `commits` on a card's face, with the same strokes for the same world. On a painting, a paper-toned halo goes under it. */
+type Pencilled = (
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  onPaint?: boolean,
+) => void;
+
+const tallyOf =
+  (commits: number | null, worldRoot: string): Pencilled =>
+  (c, x, y, w, h, onPaint = false): void =>
+    drawTally(c, x, y, w, h, commits, worldRoot, onPaint);
+
+/** Returns a copy of `face` with `pencilled` drawn on it, or `face` itself when there is nothing to draw. `onPaint` is true when the face is a painting. */
+function tallied<F extends HTMLCanvasElement | HTMLImageElement>(
+  face: F,
+  pencilled: Pencilled | null,
+  onPaint: boolean,
+): F | HTMLCanvasElement {
+  if (pencilled === null) return face;
+  const copy = document.createElement("canvas");
+  copy.width =
+    face instanceof HTMLImageElement ? face.naturalWidth : face.width;
+  copy.height =
+    face instanceof HTMLImageElement ? face.naturalHeight : face.height;
+  const c = copy.getContext("2d") as CanvasRenderingContext2D;
+  c.drawImage(face, 0, 0);
+  pencilled(c, 0, 0, copy.width, copy.height, onPaint);
+  return copy;
+}
+
 export interface TableOptions {
   /** The hour the world shows now. */
   readonly hour: number;
@@ -106,6 +145,26 @@ export function createTable(
       frame = requestAnimationFrame(tick);
     }
   };
+  function stepChosen(activeScene: TableScene, now: number): boolean {
+    if (chosen === null) return false;
+    const t = (now - chosen.at) / 1000;
+    activeScene.choose(chosen.index, Math.min(t, CHOSEN_MS / 1000), toSheet());
+    if (t * 1000 < CHOSEN_MS) return true;
+    if (!arrived) {
+      // Draws one frame exactly at the card's end, so the frame before the sheet replaces it already matches the sheet.
+      arrived = true;
+      return true;
+    }
+    if (!landed) {
+      // The card now lies where the wait's sheet is, drawn as the page draws the sheet. In this one frame the sheet shows
+      // in its place, the card is withdrawn, and the table moves behind.
+      landed = true;
+      veil.dataset.table = "behind";
+      activeScene.withdraw(0);
+      options.landed?.();
+    }
+    return false;
+  }
   function tick(now: number): void {
     frame = 0;
     if (scene === null || gone) return;
@@ -121,23 +180,7 @@ export function createTable(
       else moving = true;
       write({ ...writing, answered });
     }
-    if (chosen !== null) {
-      const t = (now - chosen.at) / 1000;
-      scene.choose(chosen.index, Math.min(t, CHOSEN_MS / 1000), toSheet());
-      if (t * 1000 < CHOSEN_MS) moving = true;
-      else if (!arrived) {
-        // Draws one frame exactly at the card's end, so the frame before the sheet replaces it already matches the sheet.
-        arrived = true;
-        moving = true;
-      } else if (!landed) {
-        // The card now lies where the wait's sheet is, drawn as the page draws the sheet. In this one frame the sheet shows
-        // in its place, the card is withdrawn, and the table moves behind.
-        landed = true;
-        veil.dataset.table = "behind";
-        scene.withdraw(0);
-        options.landed?.();
-      }
-    }
+    if (stepChosen(scene, now)) moving = true;
     scene.render();
     if (moving) draw();
   }
@@ -163,20 +206,15 @@ export function createTable(
   }
 
   // ---------- the hit areas over the canvas ----------
-  const place = (el: HTMLElement, r: Rect): void => {
-    el.style.transform = `translate(${r.x.toFixed(1)}px, ${r.y.toFixed(1)}px)`;
-    el.style.width = `${r.w.toFixed(1)}px`;
-    el.style.height = `${r.h.toFixed(1)}px`;
-  };
   function placeHits(): void {
     if (scene === null) return;
     const hits = scene.hits();
     [...cardsEl.children].forEach((el, i) => {
       const r = hits.cards[i];
-      if (r !== undefined) place(el as HTMLElement, r);
+      if (r !== undefined) placeHit(el as HTMLElement, r);
     });
-    place(form, hits.line);
-    place(folderEl, hits.folder);
+    placeHit(form, hits.line);
+    placeHit(folderEl, hits.folder);
   }
 
   form.addEventListener("submit", (e) => {
@@ -231,8 +269,8 @@ export function createTable(
     const next = createTableScene(
       tableLayout(phone, recent.length),
       recent.map((world, i) => ({ world, picture: faces[i] ?? null })),
-      logo as HTMLImageElement,
-      deckle as HTMLImageElement,
+      logo,
+      deckle,
       { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) },
     );
     next.canvas.className = "table-view";
@@ -268,37 +306,6 @@ export function createTable(
       }),
     );
     placeHits();
-  }
-
-  /** Draws the tally of `commits` on a card's face, with the same strokes for the same world. On a painting, a paper-toned halo goes under it. */
-  type Pencilled = (
-    c: CanvasRenderingContext2D,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    onPaint?: boolean,
-  ) => void;
-  const tallyOf =
-    (commits: number | null, root: string): Pencilled =>
-    (c, x, y, w, h, onPaint = false) =>
-      drawTally(c, x, y, w, h, commits, root, onPaint);
-  /** Returns a copy of `face` with `pencilled` drawn on it, or `face` itself when there is nothing to draw. `onPaint` is true when the face is a painting. */
-  function tallied<F extends HTMLCanvasElement | HTMLImageElement>(
-    face: F,
-    pencilled: Pencilled | null,
-    onPaint: boolean,
-  ): F | HTMLCanvasElement {
-    if (pencilled === null) return face;
-    const copy = document.createElement("canvas");
-    copy.width =
-      face instanceof HTMLImageElement ? face.naturalWidth : face.width;
-    copy.height =
-      face instanceof HTMLImageElement ? face.naturalHeight : face.height;
-    const c = copy.getContext("2d") as CanvasRenderingContext2D;
-    c.drawImage(face, 0, 0);
-    pencilled(c, 0, 0, copy.width, copy.height, onPaint);
-    return copy;
   }
 
   /** Starts card `index` lifting at time `at` and rising into the wait's sheet. */
@@ -346,7 +353,7 @@ export function createTable(
   resized.observe(root);
 
   return {
-    offer(offer) {
+    offer(offer): Promise<StartChoice> {
       const recent = offer.recent.slice(0, RECENT_KEPT);
       const same =
         scene !== null &&
@@ -388,12 +395,12 @@ export function createTable(
       });
       return new Promise((resolve) => (settle = resolve));
     },
-    hour(h) {
+    hour(h): void {
       hour = h;
       // The page passes the hour every frame, and the table redraws only when its light has changed.
       if (scene?.hour(h) === true) draw();
     },
-    leave() {
+    leave(): void {
       if (leaving) return;
       settle = null;
       leaving = true;
@@ -401,8 +408,7 @@ export function createTable(
       root.classList.add("choosing");
       // A chosen card is already rising. A folder, an address, or a world opened without the start page gets a fresh card,
       // on the current table or, without the start page, on an empty table built for it.
-      if (scene !== null) liftFresh();
-      else {
+      if (scene === null) {
         void build([]).then(() => {
           if (scene === null) return;
           scene.choose(null, 0);
@@ -412,9 +418,11 @@ export function createTable(
           // Waits for the empty table to fade in (start.css), so the card is laid on a visible table.
           liftFresh(SHOWN_MS);
         });
+      } else {
+        liftFresh();
       }
     },
-    close() {
+    close(): void {
       gone = true;
       cancelAnimationFrame(frame);
       resized.disconnect();
