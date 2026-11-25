@@ -16,7 +16,7 @@ fixtures and verification.
 - `app/world-service/protocol.ts` defines messages between the app, world
   service and renderer. Update its documentation with a protocol change.
 - A package's `src/index.ts` is its public interface. Use package entry points,
-  including in tests. `eslint.config.js` enforces imports and purity.
+  including in tests.
 - Kinds declare roles, and primitives implement them. Jev chooses from closed,
   instructed fields. Numeric scales use word levels, and code supplies free
   numbers, coordinates and measurements.
@@ -48,9 +48,13 @@ fixtures and verification.
   exercise public behavior. Do not use snapshot assertions.
 - Bake expensive fixtures once per test file and clone them for mutations. Give
   slow cases explicit timeouts with a reason.
-- Run `pnpm check`, `cargo test` and `cargo clippy --all-targets -- -D warnings`
-  for a broad change. Use rustup's toolchain. Commit through the pre-commit hook
-  and fix failures instead of skipping checks.
+- Run `prek run --all-files`, `pnpm check`, `pnpm exec tsx tools/cargo.ts test`
+  and `pnpm exec tsx tools/cargo.ts clippy --all-targets -- -D warnings` for a
+  broad change. Commit through prek (`prek install`) and fix failures instead of
+  skipping checks.
+- Work lands on `main` via pull requests. Write commit messages using
+  Conventional Commits. Ask before adding a dependency or releasing, and add no
+  backwards-compatibility shims before the first release.
 - For visual changes, use Gaia's world and the proving ground. Inspect the real
   app, capture useful evidence, and compare performance under similar load.
 

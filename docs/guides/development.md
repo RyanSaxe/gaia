@@ -179,15 +179,19 @@ are downloaded once into `~/.cache/gaia-sound/` and checked against the sums in
 ## Checks
 
 ```sh
+prek run --all-files
 pnpm check
 pnpm exec tsx tools/cargo.ts test
 pnpm exec tsx tools/cargo.ts clippy --all-targets -- -D warnings
 ```
 
-`pnpm check` runs TypeScript, ESLint and Vitest. CI runs these and the Rust
-checks on Linux, Windows and macOS. On macOS it also opens the showcase in the
-app with `pnpm app-opens`, and runs the probe's draw and walk tests in the
-showcase and the proving ground
+`pnpm check` runs TypeScript, `oxlint` (with type-aware checks) and Vitest.
+`prek run --all-files` runs formatting, Markdown (`rumdl`), project `ast-grep`
+rules, Python (`ruff`, `ty`, `uv.lock`), Web (`oxfmt`, `oxlint`) and Rust
+(`rustfmt`, `clippy`, `Cargo.lock`) checks. CI runs `prek` on Linux and the
+TypeScript and Rust checks on Linux, Windows and macOS. On macOS it also opens
+the showcase in the app with `pnpm app-opens`, and runs the probe's draw and
+walk tests in the showcase and the proving ground
 ([`check.yml`](../../.github/workflows/check.yml)).
 
 `pnpm app-opens` opens the showcase in the real app, as a person starts Gaia:
@@ -195,7 +199,7 @@ Electron's main process, the world service and the engine binary, with Jev off.
 It fails unless the world opens, the engine connects, and nothing reports an
 error ([`app-opens.ts`](../../tools/app-opens.ts)).
 
-The pre-commit hook checks types, lints changed TypeScript and JavaScript files,
-and runs clippy when Rust changes. It runs no tests. Run relevant tests during
-development and all checks before submitting a broad change. Fix failures
-without bypassing the hook.
+Install the git hook with `prek install`. The pre-commit hook runs only fast
+formatting and lint checks, never tests. Run relevant tests during development
+and all checks before submitting a broad change. Fix failures without bypassing
+the hook.
