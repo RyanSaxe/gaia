@@ -10,6 +10,7 @@ Usage: python -m music.chunks STEMS_DIR OUT_DIR MANIFEST.json   (from tools/soun
   STEMS_DIR holds bed.wav, melody.wav, shimmer.wav and minor.wav (48 kHz stereo, one loop each, all one length).
   Writes OUT_DIR/<stem>.ogg (the chunks laid end to end) and adds "chunks" and "chunk" to MANIFEST.json's "piece".
 """
+
 import json
 import subprocess
 import sys
@@ -31,15 +32,43 @@ def encode(x: np.ndarray) -> bytes:
     with tempfile.TemporaryDirectory() as tmp:
         wav, ogg = Path(tmp) / "c.wav", Path(tmp) / "c.ogg"
         sf.write(wav, x.astype(np.float32), RATE, subtype="FLOAT")
-        subprocess.run(["nice", "-n", "10", "ffmpeg", "-v", "error", "-y", "-i", str(wav), "-c:a", "libopus", "-b:a",
-                        BITRATE, "-ar", str(RATE), "-map_metadata", "-1", "-fflags", "+bitexact", "-flags:a", "+bitexact",
-                        str(ogg)], check=True)
+        subprocess.run(
+            [
+                "nice",
+                "-n",
+                "10",
+                "ffmpeg",
+                "-v",
+                "error",
+                "-y",
+                "-i",
+                str(wav),
+                "-c:a",
+                "libopus",
+                "-b:a",
+                BITRATE,
+                "-ar",
+                str(RATE),
+                "-map_metadata",
+                "-1",
+                "-fflags",
+                "+bitexact",
+                "-flags:a",
+                "+bitexact",
+                str(ogg),
+            ],
+            check=True,
+        )
         return ogg.read_bytes()
 
 
 def decode(data: bytes) -> np.ndarray:
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-f", "ogg", "-i", "pipe:0", "-f", "f32le", "-ac", "2", "-ar", str(RATE),
-                          "pipe:1"], input=data, capture_output=True, check=True).stdout
+    raw = subprocess.run(
+        ["ffmpeg", "-v", "error", "-f", "ogg", "-i", "pipe:0", "-f", "f32le", "-ac", "2", "-ar", str(RATE), "pipe:1"],
+        input=data,
+        capture_output=True,
+        check=True,
+    ).stdout
     return np.frombuffer(raw, np.float32).reshape(-1, 2)
 
 
@@ -61,10 +90,10 @@ def main(stems_dir, out_dir, manifest_path):
         files, spans, kept = [], [], []
         at = 0
         for k in range(count):
-            data = encode(wrapped[k * chunk: (k + 1) * chunk + 2 * MARGIN])
+            data = encode(wrapped[k * chunk : (k + 1) * chunk + 2 * MARGIN])
             decoded = decode(data)
             assert len(decoded) == chunk + 2 * MARGIN, f"{stem} chunk {k} decodes to {len(decoded)} frames"
-            kept.append(decoded[MARGIN: MARGIN + chunk])
+            kept.append(decoded[MARGIN : MARGIN + chunk])
             spans.append({"at": at, "bytes": len(data)})
             files.append(data)
             at += len(data)
@@ -72,12 +101,16 @@ def main(stems_dir, out_dir, manifest_path):
         # How close the streamed stem is to the music, and how large the joins are against the stem's own steps.
         streamed = np.concatenate(kept)
         err = streamed - x
-        snr = 10 * np.log10((x ** 2).sum() / max((err ** 2).sum(), 1e-20))
+        snr = 10 * np.log10((x**2).sum() / max((err**2).sum(), 1e-20))
         steps = np.abs(np.diff(streamed, axis=0)).max(axis=1)
         joins = [float(np.abs(streamed[k * chunk] - streamed[k * chunk - 1]).max()) for k in range(1, count)]
         joins.append(float(np.abs(streamed[0] - streamed[-1]).max()))
-        report[stem] = {"snr_db": round(float(snr), 1), "join_max": round(max(joins), 5),
-                        "step_p99": round(float(np.percentile(steps, 99)), 5), "bytes": at}
+        report[stem] = {
+            "snr_db": round(float(snr), 1),
+            "join_max": round(max(joins), 5),
+            "step_p99": round(float(np.percentile(steps, 99)), 5),
+            "bytes": at,
+        }
         piece.setdefault("chunks", {})[stem] = spans
     piece["chunk"] = {"frames": chunk, "margin": MARGIN, "rate": RATE}
     manifest_path.write_text(json.dumps(manifest, indent=2))

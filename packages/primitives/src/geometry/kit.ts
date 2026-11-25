@@ -6,11 +6,24 @@ import type { Part, Vec3 } from "@gaia/schema";
 
 export type V3 = [number, number, number];
 
-export const add = (a: Vec3, b: Vec3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-export const sub = (a: Vec3, b: Vec3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+export const add = (a: Vec3, b: Vec3): V3 => [
+  a[0] + b[0],
+  a[1] + b[1],
+  a[2] + b[2],
+];
+export const sub = (a: Vec3, b: Vec3): V3 => [
+  a[0] - b[0],
+  a[1] - b[1],
+  a[2] - b[2],
+];
 export const scale = (a: Vec3, s: number): V3 => [a[0] * s, a[1] * s, a[2] * s];
-export const addScaled = (a: Vec3, b: Vec3, s: number): V3 => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
-export const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+export const addScaled = (a: Vec3, b: Vec3, s: number): V3 => [
+  a[0] + b[0] * s,
+  a[1] + b[1] * s,
+  a[2] + b[2] * s,
+];
+export const dot = (a: Vec3, b: Vec3): number =>
+  a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 export const cross = (a: Vec3, b: Vec3): V3 => [
   a[1] * b[2] - a[2] * b[1],
   a[2] * b[0] - a[0] * b[2],
@@ -26,7 +39,8 @@ export function normalize(a: Vec3): V3 {
   const l = length(a);
   return l > 1e-9 ? [a[0] / l, a[1] / l, a[2] / l] : [0, 1, 0];
 }
-export const clamp = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x));
+export const clamp = (x: number, lo: number, hi: number): number =>
+  Math.min(hi, Math.max(lo, x));
 
 /** Two unit vectors perpendicular to `dir` and to each other. */
 export function basis(dir: Vec3): [V3, V3] {
@@ -42,7 +56,11 @@ export function rotate(v: Vec3, axis: Vec3, angle: number): V3 {
   const s = Math.sin(angle);
   const k = cross(axis, v);
   const d = dot(axis, v) * (1 - c);
-  return [v[0] * c + k[0] * s + axis[0] * d, v[1] * c + k[1] * s + axis[1] * d, v[2] * c + k[2] * s + axis[2] * d];
+  return [
+    v[0] * c + k[0] * s + axis[0] * d,
+    v[1] * c + k[1] * s + axis[1] * d,
+    v[2] * c + k[2] * s + axis[2] * d,
+  ];
 }
 
 /** The per-vertex vitality response of one piece of a part. */
@@ -81,7 +99,10 @@ const NO_FALL = [0, 0, 0, 0] as const;
  * is the side of a square with half its surface area. A vertex no triangle
  * uses is its own piece, of size 0.
  */
-function piecesOf(pos: readonly number[], idx: readonly number[]): Float32Array {
+function piecesOf(
+  pos: readonly number[],
+  idx: readonly number[],
+): Float32Array {
   const n = pos.length / 3;
   const parent = new Int32Array(n);
   for (let i = 0; i < n; i++) parent[i] = i;
@@ -105,12 +126,24 @@ function piecesOf(pos: readonly number[], idx: readonly number[]): Float32Array 
     parent[c] = low;
   }
   const area = new Float64Array(n);
-  const at = (v: number): V3 => [pos[v * 3] as number, pos[v * 3 + 1] as number, pos[v * 3 + 2] as number];
+  const at = (v: number): V3 => [
+    pos[v * 3] as number,
+    pos[v * 3 + 1] as number,
+    pos[v * 3 + 2] as number,
+  ];
   for (let t = 0; t < idx.length; t += 3) {
     const a = idx[t] as number;
     const corner = at(a);
     const r = root(a);
-    area[r] = (area[r] as number) + length(cross(sub(at(idx[t + 1] as number), corner), sub(at(idx[t + 2] as number), corner))) / 2;
+    area[r] =
+      (area[r] as number) +
+      length(
+        cross(
+          sub(at(idx[t + 1] as number), corner),
+          sub(at(idx[t + 2] as number), corner),
+        ),
+      ) /
+        2;
   }
   const number = new Int32Array(n).fill(-1);
   let pieces = 0;
@@ -145,7 +178,13 @@ export class PartBuilder {
   readonly #spin: number[] = [];
   readonly #grain: number[] = [];
   /** The optional channels that at least one vertex set. `part` leaves out the rest. */
-  readonly #uses = { fall: false, grow: false, rot: false, spin: false, grain: false };
+  readonly #uses = {
+    fall: false,
+    grow: false,
+    rot: false,
+    spin: false,
+    grain: false,
+  };
   readonly #idx: number[] = [];
 
   constructor(
@@ -162,7 +201,13 @@ export class PartBuilder {
   }
 
   /** Adds a vertex. `cut` places it on a leaf card (see `CUT`). Solid surfaces omit it. */
-  vertex(p: Vec3, n: Vec3, shade: number, c: Channels, cut: Vec3 = SOLID): number {
+  vertex(
+    p: Vec3,
+    n: Vec3,
+    shade: number,
+    c: Channels,
+    cut: Vec3 = SOLID,
+  ): number {
     this.#pos.push(p[0], p[1], p[2]);
     this.#cut.push(cut[0], cut[1], cut[2]);
     this.#nrm.push(n[0], n[1], n[2]);
@@ -184,7 +229,8 @@ export class PartBuilder {
     this.#rot.push(clamp(c.rot ?? 0, 0, 1));
     const spin = c.spin ?? SOLID;
     this.#spin.push(spin[0], spin[1], spin[2]);
-    const grain = typeof c.grain === "function" ? c.grain(p) : (c.grain ?? SOLID);
+    const grain =
+      typeof c.grain === "function" ? c.grain(p) : (c.grain ?? SOLID);
     this.#grain.push(grain[0], grain[1], grain[2]);
     if (c.fall !== undefined && fall[3] > 0) this.#uses.fall = true;
     if ((c.grow ?? 0) > 0) this.#uses.grow = true;
@@ -229,7 +275,8 @@ export class PartBuilder {
 }
 
 /** A leaf card's cut value: the `CUT` form plus the card's own seed (0 to 1) in the fraction. */
-export const cutOf = (form: number, seed: number): number => form + 0.999 * clamp(seed, 0, 1);
+export const cutOf = (form: number, seed: number): number =>
+  form + 0.999 * clamp(seed, 0, 1);
 
 /** One vertex of a leaf card: position, coordinates on the card, normal and shade. */
 export interface CardPoint {
@@ -241,10 +288,17 @@ export interface CardPoint {
 }
 
 /** A leaf card as a grid of rows (along the card) of points (across it). */
-export function emitCard(out: PartBuilder, rows: readonly (readonly CardPoint[])[], cut: number, ch: Channels): void {
+export function emitCard(
+  out: PartBuilder,
+  rows: readonly (readonly CardPoint[])[],
+  cut: number,
+  ch: Channels,
+): void {
   const first = out.vertexCount;
   const cols = rows[0]?.length ?? 0;
-  for (const row of rows) for (const v of row) out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
+  for (const row of rows)
+    for (const v of row)
+      out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
   for (let i = 0; i + 1 < rows.length; i++) {
     for (let j = 0; j + 1 < cols; j++) {
       const a = first + i * cols + j;
@@ -269,16 +323,41 @@ export function icosphere(subdivisions: number): SphereTemplate {
   const t = (1 + Math.sqrt(5)) / 2;
   let points: V3[] = (
     [
-      [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
-      [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t],
-      [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1],
+      [-1, t, 0],
+      [1, t, 0],
+      [-1, -t, 0],
+      [1, -t, 0],
+      [0, -1, t],
+      [0, 1, t],
+      [0, -1, -t],
+      [0, 1, -t],
+      [t, 0, -1],
+      [t, 0, 1],
+      [-t, 0, -1],
+      [-t, 0, 1],
     ] as V3[]
   ).map(normalize);
   let tris: [number, number, number][] = [
-    [0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11],
-    [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8],
-    [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9],
-    [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1],
+    [0, 11, 5],
+    [0, 5, 1],
+    [0, 1, 7],
+    [0, 7, 10],
+    [0, 10, 11],
+    [1, 5, 9],
+    [5, 11, 4],
+    [11, 10, 2],
+    [10, 7, 6],
+    [7, 1, 8],
+    [3, 9, 4],
+    [3, 4, 2],
+    [3, 2, 6],
+    [3, 6, 8],
+    [3, 8, 9],
+    [4, 9, 5],
+    [2, 4, 11],
+    [6, 2, 10],
+    [8, 6, 7],
+    [9, 8, 1],
   ];
   for (let s = 0; s < subdivisions; s++) {
     const mids = new Map<string, number>();
@@ -308,7 +387,11 @@ export function icosphere(subdivisions: number): SphereTemplate {
 
 /** A deterministic hash of a lattice point and seed, in [0, 1]. */
 function hash3(x: number, y: number, z: number, seed: number): number {
-  let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 1274126177) ^ Math.imul(seed, 2246822519);
+  let h =
+    Math.imul(x, 374761393) ^
+    Math.imul(y, 668265263) ^
+    Math.imul(z, 1274126177) ^
+    Math.imul(seed, 2246822519);
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
 }
@@ -324,7 +407,8 @@ export function noise3(x: number, y: number, z: number, seed = 0): number {
   const ux = fx * fx * (3 - 2 * fx);
   const uy = fy * fy * (3 - 2 * fy);
   const uz = fz * fz * (3 - 2 * fz);
-  const c = (dx: number, dy: number, dz: number): number => hash3(xi + dx, yi + dy, zi + dz, seed);
+  const c = (dx: number, dy: number, dz: number): number =>
+    hash3(xi + dx, yi + dy, zi + dz, seed);
   const x00 = c(0, 0, 0) + (c(1, 0, 0) - c(0, 0, 0)) * ux;
   const x10 = c(0, 1, 0) + (c(1, 1, 0) - c(0, 1, 0)) * ux;
   const x01 = c(0, 0, 1) + (c(1, 0, 1) - c(0, 0, 1)) * ux;
@@ -334,7 +418,13 @@ export function noise3(x: number, y: number, z: number, seed = 0): number {
   return (y0 + (y1 - y0) * uz) * 2 - 1;
 }
 
-export function fbm3(x: number, y: number, z: number, seed = 0, octaves = 3): number {
+export function fbm3(
+  x: number,
+  y: number,
+  z: number,
+  seed = 0,
+  octaves = 3,
+): number {
   let sum = 0;
   let amp = 1;
   let norm = 0;
@@ -361,4 +451,5 @@ export const LOSS_BAND = 0.08;
  * across many pieces. Few pieces go early, and most stay until vitality is
  * low. The fraction lost at vitality v is about 1 - (v / top)^(2/3).
  */
-export const lossThreshold = (u: number, top: number, floor = 0.02): number => floor + (top - floor) * Math.pow(u, 1.5);
+export const lossThreshold = (u: number, top: number, floor = 0.02): number =>
+  floor + (top - floor) * Math.pow(u, 1.5);

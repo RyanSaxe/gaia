@@ -5,6 +5,7 @@ Usage: build.py [world|music] [--out ASSETS_DIR] [--keep]
   --out         where the files go (default: app/renderer/sound/assets, with the music in its music/ folder)
   --keep        keep the music's MIDI, rendered parts and mixed stems in the cache's work/ folder
 """
+
 import argparse
 import shutil
 import time
@@ -17,6 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 def music(out, keep):
     from music import compose, encode, mix, patches, render
+
     cache.music()
     patches.write()
     work = cache.CACHE / "work"
@@ -41,6 +43,7 @@ def main():
     start = time.time()
     if args.half in (None, "world"):
         import world
+
         world.main(out)
     if args.half in (None, "music"):
         music(out, args.keep)

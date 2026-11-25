@@ -10,7 +10,11 @@ export interface PainterJob extends PaintJob {
 }
 /** The worker's reply: the painting with its stored copy, or the failure message. */
 export type PainterReply =
-  | { readonly id: number; readonly painting: ImageBitmap; readonly kept: Blob | null }
+  | {
+      readonly id: number;
+      readonly painting: ImageBitmap;
+      readonly kept: Blob | null;
+    }
   | { readonly id: number; readonly failed: string };
 
 interface WorkerScope {
@@ -27,7 +31,9 @@ scope.onmessage = async (e) => {
   const { id } = e.data;
   try {
     const canvas = paint(e.data);
-    const kept = await canvas.convertToBlob({ type: "image/webp", quality: KEPT }).catch(() => null);
+    const kept = await canvas
+      .convertToBlob({ type: "image/webp", quality: KEPT })
+      .catch(() => null);
     const painting = canvas.transferToImageBitmap();
     scope.postMessage({ id, painting, kept }, [painting]);
   } catch (error) {

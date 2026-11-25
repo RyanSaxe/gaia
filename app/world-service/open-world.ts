@@ -4,12 +4,42 @@
 // before any judging. Jev's answers are stored in the project's store by
 // request hash, so a reopen asks Jev only about things whose facts changed.
 
-import type { CodeGraph, EngineClient, GraphNode, JevClient, JevResponse, Span } from "@gaia/schema";
+import type {
+  CodeGraph,
+  EngineClient,
+  GraphNode,
+  JevClient,
+  JevResponse,
+  Span,
+} from "@gaia/schema";
 import { outlinesOf } from "@gaia/terrain";
-import { type CodeWorld, RequestFailed, areaOfRequest, composeWorld, composingEstimate, factsOf, judgeWorld, keptJev, landOf, layoutWorld, planForms, planWorldRequests, requestKey, vitalityOf, withLines, withVitality } from "@gaia/world";
+import {
+  type CodeWorld,
+  RequestFailed,
+  areaOfRequest,
+  composeWorld,
+  composingEstimate,
+  factsOf,
+  judgeWorld,
+  keptJev,
+  landOf,
+  layoutWorld,
+  planForms,
+  planWorldRequests,
+  requestKey,
+  vitalityOf,
+  withLines,
+  withVitality,
+} from "@gaia/world";
 import { LOOKS } from "../renderer/terrain/looks.ts";
 import { engineJev } from "./jev.ts";
-import type { ConsentPlan, VitalityUpdate, JudgedThing, Opening, WorldDocument } from "./protocol.ts";
+import type {
+  ConsentPlan,
+  VitalityUpdate,
+  JudgedThing,
+  Opening,
+  WorldDocument,
+} from "./protocol.ts";
 
 /**
  * The spend limit in US dollars until the person sets one. It is infinite
@@ -26,14 +56,31 @@ export const LIMIT_KEY = "jev-spend-limit";
 
 /** Returns the spend limit, in US dollars, for judging one project without asking. */
 export async function spendLimit(engine: EngineClient): Promise<number> {
-  const kept = (await engine.call("store.get", { project: APP_STORE, table: "settings", key: LIMIT_KEY }))?.value as { usd?: unknown } | undefined;
-  return typeof kept?.usd === "number" && Number.isFinite(kept.usd) && kept.usd >= 0 ? kept.usd : DEFAULT_SPEND_LIMIT_USD;
+  const kept = (
+    await engine.call("store.get", {
+      project: APP_STORE,
+      table: "settings",
+      key: LIMIT_KEY,
+    })
+  )?.value as { usd?: unknown } | undefined;
+  return typeof kept?.usd === "number" &&
+    Number.isFinite(kept.usd) &&
+    kept.usd >= 0
+    ? kept.usd
+    : DEFAULT_SPEND_LIMIT_USD;
 }
 
 /** Stores the spend limit, in US dollars. */
-export async function setSpendLimit(engine: EngineClient, usd: number): Promise<void> {
-  if (!Number.isFinite(usd) || usd < 0) throw new Error(`Not a spend limit: ${usd}`);
-  await engine.call("store.put", { project: APP_STORE, writes: [{ table: "settings", key: LIMIT_KEY, value: { usd } }] });
+export async function setSpendLimit(
+  engine: EngineClient,
+  usd: number,
+): Promise<void> {
+  if (!Number.isFinite(usd) || usd < 0)
+    throw new Error(`Not a spend limit: ${usd}`);
+  await engine.call("store.put", {
+    project: APP_STORE,
+    writes: [{ table: "settings", key: LIMIT_KEY, value: { usd } }],
+  });
 }
 
 /**
@@ -45,7 +92,8 @@ export async function setSpendLimit(engine: EngineClient, usd: number): Promise<
  * each definition keeps only the fields that place and size it.
  */
 export function judgedGraph(graph: CodeGraph): CodeGraph {
-  const stand = (n: GraphNode) => (n.judged?.value === undefined ? {} : { judged: { value: n.judged.value } });
+  const stand = (n: GraphNode) =>
+    n.judged?.value === undefined ? {} : { judged: { value: n.judged.value } };
   const nodes = graph.nodes.flatMap((n): GraphNode[] => {
     switch (n.kind) {
       case "block":
@@ -74,7 +122,10 @@ export function judgedGraph(graph: CodeGraph): CodeGraph {
       }
     }
   });
-  const read = (e: CodeGraph["edges"][number]): boolean => e.kind === "imports" || ((e.kind === "calls" || e.kind === "references") && e.to.startsWith("def:"));
+  const read = (e: CodeGraph["edges"][number]): boolean =>
+    e.kind === "imports" ||
+    ((e.kind === "calls" || e.kind === "references") &&
+      e.to.startsWith("def:"));
   return { ...graph, nodes, edges: graph.edges.filter(read), pending: [] };
 }
 
@@ -84,20 +135,36 @@ export function judgedGraph(graph: CodeGraph): CodeGraph {
  * `<path>#<qualified name>` for a definition. Blocks Jev picked are line spans.
  */
 export function judgedThings(graph: CodeGraph): Record<string, JudgedThing> {
-  const spans = new Map(graph.nodes.flatMap((n) => (n.kind === "block" ? [[n.id, n.span] as const] : [])));
-  const pathOf = new Map(graph.nodes.flatMap((n) => (n.kind === "file" ? [[n.id, n.path] as const] : [])));
+  const spans = new Map(
+    graph.nodes.flatMap((n) =>
+      n.kind === "block" ? [[n.id, n.span] as const] : [],
+    ),
+  );
+  const pathOf = new Map(
+    graph.nodes.flatMap((n) =>
+      n.kind === "file" ? [[n.id, n.path] as const] : [],
+    ),
+  );
   const out: Record<string, JudgedThing> = {};
   for (const n of graph.nodes) {
     if (n.kind === "block") continue;
     const value = n.judged?.value;
     if (value === undefined) continue;
-    const key = n.kind === "def" ? `${pathOf.get(n.file) ?? ""}#${n.id.slice(n.id.indexOf("#") + 1)}` : n.path;
+    const key =
+      n.kind === "def"
+        ? `${pathOf.get(n.file) ?? ""}#${n.id.slice(n.id.indexOf("#") + 1)}`
+        : n.path;
     const picks: { key?: Span; weak?: Span } = {};
     for (const pick of ["key", "weak"] as const) {
       const span = spans.get(n.judged?.picks?.[pick]?.choice ?? "");
       if (span !== undefined) picks[pick] = span;
     }
-    out[key] = { quality: value.quality, importance: value.importance, concepts: value.concepts, picks };
+    out[key] = {
+      quality: value.quality,
+      importance: value.importance,
+      concepts: value.concepts,
+      picks,
+    };
   }
   return out;
 }
@@ -116,10 +183,26 @@ export interface OpenWorldOptions {
  * request is reported by its file. An entity's, directory's or the repository's is reported by its area, with "" for
  * the repository. A trail's request returns null.
  */
-function settledByState(request: { readonly state?: unknown; readonly questions: Readonly<Record<string, unknown>> }): { readonly by: "chosen" | "composed"; readonly file?: string; readonly area?: string } | null {
-  const s = (request.state ?? {}) as Record<string, { path?: string; file?: string } | undefined>;
-  const own = (path: string | undefined): string => (path === undefined || path.startsWith("(") ? "" : path);
-  const by = Object.keys(request.questions).some((id) => /^[a-z]+\.(use|present)$/.test(id)) || (s as Record<string, unknown>).decided !== undefined ? "composed" : "chosen";
+function settledByState(request: {
+  readonly state?: unknown;
+  readonly questions: Readonly<Record<string, unknown>>;
+}): {
+  readonly by: "chosen" | "composed";
+  readonly file?: string;
+  readonly area?: string;
+} | null {
+  const s = (request.state ?? {}) as Record<
+    string,
+    { path?: string; file?: string } | undefined
+  >;
+  const own = (path: string | undefined): string =>
+    path === undefined || path.startsWith("(") ? "" : path;
+  const by =
+    Object.keys(request.questions).some((id) =>
+      /^[a-z]+\.(use|present)$/.test(id),
+    ) || (s as Record<string, unknown>).decided !== undefined
+      ? "composed"
+      : "chosen";
   if (s.file?.path !== undefined) return { by, file: s.file.path };
   if (s.definition?.file !== undefined) return { by, file: s.definition.file };
   if (s.entity !== undefined) return { by, area: own(s.entity.path) };
@@ -130,9 +213,14 @@ function settledByState(request: { readonly state?: unknown; readonly questions:
 
 /** Returns the area a request made after the looks is about, from its state: a file's or definition's folder, an entity's or directory's own path, a trail's `from` end, or "" for the sky. */
 function areaOfState(state: unknown): string {
-  const s = (state ?? {}) as Record<string, { path?: string; file?: string; from?: { path?: string } } | undefined>;
-  const folder = (path: string): string => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
-  const own = (path: string | undefined): string => (path === undefined || path.startsWith("(") ? "" : path);
+  const s = (state ?? {}) as Record<
+    string,
+    { path?: string; file?: string; from?: { path?: string } } | undefined
+  >;
+  const folder = (path: string): string =>
+    path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+  const own = (path: string | undefined): string =>
+    path === undefined || path.startsWith("(") ? "" : path;
   if (s.file?.path !== undefined) return folder(s.file.path);
   if (s.definition?.file !== undefined) return folder(s.definition.file);
   if (s.entity !== undefined) return own(s.entity.path);
@@ -141,9 +229,15 @@ function areaOfState(state: unknown): string {
   return "";
 }
 
-const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`): string =>
+  `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
-export async function openWorld({ engine, root, consent, progress }: OpenWorldOptions): Promise<WorldDocument> {
+export async function openWorld({
+  engine,
+  root,
+  consent,
+  progress,
+}: OpenWorldOptions): Promise<WorldDocument> {
   progress({ stage: "reading", root });
   // Sends the land's area outlines, file patches and entity lots as soon as the graph exists. The graph includes every
   // definition, with any judgments already stored. `factsOf` derives the facts that the layout and the looks read.
@@ -153,14 +247,34 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   const project = facts.projectId;
   const name = facts.repository.name;
   // A world is made of a codebase's files, so a folder with none has none to show.
-  if (facts.files.length === 0) throw new Error(`${name} has no files Gaia can read, so there is no world to make from it.`);
+  if (facts.files.length === 0)
+    throw new Error(
+      `${name} has no files Gaia can read, so there is no world to make from it.`,
+    );
   const land = landOf(facts, graph);
-  progress({ stage: "land", name, size: land.size, ...(land.aspect === undefined ? {} : { aspect: land.aspect }), areas: outlinesOf(land).areas, patches: land.patches.map(({ path, name, area, x, z, radius }) => ({ path, name, area, x, z, radius })), lots: land.lots });
+  progress({
+    stage: "land",
+    name,
+    size: land.size,
+    ...(land.aspect === undefined ? {} : { aspect: land.aspect }),
+    areas: outlinesOf(land).areas,
+    patches: land.patches.map(({ path, name, area, x, z, radius }) => ({
+      path,
+      name,
+      area,
+      x,
+      z,
+      radius,
+    })),
+    lots: land.lots,
+  });
   // `understanding.plan` counts the understanding requests the world needs: the imports and calls only Jev can resolve,
   // and each definition's judgment. Planning takes seconds and only serves the cost estimate, so it runs only under a
   // finite spend limit. Otherwise the pass finds its requests as it goes.
   const limitUsd = await spendLimit(engine);
-  const understanding = Number.isFinite(limitUsd) ? await engine.call("understanding.plan", { root }) : null;
+  const understanding = Number.isFinite(limitUsd)
+    ? await engine.call("understanding.plan", { root })
+    : null;
   const planned = planWorldRequests(facts, LOOKS);
   const keys = planned.map((p) => requestKey(p.request));
   // Form requests depend on the importance the understanding pass judges, so `composeWorld` plans them again after the
@@ -175,15 +289,27 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     healthSettled[path] = vitality;
   };
   const sendHealth = (): void => {
-    if (Object.keys(healthSettled).length > 0) progress({ stage: "health", vitality: healthSettled });
+    if (Object.keys(healthSettled).length > 0)
+      progress({ stage: "health", vitality: healthSettled });
     healthSettled = {};
   };
 
-  const { records } = await engine.call("store.read", { project, table: "answers" });
-  const stored = new Map(Object.entries(records as Record<string, JevResponse>));
-  const missing = [...planned.filter((_, i) => !stored.has(keys[i] as string)), ...formRequests.filter((p) => !stored.has(requestKey(p.request)))];
+  const { records } = await engine.call("store.read", {
+    project,
+    table: "answers",
+  });
+  const stored = new Map(
+    Object.entries(records as Record<string, JevResponse>),
+  );
+  const missing = [
+    ...planned.filter((_, i) => !stored.has(keys[i] as string)),
+    ...formRequests.filter((p) => !stored.has(requestKey(p.request))),
+  ];
   /** Pending understanding requests, or null when `understanding.plan` did not run. */
-  const toUnderstand = understanding === null ? null : understanding.pending.reduce((n, p) => n + p.requests, 0);
+  const toUnderstand =
+    understanding === null
+      ? null
+      : understanding.pending.reduce((n, p) => n + p.requests, 0);
   // Requests to send to Jev. The understanding share is planned before Jev resolves links, so the count is corrected to
   // the requests actually sent once the pass ends.
   let total = missing.length + (toUnderstand ?? 0);
@@ -195,29 +321,62 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   /** Look requests in flight at once, matched to how many the engine sends Jev at once. */
   let concurrency = 1;
   const status = await engine.call("jev.status", {});
-  if (!status.live) unasked = "Jev is off: start Gaia with GAIA_JEV=live to judge it";
+  if (!status.live)
+    unasked = "Jev is off: start Gaia with GAIA_JEV=live to judge it";
   else if (!status.key) unasked = "set OPENROUTER_API_KEY before starting Gaia";
   // Without Jev, a world opens only if every answer is stored. With no spend limit the understanding pass has no plan
   // yet, so it is planned now to count what is missing.
   if (unasked !== undefined) {
-    const pending = toUnderstand ?? (await engine.call("understanding.plan", { root })).pending.reduce((n, p) => n + p.requests, 0);
-    if (missing.length + pending > 0) throw new Error(`Gaia could not judge ${name}: ${unasked}.`);
+    const pending =
+      toUnderstand ??
+      (await engine.call("understanding.plan", { root })).pending.reduce(
+        (n, p) => n + p.requests,
+        0,
+      );
+    if (missing.length + pending > 0)
+      throw new Error(`Gaia could not judge ${name}: ${unasked}.`);
   }
   // Jev is available. Estimate the cost when answers are missing, or when the understanding pass has no plan and will
   // find its requests as it goes.
   if (unasked === undefined && (total > 0 || toUnderstand === null)) {
-    const judging = missing.length > 0 ? await engine.call("jev.estimate", { requests: missing.map((p) => p.request) }) : undefined;
-    concurrency = judging?.concurrency ?? understanding?.estimate.concurrency ?? (await engine.call("jev.estimate", { requests: [] })).concurrency;
+    const judging =
+      missing.length > 0
+        ? await engine.call("jev.estimate", {
+            requests: missing.map((p) => p.request),
+          })
+        : undefined;
+    concurrency =
+      judging?.concurrency ??
+      understanding?.estimate.concurrency ??
+      (await engine.call("jev.estimate", { requests: [] })).concurrency;
     // The composing requests depend on Jev's form choices, so `composingEstimate` prices them at about two requests per
     // thing, each the size of a tree's composing request.
-    const composing = missing.length > 0 ? composingEstimate(facts, LOOKS, graph) : null;
-    const each = composing === null ? undefined : await engine.call("jev.estimate", { requests: [composing.sample] });
-    const composed = { requests: composing?.requests ?? 0, estimatedTokens: (each?.estimatedTokens ?? 0) * (composing?.requests ?? 0), estimatedUsd: (each?.estimatedUsd ?? 0) * (composing?.requests ?? 0) };
+    const composing =
+      missing.length > 0 ? composingEstimate(facts, LOOKS, graph) : null;
+    const each =
+      composing === null
+        ? undefined
+        : await engine.call("jev.estimate", { requests: [composing.sample] });
+    const composed = {
+      requests: composing?.requests ?? 0,
+      estimatedTokens:
+        (each?.estimatedTokens ?? 0) * (composing?.requests ?? 0),
+      estimatedUsd: (each?.estimatedUsd ?? 0) * (composing?.requests ?? 0),
+    };
     const estimate = {
       endpoint: judging?.endpoint ?? understanding?.estimate.endpoint ?? "",
-      requests: (judging?.requests ?? 0) + (understanding?.estimate.requests ?? 0) + composed.requests,
-      estimatedTokens: (judging?.estimatedTokens ?? 0) + (understanding?.estimate.estimatedTokens ?? 0) + composed.estimatedTokens,
-      estimatedUsd: (judging?.estimatedUsd ?? 0) + (understanding?.estimate.estimatedUsd ?? 0) + composed.estimatedUsd,
+      requests:
+        (judging?.requests ?? 0) +
+        (understanding?.estimate.requests ?? 0) +
+        composed.requests,
+      estimatedTokens:
+        (judging?.estimatedTokens ?? 0) +
+        (understanding?.estimate.estimatedTokens ?? 0) +
+        composed.estimatedTokens,
+      estimatedUsd:
+        (judging?.estimatedUsd ?? 0) +
+        (understanding?.estimate.estimatedUsd ?? 0) +
+        composed.estimatedUsd,
     };
     console.log(
       understanding === null
@@ -225,8 +384,20 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
         : `gaia: ${name}: ${estimate.requests} requests to judge, about ${estimate.estimatedTokens} tokens, $${estimate.estimatedUsd.toFixed(4)} (limit $${limitUsd})`,
     );
     // Above the spend limit, the person decides. Declining leaves the world unopened, and the next opening asks again.
-    ask = estimate.estimatedUsd <= limitUsd || (await consent({ name, requests: estimate.requests, estimatedTokens: estimate.estimatedTokens, estimatedUsd: estimate.estimatedUsd, limitUsd, endpoint: estimate.endpoint }));
-    if (!ask) throw new Error(`Gaia did not judge ${name}: judging it costs about $${estimate.estimatedUsd.toFixed(3)}, over your $${limitUsd} limit, and you chose not to go ahead.`);
+    ask =
+      estimate.estimatedUsd <= limitUsd ||
+      (await consent({
+        name,
+        requests: estimate.requests,
+        estimatedTokens: estimate.estimatedTokens,
+        estimatedUsd: estimate.estimatedUsd,
+        limitUsd,
+        endpoint: estimate.endpoint,
+      }));
+    if (!ask)
+      throw new Error(
+        `Gaia did not judge ${name}: judging it costs about $${estimate.estimatedUsd.toFixed(3)}, over your $${limitUsd} limit, and you chose not to go ahead.`,
+      );
   }
 
   // Jev's answers arrive in batches, and `keep` stores each batch in one `store.put`.
@@ -259,33 +430,63 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     const area = areaOfRequest(p);
     unsettled.set(area, (unsettled.get(area) ?? 0) + 1);
   }
-  const regions = new Set(planned.filter((p) => p.about === "area").map((p) => p.target));
+  const regions = new Set(
+    planned.filter((p) => p.about === "area").map((p) => p.target),
+  );
   const regionOf = (area: string): string => {
-    for (let p = area; p !== ""; p = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "") if (regions.has(p)) return p;
+    for (
+      let p = area;
+      p !== "";
+      p = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : ""
+    )
+      if (regions.has(p)) return p;
     return "";
   };
   const regionsAnswered = new Set<string>();
-  const settledAreas = (): string[] => [...unsettled].filter(([area, n]) => n === 0 && regionsAnswered.has(regionOf(area))).map(([area]) => area);
+  const settledAreas = (): string[] =>
+    [...unsettled]
+      .filter(([area, n]) => n === 0 && regionsAnswered.has(regionOf(area)))
+      .map(([area]) => area);
   /** Questions in flight, by the area they are about. */
   const inFlight = new Map<string, number>();
   const asking = (): void =>
-    progress({ stage: "asking", name, total, answered, settled: settledAreas(), asking: [...inFlight].filter(([, n]) => n > 0).map(([area]) => area) });
+    progress({
+      stage: "asking",
+      name,
+      total,
+      answered,
+      settled: settledAreas(),
+      asking: [...inFlight].filter(([, n]) => n > 0).map(([area]) => area),
+    });
   if (ask) asking();
   // Every answer comes from Jev, either stored or asked now.
-  const kept = keptJev(ask ? engineJev(engine) : null, { stored, keep, ...(unasked === undefined ? {} : { unasked }) });
+  const kept = keptJev(ask ? engineJev(engine) : null, {
+    stored,
+    keep,
+    ...(unasked === undefined ? {} : { unasked }),
+  });
   // A request counts as settled once its answer arrives, stored or new. An area request's answer settles its region.
   const counted = new Set<string>();
   // Files and areas settled by form choices and composing. Each is sent once, batched into one `composed` message on
   // the next tick.
   const penciled = new Set<string>();
-  let due: { chosen: { files: string[]; areas: string[] }; composed: { files: string[]; areas: string[] } } | null = null;
+  let due: {
+    chosen: { files: string[]; areas: string[] };
+    composed: { files: string[]; areas: string[] };
+  } | null = null;
   const pencil = (settled: ReturnType<typeof settledByState>): void => {
     if (settled === null) return;
-    const [list, path] = settled.file !== undefined ? (["files", settled.file] as const) : (["areas", settled.area ?? ""] as const);
+    const [list, path] =
+      settled.file !== undefined
+        ? (["files", settled.file] as const)
+        : (["areas", settled.area ?? ""] as const);
     if (penciled.has(`${settled.by}:${list}:${path}`)) return;
     penciled.add(`${settled.by}:${list}:${path}`);
     if (due === null) {
-      due = { chosen: { files: [], areas: [] }, composed: { files: [], areas: [] } };
+      due = {
+        chosen: { files: [], areas: [] },
+        composed: { files: [], areas: [] },
+      };
       setTimeout(() => {
         if (due !== null) progress({ stage: "composed", ...due });
         due = null;
@@ -301,7 +502,11 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
       // look's area comes from its plan, and a form or composing request's area from its state (`areaOfState`).
       // `fresh` is read before `keep` stores the answer.
       const fresh = ask && !stored.has(key);
-      const out = fresh ? (p !== undefined ? areaOfRequest(p) : areaOfState(request.state)) : null;
+      const out = fresh
+        ? p !== undefined
+          ? areaOfRequest(p)
+          : areaOfState(request.state)
+        : null;
       if (out !== null) {
         inFlight.set(out, (inFlight.get(out) ?? 0) + 1);
         asking();
@@ -345,18 +550,29 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
     for (;;) {
       const slice = await engine.call("understanding.next", { root });
       const failure = slice.failures[0];
-      if (failure !== undefined || slice.failed > 0) throw new RequestFailed(`understanding ${failure?.unit ?? "part of the code"}`, failure?.error ?? `${plural(slice.failed, "request")} failed`);
+      if (failure !== undefined || slice.failed > 0)
+        throw new RequestFailed(
+          `understanding ${failure?.unit ?? "part of the code"}`,
+          failure?.error ?? `${plural(slice.failed, "request")} failed`,
+        );
       // Reports the files and areas this slice read, so the wait can show which code Jev just covered. Then it sends
       // each file the slice finished, at the quality the finished world shows.
-      const files = slice.settled.flatMap((id) => (id.startsWith("file:") ? [id.slice(5)] : []));
-      const areas = slice.settled.flatMap((id) => (id.startsWith("dir:") ? [id.slice(4)] : []));
-      if (files.length > 0 || areas.length > 0) progress({ stage: "understood", files, areas });
-      for (const [path, quality] of Object.entries(slice.quality)) settleHealth(path, quality);
+      const files = slice.settled.flatMap((id) =>
+        id.startsWith("file:") ? [id.slice(5)] : [],
+      );
+      const areas = slice.settled.flatMap((id) =>
+        id.startsWith("dir:") ? [id.slice(4)] : [],
+      );
+      if (files.length > 0 || areas.length > 0)
+        progress({ stage: "understood", files, areas });
+      for (const [path, quality] of Object.entries(slice.quality))
+        settleHealth(path, quality);
       sendHealth();
       understood += slice.sent;
       answered += slice.sent;
       total = Math.max(total, answered);
-      if (slice.left === 0 || (slice.sent === 0 && slice.settled.length === 0)) break;
+      if (slice.left === 0 || (slice.sent === 0 && slice.settled.length === 0))
+        break;
       asking();
     }
     total = missing.length + understood;
@@ -375,21 +591,35 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
   }
   // `composeWorld` composes every building and landmark part by part after the understanding pass. Each request
   // includes what the pass found about its entity, so its stored answer is reused until that code changes.
-  const composed = await composeWorld(facts, LOOKS, jev, judgments, { graph, concurrency });
+  const composed = await composeWorld(facts, LOOKS, jev, judgments, {
+    graph,
+    concurrency,
+  });
   // Waits for the composing answers to be stored before returning the world, as for the looks.
   await new Promise((resolve) => setTimeout(resolve, 0));
   await Promise.all(writes);
 
   // Counts the things Jev judged: every look target, file and entity. A file's form request also covers its
   // definitions.
-  const things = new Set([...planned.map((p) => `${p.about}:${p.target}`), ...facts.files.map((f) => `file:${f.path}`), ...facts.entities.map((e) => `entity:${e.path}`)]).size;
+  const things = new Set([
+    ...planned.map((p) => `${p.about}:${p.target}`),
+    ...facts.files.map((f) => `file:${f.path}`),
+    ...facts.entities.map((e) => `entity:${e.path}`),
+  ]).size;
   const parts = [`${plural(things, "thing")} judged by Jev`];
   if (billed > 0) parts.push(`$${billed.toFixed(4)} billed`);
   const world = layoutWorld(facts, composed, graph);
   // Sends the vitality of every file no answer covered, before the document.
   for (const p of world.patches) settleHealth(p.path, p.vitality);
   sendHealth();
-  return { root, ...(judged.commit === undefined ? {} : { commit: judged.commit }), facts, world, summary: parts.join("; "), judged: judgedThings(judged) };
+  return {
+    root,
+    ...(judged.commit === undefined ? {} : { commit: judged.commit }),
+    facts,
+    world,
+    summary: parts.join("; "),
+    judged: judgedThings(judged),
+  };
 }
 
 /**
@@ -399,17 +629,28 @@ export async function openWorld({ engine, root, consent, progress }: OpenWorldOp
  */
 function sameLand(a: CodeWorld, b: CodeWorld): boolean {
   const shape = (w: CodeWorld): string =>
-    JSON.stringify([w.size, w.aspect, w.areas.map((r) => [r.path, r.x, r.z]), w.patches.map((p) => [p.path, p.x, p.z, p.radius]), w.symbols.map((d) => [d.id, d.x, d.z])]);
+    JSON.stringify([
+      w.size,
+      w.aspect,
+      w.areas.map((r) => [r.path, r.x, r.z]),
+      w.patches.map((p) => [p.path, p.x, p.z, p.radius]),
+      w.symbols.map((d) => [d.id, d.x, d.z]),
+    ]);
   return shape(a) === shape(b);
 }
 
 /** Returns each definition whose lines in `b` differ from `a`, by id, with its lines in `b`. */
-function linesMoved(a: CodeWorld, b: CodeWorld): Record<string, { line: number; lines: number }> {
+function linesMoved(
+  a: CodeWorld,
+  b: CodeWorld,
+): Record<string, { line: number; lines: number }> {
   const was = new Map(a.symbols.map((s) => [s.id, s]));
   return Object.fromEntries(
     b.symbols.flatMap((s) => {
       const old = was.get(s.id);
-      return old === undefined || (old.line === s.line && old.lines === s.lines) ? [] : [[s.id, { line: s.line, lines: s.lines }] as const];
+      return old === undefined || (old.line === s.line && old.lines === s.lines)
+        ? []
+        : [[s.id, { line: s.line, lines: s.lines }] as const];
     }),
   );
 }
@@ -425,8 +666,19 @@ function linesMoved(a: CodeWorld, b: CodeWorld): Record<string, { line: number; 
  * on that open. A refresh never asks for consent mid-walk, so one that costs more than the spend limit fails, and the
  * next open asks.
  */
-export async function refreshWorld(engine: EngineClient, shown: WorldDocument): Promise<{ readonly update: VitalityUpdate | null; readonly shown: WorldDocument }> {
-  const next = await openWorld({ engine, root: shown.root, consent: async () => false, progress: () => {} });
+export async function refreshWorld(
+  engine: EngineClient,
+  shown: WorldDocument,
+): Promise<{
+  readonly update: VitalityUpdate | null;
+  readonly shown: WorldDocument;
+}> {
+  const next = await openWorld({
+    engine,
+    root: shown.root,
+    consent: async () => false,
+    progress: () => {},
+  });
   const now = vitalityOf(next.world);
   const vitality: Record<string, number> = {};
   for (const [id, was] of vitalityOf(shown.world)) {
@@ -434,10 +686,29 @@ export async function refreshWorld(engine: EngineClient, shown: WorldDocument): 
     if (v !== undefined && v !== was) vitality[id] = v;
   }
   const world = withVitality(shown.world, new Map(Object.entries(vitality)));
-  if (!sameLand(shown.world, next.world)) return { update: Object.keys(vitality).length === 0 ? null : { type: "world.vitality", vitality }, shown: { ...shown, world } };
-  const judged = Object.fromEntries(Object.entries(next.judged).filter(([of, j]) => JSON.stringify(j) !== JSON.stringify(shown.judged[of])));
+  if (!sameLand(shown.world, next.world))
+    return {
+      update:
+        Object.keys(vitality).length === 0
+          ? null
+          : { type: "world.vitality", vitality },
+      shown: { ...shown, world },
+    };
+  const judged = Object.fromEntries(
+    Object.entries(next.judged).filter(
+      ([of, j]) => JSON.stringify(j) !== JSON.stringify(shown.judged[of]),
+    ),
+  );
   const commit = next.commit === undefined ? {} : { commit: next.commit };
   const moved = linesMoved(shown.world, next.world);
   const symbols = Object.keys(moved).length === 0 ? {} : { symbols: moved };
-  return { update: { type: "world.vitality", vitality, judged, ...symbols, ...commit }, shown: { ...shown, world: withLines(world, moved), judged: next.judged, ...commit } };
+  return {
+    update: { type: "world.vitality", vitality, judged, ...symbols, ...commit },
+    shown: {
+      ...shown,
+      world: withLines(world, moved),
+      judged: next.judged,
+      ...commit,
+    },
+  };
 }

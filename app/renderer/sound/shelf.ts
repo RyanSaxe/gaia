@@ -16,13 +16,17 @@ export interface Shelf<K extends string> {
 }
 
 /** The bytes a decoded recording takes. */
-export const sizeOf = (b: AudioBuffer): number => b.length * b.numberOfChannels * 4;
+export const sizeOf = (b: AudioBuffer): number =>
+  b.length * b.numberOfChannels * 4;
 
 /**
  * Creates a shelf of recordings, each decoded by `decode` when first asked
  * for. With `keep`, nothing is ever released, as an offline render needs.
  */
-export function createShelf<K extends string>(decode: (name: K) => Promise<AudioBuffer>, keep: boolean): Shelf<K> {
+export function createShelf<K extends string>(
+  decode: (name: K) => Promise<AudioBuffer>,
+  keep: boolean,
+): Shelf<K> {
   const decoded = new Map<K, AudioBuffer>();
   const decoding = new Map<K, Promise<void>>();
   const load = (name: K): Promise<void> => {
@@ -56,7 +60,9 @@ export function createShelf<K extends string>(decode: (name: K) => Promise<Audio
     },
     held: () => [...decoded.values()].reduce((sum, b) => sum + sizeOf(b), 0),
     async ready(names) {
-      await Promise.all(names.map((n) => (decoded.has(n) ? Promise.resolve() : load(n))));
+      await Promise.all(
+        names.map((n) => (decoded.has(n) ? Promise.resolve() : load(n))),
+      );
     },
   };
 }

@@ -6,7 +6,15 @@
 
 import * as THREE from "three";
 import { LIGHT_GLSL, type SceneLight, hexToVec3 } from "@gaia/render";
-import { FLOW, type Terrain, flowAt, headsOf, streamFlow, surfaceHalfWidth, waterDepthAt } from "@gaia/terrain";
+import {
+  FLOW,
+  type Terrain,
+  flowAt,
+  headsOf,
+  streamFlow,
+  surfaceHalfWidth,
+  waterDepthAt,
+} from "@gaia/terrain";
 import { GROUND_SAMPLE_GLSL, type GroundTexture } from "./ground.ts";
 import { VITALITY_GLSL, vitalityUniforms } from "./vitality.ts";
 
@@ -376,10 +384,22 @@ export interface Water {
    * level, without `hide` and with `show` drawn instead. Skipped when no water
    * is in view. Returns the draw calls it made.
    */
-  mirror(renderer: THREE.WebGLRenderer, scene: THREE.Scene, view: THREE.PerspectiveCamera, hide: readonly THREE.Object3D[], show: readonly THREE.Object3D[], dt: number): number;
+  mirror(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    view: THREE.PerspectiveCamera,
+    hide: readonly THREE.Object3D[],
+    show: readonly THREE.Object3D[],
+    dt: number,
+  ): number;
   /** Spreads rings from the person's legs as they move through water, given their position, facing and distance moved. */
   wade(x: number, z: number, yaw: number, walked: number, dt: number): void;
-  stats(): { mirrorCalls: number; mirrorLevel: number; mirrored: boolean; moon: number[] };
+  stats(): {
+    mirrorCalls: number;
+    mirrorLevel: number;
+    mirrored: boolean;
+    moon: number[];
+  };
 }
 
 interface Ribbon {
@@ -403,23 +423,49 @@ function ribbon(stream: Terrain["streams"][number]): Ribbon {
   const index: number[] = [];
   // Seconds the water took to reach each station from the spring.
   const arrival = new Float64Array(n);
-  const speed = (i: number): number => Math.hypot(velocity[i * 2] as number, velocity[i * 2 + 1] as number) || FLOW.slowest;
+  const speed = (i: number): number =>
+    Math.hypot(velocity[i * 2] as number, velocity[i * 2 + 1] as number) ||
+    FLOW.slowest;
   for (let i = 1; i < n; i++) {
     const a = st[i - 1]!;
     const b = st[i]!;
-    arrival[i] = (arrival[i - 1] as number) + Math.hypot(b.x - a.x, b.z - a.z) / ((speed(i - 1) + speed(i)) / 2);
+    arrival[i] =
+      (arrival[i - 1] as number) +
+      Math.hypot(b.x - a.x, b.z - a.z) / ((speed(i - 1) + speed(i)) / 2);
   }
-  const put = (k: number, x: number, z: number, level: number, half: number, i: number, time: number): void => {
+  const put = (
+    k: number,
+    x: number,
+    z: number,
+    level: number,
+    half: number,
+    i: number,
+    time: number,
+  ): void => {
     const a = st[Math.max(0, i - 1)]!;
     const b = st[Math.min(n - 1, i + 1)]!;
     const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
     const nx = -(b.z - a.z) / len;
     const nz = (b.x - a.x) / len;
     const v = speed(i);
-    for (const [j, sign] of [[0, -1], [1, 1]] as const) {
+    for (const [j, sign] of [
+      [0, -1],
+      [1, 1],
+    ] as const) {
       const vi = k * 2 + j;
-      positions.set([x + nx * half * sign, level, z + nz * half * sign], vi * 3);
-      flow.set([(velocity[i * 2] as number) / v, (velocity[i * 2 + 1] as number) / v, v, time], vi * 4);
+      positions.set(
+        [x + nx * half * sign, level, z + nz * half * sign],
+        vi * 3,
+      );
+      flow.set(
+        [
+          (velocity[i * 2] as number) / v,
+          (velocity[i * 2 + 1] as number) / v,
+          v,
+          time,
+        ],
+        vi * 4,
+      );
       across[vi] = half * sign;
     }
   };
@@ -441,14 +487,43 @@ function ribbon(stream: Terrain["streams"][number]): Ribbon {
   const startZ = first.z - ((second.z - first.z) / lead) * RUN_ON;
   const endX = last.x + ((last.x - before.x) / tail) * RUN_ON;
   const endZ = last.z + ((last.z - before.z) / tail) * RUN_ON;
-  put(0, startX, startZ, first.level, cover(startX, startZ, surfaceHalfWidth(first)), 0, -RUN_ON / speed(0));
-  st.forEach((s, i) => put(i + 1, s.x, s.z, s.level, cover(s.x, s.z, surfaceHalfWidth(s)), i, arrival[i] as number));
-  put(n + 1, endX, endZ, last.level, cover(endX, endZ, surfaceHalfWidth(last)), n - 1, (arrival[n - 1] as number) + RUN_ON / speed(n - 1));
-  for (let k = 0; k + 1 < count; k++) index.push(k * 2, k * 2 + 2, k * 2 + 1, k * 2 + 1, k * 2 + 2, k * 2 + 3);
+  put(
+    0,
+    startX,
+    startZ,
+    first.level,
+    cover(startX, startZ, surfaceHalfWidth(first)),
+    0,
+    -RUN_ON / speed(0),
+  );
+  st.forEach((s, i) =>
+    put(
+      i + 1,
+      s.x,
+      s.z,
+      s.level,
+      cover(s.x, s.z, surfaceHalfWidth(s)),
+      i,
+      arrival[i] as number,
+    ),
+  );
+  put(
+    n + 1,
+    endX,
+    endZ,
+    last.level,
+    cover(endX, endZ, surfaceHalfWidth(last)),
+    n - 1,
+    (arrival[n - 1] as number) + RUN_ON / speed(n - 1),
+  );
+  for (let k = 0; k + 1 < count; k++)
+    index.push(k * 2, k * 2 + 2, k * 2 + 1, k * 2 + 1, k * 2 + 2, k * 2 + 3);
   return { positions, flow, across, index };
 }
 
-function streamGeometry(stream: Terrain["streams"][number]): THREE.BufferGeometry {
+function streamGeometry(
+  stream: Terrain["streams"][number],
+): THREE.BufferGeometry {
   const r = ribbon(stream);
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(r.positions, 3));
@@ -459,7 +534,12 @@ function streamGeometry(stream: Terrain["streams"][number]): THREE.BufferGeometr
   return g;
 }
 
-function disc(x: number, z: number, radius: number, level: number): THREE.BufferGeometry {
+function disc(
+  x: number,
+  z: number,
+  radius: number,
+  level: number,
+): THREE.BufferGeometry {
   const g = new THREE.CircleGeometry(radius, 72);
   g.rotateX(-Math.PI / 2);
   g.translate(x, level, z);
@@ -491,12 +571,32 @@ function nearestLevel(t: Terrain, x: number, z: number): number | null {
 
 /** The planar mirror: the scene drawn from a camera reflected through the water's plane, clipped at it. */
 function createMirror() {
-  const target = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: true, generateMipmaps: false });
+  const target = new THREE.WebGLRenderTarget(1, 1, {
+    depthBuffer: true,
+    generateMipmaps: false,
+  });
   target.texture.minFilter = THREE.LinearFilter;
   target.texture.magFilter = THREE.LinearFilter;
   const camera = new THREE.PerspectiveCamera();
   const matrix = new THREE.Matrix4();
-  const bias = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
+  const bias = new THREE.Matrix4().set(
+    0.5,
+    0,
+    0,
+    0.5,
+    0,
+    0.5,
+    0,
+    0.5,
+    0,
+    0,
+    0.5,
+    0.5,
+    0,
+    0,
+    0,
+    1,
+  );
   const size = new THREE.Vector2();
   const eye = new THREE.Vector3();
   const look = new THREE.Vector3();
@@ -511,7 +611,12 @@ function createMirror() {
     texture: target.texture,
     matrix,
     texel,
-    render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, view: THREE.PerspectiveCamera, level: number): void {
+    render(
+      renderer: THREE.WebGLRenderer,
+      scene: THREE.Scene,
+      view: THREE.PerspectiveCamera,
+      level: number,
+    ): void {
       renderer.getSize(size);
       const w = Math.max(16, Math.round(size.x * MIRROR_SCALE));
       const h = Math.max(16, Math.round(size.y * MIRROR_SCALE));
@@ -532,7 +637,10 @@ function createMirror() {
       camera.updateMatrixWorld();
       camera.projectionMatrix.copy(view.projectionMatrix);
       camera.projectionMatrixInverse.copy(view.projectionMatrixInverse);
-      matrix.copy(bias).multiply(camera.projectionMatrix).multiply(camera.matrixWorldInverse);
+      matrix
+        .copy(bias)
+        .multiply(camera.projectionMatrix)
+        .multiply(camera.matrixWorldInverse);
 
       // An oblique near plane at the water, so nothing beneath it is mirrored.
       plane.normal.set(0, 1, 0);
@@ -540,7 +648,12 @@ function createMirror() {
       plane.applyMatrix4(camera.matrixWorldInverse);
       clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
       const e = camera.projectionMatrix.elements;
-      q.set((Math.sign(clip.x) + (e[8] as number)) / (e[0] as number), (Math.sign(clip.y) + (e[9] as number)) / (e[5] as number), -1, (1 + (e[10] as number)) / (e[14] as number));
+      q.set(
+        (Math.sign(clip.x) + (e[8] as number)) / (e[0] as number),
+        (Math.sign(clip.y) + (e[9] as number)) / (e[5] as number),
+        -1,
+        (1 + (e[10] as number)) / (e[14] as number),
+      );
       clip.multiplyScalar(2 / clip.dot(q));
       e[2] = clip.x;
       e[6] = clip.y;
@@ -555,7 +668,11 @@ function createMirror() {
   };
 }
 
-export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture): Water {
+export function createWater(
+  t: Terrain,
+  light: SceneLight,
+  ground: GroundTexture,
+): Water {
   let terrain = t;
   const mirror = createMirror();
   const rings = new Float32Array(RINGS * 4).fill(-1000);
@@ -598,8 +715,10 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
       (child as THREE.Mesh).geometry.dispose();
       group.remove(child);
     }
-    for (const s of next.streams) group.add(new THREE.Mesh(streamGeometry(s), streamMaterial));
-    for (const p of next.ponds) group.add(new THREE.Mesh(disc(p.x, p.z, p.reach, p.level), pondMaterial));
+    for (const s of next.streams)
+      group.add(new THREE.Mesh(streamGeometry(s), streamMaterial));
+    for (const p of next.ponds)
+      group.add(new THREE.Mesh(disc(p.x, p.z, p.reach, p.level), pondMaterial));
     for (const m of group.children) m.renderOrder = 2;
     level = Number.NaN;
   };
@@ -613,9 +732,13 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
   const hidden: boolean[] = [];
   const shown: boolean[] = [];
   const inView = (view: THREE.Camera): boolean => {
-    viewProjection.multiplyMatrices(view.projectionMatrix, view.matrixWorldInverse);
+    viewProjection.multiplyMatrices(
+      view.projectionMatrix,
+      view.matrixWorldInverse,
+    );
     frustum.setFromProjectionMatrix(viewProjection);
-    for (const m of group.children) if (frustum.intersectsObject(m)) return true;
+    for (const m of group.children)
+      if (frustum.intersectsObject(m)) return true;
     return false;
   };
 
@@ -637,7 +760,10 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
       if (!mirrored) return 0;
       const target = nearestLevel(terrain, view.position.x, view.position.z);
       if (target === null) return 0;
-      level = Number.isNaN(level) || Math.abs(target - level) > 3 ? target : level + (target - level) * (1 - Math.exp(-dt / MIRROR_SETTLE));
+      level =
+        Number.isNaN(level) || Math.abs(target - level) > 3
+          ? target
+          : level + (target - level) * (1 - Math.exp(-dt / MIRROR_SETTLE));
       uniforms.uMirrorLevel.value = level;
       for (let i = 0; i < hide.length; i++) {
         const o = hide[i] as THREE.Object3D;
@@ -654,8 +780,10 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
       mirror.render(renderer, scene, view, level);
       mirrorCalls = renderer.info.render.calls;
       group.visible = water;
-      for (let i = 0; i < hide.length; i++) (hide[i] as THREE.Object3D).visible = hidden[i] ?? true;
-      for (let i = 0; i < show.length; i++) (show[i] as THREE.Object3D).visible = shown[i] ?? false;
+      for (let i = 0; i < hide.length; i++)
+        (hide[i] as THREE.Object3D).visible = hidden[i] ?? true;
+      for (let i = 0; i < show.length; i++)
+        (show[i] as THREE.Object3D).visible = shown[i] ?? false;
       return mirrorCalls;
     },
     wade(x, z, yaw, walked, dt) {
@@ -663,9 +791,17 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
       walkedSince += walked;
       const depth = waterDepthAt(terrain, x, z);
       const moving = dt > 0 && walked / dt > 0.3;
-      const pushing = depth >= RING.shallowest && moving ? Math.min(1, depth / 0.25) * Math.min(1, walked / dt / 2.5) : 0;
+      const pushing =
+        depth >= RING.shallowest && moving
+          ? Math.min(1, depth / 0.25) * Math.min(1, walked / dt / 2.5)
+          : 0;
       push += (pushing - push) * (1 - Math.exp(-dt / RING.settle));
-      uniforms.uWader.value.set(x, z, -Math.sin(yaw) * push, -Math.cos(yaw) * push);
+      uniforms.uWader.value.set(
+        x,
+        z,
+        -Math.sin(yaw) * push,
+        -Math.cos(yaw) * push,
+      );
       if (depth < RING.shallowest || !moving) {
         walkedSince = RING.stride;
         return;
@@ -682,9 +818,22 @@ export function createWater(t: Terrain, light: SceneLight, ground: GroundTexture
       const cz = z + fz * RING.ahead + fx * RING.legs * leg;
       const v = flowAt(terrain, cx, cz);
       const speed = walked / dt;
-      rings.set([cx, cz, light.uTime.value, Math.min(1, depth / 0.25) * Math.min(1, 0.4 + speed / 4)], slot * 4);
+      rings.set(
+        [
+          cx,
+          cz,
+          light.uTime.value,
+          Math.min(1, depth / 0.25) * Math.min(1, 0.4 + speed / 4),
+        ],
+        slot * 4,
+      );
       drift.set([v.x, v.z], slot * 2);
     },
-    stats: () => ({ mirrorCalls, mirrorLevel: level, mirrored, moon: light.uMoonDirection.value.toArray() }),
+    stats: () => ({
+      mirrorCalls,
+      mirrorLevel: level,
+      mirrored,
+      moon: light.uMoonDirection.value.toArray(),
+    }),
   };
 }

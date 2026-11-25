@@ -1,20 +1,40 @@
 import { describe, expect, it } from "vitest";
 import { Library } from "@gaia/schema";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { COVER_TAPS, type OwnedSite, type Terrain, type TerrainPlan, bakeTerrain, bakeTile, composeRows, finishTerrain, landformsOf, latticeOf, ownershipGrid, ownershipOf, ownershipRows, planOf } from "@gaia/terrain";
+import {
+  COVER_TAPS,
+  type OwnedSite,
+  type Terrain,
+  type TerrainPlan,
+  bakeTerrain,
+  bakeTile,
+  composeRows,
+  finishTerrain,
+  landformsOf,
+  latticeOf,
+  ownershipGrid,
+  ownershipOf,
+  ownershipRows,
+  planOf,
+} from "@gaia/terrain";
 import { randomWorld, sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 // Baked once for the file: the sample world and two random draws, each whole, with the plan the app reads from the
 // whole bake to bake a tile alone.
-const worlds = [sampleWorld(), randomWorld(lib, 7003), randomWorld(lib, 7011)].map((spec) => {
+const worlds = [
+  sampleWorld(),
+  randomWorld(lib, 7003),
+  randomWorld(lib, 7011),
+].map((spec) => {
   const whole = bakeTerrain(spec, lib);
   return { whole, plan: planOf(whole) };
 });
 /** Small tiles, so a test covers many edges between them cheaply. */
 const SIZE = 64;
 
-const bytes = (a: ArrayBufferView): Buffer => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
+const bytes = (a: ArrayBufferView): Buffer =>
+  Buffer.from(a.buffer, a.byteOffset, a.byteLength);
 
 /** The tiles worth checking: each corner of the land, every tile water runs through or lies in, and their neighbors, whose shore reaches across the edge. */
 function tilesOf(t: Terrain): [number, number][] {
@@ -25,17 +45,30 @@ function tilesOf(t: Terrain): [number, number][] {
     const cx = Math.floor((x - origin) / spacing / SIZE) * SIZE;
     const cz = Math.floor((z - origin) / spacing / SIZE) * SIZE;
     for (const ix of [cx - SIZE, cx, cx + SIZE]) {
-      for (const iz of [cz - SIZE, cz, cz + SIZE]) if (ix >= 0 && iz >= 0 && ix < n && iz < n) at.set(`${ix},${iz}`, [ix, iz]);
+      for (const iz of [cz - SIZE, cz, cz + SIZE])
+        if (ix >= 0 && iz >= 0 && ix < n && iz < n)
+          at.set(`${ix},${iz}`, [ix, iz]);
     }
   };
-  for (const [ix, iz] of [[0, 0], [last, 0], [0, last], [last, last]] as const) at.set(`${ix},${iz}`, [ix, iz]);
+  for (const [ix, iz] of [
+    [0, 0],
+    [last, 0],
+    [0, last],
+    [last, last],
+  ] as const)
+    at.set(`${ix},${iz}`, [ix, iz]);
   for (const s of t.streams) for (const st of s.stations) add(st.x, st.z);
   for (const p of t.ponds) add(p.x, p.z);
   return [...at.values()];
 }
 
 /** Whether tile (x0, z0) of `plan`, baked alone, holds the same bytes as `whole` at every sample both have. */
-function sameAsWhole(plan: TerrainPlan, whole: Terrain, x0: number, z0: number): void {
+function sameAsWhole(
+  plan: TerrainPlan,
+  whole: Terrain,
+  x0: number,
+  z0: number,
+): void {
   const tile = bakeTile(plan, x0, z0, SIZE);
   const { n } = whole.lattice;
   const width = Math.min(SIZE, n - x0);
@@ -43,8 +76,18 @@ function sameAsWhole(plan: TerrainPlan, whole: Terrain, x0: number, z0: number):
   for (let j = 0; j < rows; j++) {
     const w = (z0 + j) * n + x0;
     const t = j * SIZE;
-    const row = (a: ArrayBufferView & { subarray(b: number, e: number): ArrayBufferView }, b: ArrayBufferView & { subarray(b: number, e: number): ArrayBufferView }, per: number, what: string): void => {
-      expect(bytes(b.subarray(t * per, (t + width) * per)).equals(bytes(a.subarray(w * per, (w + width) * per))), `${what}, tile (${x0}, ${z0}), row ${j}`).toBe(true);
+    const row = (
+      a: ArrayBufferView & { subarray(b: number, e: number): ArrayBufferView },
+      b: ArrayBufferView & { subarray(b: number, e: number): ArrayBufferView },
+      per: number,
+      what: string,
+    ): void => {
+      expect(
+        bytes(b.subarray(t * per, (t + width) * per)).equals(
+          bytes(a.subarray(w * per, (w + width) * per)),
+        ),
+        `${what}, tile (${x0}, ${z0}), row ${j}`,
+      ).toBe(true);
     };
     row(whole.lattice.heights, tile.heights, 1, "heights");
     row(whole.waterLevel, tile.waterLevel, 1, "water");
@@ -70,14 +113,36 @@ describe("land baked in tiles", () => {
     const landforms = landformsOf(w, lib);
     const { n } = latticeOf(w);
     const cuts = [0, 97, 98, 250, n];
-    const banded = finishTerrain(w, landforms, cuts.slice(1).map((z1, i) => composeRows(w, landforms, cuts[i]!, z1)).reverse());
-    for (const key of ["waterLevel", "shore", "region", "coverRegions", "coverShares"] as const) expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
-    expect(bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights))).toBe(true);
+    const banded = finishTerrain(
+      w,
+      landforms,
+      cuts
+        .slice(1)
+        .map((z1, i) => composeRows(w, landforms, cuts[i]!, z1))
+        .reverse(),
+    );
+    for (const key of [
+      "waterLevel",
+      "shore",
+      "region",
+      "coverRegions",
+      "coverShares",
+    ] as const)
+      expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
+    expect(
+      bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights)),
+    ).toBe(true);
     expect(banded.streams).toEqual(whole.streams);
     // Who owns the ground, computed in rows apart as the bake's threads do, is who owns it computed whole.
     const size = 300;
     const sites: OwnedSite[] = [];
-    for (let x = -144; x <= 144; x += 16) for (let z = -144; z <= 144; z += 16) sites.push({ x, z, owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1 });
+    for (let x = -144; x <= 144; x += 16)
+      for (let z = -144; z <= 144; z += 16)
+        sites.push({
+          x,
+          z,
+          owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1,
+        });
     const own = ownershipOf(sites, { size }, size + 80);
     const grid = ownershipGrid(size + 80);
     const top = ownershipRows(sites, { size }, grid, 0, 40);

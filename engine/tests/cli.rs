@@ -74,7 +74,11 @@ fn stand_in_curl(name: &str, script: &str) -> (std::path::PathBuf, String) {
     let curl = dir.join("curl");
     std::fs::write(&curl, format!("#!/bin/sh\n{script}")).unwrap();
     std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap_or_default());
+    let path = format!(
+        "{}:{}",
+        dir.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
     (dir, path)
 }
 
@@ -170,11 +174,24 @@ fn nothing_is_sent_while_jev_is_off() {
     // The endpoint is a closed local port, so even an engine that tried to send would reach nothing.
     let request = serde_json::json!({ "model": "typesafe/jev-1.13", "state": {}, "questions": {} });
     let refused = rpc(
-        &[("GAIA_JEV_ENDPOINT", "http://127.0.0.1:9/api/alpha/decisions")],
-        &[serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "jev.batch", "params": { "requests": [request] } })],
+        &[(
+            "GAIA_JEV_ENDPOINT",
+            "http://127.0.0.1:9/api/alpha/decisions",
+        )],
+        &[
+            serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "jev.batch", "params": { "requests": [request] } }),
+        ],
     );
-    assert!(refused[0]["result"].is_null(), "the batch is refused whole, not sent and failed");
-    assert!(refused[0]["error"]["message"].as_str().unwrap().contains("GAIA_JEV=live"));
+    assert!(
+        refused[0]["result"].is_null(),
+        "the batch is refused whole, not sent and failed"
+    );
+    assert!(
+        refused[0]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("GAIA_JEV=live")
+    );
 }
 
 #[cfg(unix)]
@@ -194,21 +211,44 @@ printf '%s\n200' '{"answers":{},"model":"typesafe/jev-1.13","usage":{"cost":0,"i
     let request = serde_json::json!({ "model": "typesafe/jev-1.13", "state": {}, "questions": {} });
     let call = |id: u32, method: &str, params: serde_json::Value| serde_json::json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params });
     let answers = rpc(
-        &[("GAIA_JEV", "live"), ("OPENROUTER_API_KEY", KEY), ("PATH", &path)],
+        &[
+            ("GAIA_JEV", "live"),
+            ("OPENROUTER_API_KEY", KEY),
+            ("PATH", &path),
+        ],
         &[
             call(1, "jev.status", serde_json::json!({})),
-            call(2, "jev.estimate", serde_json::json!({ "requests": [request] })),
+            call(
+                2,
+                "jev.estimate",
+                serde_json::json!({ "requests": [request] }),
+            ),
             call(3, "jev.batch", serde_json::json!({ "requests": [request] })),
         ],
     );
-    assert_eq!(answers[2]["result"]["responses"][0]["model"], "typesafe/jev-1.13", "the batch went through the stand-in");
+    assert_eq!(
+        answers[2]["result"]["responses"][0]["model"], "typesafe/jev-1.13",
+        "the batch went through the stand-in"
+    );
     let seen = |file: &str| std::fs::read_to_string(dir.join(file)).unwrap();
     let (args, env) = (seen("args"), seen("env"));
-    assert!(seen("input").contains(KEY), "curl gets the key on its input");
-    assert!(args.contains("https://openrouter.ai/") && !args.contains(KEY), "curl's arguments, which any process can list, never hold the key: {args}");
-    assert!(env.contains("GAIA_JEV=live") && !env.contains(KEY), "nor does curl's environment");
+    assert!(
+        seen("input").contains(KEY),
+        "curl gets the key on its input"
+    );
+    assert!(
+        args.contains("https://openrouter.ai/") && !args.contains(KEY),
+        "curl's arguments, which any process can list, never hold the key: {args}"
+    );
+    assert!(
+        env.contains("GAIA_JEV=live") && !env.contains(KEY),
+        "nor does curl's environment"
+    );
     for answer in &answers {
-        assert!(!answer.to_string().contains(KEY), "an answer over RPC carries the key: {answer}");
+        assert!(
+            !answer.to_string().contains(KEY),
+            "an answer over RPC carries the key: {answer}"
+        );
     }
     std::fs::remove_dir_all(dir).unwrap();
 }
@@ -247,8 +287,14 @@ fn the_journal_reads_a_file_as_the_world_s_commit_holds_it() {
             serde_json::json!({ "id": 3, "method": "project.source", "params": { "root": r, "path": "../a.ts" } }),
         ],
     );
-    assert_eq!(answers[0]["result"]["lines"], serde_json::json!(["one", "two", ""]));
-    assert_eq!(answers[1]["result"]["lines"], serde_json::json!(["three", ""]));
+    assert_eq!(
+        answers[0]["result"]["lines"],
+        serde_json::json!(["one", "two", ""])
+    );
+    assert_eq!(
+        answers[1]["result"]["lines"],
+        serde_json::json!(["three", ""])
+    );
     assert_eq!(answers[2]["result"]["lines"], serde_json::json!(null));
     std::fs::remove_dir_all(&root).unwrap();
 }
@@ -280,16 +326,35 @@ esac
     let data = dir.join("data");
     let root = dir.join("project");
     std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(root.join("walk.lua"), "local function walk(root)\n  return root\nend\n\nreturn walk\n").unwrap();
+    std::fs::write(
+        root.join("walk.lua"),
+        "local function walk(root)\n  return root\nend\n\nreturn walk\n",
+    )
+    .unwrap();
     let graph = || {
         let call = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "project.graph", "params": { "root": root } });
-        rpc(&[("GAIA_DATA_DIR", data.to_str().unwrap()), ("PATH", &path)], &[call]).remove(0)
+        rpc(
+            &[("GAIA_DATA_DIR", data.to_str().unwrap()), ("PATH", &path)],
+            &[call],
+        )
+        .remove(0)
     };
-    let definitions = |graph: &serde_json::Value| graph["result"]["nodes"].as_array().unwrap().iter().filter(|n| n["kind"] == "def").count();
+    let definitions = |graph: &serde_json::Value| {
+        graph["result"]["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|n| n["kind"] == "def")
+            .count()
+    };
     let kept = || std::fs::read_dir(data.join("grammars")).map_or(0, |entries| entries.count());
 
     std::fs::write(dir.join("served"), &altered).unwrap();
-    assert_eq!(definitions(&graph()), 0, "a grammar that does not match its hash never parses");
+    assert_eq!(
+        definitions(&graph()),
+        0,
+        "a grammar that does not match its hash never parses"
+    );
     assert_eq!(kept(), 0, "and is never kept for a later run");
     // The pinned bytes, served the same way, are accepted, kept and parse.
     std::fs::write(dir.join("served"), &pinned).unwrap();

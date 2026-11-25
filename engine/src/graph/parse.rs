@@ -528,9 +528,9 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             let def = found[i].0;
             let inner = |n: &Node| {
                 contains(def, *n)
-                    && !found
-                        .iter()
-                        .any(|(o, _, _)| o.id() != def.id() && contains(def, *o) && contains(*o, *n))
+                    && !found.iter().any(|(o, _, _)| {
+                        o.id() != def.id() && contains(def, *o) && contains(*o, *n)
+                    })
             };
             functions[i].is_some_and(|f| f.child_by_field_name("parameters").is_some())
                 || param_lists.iter().chain(&single_params).any(inner)

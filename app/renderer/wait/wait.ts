@@ -43,7 +43,8 @@ export interface Wait extends WaitView {
   failed(message: string): void;
 }
 
-const dollars = (usd: number): string => `$${usd < 0.01 ? usd.toFixed(3) : usd.toFixed(2)}`;
+const dollars = (usd: number): string =>
+  `$${usd < 0.01 ? usd.toFixed(3) : usd.toFixed(2)}`;
 
 /** The wait `startWaitEarly` made before the world's page was built, until `takeWait` takes it. */
 let early: { veil: HTMLElement; wait: Wait } | null = null;
@@ -57,7 +58,12 @@ let early: { veil: HTMLElement; wait: Wait } | null = null;
  * paper shows until the table appears. The world claims this wait with
  * `takeWait`.
  */
-export function startWaitEarly(host: HTMLElement, night: number, aspect: number, underTable = false): void {
+export function startWaitEarly(
+  host: HTMLElement,
+  night: number,
+  aspect: number,
+  underTable = false,
+): void {
   const veil = document.createElement("div");
   veil.className = "veil";
   veil.dataset.ref = "veil";
@@ -70,7 +76,10 @@ export function startWaitEarly(host: HTMLElement, night: number, aspect: number,
 }
 
 /** Returns the early wait, swapped in for `slot`, or a new wait in `slot` with aspect `aspect`. */
-export function takeWait(slot: HTMLElement, aspect: number): { veil: HTMLElement; wait: Wait } {
+export function takeWait(
+  slot: HTMLElement,
+  aspect: number,
+): { veil: HTMLElement; wait: Wait } {
   if (early === null) return { veil: slot, wait: createWait(slot, aspect) };
   const taken = early;
   early = null;
@@ -82,7 +91,13 @@ export function takeWait(slot: HTMLElement, aspect: number): { veil: HTMLElement
  * A small paper slip at the bottom of the wait, with text and one or two answer buttons. It is the only place the wait
  * shows words. `answered` receives the chosen value on the click, as the slip starts to leave.
  */
-function slipIn(veil: HTMLElement): (words: HTMLElement, answers: readonly (readonly [string, boolean | string])[], answered: (value: string) => void) => void {
+function slipIn(
+  veil: HTMLElement,
+): (
+  words: HTMLElement,
+  answers: readonly (readonly [string, boolean | string])[],
+  answered: (value: string) => void,
+) => void {
   return (words, answers, answered) => {
     const slip = document.createElement("div");
     slip.className = "wait-slip";
@@ -101,7 +116,9 @@ function slipIn(veil: HTMLElement): (words: HTMLElement, answers: readonly (read
     (veil.parentElement ?? veil).append(slip);
     buttons[0]?.focus({ preventScroll: true });
     choices.addEventListener("click", (e) => {
-      const answer = (e.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.answer;
+      const answer = (e.target as HTMLElement).closest<HTMLButtonElement>(
+        "button",
+      )?.dataset.answer;
       if (answer === undefined) return;
       slip.classList.add("leaving");
       window.setTimeout(() => slip.remove(), 400);
@@ -122,8 +139,20 @@ export function createWait(veil: HTMLElement, aspect: number): Wait {
       words.append("Judging ");
       const name = document.createElement("i");
       name.textContent = plan.name;
-      words.append(name, ` costs about ${dollars(plan.estimatedUsd)}, over your ${dollars(plan.limitUsd)} limit.`);
-      return new Promise((resolve) => slip(words, [["Go ahead", true], ["Not now", false]], (answer) => resolve(answer === "true")));
+      words.append(
+        name,
+        ` costs about ${dollars(plan.estimatedUsd)}, over your ${dollars(plan.limitUsd)} limit.`,
+      );
+      return new Promise((resolve) =>
+        slip(
+          words,
+          [
+            ["Go ahead", true],
+            ["Not now", false],
+          ],
+          (answer) => resolve(answer === "true"),
+        ),
+      );
     },
     failed(message) {
       const words = document.createElement("p");

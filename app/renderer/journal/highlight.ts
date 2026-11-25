@@ -20,9 +20,13 @@ const KEYWORDS = new Set(
 );
 
 /** A file's comment syntax by extension: the line comment marker, and whether it has block comments. */
-function commentsOf(path: string): { readonly line: string; readonly block: boolean } {
+function commentsOf(path: string): {
+  readonly line: string;
+  readonly block: boolean;
+} {
   const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
-  if (["py", "toml", "sh", "yml", "yaml", "rb"].includes(ext)) return { line: "#", block: false };
+  if (["py", "toml", "sh", "yml", "yaml", "rb"].includes(ext))
+    return { line: "#", block: false };
   if (["css"].includes(ext)) return { line: "", block: true };
   return { line: "//", block: true };
 }
@@ -36,7 +40,8 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
     if (t === "") return;
     const last = pieces[pieces.length - 1];
     // Merges adjacent plain text into one piece.
-    if (ink === undefined && last !== undefined && last.ink === undefined) pieces[pieces.length - 1] = { text: last.text + t };
+    if (ink === undefined && last !== undefined && last.ink === undefined)
+      pieces[pieces.length - 1] = { text: last.text + t };
     else pieces.push(ink === undefined ? { text: t } : { text: t, ink });
   };
   // Sticky regexes match at the current position, so a long definition is scanned in one pass.
@@ -72,7 +77,12 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
     const c = text[i] as string;
     if (c === '"' || c === "'" || c === "`") {
       let j = i + 1;
-      while (j < text.length && text[j] !== c && (c === "`" || text[j] !== "\n")) j += text[j] === "\\" ? 2 : 1;
+      while (
+        j < text.length &&
+        text[j] !== c &&
+        (c === "`" || text[j] !== "\n")
+      )
+        j += text[j] === "\\" ? 2 : 1;
       const t = text.slice(i, Math.min(text.length, j + 1));
       push(t, "str");
       i += t.length;
@@ -86,7 +96,15 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
     }
     const w = at(WORD, i);
     if (w !== null) {
-      const ink: Ink | undefined = KEYWORDS.has(w) ? "kw" : at(CALLED, i + w.length) !== null ? "fn" : /^[A-Z]/.test(w) ? "type" : before(i) === "." ? "prop" : undefined;
+      const ink: Ink | undefined = KEYWORDS.has(w)
+        ? "kw"
+        : at(CALLED, i + w.length) !== null
+          ? "fn"
+          : /^[A-Z]/.test(w)
+            ? "type"
+            : before(i) === "."
+              ? "prop"
+              : undefined;
       push(w, ink);
       i += w.length;
       continue;
@@ -99,7 +117,10 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
   for (const p of pieces) {
     p.text.split("\n").forEach((part, k) => {
       if (k > 0) out.push([]);
-      if (part !== "") (out[out.length - 1] as Piece[]).push(p.ink === undefined ? { text: part } : { text: part, ink: p.ink });
+      if (part !== "")
+        (out[out.length - 1] as Piece[]).push(
+          p.ink === undefined ? { text: part } : { text: part, ink: p.ink },
+        );
     });
   }
   while (out.length < lines.length) out.push([]);

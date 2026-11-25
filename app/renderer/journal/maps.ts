@@ -6,8 +6,21 @@
 
 import type { Place, WorldPlaces } from "@gaia/terrain";
 import { landReach, pastTheEdge } from "@gaia/terrain";
-import { CLOSE, type Paper, drawLand, haloOf, letter, letterName } from "../immersive/field-map.ts";
-import { SERIF, canvasMeasure, nameFont, nameSpacing, placeNames } from "../immersive/map-names.ts";
+import {
+  CLOSE,
+  type Paper,
+  drawLand,
+  haloOf,
+  letter,
+  letterName,
+} from "../immersive/field-map.ts";
+import {
+  SERIF,
+  canvasMeasure,
+  nameFont,
+  nameSpacing,
+  placeNames,
+} from "../immersive/map-names.ts";
 import type { BakedWorld } from "../terrain/world.ts";
 
 export interface MapSource {
@@ -29,13 +42,17 @@ export interface MapTaps {
   at(px: number, py: number): { readonly x: number; readonly z: number };
   name(px: number, py: number): string | null;
   /** The box a name under (px, py) is lettered in, in the page's pixels, or null over the land. */
-  nameBox(px: number, py: number): readonly [number, number, number, number] | null;
+  nameBox(
+    px: number,
+    py: number,
+  ): readonly [number, number, number, number] | null;
   /** Projects a world spot onto the page, in its pixels. */
   page(x: number, z: number): { readonly px: number; readonly py: number };
 }
 const taps = new WeakMap<HTMLCanvasElement, MapTaps>();
 /** The hit testing for a map canvas the journal drew, or null for any other element. */
-export const tapsOf = (canvas: HTMLElement | null): MapTaps | null => (canvas instanceof HTMLCanvasElement ? (taps.get(canvas) ?? null) : null);
+export const tapsOf = (canvas: HTMLElement | null): MapTaps | null =>
+  canvas instanceof HTMLCanvasElement ? (taps.get(canvas) ?? null) : null;
 
 /**
  * Draws a `w` by `h` px map of the folder or file at `area`, or of the whole
@@ -44,7 +61,13 @@ export const tapsOf = (canvas: HTMLElement | null): MapTaps | null => (canvas in
  * `fold` keeps names off a spread's center. Returns null before the field
  * map's paper is painted.
  */
-export function drawMapPage(src: MapSource, area: string, w: number, h: number, fold: boolean): HTMLCanvasElement | null {
+export function drawMapPage(
+  src: MapSource,
+  area: string,
+  w: number,
+  h: number,
+  fold: boolean,
+): HTMLCanvasElement | null {
   const paper = src.paper();
   if (paper === null) return null;
   const places = src.places();
@@ -53,14 +76,23 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   canvas.height = h * DPR;
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
   ctx.scale(DPR, DPR);
-  const mine = (path: string): boolean => area === "" || path === area || path.startsWith(`${area}/`);
+  const mine = (path: string): boolean =>
+    area === "" || path === area || path.startsWith(`${area}/`);
   const reach = landReach(places);
   /** The zoom at which the land just covers the page, the base for `CLOSE` as on the field map. */
   const whole = Math.max(w / (reach.x * 2), h / (reach.z * 2));
   let view: { x: number; z: number; zoom: number };
   if (area === "") view = { x: 0, z: 0, zoom: whole * 1.02 };
-  else if (places.patches.some((p) => p.path === area)) view = folderView(places, (k) => k.file === area, w, h, FILE_CLOSEST);
-  else view = folderView(places, (k) => k.area === area || k.area.startsWith(`${area}/`), w, h, FOLDER_CLOSEST);
+  else if (places.patches.some((p) => p.path === area))
+    view = folderView(places, (k) => k.file === area, w, h, FILE_CLOSEST);
+  else
+    view = folderView(
+      places,
+      (k) => k.area === area || k.area.startsWith(`${area}/`),
+      w,
+      h,
+      FOLDER_CLOSEST,
+    );
   drawLand(ctx, w, h, paper, src.baked(), view, 1.35, true);
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
@@ -83,27 +115,50 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
   taps.set(canvas, {
     at: (px, py) => ({ x: mx(px), z: mz(py) }),
     page: (x, z) => ({ px: sx(x), py: sy(z) }),
-    name: (px, py) => named.find(({ box: b }) => px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3])?.path ?? null,
-    nameBox: (px, py) => named.find(({ box: b }) => px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3])?.box ?? null,
+    name: (px, py) =>
+      named.find(
+        ({ box: b }) => px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3],
+      )?.path ?? null,
+    nameBox: (px, py) =>
+      named.find(
+        ({ box: b }) => px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3],
+      )?.box ?? null,
   });
-  const clear = (b: Box): boolean => taken.every((o) => b[2] < o[0] || b[0] > o[2] || b[3] < o[1] || b[1] > o[3]);
-  const onPage = (b: Box): boolean => b[0] > NAME.edge && b[1] > NAME.edge && b[2] < w - NAME.edge && b[3] < h - NAME.edge;
-  const offFold = (b: Box): boolean => !fold || b[2] < w / 2 - NAME.fold || b[0] > w / 2 + NAME.fold;
+  const clear = (b: Box): boolean =>
+    taken.every(
+      (o) => b[2] < o[0] || b[0] > o[2] || b[3] < o[1] || b[1] > o[3],
+    );
+  const onPage = (b: Box): boolean =>
+    b[0] > NAME.edge &&
+    b[1] > NAME.edge &&
+    b[2] < w - NAME.edge &&
+    b[3] < h - NAME.edge;
+  const offFold = (b: Box): boolean =>
+    !fold || b[2] < w / 2 - NAME.fold || b[0] > w / 2 + NAME.fold;
   const ownAt = (path: string, x: number, y: number): boolean => {
     const at = src.placeAt(mx(x), mz(y)).area.path;
     return at === path || at.startsWith(`${path}/`);
   };
-  const depth = area === "" ? 0 : (places.areas.find((a) => a.path === area)?.depth ?? 0);
+  const depth =
+    area === "" ? 0 : (places.areas.find((a) => a.path === area)?.depth ?? 0);
 
   // Letters each child folder large, as near the center of its land as fits with the whole name on its land. A folder
   // with too little land gets a small name, and one with too little for that gets a small name beside its land.
-  for (const a of places.areas.filter((a) => a.depth === depth + 1 && mine(a.path))) {
-    const cells = places.cells.filter((k) => k.area === a.path || k.area.startsWith(`${a.path}/`));
+  for (const a of places.areas.filter(
+    (a) => a.depth === depth + 1 && mine(a.path),
+  )) {
+    const cells = places.cells.filter(
+      (k) => k.area === a.path || k.area.startsWith(`${a.path}/`),
+    );
     if (cells.length === 0) continue;
     const cx = sx(cells.reduce((n, k) => n + k.x, 0) / cells.length);
     const cy = sy(cells.reduce((n, k) => n + k.z, 0) / cells.length);
     let spot: { x: number; y: number; size: number; box: Box } | null = null;
-    for (const [size, own] of [[NAME.large, true], [NAME.small, true], [NAME.small, false]] as const) {
+    for (const [size, own] of [
+      [NAME.large, true],
+      [NAME.small, true],
+      [NAME.small, false],
+    ] as const) {
       ctx.font = nameFont(size);
       ctx.letterSpacing = `${nameSpacing(size)}px`;
       const half = ctx.measureText(a.name.toUpperCase()).width / 2 + 6;
@@ -114,7 +169,13 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
           const x = cx + Math.cos((k / around) * Math.PI * 2) * r;
           const y = cy + Math.sin((k / around) * Math.PI * 2) * r;
           const box: Box = [x - half, y - size * 0.7, x + half, y + size * 0.7];
-          if (onPage(box) && offFold(box) && clear(box) && (!own || ownAt(a.path, x, y))) spot = { x, y, size, box };
+          if (
+            onPage(box) &&
+            offFold(box) &&
+            clear(box) &&
+            (!own || ownAt(a.path, x, y))
+          )
+            spot = { x, y, size, box };
         }
       }
       if (spot !== null) break;
@@ -122,11 +183,22 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
     if (spot === null) continue;
     taken.push(spot.box);
     named.push({ box: spot.box, path: a.path });
-    letterName(ctx, { area: { name: a.name }, angle: 0, above: "" } as never, spot.x, spot.y, spot.size, paper.style);
+    letterName(
+      ctx,
+      { area: { name: a.name }, angle: 0, above: "" } as never,
+      spot.x,
+      spot.y,
+      spot.size,
+      paper.style,
+    );
   }
 
   // Grandchild folders, where `placeNames` puts them, wherever they fit on the page.
-  const steps = placeNames(paper.names, Math.min(view.zoom * paper.reach * 2, 4096), canvasMeasure(ctx));
+  const steps = placeNames(
+    paper.names,
+    Math.min(view.zoom * paper.reach * 2, 4096),
+    canvasMeasure(ctx),
+  );
   let step = steps.next();
   while (step.done !== true) step = steps.next();
   for (const p of step.value.places) {
@@ -152,7 +224,15 @@ export function drawMapPage(src: MapSource, area: string, w: number, h: number, 
       if (!onPage(box) || !offFold(box) || !clear(box)) continue;
       taken.push(box);
       named.push({ box, path: p.area === "" ? p.name : `${p.area}/${p.name}` });
-      letter(ctx, p.name, x, y, "rgba(58,47,34,0.92)", haloOf(paper.style), 2.5);
+      letter(
+        ctx,
+        p.name,
+        x,
+        y,
+        "rgba(58,47,34,0.92)",
+        haloOf(paper.style),
+        2.5,
+      );
     }
     ctx.globalAlpha = 1;
   }
@@ -174,12 +254,21 @@ const FILE_CLOSEST = 7;
  * covering most of them with the least surrounding land. The page is painted
  * to its edges, and land outside the window runs off them.
  */
-function folderView(places: WorldPlaces, owns: (cell: WorldPlaces["cells"][number]) => boolean, w: number, h: number, closestBy: number): { x: number; z: number; zoom: number } {
+function folderView(
+  places: WorldPlaces,
+  owns: (cell: WorldPlaces["cells"][number]) => boolean,
+  w: number,
+  h: number,
+  closestBy: number,
+): { x: number; z: number; zoom: number } {
   const reach = landReach(places);
   // Counts all cells and the owned cells on a grid as summed-area tables, so any window's count takes four lookups.
   const n = 96;
   const [bx, bz] = [(reach.x * 2) / n, (reach.z * 2) / n];
-  const sums = [new Float64Array((n + 1) * (n + 1)), new Float64Array((n + 1) * (n + 1))] as const;
+  const sums = [
+    new Float64Array((n + 1) * (n + 1)),
+    new Float64Array((n + 1) * (n + 1)),
+  ] as const;
   let own = 0;
   let [mx, mz] = [0, 0];
   for (const k of places.cells) {
@@ -195,9 +284,20 @@ function folderView(places: WorldPlaces, owns: (cell: WorldPlaces["cells"][numbe
     }
   }
   [mx, mz] = [mx / Math.max(1, own), mz / Math.max(1, own)];
-  const v = (t: Float64Array, i: number, j: number): number => t[j * (n + 1) + i] as number;
-  for (const t of sums) for (let j = 1; j <= n; j++) for (let i = 1; i <= n; i++) t[j * (n + 1) + i] = v(t, i, j) + v(t, i, j - 1) + v(t, i - 1, j) - v(t, i - 1, j - 1);
-  const count = (t: Float64Array, x: number, z: number, hw: number, hh: number): number => {
+  const v = (t: Float64Array, i: number, j: number): number =>
+    t[j * (n + 1) + i] as number;
+  for (const t of sums)
+    for (let j = 1; j <= n; j++)
+      for (let i = 1; i <= n; i++)
+        t[j * (n + 1) + i] =
+          v(t, i, j) + v(t, i, j - 1) + v(t, i - 1, j) - v(t, i - 1, j - 1);
+  const count = (
+    t: Float64Array,
+    x: number,
+    z: number,
+    hw: number,
+    hh: number,
+  ): number => {
     const i0 = Math.max(0, Math.min(n, Math.round((x - hw + reach.x) / bx)));
     const i1 = Math.max(0, Math.min(n, Math.round((x + hw + reach.x) / bx)));
     const j0 = Math.max(0, Math.min(n, Math.round((z - hh + reach.z) / bz)));
@@ -205,7 +305,12 @@ function folderView(places: WorldPlaces, owns: (cell: WorldPlaces["cells"][numbe
     return v(t, i1, j1) - v(t, i1, j0) - v(t, i0, j1) + v(t, i0, j0);
   };
   // The land is convex, so a window is inside it when its corners are.
-  const fits = (x: number, z: number, hw: number, hh: number): boolean => [-1, 1].every((sx) => [-1, 1].every((sz) => pastTheEdge(places, x + sx * hw, z + sz * hh) <= -INSIDE));
+  const fits = (x: number, z: number, hw: number, hh: number): boolean =>
+    [-1, 1].every((sx) =>
+      [-1, 1].every(
+        (sz) => pastTheEdge(places, x + sx * hw, z + sz * hh) <= -INSIDE,
+      ),
+    );
   /**
    * How well a window matches the folder: owned cells inside it over the union of the window's cells and the
    * folder's, reduced by up to a quarter the farther it sits from the folder's center, so a small folder's map
@@ -213,9 +318,17 @@ function folderView(places: WorldPlaces, owns: (cell: WorldPlaces["cells"][numbe
    */
   const share = (x: number, z: number, hw: number, hh: number): number => {
     const mine = count(sums[1], x, z, hw, hh);
-    return (mine / (own + count(sums[0], x, z, hw, hh) - mine)) * (1 - 0.25 * Math.min(1, Math.hypot(x - mx, z - mz) / Math.hypot(hw, hh)));
+    return (
+      (mine / (own + count(sums[0], x, z, hw, hh) - mine)) *
+      (1 - 0.25 * Math.min(1, Math.hypot(x - mx, z - mz) / Math.hypot(hw, hh)))
+    );
   };
-  let best = { x: 0, z: 0, zoom: Math.max(w / (reach.x * 2), h / (reach.z * 2)), share: -1 };
+  let best = {
+    x: 0,
+    z: 0,
+    zoom: Math.max(w / (reach.x * 2), h / (reach.z * 2)),
+    share: -1,
+  };
   const consider = (x: number, z: number, zoom: number): void => {
     const [hw, hh] = [w / 2 / zoom, h / 2 / zoom];
     if (zoom > closest || !fits(x, z, hw, hh)) return;
@@ -226,22 +339,43 @@ function folderView(places: WorldPlaces, owns: (cell: WorldPlaces["cells"][numbe
   const widest = Math.max(w / (reach.x * 2), h / (reach.z * 2));
   const closest = widest * closestBy;
   for (let zoom = widest; zoom <= closest; zoom *= 1.08) {
-    for (let j = 0; j <= 24; j++) for (let i = 0; i <= 24; i++) consider(-reach.x + (reach.x * 2 * i) / 24, -reach.z + (reach.z * 2 * j) / 24, zoom);
+    for (let j = 0; j <= 24; j++)
+      for (let i = 0; i <= 24; i++)
+        consider(
+          -reach.x + (reach.x * 2 * i) / 24,
+          -reach.z + (reach.z * 2 * j) / 24,
+          zoom,
+        );
   }
   // Then refines around the best window.
   for (let step = (reach.x * 2) / 48; step > 1; step /= 2) {
     const { x, z, zoom } = best;
-    for (const [dx, dz, dzoom] of [[step, 0, 1], [-step, 0, 1], [0, step, 1], [0, -step, 1], [0, 0, 1.03], [0, 0, 1 / 1.03]] as const) consider(x + dx, z + dz, zoom * dzoom);
+    for (const [dx, dz, dzoom] of [
+      [step, 0, 1],
+      [-step, 0, 1],
+      [0, step, 1],
+      [0, -step, 1],
+      [0, 0, 1.03],
+      [0, 0, 1 / 1.03],
+    ] as const)
+      consider(x + dx, z + dz, zoom * dzoom);
   }
   return { x: best.x, z: best.z, zoom: best.zoom };
 }
 
 /** A page-sized half of a spread's map, as a canvas of its own. */
-export function halfOf(spread: HTMLCanvasElement, side: "left" | "right"): HTMLCanvasElement {
+export function halfOf(
+  spread: HTMLCanvasElement,
+  side: "left" | "right",
+): HTMLCanvasElement {
   const half = document.createElement("canvas");
   half.width = spread.width / 2;
   half.height = spread.height;
-  (half.getContext("2d") as CanvasRenderingContext2D).drawImage(spread, side === "left" ? 0 : -spread.width / 2, 0);
+  (half.getContext("2d") as CanvasRenderingContext2D).drawImage(
+    spread,
+    side === "left" ? 0 : -spread.width / 2,
+    0,
+  );
   const whole = taps.get(spread);
   const shift = side === "left" ? 0 : spread.width / 2 / DPR;
   if (whole !== undefined) {

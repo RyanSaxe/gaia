@@ -21,7 +21,13 @@ export type HeightField =
       readonly style: "smooth" | "ridged";
     }
   /** Wind ridges, 0..1, with a gentle windward face, a steeper lee, and crests running across `angle`. */
-  | { readonly op: "dunes"; readonly seed: number; readonly wavelength: number; readonly angle: number; readonly wander: number }
+  | {
+      readonly op: "dunes";
+      readonly seed: number;
+      readonly wavelength: number;
+      readonly angle: number;
+      readonly wander: number;
+    }
   /** A valley's cross-section, 0 on the floor line to 1 on the shoulders, along a meandering axis at `angle`. */
   | {
       readonly op: "trough";
@@ -35,13 +41,23 @@ export type HeightField =
       readonly meanderWavelength: number;
     }
   /** A tilt of `grade` meters per meter toward `angle`, eased flat beyond `reach` meters from the center. */
-  | { readonly op: "plane"; readonly angle: number; readonly grade: number; readonly reach: number }
+  | {
+      readonly op: "plane";
+      readonly angle: number;
+      readonly grade: number;
+      readonly reach: number;
+    }
   /** 1 at the center, falling smoothly to 0 at `radius`. */
   | { readonly op: "dome"; readonly radius: number }
   /** A soft circular bump of height 1 centered on `radius`. */
   | { readonly op: "ring"; readonly radius: number; readonly width: number }
   /** Quantizes a field into flat treads of `step` meters. `riser` is the share of each step spent climbing. */
-  | { readonly op: "terrace"; readonly step: number; readonly riser: number; readonly of: HeightField }
+  | {
+      readonly op: "terrace";
+      readonly step: number;
+      readonly riser: number;
+      readonly of: HeightField;
+    }
   | { readonly op: "sum"; readonly of: readonly HeightField[] }
   | { readonly op: "product"; readonly of: readonly HeightField[] }
   | { readonly op: "scale"; readonly by: number; readonly of: HeightField };

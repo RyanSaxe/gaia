@@ -21,7 +21,12 @@ const NEAR_EVERY = 3000;
 
 export interface PaintingsOptions {
   /** Captures the world's view of a thing, wide for the title page with `wide`, or null when no thing in the world matches `id`. */
-  view(id: string, w: number, h: number, wide?: boolean): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
+  view(
+    id: string,
+    w: number,
+    h: number,
+    wide?: boolean,
+  ): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null>;
   /** Where paintings are kept between visits. */
   store?: PaintingStore;
   /** A painting's key in the store, from its world, its thing and the thing's form and vitality. Null skips the store. */
@@ -59,10 +64,22 @@ export interface Paintings {
  * Paints `seen` at `w` by `h` device pixels on a new painter worker, with the same strokes for the same `seed`. Returns
  * the painting encoded for storage (WebP), or null when it could not be painted.
  */
-export async function paintKept(seen: { readonly color: Pixels; readonly mask: Pixels }, w: number, h: number, seed: string): Promise<Blob | null> {
+export async function paintKept(
+  seen: { readonly color: Pixels; readonly mask: Pixels },
+  w: number,
+  h: number,
+  seed: string,
+): Promise<Blob | null> {
   const worker = new PainterWorker();
   try {
-    const job: PainterJob = { id: 1, color: seen.color, mask: seen.mask, w, h, seed: seedOf(seed) };
+    const job: PainterJob = {
+      id: 1,
+      color: seen.color,
+      mask: seen.mask,
+      w,
+      h,
+      seed: seedOf(seed),
+    };
     const reply = await new Promise<PainterReply>((resolve) => {
       worker.onmessage = (e: MessageEvent<PainterReply>) => resolve(e.data);
       worker.postMessage(job, [job.color.data.buffer, job.mask.data.buffer]);
@@ -91,15 +108,26 @@ interface Painting {
 
 /** The id prefix for a wide painting in the queue. */
 const WIDE = "wide:";
-const named = (thing: string, wide: boolean): string => (wide ? `${WIDE}${thing}` : thing);
+const named = (thing: string, wide: boolean): string =>
+  wide ? `${WIDE}${thing}` : thing;
 /** A painting's seed from its id, so the same thing always gets the same strokes. */
-const seedOf = (id: string): number => [...id].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619), 2166136261) >>> 0;
+const seedOf = (id: string): number =>
+  [...id].reduce(
+    (h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619),
+    2166136261,
+  ) >>> 0;
 /** How many painter workers run at once: a third of the CPU cores, from 1 to 3. */
-const PAINTERS = Math.max(1, Math.min(3, Math.floor((navigator.hardwareConcurrency ?? 4) / 3)));
+const PAINTERS = Math.max(
+  1,
+  Math.min(3, Math.floor((navigator.hardwareConcurrency ?? 4) / 3)),
+);
 
 export function createPaintings(options: PaintingsOptions): Paintings {
   let paintings = new Map<string, Painting>();
-  const painters = Array.from({ length: PAINTERS }, () => ({ worker: null as Worker | null, busy: false }));
+  const painters = Array.from({ length: PAINTERS }, () => ({
+    worker: null as Worker | null,
+    busy: false,
+  }));
   let jobs = 0;
   /** Captures run one at a time, since each renders the world and two must never share a frame. */
   let viewing: Promise<unknown> = Promise.resolve();
@@ -111,7 +139,14 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     if (p === undefined) {
       let settle = (): void => {};
       const settled = new Promise<void>((resolve) => (settle = resolve));
-      p = { state: "waiting", rank: 2, done: null, shown: new Set(), settled, settle };
+      p = {
+        state: "waiting",
+        rank: 2,
+        done: null,
+        shown: new Set(),
+        settled,
+        settle,
+      };
       paintings.set(id, p);
     }
     return p;
@@ -121,14 +156,24 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     p.rank = Math.min(p.rank, rank) as Rank;
     return p;
   };
-  const finish = (p: Painting, state: "done" | "none", bitmap: ImageBitmap | null): void => {
+  const finish = (
+    p: Painting,
+    state: "done" | "none",
+    bitmap: ImageBitmap | null,
+  ): void => {
     // A new painting replaces the old one. A repaint that produced nothing leaves the old one shown.
     if (bitmap !== null) {
       if (p.done !== bitmap) p.done?.close();
       p.done = bitmap;
     }
     p.state = p.done === null ? state : "done";
-    if (bitmap !== null) for (const c of p.shown) (c.getContext("2d") as CanvasRenderingContext2D).drawImage(bitmap, 0, 0);
+    if (bitmap !== null)
+      for (const c of p.shown)
+        (c.getContext("2d") as CanvasRenderingContext2D).drawImage(
+          bitmap,
+          0,
+          0,
+        );
     p.shown.clear();
     p.settle();
   };
@@ -136,12 +181,21 @@ export function createPaintings(options: PaintingsOptions): Paintings {
   /** The waiting painting with the best rank, in request order. A near thing waits while the person walks and until `NEAR_EVERY` has passed. */
   function take(): string | undefined {
     let best: [string, Painting] | undefined;
-    for (const [id, p] of paintings) if (p.state === "waiting" && (best === undefined || p.rank < best[1].rank)) best = [id, p];
+    for (const [id, p] of paintings)
+      if (
+        p.state === "waiting" &&
+        (best === undefined || p.rank < best[1].rank)
+      )
+        best = [id, p];
     if (best === undefined) return undefined;
     if (best[1].rank === 2) {
-      const wait = options.idle?.() === false ? IDLE_CHECK : lastNear + NEAR_EVERY - performance.now();
+      const wait =
+        options.idle?.() === false
+          ? IDLE_CHECK
+          : lastNear + NEAR_EVERY - performance.now();
       if (wait > 0) {
-        if (idleTimer === 0) idleTimer = window.setTimeout(() => ((idleTimer = 0), pump()), wait);
+        if (idleTimer === 0)
+          idleTimer = window.setTimeout(() => ((idleTimer = 0), pump()), wait);
         return undefined;
       }
       lastNear = performance.now();
@@ -158,7 +212,10 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     }
   }
 
-  async function paintOne(id: string, painter: (typeof painters)[number]): Promise<void> {
+  async function paintOne(
+    id: string,
+    painter: (typeof painters)[number],
+  ): Promise<void> {
     const mine = paintings;
     const p = entry(id);
     p.state = "painting";
@@ -167,15 +224,26 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     const thing = wide ? id.slice(WIDE.length) : id;
     try {
       const key = options.keyOf?.(thing, wide) ?? null;
-      const kept = key === null ? null : ((await options.store?.get(key)) ?? null);
-      if (kept !== null) return finish(p, "done", await createImageBitmap(kept));
-      const look = viewing.then(() => options.view(thing, VIEW.w, VIEW.h, wide));
+      const kept =
+        key === null ? null : ((await options.store?.get(key)) ?? null);
+      if (kept !== null)
+        return finish(p, "done", await createImageBitmap(kept));
+      const look = viewing.then(() =>
+        options.view(thing, VIEW.w, VIEW.h, wide),
+      );
       viewing = look.catch(() => null);
       const seen = await look;
       if (seen === null || mine !== paintings) return finish(p, "none", null);
       painter.worker ??= new PainterWorker();
       const worker = painter.worker;
-      const job: PainterJob = { id: ++jobs, color: seen.color, mask: seen.mask, w: PAINTED.w, h: PAINTED.h, seed: seedOf(id) };
+      const job: PainterJob = {
+        id: ++jobs,
+        color: seen.color,
+        mask: seen.mask,
+        w: PAINTED.w,
+        h: PAINTED.h,
+        seed: seedOf(id),
+      };
       const reply = await new Promise<PainterReply>((resolve) => {
         worker.onmessage = (e: MessageEvent<PainterReply>) => {
           if (e.data.id === job.id) resolve(e.data);
@@ -185,7 +253,8 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       if (!("painting" in reply)) return finish(p, "none", null);
       if (mine !== paintings) return void reply.painting.close();
       finish(p, "done", reply.painting);
-      if (key !== null && reply.kept !== null) void options.store?.put(key, reply.kept);
+      if (key !== null && reply.kept !== null)
+        void options.store?.put(key, reply.kept);
     } catch {
       finish(p, "none", null);
     } finally {
@@ -201,7 +270,12 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       canvas.width = PAINTED.w;
       canvas.height = PAINTED.h;
       const p = want(id, 0);
-      if (p.done !== null) (canvas.getContext("2d") as CanvasRenderingContext2D).drawImage(p.done, 0, 0);
+      if (p.done !== null)
+        (canvas.getContext("2d") as CanvasRenderingContext2D).drawImage(
+          p.done,
+          0,
+          0,
+        );
       // A painting being redone shows its old painting until the new one is done.
       if (p.state === "waiting" || p.state === "painting") p.shown.add(canvas);
       pump();
@@ -221,7 +295,10 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       pump();
     },
     repaint(things) {
-      for (const id of things.flatMap((t) => [named(t, false), named(t, true)])) {
+      for (const id of things.flatMap((t) => [
+        named(t, false),
+        named(t, true),
+      ])) {
         const p = paintings.get(id);
         if (p?.state !== "done") continue;
         p.state = "waiting";
@@ -229,7 +306,8 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       }
       pump();
     },
-    state: (thing, wide = false) => paintings.get(named(thing, wide))?.state ?? "waiting",
+    state: (thing, wide = false) =>
+      paintings.get(named(thing, wide))?.state ?? "waiting",
     clear() {
       // Resolves every cleared painting at once, so nothing waits on them.
       for (const p of paintings.values()) {

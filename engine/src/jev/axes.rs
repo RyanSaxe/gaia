@@ -207,7 +207,11 @@ fn above(ctx: &Ctx, dir: &str) -> Vec<Value> {
             let mut found = Map::new();
             found.insert(
                 "path".into(),
-                json!(if p.is_empty() { "(the repository's root)" } else { p }),
+                json!(if p.is_empty() {
+                    "(the repository's root)"
+                } else {
+                    p
+                }),
             );
             found.insert("importance".into(), json!(score("axes.importance")));
             for name in vocab().folder.keys() {
@@ -501,7 +505,11 @@ impl Call for FolderAxes {
         }
         // The folders that contain this one, never itself. The root has none. A request that included its own
         // answers would change once they were held and go out again, and so would every request below it.
-        let holders = if dir.path.is_empty() { Vec::new() } else { above(ctx, parent_dir(&dir.path)) };
+        let holders = if dir.path.is_empty() {
+            Vec::new()
+        } else {
+            above(ctx, parent_dir(&dir.path))
+        };
         out.insert("above".into(), json!(holders));
         if !dir.path.is_empty()
             && let Some(docs) = prose(ctx, &dir.path, budget / 6)
@@ -862,13 +870,21 @@ mod tests {
         // Many files side by side, of different lengths and qualities, so a sum added in another order would differ.
         for i in 0..40 {
             let body = "  x += 1;\n".repeat(i % 7);
-            std::fs::write(root.join(format!("src/f{i}.ts")), format!("export function f{i}(x: number): number {{\n{body}  return x;\n}}\n")).unwrap();
+            std::fs::write(
+                root.join(format!("src/f{i}.ts")),
+                format!("export function f{i}(x: number): number {{\n{body}  return x;\n}}\n"),
+            )
+            .unwrap();
         }
         let gathered = || {
             let mut graph = crate::graph::build(&root).unwrap();
             for i in 0..40 {
                 let score = f64::from(i % 4) * 0.7 + 0.1;
-                set(&mut graph, &format!("file:src/f{i}.ts"), json!({ "axes": { "readability": { "score": score }, "importance": { "score": 2.0 } } }));
+                set(
+                    &mut graph,
+                    &format!("file:src/f{i}.ts"),
+                    json!({ "axes": { "readability": { "score": score }, "importance": { "score": 2.0 } } }),
+                );
             }
             values(&mut graph);
             value(&graph, "dir:")["quality"].clone()

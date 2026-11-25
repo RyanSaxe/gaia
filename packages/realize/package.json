@@ -7,8 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@gaia/schema": "workspace:*",
-    "@gaia/primitives": "workspace:*"
+    "@gaia/primitives": "workspace:*",
+    "@gaia/schema": "workspace:*"
   },
   "devDependencies": {
     "@gaia/kinds": "workspace:*",

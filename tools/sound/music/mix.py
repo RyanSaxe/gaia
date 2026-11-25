@@ -17,6 +17,7 @@ There is no bus compression. The dynamics come from the notes' velocities and CC
 Usage: mix.py WORK_DIR OUT_DIR   (reads WORK_DIR/midi/<song>/ and WORK_DIR/parts/<song>/; writes OUT_DIR/<stem>.wav,
 OUT_DIR/<phrase>.wav and OUT_DIR/mix-report.json)
 """
+
 import json
 import sys
 from pathlib import Path
@@ -40,6 +41,7 @@ def calibration(names):
     missing = [n for n in names if Path(n).name not in cal]
     if missing:
         from .calibrate import loudness
+
         for n in missing:
             cal[Path(n).name], notes = loudness(n)
             print(f"calibrated {Path(n).name}: {cal[Path(n).name]} LUFS (notes {notes})")
@@ -71,7 +73,7 @@ def impulse(rt=(2.6, 2.3, 1.8, 1.1), length=3.2, predelay=0.018, seed=7):
             ir[k, ch] += rng.uniform(0.25, 0.7) * rng.choice([-1, 1])
     pad = int(predelay * SR)
     ir = np.vstack([np.zeros((pad, 2)), ir])
-    return ir / np.sqrt((ir ** 2).sum() / 2)
+    return ir / np.sqrt((ir**2).sum() / 2)
 
 
 def shelf(f0, gain_db, kind):
@@ -81,10 +83,16 @@ def shelf(f0, gain_db, kind):
     alpha = np.sin(w0) / 2 * np.sqrt(2)
     c = np.cos(w0)
     if kind == "high":
-        b = [A * ((A + 1) + (A - 1) * c + 2 * np.sqrt(A) * alpha), -2 * A * ((A - 1) + (A + 1) * c),
-             A * ((A + 1) + (A - 1) * c - 2 * np.sqrt(A) * alpha)]
-        a = [(A + 1) - (A - 1) * c + 2 * np.sqrt(A) * alpha, 2 * ((A - 1) - (A + 1) * c),
-             (A + 1) - (A - 1) * c - 2 * np.sqrt(A) * alpha]
+        b = [
+            A * ((A + 1) + (A - 1) * c + 2 * np.sqrt(A) * alpha),
+            -2 * A * ((A - 1) + (A + 1) * c),
+            A * ((A + 1) + (A - 1) * c - 2 * np.sqrt(A) * alpha),
+        ]
+        a = [
+            (A + 1) - (A - 1) * c + 2 * np.sqrt(A) * alpha,
+            2 * ((A - 1) - (A + 1) * c),
+            (A + 1) - (A - 1) * c - 2 * np.sqrt(A) * alpha,
+        ]
     return np.array(b) / a[0], np.array(a) / a[0]
 
 
@@ -97,7 +105,7 @@ def limit(x, sr, ceiling, look=0.005, release=0.08):
     la = int(look * sr)
     # look ahead: each sample takes the smallest gain needed within the next `la` samples
     centred = minimum_filter1d(need, size=2 * (la // 2) + 1, mode="nearest")
-    need = np.concatenate([centred[la // 2:], np.full(la // 2, centred[-1])])
+    need = np.concatenate([centred[la // 2 :], np.full(la // 2, centred[-1])])
     g = np.empty_like(need)
     rel = np.exp(-1 / (release * sr))
     att = np.exp(-1 / (look * sr / 2))
@@ -124,11 +132,11 @@ def fold(x, start, n):
     """Everything the render holds, laid onto one period of n samples beginning at sample `start`."""
     y = np.zeros((n, 2))
     pre = x[:start]
-    y[n - len(pre):] += pre
+    y[n - len(pre) :] += pre
     rest = x[start:]
     for k in range(0, len(rest), n):
-        seg = rest[k:k + n]
-        y[:len(seg)] += seg
+        seg = rest[k : k + n]
+        y[: len(seg)] += seg
     return y
 
 
@@ -172,10 +180,11 @@ def mix(song_dir, parts_dir, periodic):
         dry[owner[pname]] += X
         send[owner[pname]] += X * 10 ** (rev / 20)
     irp = np.zeros((n, 2))
-    irp[:len(ir)] = ir
+    irp[: len(ir)] = ir
     IR = np.fft.rfft(irp, axis=0)
-    wet_h = (response(freqs, sos=signal.butter(2, 200, "highpass", fs=SR, output="sos"))
-             * response(freqs, sos=signal.butter(2, 9500, "lowpass", fs=SR, output="sos")))
+    wet_h = response(freqs, sos=signal.butter(2, 200, "highpass", fs=SR, output="sos")) * response(
+        freqs, sos=signal.butter(2, 9500, "lowpass", fs=SR, output="sos")
+    )
     stems = {}
     for g in groups:
         Y = dry[g] + send[g] * IR * wet_h[:, None] * 10 ** (rv.get("wet_db", 0) / 20)
@@ -195,8 +204,13 @@ def wrap_check(x):
     d = np.abs(np.diff(x, axis=0)).max(axis=1)
     jump = np.abs(x[0] - x[-1]).max()
     pct = (d < jump).mean() * 100
-    return {"rms_before_db": round(before, 2), "rms_after_db": round(after, 2), "step": float(jump),
-            "step_percentile": round(pct, 2), "largest_step": float(d.max())}
+    return {
+        "rms_before_db": round(before, 2),
+        "rms_after_db": round(after, 2),
+        "step": float(jump),
+        "step_percentile": round(pct, 2),
+        "largest_step": float(d.max()),
+    }
 
 
 def trim(x):
@@ -204,10 +218,10 @@ def trim(x):
     a = np.abs(x).max(axis=1)
     first = int(np.argmax(a > 10 ** (-70 / 20)))
     w = int(0.05 * SR)
-    rms = np.sqrt(np.convolve((x ** 2).mean(axis=1), np.ones(w) / w, mode="same"))
+    rms = np.sqrt(np.convolve((x**2).mean(axis=1), np.ones(w) / w, mode="same"))
     loud = np.where(rms > 10 ** (-66 / 20))[0]
     last = min(len(x), int(loud[-1]) + w)
-    y = x[max(0, first - int(0.005 * SR)):last].copy()
+    y = x[max(0, first - int(0.005 * SR)) : last].copy()
     f = int(0.4 * SR)
     y[-f:] *= (np.cos(np.linspace(0, np.pi, f)) * 0.5 + 0.5)[:, None]
     return y
@@ -238,19 +252,32 @@ def main(work, out):
     g = TARGET - lufs(st["bed"] + st["melody"])
     for k in st:
         st[k] = st[k] * 10 ** (g / 20)
-    mixes = {"piece-day": st["bed"] + st["melody"], "piece-night": st["bed"] + 0.6 * st["melody"] + st["shimmer"],
-             "piece-ruin": st["minor"], "all-major-stems": st["bed"] + st["melody"] + st["shimmer"]}
+    mixes = {
+        "piece-day": st["bed"] + st["melody"],
+        "piece-night": st["bed"] + 0.6 * st["melody"] + st["shimmer"],
+        "piece-ruin": st["minor"],
+        "all-major-stems": st["bed"] + st["melody"] + st["shimmer"],
+    }
     worst = max(true_peak(x) for x in list(st.values()) + list(mixes.values()))
     if worst > CEIL_DBTP:
         raise SystemExit(f"the piece peaks at {worst:.2f} dBTP: soften the loudest notes rather than limit a loop")
     for k, x in st.items():
         sf.write(out / f"{k}.wav", x.astype(np.float32), SR, subtype="FLOAT")
-        report[k] = {"lufs": round(lufs(x), 2), "true_peak_dbtp": round(true_peak(x), 2), "samples": len(x),
-                     "wrap": wrap_check(x)}
+        report[k] = {
+            "lufs": round(lufs(x), 2),
+            "true_peak_dbtp": round(true_peak(x), 2),
+            "samples": len(x),
+            "wrap": wrap_check(x),
+        }
     for k, x in mixes.items():
         report[k] = {"lufs": round(lufs(x), 2), "true_peak_dbtp": round(true_peak(x), 2), "wrap": wrap_check(x)}
-    report["_piece"] = {"gain_db": round(g, 2), "bars": meta["bars"], "bpm": meta["bpm"], "seconds": meta["loop_seconds"],
-                        "samples": len(st["bed"])}
+    report["_piece"] = {
+        "gain_db": round(g, 2),
+        "bars": meta["bars"],
+        "bpm": meta["bpm"],
+        "seconds": meta["loop_seconds"],
+        "samples": len(st["bed"]),
+    }
     # ---- the phrases
     for d in sorted((work / "midi").iterdir()):
         if not d.name.startswith("phrase-"):
@@ -259,8 +286,12 @@ def main(work, out):
         x = trim(sum(ps.values()))
         y, gain, lim = master_phrase(x)
         sf.write(out / f"{d.name}.wav", y.astype(np.float32), SR, subtype="FLOAT")
-        report[d.name] = {"lufs": round(lufs(y), 2), "true_peak_dbtp": round(true_peak(y), 2),
-                          "seconds": round(len(y) / SR, 2), "limiter_db": round(lim, 2)}
+        report[d.name] = {
+            "lufs": round(lufs(y), 2),
+            "true_peak_dbtp": round(true_peak(y), 2),
+            "seconds": round(len(y) / SR, 2),
+            "limiter_db": round(lim, 2),
+        }
     (out / "mix-report.json").write_text(json.dumps(report, indent=1))
     for k, v in report.items():
         print(f"{k:16s} {json.dumps(v)}")

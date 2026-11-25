@@ -13,7 +13,13 @@
 // identity at TO, by id alone and by lineage.
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -41,17 +47,31 @@ const env = {
 const engine = engineBinary(repo, "release");
 
 /** One request to a fresh engine, and how long it took to answer. */
-async function call<T>(method: string, params: object, dataDir?: string): Promise<{ result: T; ms: number }> {
-  const childEnv = dataDir === undefined ? env : { ...env, GAIA_DATA_DIR: dataDir };
-  const child = spawn(engine, ["rpc"], { env: childEnv, stdio: ["pipe", "pipe", "inherit"] });
+async function call<T>(
+  method: string,
+  params: object,
+  dataDir?: string,
+): Promise<{ result: T; ms: number }> {
+  const childEnv =
+    dataDir === undefined ? env : { ...env, GAIA_DATA_DIR: dataDir };
+  const child = spawn(engine, ["rpc"], {
+    env: childEnv,
+    stdio: ["pipe", "pipe", "inherit"],
+  });
   const lines = createInterface({ input: child.stdout });
   const t0 = performance.now();
-  child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })}\n`);
+  child.stdin.write(
+    `${JSON.stringify({ jsonrpc: "2.0", id: 1, method, params })}\n`,
+  );
   for await (const line of lines) {
     const ms = performance.now() - t0;
     child.stdin.end();
-    const response = JSON.parse(line) as { result?: T; error?: { message: string } };
-    if (response.result === undefined) throw new Error(`${method}: ${response.error?.message ?? "no answer"}`);
+    const response = JSON.parse(line) as {
+      result?: T;
+      error?: { message: string };
+    };
+    if (response.result === undefined)
+      throw new Error(`${method}: ${response.error?.message ?? "no answer"}`);
     return { result: response.result, ms };
   }
   throw new Error(`${method}: the engine closed without answering`);
@@ -62,24 +82,34 @@ async function rootOf(r: Repo): Promise<string> {
   if (r.root !== undefined) {
     const root = resolve(repo, r.root);
     const [command, ...rest] = r.make ?? [];
-    if (command !== undefined && !existsSync(root)) execFileSync(command, rest, { cwd: repo, env, stdio: "inherit" });
+    if (command !== undefined && !existsSync(root))
+      execFileSync(command, rest, { cwd: repo, env, stdio: "inherit" });
     return root;
   }
-  if (r.address === undefined || r.commit === undefined) throw new Error(`${r.name} needs a root, or an address and a commit`);
-  const { result } = await call<Cloned>("project.clone", { address: r.address });
-  if (!result.cloned) throw new Error(`${r.name} could not be cloned: ${result.why}`);
-  const git = (...args: string[]): void => void execFileSync("git", ["-C", result.root, ...args], { stdio: "ignore" });
+  if (r.address === undefined || r.commit === undefined)
+    throw new Error(`${r.name} needs a root, or an address and a commit`);
+  const { result } = await call<Cloned>("project.clone", {
+    address: r.address,
+  });
+  if (!result.cloned)
+    throw new Error(`${r.name} could not be cloned: ${result.why}`);
+  const git = (...args: string[]): void =>
+    void execFileSync("git", ["-C", result.root, ...args], { stdio: "ignore" });
   try {
     git("cat-file", "-e", `${r.commit}^{commit}`);
   } catch {
     git("fetch", "--quiet", "origin", r.commit);
   }
   git("-c", "advice.detachedHead=false", "checkout", "--quiet", r.commit);
-  for (const path of r.drop ?? []) rmSync(resolve(result.root, path), { recursive: true, force: true });
+  for (const path of r.drop ?? [])
+    rmSync(resolve(result.root, path), { recursive: true, force: true });
   return result.root;
 }
 
-const tally = <T>(items: readonly T[], key: (t: T) => string): Record<string, number> => {
+const tally = <T>(
+  items: readonly T[],
+  key: (t: T) => string,
+): Record<string, number> => {
   const out: Record<string, number> = {};
   for (const item of items) out[key(item)] = (out[key(item)] ?? 0) + 1;
   return Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1]));
@@ -112,11 +142,22 @@ function measure(graph: CodeGraph, ms: number) {
 }
 
 /** Replays a repository's history and reports what keeps its identity. */
-async function replay(r: Repo, from: string, to: string, monthly: boolean): Promise<void> {
+async function replay(
+  r: Repo,
+  from: string,
+  to: string,
+  monthly: boolean,
+): Promise<void> {
   const root = await rootOf(r);
-  const git = (...a: string[]): string => execFileSync("git", ["-C", root, ...a], { encoding: "utf8" }).trim();
+  const git = (...a: string[]): string =>
+    execFileSync("git", ["-C", root, ...a], { encoding: "utf8" }).trim();
   const fromSha = git("rev-parse", from);
-  let commits = [fromSha, ...git("rev-list", "--first-parent", "--reverse", `${fromSha}..${to}`).split("\n").filter(Boolean)];
+  let commits = [
+    fromSha,
+    ...git("rev-list", "--first-parent", "--reverse", `${fromSha}..${to}`)
+      .split("\n")
+      .filter(Boolean),
+  ];
   if (monthly) {
     const picked: string[] = [];
     let last = -Infinity;
@@ -134,14 +175,29 @@ async function replay(r: Repo, from: string, to: string, monthly: boolean): Prom
   try {
     for (const c of commits) {
       git("-c", "advice.detachedHead=false", "checkout", "--quiet", c);
-      const { result } = await call<CodeGraph>("project.graph", { root }, store);
+      const { result } = await call<CodeGraph>(
+        "project.graph",
+        { root },
+        store,
+      );
       defsAt.push(
-        result.nodes.flatMap((n) => (n.kind === "def" ? [{ id: n.id, qualified: n.id.split("#").slice(1).join("#"), lineage: n.lineage }] : [])),
+        result.nodes.flatMap((n) =>
+          n.kind === "def"
+            ? [
+                {
+                  id: n.id,
+                  qualified: n.id.split("#").slice(1).join("#"),
+                  lineage: n.lineage,
+                },
+              ]
+            : [],
+        ),
       );
     }
   } finally {
     rmSync(store, { recursive: true, force: true });
-    if (r.commit !== undefined) git("-c", "advice.detachedHead=false", "checkout", "--quiet", r.commit);
+    if (r.commit !== undefined)
+      git("-c", "advice.detachedHead=false", "checkout", "--quiet", r.commit);
   }
   const first = defsAt[0] ?? [];
   const last = defsAt.at(-1) ?? [];
@@ -150,28 +206,45 @@ async function replay(r: Repo, from: string, to: string, monthly: boolean): Prom
   const names = new Set(last.map((d) => d.qualified));
   // A definition survives when its qualified name still exists somewhere, wherever it moved.
   const surviving = first.filter((d) => names.has(d.qualified));
-  const pct = (n: number, of: number): string => `${of === 0 ? 0 : Math.round((100 * n) / of)}%`;
+  const pct = (n: number, of: number): string =>
+    `${of === 0 ? 0 : Math.round((100 * n) / of)}%`;
   const byId = first.filter((d) => ids.has(d.id)).length;
   const byLineage = surviving.filter((d) => lineages.has(d.lineage)).length;
-  console.log(`${r.name}, ${commits.length} commits from ${fromSha.slice(0, 7)} to ${to.slice(0, 7)}:`);
-  console.log(`  ${first.length} definitions at the start; ${surviving.length} still exist by qualified name`);
-  console.log(`  same id: ${byId} (${pct(byId, first.length)}); surviving with their lineage: ${byLineage} of ${surviving.length} (${pct(byLineage, surviving.length)})`);
+  console.log(
+    `${r.name}, ${commits.length} commits from ${fromSha.slice(0, 7)} to ${to.slice(0, 7)}:`,
+  );
+  console.log(
+    `  ${first.length} definitions at the start; ${surviving.length} still exist by qualified name`,
+  );
+  console.log(
+    `  same id: ${byId} (${pct(byId, first.length)}); surviving with their lineage: ${byLineage} of ${surviving.length} (${pct(byLineage, surviving.length)})`,
+  );
 }
 
 const args = process.argv.slice(2);
 const outAt = args.indexOf("--out");
 const out = outAt >= 0 ? args[outAt + 1] : undefined;
-const names = args.filter((a, i) => !a.startsWith("--") && (outAt < 0 || i !== outAt + 1));
-const { repos } = JSON.parse(readFileSync(resolve(repo, "tools/bench/repos.json"), "utf8")) as { repos: Repo[] };
+const names = args.filter(
+  (a, i) => !a.startsWith("--") && (outAt < 0 || i !== outAt + 1),
+);
+const { repos } = JSON.parse(
+  readFileSync(resolve(repo, "tools/bench/repos.json"), "utf8"),
+) as { repos: Repo[] };
 const replayAt = args.indexOf("--replay");
-const picked = names.length > 0 ? repos.filter((r) => names.includes(r.name)) : repos;
+const picked =
+  names.length > 0 ? repos.filter((r) => names.includes(r.name)) : repos;
 const chosen = replayAt >= 0 ? [] : picked;
 
-execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], { cwd: repo, env, stdio: "inherit" });
+execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], {
+  cwd: repo,
+  env,
+  stdio: "inherit",
+});
 if (replayAt >= 0) {
   const [name, from, to] = args.slice(replayAt + 1, replayAt + 4);
   const r = repos.find((x) => x.name === name);
-  if (r === undefined || from === undefined || to === undefined) throw new Error("Usage: pnpm bench --replay name FROM TO [--monthly]");
+  if (r === undefined || from === undefined || to === undefined)
+    throw new Error("Usage: pnpm bench --replay name FROM TO [--monthly]");
   await replay(r, from, to, args.includes("--monthly"));
 }
 const results: Record<string, ReturnType<typeof measure>> = {};
@@ -190,6 +263,8 @@ for (const r of chosen) {
   console.log(`  definitions: ${words(m.roles)}`);
   console.log(`  blocks: ${words(m.blocks)}`);
   console.log(`  edges: ${words(m.edges)}`);
-  if (Object.keys(m.conventions).length > 0) console.log(`  conventions: ${words(m.conventions)}`);
+  if (Object.keys(m.conventions).length > 0)
+    console.log(`  conventions: ${words(m.conventions)}`);
 }
-if (out !== undefined) writeFileSync(resolve(out), `${JSON.stringify(results, null, 2)}\n`);
+if (out !== undefined)
+  writeFileSync(resolve(out), `${JSON.stringify(results, null, 2)}\n`);

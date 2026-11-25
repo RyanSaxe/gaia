@@ -35,8 +35,10 @@ function breaksOf(text: string): [string, string][] {
     const before = text[i - 1] as string;
     const at = text[i] as string;
     if (before === " ") out.push([text.slice(0, i - 1), text.slice(i)]);
-    else if ("/-_.".includes(before) && at !== " ") out.push([text.slice(0, i), text.slice(i)]);
-    else if (/[a-z0-9]/.test(before) && /[A-Z]/.test(at)) out.push([text.slice(0, i), text.slice(i)]);
+    else if ("/-_.".includes(before) && at !== " ")
+      out.push([text.slice(0, i), text.slice(i)]);
+    else if (/[a-z0-9]/.test(before) && /[A-Z]/.test(at))
+      out.push([text.slice(0, i), text.slice(i)]);
   }
   return out.filter(([a, b]) => a.trim() !== "" && b.trim() !== "");
 }
@@ -46,31 +48,48 @@ function breaksOf(text: string): [string, string][] {
  * `size` px. Every line of the result is no wider than the board's width
  * times its `widen`.
  */
-export function letter(text: string, board: Board, measure: (text: string, size: number) => number): Lettered {
+export function letter(
+  text: string,
+  board: Board,
+  measure: (text: string, size: number) => number,
+): Lettered {
   const ref = board.size;
   /** Width per pixel of size, from one measurement at the board's own size. */
   const per = (s: string): number => Math.max(1e-6, measure(s, ref) / ref);
   const layouts = [{ lines: [text], per: per(text), cap: board.size }];
   if (board.twoLines) {
     const cap = Math.min(board.size, board.height * TWO_LINE_SHARE);
-    for (const [a, b] of breaksOf(text)) layouts.push({ lines: [a, b], per: Math.max(per(a), per(b)), cap });
+    for (const [a, b] of breaksOf(text))
+      layouts.push({ lines: [a, b], per: Math.max(per(a), per(b)), cap });
   }
-  const sizeAt = (l: (typeof layouts)[number], widen: number): number => Math.min(l.cap, (board.width * widen) / l.per);
+  const sizeAt = (l: (typeof layouts)[number], widen: number): number =>
+    Math.min(l.cap, (board.width * widen) / l.per);
   // Use one line if it fits at the least size, else the best break, else widen the board as little as needed.
   const one = layouts[0] as (typeof layouts)[number];
   let chosen = one;
   let widen = 1;
   if (sizeAt(one, 1) < board.least) {
-    const best = layouts.slice(1).sort((a, b) => sizeAt(b, 1) - sizeAt(a, 1))[0];
+    const best = layouts
+      .slice(1)
+      .sort((a, b) => sizeAt(b, 1) - sizeAt(a, 1))[0];
     if (best !== undefined && sizeAt(best, 1) >= board.least) chosen = best;
     else {
-      const need = layouts.map((l) => ({ l, f: (board.least * l.per) / board.width })).sort((a, b) => a.f - b.f)[0] as { l: (typeof layouts)[number]; f: number };
+      const need = layouts
+        .map((l) => ({ l, f: (board.least * l.per) / board.width }))
+        .sort((a, b) => a.f - b.f)[0] as {
+        l: (typeof layouts)[number];
+        f: number;
+      };
       if (need.f <= board.widen) {
         chosen = need.l;
         widen = need.f;
       } else {
         widen = board.widen;
-        chosen = layouts.slice().sort((a, b) => sizeAt(b, widen) - sizeAt(a, widen))[0] as (typeof layouts)[number];
+        chosen = layouts
+          .slice()
+          .sort(
+            (a, b) => sizeAt(b, widen) - sizeAt(a, widen),
+          )[0] as (typeof layouts)[number];
       }
     }
   }

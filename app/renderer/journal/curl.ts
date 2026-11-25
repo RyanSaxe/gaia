@@ -27,7 +27,12 @@ export interface Curl {
 }
 
 /** A copy of `page` for one strip, with its canvases cropped to the strip's part, since cloning loses canvas content. `x0` and `w` are in page pixels. */
-function stripOf(page: HTMLElement, x0: number, w: number, pw: number): HTMLElement {
+function stripOf(
+  page: HTMLElement,
+  x0: number,
+  w: number,
+  pw: number,
+): HTMLElement {
   const copy = page.cloneNode(true) as HTMLElement;
   const from = [...page.querySelectorAll("canvas")];
   const to = [...copy.querySelectorAll("canvas")];
@@ -38,7 +43,19 @@ function stripOf(page: HTMLElement, x0: number, w: number, pw: number): HTMLElem
     const part = document.createElement("canvas");
     part.width = Math.max(1, Math.round(w * sx));
     part.height = c.height;
-    part.getContext("2d")?.drawImage(c, x0 * sx, 0, w * sx, c.height, 0, 0, part.width, part.height);
+    part
+      .getContext("2d")
+      ?.drawImage(
+        c,
+        x0 * sx,
+        0,
+        w * sx,
+        c.height,
+        0,
+        0,
+        part.width,
+        part.height,
+      );
     part.style.cssText = `position:absolute;left:${x0}px;top:0;right:auto;bottom:auto;width:${w}px;height:100%;`;
     into.replaceWith(part);
   });
@@ -50,7 +67,15 @@ function stripOf(page: HTMLElement, x0: number, w: number, pw: number): HTMLElem
  * positioned like the leaf. `shades` are the layers over the right and left
  * pages that receive the leaf's shadow.
  */
-export function createCurl(host: HTMLElement, front: HTMLElement | null, back: HTMLElement | null, pw: number, ph: number, bend: boolean, shades: { readonly right: HTMLElement; readonly left: HTMLElement }): Curl {
+export function createCurl(
+  host: HTMLElement,
+  front: HTMLElement | null,
+  back: HTMLElement | null,
+  pw: number,
+  ph: number,
+  bend: boolean,
+  shades: { readonly right: HTMLElement; readonly left: HTMLElement },
+): Curl {
   const strips: HTMLElement[] = [];
   const faces: HTMLElement[] = [];
   const n = bend ? STRIPS : 0;
@@ -63,7 +88,10 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
     strip.style.height = `${ph}px`;
     // Every strip but the last extends under the next. The last ends at the page's edge.
     const over = i < n - 1 ? OVERLAP : 0;
-    for (const [page, side] of [[front, "front"], [back, "back"]] as const) {
+    for (const [page, side] of [
+      [front, "front"],
+      [back, "back"],
+    ] as const) {
       const face = document.createElement("div");
       face.className = `jb-strip-face ${side}`;
       face.style.right = `${-over}px`;
@@ -87,7 +115,12 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
     strips.push(strip);
     holder = strip;
   }
-  const shade = (el: HTMLElement, from: number, to: number, dark: number): void => {
+  const shade = (
+    el: HTMLElement,
+    from: number,
+    to: number,
+    dark: number,
+  ): void => {
     el.style.opacity = dark <= 0.001 ? "0" : "1";
     el.style.background = `linear-gradient(90deg, rgba(30,16,6,0) ${from}px, rgba(30,16,6,${dark.toFixed(3)}) ${(from + 0.15 * (to - from)).toFixed(1)}px, rgba(30,16,6,0) ${to}px)`;
   };
@@ -103,10 +136,16 @@ export function createCurl(host: HTMLElement, front: HTMLElement | null, back: H
         // Each strip turns back a little more than the one before, so the bend increases toward the edge.
         const step = i === 0 ? angle : (b * (2 * i)) / (n * (n - 1));
         if (i > 0) angle += step;
-        s.style.transform = i === 0 ? `rotateY(${step.toFixed(2)}deg)` : `translateX(${w}px) rotateY(${step.toFixed(2)}deg)`;
+        s.style.transform =
+          i === 0
+            ? `rotateY(${step.toFixed(2)}deg)`
+            : `translateX(${w}px) rotateY(${step.toFixed(2)}deg)`;
         // Darkens both faces of a strip by how far it is turned from flat.
         const dim = 0.22 * Math.abs(Math.sin((angle * Math.PI) / 180)) ** 1.6;
-        for (const face of [faces[2 * i], faces[2 * i + 1]]) (face?.lastElementChild as HTMLElement | undefined)?.style.setProperty("opacity", dim.toFixed(3));
+        for (const face of [faces[2 * i], faces[2 * i + 1]])
+          (
+            face?.lastElementChild as HTMLElement | undefined
+          )?.style.setProperty("opacity", dim.toFixed(3));
       });
       // The shadow falls just past the leaf's edge on the page beneath: the right page before the leaf crosses the
       // spine, the left after. It is darkest when the leaf is upright and absent when it lies flat.

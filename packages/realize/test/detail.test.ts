@@ -3,7 +3,13 @@
 // primitives contract checks that every primitive builds whole pieces.
 
 import { describe, expect, it } from "vitest";
-import { type AnyPrimitive, type Built, type Field, type Part, rand } from "@gaia/schema";
+import {
+  type AnyPrimitive,
+  type Built,
+  type Field,
+  type Part,
+  rand,
+} from "@gaia/schema";
 import { PRIMITIVES } from "@gaia/primitives";
 import { detailAt, resolveParams } from "@gaia/realize";
 
@@ -11,15 +17,28 @@ import { detailAt, resolveParams } from "@gaia/realize";
 function middle(p: AnyPrimitive): Record<string, string | boolean | string[]> {
   const out: Record<string, string | boolean | string[]> = {};
   for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
-    out[name] = f.type === "scale" ? (f.levels[Math.floor(f.levels.length / 2)]?.words ?? "") : f.type === "choice" ? (Object.keys(f.options)[0] ?? "") : f.type === "flag" ? false : [];
+    out[name] =
+      f.type === "scale"
+        ? (f.levels[Math.floor(f.levels.length / 2)]?.words ?? "")
+        : f.type === "choice"
+          ? (Object.keys(f.options)[0] ?? "")
+          : f.type === "flag"
+            ? false
+            : [];
   }
   return out;
 }
 
 /** Parts whose pieces span many sizes, from a petal to a standing stone: every rock, drift and landmark. */
-const parts: Part[] = PRIMITIVES.filter((p) => p.role === "Rock" || p.role === "Drift" || p.role === "Landmark").flatMap((p) => {
+const parts: Part[] = PRIMITIVES.filter(
+  (p) => p.role === "Rock" || p.role === "Drift" || p.role === "Landmark",
+).flatMap((p) => {
   const params = resolveParams(p, middle(p), rand(5), p.id);
-  return ((p.build as (params: unknown, ctx: unknown, input: unknown) => Built)(params, { rand: rand(5).fork(p.id), facts: { scale: 1, age: 120 } }, null)).parts as Part[];
+  return (p.build as (params: unknown, ctx: unknown, input: unknown) => Built)(
+    params,
+    { rand: rand(5).fork(p.id), facts: { scale: 1, age: 120 } },
+    null,
+  ).parts as Part[];
 });
 
 describe("detailAt", () => {
@@ -32,9 +51,13 @@ describe("detailAt", () => {
       for (const distance of [20, 50, 120, 300, 800]) {
         const far = detailAt(part, distance);
         const kept = new Set<number>();
-        for (let v = 0; v < far.shade.length; v++) kept.add(far.piece[v * 2] as number);
+        for (let v = 0; v < far.shade.length; v++)
+          kept.add(far.piece[v * 2] as number);
         // Each step out leaves out more whole pieces and brings none back.
-        expect([...kept].every((k) => before.has(k)), part.swatch).toBe(true);
+        expect(
+          [...kept].every((k) => before.has(k)),
+          part.swatch,
+        ).toBe(true);
         left += before.size - kept.size;
         before = kept;
         const from: number[] = [];
@@ -43,7 +66,9 @@ describe("detailAt", () => {
         const same = (full: Float32Array, reduced: Float32Array): boolean => {
           const width = full.length / n;
           return from.every((v, k) => {
-            for (let c = 0; c < width; c++) if (!Object.is(reduced[k * width + c], full[v * width + c])) return false;
+            for (let c = 0; c < width; c++)
+              if (!Object.is(reduced[k * width + c], full[v * width + c]))
+                return false;
             return true;
           });
         };
@@ -54,9 +79,21 @@ describe("detailAt", () => {
           ["tint", part.tint, far.tint],
           ["cutout", part.cutout, far.cutout],
           ["piece", part.piece, far.piece],
-          ...Object.entries(far.channels).map(([name, reduced]) => [name, part.channels[name as keyof Part["channels"]] as Float32Array, reduced as Float32Array] as [string, Float32Array, Float32Array]),
+          ...Object.entries(far.channels).map(
+            ([name, reduced]) =>
+              [
+                name,
+                part.channels[name as keyof Part["channels"]] as Float32Array,
+                reduced as Float32Array,
+              ] as [string, Float32Array, Float32Array],
+          ),
         ];
-        expect(arrays.filter(([, full, reduced]) => !same(full, reduced)).map(([name]) => name), part.swatch).toEqual([]);
+        expect(
+          arrays
+            .filter(([, full, reduced]) => !same(full, reduced))
+            .map(([name]) => name),
+          part.swatch,
+        ).toEqual([]);
         // The kept triangles are the full build's, in its order.
         const at = new Map(from.map((v, k) => [v, k]));
         const triangles: number[] = [];

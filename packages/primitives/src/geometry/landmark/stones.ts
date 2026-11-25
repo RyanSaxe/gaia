@@ -7,8 +7,26 @@
 
 import type { BuildContext, Built, Rand, Resolved } from "@gaia/schema";
 import type { standingStonesParams } from "../../landmark.ts";
-import { type Channels, PartBuilder, type V3, clamp, cross, fbm3, icosphere, lossThreshold, normalize, rotate } from "../kit.ts";
-import { type Bands, about, landmarkShape, lump, smoothNormals, still } from "./shared.ts";
+import {
+  type Channels,
+  PartBuilder,
+  type V3,
+  clamp,
+  cross,
+  fbm3,
+  icosphere,
+  lossThreshold,
+  normalize,
+  rotate,
+} from "../kit.ts";
+import {
+  type Bands,
+  about,
+  landmarkShape,
+  lump,
+  smoothNormals,
+  still,
+} from "./shared.ts";
 
 type StonesParams = Resolved<typeof standingStonesParams>;
 
@@ -31,7 +49,12 @@ type Decline =
    * It turns about its toe by `most` radians once vitality drops below
    * `from`. With `flat`, it turns as far as it takes to lie in the grass.
    */
-  | { readonly kind: "tilt"; readonly most: number; readonly from: number; readonly flat?: boolean }
+  | {
+      readonly kind: "tilt";
+      readonly most: number;
+      readonly from: number;
+      readonly flat?: boolean;
+    }
   /** Below vitality `loss` it snaps at `at`, a share of its height, and the top lies broken at its foot. */
   | { readonly kind: "snap"; readonly at: number; readonly loss: number }
   | { readonly kind: "firm" };
@@ -59,20 +82,41 @@ function toeOf(s: Stone, local: readonly V3[]): V3 {
   const c = Math.cos(s.yaw);
   const sn = Math.sin(s.yaw);
   let reach = 0;
-  for (const q of local) if (q[1] > -0.1 && q[1] < 0.25) reach = Math.max(reach, (q[0] * c + q[2] * sn) * dir[0] + (-q[0] * sn + q[2] * c) * dir[2]);
+  for (const q of local)
+    if (q[1] > -0.1 && q[1] < 0.25)
+      reach = Math.max(
+        reach,
+        (q[0] * c + q[2] * sn) * dir[0] + (-q[0] * sn + q[2] * c) * dir[2],
+      );
   return [s.x + dir[0] * reach * 0.98, 0, s.z + dir[2] * reach * 0.98];
 }
 
 /** The axis a stone turns about to tip toward its lean: the top moves along `toward`. */
-const tipAxis = (s: Stone): V3 => normalize(cross([0, 1, 0], [Math.cos(s.toward), 0, Math.sin(s.toward)]));
+const tipAxis = (s: Stone): V3 =>
+  normalize(cross([0, 1, 0], [Math.cos(s.toward), 0, Math.sin(s.toward)]));
 
 /**
  * How far `points` must turn about `axis` through `hinge` until the lowest
  * of them comes down to `ground`: where a falling stone comes to rest.
  */
-export function restAngle(points: readonly V3[], hinge: V3, axis: V3, ground: number): number {
+export function restAngle(
+  points: readonly V3[],
+  hinge: V3,
+  axis: V3,
+  ground: number,
+): number {
   const lowest = (angle: number): number =>
-    Math.min(...points.map((p) => hinge[1] + rotate([p[0] - hinge[0], p[1] - hinge[1], p[2] - hinge[2]], axis, angle)[1]));
+    Math.min(
+      ...points.map(
+        (p) =>
+          hinge[1] +
+          rotate(
+            [p[0] - hinge[0], p[1] - hinge[1], p[2] - hinge[2]],
+            axis,
+            angle,
+          )[1],
+      ),
+    );
   let lo = 0;
   let hi = Math.PI * 0.75;
   if (lowest(hi) > ground) return hi;
@@ -89,7 +133,17 @@ export function restAngle(points: readonly V3[], hinge: V3, axis: V3, ground: nu
  * ground, `sink` meters of it below, tapering and rounding toward the top,
  * its faces cut flat as sharply as `facets` sets.
  */
-function slabShape(s: { width: number; depth: number; height: number }, facets: number, sink: number, r: Rand, subdiv: number): { points: V3[]; triangles: readonly (readonly [number, number, number])[]; seed: number } {
+function slabShape(
+  s: { width: number; depth: number; height: number },
+  facets: number,
+  sink: number,
+  r: Rand,
+  subdiv: number,
+): {
+  points: V3[];
+  triangles: readonly (readonly [number, number, number])[];
+  seed: number;
+} {
   const sphere = icosphere(subdiv);
   const seed = Math.floor(r.next() * 1e6);
   const planes: { n: V3; d: number }[] = [];
@@ -97,20 +151,34 @@ function slabShape(s: { width: number; depth: number; height: number }, facets: 
     const a = r.next() * Math.PI * 2;
     const y = r.range(-0.3, 0.6);
     const h = Math.sqrt(1 - y * y);
-    planes.push({ n: [Math.cos(a) * h, y, Math.sin(a) * h], d: r.range(0.72, 0.9) });
+    planes.push({
+      n: [Math.cos(a) * h, y, Math.sin(a) * h],
+      d: r.range(0.72, 0.9),
+    });
   }
   const cut = 0.4 + 0.6 * facets;
   const total = s.height + sink;
   const points: V3[] = sphere.points.map((n) => {
-    const bump = 1 + 0.13 * fbm3(n[0] * 1.4, n[1] * 1.4 + seed * 0.001, n[2] * 1.4, seed, 3);
+    const bump =
+      1 +
+      0.13 * fbm3(n[0] * 1.4, n[1] * 1.4 + seed * 0.001, n[2] * 1.4, seed, 3);
     let q: V3 = [n[0] * bump, n[1] * bump, n[2] * bump];
     for (const pl of planes) {
       const over = q[0] * pl.n[0] + q[1] * pl.n[1] + q[2] * pl.n[2] - pl.d;
-      if (over > 0) q = [q[0] - pl.n[0] * over * cut, q[1] - pl.n[1] * over * cut, q[2] - pl.n[2] * over * cut];
+      if (over > 0)
+        q = [
+          q[0] - pl.n[0] * over * cut,
+          q[1] - pl.n[1] * over * cut,
+          q[2] - pl.n[2] * over * cut,
+        ];
     }
     const t = (q[1] + 1) / 2;
     const taper = 1 - 0.28 * t * t;
-    return [q[0] * s.width * 0.5 * taper, -sink + t * total, q[2] * s.depth * 0.5 * taper];
+    return [
+      q[0] * s.width * 0.5 * taper,
+      -sink + t * total,
+      q[2] * s.depth * 0.5 * taper,
+    ];
   });
   return { points, triangles: sphere.triangles, seed };
 }
@@ -120,22 +188,41 @@ function placer(s: Stone, toe: V3): { at: (q: V3) => V3; dir: (n: V3) => V3 } {
   const c = Math.cos(s.yaw);
   const sn = Math.sin(s.yaw);
   const axis = tipAxis(s);
-  const turn = (q: V3): V3 => [q[0] * c + q[2] * sn, q[1], -q[0] * sn + q[2] * c];
+  const turn = (q: V3): V3 => [
+    q[0] * c + q[2] * sn,
+    q[1],
+    -q[0] * sn + q[2] * c,
+  ];
   return {
     at: (q) => {
       const p = turn(q);
-      const o = rotate([p[0] + s.x - toe[0], p[1], p[2] + s.z - toe[2]], axis, s.lean);
+      const o = rotate(
+        [p[0] + s.x - toe[0], p[1], p[2] + s.z - toe[2]],
+        axis,
+        s.lean,
+      );
       return [o[0] + toe[0], o[1], o[2] + toe[2]];
     },
     dir: (n) => rotate(turn(n), axis, s.lean),
   };
 }
 
-function shadeOf(p: V3, height: number, n: V3, seed: number): { shade: number; mottle: number } {
+function shadeOf(
+  p: V3,
+  height: number,
+  n: V3,
+  seed: number,
+): { shade: number; mottle: number } {
   const above = clamp(p[1] / Math.max(0.5, height), 0, 1);
   const mottle = fbm3(p[0] * 1.3, p[1] * 1.3, p[2] * 1.3, seed + 3, 3);
   const streak = fbm3(p[0] * 4, p[1] * 0.5, p[2] * 4, seed + 6, 2);
-  const shade = 0.44 + 0.16 * mottle + 0.08 * streak + 0.14 * above - 0.18 * (1 - clamp(p[1] / 0.5 + 0.2, 0, 1)) + 0.05 * n[1];
+  const shade =
+    0.44 +
+    0.16 * mottle +
+    0.08 * streak +
+    0.14 * above -
+    0.18 * (1 - clamp(p[1] / 0.5 + 0.2, 0, 1)) +
+    0.05 * n[1];
   return { shade, mottle };
 }
 
@@ -143,7 +230,13 @@ function shadeOf(p: V3, height: number, n: V3, seed: number): { shade: number; m
  * A standing stone. It leans or falls whole about its toe without bending,
  * or it snaps and its top lies broken at its foot.
  */
-function emitStone(b: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: number): void {
+function emitStone(
+  b: PartBuilder,
+  s: Stone,
+  facets: number,
+  r: Rand,
+  subdiv: number,
+): void {
   const shape = slabShape(s, facets, 0.55, r, subdiv);
   const toe = toeOf(s, shape.points);
   const place = placer(s, toe);
@@ -152,8 +245,21 @@ function emitStone(b: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: nu
   const d = s.decline;
   const tilt = d.kind === "tilt" ? tipAxis(s) : null;
   // A stone that falls flat turns until its upper part lies on the ground, bedded a little in the grass.
-  const most = d.kind === "tilt" && d.flat === true && tilt !== null ? restAngle(points.filter((p) => p[1] > s.height * 0.3), toe, tilt, -0.05) : d.kind === "tilt" ? d.most : 0;
-  const fall = tilt !== null && d.kind === "tilt" ? ([tilt[0] * most, tilt[1] * most, tilt[2] * most, d.from] as const) : undefined;
+  const most =
+    d.kind === "tilt" && d.flat === true && tilt !== null
+      ? restAngle(
+          points.filter((p) => p[1] > s.height * 0.3),
+          toe,
+          tilt,
+          -0.05,
+        )
+      : d.kind === "tilt"
+        ? d.most
+        : 0;
+  const fall =
+    tilt !== null && d.kind === "tilt"
+      ? ([tilt[0] * most, tilt[1] * most, tilt[2] * most, d.from] as const)
+      : undefined;
   const breakY = d.kind === "snap" ? d.at * s.height : Infinity;
   const breakPivot = place.at([0, breakY === Infinity ? 0 : breakY, 0]);
   const tint = r.range(-0.03, 0.03);
@@ -163,7 +269,15 @@ function emitStone(b: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: nu
     const n = normals[i] as V3;
     const { shade, mottle } = shadeOf(p, s.height, n, shape.seed);
     const broken = local[1] > breakY;
-    const loss = broken && d.kind === "snap" ? clamp(d.loss + 0.05 * fbm3(p[0] * 3, p[1] * 3, p[2] * 3, shape.seed + 8, 1), 0.05, 0.9) : 0;
+    const loss =
+      broken && d.kind === "snap"
+        ? clamp(
+            d.loss +
+              0.05 * fbm3(p[0] * 3, p[1] * 3, p[2] * 3, shape.seed + 8, 1),
+            0.05,
+            0.9,
+          )
+        : 0;
     b.vertex(p, n, shade, {
       loss,
       droop: 0,
@@ -174,19 +288,52 @@ function emitStone(b: PartBuilder, s: Stone, facets: number, r: Rand, subdiv: nu
       ...(fall === undefined ? {} : { fall }),
     });
   });
-  for (const [a, bb, c] of shape.triangles) b.triangle(first + a, first + bb, first + c);
+  for (const [a, bb, c] of shape.triangles)
+    b.triangle(first + a, first + bb, first + c);
   // A snapped top lies in the grass beside its stump, growing in as the top goes.
   if (d.kind === "snap") {
     const len = s.height * (1 - d.at);
     const away = r.next() * Math.PI * 2;
     const reach = len * 0.55 + s.depth * 0.6;
-    emitFallen(b, { x: s.x + Math.cos(away) * reach, z: s.z + Math.sin(away) * reach, yaw: away + Math.PI / 2, width: s.width * 0.85, depth: s.depth, length: len }, facets, d.loss, r);
+    emitFallen(
+      b,
+      {
+        x: s.x + Math.cos(away) * reach,
+        z: s.z + Math.sin(away) * reach,
+        yaw: away + Math.PI / 2,
+        width: s.width * 0.85,
+        depth: s.depth,
+        length: len,
+      },
+      facets,
+      d.loss,
+      r,
+    );
   }
 }
 
 /** A piece of stone lying in the grass, half sunk, that grows in below `grow`: a snapped top or a fallen lintel. */
-export function emitFallen(b: PartBuilder, f: { x: number; z: number; yaw: number; width: number; depth: number; length: number }, facets: number, grow: number, r: Rand): void {
-  const shape = slabShape({ width: f.width, depth: f.depth, height: f.length }, facets, 0, r, 2);
+export function emitFallen(
+  b: PartBuilder,
+  f: {
+    x: number;
+    z: number;
+    yaw: number;
+    width: number;
+    depth: number;
+    length: number;
+  },
+  facets: number,
+  grow: number,
+  r: Rand,
+): void {
+  const shape = slabShape(
+    { width: f.width, depth: f.depth, height: f.length },
+    facets,
+    0,
+    r,
+    2,
+  );
   const c = Math.cos(f.yaw);
   const sn = Math.sin(f.yaw);
   const roll = r.range(-0.25, 0.25);
@@ -195,7 +342,11 @@ export function emitFallen(b: PartBuilder, f: { x: number; z: number; yaw: numbe
     const along = q[1] - f.length / 2;
     const up = q[2] * Math.cos(roll) + q[0] * Math.sin(roll);
     const side = q[0] * Math.cos(roll) - q[2] * Math.sin(roll);
-    return [f.x + along * c - side * sn, up + f.depth * 0.18, f.z + along * sn + side * c];
+    return [
+      f.x + along * c - side * sn,
+      up + f.depth * 0.18,
+      f.z + along * sn + side * c,
+    ];
   };
   const points = shape.points.map(lay);
   const normals = smoothNormals(points, shape.triangles);
@@ -204,28 +355,52 @@ export function emitFallen(b: PartBuilder, f: { x: number; z: number; yaw: numbe
   points.forEach((p, i) => {
     const n = normals[i] as V3;
     const { shade, mottle } = shadeOf(p, f.depth * 2, n, shape.seed);
-    b.vertex(p, n, shade - 0.04, { loss: 0, droop: 0, wither: clamp(0.65 + 0.3 * mottle, 0.2, 0.95), glow: 0, pivot, tint: 0.02 * mottle, grow: clamp(grow, 0.05, 0.9) });
+    b.vertex(p, n, shade - 0.04, {
+      loss: 0,
+      droop: 0,
+      wither: clamp(0.65 + 0.3 * mottle, 0.2, 0.95),
+      glow: 0,
+      pivot,
+      tint: 0.02 * mottle,
+      grow: clamp(grow, 0.05, 0.9),
+    });
   });
-  for (const [a, bb, cc] of shape.triangles) b.triangle(first + a, first + bb, first + cc);
+  for (const [a, bb, cc] of shape.triangles)
+    b.triangle(first + a, first + bb, first + cc);
 }
 
 /** A slab lying across two stones' tops. It falls away first, and then lies broken in the grass below. */
-function emitLintel(b: PartBuilder, a: Stone, c: Stone, thick: number, depth: number, facets: number, r: Rand): void {
+function emitLintel(
+  b: PartBuilder,
+  a: Stone,
+  c: Stone,
+  thick: number,
+  depth: number,
+  facets: number,
+  r: Rand,
+): void {
   const sphere = icosphere(2);
   const seed = Math.floor(r.next() * 1e6);
   const x = (a.x + c.x) / 2;
   const z = (a.z + c.z) / 2;
   const y = Math.min(a.height, c.height) * 0.97;
-  const span = Math.hypot(c.x - a.x, c.z - a.z) + Math.min(a.width, c.width) * 0.9;
+  const span =
+    Math.hypot(c.x - a.x, c.z - a.z) + Math.min(a.width, c.width) * 0.9;
   const yaw = Math.atan2(c.z - a.z, c.x - a.x);
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
   // It goes before either stone under it starts to give way.
-  const gives = (st: Stone): number => (st.decline.kind === "tilt" ? st.decline.from : st.decline.kind === "snap" ? st.decline.loss : 0);
+  const gives = (st: Stone): number =>
+    st.decline.kind === "tilt"
+      ? st.decline.from
+      : st.decline.kind === "snap"
+        ? st.decline.loss
+        : 0;
   const loss = Math.max(r.range(0.6, 0.7), gives(a) + 0.02, gives(c) + 0.02);
   const points: V3[] = sphere.points.map((n) => {
     const bump = 1 + 0.1 * fbm3(n[0] * 1.5, n[1] * 1.5, n[2] * 1.5, seed, 2);
-    const flat = (v: number): number => Math.sign(v) * Math.pow(Math.abs(v), 0.55 - 0.25 * facets);
+    const flat = (v: number): number =>
+      Math.sign(v) * Math.pow(Math.abs(v), 0.55 - 0.25 * facets);
     const lx = flat(n[0]) * bump * span * 0.5;
     const ly = flat(n[1]) * bump * thick * 0.5;
     const lz = flat(n[2]) * bump * depth * 0.5;
@@ -237,29 +412,73 @@ function emitLintel(b: PartBuilder, a: Stone, c: Stone, thick: number, depth: nu
   points.forEach((p, i) => {
     const n = normals[i] as V3;
     const mottle = fbm3(p[0] * 1.3, p[1] * 1.3, p[2] * 1.3, seed + 3, 3);
-    b.vertex(p, n, 0.5 + 0.16 * mottle + 0.08 * n[1], { loss, droop: 0, wither: clamp(0.6 + 0.3 * mottle, 0.2, 0.95), glow: 0, pivot, tint: 0.02 * mottle });
+    b.vertex(p, n, 0.5 + 0.16 * mottle + 0.08 * n[1], {
+      loss,
+      droop: 0,
+      wither: clamp(0.6 + 0.3 * mottle, 0.2, 0.95),
+      glow: 0,
+      pivot,
+      tint: 0.02 * mottle,
+    });
   });
-  for (const [i, j, k] of sphere.triangles) b.triangle(first + i, first + j, first + k);
+  for (const [i, j, k] of sphere.triangles)
+    b.triangle(first + i, first + j, first + k);
   // The fallen lintel lies outward of the gateway, where it slid off.
-  const out = Math.hypot(x, z) > 0.5 ? Math.atan2(z, x) : r.next() * Math.PI * 2;
+  const out =
+    Math.hypot(x, z) > 0.5 ? Math.atan2(z, x) : r.next() * Math.PI * 2;
   const reach = thick + 1.2 + r.next() * 1.2;
-  emitFallen(b, { x: x + Math.cos(out) * reach, z: z + Math.sin(out) * reach, yaw: yaw + r.range(-0.4, 0.4), width: depth, depth: thick, length: span * 0.9 }, facets, loss, r);
+  emitFallen(
+    b,
+    {
+      x: x + Math.cos(out) * reach,
+      z: z + Math.sin(out) * reach,
+      yaw: yaw + r.range(-0.4, 0.4),
+      width: depth,
+      depth: thick,
+      length: span * 0.9,
+    },
+    facets,
+    loss,
+    r,
+  );
 }
 
 /** How each stone of a group gives way, drawn from its own stream: about two in five lean, one in three snaps, the rest fall flat. */
 function declineOf(sr: Rand, lean: number): Decline {
   const kind = sr.next();
-  if (kind < 0.42) return { kind: "tilt", most: sr.range(0.18, 0.42), from: sr.range(0.38, 0.58) };
-  if (kind < 0.75) return { kind: "snap", at: sr.range(0.3, 0.55), loss: sr.range(0.3, 0.55) };
-  return { kind: "tilt", most: Math.PI / 2 - lean, from: sr.range(0.16, 0.34), flat: true };
+  if (kind < 0.42)
+    return {
+      kind: "tilt",
+      most: sr.range(0.18, 0.42),
+      from: sr.range(0.38, 0.58),
+    };
+  if (kind < 0.75)
+    return { kind: "snap", at: sr.range(0.3, 0.55), loss: sr.range(0.3, 0.55) };
+  return {
+    kind: "tilt",
+    most: Math.PI / 2 - lean,
+    from: sr.range(0.16, 0.34),
+    flat: true,
+  };
 }
 
 /**
  * A stone of the arrangement, its size jittered from the arrangement's, leaning and falling within `DOWNWIND` of
  * `downwind`. With `downwind` null, as under a dolmen's capstone, it leans any way.
  */
-function stoneAt(sr: Rand, x: number, z: number, yaw: number, size: { width: number; depth: number; height: number }, downwind: number | null, lean = 0): Stone {
-  const toward = downwind === null ? sr.next() * Math.PI * 2 : downwind + (sr.next() * 2 - 1) * DOWNWIND;
+function stoneAt(
+  sr: Rand,
+  x: number,
+  z: number,
+  yaw: number,
+  size: { width: number; depth: number; height: number },
+  downwind: number | null,
+  lean = 0,
+): Stone {
+  const toward =
+    downwind === null
+      ? sr.next() * Math.PI * 2
+      : downwind + (sr.next() * 2 - 1) * DOWNWIND;
   return {
     x,
     z,
@@ -287,7 +506,11 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   // Fallen pieces grow in only once they have fallen, and a person walks over them.
   const out = new PartBuilder("stone", "solid");
   const h = p.height * scale;
-  const size = { width: h * 0.42 * shape.breadth, depth: h * 0.22 * shape.breadth, height: h };
+  const size = {
+    width: h * 0.42 * shape.breadth,
+    depth: h * 0.22 * shape.breadth,
+    height: h,
+  };
   const count = Math.max(4, Math.round(p.count));
   const stones: Stone[] = [];
   const lintels: [number, number][] = [];
@@ -296,15 +519,28 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
 
   if (p.arrangement === "ring") {
     // The radius keeps at least three quarters of a stone's width between neighbors.
-    const ringR = Math.max(h * 1.1 * shape.spacing, (count * size.width * 1.75) / (Math.PI * 2));
+    const ringR = Math.max(
+      h * 1.1 * shape.spacing,
+      (count * size.width * 1.75) / (Math.PI * 2),
+    );
     const turn = r.next() * Math.PI * 2;
     for (let k = 0; k < count; k++) {
       const sr = r.fork(`stone${k}`);
       const a = turn + (k / count) * Math.PI * 2 + sr.range(-0.06, 0.06);
       // Faces turn toward the center, as in a real stone ring.
-      stones.push(stoneAt(sr, Math.cos(a) * ringR, Math.sin(a) * ringR, -a + Math.PI / 2, size, downwind));
+      stones.push(
+        stoneAt(
+          sr,
+          Math.cos(a) * ringR,
+          Math.sin(a) * ringR,
+          -a + Math.PI / 2,
+          size,
+          downwind,
+        ),
+      );
     }
-    if (p.lintels) for (let k = 0; k + 1 < count; k += 2) lintels.push([k, k + 1]);
+    if (p.lintels)
+      for (let k = 0; k + 1 < count; k += 2) lintels.push([k, k + 1]);
   } else if (p.arrangement === "avenue") {
     // Two facing rows, rising toward the head, which stands at +x.
     const pairs = Math.max(2, Math.round(count / 2));
@@ -316,9 +552,19 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       const grade = { ...size, height: h * (0.72 + 0.38 * t) };
       for (const side of [-1, 1]) {
         const sr = r.fork(`stone${k}-${side}`);
-        stones.push(stoneAt(sr, -length / 2 + k * spacing + sr.range(-0.2, 0.2), side * (across / 2 + sr.range(-0.15, 0.15)), 0, grade, downwind));
+        stones.push(
+          stoneAt(
+            sr,
+            -length / 2 + k * spacing + sr.range(-0.2, 0.2),
+            side * (across / 2 + sr.range(-0.15, 0.15)),
+            0,
+            grade,
+            downwind,
+          ),
+        );
       }
-      if (p.lintels && k % 2 === 1) lintels.push([stones.length - 2, stones.length - 1]);
+      if (p.lintels && k % 2 === 1)
+        lintels.push([stones.length - 2, stones.length - 1]);
     }
     center = [length / 2 + spacing * 1.1, 0];
   } else if (p.arrangement === "dolmen") {
@@ -329,8 +575,21 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
     const capW = capL * 0.66;
     const uprights = clamp(Math.round(count / 3), 3, 5);
     const legs: [number, number, number][] =
-      uprights === 3 ? [[-0.28, 0.3, Math.PI / 2], [0.28, 0.3, Math.PI / 2], [0, -0.36, 0]]
-      : [[-0.3, 0.3, Math.PI / 2], [0.3, 0.3, Math.PI / 2], [-0.3, -0.3, Math.PI / 2], [0.3, -0.3, Math.PI / 2], ...(uprights === 5 ? [[0, -0.42, 0] as [number, number, number]] : [])];
+      uprights === 3
+        ? [
+            [-0.28, 0.3, Math.PI / 2],
+            [0.28, 0.3, Math.PI / 2],
+            [0, -0.36, 0],
+          ]
+        : [
+            [-0.3, 0.3, Math.PI / 2],
+            [0.3, 0.3, Math.PI / 2],
+            [-0.3, -0.3, Math.PI / 2],
+            [0.3, -0.3, Math.PI / 2],
+            ...(uprights === 5
+              ? [[0, -0.42, 0] as [number, number, number]]
+              : []),
+          ];
     const legSize = { width: capW * 0.45, depth: legH * 0.28, height: legH };
     const firstLeg = stones.length;
     legs.forEach(([fx, fz, yaw], k) => {
@@ -338,16 +597,61 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       const s = stoneAt(sr, fx * capL, fz * capW, yaw, legSize, null);
       // The uprights on one side give way outward, and the capstone tips off after them.
       const gives = fx >= 0;
-      stones.push({ ...s, height: legH * sr.range(0.96, 1.04), toward: gives ? sr.range(-0.3, 0.3) : s.toward, decline: gives ? { kind: "tilt", most: sr.range(0.9, 1.25), from: sr.range(0.3, 0.38) } : { kind: "tilt", most: sr.range(0.08, 0.2), from: sr.range(0.36, 0.5) } });
+      stones.push({
+        ...s,
+        height: legH * sr.range(0.96, 1.04),
+        toward: gives ? sr.range(-0.3, 0.3) : s.toward,
+        decline: gives
+          ? {
+              kind: "tilt",
+              most: sr.range(0.9, 1.25),
+              from: sr.range(0.3, 0.38),
+            }
+          : {
+              kind: "tilt",
+              most: sr.range(0.08, 0.2),
+              from: sr.range(0.36, 0.5),
+            },
+      });
     });
-    emitCapstone(out, stones.slice(firstLeg), capL, capW, h * 0.2, p.facets, r.fork("capstone"));
+    emitCapstone(
+      out,
+      stones.slice(firstLeg),
+      capL,
+      capW,
+      h * 0.2,
+      p.facets,
+      r.fork("capstone"),
+    );
     const kerb = Math.round(count * 1.5);
     const kerbR = capL * 0.95;
     for (let k = 0; k < kerb; k++) {
       const sr = r.fork(`kerb${k}`);
       const a = (k / kerb) * Math.PI * 2 + sr.range(-0.05, 0.05);
-      const s = stoneAt(sr, Math.cos(a) * kerbR, Math.sin(a) * kerbR * 0.85, -a + Math.PI / 2, { width: h * 0.24 * shape.breadth, depth: h * 0.14 * shape.breadth, height: h * 0.2 }, downwind);
-      stones.push({ ...s, toward: a, decline: s.decline.kind === "snap" ? { kind: "tilt", most: sr.range(0.3, 0.7), from: sr.range(0.2, 0.5) } : s.decline });
+      const s = stoneAt(
+        sr,
+        Math.cos(a) * kerbR,
+        Math.sin(a) * kerbR * 0.85,
+        -a + Math.PI / 2,
+        {
+          width: h * 0.24 * shape.breadth,
+          depth: h * 0.14 * shape.breadth,
+          height: h * 0.2,
+        },
+        downwind,
+      );
+      stones.push({
+        ...s,
+        toward: a,
+        decline:
+          s.decline.kind === "snap"
+            ? {
+                kind: "tilt",
+                most: sr.range(0.3, 0.7),
+                from: sr.range(0.2, 0.5),
+              }
+            : s.decline,
+      });
     }
     center = [0, kerbR + 1.8];
   } else if (p.arrangement === "cairn field") {
@@ -361,7 +665,12 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       const tall = h * (k === 0 ? 1 : cr.range(0.45, 0.8));
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d;
-      if (placed.some(([px, pz, pr]) => Math.hypot(px - x, pz - z) < pr + tall * 0.6 + 0.8)) continue;
+      if (
+        placed.some(
+          ([px, pz, pr]) => Math.hypot(px - x, pz - z) < pr + tall * 0.6 + 0.8,
+        )
+      )
+        continue;
       placed.push([x, z, tall * 0.6]);
       emitCairn(out, x, z, tall, p.facets, cr);
       k++;
@@ -369,8 +678,13 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
     center = [spread * 0.9, 0];
   } else {
     // Lone menhirs scattered loosely, taller than a ring's, some already leaning.
-    const spread = Math.max(h * 1.3, Math.sqrt(count) * h * 0.75) * shape.spacing;
-    const tall = { width: size.width * 0.85, depth: size.depth * 1.1, height: h * 1.25 };
+    const spread =
+      Math.max(h * 1.3, Math.sqrt(count) * h * 0.75) * shape.spacing;
+    const tall = {
+      width: size.width * 0.85,
+      depth: size.depth * 1.1,
+      height: h * 1.25,
+    };
     for (let tries = 0; stones.length < count && tries < 300; tries++) {
       const sr = r.fork(`menhir${tries}`);
       const a = sr.next() * Math.PI * 2;
@@ -382,11 +696,23 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       stones.push(stoneAt(sr, x, z, sr.next() * Math.PI, tall, downwind, lean));
     }
     center = [0, 0];
-    if (stones.some((s) => Math.hypot(s.x, s.z) < h)) center = [spread + h * 0.6, 0];
+    if (stones.some((s) => Math.hypot(s.x, s.z) < h))
+      center = [spread + h * 0.6, 0];
   }
 
-  stones.forEach((s, k) => emitStone(out, s, p.facets, r.fork(`emit${k}`), s.height > h * 0.4 ? 3 : 2));
-  for (const [i, j] of lintels) emitLintel(out, stones[i] as Stone, stones[j] as Stone, h * 0.17, size.depth * 1.05, p.facets, r.fork(`lintel${i}`));
+  stones.forEach((s, k) =>
+    emitStone(out, s, p.facets, r.fork(`emit${k}`), s.height > h * 0.4 ? 3 : 2),
+  );
+  for (const [i, j] of lintels)
+    emitLintel(
+      out,
+      stones[i] as Stone,
+      stones[j] as Stone,
+      h * 0.17,
+      size.depth * 1.05,
+      p.facets,
+      r.fork(`lintel${i}`),
+    );
 
   if (p.centre !== "nothing" && p.arrangement !== "dolmen") {
     const cr = r.fork("centre");
@@ -400,7 +726,9 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       height: king ? h * 1.55 : h * 0.3,
       toward: downwind + (cr.next() * 2 - 1) * DOWNWIND,
       lean: king ? cr.range(0, 0.06) : 0,
-      decline: king ? { kind: "tilt", most: cr.range(0.25, 0.4), from: cr.range(0.28, 0.4) } : { kind: "firm" },
+      decline: king
+        ? { kind: "tilt", most: cr.range(0.25, 0.4), from: cr.range(0.28, 0.4) }
+        : { kind: "firm" },
     };
     emitStone(out, centre, p.facets, cr, 3);
   }
@@ -412,9 +740,23 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
  * one side give way outward, it tips about the other side's tops until its
  * edge rests on the ground.
  */
-function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, width: number, thick: number, facets: number, r: Rand): void {
+function emitCapstone(
+  b: PartBuilder,
+  legs: readonly Stone[],
+  length: number,
+  width: number,
+  thick: number,
+  facets: number,
+  r: Rand,
+): void {
   const top = Math.min(...legs.map((l) => l.height)) * 0.98;
-  const shape = slabShape({ width: length, depth: width, height: thick }, facets, 0, r, 3);
+  const shape = slabShape(
+    { width: length, depth: width, height: thick },
+    facets,
+    0,
+    r,
+    3,
+  );
   // The slab's own frame is upright. Turn it to lie flat, with its thickness upward.
   const yaw = r.range(-0.08, 0.08);
   const c = Math.cos(yaw);
@@ -425,19 +767,37 @@ function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, wi
   });
   const normals = smoothNormals(points, shape.triangles);
   const standing = legs.filter((l) => l.x < 0);
-  const hingeX = Math.max(...standing.map((l) => l.x + l.depth * 0.5), -length * 0.25);
+  const hingeX = Math.max(
+    ...standing.map((l) => l.x + l.depth * 0.5),
+    -length * 0.25,
+  );
   const hinge: V3 = [hingeX, top, 0];
   // It tips about the standing side until its far edge lies on the ground.
   const tip = restAngle(points, hinge, [0, 0, -1], -0.05);
-  const from = Math.max(...legs.filter((l) => l.x >= 0).map((l) => (l.decline.kind === "tilt" ? l.decline.from : 0)), 0.3) + 0.02;
+  const from =
+    Math.max(
+      ...legs
+        .filter((l) => l.x >= 0)
+        .map((l) => (l.decline.kind === "tilt" ? l.decline.from : 0)),
+      0.3,
+    ) + 0.02;
   const first = b.vertexCount;
   points.forEach((p, i) => {
     const n = normals[i] as V3;
     const mottle = fbm3(p[0] * 1.1, p[1] * 1.1, p[2] * 1.1, shape.seed + 3, 3);
-    const ch: Channels = { loss: 0, droop: 0, wither: clamp(0.6 + 0.3 * mottle, 0.2, 0.95), glow: 0, pivot: hinge, tint: 0.025 * mottle, fall: [0, 0, -tip, from] };
+    const ch: Channels = {
+      loss: 0,
+      droop: 0,
+      wither: clamp(0.6 + 0.3 * mottle, 0.2, 0.95),
+      glow: 0,
+      pivot: hinge,
+      tint: 0.025 * mottle,
+      fall: [0, 0, -tip, from],
+    };
     b.vertex(p, n, 0.5 + 0.14 * mottle + 0.1 * n[1], ch);
   });
-  for (const [i, j, k] of shape.triangles) b.triangle(first + i, first + j, first + k);
+  for (const [i, j, k] of shape.triangles)
+    b.triangle(first + i, first + j, first + k);
 }
 
 /**
@@ -446,7 +806,14 @@ function emitCapstone(b: PartBuilder, legs: readonly Stone[], length: number, wi
  * tumble first and come to rest round its foot. A stone never outlasts the
  * stones it rests on, so none is left above a gap.
  */
-function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: number, r: Rand): void {
+function emitCairn(
+  b: PartBuilder,
+  x: number,
+  z: number,
+  tall: number,
+  facets: number,
+  r: Rand,
+): void {
   const base = tall * 0.55;
   const stone = clamp(tall * 0.13, 0.2, 0.45);
   // Bedded courses rise about 0.62 of a stone each.
@@ -454,7 +821,8 @@ function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: n
   /** The distance from the pile's center to where its slope meets the ground. */
   const slope = base + stone * 0.3;
   /** The stones of the course below: where each stands, how wide, its top and its threshold. */
-  let below: { x: number; z: number; s: number; top: number; loss: number }[] = [];
+  let below: { x: number; z: number; s: number; top: number; loss: number }[] =
+    [];
   for (let row = 0; row < rows; row++) {
     const t = row / rows;
     const rad = base * Math.pow(1 - t, 0.8) + stone * 0.3;
@@ -469,14 +837,33 @@ function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: n
       const ry = s * (0.78 - 0.12 * facets);
       // It rests on the stones under it, sunk a little into the course below,
       // and as it goes it slides down the pile's slope into them.
-      const under = below.filter((o) => Math.hypot(o.x - sx, o.z - sz) < (o.s + s) * 0.95);
+      const under = below.filter(
+        (o) => Math.hypot(o.x - sx, o.z - sz) < (o.s + s) * 0.95,
+      );
       if (row > 0 && under.length === 0) continue;
-      const foot = row === 0 ? 0 : Math.min(...under.map((o) => o.top)) - ry * 0.35;
+      const foot =
+        row === 0 ? 0 : Math.min(...under.map((o) => o.top)) - ry * 0.35;
       const own = row < 2 ? 0 : lossThreshold(t * r.range(0.7, 1), 0.62, 0.05);
-      const loss = row < 2 ? 0 : clamp(Math.max(own, ...under.map((o) => o.loss)), 0, 0.7);
+      const loss =
+        row < 2 ? 0 : clamp(Math.max(own, ...under.map((o) => o.loss)), 0, 0.7);
       // A flat-bottomed lump: its bottom sits 0.4 of its height below its center.
       const at: V3 = [sx, foot + ry * 0.4 * 0.8, sz];
-      lump(b, at, [s, ry, s * 0.85], a, 0.5 + 0.2 * r.next() + 0.08 * t, { loss, droop: 0, wither: 0.4 + 0.4 * r.next(), glow: 0, pivot: [x + Math.cos(a) * slope, 0, z + Math.sin(a) * slope], tint: (r.next() - 0.5) * 0.05 }, r);
+      lump(
+        b,
+        at,
+        [s, ry, s * 0.85],
+        a,
+        0.5 + 0.2 * r.next() + 0.08 * t,
+        {
+          loss,
+          droop: 0,
+          wither: 0.4 + 0.4 * r.next(),
+          glow: 0,
+          pivot: [x + Math.cos(a) * slope, 0, z + Math.sin(a) * slope],
+          tint: (r.next() - 0.5) * 0.05,
+        },
+        r,
+      );
       course.push({ x: sx, z: sz, s, top: at[1] + ry * 0.8, loss });
     }
     if (course.length === 0) break;
@@ -488,6 +875,14 @@ function emitCairn(b: PartBuilder, x: number, z: number, tall: number, facets: n
     const d = base + stone + r.next() * tall * 0.5;
     const s = stone * r.range(0.7, 1.1);
     const at: V3 = [x + Math.cos(a) * d, s * 0.12, z + Math.sin(a) * d];
-    lump(b, at, [s, s * 0.55, s * 0.8], a, 0.45 + 0.15 * r.next(), still([at[0], 0, at[2]], 0.6, { grow: r.range(0.12, 0.5) }), r);
+    lump(
+      b,
+      at,
+      [s, s * 0.55, s * 0.8],
+      a,
+      0.45 + 0.15 * r.next(),
+      still([at[0], 0, at[2]], 0.6, { grow: r.range(0.12, 0.5) }),
+      r,
+    );
   }
 }

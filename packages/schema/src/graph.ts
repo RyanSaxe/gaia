@@ -92,7 +92,17 @@ export interface BlockNode extends NodeBase {
   readonly depth: number;
 }
 
-export type BlockShape = "branch" | "loop" | "match" | "try" | "closure" | "scope" | "concurrent" | "unsafe" | "data" | "markup";
+export type BlockShape =
+  | "branch"
+  | "loop"
+  | "match"
+  | "try"
+  | "closure"
+  | "scope"
+  | "concurrent"
+  | "unsafe"
+  | "data"
+  | "markup";
 
 /** What the engine counts: every node's lines, and a file's or directory's history from git. */
 export interface Measures {
@@ -138,7 +148,9 @@ export interface GraphEdge {
 export type EdgeKind = "imports" | "calls" | "references" | "implements";
 
 /** Who filled an edge. A rule is certain, and Jev's answer includes its probability. */
-export type Filled = { readonly by: "rule" } | { readonly by: "jev"; readonly call: string; readonly p: number };
+export type Filled =
+  | { readonly by: "rule" }
+  | { readonly by: "jev"; readonly call: string; readonly p: number };
 
 export interface PendingRef {
   readonly from: NodeId;

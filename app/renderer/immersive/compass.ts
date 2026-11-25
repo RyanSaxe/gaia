@@ -23,11 +23,17 @@ const STEP = 1 / 240;
  * radians clockwise from up, always the short way around.
  */
 export function swing(needle: Needle, bearing: number, dt: number): void {
-  const target = needle.angle + ((((bearing - needle.angle) % TAU) + TAU * 1.5) % TAU) - Math.PI;
+  const target =
+    needle.angle +
+    ((((bearing - needle.angle) % TAU) + TAU * 1.5) % TAU) -
+    Math.PI;
   const { rate, damping } = NEEDLE;
   for (let left = dt; left > 1e-9; left -= STEP) {
     const h = Math.min(left, STEP);
-    needle.speed += (-2 * damping * rate * needle.speed - rate * rate * (needle.angle - target)) * h;
+    needle.speed +=
+      (-2 * damping * rate * needle.speed -
+        rate * rate * (needle.angle - target)) *
+      h;
     needle.angle += needle.speed * h;
   }
 }
@@ -36,7 +42,14 @@ const INK = "#4a3c2c";
 const PAPER = "#f4ecd6";
 
 /** One point of the needle as SVG, with a dark half and a light half, as the field map draws its rose. */
-function point(length: number, half: number, turn: number, dark: string, light: string, line: string): string {
+function point(
+  length: number,
+  half: number,
+  turn: number,
+  dark: string,
+  light: string,
+  line: string,
+): string {
   return `<g transform="rotate(${turn})"><path d="M0 ${-length} L${-half} ${-half} L0 0Z" fill="${dark}" stroke="${line}" stroke-width=".5" stroke-linejoin="round"/><path d="M0 ${-length} L${half} ${-half} L0 0Z" fill="${light}" stroke="${line}" stroke-width=".5" stroke-linejoin="round"/></g>`;
 }
 
@@ -47,7 +60,12 @@ function disc(radius: number, wander: number): string {
   let d = "";
   for (let i = 0; i < 96; i++) {
     const a = (i / 96) * TAU;
-    const k = radius + wander * (0.6 * Math.sin(a * 7 + (phase[0] as number)) + 0.4 * Math.sin(a * 17 + (phase[1] as number))) + (r.next() - 0.5) * wander * 0.8;
+    const k =
+      radius +
+      wander *
+        (0.6 * Math.sin(a * 7 + (phase[0] as number)) +
+          0.4 * Math.sin(a * 17 + (phase[1] as number))) +
+      (r.next() - 0.5) * wander * 0.8;
     d += `${i === 0 ? "M" : "L"}${(Math.sin(a) * k).toFixed(2)} ${(-Math.cos(a) * k).toFixed(2)}`;
   }
   return `${d}Z`;
@@ -102,6 +120,10 @@ export function createCompass(button: HTMLElement): Compass {
       const degrees = ((((needle.angle * 180) / Math.PI) % 360) + 360) % 360;
       svg.style.transform = `rotate(${degrees.toFixed(2)}deg)`;
     },
-    state: () => ({ needle: +(((((needle.angle * 180) / Math.PI) % 360) + 360) % 360).toFixed(1) }),
+    state: () => ({
+      needle: +(((((needle.angle * 180) / Math.PI) % 360) + 360) % 360).toFixed(
+        1,
+      ),
+    }),
   };
 }

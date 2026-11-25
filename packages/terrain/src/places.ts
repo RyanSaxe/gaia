@@ -8,12 +8,25 @@ import type { CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
 import { siteAt } from "./land.ts";
 import { type LandOutline, pastTheEdge } from "./edge.ts";
 
-export type { AreaPlace, CellPlace, PatchPlace, WorldPlaces } from "@gaia/schema";
+export type {
+  AreaPlace,
+  CellPlace,
+  PatchPlace,
+  WorldPlaces,
+} from "@gaia/schema";
 
 /** The directory area a point belongs to, and the file patch it is on, if any. */
 export interface Place {
-  readonly area: { readonly path: string; readonly name: string; readonly depth: number };
-  readonly file: { readonly path: string; readonly name: string; readonly vitality: number } | null;
+  readonly area: {
+    readonly path: string;
+    readonly name: string;
+    readonly depth: number;
+  };
+  readonly file: {
+    readonly path: string;
+    readonly name: string;
+    readonly vitality: number;
+  } | null;
 }
 
 /** A directory's area of land. `depth` is 0 for the repository's root and -1 for the wild. */
@@ -29,7 +42,8 @@ export function pastTheLand(land: LandOutline, x: number, z: number): boolean {
 
 /** Side in meters of a patch bucket. */
 const BUCKET = 8;
-const bucketKey = (bx: number, bz: number): number => (bx + 32768) * 65536 + (bz + 32768);
+const bucketKey = (bx: number, bz: number): number =>
+  (bx + 32768) * 65536 + (bz + 32768);
 
 type Area = WorldPlaces["areas"][number];
 /** A lookup index: disc patches by bucket, patches and areas by path, and the root area. */
@@ -45,8 +59,16 @@ function indexOf(world: WorldPlaces): Index {
   if (index !== undefined) return index;
   const buckets = new Map<number, number[]>();
   world.patches.forEach((p, i) => {
-    for (let bx = Math.floor((p.x - p.radius) / BUCKET); bx <= Math.floor((p.x + p.radius) / BUCKET); bx++) {
-      for (let bz = Math.floor((p.z - p.radius) / BUCKET); bz <= Math.floor((p.z + p.radius) / BUCKET); bz++) {
+    for (
+      let bx = Math.floor((p.x - p.radius) / BUCKET);
+      bx <= Math.floor((p.x + p.radius) / BUCKET);
+      bx++
+    ) {
+      for (
+        let bz = Math.floor((p.z - p.radius) / BUCKET);
+        bz <= Math.floor((p.z + p.radius) / BUCKET);
+        bz++
+      ) {
         const key = bucketKey(bx, bz);
         const list = buckets.get(key);
         if (list === undefined) buckets.set(key, [i]);
@@ -65,10 +87,17 @@ function indexOf(world: WorldPlaces): Index {
 }
 
 /** The disc patch under (x, z), for a world whose cells name no files. */
-function discAt(world: WorldPlaces, index: Index, x: number, z: number): Place["file"] {
+function discAt(
+  world: WorldPlaces,
+  index: Index,
+  x: number,
+  z: number,
+): Place["file"] {
   let file: Place["file"] = null;
   let nearest = Infinity;
-  for (const i of index.buckets.get(bucketKey(Math.floor(x / BUCKET), Math.floor(z / BUCKET))) ?? []) {
+  for (const i of index.buckets.get(
+    bucketKey(Math.floor(x / BUCKET), Math.floor(z / BUCKET)),
+  ) ?? []) {
     const p = world.patches[i] as PatchPlace;
     // Take the patch with the least distance over radius, so a small patch inside a large one's edge still wins.
     const d = Math.hypot(x - p.x, z - p.z) / p.radius;
@@ -92,14 +121,25 @@ export function placeAt(world: WorldPlaces, x: number, z: number): Place {
   const index = indexOf(world);
   const k = cellUnder(world, x, z);
   const cell = k < 0 ? undefined : (world.cells[k] as CellPlace);
-  const area = (cell === undefined ? undefined : index.byPath.get(cell.area)) ?? index.root;
+  const area =
+    (cell === undefined ? undefined : index.byPath.get(cell.area)) ??
+    index.root;
   let file: Place["file"];
   if (cell?.file === undefined) file = discAt(world, index, x, z);
   else {
     const p = cell.file === null ? undefined : index.patches.get(cell.file);
-    file = p === undefined ? null : { path: p.path, name: p.name, vitality: p.vitality };
+    file =
+      p === undefined
+        ? null
+        : { path: p.path, name: p.name, vitality: p.vitality };
   }
-  return { area: area === undefined ? { path: "", name: world.name, depth: 0 } : { path: area.path, name: area.name, depth: area.depth }, file };
+  return {
+    area:
+      area === undefined
+        ? { path: "", name: world.name, depth: 0 }
+        : { path: area.path, name: area.name, depth: area.depth },
+    file,
+  };
 }
 
 /** One area's or patch's outline: closed rings of world points, [x0, z0, x1, z1, …], softened. */
@@ -155,7 +195,12 @@ function soften(points: readonly number[]): number[] {
       const az = pts[k * 2 + 1] as number;
       const bx = pts[((k + 1) % count) * 2] as number;
       const bz = pts[((k + 1) % count) * 2 + 1] as number;
-      out.push(ax * 0.75 + bx * 0.25, az * 0.75 + bz * 0.25, ax * 0.25 + bx * 0.75, az * 0.25 + bz * 0.75);
+      out.push(
+        ax * 0.75 + bx * 0.25,
+        az * 0.75 + bz * 0.25,
+        ax * 0.25 + bx * 0.75,
+        az * 0.25 + bz * 0.75,
+      );
     }
     pts = out;
   }
@@ -198,31 +243,50 @@ function traceOutlines(world: WorldPlaces, step: number): Outlines {
     box[2] = Math.max(box[2] as number, i);
     box[3] = Math.max(box[3] as number, j);
   };
-  const parentOf = world.areas.map((a) => areaIndex.get(a.parent ?? "\u0000") ?? -1);
+  const parentOf = world.areas.map(
+    (a) => areaIndex.get(a.parent ?? "\u0000") ?? -1,
+  );
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
-      const place = placeAt(world, x0 + (i + 0.5) * step, x0 + (j + 0.5) * step);
+      const place = placeAt(
+        world,
+        x0 + (i + 0.5) * step,
+        x0 + (j + 0.5) * step,
+      );
       if (place.area.depth < 0) continue;
       const a = areaIndex.get(place.area.path) ?? -1;
       areaAt[j * n + i] = a;
       for (let k = a; k >= 0; k = parentOf[k] as number) grow(areaBox[k], i, j);
-      const p = place.file === null ? -1 : (patchIndex.get(place.file.path) ?? -1);
+      const p =
+        place.file === null ? -1 : (patchIndex.get(place.file.path) ?? -1);
       patchAt[j * n + i] = p;
       grow(patchBox[p], i, j);
     }
   }
   const corner = (i: number, j: number): number => j * (n + 1) + i;
-  const toWorld = (ring: readonly number[]): number[] => soften(ring.flatMap((c) => [x0 + (c % (n + 1)) * step, x0 + Math.floor(c / (n + 1)) * step]));
+  const toWorld = (ring: readonly number[]): number[] =>
+    soften(
+      ring.flatMap((c) => [
+        x0 + (c % (n + 1)) * step,
+        x0 + Math.floor(c / (n + 1)) * step,
+      ]),
+    );
   // Chain the raster edges between samples inside and outside an outline into rings.
-  const trace = (box: readonly number[], holds: (k: number) => boolean): number[][] => {
+  const trace = (
+    box: readonly number[],
+    holds: (k: number) => boolean,
+  ): number[][] => {
     const edges: number[] = [];
-    const inside = (i: number, j: number): boolean => i >= 0 && j >= 0 && i < n && j < n && holds(j * n + i);
+    const inside = (i: number, j: number): boolean =>
+      i >= 0 && j >= 0 && i < n && j < n && holds(j * n + i);
     for (let j = box[1] as number; j <= (box[3] as number); j++) {
       for (let i = box[0] as number; i <= (box[2] as number); i++) {
         if (!inside(i, j)) continue;
         if (!inside(i, j - 1)) edges.push(corner(i, j), corner(i + 1, j));
-        if (!inside(i + 1, j)) edges.push(corner(i + 1, j), corner(i + 1, j + 1));
-        if (!inside(i, j + 1)) edges.push(corner(i + 1, j + 1), corner(i, j + 1));
+        if (!inside(i + 1, j))
+          edges.push(corner(i + 1, j), corner(i + 1, j + 1));
+        if (!inside(i, j + 1))
+          edges.push(corner(i + 1, j + 1), corner(i, j + 1));
         if (!inside(i - 1, j)) edges.push(corner(i, j + 1), corner(i, j));
       }
     }
@@ -230,7 +294,7 @@ function traceOutlines(world: WorldPlaces, step: number): Outlines {
   };
   const within = world.areas.map((a) => {
     const set = new Set<number>();
-    for (let p: string | null = a.path; p !== null; ) {
+    for (let p: string | null = a.path; p !== null;) {
       const k = areaIndex.get(p);
       if (k === undefined) break;
       set.add(k);
@@ -238,7 +302,23 @@ function traceOutlines(world: WorldPlaces, step: number): Outlines {
     }
     return set;
   });
-  const areas = world.areas.map((a, ai) => ({ path: a.path, depth: a.depth, rings: trace(areaBox[ai] as number[], (k) => (areaAt[k] as number) >= 0 && (within[areaAt[k] as number] as Set<number>).has(ai)) }));
-  const patches = world.patches.map((p, pi) => ({ path: p.path, depth: (world.areas[areaIndex.get(p.area) ?? -1]?.depth ?? 0) + 1, rings: trace(patchBox[pi] as number[], (k) => patchAt[k] === pi) }));
-  return { areas: areas.filter((a) => a.rings.length > 0), patches: patches.filter((p) => p.rings.length > 0) };
+  const areas = world.areas.map((a, ai) => ({
+    path: a.path,
+    depth: a.depth,
+    rings: trace(
+      areaBox[ai] as number[],
+      (k) =>
+        (areaAt[k] as number) >= 0 &&
+        (within[areaAt[k] as number] as Set<number>).has(ai),
+    ),
+  }));
+  const patches = world.patches.map((p, pi) => ({
+    path: p.path,
+    depth: (world.areas[areaIndex.get(p.area) ?? -1]?.depth ?? 0) + 1,
+    rings: trace(patchBox[pi] as number[], (k) => patchAt[k] === pi),
+  }));
+  return {
+    areas: areas.filter((a) => a.rings.length > 0),
+    patches: patches.filter((p) => p.rings.length > 0),
+  };
 }

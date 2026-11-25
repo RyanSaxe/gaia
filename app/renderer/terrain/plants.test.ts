@@ -13,14 +13,20 @@ describe("one build for each blueprint", () => {
     code.layout.symbols.forEach((sym, k) => {
       if (sym.rule === AS_THING) return;
       small++;
-      const builds = code.naturalBuilds[sym.rule as keyof typeof code.naturalBuilds];
-      expect(builds[sym.variant]?.id, `symbol ${k}`).toBe(things[k]?.blueprint?.id);
+      const builds =
+        code.naturalBuilds[sym.rule as keyof typeof code.naturalBuilds];
+      expect(builds[sym.variant]?.id, `symbol ${k}`).toBe(
+        things[k]?.blueprint?.id,
+      );
     });
     expect(small).toBeGreaterThan(0);
   });
 
   it("seeds a build by its blueprint's content alone, so it builds the same in any world", () => {
-    const [a, b] = code.naturalBuilds.trees as [NonNullable<(typeof code.naturalBuilds.trees)[number]>, NonNullable<(typeof code.naturalBuilds.trees)[number]>];
+    const [a, b] = code.naturalBuilds.trees as [
+      NonNullable<(typeof code.naturalBuilds.trees)[number]>,
+      NonNullable<(typeof code.naturalBuilds.trees)[number]>,
+    ];
     expect(plantAsk(structuredClone(a))).toEqual(plantAsk(a));
     expect(plantAsk(a).seed).not.toBe(plantAsk(b).seed);
   });

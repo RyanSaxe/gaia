@@ -26,7 +26,16 @@ export interface PlacedDef {
 }
 
 /** Roles that are not placed in the world: plain values, stylesheet rules, sections, keys and markup. */
-const NOT_STANDING = new Set(["rule", "section", "key", "element", "property", "field", "variable", "constant"]);
+const NOT_STANDING = new Set([
+  "rule",
+  "section",
+  "key",
+  "element",
+  "property",
+  "field",
+  "variable",
+  "constant",
+]);
 
 const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
   function: "function",
@@ -43,39 +52,66 @@ const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
   namespace: "module",
 };
 
-
-
 /**
  * Each file's placed definitions by path, in source order, with each
  * definition before the ones inside it. With a graph, every definition in it
  * is placed. Without one, the facts' top-level symbols are.
  */
-export function definitionsOf(facts: CodeFacts, graph?: CodeGraph): ReadonlyMap<string, readonly PlacedDef[]> {
+export function definitionsOf(
+  facts: CodeFacts,
+  graph?: CodeGraph,
+): ReadonlyMap<string, readonly PlacedDef[]> {
   const files = new Map(facts.files.map((f) => [f.path, f]));
   const out = new Map<string, PlacedDef[]>();
   if (graph === undefined) {
     for (const f of files.values()) {
-      const defs = f.symbols.map((s): PlacedDef => ({ id: `${f.path}#${s.name}`, file: f.path, name: s.name, kind: s.kind, exported: s.exported, line: s.line ?? 0, lines: s.lines ?? 1 }));
-      if (defs.length > 0) out.set(f.path, defs.sort((a, b) => a.line - b.line || (a.id < b.id ? -1 : 1)));
+      const defs = f.symbols.map((s): PlacedDef => ({
+        id: `${f.path}#${s.name}`,
+        file: f.path,
+        name: s.name,
+        kind: s.kind,
+        exported: s.exported,
+        line: s.line ?? 0,
+        lines: s.lines ?? 1,
+      }));
+      if (defs.length > 0)
+        out.set(
+          f.path,
+          defs.sort((a, b) => a.line - b.line || (a.id < b.id ? -1 : 1)),
+        );
     }
     return out;
   }
-  const pathOf = new Map(graph.nodes.flatMap((n) => (n.kind === "file" ? [[n.id, n.path] as const] : [])));
-  const every = new Map(graph.nodes.flatMap((n) => (n.kind === "def" ? [[n.id, n] as const] : [])));
-  const nodes = [...every.values()].filter((n) => !NOT_STANDING.has(n.role) && files.has(pathOf.get(n.file) ?? ""));
+  const pathOf = new Map(
+    graph.nodes.flatMap((n) =>
+      n.kind === "file" ? [[n.id, n.path] as const] : [],
+    ),
+  );
+  const every = new Map(
+    graph.nodes.flatMap((n) => (n.kind === "def" ? [[n.id, n] as const] : [])),
+  );
+  const nodes = [...every.values()].filter(
+    (n) => !NOT_STANDING.has(n.role) && files.has(pathOf.get(n.file) ?? ""),
+  );
   const kept = new Set(nodes.map((n) => n.id));
-  const idOf = (n: DefNode): string => `${pathOf.get(n.file) as string}#${n.id.slice(n.id.indexOf("#") + 1)}`;
+  const idOf = (n: DefNode): string =>
+    `${pathOf.get(n.file) as string}#${n.id.slice(n.id.indexOf("#") + 1)}`;
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  for (const n of nodes.sort((a, b) => a.span.start - b.span.start || (a.id < b.id ? -1 : 1))) {
+  for (const n of nodes.sort(
+    (a, b) => a.span.start - b.span.start || (a.id < b.id ? -1 : 1),
+  )) {
     const path = pathOf.get(n.file) as string;
     // A definition inside an unplaced one, such as an arrow function assigned to a constant, takes the nearest placed ancestor as parent.
     let parent = n.parent;
-    while (parent !== undefined && !kept.has(parent)) parent = every.get(parent)?.parent;
+    while (parent !== undefined && !kept.has(parent))
+      parent = every.get(parent)?.parent;
     const importance = n.judged?.value?.importance ?? undefined;
     const def: PlacedDef = {
       id: idOf(n),
       file: path,
-      ...(parent === undefined ? {} : { parent: idOf(byId.get(parent) as DefNode) }),
+      ...(parent === undefined
+        ? {}
+        : { parent: idOf(byId.get(parent) as DefNode) }),
       name: n.name,
       kind: KIND_OF_ROLE[n.role] ?? "function",
       exported: n.exported,

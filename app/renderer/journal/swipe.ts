@@ -11,7 +11,10 @@ export const SWIPE = { reach: 40, rest: 200 } as const;
  * other way. The rest of that gesture returns null until `rest` ms pass with
  * no event.
  */
-export function swipes(reach: number = SWIPE.reach, rest: number = SWIPE.rest): (dx: number, dy: number, at: number) => 1 | -1 | null {
+export function swipes(
+  reach: number = SWIPE.reach,
+  rest: number = SWIPE.rest,
+): (dx: number, dy: number, at: number) => 1 | -1 | null {
   let sum = 0;
   let last = Number.NEGATIVE_INFINITY;
   let turned = false;

@@ -27,9 +27,7 @@ fn main() -> ExitCode {
             }
         },
         _ => {
-            eprintln!(
-                "usage: gaia-engine --version | gaia-engine rpc"
-            );
+            eprintln!("usage: gaia-engine --version | gaia-engine rpc");
             ExitCode::from(2)
         }
     }

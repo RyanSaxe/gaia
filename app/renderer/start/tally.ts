@@ -10,10 +10,34 @@ import { PENCIL } from "../wait/map-wait.ts";
 /** The most commits the tally draws as strokes, six groups of five. Past it, one stroke per commit is no longer readable, so the card shows only the number. */
 export const TALLY_MOST = 30;
 
-const ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const ONES = [
+  "",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+];
 const TENS = ["", "", "twenty", "thirty"];
 /** Spells a count below 40 in words. */
-const inWords = (n: number): string => (n < 20 ? (ONES[n] as string) : `${TENS[Math.floor(n / 10)] as string}${n % 10 === 0 ? "" : `-${ONES[n % 10] as string}`}`);
+const inWords = (n: number): string =>
+  n < 20
+    ? (ONES[n] as string)
+    : `${TENS[Math.floor(n / 10)] as string}${n % 10 === 0 ? "" : `-${ONES[n % 10] as string}`}`;
 
 /**
  * The card's two lines of text: the number of commits since the person last opened the world, in words up to
@@ -24,7 +48,10 @@ export function tallyWords(commits: number | null): readonly [string, string] {
   const since = "since you last opened it";
   if (commits === null) return ["the code has changed", since];
   if (commits === 1) return ["one commit", since];
-  return [`${commits <= TALLY_MOST ? inWords(commits) : commits.toLocaleString("en")} commits`, since];
+  return [
+    `${commits <= TALLY_MOST ? inWords(commits) : commits.toLocaleString("en")} commits`,
+    since,
+  ];
 }
 
 /**
@@ -32,21 +59,44 @@ export function tallyWords(commits: number | null): readonly [string, string] {
  * and lines, and the text size. The text shrinks only to keep its longer line within the `wide` share of the card's
  * width. With six worlds on the table a card is a few centimeters wide, and the text is still readable.
  */
-const TALLY = { stroke: 0.3, width: 0.016, apart: 0.05, gate: 0.09, gap: 0.08, line: 0.16, leading: 1.25, wide: 0.86 } as const;
+const TALLY = {
+  stroke: 0.3,
+  width: 0.016,
+  apart: 0.05,
+  gate: 0.09,
+  gap: 0.08,
+  line: 0.16,
+  leading: 1.25,
+  wide: 0.86,
+} as const;
 
 /** A paper-toned halo drawn under the tally on a painting, so the strokes and text stand out from the paint. */
-const PAPER_ROUND = { color: "rgba(241, 231, 207, 0.78)", widen: 3.2, blur: 0.012 } as const;
+const PAPER_ROUND = {
+  color: "rgba(241, 231, 207, 0.78)",
+  widen: 3.2,
+  blur: 0.012,
+} as const;
 
 /**
  * Draws the tally for `commits`, centered on the `w` by `h` card face at (`x`, `y`) in `c`, with the text below it.
  * The same `seed` gives the same strokes. Past `TALLY_MOST` commits, or when `commits` is null, only the text is drawn.
  * With `onPaint`, the face is a painting, so the paper-toned halo is drawn first.
  */
-export function drawTally(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, commits: number | null, seed: string, onPaint = false): void {
+export function drawTally(
+  c: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  commits: number | null,
+  seed: string,
+  onPaint = false,
+): void {
   const [first, second] = tallyWords(commits);
   c.save();
   c.font = `italic 100px ${SERIF}`;
-  const widest = Math.max(c.measureText(first).width, c.measureText(second).width) / 100;
+  const widest =
+    Math.max(c.measureText(first).width, c.measureText(second).width) / 100;
   const line = Math.min(TALLY.line * h, (TALLY.wide * w) / widest);
   const counted = commits !== null && commits <= TALLY_MOST ? commits : 0;
   const head = counted > 0 ? (TALLY.stroke + TALLY.gap) * h : 0;
@@ -76,10 +126,22 @@ export function drawTally(c: CanvasRenderingContext2D, x: number, y: number, w: 
           }
         };
         for (let k = 0; k < Math.min(4, n); k++) {
-          const sx = left + k * TALLY.apart * h + r.range(-0.08, 0.08) * TALLY.apart * h;
-          pass(sx, top + r.range(0, 0.06) * TALLY.stroke * h, sx + r.range(-0.12, 0.04) * TALLY.apart * h, top + TALLY.stroke * h * r.range(0.94, 1));
+          const sx =
+            left + k * TALLY.apart * h + r.range(-0.08, 0.08) * TALLY.apart * h;
+          pass(
+            sx,
+            top + r.range(0, 0.06) * TALLY.stroke * h,
+            sx + r.range(-0.12, 0.04) * TALLY.apart * h,
+            top + TALLY.stroke * h * r.range(0.94, 1),
+          );
         }
-        if (n === 5) pass(left - 0.5 * TALLY.apart * h, top + TALLY.stroke * h * 0.78, left + 3.5 * TALLY.apart * h, top + TALLY.stroke * h * 0.2);
+        if (n === 5)
+          pass(
+            left - 0.5 * TALLY.apart * h,
+            top + TALLY.stroke * h * 0.78,
+            left + 3.5 * TALLY.apart * h,
+            top + TALLY.stroke * h * 0.2,
+          );
         left += 3 * TALLY.apart * h + TALLY.gate * h;
       }
     }

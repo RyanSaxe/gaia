@@ -29,7 +29,14 @@ export interface Capture {
    * inside `bounds`. Every draw happens before it returns, and only the
    * read-back waits.
    */
-  shoot(scene: THREE.Scene, camera: THREE.PerspectiveCamera, ground: readonly THREE.Object3D[], bounds: CaptureBounds, width: number, height: number): Promise<{ color: Pixels; mask: Pixels }>;
+  shoot(
+    scene: THREE.Scene,
+    camera: THREE.PerspectiveCamera,
+    ground: readonly THREE.Object3D[],
+    bounds: CaptureBounds,
+    width: number,
+    height: number,
+  ): Promise<{ color: Pixels; mask: Pixels }>;
   dispose(): void;
 }
 
@@ -71,13 +78,19 @@ export function createCapture(renderer: THREE.WebGLRenderer): Capture {
     if (all !== null && size.w === w && size.h === h) return;
     for (const t of [all, things, mask]) t?.dispose();
     const depthTarget = (): THREE.WebGLRenderTarget => {
-      const t = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat });
+      const t = new THREE.WebGLRenderTarget(w, h, {
+        type: THREE.UnsignedByteType,
+        format: THREE.RGBAFormat,
+      });
       t.depthTexture = new THREE.DepthTexture(w, h);
       return t;
     };
     all = depthTarget();
     things = depthTarget();
-    mask = new THREE.WebGLRenderTarget(w, h, { type: THREE.UnsignedByteType, format: THREE.RGBAFormat });
+    mask = new THREE.WebGLRenderTarget(w, h, {
+      type: THREE.UnsignedByteType,
+      format: THREE.RGBAFormat,
+    });
     size = { w, h };
   };
   const material = new THREE.ShaderMaterial({
@@ -96,26 +109,41 @@ export function createCapture(renderer: THREE.WebGLRenderer): Capture {
     depthWrite: false,
   });
   const quadGeometry = new THREE.BufferGeometry();
-  quadGeometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+  quadGeometry.setAttribute(
+    "position",
+    new THREE.BufferAttribute(
+      new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]),
+      3,
+    ),
+  );
   const quad = new THREE.Mesh(quadGeometry, material);
   quad.frustumCulled = false;
   const quadScene = new THREE.Scene();
   quadScene.add(quad);
   const quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-  const read = async (target: THREE.WebGLRenderTarget, w: number, h: number): Promise<Pixels> => {
+  const read = async (
+    target: THREE.WebGLRenderTarget,
+    w: number,
+    h: number,
+  ): Promise<Pixels> => {
     const raw = new Uint8Array(w * h * 4);
     await renderer.readRenderTargetPixelsAsync(target, 0, 0, w, h, raw);
     // GL's rows run bottom first.
     const data = new Uint8ClampedArray(w * h * 4);
-    for (let y = 0; y < h; y++) data.set(raw.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+    for (let y = 0; y < h; y++)
+      data.set(raw.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
     return { data, width: w, height: h };
   };
 
   return {
     async shoot(scene, camera, ground, bounds, w, h) {
       targets(w, h);
-      const [a, b, m] = [all, things, mask] as [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget, THREE.WebGLRenderTarget];
+      const [a, b, m] = [all, things, mask] as [
+        THREE.WebGLRenderTarget,
+        THREE.WebGLRenderTarget,
+        THREE.WebGLRenderTarget,
+      ];
       camera.updateMatrixWorld();
       camera.updateProjectionMatrix();
       const before = renderer.getRenderTarget();
@@ -134,10 +162,21 @@ export function createCapture(renderer: THREE.WebGLRenderer): Capture {
       const u = material.uniforms as Record<string, THREE.IUniform>;
       (u.tAll as THREE.IUniform).value = a.depthTexture;
       (u.tThings as THREE.IUniform).value = b.depthTexture;
-      (u.uInverseProjection as THREE.IUniform<THREE.Matrix4>).value.copy(camera.projectionMatrixInverse);
-      (u.uCameraWorld as THREE.IUniform<THREE.Matrix4>).value.copy(camera.matrixWorld);
-      (u.uCenter as THREE.IUniform<THREE.Vector3>).value.set(bounds.x, bounds.base, bounds.z);
-      (u.uSpan as THREE.IUniform<THREE.Vector2>).value.set(bounds.base - 0.4, bounds.base + bounds.height * 1.1 + 0.3);
+      (u.uInverseProjection as THREE.IUniform<THREE.Matrix4>).value.copy(
+        camera.projectionMatrixInverse,
+      );
+      (u.uCameraWorld as THREE.IUniform<THREE.Matrix4>).value.copy(
+        camera.matrixWorld,
+      );
+      (u.uCenter as THREE.IUniform<THREE.Vector3>).value.set(
+        bounds.x,
+        bounds.base,
+        bounds.z,
+      );
+      (u.uSpan as THREE.IUniform<THREE.Vector2>).value.set(
+        bounds.base - 0.4,
+        bounds.base + bounds.height * 1.1 + 0.3,
+      );
       (u.uReach as THREE.IUniform).value = bounds.reach * 1.1 + 0.2;
       renderer.setRenderTarget(m);
       renderer.clear();

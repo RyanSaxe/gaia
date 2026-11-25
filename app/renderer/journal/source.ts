@@ -15,9 +15,13 @@ export interface SourceText {
   when(path: string): Promise<void>;
 }
 
-export function createSourceText(service: WorldService | null, carried: ReadonlyMap<string, string> | null = null): SourceText {
+export function createSourceText(
+  service: WorldService | null,
+  carried: ReadonlyMap<string, string> | null = null,
+): SourceText {
   const files = new Map<string, readonly string[] | null | "asked">();
-  for (const [path, text] of carried ?? []) files.set(path, text.replace(/\n$/, "").split("\n"));
+  for (const [path, text] of carried ?? [])
+    files.set(path, text.replace(/\n$/, "").split("\n"));
   const listeners: ((path: string) => void)[] = [];
   /** Resolvers waiting on each file, each called once. */
   const waiting = new Map<string, (() => void)[]>();
@@ -30,7 +34,9 @@ export function createSourceText(service: WorldService | null, carried: Readonly
   service?.on((m) => {
     if (m.type === "world.source") arrive(m.path, m.lines);
     // Keeps each file's old lines until the new ones arrive, so no page shows a file empty.
-    else if (m.type === "world.vitality" && m.commit !== undefined) for (const [path, had] of files) if (had !== "asked") service.send({ type: "world.source", path });
+    else if (m.type === "world.vitality" && m.commit !== undefined)
+      for (const [path, had] of files)
+        if (had !== "asked") service.send({ type: "world.source", path });
   });
   return {
     lines(path) {
@@ -47,7 +53,9 @@ export function createSourceText(service: WorldService | null, carried: Readonly
     onArrive: (listener) => listeners.push(listener),
     when(path) {
       if (this.lines(path) !== undefined) return Promise.resolve();
-      return new Promise((resolve) => waiting.set(path, [...(waiting.get(path) ?? []), resolve]));
+      return new Promise((resolve) =>
+        waiting.set(path, [...(waiting.get(path) ?? []), resolve]),
+      );
     },
   };
 }

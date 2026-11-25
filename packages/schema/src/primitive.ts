@@ -30,7 +30,11 @@ export interface Primitive<R extends Role = Role, P extends Params = Params> {
    * freely.
    */
   readonly needs?: readonly Need[];
-  readonly build: (params: Resolved<P>, ctx: BuildContext, input: RoleInput<R>) => RoleOutput<R>;
+  readonly build: (
+    params: Resolved<P>,
+    ctx: BuildContext,
+    input: RoleInput<R>,
+  ) => RoleOutput<R>;
 }
 
 /**
@@ -52,15 +56,27 @@ export interface Place {
  * is in each range needed. A place with no rank meets no range. This is the
  * only rule that limits what Jev is offered, and Jev chooses among what fits.
  */
-export function meets(needs: readonly Need[] | undefined, place: Place): boolean {
-  return (needs ?? []).every((n) => (typeof n === "string" ? place.has.includes(n) : place.rank !== undefined && place.rank >= n.rank[0] && place.rank <= n.rank[1]));
+export function meets(
+  needs: readonly Need[] | undefined,
+  place: Place,
+): boolean {
+  return (needs ?? []).every((n) =>
+    typeof n === "string"
+      ? place.has.includes(n)
+      : place.rank !== undefined &&
+        place.rank >= n.rank[0] &&
+        place.rank <= n.rank[1],
+  );
 }
 
-export function primitive<R extends Role, const P extends Params>(def: Primitive<R, P>): Primitive<R, P> {
+export function primitive<R extends Role, const P extends Params>(
+  def: Primitive<R, P>,
+): Primitive<R, P> {
   if (!/^[a-z][a-z0-9-]*@\d+$/.test(def.id)) {
     throw new Error(`Primitive ID "${def.id}" must look like "name@1".`);
   }
-  if (def.doc.trim().length === 0) throw new Error(`${def.id} needs a doc for Jev.`);
+  if (def.doc.trim().length === 0)
+    throw new Error(`${def.id} needs a doc for Jev.`);
   return Object.freeze(def);
 }
 
@@ -87,7 +103,8 @@ export class Library {
   }
 
   add(p: AnyPrimitive): void {
-    if (this.#byId.has(p.id)) throw new Error(`Primitive ${p.id} is registered twice.`);
+    if (this.#byId.has(p.id))
+      throw new Error(`Primitive ${p.id} is registered twice.`);
     this.#byId.set(p.id, p);
   }
 
@@ -100,7 +117,10 @@ export class Library {
   /** The primitives that can fill a slot of this role, in a stable order. Given a place, only those whose needs it meets (`meets`). */
   forRole(role: Role, place?: Place): AnyPrimitive[] {
     return [...this.#byId.values()]
-      .filter((p) => p.role === role && (place === undefined || meets(p.needs, place)))
+      .filter(
+        (p) =>
+          p.role === role && (place === undefined || meets(p.needs, place)),
+      )
       .sort((a, b) => a.id.localeCompare(b.id));
   }
 }

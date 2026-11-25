@@ -28,7 +28,11 @@ const BACKOFF = {
   stable: 10_000,
 };
 
-export function superviseEngine(command: string, args: readonly string[], on: EngineEvents): Engine {
+export function superviseEngine(
+  command: string,
+  args: readonly string[],
+  on: EngineEvents,
+): Engine {
   let child: ChildProcess | null = null;
   /** Consecutive exits. A run that lasted `BACKOFF.stable` resets the count to 1. */
   let failures = 0;
@@ -41,7 +45,8 @@ export function superviseEngine(command: string, args: readonly string[], on: En
     child = proc;
     // A write to an engine that just exited must not crash the main process.
     proc.stdin?.on("error", () => {});
-    if (proc.stdout !== null) createInterface({ input: proc.stdout }).on("line", on.line);
+    if (proc.stdout !== null)
+      createInterface({ input: proc.stdout }).on("line", on.line);
     proc.once("spawn", on.up);
 
     let ended = false;
@@ -57,7 +62,13 @@ export function superviseEngine(command: string, args: readonly string[], on: En
       timer = setTimeout(start, delay);
     };
     proc.once("error", (error) => end(`could not start: ${error.message}`));
-    proc.once("exit", (code, signal) => end(signal === null ? `exited with code ${code}` : `was killed by ${signal}`));
+    proc.once("exit", (code, signal) =>
+      end(
+        signal === null
+          ? `exited with code ${code}`
+          : `was killed by ${signal}`,
+      ),
+    );
   };
 
   start();
@@ -65,7 +76,8 @@ export function superviseEngine(command: string, args: readonly string[], on: En
   return {
     send(line) {
       const stdin = child?.stdin;
-      if (stdin === null || stdin === undefined || !stdin.writable) return false;
+      if (stdin === null || stdin === undefined || !stdin.writable)
+        return false;
       stdin.write(`${line}\n`);
       return true;
     },

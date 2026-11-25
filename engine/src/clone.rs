@@ -404,7 +404,13 @@ mod tests {
             assert_eq!(parse_address(text), None, "{text:?} should be refused");
         }
         // Both methods that reach GitHub refuse an address before they run git.
-        assert_eq!(locate("https://gitlab.com/a/b").unwrap(), json!({ "found": false, "why": "address" }));
-        assert_eq!(clone("git@github.com:a/b.git").unwrap(), json!({ "cloned": false, "why": "address" }));
+        assert_eq!(
+            locate("https://gitlab.com/a/b").unwrap(),
+            json!({ "found": false, "why": "address" })
+        );
+        assert_eq!(
+            clone("git@github.com:a/b.git").unwrap(),
+            json!({ "cloned": false, "why": "address" })
+        );
     }
 }

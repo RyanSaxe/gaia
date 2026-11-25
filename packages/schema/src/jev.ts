@@ -2,8 +2,16 @@
 // The client is in the Rust engine, which holds the key.
 
 export type JevQuestion =
-  | { readonly type: "choice"; readonly instructions: string; readonly criteria: Readonly<Record<string, string>> }
-  | { readonly type: "score"; readonly instructions: string; readonly criteria: readonly string[] }
+  | {
+      readonly type: "choice";
+      readonly instructions: string;
+      readonly criteria: Readonly<Record<string, string>>;
+    }
+  | {
+      readonly type: "score";
+      readonly instructions: string;
+      readonly criteria: readonly string[];
+    }
   | {
       readonly type: "noul";
       readonly instructions: string;

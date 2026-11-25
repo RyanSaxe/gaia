@@ -27,10 +27,16 @@ export function createEngineClient(send: (line: string) => void): LineClient {
   const pending = new Map<number, Pending>();
 
   return {
-    call<M extends keyof EngineMethods>(method: M, params: EngineMethods[M]["params"]): Promise<EngineMethods[M]["result"]> {
+    call<M extends keyof EngineMethods>(
+      method: M,
+      params: EngineMethods[M]["params"],
+    ): Promise<EngineMethods[M]["result"]> {
       const id = nextId++;
       return new Promise<EngineMethods[M]["result"]>((resolve, reject) => {
-        pending.set(id, { resolve: (r) => resolve(r as EngineMethods[M]["result"]), reject });
+        pending.set(id, {
+          resolve: (r) => resolve(r as EngineMethods[M]["result"]),
+          reject,
+        });
         send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
       });
     },
@@ -39,13 +45,19 @@ export function createEngineClient(send: (line: string) => void): LineClient {
       try {
         message = JSON.parse(line) as Response;
       } catch {
-        console.error(`gaia: the engine wrote a line that is not JSON: ${line}`);
+        console.error(
+          `gaia: the engine wrote a line that is not JSON: ${line}`,
+        );
         return;
       }
-      const call = typeof message.id === "number" ? pending.get(message.id) : undefined;
+      const call =
+        typeof message.id === "number" ? pending.get(message.id) : undefined;
       if (call === undefined) return;
       pending.delete(message.id as number);
-      if (message.error !== undefined) call.reject(new Error(`${message.error.message} (${message.error.code})`));
+      if (message.error !== undefined)
+        call.reject(
+          new Error(`${message.error.message} (${message.error.code})`),
+        );
       else call.resolve(message.result);
     },
     disconnect(reason) {

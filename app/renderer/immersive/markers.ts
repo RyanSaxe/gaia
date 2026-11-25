@@ -7,7 +7,13 @@
 import * as THREE from "three";
 import { shownVitality } from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "@gaia/render";
-import { type PlaceArea, type SolidShape, type Way, heightAt, waterDepthAt } from "@gaia/terrain";
+import {
+  type PlaceArea,
+  type SolidShape,
+  type Way,
+  heightAt,
+  waterDepthAt,
+} from "@gaia/terrain";
 import type { Furnishing, BakedWorld } from "../terrain/world.ts";
 import { type Board, letter } from "../terrain/lettering.ts";
 
@@ -17,7 +23,10 @@ export const MARKER_LAYER = 1;
 export interface Markers {
   readonly group: THREE.Group;
   /** Places a fingerpost and a boundary stone wherever a trail crosses into another area. Returns the capsules that keep grass off them and the solids that stop a walker. */
-  place(baked: BakedWorld, areaAt: (x: number, z: number) => PlaceArea): Furnishing;
+  place(
+    baked: BakedWorld,
+    areaAt: (x: number, z: number) => PlaceArea,
+  ): Furnishing;
   /** Weathers each arm with the vitality of the area it names, and each post and stone with the mean of both areas'. */
   vitality(of: (path: string) => number): void;
   /** Each marked crossing with its post and stone positions and the areas on either side, for scripted checks. */
@@ -61,7 +70,13 @@ interface Build {
 const build = (): Build => ({ pos: [], nrm: [], uv: [], face: [], idx: [] });
 
 /** Adds a flat polygon facing `n`, fanned from its first corner. `uv` is per corner, and `face` is 1 where names are painted. */
-function polygon(b: Build, corners: readonly (readonly [number, number, number])[], n: readonly [number, number, number], uv: readonly (readonly [number, number])[], face: number): void {
+function polygon(
+  b: Build,
+  corners: readonly (readonly [number, number, number])[],
+  n: readonly [number, number, number],
+  uv: readonly (readonly [number, number])[],
+  face: number,
+): void {
   const base = b.pos.length / 3;
   corners.forEach((c, i) => {
     b.pos.push(...c);
@@ -71,9 +86,17 @@ function polygon(b: Build, corners: readonly (readonly [number, number, number])
   });
   // Wind so the face points along n.
   const [a, c1, c2] = [corners[0], corners[1], corners[2]] as const;
-  const ux = (c1?.[0] ?? 0) - (a?.[0] ?? 0), uy = (c1?.[1] ?? 0) - (a?.[1] ?? 0), uz = (c1?.[2] ?? 0) - (a?.[2] ?? 0);
-  const vx = (c2?.[0] ?? 0) - (a?.[0] ?? 0), vy = (c2?.[1] ?? 0) - (a?.[1] ?? 0), vz = (c2?.[2] ?? 0) - (a?.[2] ?? 0);
-  const facing = (uy * vz - uz * vy) * n[0] + (uz * vx - ux * vz) * n[1] + (ux * vy - uy * vx) * n[2] > 0;
+  const ux = (c1?.[0] ?? 0) - (a?.[0] ?? 0),
+    uy = (c1?.[1] ?? 0) - (a?.[1] ?? 0),
+    uz = (c1?.[2] ?? 0) - (a?.[2] ?? 0);
+  const vx = (c2?.[0] ?? 0) - (a?.[0] ?? 0),
+    vy = (c2?.[1] ?? 0) - (a?.[1] ?? 0),
+    vz = (c2?.[2] ?? 0) - (a?.[2] ?? 0);
+  const facing =
+    (uy * vz - uz * vy) * n[0] +
+      (uz * vx - ux * vz) * n[1] +
+      (ux * vy - uy * vx) * n[2] >
+    0;
   for (let k = 1; k < corners.length - 1; k++) {
     if (facing) b.idx.push(base, base + k, base + k + 1);
     else b.idx.push(base, base + k + 1, base + k);
@@ -81,17 +104,52 @@ function polygon(b: Build, corners: readonly (readonly [number, number, number])
 }
 
 /** Adds a prism of the outline in x and y, extruded from z = -half to +half. The front and back carry the outline's uvs, mirrored on the back. */
-function prism(b: Build, outline: readonly (readonly [number, number])[], half: number, uvOf: (x: number, y: number) => readonly [number, number], painted: boolean): void {
+function prism(
+  b: Build,
+  outline: readonly (readonly [number, number])[],
+  half: number,
+  uvOf: (x: number, y: number) => readonly [number, number],
+  painted: boolean,
+): void {
   const front = outline.map(([x, y]) => [x, y, half] as const);
   const back = outline.map(([x, y]) => [x, y, -half] as const);
-  polygon(b, front, [0, 0, 1], outline.map(([x, y]) => uvOf(x, y)), painted ? 1 : 0);
-  polygon(b, back, [0, 0, -1], outline.map(([x, y]) => { const [u, v] = uvOf(x, y); return [1 - u, v] as const; }), painted ? 1 : 0);
+  polygon(
+    b,
+    front,
+    [0, 0, 1],
+    outline.map(([x, y]) => uvOf(x, y)),
+    painted ? 1 : 0,
+  );
+  polygon(
+    b,
+    back,
+    [0, 0, -1],
+    outline.map(([x, y]) => {
+      const [u, v] = uvOf(x, y);
+      return [1 - u, v] as const;
+    }),
+    painted ? 1 : 0,
+  );
   for (let i = 0; i < outline.length; i++) {
     const [x0, y0] = outline[i] as readonly [number, number];
-    const [x1, y1] = outline[(i + 1) % outline.length] as readonly [number, number];
+    const [x1, y1] = outline[(i + 1) % outline.length] as readonly [
+      number,
+      number,
+    ];
     const len = Math.hypot(x1 - x0, y1 - y0) || 1;
     const n = [(y1 - y0) / len, -(x1 - x0) / len, 0] as const;
-    polygon(b, [[x0, y0, half], [x1, y1, half], [x1, y1, -half], [x0, y0, -half]], n, [], 0);
+    polygon(
+      b,
+      [
+        [x0, y0, half],
+        [x1, y1, half],
+        [x1, y1, -half],
+        [x0, y0, -half],
+      ],
+      n,
+      [],
+      0,
+    );
   }
 }
 
@@ -108,12 +166,35 @@ function geometryOf(b: Build): THREE.BufferGeometry {
 /** An arm board from the post (x = 0) out to a pointed tip (x = length), with the name on both faces. */
 function armGeometry(): THREE.BufferGeometry {
   const { length: L, height: h, thick, tip, root } = ARM;
-  const outline: [number, number][] = [[root, -h / 2], [L - tip, -h / 2], [L, 0], [L - tip, h / 2], [root, h / 2]];
+  const outline: [number, number][] = [
+    [root, -h / 2],
+    [L - tip, -h / 2],
+    [L, 0],
+    [L - tip, h / 2],
+    [root, h / 2],
+  ];
   const b = build();
   // The name fills the board, short of the tip.
-  prism(b, outline, thick / 2, (x, y) => [(x - root) / (L - tip - root), 0.5 - y / h], true);
+  prism(
+    b,
+    outline,
+    thick / 2,
+    (x, y) => [(x - root) / (L - tip - root), 0.5 - y / h],
+    true,
+  );
   // A short block where the arm is nailed to the post.
-  prism(b, [[0, -h * 0.4], [root, -h * 0.4], [root, h * 0.4], [0, h * 0.4]], thick * 0.8, () => [0, 0], false);
+  prism(
+    b,
+    [
+      [0, -h * 0.4],
+      [root, -h * 0.4],
+      [root, h * 0.4],
+      [0, h * 0.4],
+    ],
+    thick * 0.8,
+    () => [0, 0],
+    false,
+  );
   return geometryOf(b);
 }
 
@@ -121,15 +202,41 @@ function armGeometry(): THREE.BufferGeometry {
 function postGeometry(): THREE.BufferGeometry {
   const { height: H, half: s, sink } = POST;
   const b = build();
-  const sides: [number, number, number, number][] = [[s, s, 1, 0], [-s, -s, -1, 0], [-s, s, 0, 1], [s, -s, 0, -1]];
+  const sides: [number, number, number, number][] = [
+    [s, s, 1, 0],
+    [-s, -s, -1, 0],
+    [-s, s, 0, 1],
+    [s, -s, 0, -1],
+  ];
   for (const [ax, az, nx, nz] of sides) {
     const bx = nz !== 0 ? -ax : ax;
     const bz = nx !== 0 ? -az : az;
-    polygon(b, [[ax, -sink, az], [bx, -sink, bz], [bx, H, bz], [ax, H, az]], [nx, 0, nz], [], 0);
+    polygon(
+      b,
+      [
+        [ax, -sink, az],
+        [bx, -sink, bz],
+        [bx, H, bz],
+        [ax, H, az],
+      ],
+      [nx, 0, nz],
+      [],
+      0,
+    );
     // The cap: each side slopes up to a point.
     const up = 0.08;
     const len = Math.hypot(up, s);
-    polygon(b, [[ax, H, az], [bx, H, bz], [0, H + up, 0]], [(nx * up) / len, s / len, (nz * up) / len], [], 0);
+    polygon(
+      b,
+      [
+        [ax, H, az],
+        [bx, H, bz],
+        [0, H + up, 0],
+      ],
+      [(nx * up) / len, s / len, (nz * up) / len],
+      [],
+      0,
+    );
   }
   return geometryOf(b);
 }
@@ -137,15 +244,28 @@ function postGeometry(): THREE.BufferGeometry {
 /** A squat standing stone with a rounded top. Its front (+z) carries the carving. */
 function stoneGeometry(): THREE.BufferGeometry {
   const { width: w, height: H, thick, sink } = STONE;
-  const outline: [number, number][] = [[-w / 2, -sink], [w / 2, -sink], [w / 2, H - w * 0.32]];
+  const outline: [number, number][] = [
+    [-w / 2, -sink],
+    [w / 2, -sink],
+    [w / 2, H - w * 0.32],
+  ];
   // The rounded top, as a flattened arc.
   for (let k = 1; k < 10; k++) {
     const a = (k / 10) * Math.PI;
-    outline.push([(Math.cos(a) * w) / 2, H - w * 0.32 + Math.sin(a) * w * 0.32]);
+    outline.push([
+      (Math.cos(a) * w) / 2,
+      H - w * 0.32 + Math.sin(a) * w * 0.32,
+    ]);
   }
   outline.push([-w / 2, H - w * 0.32]);
   const b = build();
-  prism(b, outline, thick / 2, (x, y) => [x / w + 0.5, 1 - (y - BAND.from) / (BAND.to - BAND.from)], true);
+  prism(
+    b,
+    outline,
+    thick / 2,
+    (x, y) => [x / w + 0.5, 1 - (y - BAND.from) / (BAND.to - BAND.from)],
+    true,
+  );
   return geometryOf(b);
 }
 
@@ -259,16 +379,40 @@ void main() {
 const SERIF = `Georgia, "Iowan Old Style", "Times New Roman", serif`;
 
 /** Measures text in a style on the atlas's canvas. */
-const measureOn = (ctx: CanvasRenderingContext2D, style: string) => (text: string, size: number): number => {
-  ctx.font = `${style} ${size}px ${SERIF}`;
-  return ctx.measureText(text).width;
-};
+const measureOn =
+  (ctx: CanvasRenderingContext2D, style: string) =>
+  (text: string, size: number): number => {
+    ctx.font = `${style} ${size}px ${SERIF}`;
+    return ctx.measureText(text).width;
+  };
 /** An arm's lettering: one or two lines, and the arm grows up to 1.35 times longer before its letters shrink further. */
-const ARM_BOARD: Board = { width: ARM_SLOT.w - 50, height: ARM_SLOT.h, size: 78, least: 46, twoLines: true, widen: 1.35 };
+const ARM_BOARD: Board = {
+  width: ARM_SLOT.w - 50,
+  height: ARM_SLOT.h,
+  size: 78,
+  least: 46,
+  twoLines: true,
+  widen: 1.35,
+};
 /** Each name on a stone stays on one line, above or below the cut, and shrinks to fit. */
-const STONE_BOARD: Board = { width: STONE_SLOT.w - 70, height: STONE_SLOT.h * 0.42, size: 74, least: 74, twoLines: false, widen: 1 };
+const STONE_BOARD: Board = {
+  width: STONE_SLOT.w - 70,
+  height: STONE_SLOT.h * 0.42,
+  size: 74,
+  least: 74,
+  twoLines: false,
+  widen: 1,
+};
 
-function atlas(cols: number, rows: number, slot: { w: number; h: number }): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D; texture: THREE.CanvasTexture } {
+function atlas(
+  cols: number,
+  rows: number,
+  slot: { w: number; h: number },
+): {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  texture: THREE.CanvasTexture;
+} {
   const canvas = document.createElement("canvas");
   canvas.width = slot.w * cols;
   canvas.height = Math.max(1, slot.h * rows);
@@ -284,28 +428,42 @@ function atlas(cols: number, rows: number, slot: { w: number; h: number }): { ca
 }
 
 /** Returns each point index where a trail passes from one area into another, ignoring short runs along a border. */
-function crossingsOf(trail: Way, areaAt: (x: number, z: number) => PlaceArea): { i: number; from: PlaceArea; to: PlaceArea }[] {
+function crossingsOf(
+  trail: Way,
+  areaAt: (x: number, z: number) => PlaceArea,
+): { i: number; from: PlaceArea; to: PlaceArea }[] {
   const p = trail.points;
   const count = p.length / 2;
   const runs: { area: PlaceArea; start: number; end: number }[] = [];
   for (let i = 0; i < count; i++) {
     const area = areaAt(p[i * 2] as number, p[i * 2 + 1] as number);
     const last = runs[runs.length - 1];
-    if (last !== undefined && last.area.path === area.path && last.area.depth === area.depth) last.end = i;
+    if (
+      last !== undefined &&
+      last.area.path === area.path &&
+      last.area.depth === area.depth
+    )
+      last.end = i;
     else runs.push({ area, start: i, end: i });
   }
   // A short run is a wobble along a border, so it merges into the run before it.
   const kept: typeof runs = [];
   for (const r of runs) {
     const last = kept[kept.length - 1];
-    if (last !== undefined && (r.end - r.start < MIN_RUN || (last.area.path === r.area.path && last.area.depth === r.area.depth))) last.end = r.end;
+    if (
+      last !== undefined &&
+      (r.end - r.start < MIN_RUN ||
+        (last.area.path === r.area.path && last.area.depth === r.area.depth))
+    )
+      last.end = r.end;
     else kept.push({ ...r });
   }
   const out: { i: number; from: PlaceArea; to: PlaceArea }[] = [];
   for (let k = 1; k < kept.length; k++) {
     const a = kept[k - 1] as (typeof kept)[number];
     const b = kept[k] as (typeof kept)[number];
-    if (a.area.path !== b.area.path && a.area.depth >= 0 && b.area.depth >= 0) out.push({ i: b.start, from: a.area, to: b.area });
+    if (a.area.path !== b.area.path && a.area.depth >= 0 && b.area.depth >= 0)
+      out.push({ i: b.start, from: a.area, to: b.area });
   }
   return out;
 }
@@ -326,11 +484,22 @@ export function createMarkers(light: SceneLight): Markers {
   let armNames: string[] = [];
   let stoneNames: [string, string][] = [];
 
-  const material = (names: THREE.Texture, slots: THREE.Vector2, stone: boolean, droop: number): THREE.ShaderMaterial =>
+  const material = (
+    names: THREE.Texture,
+    slots: THREE.Vector2,
+    stone: boolean,
+    droop: number,
+  ): THREE.ShaderMaterial =>
     new THREE.ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: FRAG,
-      uniforms: { ...light, uNames: { value: names }, uSlots: { value: slots }, uStone: { value: stone ? 1 : 0 }, uDroop: { value: droop } },
+      uniforms: {
+        ...light,
+        uNames: { value: names },
+        uSlots: { value: slots },
+        uStone: { value: stone ? 1 : 0 },
+        uDroop: { value: droop },
+      },
     });
 
   function clear(): void {
@@ -351,7 +520,15 @@ export function createMarkers(light: SceneLight): Markers {
     place(baked, areaAt) {
       clear();
       const t = baked.terrain;
-      const found: { x: number; z: number; tx: number; tz: number; off: number; from: PlaceArea; to: PlaceArea }[] = [];
+      const found: {
+        x: number;
+        z: number;
+        tx: number;
+        tz: number;
+        off: number;
+        from: PlaceArea;
+        to: PlaceArea;
+      }[] = [];
       for (const trail of baked.ways) {
         const p = trail.points;
         const count = p.length / 2;
@@ -364,14 +541,37 @@ export function createMarkers(light: SceneLight): Markers {
           const dz = (p[b * 2 + 1] as number) - (p[a * 2 + 1] as number);
           const len = Math.hypot(dx, dz) || 1;
           const pair = [c.from.path, c.to.path].sort().join("|");
-          if (found.some((f) => [f.from.path, f.to.path].sort().join("|") === pair && Math.hypot(f.x - x, f.z - z) < SPACING)) continue;
+          if (
+            found.some(
+              (f) =>
+                [f.from.path, f.to.path].sort().join("|") === pair &&
+                Math.hypot(f.x - x, f.z - z) < SPACING,
+            )
+          )
+            continue;
           const off = trail.style.width / 2 + 0.9;
           // Skips a crossing whose post or stone would stand in water or near a footbridge.
-          const dry = (sx: number, sz: number): boolean => waterDepthAt(t, sx, sz) <= 0 && trail.crossings.every((k) => Math.hypot(k.x - sx, k.z - sz) > k.span / 2 + 3);
+          const dry = (sx: number, sz: number): boolean =>
+            waterDepthAt(t, sx, sz) <= 0 &&
+            trail.crossings.every(
+              (k) => Math.hypot(k.x - sx, k.z - sz) > k.span / 2 + 3,
+            );
           const nx = dz / len;
           const nz = -dx / len;
-          if (!dry(x + nx * off, z + nz * off) || !dry(x - nx * off, z - nz * off)) continue;
-          found.push({ x, z, tx: dx / len, tz: dz / len, off, from: c.from, to: c.to });
+          if (
+            !dry(x + nx * off, z + nz * off) ||
+            !dry(x - nx * off, z - nz * off)
+          )
+            continue;
+          found.push({
+            x,
+            z,
+            tx: dx / len,
+            tz: dz / len,
+            off,
+            from: c.from,
+            to: c.to,
+          });
         }
       }
 
@@ -380,12 +580,43 @@ export function createMarkers(light: SceneLight): Markers {
       const stoneRows = Math.ceil(n / STONE_SLOT.cols);
       armAtlas = atlas(ARM_SLOT.cols, armRows, ARM_SLOT);
       stoneAtlas = atlas(STONE_SLOT.cols, stoneRows, STONE_SLOT);
-      arms = new THREE.InstancedMesh(armGeo, material(armAtlas.texture, new THREE.Vector2(ARM_SLOT.cols, Math.max(1, armRows)), false, 0.32), Math.max(1, n * 2));
-      posts = new THREE.InstancedMesh(postGeo, material(armAtlas.texture, new THREE.Vector2(1, 1), false, 0), Math.max(1, n));
-      stones = new THREE.InstancedMesh(stoneGeo, material(stoneAtlas.texture, new THREE.Vector2(STONE_SLOT.cols, Math.max(1, stoneRows)), true, 0), Math.max(1, n));
-      const armMark = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, n * 2) * 3), 3);
-      const postMark = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, n) * 3), 3);
-      const stoneMark = new THREE.InstancedBufferAttribute(new Float32Array(Math.max(1, n) * 3), 3);
+      arms = new THREE.InstancedMesh(
+        armGeo,
+        material(
+          armAtlas.texture,
+          new THREE.Vector2(ARM_SLOT.cols, Math.max(1, armRows)),
+          false,
+          0.32,
+        ),
+        Math.max(1, n * 2),
+      );
+      posts = new THREE.InstancedMesh(
+        postGeo,
+        material(armAtlas.texture, new THREE.Vector2(1, 1), false, 0),
+        Math.max(1, n),
+      );
+      stones = new THREE.InstancedMesh(
+        stoneGeo,
+        material(
+          stoneAtlas.texture,
+          new THREE.Vector2(STONE_SLOT.cols, Math.max(1, stoneRows)),
+          true,
+          0,
+        ),
+        Math.max(1, n),
+      );
+      const armMark = new THREE.InstancedBufferAttribute(
+        new Float32Array(Math.max(1, n * 2) * 3),
+        3,
+      );
+      const postMark = new THREE.InstancedBufferAttribute(
+        new Float32Array(Math.max(1, n) * 3),
+        3,
+      );
+      const stoneMark = new THREE.InstancedBufferAttribute(
+        new Float32Array(Math.max(1, n) * 3),
+        3,
+      );
       arms.geometry = armGeo.clone();
       posts.geometry = postGeo.clone();
       stones.geometry = stoneGeo.clone();
@@ -427,23 +658,45 @@ export function createMarkers(light: SceneLight): Markers {
         posts?.setMatrixAt(k, m4);
         postMark.setXYZ(k, 1, 0, 0);
         // Two arms, one each way along the trail, turned `SPLAY` away from it so a person walking that way can read it.
-        for (const [j, dir, area, height] of [[0, 1, f.to, 2.0], [1, -1, f.from, 1.68]] as const) {
+        for (const [j, dir, area, height] of [
+          [0, 1, f.to, 2.0],
+          [1, -1, f.from, 1.68],
+        ] as const) {
           const ax = f.tx * dir * Math.cos(SPLAY) + nx * Math.sin(SPLAY);
           const az = f.tz * dir * Math.cos(SPLAY) + nz * Math.sin(SPLAY);
           // Three's Y rotation turns local +x to (cos, -sin).
           q.setFromAxisAngle(up, Math.atan2(-az, ax));
           const slot = k * 2 + j;
-          const name = letter(area.name, ARM_BOARD, measureOn(actx, "italic 600"));
+          const name = letter(
+            area.name,
+            ARM_BOARD,
+            measureOn(actx, "italic 600"),
+          );
           // A long name's arm is scaled longer by `name.widen`, and its letters are painted narrower by the same factor, so they keep their shape.
-          m4.compose(new THREE.Vector3(px + ax * POST.half, py + height, pz + az * POST.half), q, new THREE.Vector3(name.widen, 1, 1));
+          m4.compose(
+            new THREE.Vector3(
+              px + ax * POST.half,
+              py + height,
+              pz + az * POST.half,
+            ),
+            q,
+            new THREE.Vector3(name.widen, 1, 1),
+          );
           arms?.setMatrixAt(slot, m4);
           armMark.setXYZ(slot, 1, slot, 0);
           armNames.push(area.path);
           const cx = (slot % ARM_SLOT.cols) * ARM_SLOT.w + ARM_SLOT.w / 2;
-          const cy = Math.floor(slot / ARM_SLOT.cols) * ARM_SLOT.h + ARM_SLOT.h / 2 + 3;
+          const cy =
+            Math.floor(slot / ARM_SLOT.cols) * ARM_SLOT.h + ARM_SLOT.h / 2 + 3;
           actx.setTransform(1 / name.widen, 0, 0, 1, cx, cy);
           actx.font = `italic 600 ${name.size}px ${SERIF}`;
-          name.lines.forEach((line, n) => actx.fillText(line, 0, (n - (name.lines.length - 1) / 2) * name.size * 1.02));
+          name.lines.forEach((line, n) =>
+            actx.fillText(
+              line,
+              0,
+              (n - (name.lines.length - 1) / 2) * name.size * 1.02,
+            ),
+          );
           actx.setTransform(1, 0, 0, 1, 0, 0);
         }
         // The stone faces the trail. Seen from there, the area to the left is lettered above the cut and the area to the right below it.
@@ -455,8 +708,24 @@ export function createMarkers(light: SceneLight): Markers {
         const toOnRight = rightX * f.tx + rightZ * f.tz > 0;
         const [left, right] = toOnRight ? [f.from, f.to] : [f.to, f.from];
         let low = Infinity;
-        for (const [ox, oz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
-          low = Math.min(low, heightAt(t.lattice, sx + rightX * ox * STONE.width * 0.5 + fx * oz * STONE.thick * 0.5, sz + rightZ * ox * STONE.width * 0.5 + fz * oz * STONE.thick * 0.5));
+        for (const [ox, oz] of [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ] as const) {
+          low = Math.min(
+            low,
+            heightAt(
+              t.lattice,
+              sx +
+                rightX * ox * STONE.width * 0.5 +
+                fx * oz * STONE.thick * 0.5,
+              sz +
+                rightZ * ox * STONE.width * 0.5 +
+                fz * oz * STONE.thick * 0.5,
+            ),
+          );
         }
         q.setFromAxisAngle(up, yaw);
         m4.compose(new THREE.Vector3(sx, low - 0.04, sz), q, one);
@@ -467,7 +736,10 @@ export function createMarkers(light: SceneLight): Markers {
         const oy = Math.floor(k / STONE_SLOT.cols) * STONE_SLOT.h;
         const half = STONE_SLOT.w / 2;
         // Letters each name in capitals, as on carved stone, with an arrow toward its area's side.
-        for (const [text, cy] of [[`‹ ${left.name.toUpperCase()}`, 0.27], [`${right.name.toUpperCase()} ›`, 0.73]] as const) {
+        for (const [text, cy] of [
+          [`‹ ${left.name.toUpperCase()}`, 0.27],
+          [`${right.name.toUpperCase()} ›`, 0.73],
+        ] as const) {
           sctx.font = `600 ${letter(text, STONE_BOARD, measureOn(sctx, "600")).size}px ${SERIF}`;
           sctx.fillText(text, ox + half, oy + STONE_SLOT.h * cy);
         }
@@ -476,26 +748,57 @@ export function createMarkers(light: SceneLight): Markers {
         solids.push({ x: px, z: pz, radius: POST.half * 1.5 });
         const hw = STONE.width / 2;
         const ht = STONE.thick / 2;
-        solids.push({ points: [[-1, -1], [1, -1], [1, 1], [-1, 1]].flatMap(([a, b]) => [sx + rightX * (a as number) * hw + fx * (b as number) * ht, sz + rightZ * (a as number) * hw + fz * (b as number) * ht]) });
-        capsules.push({ ax: sx - rightX * hw * 0.7, az: sz - rightZ * hw * 0.7, bx: sx + rightX * hw * 0.7, bz: sz + rightZ * hw * 0.7, radius: ht + 0.06 });
-        placed.push({ x: f.x, z: f.z, from: f.from, to: f.to, post: { x: px, z: pz }, stone: { x: sx, z: sz } });
+        solids.push({
+          points: [
+            [-1, -1],
+            [1, -1],
+            [1, 1],
+            [-1, 1],
+          ].flatMap(([a, b]) => [
+            sx + rightX * (a as number) * hw + fx * (b as number) * ht,
+            sz + rightZ * (a as number) * hw + fz * (b as number) * ht,
+          ]),
+        });
+        capsules.push({
+          ax: sx - rightX * hw * 0.7,
+          az: sz - rightZ * hw * 0.7,
+          bx: sx + rightX * hw * 0.7,
+          bz: sz + rightZ * hw * 0.7,
+          radius: ht + 0.06,
+        });
+        placed.push({
+          x: f.x,
+          z: f.z,
+          from: f.from,
+          to: f.to,
+          post: { x: px, z: pz },
+          stone: { x: sx, z: sz },
+        });
       });
       armAtlas.texture.needsUpdate = true;
       stoneAtlas.texture.needsUpdate = true;
-      for (const m of [arms, posts, stones]) m.instanceMatrix.needsUpdate = true;
+      for (const m of [arms, posts, stones])
+        m.instanceMatrix.needsUpdate = true;
       return { capsules, solids };
     },
     vitality(of) {
-      const armMark = arms?.geometry.getAttribute("aMark") as THREE.InstancedBufferAttribute | undefined;
-      const stoneMark = stones?.geometry.getAttribute("aMark") as THREE.InstancedBufferAttribute | undefined;
-      const postMark = posts?.geometry.getAttribute("aMark") as THREE.InstancedBufferAttribute | undefined;
+      const armMark = arms?.geometry.getAttribute("aMark") as
+        | THREE.InstancedBufferAttribute
+        | undefined;
+      const stoneMark = stones?.geometry.getAttribute("aMark") as
+        | THREE.InstancedBufferAttribute
+        | undefined;
+      const postMark = posts?.geometry.getAttribute("aMark") as
+        | THREE.InstancedBufferAttribute
+        | undefined;
       armNames.forEach((path, i) => armMark?.setX(i, shownVitality(of(path))));
       stoneNames.forEach(([a, b], i) => {
         const v = shownVitality((of(a) + of(b)) / 2);
         stoneMark?.setX(i, v);
         postMark?.setX(i, v);
       });
-      for (const a of [armMark, stoneMark, postMark]) if (a !== undefined) a.needsUpdate = true;
+      for (const a of [armMark, stoneMark, postMark])
+        if (a !== undefined) a.needsUpdate = true;
     },
     crossings: () => placed,
   };

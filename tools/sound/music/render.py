@@ -6,6 +6,7 @@ whole first. The copy sits beside the patch, because its sample paths are relati
 
 Usage: render.py MIDI_ROOT PARTS_ROOT   (MIDI_ROOT/<song>/ as compose.py writes it; PARTS_ROOT/<song>/<part>.wav)
 """
+
 import json
 import subprocess
 import sys
@@ -38,11 +39,23 @@ def silent_notes(mid_dir, parts):
         regs = []
         for h, o in parse(patch(info["sfz"]).read_text(encoding="latin-1")):
             if h == "region":
-                regs.append((int(o.get("lokey", o.get("key", 0))), int(o.get("hikey", o.get("key", 127))),
-                             int(o.get("lovel", 0)), int(o.get("hivel", 127))))
-        miss = sorted({(m.note, m.velocity) for m in mido.MidiFile(mid_dir / f"{name}.mid")
-                       if m.type == "note_on" and m.velocity > 0
-                       and not any(lo <= m.note <= hi and lv <= m.velocity <= hv for lo, hi, lv, hv in regs)})
+                regs.append(
+                    (
+                        int(o.get("lokey", o.get("key", 0))),
+                        int(o.get("hikey", o.get("key", 127))),
+                        int(o.get("lovel", 0)),
+                        int(o.get("hivel", 127)),
+                    )
+                )
+        miss = sorted(
+            {
+                (m.note, m.velocity)
+                for m in mido.MidiFile(mid_dir / f"{name}.mid")
+                if m.type == "note_on"
+                and m.velocity > 0
+                and not any(lo <= m.note <= hi and lv <= m.velocity <= hv for lo, hi, lv, hv in regs)
+            }
+        )
         if miss:
             out[name] = miss
     return out
@@ -58,9 +71,28 @@ def render_song(mid_dir, out_dir):
     def one(job):
         name, sfz = job
         with open(out_dir / f"{name}.log", "w") as log:
-            r = subprocess.run(["nice", "-n", "10", str(SFIZZ), "--sfz", str(sfz), "--midi", str(mid_dir / f"{name}.mid"),
-                                "--wav", str(out_dir / f"{name}.wav"), "-s", "48000", "-q", "10", "-p", "256"],
-                               stdout=log, stderr=subprocess.STDOUT)
+            r = subprocess.run(
+                [
+                    "nice",
+                    "-n",
+                    "10",
+                    str(SFIZZ),
+                    "--sfz",
+                    str(sfz),
+                    "--midi",
+                    str(mid_dir / f"{name}.mid"),
+                    "--wav",
+                    str(out_dir / f"{name}.wav"),
+                    "-s",
+                    "48000",
+                    "-q",
+                    "10",
+                    "-p",
+                    "256",
+                ],
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
         return name, r.returncode
 
     start = time.time()

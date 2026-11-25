@@ -30,9 +30,33 @@ interface DriftForm {
 }
 
 const DRIFT_FORMS: Readonly<Record<AccentForm, DriftForm>> = {
-  petals: { shape: 1, fall: 0.35, low: 0, high: 9, wander: 0.6, blink: 0, opacity: 0.95 },
-  fireflies: { shape: 0, fall: 0, low: 0.7, high: 2.6, wander: 0.9, blink: 1, opacity: 1 },
-  leaves: { shape: 2, fall: 0.6, low: 0, high: 10, wander: 0.8, blink: 0, opacity: 1 },
+  petals: {
+    shape: 1,
+    fall: 0.35,
+    low: 0,
+    high: 9,
+    wander: 0.6,
+    blink: 0,
+    opacity: 0.95,
+  },
+  fireflies: {
+    shape: 0,
+    fall: 0,
+    low: 0.7,
+    high: 2.6,
+    wander: 0.9,
+    blink: 1,
+    opacity: 1,
+  },
+  leaves: {
+    shape: 2,
+    fall: 0.6,
+    low: 0,
+    high: 10,
+    wander: 0.8,
+    blink: 0,
+    opacity: 1,
+  },
 };
 
 /**
@@ -40,7 +64,14 @@ const DRIFT_FORMS: Readonly<Record<AccentForm, DriftForm>> = {
  * or `px` device pixels, so a far one or one on a small screen still reads as a point of light. In the dark a halo
  * reaches `halo` times as far at `haloAlpha` of the core's light. Between flashes it dims to `dim`.
  */
-const GLOW = { core: 0.15, angle: 0.0028, px: 1.4, halo: 3, haloAlpha: 0.3, dim: 0.4 } as const;
+const GLOW = {
+  core: 0.15,
+  angle: 0.0028,
+  px: 1.4,
+  halo: 3,
+  haloAlpha: 0.3,
+  dim: 0.4,
+} as const;
 
 /** Draws a drift's color and shape, lit like everything else, so petals darken at night while glowing things shine. */
 const DRIFT_FRAG = /* glsl */ `
@@ -97,7 +128,13 @@ void main() {
  * `keep`, where the wind can carry none back into sight. A drift nearer the
  * eye than `near[1]` fades, and is gone at `near[0]`, so none fills the view.
  */
-export const DRIFT_REACH = { air: 30, trees: 60, keep: 72, fade: 0.7, near: [0.6, 1.8] } as const;
+export const DRIFT_REACH = {
+  air: 30,
+  trees: 60,
+  keep: 72,
+  fade: 0.7,
+  near: [0.6, 1.8],
+} as const;
 /** Most drifts per form. */
 const MOST = 2400;
 /** Most trees dropping leaves or petals at once. Each drops up to `MOST / CROWNS`, which is 50, at a time. */
@@ -291,9 +328,15 @@ export interface Drifts {
    * returns every tree within `reach` meters of (x, z), and `focal` is the
    * view's device pixels per radian.
    */
-  follow(crowns: (x: number, z: number, reach: number) => readonly Crown[], focal: number): void;
+  follow(
+    crowns: (x: number, z: number, reach: number) => readonly Crown[],
+    focal: number,
+  ): void;
   /** For each drawn form: its fullest region's fill, 0 to 1, how many of its drifts can show, and how many trees drop it now. */
-  state(): Record<string, { readonly most: number; readonly drawn: number; readonly trees: number }>;
+  state(): Record<
+    string,
+    { readonly most: number; readonly drawn: number; readonly trees: number }
+  >;
 }
 
 /** The uniforms that set how one form's drifts move and draw. */
@@ -312,8 +355,12 @@ function formUniforms(form: AccentForm, carried: THREE.Vector2) {
     uFill: { value: fillTexture() },
     uFillMap: { value: new THREE.Vector4(0, 0, FILL.spacing, FILL.samples) },
     uFull: { value: 0 },
-    uCrownAt: { value: Array.from({ length: CROWNS }, () => new THREE.Vector4()) },
-    uCrownOf: { value: Array.from({ length: CROWNS }, () => new THREE.Vector4()) },
+    uCrownAt: {
+      value: Array.from({ length: CROWNS }, () => new THREE.Vector4()),
+    },
+    uCrownOf: {
+      value: Array.from({ length: CROWNS }, () => new THREE.Vector4()),
+    },
     uColor: { value: new THREE.Vector3(1, 1, 1) },
     uGlow: { value: 0 },
     uShape: { value: b.shape },
@@ -325,7 +372,13 @@ function formUniforms(form: AccentForm, carried: THREE.Vector2) {
 
 /** A form's fill texture around the person, `FILL.samples` a side, empty until first filled. */
 function fillTexture(): THREE.DataTexture {
-  const t = new THREE.DataTexture(new Uint8Array(FILL.samples * FILL.samples), FILL.samples, FILL.samples, THREE.RedFormat, THREE.UnsignedByteType);
+  const t = new THREE.DataTexture(
+    new Uint8Array(FILL.samples * FILL.samples),
+    FILL.samples,
+    FILL.samples,
+    THREE.RedFormat,
+    THREE.UnsignedByteType,
+  );
   t.minFilter = THREE.LinearFilter;
   t.magFilter = THREE.LinearFilter;
   t.unpackAlignment = 1;
@@ -354,7 +407,11 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
   let lastTime = light.uTime.value;
   const forms = new Map<AccentForm, FormPoints>();
 
-  const makeForm = (form: AccentForm, seedBase: number, spec: AccentSpec): FormPoints => {
+  const makeForm = (
+    form: AccentForm,
+    seedBase: number,
+    spec: AccentSpec,
+  ): FormPoints => {
     const seeds = new Float32Array(MOST * 4);
     const more = new Float32Array(MOST * 2);
     let seed = seedBase >>> 0 || 1;
@@ -367,14 +424,22 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
       more.set([i % CROWNS, next()], i * 2);
     }
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(MOST * 3), 3));
+    geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(MOST * 3), 3),
+    );
     geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 4));
     geometry.setAttribute("aMore", new THREE.BufferAttribute(more, 2));
     const uniforms = formUniforms(form, carried);
     const material = new THREE.ShaderMaterial({
       vertexShader: DRIFT_VERT,
       fragmentShader: DRIFT_FRAG,
-      uniforms: { ...light, ...ground.uniforms, ...vitalityUniforms, ...uniforms },
+      uniforms: {
+        ...light,
+        ...ground.uniforms,
+        ...vitalityUniforms,
+        ...uniforms,
+      },
       transparent: true,
       depthWrite: false,
       // A glowing thing adds its light to what is behind it, so it brightens the dark rather than covering it.
@@ -386,7 +451,14 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     points.renderOrder = 3;
     points.visible = false;
     object.add(points);
-    return { points, uniforms, slots: new Array<number | null>(CROWNS).fill(null), full: [], spec, fillAt: null };
+    return {
+      points,
+      uniforms,
+      slots: new Array<number | null>(CROWNS).fill(null),
+      full: [],
+      spec,
+      fillAt: null,
+    };
   };
 
   /** Sets a form's glow for the hour. Glowing things show by contrast, faint at noon and bright at dusk. */
@@ -394,7 +466,8 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     const dark = Math.min(1, Math.max(0, light.uNightness.value));
     const b = DRIFT_FORMS[f.spec.form];
     f.uniforms.uGlow.value = f.spec.glow * (0.35 + 0.65 * dark);
-    f.uniforms.uOpacity.value = b.opacity * (f.spec.glow > 0.5 ? 0.45 + 0.55 * dark : 1);
+    f.uniforms.uOpacity.value =
+      b.opacity * (f.spec.glow > 0.5 ? 0.45 + 0.55 * dark : 1);
     f.uniforms.uHalo.value = b.shape === 0 ? f.spec.glow * dark : 0;
   };
 
@@ -404,7 +477,12 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
    * Fills the window around (x, z) with the form's fill as a share of its fullest region's, blending regions by their
    * weights raised to `EDGE`.
    */
-  const fillAround = (f: FormPoints, land: WorldSpec, x: number, z: number): void => {
+  const fillAround = (
+    f: FormPoints,
+    land: WorldSpec,
+    x: number,
+    z: number,
+  ): void => {
     const half = (FILL.samples - 1) / 2;
     const i0 = Math.round(x / FILL.spacing) - half;
     const j0 = Math.round(z / FILL.spacing) - half;
@@ -413,7 +491,12 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     const data = texture.image.data as Uint8Array;
     for (let j = 0; j < FILL.samples; j++) {
       for (let i = 0; i < FILL.samples; i++) {
-        regionWeights(land, (i0 + i) * FILL.spacing, (j0 + j) * FILL.spacing, weights);
+        regionWeights(
+          land,
+          (i0 + i) * FILL.spacing,
+          (j0 + j) * FILL.spacing,
+          weights,
+        );
         let sum = 0;
         let total = 0;
         weights.forEach((w, r) => {
@@ -421,23 +504,38 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
           sum += share * (f.full[r] ?? 0);
           total += share;
         });
-        data[j * FILL.samples + i] = most > 0 && total > 0 ? Math.round((sum / total / most) * 255) : 0;
+        data[j * FILL.samples + i] =
+          most > 0 && total > 0 ? Math.round((sum / total / most) * 255) : 0;
       }
     }
     texture.needsUpdate = true;
-    f.uniforms.uFillMap.value.set(i0 * FILL.spacing, j0 * FILL.spacing, FILL.spacing, FILL.samples);
+    f.uniforms.uFillMap.value.set(
+      i0 * FILL.spacing,
+      j0 * FILL.spacing,
+      FILL.spacing,
+      FILL.samples,
+    );
     f.fillAt = [i0 + half, j0 + half];
   };
   /** Whether the person at (x, z) is far enough from the center of the form's fill window to refill it around them. */
   const strayed = (f: FormPoints, x: number, z: number): boolean =>
-    f.fillAt === null || Math.max(Math.abs(x - f.fillAt[0] * FILL.spacing), Math.abs(z - f.fillAt[1] * FILL.spacing)) > FILL.recenter;
+    f.fillAt === null ||
+    Math.max(
+      Math.abs(x - f.fillAt[0] * FILL.spacing),
+      Math.abs(z - f.fillAt[1] * FILL.spacing),
+    ) > FILL.recenter;
 
   /**
    * Keeps each slot's tree while it stays within `DRIFT_REACH.keep`, so a slot frees only once nothing it dropped is
    * in sight. Fills free slots with the nearest trees first, and sets each tree's drop rate from its region's fill and
    * its ground's decline.
    */
-  const tend = (f: FormPoints, near: readonly Crown[], x: number, z: number): void => {
+  const tend = (
+    f: FormPoints,
+    near: readonly Crown[],
+    x: number,
+    z: number,
+  ): void => {
     const at = f.uniforms.uCrownAt.value;
     const of = f.uniforms.uCrownOf.value;
     const mine = near.filter((c) => (f.full[c.region] ?? 0) > 0);
@@ -447,16 +545,26 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
       if (id !== null && c === undefined) {
         f.slots[s] = null;
         (of[s] as THREE.Vector4).x = 0;
-      } else if (c !== undefined) (of[s] as THREE.Vector4).w = (f.full[c.region] ?? 0) * (1 - c.decline);
+      } else if (c !== undefined)
+        (of[s] as THREE.Vector4).w = (f.full[c.region] ?? 0) * (1 - c.decline);
     });
     const held = new Set(f.slots);
-    const waiting = mine.filter((c) => !held.has(c.id)).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));
+    const waiting = mine
+      .filter((c) => !held.has(c.id))
+      .sort(
+        (a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z),
+      );
     for (const c of waiting) {
       const s = f.slots.indexOf(null);
       if (s < 0) break;
       f.slots[s] = c.id;
       (at[s] as THREE.Vector4).set(c.x, c.z, c.low, c.high);
-      (of[s] as THREE.Vector4).set(c.reach, c.ground, light.uTime.value, (f.full[c.region] ?? 0) * (1 - c.decline));
+      (of[s] as THREE.Vector4).set(
+        c.reach,
+        c.ground,
+        light.uTime.value,
+        (f.full[c.region] ?? 0) * (1 - c.decline),
+      );
     }
   };
 
@@ -474,11 +582,23 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
         }
         f ??= makeForm(form, 991 + k * 7919, spec);
         forms.set(form, f);
-        f.full = drifts.map((d) => (d?.form === form ? Math.min(1, FROM_TREES.has(form) ? d.count / FULL_TREE : d.count * AIR_SHARE) : 0));
+        f.full = drifts.map((d) =>
+          d?.form === form
+            ? Math.min(
+                1,
+                FROM_TREES.has(form)
+                  ? d.count / FULL_TREE
+                  : d.count * AIR_SHARE,
+              )
+            : 0,
+        );
         f.uniforms.uFull.value = Math.max(...f.full);
         f.fillAt = null;
         // A drift ranked past the fullest region's share never shows, so it is not drawn.
-        f.points.geometry.setDrawRange(0, Math.min(MOST, Math.ceil(Math.max(...f.full) * MOST) + 1));
+        f.points.geometry.setDrawRange(
+          0,
+          Math.min(MOST, Math.ceil(Math.max(...f.full) * MOST) + 1),
+        );
         // All regions' drifts of one form share one look, because `drift@1` gives each form one color and size.
         f.spec = spec;
         f.uniforms.uSize.value = spec.size * SCALE;
@@ -492,7 +612,14 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
       Object.fromEntries(
         [...forms]
           .filter(([, f]) => f.points.visible)
-          .map(([form, f]) => [form, { most: +Math.max(...f.full).toFixed(3), drawn: f.points.geometry.drawRange.count, trees: f.slots.filter((s) => s !== null).length }]),
+          .map(([form, f]) => [
+            form,
+            {
+              most: +Math.max(...f.full).toFixed(3),
+              drawn: f.points.geometry.drawRange.count,
+              trees: f.slots.filter((s) => s !== null).length,
+            },
+          ]),
       ),
     follow(crowns, focal) {
       // The wind moves the air as the world's clock runs, and not while the clock is frozen.
@@ -500,16 +627,25 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
       const dt = Math.max(0, t - lastTime);
       lastTime = t;
       const wind = light.uWindDir.value;
-      carried.x = (carried.x + wind.x * light.uWind.value * CARRY * dt) % (2 * DRIFT_REACH.air);
-      carried.y = (carried.y + wind.y * light.uWind.value * CARRY * dt) % (2 * DRIFT_REACH.air);
+      carried.x =
+        (carried.x + wind.x * light.uWind.value * CARRY * dt) %
+        (2 * DRIFT_REACH.air);
+      carried.y =
+        (carried.y + wind.y * light.uWind.value * CARRY * dt) %
+        (2 * DRIFT_REACH.air);
       const eye = light.uEye.value;
-      const near = [...forms.entries()].some(([form, f]) => f.points.visible && FROM_TREES.has(form)) ? crowns(eye.x, eye.z, DRIFT_REACH.keep) : [];
+      const near = [...forms.entries()].some(
+        ([form, f]) => f.points.visible && FROM_TREES.has(form),
+      )
+        ? crowns(eye.x, eye.z, DRIFT_REACH.keep)
+        : [];
       for (const [form, f] of forms) {
         if (!f.points.visible) continue;
         f.uniforms.uPixels.value = focal;
         shine(f);
         if (FROM_TREES.has(form)) tend(f, near, eye.x, eye.z);
-        else if (world !== null && strayed(f, eye.x, eye.z)) fillAround(f, world, eye.x, eye.z);
+        else if (world !== null && strayed(f, eye.x, eye.z))
+          fillAround(f, world, eye.x, eye.z);
       }
     },
   };

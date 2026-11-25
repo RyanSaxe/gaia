@@ -88,10 +88,12 @@ function bucketsOf(sites: readonly OwnedSite[]): Buckets {
   }
   const nx = Math.max(1, Math.floor((x1 - x0) / BUCKET) + 1);
   const nz = Math.max(1, Math.floor((z1 - z0) / BUCKET) + 1);
-  const at = (s: OwnedSite): number => Math.floor((s.z - z0) / BUCKET) * nx + Math.floor((s.x - x0) / BUCKET);
+  const at = (s: OwnedSite): number =>
+    Math.floor((s.z - z0) / BUCKET) * nx + Math.floor((s.x - x0) / BUCKET);
   const starts = new Int32Array(nx * nz + 1);
   for (const s of sites) starts[at(s) + 1] = (starts[at(s) + 1] as number) + 1;
-  for (let c = 0; c < nx * nz; c++) starts[c + 1] = (starts[c + 1] as number) + (starts[c] as number);
+  for (let c = 0; c < nx * nz; c++)
+    starts[c + 1] = (starts[c + 1] as number) + (starts[c] as number);
   const fill = starts.slice(0, nx * nz);
   const ids = new Int32Array(sites.length);
   sites.forEach((s, k) => {
@@ -107,10 +109,19 @@ function bucketsOf(sites: readonly OwnedSite[]): Buckets {
 const smooth = (t: number): number => t * t * (3 - 2 * t);
 
 /** Fills `owners` and `shares` with the owners of (x, z) as `groundOwners` computes them, unsorted, and returns the count. */
-function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z: number, soft: number, owners: Int32Array, shares: Float64Array): number {
+function ownersInto(
+  sites: readonly OwnedSite[],
+  land: LandOutline,
+  x: number,
+  z: number,
+  soft: number,
+  owners: Int32Array,
+  shares: Float64Array,
+): number {
   const half = GROUND_VITALITY.rim / 2;
   const past = pastTheEdge(land, x, z);
-  const wild = past <= -half ? 0 : past >= half ? 1 : smooth((past + half) / (2 * half));
+  const wild =
+    past <= -half ? 0 : past >= half ? 1 : smooth((past + half) / (2 * half));
   if (wild >= 1 || sites.length === 0) {
     owners[0] = WILD_OWNER;
     shares[0] = 1;
@@ -118,7 +129,8 @@ function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z
   }
   const [wx, wz] = warpPoint(x, z);
   const nearest = sites[nearestSite(sites, wx, wz)] as OwnedSite;
-  const dMin = Math.hypot(wx - nearest.x, wz - nearest.z) - (nearest.reach ?? 0);
+  const dMin =
+    Math.hypot(wx - nearest.x, wz - nearest.z) - (nearest.reach ?? 0);
   const cut = GROUND_VITALITY.cut * soft;
   // Visit every site that could lie within `cut` of the nearest. Each owner keeps its nearest site's distance.
   const b = bucketsOf(sites);
@@ -129,10 +141,22 @@ function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z
   let count = 1;
   const j1 = Math.min(b.nz - 1, Math.floor((wz + r - b.z0) / BUCKET));
   const i1 = Math.min(b.nx - 1, Math.floor((wx + r - b.x0) / BUCKET));
-  for (let j = Math.max(0, Math.floor((wz - r - b.z0) / BUCKET)); j <= j1; j++) {
-    for (let i = Math.max(0, Math.floor((wx - r - b.x0) / BUCKET)); i <= i1; i++) {
+  for (
+    let j = Math.max(0, Math.floor((wz - r - b.z0) / BUCKET));
+    j <= j1;
+    j++
+  ) {
+    for (
+      let i = Math.max(0, Math.floor((wx - r - b.x0) / BUCKET));
+      i <= i1;
+      i++
+    ) {
       const c = j * b.nx + i;
-      for (let n = b.starts[c] as number; n < (b.starts[c + 1] as number); n++) {
+      for (
+        let n = b.starts[c] as number;
+        n < (b.starts[c + 1] as number);
+        n++
+      ) {
         const s = sites[b.ids[n] as number] as OwnedSite;
         const d = Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0) - dMin;
         if (d >= cut) continue;
@@ -153,7 +177,8 @@ function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z
     shares[k] = Math.exp(-(shares[k] as number) / soft) - floor;
     total += shares[k] as number;
   }
-  for (let k = 0; k < count; k++) shares[k] = ((shares[k] as number) / total) * (1 - wild);
+  for (let k = 0; k < count; k++)
+    shares[k] = ((shares[k] as number) / total) * (1 - wild);
   if (wild > 0) {
     owners[count] = WILD_OWNER;
     shares[count++] = wild;
@@ -169,15 +194,27 @@ function ownersInto(sites: readonly OwnedSite[], land: LandOutline, x: number, z
  * Within `GROUND_VITALITY.rim` of the land's edge the wild takes over. Shares
  * sum to 1, largest first.
  */
-export function groundOwners(sites: readonly OwnedSite[], land: LandOutline, x: number, z: number, soft: number = GROUND_VITALITY.soft): Share[] {
+export function groundOwners(
+  sites: readonly OwnedSite[],
+  land: LandOutline,
+  x: number,
+  z: number,
+  soft: number = GROUND_VITALITY.soft,
+): Share[] {
   const owners = new Int32Array(MOST + 1);
   const shares = new Float64Array(MOST + 1);
   const count = ownersInto(sites, land, x, z, soft, owners, shares);
-  return Array.from({ length: count }, (_, k) => ({ owner: owners[k] as number, share: shares[k] as number })).sort((p, q) => q.share - p.share || p.owner - q.owner);
+  return Array.from({ length: count }, (_, k) => ({
+    owner: owners[k] as number,
+    share: shares[k] as number,
+  })).sort((p, q) => q.share - p.share || p.owner - q.owner);
 }
 
 /** The sample grid for the ownership of a world `extent` meters across, centered on the world. */
-export function ownershipGrid(extent: number, spacing: number = GROUND_VITALITY.spacing): { readonly n: number; readonly origin: number; readonly spacing: number } {
+export function ownershipGrid(
+  extent: number,
+  spacing: number = GROUND_VITALITY.spacing,
+): { readonly n: number; readonly origin: number; readonly spacing: number } {
   const n = Math.round(extent / spacing) + 1;
   return { n, origin: (-(n - 1) * spacing) / 2, spacing };
 }
@@ -188,17 +225,40 @@ export function ownershipGrid(extent: number, spacing: number = GROUND_VITALITY.
  * so a bake can compute them in parts on several threads and get the same
  * bytes as all at once.
  */
-export function ownershipRows(sites: readonly OwnedSite[], land: LandOutline, grid: { readonly n: number; readonly origin: number; readonly spacing: number }, k0: number, k1: number, soft: number = GROUND_VITALITY.soft): { owners: Uint16Array; shares: Uint8Array } {
+export function ownershipRows(
+  sites: readonly OwnedSite[],
+  land: LandOutline,
+  grid: {
+    readonly n: number;
+    readonly origin: number;
+    readonly spacing: number;
+  },
+  k0: number,
+  k1: number,
+  soft: number = GROUND_VITALITY.soft,
+): { owners: Uint16Array; shares: Uint8Array } {
   const { n, origin, spacing } = grid;
   const taps = GROUND_VITALITY.taps;
-  for (const s of sites) if (s.owner < 0 || s.owner >= WILD_TAP) throw new Error(`Ground has at most ${WILD_TAP} owners, numbered from 0; a site names owner ${s.owner}.`);
+  for (const s of sites)
+    if (s.owner < 0 || s.owner >= WILD_TAP)
+      throw new Error(
+        `Ground has at most ${WILD_TAP} owners, numbered from 0; a site names owner ${s.owner}.`,
+      );
   const owners = new Uint16Array((k1 - k0) * n * taps).fill(WILD_TAP);
   const shares = new Uint8Array((k1 - k0) * n * taps);
   const who = new Int32Array(MOST + 1);
   const much = new Float64Array(MOST + 1);
   for (let k = k0; k < k1; k++) {
     for (let i = 0; i < n; i++) {
-      const count = ownersInto(sites, land, origin + i * spacing, origin + k * spacing, soft, who, much);
+      const count = ownersInto(
+        sites,
+        land,
+        origin + i * spacing,
+        origin + k * spacing,
+        soft,
+        who,
+        much,
+      );
       // Select the largest shares first, with ties going to the lower owner.
       const kept = Math.min(taps, count);
       let total = 0;
@@ -206,7 +266,8 @@ export function ownershipRows(sites: readonly OwnedSite[], land: LandOutline, gr
         let best = t;
         for (let j = t + 1; j < count; j++) {
           const d = (much[j] as number) - (much[best] as number);
-          if (d > 0 || (d === 0 && (who[j] as number) < (who[best] as number))) best = j;
+          if (d > 0 || (d === 0 && (who[j] as number) < (who[best] as number)))
+            best = j;
         }
         [who[t], who[best]] = [who[best] as number, who[t] as number];
         [much[t], much[best]] = [much[best] as number, much[t] as number];
@@ -215,7 +276,10 @@ export function ownershipRows(sites: readonly OwnedSite[], land: LandOutline, gr
       const at = ((k - k0) * n + i) * taps;
       let left = 255;
       for (let t = 0; t < kept; t++) {
-        const q = t === kept - 1 ? left : Math.min(left, Math.round(((much[t] as number) / total) * 255));
+        const q =
+          t === kept - 1
+            ? left
+            : Math.min(left, Math.round(((much[t] as number) / total) * 255));
         owners[at + t] = who[t] === WILD_OWNER ? WILD_TAP : (who[t] as number);
         shares[at + t] = q;
         left -= q;
@@ -226,7 +290,13 @@ export function ownershipRows(sites: readonly OwnedSite[], land: LandOutline, gr
 }
 
 /** The owners of every sample of a grid `extent` meters across, centered on the world: `ownershipRows` over every row. */
-export function ownershipOf(sites: readonly OwnedSite[], land: LandOutline, extent: number, soft: number = GROUND_VITALITY.soft, spacing: number = GROUND_VITALITY.spacing): Ownership {
+export function ownershipOf(
+  sites: readonly OwnedSite[],
+  land: LandOutline,
+  extent: number,
+  soft: number = GROUND_VITALITY.soft,
+  spacing: number = GROUND_VITALITY.spacing,
+): Ownership {
   const grid = ownershipGrid(extent, spacing);
   return { ...grid, ...ownershipRows(sites, land, grid, 0, grid.n, soft) };
 }
@@ -238,7 +308,13 @@ export function ownershipOf(sites: readonly OwnedSite[], land: LandOutline, exte
  * from `offset`, so two vitality tables can fill one texture's channels. A
  * byte array gets whole 255ths, and a float array gets exact values.
  */
-export function vitalityOver<T extends Uint8Array | Float32Array>(own: Ownership, vitality: ArrayLike<number>, into: T = new Uint8Array(own.n * own.n) as T, stride = 1, offset = 0): T {
+export function vitalityOver<T extends Uint8Array | Float32Array>(
+  own: Ownership,
+  vitality: ArrayLike<number>,
+  into: T = new Uint8Array(own.n * own.n) as T,
+  stride = 1,
+  offset = 0,
+): T {
   const whole = into instanceof Uint8Array;
   const taps = GROUND_VITALITY.taps;
   const count = own.n * own.n;
@@ -258,15 +334,26 @@ export function vitalityOver<T extends Uint8Array | Float32Array>(own: Ownership
 }
 
 /** The vitality at (x, z) from per-sample values in 255ths, blended between the four nearest samples as a linearly filtered texture reads them. */
-export function vitalityAt(own: Ownership, values: ArrayLike<number>, x: number, z: number, stride = 1, offset = 0): number {
+export function vitalityAt(
+  own: Ownership,
+  values: ArrayLike<number>,
+  x: number,
+  z: number,
+  stride = 1,
+  offset = 0,
+): number {
   const gx = Math.min(own.n - 1, Math.max(0, (x - own.origin) / own.spacing));
   const gz = Math.min(own.n - 1, Math.max(0, (z - own.origin) / own.spacing));
   const i = Math.min(own.n - 2, Math.floor(gx));
   const k = Math.min(own.n - 2, Math.floor(gz));
   const fx = gx - i;
   const fz = gz - k;
-  const v = (a: number, b: number): number => (values[(b * own.n + a) * stride + offset] as number) / 255;
-  return (v(i, k) * (1 - fx) + v(i + 1, k) * fx) * (1 - fz) + (v(i, k + 1) * (1 - fx) + v(i + 1, k + 1) * fx) * fz;
+  const v = (a: number, b: number): number =>
+    (values[(b * own.n + a) * stride + offset] as number) / 255;
+  return (
+    (v(i, k) * (1 - fx) + v(i + 1, k) * fx) * (1 - fz) +
+    (v(i, k + 1) * (1 - fx) + v(i + 1, k + 1) * fx) * fz
+  );
 }
 
 /**
@@ -291,19 +378,34 @@ export const GROUND_DECLINE = {
 
 /** How far ground of vitality `v` has declined, from 0 to 1 at full decline. It reads `shownVitality`, as plants do. */
 export function groundDecline(v: number): number {
-  const t = Math.min(1, Math.max(0, (shownVitality(v) - GROUND_DECLINE.to) / (GROUND_DECLINE.from - GROUND_DECLINE.to)));
+  const t = Math.min(
+    1,
+    Math.max(
+      0,
+      (shownVitality(v) - GROUND_DECLINE.to) /
+        (GROUND_DECLINE.from - GROUND_DECLINE.to),
+    ),
+  );
   return 1 - smooth(t);
 }
 
 /** What ground of vitality `v` shows: the share of blades remaining and their height, the share gone to straw, the share of bare earth, and how far its cover has dried. */
-export function groundLook(v: number): { blades: number; height: number; straw: number; bare: number; dry: number } {
+export function groundLook(v: number): {
+  blades: number;
+  height: number;
+  straw: number;
+  bare: number;
+  dry: number;
+} {
   const d = groundDecline(v);
   const g = GROUND_DECLINE;
   return {
     blades: 1 - (1 - g.blades) * d,
     height: 1 - (1 - g.height) * d,
     straw: d,
-    bare: g.bare * smooth(Math.min(1, Math.max(0, (d - g.bareFrom) / (1 - g.bareFrom)))),
+    bare:
+      g.bare *
+      smooth(Math.min(1, Math.max(0, (d - g.bareFrom) / (1 - g.bareFrom)))),
     dry: g.dry * d,
   };
 }

@@ -7,7 +7,9 @@ import { dirname, resolve } from "node:path";
 import { build } from "esbuild";
 import { LAB_BUILD, labBundle, labPage } from "./lab-page.ts";
 
-const out = resolve(process.argv[2] ?? resolve(import.meta.dirname, "../dist/lab.html"));
+const out = resolve(
+  process.argv[2] ?? resolve(import.meta.dirname, "../dist/lab.html"),
+);
 const html = labPage(labBundle(await build(LAB_BUILD)));
 
 mkdirSync(dirname(out), { recursive: true });

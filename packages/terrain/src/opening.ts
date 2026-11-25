@@ -55,18 +55,38 @@ export interface OpeningSpot {
 /** The positions of everything that represents code on a world's land: buildings and landmarks, definitions on their files' patches, and files and entities shown as flowers, stones, bushes or trees. */
 export interface CodePositions {
   /** Buildings and landmarks, each with its lot's radius. The sample world's have none. */
-  readonly things: readonly { readonly x: number; readonly z: number; readonly lot?: number }[];
+  readonly things: readonly {
+    readonly x: number;
+    readonly z: number;
+    readonly lot?: number;
+  }[];
   /** Definitions. One with no form (`""`) is not shown. */
-  readonly symbols: readonly { readonly x: number; readonly z: number; readonly form: string }[];
+  readonly symbols: readonly {
+    readonly x: number;
+    readonly z: number;
+    readonly form: string;
+  }[];
   /** Files and entities shown as flowers, a stone, a bush or a tree. */
-  readonly naturalThings?: readonly { readonly x: number; readonly z: number }[];
+  readonly naturalThings?: readonly {
+    readonly x: number;
+    readonly z: number;
+  }[];
 }
 
 /** Whether (x, z) is clear of everything that represents code (`OPENING.clear`). */
-export function clearOfCode(code: CodePositions, x: number, z: number): boolean {
-  for (const t of code.things) if (Math.hypot(t.x - x, t.z - z) < (t.lot ?? 0) + OPENING.pastLot) return false;
-  for (const s of code.symbols) if (s.form !== "" && Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
-  for (const s of code.naturalThings ?? []) if (Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
+export function clearOfCode(
+  code: CodePositions,
+  x: number,
+  z: number,
+): boolean {
+  for (const t of code.things)
+    if (Math.hypot(t.x - x, t.z - z) < (t.lot ?? 0) + OPENING.pastLot)
+      return false;
+  for (const s of code.symbols)
+    if (s.form !== "" && Math.hypot(s.x - x, s.z - z) < OPENING.clear)
+      return false;
+  for (const s of code.naturalThings ?? [])
+    if (Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
   return true;
 }
 
@@ -79,19 +99,33 @@ export interface OpeningView {
 }
 
 /** Whether a point lies on a file's patch or an area's own ground, not in the wild past them. */
-export const amongCode = (places: WorldPlaces, x: number, z: number): boolean => placeAt(places, x, z).area.depth >= 0;
+export const amongCode = (places: WorldPlaces, x: number, z: number): boolean =>
+  placeAt(places, x, z).area.depth >= 0;
 
 /** What a person standing at (x, z) and facing `yaw` sees. */
-export function openingView(t: Terrain, code: CodePositions, x: number, z: number, yaw: number): OpeningView {
+export function openingView(
+  t: Terrain,
+  code: CodePositions,
+  x: number,
+  z: number,
+  yaw: number,
+): OpeningView {
   const fx = -Math.sin(yaw);
   const fz = -Math.cos(yaw);
   const eye = heightAt(t.lattice, x, z) + EYE_HEIGHT;
   let rise = -90;
-  for (let d = OPENING.near; d <= OPENING.far; d += 4) rise = Math.max(rise, (Math.atan2(heightAt(t.lattice, x + fx * d, z + fz * d) - eye, d) * 180) / Math.PI);
+  for (let d = OPENING.near; d <= OPENING.far; d += 4)
+    rise = Math.max(
+      rise,
+      (Math.atan2(heightAt(t.lattice, x + fx * d, z + fz * d) - eye, d) * 180) /
+        Math.PI,
+    );
   const cos = Math.cos((OPENING.halfView * Math.PI) / 180);
   const inView = (p: { readonly x: number; readonly z: number }): boolean => {
     const d = Math.hypot(p.x - x, p.z - z);
-    return d > 0 && d <= OPENING.sees && ((p.x - x) * fx + (p.z - z) * fz) / d >= cos;
+    return (
+      d > 0 && d <= OPENING.sees && ((p.x - x) * fx + (p.z - z) * fz) / d >= cos
+    );
   };
   let seen = 0;
   for (const p of code.things) if (inView(p)) seen += OPENING.tall;
@@ -110,13 +144,25 @@ function better(a: Weighed, b: Weighed): boolean {
   return a.far < b.far;
 }
 
-export function openingSpot(t: Terrain, world: WorldPlaces & CodePositions): OpeningSpot {
+export function openingSpot(
+  t: Terrain,
+  world: WorldPlaces & CodePositions,
+): OpeningSpot {
   const root = world.areas.find((a) => a.path === "") ?? { x: 0, z: 0 };
   // Dry ground among the code, clear of everything that represents code.
-  const dryAmong = (x: number, z: number): boolean => amongCode(world, x, z) && waterDepthAt(t, x, z) <= OPENING.dry && clearOfCode(world, x, z);
+  const dryAmong = (x: number, z: number): boolean =>
+    amongCode(world, x, z) &&
+    waterDepthAt(t, x, z) <= OPENING.dry &&
+    clearOfCode(world, x, z);
   let best: Weighed | null = null;
   const weigh = (x: number, z: number, yaw: number): void => {
-    const view: Weighed = { x, z, yaw, ...openingView(t, world, x, z, yaw), far: Math.hypot(x - root.x, z - root.z) };
+    const view: Weighed = {
+      x,
+      z,
+      yaw,
+      ...openingView(t, world, x, z, yaw),
+      far: Math.hypot(x - root.x, z - root.z),
+    };
     if (best === null || better(view, best)) best = view;
   };
   const banks: OpeningSpot[] = [];
@@ -126,13 +172,27 @@ export function openingSpot(t: Terrain, world: WorldPlaces & CodePositions): Ope
     const end = st[st.length - 1];
     if (start === undefined || end === undefined) continue;
     // A stream shorter than `OPENING.ahead` is looked along whole, from its spring.
-    const run = Math.min(OPENING.ahead, Math.hypot(end.x - start.x, end.z - start.z));
+    const run = Math.min(
+      OPENING.ahead,
+      Math.hypot(end.x - start.x, end.z - start.z),
+    );
     for (let k = 0; k < st.length; k += OPENING.every) {
       const here = st[k] as (typeof st)[number];
       // Skip stations without `run` meters of stream left downstream to look along.
-      if (run === 0 || !amongCode(world, here.x, here.z) || Math.hypot(end.x - here.x, end.z - here.z) < run) continue;
+      if (
+        run === 0 ||
+        !amongCode(world, here.x, here.z) ||
+        Math.hypot(end.x - here.x, end.z - here.z) < run
+      )
+        continue;
       let ahead = k;
-      while (Math.hypot((st[ahead] as typeof here).x - here.x, (st[ahead] as typeof here).z - here.z) < run) ahead++;
+      while (
+        Math.hypot(
+          (st[ahead] as typeof here).x - here.x,
+          (st[ahead] as typeof here).z - here.z,
+        ) < run
+      )
+        ahead++;
       const there = st[ahead] as typeof here;
       const along = Math.atan2(-(there.x - here.x), -(there.z - here.z));
       const out = surfaceHalfWidth(here) + OPENING.bank;
@@ -140,12 +200,17 @@ export function openingSpot(t: Terrain, world: WorldPlaces & CodePositions): Ope
       for (const side of [1, -1]) {
         const x = here.x + Math.cos(along) * out * side;
         const z = here.z - Math.sin(along) * out * side;
-        if (dryAmong(x, z)) banks.push({ x, z, yaw: Math.atan2(-(there.x - x), -(there.z - z)) });
+        if (dryAmong(x, z))
+          banks.push({ x, z, yaw: Math.atan2(-(there.x - x), -(there.z - z)) });
       }
     }
   }
-  const nearest = Math.min(...banks.map((b) => Math.hypot(b.x - root.x, b.z - root.z)));
-  for (const b of banks) if (Math.hypot(b.x - root.x, b.z - root.z) <= nearest + OPENING.nearer) weigh(b.x, b.z, b.yaw);
+  const nearest = Math.min(
+    ...banks.map((b) => Math.hypot(b.x - root.x, b.z - root.z)),
+  );
+  for (const b of banks)
+    if (Math.hypot(b.x - root.x, b.z - root.z) <= nearest + OPENING.nearer)
+      weigh(b.x, b.z, b.yaw);
   if (best === null) {
     for (let r = 0; r <= OPENING.around; r += OPENING.ring) {
       const count = r === 0 ? 1 : Math.round((Math.PI * 2 * r) / OPENING.ring);
@@ -153,19 +218,32 @@ export function openingSpot(t: Terrain, world: WorldPlaces & CodePositions): Ope
         const a = (k / count) * Math.PI * 2;
         const x = root.x + Math.cos(a) * r;
         const z = root.z + Math.sin(a) * r;
-        if (dryAmong(x, z)) for (let w = 0; w < OPENING.ways; w++) weigh(x, z, (w / OPENING.ways) * Math.PI * 2);
+        if (dryAmong(x, z))
+          for (let w = 0; w < OPENING.ways; w++)
+            weigh(x, z, (w / OPENING.ways) * Math.PI * 2);
       }
     }
   }
   const chosen = best as Weighed | null;
-  return chosen === null ? { x: root.x, z: root.z, yaw: 0 } : { x: chosen.x, z: chosen.z, yaw: chosen.yaw };
+  return chosen === null
+    ? { x: root.x, z: root.z, yaw: 0 }
+    : { x: chosen.x, z: chosen.z, yaw: chosen.yaw };
 }
 
 /** Everything that represents code on a world's land, by identity, and the layout that placed it, for returning to a spot. */
 export interface CodeMarks {
   readonly size: number;
-  readonly things: readonly { readonly path: string; readonly x: number; readonly z: number }[];
-  readonly symbols: readonly { readonly id: string; readonly x: number; readonly z: number; readonly form: string }[];
+  readonly things: readonly {
+    readonly path: string;
+    readonly x: number;
+    readonly z: number;
+  }[];
+  readonly symbols: readonly {
+    readonly id: string;
+    readonly x: number;
+    readonly z: number;
+    readonly form: string;
+  }[];
   /** The land's regions under them. The same code lays out the same regions. */
   readonly regions: readonly unknown[];
 }
@@ -180,7 +258,11 @@ export interface LastSpot {
   readonly z: number;
   readonly yaw: number;
   readonly layout: string;
-  readonly by: { readonly path: string; readonly x: number; readonly z: number } | null;
+  readonly by: {
+    readonly path: string;
+    readonly x: number;
+    readonly z: number;
+  } | null;
 }
 
 /** Where a returning person stands. `exact` is true when the code's layout is unchanged, so they stand where they stood. */
@@ -196,9 +278,11 @@ export function layoutKey(world: CodeMarks): string {
   // FNV-1a over the layout as text, with positions to the centimeter.
   let h = 0x811c9dc5;
   const add = (s: string): void => {
-    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+    for (let i = 0; i < s.length; i++)
+      h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
   };
-  const at = (x: number, z: number): string => `${Math.round(x * 100)},${Math.round(z * 100)};`;
+  const at = (x: number, z: number): string =>
+    `${Math.round(x * 100)},${Math.round(z * 100)};`;
   add(`${world.size};`);
   for (const t of world.things) add(t.path + at(t.x, t.z));
   for (const s of world.symbols) add(s.id + at(s.x, s.z));
@@ -207,7 +291,12 @@ export function layoutKey(world: CodeMarks): string {
 }
 
 /** The `LastSpot` to save for a person at (x, z) facing `yaw`. */
-export function lastSpotAt(world: CodeMarks, x: number, z: number, yaw: number): LastSpot {
+export function lastSpotAt(
+  world: CodeMarks,
+  x: number,
+  z: number,
+  yaw: number,
+): LastSpot {
   let by: LastSpot["by"] = null;
   let nearest = Infinity;
   const consider = (path: string, px: number, pz: number): void => {
@@ -224,12 +313,23 @@ export function lastSpotAt(world: CodeMarks, x: number, z: number, yaw: number):
  * Once an edit has moved things, it is beside the thing they stood by at its new position, at the same offset and
  * facing the same way, and the caller checks the ground there. Returns null on a first visit or when that thing is gone.
  */
-export function returnTo(world: CodeMarks, stood: LastSpot | undefined): Return | null {
+export function returnTo(
+  world: CodeMarks,
+  stood: LastSpot | undefined,
+): Return | null {
   if (stood === undefined) return null;
-  if (stood.layout === layoutKey(world)) return { x: stood.x, z: stood.z, yaw: stood.yaw, exact: true };
+  if (stood.layout === layoutKey(world))
+    return { x: stood.x, z: stood.z, yaw: stood.yaw, exact: true };
   if (stood.by === null) return null;
   const path = stood.by.path;
-  const now = world.things.find((t) => t.path === path) ?? world.symbols.find((s) => s.id === path && s.form !== "");
+  const now =
+    world.things.find((t) => t.path === path) ??
+    world.symbols.find((s) => s.id === path && s.form !== "");
   if (now === undefined) return null;
-  return { x: now.x + (stood.x - stood.by.x), z: now.z + (stood.z - stood.by.z), yaw: stood.yaw, exact: false };
+  return {
+    x: now.x + (stood.x - stood.by.x),
+    z: now.z + (stood.z - stood.by.z),
+    yaw: stood.yaw,
+    exact: false,
+  };
 }

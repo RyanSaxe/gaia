@@ -38,9 +38,24 @@ export interface Target {
 type Ref =
   | { readonly is: "use"; readonly slot: string }
   | { readonly is: "present"; readonly slot: string }
-  | { readonly is: "param"; readonly slot: string; readonly param: string; readonly field: Field }
-  | { readonly is: "member"; readonly slot: string; readonly param: string; readonly member: string }
-  | { readonly is: "fixed"; readonly slot: string; readonly param: string; readonly value: string | boolean };
+  | {
+      readonly is: "param";
+      readonly slot: string;
+      readonly param: string;
+      readonly field: Field;
+    }
+  | {
+      readonly is: "member";
+      readonly slot: string;
+      readonly param: string;
+      readonly member: string;
+    }
+  | {
+      readonly is: "fixed";
+      readonly slot: string;
+      readonly param: string;
+      readonly value: string | boolean;
+    };
 
 export interface Wave {
   readonly request: JevRequest;
@@ -66,7 +81,12 @@ function shuffled<T>(items: readonly T[], label: string, target: Target): T[] {
   return out;
 }
 
-function questionFor(field: Field, context: string, label: string, target: Target): JevQuestion {
+function questionFor(
+  field: Field,
+  context: string,
+  label: string,
+  target: Target,
+): JevQuestion {
   const instructions = `${context} ${field.ask}`;
   switch (field.type) {
     case "choice": {
@@ -74,15 +94,30 @@ function questionFor(field: Field, context: string, label: string, target: Targe
       return {
         type: "choice",
         instructions,
-        criteria: Object.fromEntries(keys.map((k) => [k, (field.options as Record<string, string>)[k] ?? k])),
+        criteria: Object.fromEntries(
+          keys.map((k) => [
+            k,
+            (field.options as Record<string, string>)[k] ?? k,
+          ]),
+        ),
       };
     }
     case "scale":
-      return { type: "score", instructions, criteria: field.levels.map((l) => l.words) };
+      return {
+        type: "score",
+        instructions,
+        criteria: field.levels.map((l) => l.words),
+      };
     case "flag":
-      return { type: "noul", instructions, criteria: { true: field.yes, false: field.no } };
+      return {
+        type: "noul",
+        instructions,
+        criteria: { true: field.yes, false: field.no },
+      };
     case "set":
-      throw new Error("A set becomes one noul per member; use memberQuestions.");
+      throw new Error(
+        "A set becomes one noul per member; use memberQuestions.",
+      );
   }
 }
 
@@ -93,18 +128,32 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   for (const [name, s] of Object.entries(k.slots)) {
     // Offer only primitives whose needs the place meets, or the part already chosen. An optional slot nothing fits is skipped.
     const settled = target.uses?.[name];
-    const fitting = settled !== undefined ? [lib.get(settled)] : lib.forRole(s.role, { has: target.has ?? [], ...(target.rank === undefined ? {} : { rank: target.rank }) });
+    const fitting =
+      settled !== undefined
+        ? [lib.get(settled)]
+        : lib.forRole(s.role, {
+            has: target.has ?? [],
+            ...(target.rank === undefined ? {} : { rank: target.rank }),
+          });
     if (fitting.length === 0) {
       if (s.optional) continue;
-      throw new Error(`No ${s.role} primitive fits ${target.id || "the repository's root"}'s place.`);
+      throw new Error(
+        `No ${s.role} primitive fits ${target.id || "the repository's root"}'s place.`,
+      );
     }
     offered[name] = fitting.map((p) => p.id);
     // A slot's own `ask` text, which says what the part means about the code, goes into its questions.
-    const context = s.ask === undefined ? `${k.doc} This is about its ${name}.` : `${k.doc} Its ${name}: ${s.ask}`;
+    const context =
+      s.ask === undefined
+        ? `${k.doc} This is about its ${name}.`
+        : `${k.doc} Its ${name}: ${s.ask}`;
     if (s.optional) {
       questions[`${name}.present`] = {
         type: "noul",
-        instructions: s.ask === undefined ? `${context} Should it have a ${name} (${s.role.toLowerCase()})?` : `${context} Should it have one?`,
+        instructions:
+          s.ask === undefined
+            ? `${context} Should it have a ${name} (${s.role.toLowerCase()})?`
+            : `${context} Should it have one?`,
         criteria: { true: `It has a ${name}.`, false: `It has no ${name}.` },
       };
       refs[`${name}.present`] = { is: "present", slot: name };
@@ -113,18 +162,31 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
     if (candidates.length === 1) continue;
     questions[`${name}.use`] = {
       type: "choice",
-      instructions: s.ask === undefined ? `${context} Which form fits it best?` : `${context} Which suits it?`,
+      instructions:
+        s.ask === undefined
+          ? `${context} Which form fits it best?`
+          : `${context} Which suits it?`,
       criteria: Object.fromEntries(candidates.map((p) => [p.id, p.doc])),
     };
     refs[`${name}.use`] = { is: "use", slot: name };
   }
-  return { request: { model: MODEL, state: target.state, questions }, refs, offered };
+  return {
+    request: { model: MODEL, state: target.state, questions },
+    refs,
+    offered,
+  };
 }
 
-export function readStructure(k: AnyKind, lib: Library, wave: Wave, answers: Readonly<Record<string, JevAnswer>>): Structure {
+export function readStructure(
+  k: AnyKind,
+  lib: Library,
+  wave: Wave,
+  answers: Readonly<Record<string, JevAnswer>>,
+): Structure {
   const out: Record<string, string> = {};
   const offered = wave.offered;
-  if (offered === undefined) throw new Error("readStructure reads the wave planStructure made.");
+  if (offered === undefined)
+    throw new Error("readStructure reads the wave planStructure made.");
   for (const name of slotOrder(k)) {
     const s = k.slots[name] as AnyKind["slots"][string];
     const candidates = offered[name] ?? [];
@@ -132,9 +194,12 @@ export function readStructure(k: AnyKind, lib: Library, wave: Wave, answers: Rea
     if (s.optional && !yes(answers[`${name}.present`])) continue;
     // Skip a slot whose `on` slot is absent, whatever Jev answered.
     if (s.on !== undefined && !(s.on in out)) continue;
-    const chosen = candidates.length === 1 ? candidates[0] : pick(answers[`${name}.use`]);
+    const chosen =
+      candidates.length === 1 ? candidates[0] : pick(answers[`${name}.use`]);
     if (chosen === undefined || !candidates.includes(chosen)) {
-      throw new Error(`Jev's answer for ${name}.use is not a ${s.role} primitive it was offered.`);
+      throw new Error(
+        `Jev's answer for ${name}.use is not a ${s.role} primitive it was offered.`,
+      );
     }
     out[name] = chosen;
   }
@@ -155,13 +220,25 @@ export interface DetailOptions {
   readonly earlier?: Readonly<Record<string, unknown>>;
 }
 
-export function planDetails(k: AnyKind, lib: Library, structure: Structure, target: Target, options: DetailOptions = {}): Wave {
+export function planDetails(
+  k: AnyKind,
+  lib: Library,
+  structure: Structure,
+  target: Target,
+  options: DetailOptions = {},
+): Wave {
   const { stage = 0, narrow = {}, fixed = {}, earlier } = options;
   const inStage = new Set(stagesOf(k)[stage] ?? []);
   const questions: Record<string, JevQuestion> = {};
   const refs: Record<string, Ref> = {};
-  const chosen = Object.fromEntries(Object.entries(structure).map(([slot, id]) => [slot, lib.get(id)]));
-  const state = { ...target.state, decided: describe(chosen), ...(earlier === undefined ? {} : { earlier }) };
+  const chosen = Object.fromEntries(
+    Object.entries(structure).map(([slot, id]) => [slot, lib.get(id)]),
+  );
+  const state = {
+    ...target.state,
+    decided: describe(chosen),
+    ...(earlier === undefined ? {} : { earlier }),
+  };
   for (const [slotName, p] of Object.entries(chosen)) {
     if (!inStage.has(slotName)) continue;
     const ask = k.slots[slotName]?.ask;
@@ -175,13 +252,23 @@ export function planDetails(k: AnyKind, lib: Library, structure: Structure, targ
       }
       const field = narrowed(raw, narrow[id]);
       if (field.type === "set") {
-        for (const [member, desc] of Object.entries(field.members as Record<string, string>)) {
+        for (const [member, desc] of Object.entries(
+          field.members as Record<string, string>,
+        )) {
           questions[`${id}:${member}`] = {
             type: "noul",
             instructions: `${context} ${field.ask} Include this? ${desc}`,
-            criteria: { true: `Include ${member}.`, false: `Leave out ${member}.` },
+            criteria: {
+              true: `Include ${member}.`,
+              false: `Leave out ${member}.`,
+            },
           };
-          refs[`${id}:${member}`] = { is: "member", slot: slotName, param, member };
+          refs[`${id}:${member}`] = {
+            is: "member",
+            slot: slotName,
+            param,
+            member,
+          };
         }
         continue;
       }
@@ -193,9 +280,14 @@ export function planDetails(k: AnyKind, lib: Library, structure: Structure, targ
 }
 
 /** The single allowed key of a choice, if `allowed` leaves exactly one. */
-function onlyKey(field: Field, allowed: readonly string[] | undefined): string | undefined {
+function onlyKey(
+  field: Field,
+  allowed: readonly string[] | undefined,
+): string | undefined {
   if (field.type !== "choice" || allowed === undefined) return undefined;
-  const keys = Object.keys(field.options).filter((key) => allowed.includes(key));
+  const keys = Object.keys(field.options).filter((key) =>
+    allowed.includes(key),
+  );
   return keys.length === 1 ? keys[0] : undefined;
 }
 
@@ -203,7 +295,9 @@ function onlyKey(field: Field, allowed: readonly string[] | undefined): string |
 function narrowed(field: Field, allowed: readonly string[] | undefined): Field {
   if (allowed === undefined || allowed.length === 0) return field;
   const keep = <V>(entries: Readonly<Record<string, V>>): Record<string, V> =>
-    Object.fromEntries(Object.entries(entries).filter(([key]) => allowed.includes(key)));
+    Object.fromEntries(
+      Object.entries(entries).filter(([key]) => allowed.includes(key)),
+    );
   if (field.type === "choice") {
     const options = keep(field.options);
     return Object.keys(options).length >= 2 ? { ...field, options } : field;
@@ -219,8 +313,13 @@ export function assemble(
   details: Wave | readonly Wave[],
   answers: Readonly<Record<string, JevAnswer>>,
 ): Blueprint {
-  const params: Record<string, Record<string, string | boolean | string[]>> = {};
-  const waves: readonly Wave[] = Array.isArray(details) ? details : [details as Wave];
+  const params: Record<
+    string,
+    Record<string, string | boolean | string[]>
+  > = {};
+  const waves: readonly Wave[] = Array.isArray(details)
+    ? details
+    : [details as Wave];
   for (const [qid, ref] of waves.flatMap((w) => Object.entries(w.refs))) {
     const bucket = (params[ref.slot] ??= {});
     const answer = answers[qid];
@@ -257,10 +356,13 @@ export function validate(bp: Blueprint, k: AnyKind, lib: Library): string[] {
       problems.push(`${name} uses unknown primitive ${filled.use}.`);
       continue;
     }
-    if (p.role !== s.role) problems.push(`${name} needs a ${s.role}, not ${p.id}.`);
-    if (s.on !== undefined && bp.slots[s.on] === undefined) problems.push(`${name} is on ${s.on}, which is absent.`);
+    if (p.role !== s.role)
+      problems.push(`${name} needs a ${s.role}, not ${p.id}.`);
+    if (s.on !== undefined && bp.slots[s.on] === undefined)
+      problems.push(`${name} is on ${s.on}, which is absent.`);
     for (const [param, field] of Object.entries(p.params)) {
-      if (!isStoredValue(field, filled.params[param])) problems.push(`${name}.${param} is not a valid value.`);
+      if (!isStoredValue(field, filled.params[param]))
+        problems.push(`${name}.${param} is not a valid value.`);
     }
   }
   for (const name of Object.keys(bp.slots)) {
@@ -269,8 +371,12 @@ export function validate(bp: Blueprint, k: AnyKind, lib: Library): string[] {
   return problems;
 }
 
-function describe(chosen: Readonly<Record<string, AnyPrimitive>>): Record<string, string> {
-  return Object.fromEntries(Object.entries(chosen).map(([slot, p]) => [slot, p.doc]));
+function describe(
+  chosen: Readonly<Record<string, AnyPrimitive>>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(chosen).map(([slot, p]) => [slot, p.doc]),
+  );
 }
 
 function yes(answer: JevAnswer | undefined): boolean {
@@ -291,7 +397,11 @@ function topLevel(probabilities: Readonly<Record<string, number>>): number {
   return best;
 }
 
-function valueOf(field: Field, answer: JevAnswer | undefined, qid: string): string | boolean {
+function valueOf(
+  field: Field,
+  answer: JevAnswer | undefined,
+  qid: string,
+): string | boolean {
   if (answer === undefined) throw new Error(`No answer for ${qid}.`);
   switch (field.type) {
     case "choice":

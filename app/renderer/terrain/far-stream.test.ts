@@ -1,13 +1,21 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { Realized } from "@gaia/realize";
-import { DROOP_CELLS, FAR_BAKE_VERSION, FAR_VIEWS, type FarFormData, createSceneLight } from "@gaia/render";
+import {
+  DROOP_CELLS,
+  FAR_BAKE_VERSION,
+  FAR_VIEWS,
+  type FarFormData,
+  createSceneLight,
+} from "@gaia/render";
 import type { FarStore } from "./far-store.ts";
 import { FAR_TURN, createFarStream } from "./far-stream.ts";
 import { FAR, createFarForms } from "./woods.ts";
 
 // Runs animation frames on timers, since a stored form read after the world opens uploads one atlas layer a frame.
-vi.stubGlobal("requestAnimationFrame", (step: FrameRequestCallback) => setTimeout(() => step(performance.now()), 0));
+vi.stubGlobal("requestAnimationFrame", (step: FrameRequestCallback) =>
+  setTimeout(() => step(performance.now()), 0),
+);
 
 /** A stored far form with one texel per view, which the stream reads instead of baking. */
 const stored: FarFormData = {
@@ -16,16 +24,36 @@ const stored: FarFormData = {
   frame: 1,
   sway: 0.2,
   frequency: 1,
-  droop: { cells: new Uint8Array(DROOP_CELLS ** 3 * 4).fill(128), scale: 0, reach: 0 },
+  droop: {
+    cells: new Uint8Array(DROOP_CELLS ** 3 * 4).fill(128),
+    scale: 0,
+    reach: 0,
+  },
   width: FAR_VIEWS.azimuths,
   height: FAR_VIEWS.elevations.length,
-  layers: [0, 1, 2, 3].map(() => new Uint8Array(FAR_VIEWS.azimuths * FAR_VIEWS.elevations.length * 4)),
+  layers: [0, 1, 2, 3].map(
+    () => new Uint8Array(FAR_VIEWS.azimuths * FAR_VIEWS.elevations.length * 4),
+  ),
 };
-const store: FarStore = { get: () => Promise.resolve(stored), put: () => Promise.resolve() };
+const store: FarStore = {
+  get: () => Promise.resolve(stored),
+  put: () => Promise.resolve(),
+};
 /** Stubs the renderer calls that loading a form makes. Only a GPU would see their effect. */
-const renderer = { initTexture: () => undefined, initRenderTarget: () => undefined, copyTextureToTexture: () => undefined } as unknown as THREE.WebGLRenderer;
-const plant = { parts: [], motion: { sway: 0.2, frequency: 1 }, palette: { swatches: {} } } as unknown as Realized;
-const PACE = { opening: { views: 24, ms: 6 }, walking: { views: 24, ms: 2 } } as const;
+const renderer = {
+  initTexture: () => undefined,
+  initRenderTarget: () => undefined,
+  copyTextureToTexture: () => undefined,
+} as unknown as THREE.WebGLRenderer;
+const plant = {
+  parts: [],
+  motion: { sway: 0.2, frequency: 1 },
+  palette: { swatches: {} },
+} as unknown as Realized;
+const PACE = {
+  opening: { views: 24, ms: 6 },
+  walking: { views: 24, ms: 2 },
+} as const;
 const eye = new THREE.Vector3();
 
 /** Four forms sharing two slots, weighted by `weights`, and a stream over them. */
@@ -35,10 +63,16 @@ function streamOf(weights: number[]) {
     const { form } = forms.add(plant, () => Promise.resolve(plant));
     forms.join(form, new THREE.Group(), () => weights[k] ?? 0);
   }
-  return { forms, stream: createFarStream(renderer, forms, Promise.resolve(store), PACE) };
+  return {
+    forms,
+    stream: createFarStream(renderer, forms, Promise.resolve(store), PACE),
+  };
 }
 /** Runs `seconds` of frames at 20 frames a second, letting loads finish between them. */
-async function frames(stream: ReturnType<typeof streamOf>["stream"], seconds: number): Promise<void> {
+async function frames(
+  stream: ReturnType<typeof streamOf>["stream"],
+  seconds: number,
+): Promise<void> {
   for (let t = 0; t < seconds; t += 0.05) {
     stream.follow(eye, 1000, 0.05);
     await Promise.resolve();
@@ -65,6 +99,8 @@ describe("the far forms the slots hold", () => {
     expect(forms.swapPx(2)).toBeLessThan(FAR.swapPx);
     await frames(stream, FAR_TURN.seconds / 2 + 1);
     expect(forms.swapPx(2)).toBe(FAR.swapPx);
-    await expect(Promise.race([stream.settled(), frames(stream, 1).then(() => "busy")])).resolves.toBeUndefined();
+    await expect(
+      Promise.race([stream.settled(), frames(stream, 1).then(() => "busy")]),
+    ).resolves.toBeUndefined();
   });
 });

@@ -2,7 +2,14 @@ export * from "./flora.ts";
 export * from "./palettes.ts";
 export * from "./library.ts";
 export * from "./relief.ts";
-export { type BendOf, bedBend, bedOffset, fbm, fieldAt, troughOffset } from "./geometry/field.ts";
+export {
+  type BendOf,
+  bedBend,
+  bedOffset,
+  fbm,
+  fieldAt,
+  troughOffset,
+} from "./geometry/field.ts";
 export * from "./color.ts";
 export * from "./world.ts";
 export * from "./biome.ts";
@@ -11,7 +18,29 @@ export * from "./rock.ts";
 export * from "./wildflowers.ts";
 export * from "./route.ts";
 export * from "./landmark.ts";
-export { ROCK_ARCH_FORMS, ROCK_ARCH_SHAPE, ROCK_ARCH_STUB } from "./geometry/landmark/arch.ts";
-export { ROTUNDA_MEASURES, ROTUNDA_SHAPE } from "./geometry/landmark/rotunda.ts";
-export { type Band, type Bands, type ByWord, type Shape, bandOf, landmarkShape } from "./geometry/landmark/shared.ts";
-export { type FootbridgeDeck, buildCairn, buildEdgingStones, buildFootbridge, buildSteppingStones, footbridgeDeck, footbridgeHolds } from "./geometry/crossing.ts";
+export {
+  ROCK_ARCH_FORMS,
+  ROCK_ARCH_SHAPE,
+  ROCK_ARCH_STUB,
+} from "./geometry/landmark/arch.ts";
+export {
+  ROTUNDA_MEASURES,
+  ROTUNDA_SHAPE,
+} from "./geometry/landmark/rotunda.ts";
+export {
+  type Band,
+  type Bands,
+  type ByWord,
+  type Shape,
+  bandOf,
+  landmarkShape,
+} from "./geometry/landmark/shared.ts";
+export {
+  type FootbridgeDeck,
+  buildCairn,
+  buildEdgingStones,
+  buildFootbridge,
+  buildSteppingStones,
+  footbridgeDeck,
+  footbridgeHolds,
+} from "./geometry/crossing.ts";

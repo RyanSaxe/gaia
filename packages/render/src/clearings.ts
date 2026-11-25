@@ -33,13 +33,18 @@ float clearing(vec2 p) {
 `;
 
 export interface Clearings {
-  readonly uniforms: { uClearings: { value: THREE.Vector4[] }; uClearingRadius: { value: number[] } };
+  readonly uniforms: {
+    uClearings: { value: THREE.Vector4[] };
+    uClearingRadius: { value: number[] };
+  };
   set(list: readonly Clearing[]): void;
 }
 
 export function createClearings(): Clearings {
   const uniforms = {
-    uClearings: { value: Array.from({ length: MAX_CLEARINGS }, () => new THREE.Vector4()) },
+    uClearings: {
+      value: Array.from({ length: MAX_CLEARINGS }, () => new THREE.Vector4()),
+    },
     uClearingRadius: { value: new Array<number>(MAX_CLEARINGS).fill(0) },
   };
   return {
@@ -47,7 +52,12 @@ export function createClearings(): Clearings {
     set(list) {
       for (let i = 0; i < MAX_CLEARINGS; i++) {
         const c = list[i];
-        uniforms.uClearings.value[i]?.set(c?.ax ?? 0, c?.az ?? 0, c?.bx ?? 0, c?.bz ?? 0);
+        uniforms.uClearings.value[i]?.set(
+          c?.ax ?? 0,
+          c?.az ?? 0,
+          c?.bx ?? 0,
+          c?.bz ?? 0,
+        );
         uniforms.uClearingRadius.value[i] = c?.radius ?? 0;
       }
     },

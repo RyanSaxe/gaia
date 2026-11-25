@@ -11,9 +11,25 @@
 // gust. A new primitive in these roles is covered once it is in `PRIMITIVES`.
 
 import { describe, expect, it } from "vitest";
-import { type AnyPrimitive, type Built, type BuildingPlan, type Field, Library, type Part, rand } from "@gaia/schema";
+import {
+  type AnyPrimitive,
+  type Built,
+  type BuildingPlan,
+  type Field,
+  Library,
+  type Part,
+  rand,
+} from "@gaia/schema";
 import { BUSH_PRIMITIVES, PRIMITIVES, TREE_PRIMITIVES } from "@gaia/primitives";
-import { FLUTTERS, SUPPORT, type WindState, applyVitality, gustAt, resolveParams, unsupportedAt } from "@gaia/realize";
+import {
+  FLUTTERS,
+  SUPPORT,
+  type WindState,
+  applyVitality,
+  gustAt,
+  resolveParams,
+  unsupportedAt,
+} from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
@@ -28,7 +44,13 @@ const FLOWER_SEEDS = Array.from({ length: 16 }, (_, k) => k + 1);
 /** Buildings are many times larger, so they are checked at fewer vitalities. */
 const BUILDING_VITALITIES = [0.45, 0.2, 0.06];
 /** A building is its plan and one primitive in each of these roles. */
-const BUILDING_ROLES = ["Walls", "Roof", "Openings", "Dressing", "Feature"] as const;
+const BUILDING_ROLES = [
+  "Walls",
+  "Roof",
+  "Openings",
+  "Dressing",
+  "Feature",
+] as const;
 /**
  * Landmarks checked by the flora rules instead of these. A great tree's crown
  * and twigs hang from the same joints as every flora tree.
@@ -41,66 +63,145 @@ const PLANT_BUDGET = 40_000;
 const GREAT_TREE_BUDGET = 80_000;
 
 type Stored = Record<string, string | boolean | string[]>;
-type Erased = (params: unknown, ctx: { rand: ReturnType<typeof rand>; facts: Record<string, number> }, input: unknown) => unknown;
+type Erased = (
+  params: unknown,
+  ctx: { rand: ReturnType<typeof rand>; facts: Record<string, number> },
+  input: unknown,
+) => unknown;
 
 /** The lowest, middle and highest level of every scale, with every choice option cycled through (as the contract test samples). */
 function samples(p: AnyPrimitive): Stored[] {
-  const options = Math.max(3, ...(Object.values(p.params) as Field[]).map((f) => (f.type === "choice" ? Object.keys(f.options).length : 0)));
-  return Array.from({ length: options }, (_, i) => [0, 0.5, 1][i % 3] as number).map((at, i) => {
+  const options = Math.max(
+    3,
+    ...(Object.values(p.params) as Field[]).map((f) =>
+      f.type === "choice" ? Object.keys(f.options).length : 0,
+    ),
+  );
+  return Array.from(
+    { length: options },
+    (_, i) => [0, 0.5, 1][i % 3] as number,
+  ).map((at, i) => {
     const out: Stored = {};
     for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
-      if (f.type === "scale") out[name] = f.levels[Math.round(at * (f.levels.length - 1))]?.words ?? "";
+      if (f.type === "scale")
+        out[name] =
+          f.levels[Math.round(at * (f.levels.length - 1))]?.words ?? "";
       else if (f.type === "choice") {
         const keys = Object.keys(f.options);
         out[name] = keys[i % keys.length] ?? "";
       } else if (f.type === "flag") out[name] = i % 2 === 0;
-      else out[name] = Object.keys(f.members).filter((_, k) => (k + i) % 2 === 0);
+      else
+        out[name] = Object.keys(f.members).filter((_, k) => (k + i) % 2 === 0);
     }
     return out;
   });
 }
 
-function build(p: AnyPrimitive, stored: Stored, input: unknown, seed: number): unknown {
+function build(
+  p: AnyPrimitive,
+  stored: Stored,
+  input: unknown,
+  seed: number,
+): unknown {
   const params = resolveParams(p, stored, rand(seed), p.id);
-  return (p.build as Erased)(params, { rand: rand(seed).fork(p.id), facts }, input);
+  return (p.build as Erased)(
+    params,
+    { rand: rand(seed).fork(p.id), facts },
+    input,
+  );
 }
 
-const describeFloaters = (parts: readonly Part[], v: number, moving = true): string[] =>
-  unsupportedAt(parts, v, { moving }).map((u) => `${parts[u.part]?.swatch} ${u.why} at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`);
+const describeFloaters = (
+  parts: readonly Part[],
+  v: number,
+  moving = true,
+): string[] =>
+  unsupportedAt(parts, v, { moving }).map(
+    (u) =>
+      `${parts[u.part]?.swatch} ${u.why} at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`,
+  );
 
-describe.each(lib.forRole("Landmark").filter((p) => !TREES.has(p.id)).map((p) => [p.id, p] as const))("%s", (_id, p) => {
-  it.each(samples(p).map((s, i) => [i, s] as const))("leaves no piece on nothing at any vitality, whole or partway gone (sample %i)", (i, s) => {
-    const parts = (build(p, s, null, 5 + i) as Built).parts as Part[];
-    expect(VITALITIES.flatMap((v) => describeFloaters(parts, v))).toEqual([]);
-  }, 20_000);
+describe.each(
+  lib
+    .forRole("Landmark")
+    .filter((p) => !TREES.has(p.id))
+    .map((p) => [p.id, p] as const),
+)("%s", (_id, p) => {
+  it.each(samples(p).map((s, i) => [i, s] as const))(
+    "leaves no piece on nothing at any vitality, whole or partway gone (sample %i)",
+    (i, s) => {
+      const parts = (build(p, s, null, 5 + i) as Built).parts as Part[];
+      expect(VITALITIES.flatMap((v) => describeFloaters(parts, v))).toEqual([]);
+    },
+    20_000,
+  );
 });
 
 describe("buildings", () => {
-  const plans: BuildingPlan[] = lib.forRole("Footprint").flatMap((p) => samples(p).map((s, i) => build(p, s, null, 13 + i) as BuildingPlan));
+  const plans: BuildingPlan[] = lib
+    .forRole("Footprint")
+    .flatMap((p) =>
+      samples(p).map((s, i) => build(p, s, null, 13 + i) as BuildingPlan),
+    );
   // Each plan with each walls primitive, the other roles cycled, so every structure primitive is built several ways.
-  const cases = plans.flatMap((plan, i) => lib.forRole("Walls").map((_, k) => [i, k, plan] as const));
-  it.each(cases)("leave no standing piece on nothing, and every fallen piece at rest (plan %i, walls %i)", (i, k, plan) => {
-    const parts: Part[] = [];
-    for (const role of BUILDING_ROLES) {
-      const choices = lib.forRole(role);
-      const p = role === "Walls" ? choices[k] : role === "Feature" ? [undefined, ...choices][(i + k) % (choices.length + 1)] : choices[(i + k) % choices.length];
-      if (p === undefined) continue;
-      parts.push(...((build(p, samples(p)[(i + k) % samples(p).length] as Stored, plan, 7 + i) as Built).parts as Part[]));
-    }
-    expect(BUILDING_VITALITIES.flatMap((v) => describeFloaters(parts, v, false))).toEqual([]);
-  }, 20_000);
+  const cases = plans.flatMap((plan, i) =>
+    lib.forRole("Walls").map((_, k) => [i, k, plan] as const),
+  );
+  it.each(cases)(
+    "leave no standing piece on nothing, and every fallen piece at rest (plan %i, walls %i)",
+    (i, k, plan) => {
+      const parts: Part[] = [];
+      for (const role of BUILDING_ROLES) {
+        const choices = lib.forRole(role);
+        const p =
+          role === "Walls"
+            ? choices[k]
+            : role === "Feature"
+              ? [undefined, ...choices][(i + k) % (choices.length + 1)]
+              : choices[(i + k) % choices.length];
+        if (p === undefined) continue;
+        parts.push(
+          ...((
+            build(
+              p,
+              samples(p)[(i + k) % samples(p).length] as Stored,
+              plan,
+              7 + i,
+            ) as Built
+          ).parts as Part[]),
+        );
+      }
+      expect(
+        BUILDING_VITALITIES.flatMap((v) => describeFloaters(parts, v, false)),
+      ).toEqual([]);
+    },
+    20_000,
+  );
 });
 
-const distance = (a: Float32Array, i: number, b: Float32Array, j: number): number =>
-  Math.hypot((a[i * 3] as number) - (b[j * 3] as number), (a[i * 3 + 1] as number) - (b[j * 3 + 1] as number), (a[i * 3 + 2] as number) - (b[j * 3 + 2] as number));
+const distance = (
+  a: Float32Array,
+  i: number,
+  b: Float32Array,
+  j: number,
+): number =>
+  Math.hypot(
+    (a[i * 3] as number) - (b[j * 3] as number),
+    (a[i * 3 + 1] as number) - (b[j * 3 + 1] as number),
+    (a[i * 3 + 2] as number) - (b[j * 3 + 2] as number),
+  );
 
 /**
  * Each vertex of `skin` paired with the vertex of `host` it grows from: the
  * nearest, as built, of those that turn about the same pivot and so move as it
  * does. A vertex that moves unlike everything under it has no root.
  */
-function rootsOf(skin: Part, host: readonly Part[]): ({ part: number; vertex: number } | undefined)[] {
-  const pivot = (q: Part, i: number): string => Array.from(q.channels.pivot.subarray(i * 3, i * 3 + 3)).join();
+function rootsOf(
+  skin: Part,
+  host: readonly Part[],
+): ({ part: number; vertex: number } | undefined)[] {
+  const pivot = (q: Part, i: number): string =>
+    Array.from(q.channels.pivot.subarray(i * 3, i * 3 + 3)).join();
   const turning = new Map<string, { part: number; vertex: number }[]>();
   host.forEach((q, part) => {
     for (let vertex = 0; vertex < q.shade.length; vertex++) {
@@ -114,59 +215,120 @@ function rootsOf(skin: Part, host: readonly Part[]): ({ part: number; vertex: nu
     let best: { part: number; vertex: number } | undefined;
     let nearest = Infinity;
     for (const r of turning.get(pivot(skin, i)) ?? []) {
-      const d = distance(skin.positions, i, (host[r.part] as Part).positions, r.vertex);
+      const d = distance(
+        skin.positions,
+        i,
+        (host[r.part] as Part).positions,
+        r.vertex,
+      );
       if (d < nearest) [best, nearest] = [r, d];
     }
     return best;
   });
 }
 
-describe.each(lib.forRole("Rock").map((p) => [p.id, p] as const))("%s", (_id, rock) => {
-  it.each(samples(rock).map((s, i) => [i, s] as const))("leaves no piece of it or what grows on it on nothing at any vitality (sample %i)", (i, s) => {
-    const body = build(rock, s, null, 5 + i) as Built;
-    const grown = lib.forRole("Overgrowth").flatMap((o) => samples(o).map((os, j) => [...body.parts, ...(build(o, os, body, 9 + j) as Built).parts] as Part[]));
-    expect(grown.flatMap((parts) => VITALITIES.flatMap((v) => describeFloaters(parts, v)))).toEqual([]);
-  }, 20_000);
+describe.each(lib.forRole("Rock").map((p) => [p.id, p] as const))(
+  "%s",
+  (_id, rock) => {
+    it.each(samples(rock).map((s, i) => [i, s] as const))(
+      "leaves no piece of it or what grows on it on nothing at any vitality (sample %i)",
+      (i, s) => {
+        const body = build(rock, s, null, 5 + i) as Built;
+        const grown = lib
+          .forRole("Overgrowth")
+          .flatMap((o) =>
+            samples(o).map(
+              (os, j) =>
+                [
+                  ...body.parts,
+                  ...(build(o, os, body, 9 + j) as Built).parts,
+                ] as Part[],
+            ),
+          );
+        expect(
+          grown.flatMap((parts) =>
+            VITALITIES.flatMap((v) => describeFloaters(parts, v)),
+          ),
+        ).toEqual([]);
+      },
+      20_000,
+    );
 
-  it.each(lib.forRole("Overgrowth").map((o) => [o.id, o] as const))("carries %s with it as it declines, so it never hangs in the air", (_o, overgrowth) => {
-    const pulled: string[] = [];
-    samples(rock).forEach((s, i) => {
-      const body = build(rock, s, null, 5 + i) as Built;
-      const host = body.parts as Part[];
-      samples(overgrowth).forEach((os, j) => {
-        for (const skin of (build(overgrowth, os, body, 9 + j) as Built).parts as Part[]) {
-          const roots = rootsOf(skin, host);
-          const rootless = roots.filter((r) => r === undefined).length;
-          if (rootless > 0) pulled.push(`sample ${i}, overgrowth ${j}: ${rootless} vertices move unlike anything under them`);
-          // As built, each vertex lies a little off its root. It may come closer as both decline, but no farther than surfaces that touch.
-          for (const v of VITALITIES) {
-            const grown = applyVitality(skin, v).positions;
-            const under = host.map((q) => applyVitality(q, v).positions);
-            let widest = 0;
-            roots.forEach((r, k) => {
-              if (r === undefined) return;
-              widest = Math.max(widest, distance(grown, k, under[r.part] as Float32Array, r.vertex) - distance(skin.positions, k, (host[r.part] as Part).positions, r.vertex));
-            });
-            if (widest > SUPPORT.glue) pulled.push(`sample ${i}, overgrowth ${j}: ${widest.toFixed(3)} m off what it grows on at vitality ${v}`);
-          }
-        }
-      });
-    });
-    expect(pulled).toEqual([]);
-  });
-});
+    it.each(lib.forRole("Overgrowth").map((o) => [o.id, o] as const))(
+      "carries %s with it as it declines, so it never hangs in the air",
+      (_o, overgrowth) => {
+        const pulled: string[] = [];
+        samples(rock).forEach((s, i) => {
+          const body = build(rock, s, null, 5 + i) as Built;
+          const host = body.parts as Part[];
+          samples(overgrowth).forEach((os, j) => {
+            for (const skin of (build(overgrowth, os, body, 9 + j) as Built)
+              .parts as Part[]) {
+              const roots = rootsOf(skin, host);
+              const rootless = roots.filter((r) => r === undefined).length;
+              if (rootless > 0)
+                pulled.push(
+                  `sample ${i}, overgrowth ${j}: ${rootless} vertices move unlike anything under them`,
+                );
+              // As built, each vertex lies a little off its root. It may come closer as both decline, but no farther than surfaces that touch.
+              for (const v of VITALITIES) {
+                const grown = applyVitality(skin, v).positions;
+                const under = host.map((q) => applyVitality(q, v).positions);
+                let widest = 0;
+                roots.forEach((r, k) => {
+                  if (r === undefined) return;
+                  widest = Math.max(
+                    widest,
+                    distance(
+                      grown,
+                      k,
+                      under[r.part] as Float32Array,
+                      r.vertex,
+                    ) -
+                      distance(
+                        skin.positions,
+                        k,
+                        (host[r.part] as Part).positions,
+                        r.vertex,
+                      ),
+                  );
+                });
+                if (widest > SUPPORT.glue)
+                  pulled.push(
+                    `sample ${i}, overgrowth ${j}: ${widest.toFixed(3)} m off what it grows on at vitality ${v}`,
+                  );
+              }
+            }
+          });
+        });
+        expect(pulled).toEqual([]);
+      },
+    );
+  },
+);
 
-describe.each(lib.forRole("Drift").map((p) => [p.id, p] as const))("%s", (_id, p) => {
-  // A drift of flowers is checked from 16 seeds: up to 30 s alone, and two minutes on a machine running other work.
-  it.each(samples(p).map((s, i) => [i, s] as const))("leaves no piece on nothing at any vitality, whole or partway gone (sample %i)", (i, s) => {
-    const flowers = (build(p, s, null, 5 + i) as Built).parts.some((q) => q.swatch === "bloom");
-    const floaters = (flowers ? FLOWER_SEEDS : [5 + i]).flatMap((seed) => {
-      const parts = (build(p, s, null, seed) as Built).parts as Part[];
-      return VITALITIES.flatMap((v) => describeFloaters(parts, v).map((f) => `seed ${seed}: ${f}`));
-    });
-    expect(floaters).toEqual([]);
-  }, 180_000);
-});
+describe.each(lib.forRole("Drift").map((p) => [p.id, p] as const))(
+  "%s",
+  (_id, p) => {
+    // A drift of flowers is checked from 16 seeds: up to 30 s alone, and two minutes on a machine running other work.
+    it.each(samples(p).map((s, i) => [i, s] as const))(
+      "leaves no piece on nothing at any vitality, whole or partway gone (sample %i)",
+      (i, s) => {
+        const flowers = (build(p, s, null, 5 + i) as Built).parts.some(
+          (q) => q.swatch === "bloom",
+        );
+        const floaters = (flowers ? FLOWER_SEEDS : [5 + i]).flatMap((seed) => {
+          const parts = (build(p, s, null, seed) as Built).parts as Part[];
+          return VITALITIES.flatMap((v) =>
+            describeFloaters(parts, v).map((f) => `seed ${seed}: ${f}`),
+          );
+        });
+        expect(floaters).toEqual([]);
+      },
+      180_000,
+    );
+  },
+);
 
 /**
  * The gustiest world's strongest gust in ten minutes over a supple plant: the
@@ -175,42 +337,92 @@ describe.each(lib.forRole("Drift").map((p) => [p.id, p] as const))("%s", (_id, p
  */
 const GUST: WindState = (() => {
   let time = 0;
-  for (let t = 0; t < 600; t += 0.05) if (gustAt(0, 0, t) > gustAt(0, 0, time)) time = t;
-  return { time, strength: 2, sway: 0.9, frequency: 1.1, height: 6, at: [0, 0, 0], seed: 0.3 };
+  for (let t = 0; t < 600; t += 0.05)
+    if (gustAt(0, 0, t) > gustAt(0, 0, time)) time = t;
+  return {
+    time,
+    strength: 2,
+    sway: 0.9,
+    frequency: 1.1,
+    height: 6,
+    at: [0, 0, 0],
+    seed: 0.3,
+  };
 })();
 /** Moments through that gust, so each level is caught near the top of its swing. */
-const GUST_MOMENTS = [0, 0.35, 0.7, 1.05, 1.4].map((dt) => ({ ...GUST, time: GUST.time + dt }));
+const GUST_MOMENTS = [0, 0.35, 0.7, 1.05, 1.4].map((dt) => ({
+  ...GUST,
+  time: GUST.time + dt,
+}));
 
 /** How far a triangle's edge may stretch or shrink in the wind, as a ratio. A smooth bend changes it a little. */
 const STRETCH = 1.25;
 
 /** Each triangle of `parts` at full vitality whose edge stretches or shrinks past `STRETCH` or which turns over, in each of `moments`. */
-function misshapen(parts: readonly Part[], moments: readonly WindState[]): string[] {
+function misshapen(
+  parts: readonly Part[],
+  moments: readonly WindState[],
+): string[] {
   const out: string[] = [];
-  const at = (a: Float32Array, i: number): [number, number, number] => [a[i * 3] as number, a[i * 3 + 1] as number, a[i * 3 + 2] as number];
-  const sub = (a: number[], b: number[]): number[] => [(a[0] as number) - (b[0] as number), (a[1] as number) - (b[1] as number), (a[2] as number) - (b[2] as number)];
-  const cross = (a: number[], b: number[]): number[] => [(a[1] as number) * (b[2] as number) - (a[2] as number) * (b[1] as number), (a[2] as number) * (b[0] as number) - (a[0] as number) * (b[2] as number), (a[0] as number) * (b[1] as number) - (a[1] as number) * (b[0] as number)];
-  const dot = (a: number[], b: number[]): number => (a[0] as number) * (b[0] as number) + (a[1] as number) * (b[1] as number) + (a[2] as number) * (b[2] as number);
+  const at = (a: Float32Array, i: number): [number, number, number] => [
+    a[i * 3] as number,
+    a[i * 3 + 1] as number,
+    a[i * 3 + 2] as number,
+  ];
+  const sub = (a: number[], b: number[]): number[] => [
+    (a[0] as number) - (b[0] as number),
+    (a[1] as number) - (b[1] as number),
+    (a[2] as number) - (b[2] as number),
+  ];
+  const cross = (a: number[], b: number[]): number[] => [
+    (a[1] as number) * (b[2] as number) - (a[2] as number) * (b[1] as number),
+    (a[2] as number) * (b[0] as number) - (a[0] as number) * (b[2] as number),
+    (a[0] as number) * (b[1] as number) - (a[1] as number) * (b[0] as number),
+  ];
+  const dot = (a: number[], b: number[]): number =>
+    (a[0] as number) * (b[0] as number) +
+    (a[1] as number) * (b[1] as number) +
+    (a[2] as number) * (b[2] as number);
   for (const part of parts) {
     const rest = applyVitality(part, 1).positions;
     for (const wind of moments) {
-      const moved = applyVitality(part, 1, undefined, { state: wind, flutter: FLUTTERS.has(part.swatch) }).positions;
+      const moved = applyVitality(part, 1, undefined, {
+        state: wind,
+        flutter: FLUTTERS.has(part.swatch),
+      }).positions;
       for (let t = 0; t < part.indices.length && out.length < 5; t += 3) {
-        const ids = [part.indices[t], part.indices[t + 1], part.indices[t + 2]] as number[];
+        const ids = [
+          part.indices[t],
+          part.indices[t + 1],
+          part.indices[t + 2],
+        ] as number[];
         const r = ids.map((i) => at(rest, i));
         const m = ids.map((i) => at(moved, i));
         const where = `${part.swatch} triangle at (${(r[0] as number[]).map((c) => c.toFixed(2)).join(", ")}), ${wind.time.toFixed(2)} s`;
         for (let e = 0; e < 3; e++) {
-          const lr = Math.hypot(...sub(r[e] as number[], r[(e + 1) % 3] as number[]));
-          const lm = Math.hypot(...sub(m[e] as number[], m[(e + 1) % 3] as number[]));
+          const lr = Math.hypot(
+            ...sub(r[e] as number[], r[(e + 1) % 3] as number[]),
+          );
+          const lm = Math.hypot(
+            ...sub(m[e] as number[], m[(e + 1) % 3] as number[]),
+          );
           if (lr > 0.002 && (lm > lr * STRETCH || lm < lr / STRETCH)) {
-            out.push(`${where}: an edge goes from ${lr.toFixed(3)} m to ${lm.toFixed(3)} m`);
+            out.push(
+              `${where}: an edge goes from ${lr.toFixed(3)} m to ${lm.toFixed(3)} m`,
+            );
             break;
           }
         }
-        const nr = cross(sub(r[1] as number[], r[0] as number[]), sub(r[2] as number[], r[0] as number[]));
-        const nm = cross(sub(m[1] as number[], m[0] as number[]), sub(m[2] as number[], m[0] as number[]));
-        if (Math.hypot(...nr) > 1e-5 && dot(nr, nm) < 0) out.push(`${where}: it turns over`);
+        const nr = cross(
+          sub(r[1] as number[], r[0] as number[]),
+          sub(r[2] as number[], r[0] as number[]),
+        );
+        const nm = cross(
+          sub(m[1] as number[], m[0] as number[]),
+          sub(m[2] as number[], m[0] as number[]),
+        );
+        if (Math.hypot(...nr) > 1e-5 && dot(nr, nm) < 0)
+          out.push(`${where}: it turns over`);
       }
     }
   }
@@ -218,81 +430,216 @@ function misshapen(parts: readonly Part[], moments: readonly WindState[]): strin
 }
 
 describe("plants", () => {
-  const skeletons = lib.forRole("Skeleton").flatMap((p) => samples(p).map((s, i) => build(p, s, null, 21 + i)));
+  const skeletons = lib
+    .forRole("Skeleton")
+    .flatMap((p) => samples(p).map((s, i) => build(p, s, null, 21 + i)));
   const bark = lib.forRole("Surface")[0] as AnyPrimitive;
   const blooms = lib.forRole("Ornament");
   // Each crown on frames of every kind, with bark under it and each bloom in turn on it, cycling their words.
-  const cases = lib.forRole("Foliage").flatMap((crown) => samples(crown).map((s, i) => [crown.id, i, crown, s] as const));
+  const cases = lib
+    .forRole("Foliage")
+    .flatMap((crown) =>
+      samples(crown).map((s, i) => [crown.id, i, crown, s] as const),
+    );
   /** A plant's parts, its blossoms or fruit last, and which parts those are: they hang from the plant and carry nothing. */
-  const plantOf = (crown: AnyPrimitive, s: Stored, i: number): { parts: Part[]; hanging: Set<number> } => {
+  const plantOf = (
+    crown: AnyPrimitive,
+    s: Stored,
+    i: number,
+  ): { parts: Part[]; hanging: Set<number> } => {
     const frame = skeletons[(i * 5 + crown.id.length) % skeletons.length];
     const built = build(crown, s, frame, 9 + i) as Built;
     const bloom = blooms[i % blooms.length] as AnyPrimitive;
-    const flowers = (build(bloom, samples(bloom)[i % 3] as Stored, built.anchors, 4 + i) as Built).parts as Part[];
-    const parts = [...((build(bark, samples(bark)[i % 3] as Stored, frame, 3) as Built).parts as Part[]), ...(built.parts as Part[]), ...flowers];
-    return { parts, hanging: new Set(flowers.map((_, k) => parts.length - flowers.length + k)) };
+    const flowers = (
+      build(
+        bloom,
+        samples(bloom)[i % 3] as Stored,
+        built.anchors,
+        4 + i,
+      ) as Built
+    ).parts as Part[];
+    const parts = [
+      ...((build(bark, samples(bark)[i % 3] as Stored, frame, 3) as Built)
+        .parts as Part[]),
+      ...(built.parts as Part[]),
+      ...flowers,
+    ];
+    return {
+      parts,
+      hanging: new Set(
+        flowers.map((_, k) => parts.length - flowers.length + k),
+      ),
+    };
   };
-  it.each(cases)("%s carries every leaf, flower and twig at any vitality, in still air and a gust (sample %i)", (_id, i, crown, s) => {
-    const { parts, hanging } = plantOf(crown, s, i);
-    const height = Math.max(...parts.map((p) => p.positions.reduce((m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m), 0.3)));
-    const floaters = FLORA_VITALITIES.flatMap((v) => [
-      ...unsupportedAt(parts, v, { hanging }).map((u) => `${parts[u.part]?.swatch} ${u.why} at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`),
-      ...unsupportedAt(parts, v, { hanging, wind: { ...GUST, height } }).map((u) => `${parts[u.part]?.swatch} ${u.why} in the gust at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`),
-    ]);
-    expect(floaters).toEqual([]);
-    expect(parts.reduce((n, p) => n + p.indices.length / 3, 0)).toBeLessThanOrEqual(PLANT_BUDGET);
-    // A full crown of clumps on a tall spire takes about 35 s alone, and other work shares the machine.
-  }, 120_000);
-  it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))("a great tree carries every leaf and twig at any vitality, in still air and a gust (sample %i)", (i, s) => {
-    const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built).parts as Part[];
-    const floaters = FLORA_VITALITIES.flatMap((v) => [...describeFloaters(parts, v), ...unsupportedAt(parts, v, { wind: { ...GUST, height: 20 } }).map((u) => `${parts[u.part]?.swatch} ${u.why} in the gust at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`)]);
-    expect(floaters).toEqual([]);
-    expect(parts.reduce((n, p) => n + p.indices.length / 3, 0)).toBeLessThanOrEqual(GREAT_TREE_BUDGET);
-    // A great tree carries up to 80,000 triangles and is checked six ways: up to a minute alone.
-  }, 240_000);
-  it.each(cases)("%s keeps its shape in the gust: no triangle stretches, splits or folds (sample %i)", (_id, i, crown, s) => {
-    const { parts } = plantOf(crown, s, i);
-    const height = Math.max(...parts.map((p) => p.positions.reduce((m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m), 0.3)));
-    expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height })))).toEqual([]);
-  }, 60_000);
+  it.each(cases)(
+    "%s carries every leaf, flower and twig at any vitality, in still air and a gust (sample %i)",
+    (_id, i, crown, s) => {
+      const { parts, hanging } = plantOf(crown, s, i);
+      const height = Math.max(
+        ...parts.map((p) =>
+          p.positions.reduce(
+            (m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m),
+            0.3,
+          ),
+        ),
+      );
+      const floaters = FLORA_VITALITIES.flatMap((v) => [
+        ...unsupportedAt(parts, v, { hanging }).map(
+          (u) =>
+            `${parts[u.part]?.swatch} ${u.why} at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`,
+        ),
+        ...unsupportedAt(parts, v, { hanging, wind: { ...GUST, height } }).map(
+          (u) =>
+            `${parts[u.part]?.swatch} ${u.why} in the gust at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`,
+        ),
+      ]);
+      expect(floaters).toEqual([]);
+      expect(
+        parts.reduce((n, p) => n + p.indices.length / 3, 0),
+      ).toBeLessThanOrEqual(PLANT_BUDGET);
+      // A full crown of clumps on a tall spire takes about 35 s alone, and other work shares the machine.
+    },
+    120_000,
+  );
+  it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))(
+    "a great tree carries every leaf and twig at any vitality, in still air and a gust (sample %i)",
+    (i, s) => {
+      const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built)
+        .parts as Part[];
+      const floaters = FLORA_VITALITIES.flatMap((v) => [
+        ...describeFloaters(parts, v),
+        ...unsupportedAt(parts, v, { wind: { ...GUST, height: 20 } }).map(
+          (u) =>
+            `${parts[u.part]?.swatch} ${u.why} in the gust at (${u.at.map((c) => c.toFixed(1)).join(", ")}), vitality ${v}`,
+        ),
+      ]);
+      expect(floaters).toEqual([]);
+      expect(
+        parts.reduce((n, p) => n + p.indices.length / 3, 0),
+      ).toBeLessThanOrEqual(GREAT_TREE_BUDGET);
+      // A great tree carries up to 80,000 triangles and is checked six ways: up to a minute alone.
+    },
+    240_000,
+  );
+  it.each(cases)(
+    "%s keeps its shape in the gust: no triangle stretches, splits or folds (sample %i)",
+    (_id, i, crown, s) => {
+      const { parts } = plantOf(crown, s, i);
+      const height = Math.max(
+        ...parts.map((p) =>
+          p.positions.reduce(
+            (m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m),
+            0.3,
+          ),
+        ),
+      );
+      expect(
+        misshapen(
+          parts,
+          GUST_MOMENTS.map((g) => ({ ...g, height })),
+        ),
+      ).toEqual([]);
+    },
+    60_000,
+  );
   // A crown that grows no twigs of its own, such as hanging strands, hangs its blossoms and fruit straight from the
   // frame's limbs. A pod hung where a twig's sunken start lies inside its limb showed on only a few plants, so each
   // such crown is checked on every sample of every frame it grows on, with every sample of each bloom. Its leaves are
   // cards, which hold nothing up, so only the bark is kept, which keeps the check quick.
-  const isCard = (part: Part): boolean => part.cutout.every((x, k) => k % 3 !== 2 || x >= 1);
+  const isCard = (part: Part): boolean =>
+    part.cutout.every((x, k) => k % 3 !== 2 || x >= 1);
   const framesOf = (crown: AnyPrimitive): AnyPrimitive[] =>
-    [TREE_PRIMITIVES, BUSH_PRIMITIVES].flatMap((kind) => (kind.some((q) => q.id === crown.id) ? kind.filter((q) => q.role === "Skeleton") : []));
+    [TREE_PRIMITIVES, BUSH_PRIMITIVES].flatMap((kind) =>
+      kind.some((q) => q.id === crown.id)
+        ? kind.filter((q) => q.role === "Skeleton")
+        : [],
+    );
   const onLimbs = lib.forRole("Foliage").flatMap((crown) =>
     framesOf(crown)
-      .filter((framer) => ((build(crown, samples(crown)[0] as Stored, build(framer, samples(framer)[0] as Stored, null, 21), 9) as Built).parts as Part[]).every(isCard))
+      .filter((framer) =>
+        (
+          (
+            build(
+              crown,
+              samples(crown)[0] as Stored,
+              build(framer, samples(framer)[0] as Stored, null, 21),
+              9,
+            ) as Built
+          ).parts as Part[]
+        ).every(isCard),
+      )
       .map((framer) => [crown.id, framer.id, crown, framer] as const),
   );
-  it.each(onLimbs)("%s on %s hangs every blossom and fruit from the frame's limbs, never from another", (_c, _f, crown, framer) => {
-    const loose: string[] = [];
-    samples(framer).forEach((fs, i) => {
-      const frame = build(framer, fs, null, 21 + i);
-      const built = build(crown, samples(crown)[i % samples(crown).length] as Stored, frame, 9 + i) as Built;
-      const plant = (build(bark, samples(bark)[i % 3] as Stored, frame, 3) as Built).parts as Part[];
-      for (const bloom of blooms) {
-        samples(bloom).forEach((bs, k) => {
-          const flowers = (build(bloom, bs, built.anchors, 4 + i + k) as Built).parts as Part[];
-          const parts = [...plant, ...flowers];
-          const hanging = new Set(flowers.map((_, j) => plant.length + j));
-          for (const u of unsupportedAt(parts, 1, { hanging })) loose.push(`${bloom.id} ${JSON.stringify(bs)} on frame sample ${i}: ${parts[u.part]?.swatch} at (${u.at.map((c) => c.toFixed(2)).join(", ")})`);
-        });
-      }
-    });
-    expect(loose).toEqual([]);
-    // Builds every frame sample with each of six blooms: a few seconds alone, more on a busy machine.
-  }, 60_000);
-  it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))("a great tree keeps its shape in the gust (sample %i)", (i, s) => {
-    const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built).parts as Part[];
-    expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height: 20 })))).toEqual([]);
-  }, 120_000);
-  const drifts = lib.forRole("Drift").flatMap((p) => samples(p).map((s, i) => [p.id, i, p, s] as const));
-  it.each(drifts)("%s keeps every stem, leaf and flower whole in the gust (sample %i)", (_id, i, p, s) => {
-    const parts = (build(p, s, null, 11 + i) as Built).parts as Part[];
-    const height = Math.max(...parts.map((q) => q.positions.reduce((m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m), 0.3)));
-    expect(misshapen(parts, GUST_MOMENTS.map((g) => ({ ...g, height })))).toEqual([]);
-  }, 60_000);
+  it.each(onLimbs)(
+    "%s on %s hangs every blossom and fruit from the frame's limbs, never from another",
+    (_c, _f, crown, framer) => {
+      const loose: string[] = [];
+      samples(framer).forEach((fs, i) => {
+        const frame = build(framer, fs, null, 21 + i);
+        const built = build(
+          crown,
+          samples(crown)[i % samples(crown).length] as Stored,
+          frame,
+          9 + i,
+        ) as Built;
+        const plant = (
+          build(bark, samples(bark)[i % 3] as Stored, frame, 3) as Built
+        ).parts as Part[];
+        for (const bloom of blooms) {
+          samples(bloom).forEach((bs, k) => {
+            const flowers = (
+              build(bloom, bs, built.anchors, 4 + i + k) as Built
+            ).parts as Part[];
+            const parts = [...plant, ...flowers];
+            const hanging = new Set(flowers.map((_, j) => plant.length + j));
+            for (const u of unsupportedAt(parts, 1, { hanging }))
+              loose.push(
+                `${bloom.id} ${JSON.stringify(bs)} on frame sample ${i}: ${parts[u.part]?.swatch} at (${u.at.map((c) => c.toFixed(2)).join(", ")})`,
+              );
+          });
+        }
+      });
+      expect(loose).toEqual([]);
+      // Builds every frame sample with each of six blooms: a few seconds alone, more on a busy machine.
+    },
+    60_000,
+  );
+  it.each(samples(lib.get("great-tree@1")).map((s, i) => [i, s] as const))(
+    "a great tree keeps its shape in the gust (sample %i)",
+    (i, s) => {
+      const parts = (build(lib.get("great-tree@1"), s, null, 5 + i) as Built)
+        .parts as Part[];
+      expect(
+        misshapen(
+          parts,
+          GUST_MOMENTS.map((g) => ({ ...g, height: 20 })),
+        ),
+      ).toEqual([]);
+    },
+    120_000,
+  );
+  const drifts = lib
+    .forRole("Drift")
+    .flatMap((p) => samples(p).map((s, i) => [p.id, i, p, s] as const));
+  it.each(drifts)(
+    "%s keeps every stem, leaf and flower whole in the gust (sample %i)",
+    (_id, i, p, s) => {
+      const parts = (build(p, s, null, 11 + i) as Built).parts as Part[];
+      const height = Math.max(
+        ...parts.map((q) =>
+          q.positions.reduce(
+            (m, y, k) => (k % 3 === 1 ? Math.max(m, y) : m),
+            0.3,
+          ),
+        ),
+      );
+      expect(
+        misshapen(
+          parts,
+          GUST_MOMENTS.map((g) => ({ ...g, height })),
+        ),
+      ).toEqual([]);
+    },
+    60_000,
+  );
 });

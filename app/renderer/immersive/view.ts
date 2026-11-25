@@ -70,7 +70,10 @@ const WANDER = /* html */ `
     <dt><span class="mouse-only">Click</span><span class="touch-only">Tap</span> the map</dt><dd>mark a place, then tap its mark to travel</dd>
   </dl>`;
 
-export function createImmersive(container: HTMLElement, world: WorldHandle): Immersive {
+export function createImmersive(
+  container: HTMLElement,
+  world: WorldHandle,
+): Immersive {
   const layer = document.createElement("div");
   layer.className = "wayfinding";
   container.append(layer);
@@ -85,10 +88,17 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   cover.className = "jump-cover";
   layer.append(cover);
   let jumping = false;
-  function jump(x: number, z: number, center?: { readonly x: number; readonly z: number }, watch = false): boolean {
+  function jump(
+    x: number,
+    z: number,
+    center?: { readonly x: number; readonly z: number },
+    watch = false,
+  ): boolean {
     const at = world.landing(x, z, center);
     if (at === null) {
-      console.warn(`map: nowhere to land near (${Math.round(x)}, ${Math.round(z)})`);
+      console.warn(
+        `map: nowhere to land near (${Math.round(x)}, ${Math.round(z)})`,
+      );
       return false;
     }
     return jumpTo(at, false, watch);
@@ -166,7 +176,15 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     canvas.height = Math.round(h * dpr);
     const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
     ctx.scale(dpr, dpr);
-    drawLand(ctx, w, h, paper, world.baked(), { x: at.x, z: at.z, zoom: Math.max(w, h) / JUMP.span }, 1.35);
+    drawLand(
+      ctx,
+      w,
+      h,
+      paper,
+      world.baked(),
+      { x: at.x, z: at.z, zoom: Math.max(w, h) / JUMP.span },
+      1.35,
+    );
     cover.replaceChildren(canvas);
   }
   const map = createFieldMap(
@@ -177,7 +195,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     },
     jump,
   );
-  const minimap = createMinimap(layer, map, world.baked, world.places, () => journal.open());
+  const minimap = createMinimap(layer, map, world.baked, world.places, () =>
+    journal.open(),
+  );
 
   // ---------- the journal, shut in the corner with the minimap on its cover ----------
 
@@ -190,37 +210,104 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
    * `keyOf`. A painting's key joins the project, world size, `PAINTER`, thing
    * id, this form and the thing's vitality, so a change to any of them repaints it.
    */
-  let formCache: { readonly code: CodeWorld; readonly as: ReadonlyMap<string, string> } | null = null;
+  let formCache: {
+    readonly code: CodeWorld;
+    readonly as: ReadonlyMap<string, string>;
+  } | null = null;
   const keyOf = (thing: string, wide: boolean): string | null => {
     const code = world.code();
     if (code === null || words === null) return null;
-    if (formCache?.code !== code) formCache = { code, as: new Map([...[...code.symbols.map((s) => [s.id, s] as const), ...code.naturalThings.map((s) => [s.path, s] as const)].map(([id, s]) => [id, s.blueprint?.id ?? s.form] as const), ...code.things.map((t) => [t.path, t.blueprint.id] as const)]) };
-    const of = words.journal.entry(entityOf(thing)) !== undefined ? entityOf(thing) : thing;
-    return [code.projectId, Math.round(code.size), PAINTER, wide ? `${FRONTISPIECE}:${thing}` : thing, formCache.as.get(thing) ?? "", words.vitality(of).toFixed(2)].join("|");
+    if (formCache?.code !== code)
+      formCache = {
+        code,
+        as: new Map([
+          ...[
+            ...code.symbols.map((s) => [s.id, s] as const),
+            ...code.naturalThings.map((s) => [s.path, s] as const),
+          ].map(([id, s]) => [id, s.blueprint?.id ?? s.form] as const),
+          ...code.things.map((t) => [t.path, t.blueprint.id] as const),
+        ]),
+      };
+    const of =
+      words.journal.entry(entityOf(thing)) !== undefined
+        ? entityOf(thing)
+        : thing;
+    return [
+      code.projectId,
+      Math.round(code.size),
+      PAINTER,
+      wide ? `${FRONTISPIECE}:${thing}` : thing,
+      formCache.as.get(thing) ?? "",
+      words.vitality(of).toFixed(2),
+    ].join("|");
   };
   /** Paints each thing from the world's view before its page opens, only while the person is not walking, and stores the paintings in `browserPaintings`. */
-  const paintings = createPaintings({ view: world.view, store: browserPaintings(), keyOf, idle: () => !world.person().walking });
+  const paintings = createPaintings({
+    view: world.view,
+    store: browserPaintings(),
+    keyOf,
+    idle: () => !world.person().walking,
+  });
   /** Positions of the things pages are about: buildings and landmarks, definitions, and each file's patch center. */
-  let paintable: readonly { readonly id: string; readonly x: number; readonly z: number }[] = [];
+  let paintable: readonly {
+    readonly id: string;
+    readonly x: number;
+    readonly z: number;
+  }[] = [];
   let paintedFrom = { x: Infinity, z: Infinity };
   // While the person stands still, paints the things nearest them so their pages are ready.
   window.setInterval(() => {
     const p = world.person();
-    if (paintable.length === 0 || p.walking || Math.hypot(p.x - paintedFrom.x, p.z - paintedFrom.z) < NEAR.moved) return;
+    if (
+      paintable.length === 0 ||
+      p.walking ||
+      Math.hypot(p.x - paintedFrom.x, p.z - paintedFrom.z) < NEAR.moved
+    )
+      return;
     paintedFrom = { x: p.x, z: p.z };
-    const by = (t: { x: number; z: number }): number => Math.hypot(t.x - p.x, t.z - p.z);
-    paintings.near([...paintable].filter((t) => by(t) < NEAR.reach).sort((a, b) => by(a) - by(b)).slice(0, NEAR.count).map((t) => t.id));
+    const by = (t: { x: number; z: number }): number =>
+      Math.hypot(t.x - p.x, t.z - p.z);
+    paintings.near(
+      [...paintable]
+        .filter((t) => by(t) < NEAR.reach)
+        .sort((a, b) => by(a) - by(b))
+        .slice(0, NEAR.count)
+        .map((t) => t.id),
+    );
   }, NEAR.every);
   /**
    * The journal's map canvases by area, drawn once per field map paper: the whole land ("") for the endpapers and one
    * per folder. While the paper repaints after a vitality change, `mapOf` returns the map drawn from the previous paper.
    */
-  let maps: { paper: unknown; drawn: Map<string, HTMLCanvasElement | null> } | null = null;
-  function mapOf(area: string, w: number, h: number, fold: boolean): HTMLCanvasElement | null {
+  let maps: {
+    paper: unknown;
+    drawn: Map<string, HTMLCanvasElement | null>;
+  } | null = null;
+  function mapOf(
+    area: string,
+    w: number,
+    h: number,
+    fold: boolean,
+  ): HTMLCanvasElement | null {
     const paper = map.paper();
     if (paper === null) return maps?.drawn.get(area) ?? null;
     if (maps?.paper !== paper) maps = { paper, drawn: new Map() };
-    if (!maps.drawn.has(area)) maps.drawn.set(area, drawMapPage({ paper: map.paper, baked: world.baked, places: world.places, placeAt: world.placeAt }, area, w, h, fold));
+    if (!maps.drawn.has(area))
+      maps.drawn.set(
+        area,
+        drawMapPage(
+          {
+            paper: map.paper,
+            baked: world.baked,
+            places: world.places,
+            placeAt: world.placeAt,
+          },
+          area,
+          w,
+          h,
+          fold,
+        ),
+      );
     return maps.drawn.get(area) ?? null;
   }
   const pages = journalPages({
@@ -231,14 +318,20 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     },
     map: (area) => mapOf(area, 520, 660, false),
     picture: (of) => paintings.picture(thingIdOf(of)),
-    painted: (of) => (of === "" ? paintings.painted("", true) : paintings.painted(thingIdOf(of))),
+    painted: (of) =>
+      of === ""
+        ? paintings.painted("", true)
+        : paintings.painted(thingIdOf(of)),
     frontispiece: () => paintings.picture("", true),
     ahead: (ofs) => paintings.ahead(ofs.map(thingIdOf)),
     turnTo: (at) => journal.turnTo(at),
     person: () => world.person(),
     mapped: () =>
       new Promise<void>((resolve) => {
-        const look = (): void => void (map.paper() !== null ? resolve() : window.setTimeout(look, 150));
+        const look = (): void =>
+          void (map.paper() !== null
+            ? resolve()
+            : window.setTimeout(look, 150));
         look();
       }),
     trip: () => world.trip(),
@@ -271,7 +364,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   world.onPick((id) => {
     if (!active) return;
     // A building or landmark opens its entity's page. A definition opens its own page, whatever its form.
-    const at = [entityOf(id), id].find((of) => words?.journal.entry(of) !== undefined);
+    const at = [entityOf(id), id].find(
+      (of) => words?.journal.entry(of) !== undefined,
+    );
     if (at !== undefined) journal.open(at);
   });
   world.onHeading((thing) => minimap.heading(thing));
@@ -292,31 +387,53 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     const code = world.code();
     if (code === null) return null;
     const h = Math.round(CARD_VIEW / Math.max(1, code.aspect ?? 1));
-    const kept = await paintKept(await world.look(CARD_VIEW, h), CARD_VIEW * 2, h * 2, `card:${code.projectId}`);
+    const kept = await paintKept(
+      await world.look(CARD_VIEW, h),
+      CARD_VIEW * 2,
+      h * 2,
+      `card:${code.projectId}`,
+    );
     if (kept === null) return null;
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error ?? new Error("the painting could not be read"));
+      reader.onerror = () =>
+        reject(reader.error ?? new Error("the painting could not be read"));
       reader.readAsDataURL(kept);
     });
   }
 
   // Sends the person's position to the world service as they walk, so the next open starts there. Without a world service, nothing is kept.
   if (service !== null) {
-    let kept: { readonly x: number; readonly z: number; readonly yaw: number; readonly at: number } | null = null;
+    let kept: {
+      readonly x: number;
+      readonly z: number;
+      readonly yaw: number;
+      readonly at: number;
+    } | null = null;
     const sendLastSpot = (): void => {
       const code = world.code();
       if (!lifted || code === null) return;
       const p = world.person();
       const now = performance.now();
       if (kept !== null) {
-        const turned = Math.abs(Math.atan2(Math.sin(p.yaw - kept.yaw), Math.cos(p.yaw - kept.yaw))) * (180 / Math.PI);
-        if (Math.hypot(p.x - kept.x, p.z - kept.z) < KEEP.moved && turned < KEEP.turned) return;
+        const turned =
+          Math.abs(
+            Math.atan2(Math.sin(p.yaw - kept.yaw), Math.cos(p.yaw - kept.yaw)),
+          ) *
+          (180 / Math.PI);
+        if (
+          Math.hypot(p.x - kept.x, p.z - kept.z) < KEEP.moved &&
+          turned < KEEP.turned
+        )
+          return;
         if (p.walking && now - kept.at < KEEP.every) return;
       }
       kept = { x: p.x, z: p.z, yaw: p.yaw, at: now };
-      service.send({ type: "world.stood", stood: lastSpotAt(code, p.x, p.z, p.yaw) });
+      service.send({
+        type: "world.stood",
+        stood: lastSpotAt(code, p.x, p.z, p.yaw),
+      });
     };
     // The opening position counts as sent, so nothing is sent until the person moves.
     world.onLifted(() => {
@@ -324,21 +441,44 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       kept = { x: p.x, z: p.z, yaw: p.yaw, at: performance.now() };
     });
     // Paints the view where the person stands still for the start screen's card. The next open starts in that view.
-    let painted: { readonly x: number; readonly z: number; readonly yaw: number } | null = null;
+    let painted: {
+      readonly x: number;
+      readonly z: number;
+      readonly yaw: number;
+    } | null = null;
     let painting = false;
     const paintStood = (): void => {
       const code = world.code();
       const p = world.person();
       if (!lifted || code === null || painting || p.walking) return;
       if (painted !== null) {
-        const turned = Math.abs(Math.atan2(Math.sin(p.yaw - painted.yaw), Math.cos(p.yaw - painted.yaw))) * (180 / Math.PI);
-        if (Math.hypot(p.x - painted.x, p.z - painted.z) < KEEP.moved && turned < KEEP.turned) return;
+        const turned =
+          Math.abs(
+            Math.atan2(
+              Math.sin(p.yaw - painted.yaw),
+              Math.cos(p.yaw - painted.yaw),
+            ),
+          ) *
+          (180 / Math.PI);
+        if (
+          Math.hypot(p.x - painted.x, p.z - painted.z) < KEEP.moved &&
+          turned < KEEP.turned
+        )
+          return;
       }
       painted = { x: p.x, z: p.z, yaw: p.yaw };
       painting = true;
       void paintWhereYouStand()
-        .then((done) => done !== null && service.send({ type: "world.painting", painting: done }))
-        .catch((error: unknown) => console.error(`gaia: no painting of where you stand: ${(error as Error).message}`))
+        .then(
+          (done) =>
+            done !== null &&
+            service.send({ type: "world.painting", painting: done }),
+        )
+        .catch((error: unknown) =>
+          console.error(
+            `gaia: no painting of where you stand: ${(error as Error).message}`,
+          ),
+        )
         .finally(() => (painting = false));
     };
     window.setInterval(() => {
@@ -351,7 +491,9 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
     });
   }
   // Places the trail markers on every bake, before the grass and walking read the ground.
-  world.furnish((baked) => markers.place(baked, (x, z): PlaceArea => world.placeAt(x, z).area));
+  world.furnish((baked) =>
+    markers.place(baked, (x, z): PlaceArea => world.placeAt(x, z).area),
+  );
   /** Whether the first bake has landed. Until then, no place names show. */
   let standing = false;
   world.onBaked(() => {
@@ -370,7 +512,11 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       paintable = [
         ...codeWorld.things.map((t) => ({ id: t.path, x: t.x, z: t.z })),
         ...codeWorld.symbols.map((d) => ({ id: d.id, x: d.x, z: d.z })),
-        ...[...patches].map(([id, at]) => ({ id, x: at.x / at.n, z: at.z / at.n })),
+        ...[...patches].map(([id, at]) => ({
+          id,
+          x: at.x / at.n,
+          z: at.z / at.n,
+        })),
       ];
       paintedFrom = { x: Infinity, z: Infinity };
     }
@@ -390,10 +536,22 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   function readVitality(): void {
     const code = world.code();
     if (code !== null) {
-      words = { journal: journalOf(code, ROOM), world: code, vitality: pageVitality(code), lines: (path) => source.lines(path) ?? undefined, thing: (of) => world.thing(thingIdOf(of)) };
+      words = {
+        journal: journalOf(code, ROOM),
+        world: code,
+        vitality: pageVitality(code),
+        lines: (path) => source.lines(path) ?? undefined,
+        thing: (of) => world.thing(thingIdOf(of)),
+      };
     }
     // A directory's vitality pools its files and subdirectories, weighted by patch area, as the map's wash does.
-    const vitality = areaVitality(world.places().patches.map((p) => ({ area: p.area, vitality: p.vitality, size: p.radius * p.radius })));
+    const vitality = areaVitality(
+      world.places().patches.map((p) => ({
+        area: p.area,
+        vitality: p.vitality,
+        size: p.radius * p.radius,
+      })),
+    );
     markers.vitality((path) => vitality.get(path) ?? 1);
   }
   // Vitality changes in place, such as when the world updates to a new commit. A microtask batches the changes a tool
@@ -441,33 +599,45 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
   const worldName = slip.querySelector("[data-ref=world-name]") as HTMLElement;
   // Music and world volume, each from 0 (silent) to 1 (as mixed). `--level` sets how much of the slider is inked.
   const levels = soundLevels();
-  for (const part of ["music", "world"] as const satisfies readonly (keyof Levels)[]) {
+  for (const part of [
+    "music",
+    "world",
+  ] as const satisfies readonly (keyof Levels)[]) {
     const slider = slip.querySelector(`[data-ref=${part}]`) as HTMLInputElement;
     levels.watch((l) => {
       slider.value = String(Math.round(l[part] * 100));
       slider.style.setProperty("--level", `${l[part] * 100}%`);
     });
-    slider.addEventListener("input", () => levels.set(part, Number(slider.value) / 100));
+    slider.addEventListener("input", () =>
+      levels.set(part, Number(slider.value) / 100),
+    );
   }
   function setSlip(on: boolean): void {
     if (on) map.open(false);
     // A slider left focused would take the keys meant for walking.
-    if (!on && slip.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    if (!on && slip.contains(document.activeElement))
+      (document.activeElement as HTMLElement).blur();
     slip.classList.toggle("open", on);
     menuButton.setAttribute("aria-expanded", String(on));
   }
-  menuButton.addEventListener("click", () => setSlip(!slip.classList.contains("open")));
+  menuButton.addEventListener("click", () =>
+    setSlip(!slip.classList.contains("open")),
+  );
   onTap(reading, () => {
     setSlip(false);
     map.open(false);
   });
   /** The finder's items for the current world, rebuilt when `words` changes. */
-  let findable: { readonly words: WordsSource; readonly items: readonly Findable[] } | null = null;
+  let findable: {
+    readonly words: WordsSource;
+    readonly items: readonly Findable[];
+  } | null = null;
   const finder = createFinder(
     layer,
     () => {
       if (words === null) return [];
-      if (findable?.words !== words) findable = { words, items: findablesOf(words.journal) };
+      if (findable?.words !== words)
+        findable = { words, items: findablesOf(words.journal) };
       return findable.items;
     },
     (at) => journal.open(at),
@@ -560,7 +730,8 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       /** Opens or closes the slip in the corner. */
       slip: (on: boolean) => setSlip(on),
       /** Opens the journal at the map, "contents", or a thing's path or id. Null shuts it. */
-      journal: (at?: string | null) => (at === null ? journal.close() : journal.open(at)),
+      journal: (at?: string | null) =>
+        at === null ? journal.close() : journal.open(at),
       /** The state of a page's painting: waiting, painting, done, or none when no thing in the world matches the page. */
       painting: (of: string) => paintings.state(thingIdOf(of)),
       /** Tucks the minimap below the bottom of the screen or brings it back, as a tap on its edge does. */
@@ -568,7 +739,14 @@ export function createImmersive(container: HTMLElement, world: WorldHandle): Imm
       /** The person's place, the state of the minimap, compass, field map and journal, and the number of marked trail crossings. */
       state: () => {
         const p = world.person();
-        return { place: world.placeAt(p.x, p.z), minimap: minimap.state(), compass: compass.state(), map: map.state(), markers: markers.crossings().length, journal: journal.state() };
+        return {
+          place: world.placeAt(p.x, p.z),
+          minimap: minimap.state(),
+          compass: compass.state(),
+          map: map.state(),
+          markers: markers.crossings().length,
+          journal: journal.state(),
+        };
       },
       crossings: () => markers.crossings(),
       /** The painting `paintStood` sends for the start screen's card (`world.painting`), as a WebP data URL. Null before a world loads. */

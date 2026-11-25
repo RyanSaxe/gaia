@@ -4,7 +4,15 @@
 
 import * as THREE from "three";
 import { CUT, GRAIN, type Part, SPRAYS, type Swatch } from "@gaia/schema";
-import { CHANNEL_MATH, DETAIL, FLUTTERS, type Realized, pieceFrames, shownVitality, spinAt } from "@gaia/realize";
+import {
+  CHANNEL_MATH,
+  DETAIL,
+  FLUTTERS,
+  type Realized,
+  pieceFrames,
+  shownVitality,
+  spinAt,
+} from "@gaia/realize";
 import { LIGHT_GLSL, type SceneLight } from "./light.ts";
 import { WIND_GLSL } from "./sway.ts";
 import { createSmokeMaterial } from "./smoke.ts";
@@ -882,14 +890,16 @@ export interface PlantView {
   dispose(): void;
 }
 
-const vec3Of = (c: readonly number[]): THREE.Vector3 => new THREE.Vector3(c[0] ?? 0, c[1] ?? 0, c[2] ?? 0);
+const vec3Of = (c: readonly number[]): THREE.Vector3 =>
+  new THREE.Vector3(c[0] ?? 0, c[1] ?? 0, c[2] ?? 0);
 
 /** Interleaves per-vertex scalars, one from each column, into values for one attribute. */
 function interleave(...columns: readonly Float32Array[]): Float32Array {
   const size = columns.length;
   const out = new Float32Array((columns[0]?.length ?? 0) * size);
   columns.forEach((column, k) => {
-    for (let i = 0; i < column.length; i++) out[i * size + k] = column[i] as number;
+    for (let i = 0; i < column.length; i++)
+      out[i * size + k] = column[i] as number;
   });
   return out;
 }
@@ -903,14 +913,22 @@ function snorm16(values: Float32Array, size: number): THREE.BufferAttribute {
   const n = values.length / size;
   const out = new Int16Array(n * 4);
   for (let i = 0; i < n; i++) {
-    for (let k = 0; k < size; k++) out[i * 4 + k] = Math.round(Math.min(1, Math.max(-1, values[i * size + k] as number)) * 32767);
+    for (let k = 0; k < size; k++)
+      out[i * 4 + k] = Math.round(
+        Math.min(1, Math.max(-1, values[i * size + k] as number)) * 32767,
+      );
   }
   return new THREE.BufferAttribute(out, 4, true);
 }
 /** Whether a part's pieces fall, grow, rot or spin, which its material then compiles in. */
 export const hasRuin = (part: Part): boolean => {
   const c = part.channels;
-  return c.fall !== undefined || c.grow !== undefined || c.rot !== undefined || c.spin !== undefined;
+  return (
+    c.fall !== undefined ||
+    c.grow !== undefined ||
+    c.rot !== undefined ||
+    c.spin !== undefined
+  );
 };
 
 export function geometryOf(part: Part): THREE.BufferGeometry {
@@ -924,7 +942,8 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
     start[i] = frames.reach[i * 2] as number;
     leave[i] = frames.reach[i * 2 + 1] as number;
   }
-  const center = (k: number): Float32Array => frames.center.filter((_, i) => i % 3 === k);
+  const center = (k: number): Float32Array =>
+    frames.center.filter((_, i) => i % 3 === k);
   // Normals and the channels that color a vertex take 16 bits, since the contract holds them within -1 to 1, tint
   // within 0.1 and the rest within 0 to 1. Channels that move a vertex keep full floats, because a loss threshold off
   // by 1/65534 moves a leaf's edge across the samples it covers.
@@ -934,19 +953,59 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
   g.setAttribute("aPivot", new THREE.BufferAttribute(ch.pivot, 3));
   g.setAttribute("aBough", new THREE.BufferAttribute(ch.bough, 3));
   g.setAttribute("aTwig", new THREE.BufferAttribute(ch.twig, 3));
-  g.setAttribute("aLook", snorm16(interleave(part.shade, part.tint, ch.wither, ch.glow), 4));
-  g.setAttribute("aLife", new THREE.BufferAttribute(interleave(ch.loss, ch.droop, ch.close, leave), 4));
-  g.setAttribute("aPiece", new THREE.BufferAttribute(interleave(center(0), center(1), center(2), start), 4));
+  g.setAttribute(
+    "aLook",
+    snorm16(interleave(part.shade, part.tint, ch.wither, ch.glow), 4),
+  );
+  g.setAttribute(
+    "aLife",
+    new THREE.BufferAttribute(
+      interleave(ch.loss, ch.droop, ch.close, leave),
+      4,
+    ),
+  );
+  g.setAttribute(
+    "aPiece",
+    new THREE.BufferAttribute(
+      interleave(center(0), center(1), center(2), start),
+      4,
+    ),
+  );
   if (hasRuin(part)) {
     const n = part.shade.length;
     const c = part.channels;
-    g.setAttribute("aFall", new THREE.BufferAttribute(c.fall ?? new Float32Array(n * 4), 4));
-    g.setAttribute("aGrow", new THREE.BufferAttribute(c.grow ?? new Float32Array(n), 1));
-    g.setAttribute("aRot", new THREE.BufferAttribute(interleave(c.rot ?? new Float32Array(n), ...[0, 1, 2].map((k) => (c.grain ?? new Float32Array(n * 3)).filter((_, i) => i % 3 === k))), 4));
-    g.setAttribute("aSpin", new THREE.BufferAttribute(c.spin ?? new Float32Array(n * 3), 3));
+    g.setAttribute(
+      "aFall",
+      new THREE.BufferAttribute(c.fall ?? new Float32Array(n * 4), 4),
+    );
+    g.setAttribute(
+      "aGrow",
+      new THREE.BufferAttribute(c.grow ?? new Float32Array(n), 1),
+    );
+    g.setAttribute(
+      "aRot",
+      new THREE.BufferAttribute(
+        interleave(
+          c.rot ?? new Float32Array(n),
+          ...[0, 1, 2].map((k) =>
+            (c.grain ?? new Float32Array(n * 3)).filter((_, i) => i % 3 === k),
+          ),
+        ),
+        4,
+      ),
+    );
+    g.setAttribute(
+      "aSpin",
+      new THREE.BufferAttribute(c.spin ?? new Float32Array(n * 3), 3),
+    );
   }
   // A 16-bit index when every vertex numbers below 65,535, which WebGL 2 keeps for restarting a strip.
-  g.setIndex(new THREE.BufferAttribute(n < 65536 ? new Uint16Array(part.indices) : part.indices, 1));
+  g.setIndex(
+    new THREE.BufferAttribute(
+      n < 65536 ? new Uint16Array(part.indices) : part.indices,
+      1,
+    ),
+  );
   g.computeBoundingSphere();
   g.computeBoundingBox();
   return g;
@@ -957,26 +1016,66 @@ export function geometryOf(part: Part): THREE.BufferGeometry {
  * for the index). A plant's geometry never changes once built, and three reads a buffer's array only to upload it. A
  * mesh that rays are cast against keeps its position, normal and index, which three's raycast reads.
  */
-export function letGoOnUpload(geometry: THREE.BufferGeometry, keep: readonly string[] = []): void {
+export function letGoOnUpload(
+  geometry: THREE.BufferGeometry,
+  keep: readonly string[] = [],
+): void {
   const letGo = (a: THREE.BufferAttribute): void => {
     a.onUpload(() => {
       (a as unknown as { array: null }).array = null;
     });
   };
-  for (const [name, a] of Object.entries(geometry.attributes)) if (!keep.includes(name) && a instanceof THREE.BufferAttribute) letGo(a);
+  for (const [name, a] of Object.entries(geometry.attributes))
+    if (!keep.includes(name) && a instanceof THREE.BufferAttribute) letGo(a);
   if (geometry.index !== null && !keep.includes("index")) letGo(geometry.index);
 }
 
 /** Foliage amount per swatch, from 0 for solid to 1 for thin. Bark, stone and a building's fabric are solid. Leaves, moss and blooms are thin and scatter light. Fruit and berries are solid under a waxy skin. */
 export const FOLIAGE: Readonly<Record<string, number>> = {
-  bark: 0, leaf: 1, bloom: 0.6, fruit: 0.2, berry: 0.2, stone: 0, moss: 0.3, stem: 0.8, eye: 0.6, wood: 0, cap: 0.3, stalk: 0.35, spot: 0.3,
-  wall: 0, render: 0, timber: 0, roof: 0.12, masonry: 0, trim: 0, glass: 0,
+  bark: 0,
+  leaf: 1,
+  bloom: 0.6,
+  fruit: 0.2,
+  berry: 0.2,
+  stone: 0,
+  moss: 0.3,
+  stem: 0.8,
+  eye: 0.6,
+  wood: 0,
+  cap: 0.3,
+  stalk: 0.35,
+  spot: 0.3,
+  wall: 0,
+  render: 0,
+  timber: 0,
+  roof: 0.12,
+  masonry: 0,
+  trim: 0,
+  glass: 0,
 };
 /** The colors a spray uses: the bark's for its stalks, the family's bloom for a blossom spray's petals, and stem green for its few fresh leaves. */
-export const sprayColors = (plant: Pick<Realized, "palette">): { uBark: { value: THREE.Vector3 }; uStem: { value: THREE.Vector3 }; uBloomColor: { value: THREE.Vector3 } } => ({
-  uBark: { value: vec3Of(plant.palette.swatches.bark?.healthy ?? [0.4, 0.33, 0.3]) },
-  uStem: { value: vec3Of(plant.palette.swatches.stem?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [0.4, 0.6, 0.3]) },
-  uBloomColor: { value: vec3Of(plant.palette.swatches.bloom?.healthy ?? plant.palette.swatches.leaf?.healthy ?? [1, 0.9, 0.92]) },
+export const sprayColors = (
+  plant: Pick<Realized, "palette">,
+): {
+  uBark: { value: THREE.Vector3 };
+  uStem: { value: THREE.Vector3 };
+  uBloomColor: { value: THREE.Vector3 };
+} => ({
+  uBark: {
+    value: vec3Of(plant.palette.swatches.bark?.healthy ?? [0.4, 0.33, 0.3]),
+  },
+  uStem: {
+    value: vec3Of(
+      plant.palette.swatches.stem?.healthy ??
+        plant.palette.swatches.leaf?.healthy ?? [0.4, 0.6, 0.3],
+    ),
+  },
+  uBloomColor: {
+    value: vec3Of(
+      plant.palette.swatches.bloom?.healthy ??
+        plant.palette.swatches.leaf?.healthy ?? [1, 0.9, 0.92],
+    ),
+  },
 });
 /** Swatches lit from inside at night, like window glass. */
 export const LAMP: ReadonlySet<string> = new Set(["glass"]);
@@ -991,9 +1090,16 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const geometries = plant.parts.map(geometryOf);
   // A building or a landmark is picked by a ray, which reads its positions, normals and index.
   for (const g of geometries) letGoOnUpload(g, ["position", "normal", "index"]);
-  for (const g of geometries) if (g.boundingBox !== null) box.union(g.boundingBox);
+  for (const g of geometries)
+    if (g.boundingBox !== null) box.union(g.boundingBox);
   const height = Math.max(0.3, box.max.y);
-  const radius = Math.max(Math.abs(box.min.x), box.max.x, Math.abs(box.min.z), box.max.z, 1);
+  const radius = Math.max(
+    Math.abs(box.min.x),
+    box.max.x,
+    Math.abs(box.min.z),
+    box.max.z,
+    1,
+  );
   // Wind and decline move vertices a little past the built mesh. A padded
   // sphere lets every pass cull the plant without ever clipping a swaying tip.
   const bounds = box.getBoundingSphere(new THREE.Sphere());
@@ -1020,23 +1126,40 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const advanceTurn = (): void => {
     const now = light.uTime.value;
     if (now === turnedAt) return;
-    shared.uTurn.value += Math.max(0, now - turnedAt) * spinAt(shared.uVitality.value);
+    shared.uTurn.value +=
+      Math.max(0, now - turnedAt) * spinAt(shared.uVitality.value);
     turnedAt = now;
   };
   // The shown vitality the plant is easing toward.
   let target = 1;
   const closeMine = (keep: number): boolean => {
-    [shared.uVitality.value, shared.uVitalityLag.value] = followVitality(shared.uVitality.value, shared.uVitalityLag.value, target, keep);
+    [shared.uVitality.value, shared.uVitalityLag.value] = followVitality(
+      shared.uVitality.value,
+      shared.uVitalityLag.value,
+      target,
+      keep,
+    );
     return shared.uVitality.value !== target || shared.uVitalityLag.value !== 0;
   };
   const materials: THREE.ShaderMaterial[] = [];
-  const meshes: { mesh: THREE.Mesh; color: THREE.ShaderMaterial; depth: THREE.ShaderMaterial }[] = [];
+  const meshes: {
+    mesh: THREE.Mesh;
+    color: THREE.ShaderMaterial;
+    depth: THREE.ShaderMaterial;
+  }[] = [];
   const veils: THREE.Mesh[] = [];
   plant.parts.forEach((part, i) => {
-    const swatch: Swatch = palette.swatches[part.swatch] ?? { healthy: [1, 0, 1], decline: [1, 0, 1] };
+    const swatch: Swatch = palette.swatches[part.swatch] ?? {
+      healthy: [1, 0, 1],
+      decline: [1, 0, 1],
+    };
     if (part.swatch === "smoke") {
       // Smoke drifts in its own soft material and casts no shadow.
-      const material = createSmokeMaterial(light, shared, vec3Of(swatch.healthy));
+      const material = createSmokeMaterial(
+        light,
+        shared,
+        vec3Of(swatch.healthy),
+      );
       const mesh = new THREE.Mesh(geometries[i], material);
       mesh.frustumCulled = false;
       mesh.renderOrder = 1;
@@ -1070,7 +1193,15 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
       defines,
       vertexShader: DEPTH_VERT,
       fragmentShader: DEPTH_FRAG,
-      uniforms: { uTime: light.uTime, uWind: light.uWind, uWindDir: light.uWindDir, uNightness: light.uNightness, uEye: light.uEye, ...shared, ...perPart },
+      uniforms: {
+        uTime: light.uTime,
+        uWind: light.uWind,
+        uWindDir: light.uWindDir,
+        uNightness: light.uNightness,
+        uEye: light.uEye,
+        ...shared,
+        ...perPart,
+      },
       side: THREE.DoubleSide,
     });
     const mesh = new THREE.Mesh(geometries[i], color);
@@ -1093,7 +1224,8 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
       vitality = Math.min(1, Math.max(0, v));
       target = shownVitality(vitality);
       // The shown vitality eases toward it from where it is.
-      if (target !== shared.uVitality.value || shared.uVitalityLag.value !== 0) closeEachFrame(closeMine);
+      if (target !== shared.uVitality.value || shared.uVitalityLag.value !== 0)
+        closeEachFrame(closeMine);
     },
     useDepth(on) {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;
@@ -1113,7 +1245,10 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
  * behind would show through every leaf's edge as a pale outline.
  */
 export function createRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
-  const context = canvas.getContext("webgl2", { alpha: false, antialias: true });
+  const context = canvas.getContext("webgl2", {
+    alpha: false,
+    antialias: true,
+  });
   if (context === null) throw new Error("WebGL 2 is unavailable.");
   return new THREE.WebGLRenderer({ canvas, context });
 }

@@ -7,15 +7,46 @@
 
 import * as THREE from "three";
 import { type Blueprint, Library, blueprintOf, seedOf } from "@gaia/schema";
-import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES, WORLD_PRIMITIVES } from "@gaia/primitives";
+import {
+  BIOME_PRIMITIVES,
+  RELIEF_PRIMITIVES,
+  WORLD_PRIMITIVES,
+} from "@gaia/primitives";
 import { biome, world as worldKind } from "@gaia/kinds";
 import { type WorldLook, realizeWorld } from "@gaia/realize";
-import { LANTERN, applyLight, applySky, createSceneLight, createSunShadow, hexToVec3 } from "@gaia/render";
+import {
+  LANTERN,
+  applyLight,
+  applySky,
+  createSceneLight,
+  createSunShadow,
+  hexToVec3,
+} from "@gaia/render";
 import type { StartOffer } from "../../world-service/protocol.ts";
 import { createGround } from "../world/environment.ts";
-import { type SheetBox, type Writing, paintFeather, paintSheetInk, paintWriting, seeded, writingBox, writingCanvas } from "./table-ink.ts";
+import {
+  type SheetBox,
+  type Writing,
+  paintFeather,
+  paintSheetInk,
+  paintWriting,
+  seeded,
+  writingBox,
+  writingCanvas,
+} from "./table-ink.ts";
 import type { CardPlace, TableLayout } from "./table-layout.ts";
-import { FEATHER_FRAGMENT, FLAME_FRAGMENT, GLASS_FRAGMENT, MAX_CASTERS, PAPER_FRAGMENT, POST_FRAGMENT, POST_VERTEX, SOLID_FRAGMENT, VERTEX, WOOD_FRAGMENT } from "./table-shaders.ts";
+import {
+  FEATHER_FRAGMENT,
+  FLAME_FRAGMENT,
+  GLASS_FRAGMENT,
+  MAX_CASTERS,
+  PAPER_FRAGMENT,
+  POST_FRAGMENT,
+  POST_VERTEX,
+  SOLID_FRAGMENT,
+  VERTEX,
+  WOOD_FRAGMENT,
+} from "./table-shaders.ts";
 
 /** The table top's height, in metres. */
 const TOP = 0.76;
@@ -70,7 +101,11 @@ export interface TableScene {
   resize(w: number, h: number, dpr: number): void;
   render(): void;
   /** The hit rectangles on the canvas: each card, the line and the folder text. */
-  hits(): { readonly cards: readonly Rect[]; readonly line: Rect; readonly folder: Rect };
+  hits(): {
+    readonly cards: readonly Rect[];
+    readonly line: Rect;
+    readonly folder: Rect;
+  };
   /** Compiles every material before the first frame, off the page's thread where the browser can. */
   compile(): Promise<void>;
   dispose(): void;
@@ -107,35 +142,87 @@ const ease = (x: number): number => {
  * world's wait takes its first darkness from it, because every light Jev can compose is equally dark at a given hour.
  */
 export const START_SKY: Blueprint = blueprintOf("world", {
-  light: { use: "daylight@1", params: { path: "middling", warmth: "neutral", brush: "painterly", moon: "silver moon", stars: "many" } },
-  sky: { use: "sky@1", params: { character: "powder blue", clouds: "fair-weather puffs", cover: "scattered", overcast: "fair" } },
+  light: {
+    use: "daylight@1",
+    params: {
+      path: "middling",
+      warmth: "neutral",
+      brush: "painterly",
+      moon: "silver moon",
+      stars: "many",
+    },
+  },
+  sky: {
+    use: "sky@1",
+    params: {
+      character: "powder blue",
+      clouds: "fair-weather puffs",
+      cover: "scattered",
+      overcast: "fair",
+    },
+  },
   wind: { use: "wind@1", params: { strength: "breezy" } },
 });
 
 /** The ground around the table, under the start's light. */
 const START_GROUND: Blueprint = blueprintOf("biome", {
-  relief: { use: "meadow@1", params: { undulation: "softly undulating", tilt: "level", facing: "south" } },
-  cover: { use: "ground-cover@1", params: { cover: "lush grass", length: "natural", wildflowers: "a scattering" } },
+  relief: {
+    use: "meadow@1",
+    params: { undulation: "softly undulating", tilt: "level", facing: "south" },
+  },
+  cover: {
+    use: "ground-cover@1",
+    params: {
+      cover: "lush grass",
+      length: "natural",
+      wildflowers: "a scattering",
+    },
+  },
   air: { use: "air@1", params: { air: "clear", distance: "for miles" } },
-  accents: { use: "drift@1", params: { form: "drifting petals", amount: "a few" } },
+  accents: {
+    use: "drift@1",
+    params: { form: "drifting petals", amount: "a few" },
+  },
   natives: { use: "native-families@1", params: { families: [] } },
 });
 
 /** The start's light at hour `h`. */
 const meadow = (() => {
-  const lib = new Library([...WORLD_PRIMITIVES, ...BIOME_PRIMITIVES, ...RELIEF_PRIMITIVES]);
-  return (h: number): WorldLook => realizeWorld({ blueprint: START_SKY, kind: worldKind }, { blueprint: START_GROUND, kind: biome }, lib, seedOf("start/table"), h);
+  const lib = new Library([
+    ...WORLD_PRIMITIVES,
+    ...BIOME_PRIMITIVES,
+    ...RELIEF_PRIMITIVES,
+  ]);
+  return (h: number): WorldLook =>
+    realizeWorld(
+      { blueprint: START_SKY, kind: worldKind },
+      { blueprint: START_GROUND, kind: biome },
+      lib,
+      seedOf("start/table"),
+      h,
+    );
 })();
 
 /**
  * Creates the table for `worlds`, with Gaia's `logo` on its sheet. `deckle` is the wait's sheet's torn edge mask
  * (`DECKLE_MASK`), which a chosen card takes as it becomes that sheet.
  */
-export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], logo: HTMLImageElement, deckle: HTMLImageElement, size: { w: number; h: number; dpr: number }): TableScene {
+export function createTableScene(
+  l: TableLayout,
+  worlds: readonly TableWorld[],
+  logo: HTMLImageElement,
+  deckle: HTMLImageElement,
+  size: { w: number; h: number; dpr: number },
+): TableScene {
   const canvas = document.createElement("canvas");
   // The canvas is opaque because the table always fills the view behind the wait and the focus pass writes every
   // pixel. Render targets still clear to transparent, so the lifted card's own layer is clear around it.
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: false,
+    alpha: false,
+    powerPreference: "high-performance",
+  });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setClearColor(0x000000, 0);
   const light = createSceneLight();
@@ -147,39 +234,96 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   let shadowDirty = true;
 
   // ---------- contact shade where things touch the table and the sheet ----------
-  const casterBox = Array.from({ length: MAX_CASTERS }, () => new THREE.Vector4());
-  const casterSoft = Array.from({ length: MAX_CASTERS }, () => new THREE.Vector4());
+  const casterBox = Array.from(
+    { length: MAX_CASTERS },
+    () => new THREE.Vector4(),
+  );
+  const casterSoft = Array.from(
+    { length: MAX_CASTERS },
+    () => new THREE.Vector4(),
+  );
   const casterCount = { value: 0 };
   /** The lifted card's shadow: its box on the table, then its rotation, strength, softness and the height above which nothing receives it. */
   const heldBox = new THREE.Vector4();
   const heldShade = new THREE.Vector4();
-  const surface = { uCasterBox: { value: casterBox }, uCasterSoft: { value: casterSoft }, uCasterCount: casterCount, uHeldBox: { value: heldBox }, uHeldShade: { value: heldShade } };
+  const surface = {
+    uCasterBox: { value: casterBox },
+    uCasterSoft: { value: casterSoft },
+    uCasterCount: casterCount,
+    uHeldBox: { value: heldBox },
+    uHeldShade: { value: heldShade },
+  };
   /** Adds a caster: its center on the table, half size, rotation, shade darkness, spread, and the surface it belongs to. Returns its index. */
-  const addCaster = (x: number, z: number, hx: number, hz: number, turn: number, dark: number, soft: number, self: number): number => {
+  const addCaster = (
+    x: number,
+    z: number,
+    hx: number,
+    hz: number,
+    turn: number,
+    dark: number,
+    soft: number,
+    self: number,
+  ): number => {
     const i = Math.min(MAX_CASTERS - 1, casterCount.value++);
     casterBox[i]?.set(x, z, hx, hz);
     casterSoft[i]?.set(turn, dark, soft, self);
     return i;
   };
-  const material = (fragmentShader: string, uniforms: Record<string, THREE.IUniform>, extra: THREE.ShaderMaterialParameters = {}): THREE.ShaderMaterial =>
-    new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader, uniforms: { ...light, ...surface, uLifted: { value: 0 }, ...uniforms }, ...extra });
+  const material = (
+    fragmentShader: string,
+    uniforms: Record<string, THREE.IUniform>,
+    extra: THREE.ShaderMaterialParameters = {},
+  ): THREE.ShaderMaterial =>
+    new THREE.ShaderMaterial({
+      vertexShader: VERTEX,
+      fragmentShader,
+      uniforms: { ...light, ...surface, uLifted: { value: 0 }, ...uniforms },
+      ...extra,
+    });
 
   // ---------- the table ----------
   const table = new THREE.Group();
   const plank = { value: l.table.d / 5 };
-  const top = new THREE.Mesh(new THREE.BoxGeometry(l.table.w, TABLE_THICK, l.table.d), material(WOOD_FRAGMENT, { uLeg: { value: 0 }, uPlank: plank }));
+  const top = new THREE.Mesh(
+    new THREE.BoxGeometry(l.table.w, TABLE_THICK, l.table.d),
+    material(WOOD_FRAGMENT, { uLeg: { value: 0 }, uPlank: plank }),
+  );
   top.position.y = TOP - TABLE_THICK / 2;
   table.add(top);
-  const legWood = material(WOOD_FRAGMENT, { uLeg: { value: 1 }, uPlank: plank });
+  const legWood = material(WOOD_FRAGMENT, {
+    uLeg: { value: 1 },
+    uPlank: plank,
+  });
   const under = TOP - TABLE_THICK;
-  for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.065, under, 0.065), legWood);
-    leg.position.set(x * (l.table.w / 2 - 0.09), under / 2, z * (l.table.d / 2 - 0.09));
+  for (const [x, z] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ] as const) {
+    const leg = new THREE.Mesh(
+      new THREE.BoxGeometry(0.065, under, 0.065),
+      legWood,
+    );
+    leg.position.set(
+      x * (l.table.w / 2 - 0.09),
+      under / 2,
+      z * (l.table.d / 2 - 0.09),
+    );
     table.add(leg);
   }
-  for (const [w, d, x, z] of [[l.table.w - 0.2, 0.025, 0, -1], [l.table.w - 0.2, 0.025, 0, 1], [0.025, l.table.d - 0.2, -1, 0], [0.025, l.table.d - 0.2, 1, 0]] as const) {
+  for (const [w, d, x, z] of [
+    [l.table.w - 0.2, 0.025, 0, -1],
+    [l.table.w - 0.2, 0.025, 0, 1],
+    [0.025, l.table.d - 0.2, -1, 0],
+    [0.025, l.table.d - 0.2, 1, 0],
+  ] as const) {
     const rail = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, d), legWood);
-    rail.position.set(x * (l.table.w / 2 - 0.09), under - 0.045, z * (l.table.d / 2 - 0.09));
+    rail.position.set(
+      x * (l.table.w / 2 - 0.09),
+      under - 0.045,
+      z * (l.table.d / 2 - 0.09),
+    );
     table.add(rail);
   }
   scene.add(table);
@@ -190,8 +334,21 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   const sheetLift = (sx: number, sy: number): number => {
     const u = sx / sw;
     const v = sy / sh;
-    const corner = (cu: number, cv: number, k: number): number => k * Math.pow(Math.max(0, 1 - Math.hypot(u - cu, (v - cv) * (sh / sw)) / 0.2), 2.4);
-    return 0.0006 + 0.0035 * Math.abs(2 * u - 1) + 0.0022 * (1 - Math.abs(2 * v - 1)) + corner(1, 1, 0.016) + corner(0, 0, 0.009) + corner(1, 0, 0.004) + Math.max(0, 0.0012 * Math.sin(u * 7.3 + v * 3.1) * Math.sin(v * 5.2));
+    const corner = (cu: number, cv: number, k: number): number =>
+      k *
+      Math.pow(
+        Math.max(0, 1 - Math.hypot(u - cu, (v - cv) * (sh / sw)) / 0.2),
+        2.4,
+      );
+    return (
+      0.0006 +
+      0.0035 * Math.abs(2 * u - 1) +
+      0.0022 * (1 - Math.abs(2 * v - 1)) +
+      corner(1, 1, 0.016) +
+      corner(0, 0, 0.009) +
+      corner(1, 0, 0.004) +
+      Math.max(0, 0.0012 * Math.sin(u * 7.3 + v * 3.1) * Math.sin(v * 5.2))
+    );
   };
   const cosT = Math.cos(sheetTurn);
   const sinT = Math.sin(sheetTurn);
@@ -199,7 +356,11 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   const onSheet = (sx: number, sy: number, above = 0): THREE.Vector3 => {
     const lx = sx - sw / 2;
     const lz = sy - sh / 2;
-    return new THREE.Vector3(l.sheet.x + cosT * lx - sinT * lz, TOP + sheetLift(sx, sy) + above, l.sheet.z + sinT * lx + cosT * lz);
+    return new THREE.Vector3(
+      l.sheet.x + cosT * lx - sinT * lz,
+      TOP + sheetLift(sx, sy) + above,
+      l.sheet.z + sinT * lx + cosT * lz,
+    );
   };
   const axisX = new THREE.Vector3(cosT, 0, sinT);
   const axisY = new THREE.Vector3(-sinT, 0, cosT);
@@ -215,7 +376,14 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     return (Math.abs(b.x - a.x) / 2) * size.w * size.dpr;
   })();
   const pxPerM = Math.min(3600, Math.max(1200, (across / sw) * 1.15));
-  const ink = new THREE.CanvasTexture(paintSheetInk(l, worlds.map((w) => w.world), logo, pxPerM));
+  const ink = new THREE.CanvasTexture(
+    paintSheetInk(
+      l,
+      worlds.map((w) => w.world),
+      logo,
+      pxPerM,
+    ),
+  );
   const writingPaint = writingCanvas(l, pxPerM);
   const writing = new THREE.CanvasTexture(writingPaint);
   for (const t of [ink, writing]) {
@@ -226,12 +394,26 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   // The wait's sheet's deckle, stretched to the card as the page stretches it to the sheet (mask-size 100% 100%).
   const deckleCanvas = document.createElement("canvas");
   deckleCanvas.width = deckleCanvas.height = 2048;
-  (deckleCanvas.getContext("2d") as CanvasRenderingContext2D).drawImage(deckle, 0, 0, 2048, 2048);
+  (deckleCanvas.getContext("2d") as CanvasRenderingContext2D).drawImage(
+    deckle,
+    0,
+    0,
+    2048,
+    2048,
+  );
   const deckleTexture = new THREE.CanvasTexture(deckleCanvas);
   deckleTexture.colorSpace = THREE.NoColorSpace;
   deckleTexture.anisotropy = 8;
   let folder: SheetBox = [0, 0, 0, 0];
-  const paper = (o: { size: [number, number]; seed: number; base: number; tear: number; self: number; folded?: boolean; picture?: THREE.Texture | null }): THREE.ShaderMaterial =>
+  const paper = (o: {
+    size: [number, number];
+    seed: number;
+    base: number;
+    tear: number;
+    self: number;
+    folded?: boolean;
+    picture?: THREE.Texture | null;
+  }): THREE.ShaderMaterial =>
     material(
       PAPER_FRAGMENT,
       {
@@ -243,10 +425,19 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
         uInk: { value: o.folded === true ? ink : null },
         uHasInk: { value: o.folded === true ? 1 : 0 },
         uWriting: { value: o.folded === true ? writing : null },
-        uWritingAt: { value: new THREE.Vector4(wx0 / sw, 1 - wy1 / sh, wx1 / sw, 1 - wy0 / sh) },
+        uWritingAt: {
+          value: new THREE.Vector4(
+            wx0 / sw,
+            1 - wy1 / sh,
+            wx1 / sw,
+            1 - wy0 / sh,
+          ),
+        },
         uHasWriting: { value: o.folded === true ? 1 : 0 },
         uPicture: { value: o.picture ?? null },
-        uHasPicture: { value: o.picture === null || o.picture === undefined ? 0 : 1 },
+        uHasPicture: {
+          value: o.picture === null || o.picture === undefined ? 0 : 1,
+        },
         uInset: { value: INSET },
         uSelf: { value: o.self },
         uFlat: { value: 0 },
@@ -258,21 +449,52 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       },
       { side: THREE.DoubleSide, alphaToCoverage: true },
     );
-  const sheet = new THREE.Mesh(grid(sw, sh, l.phone ? 90 : 160, l.phone ? 150 : 106, onSheet), paper({ size: [sw, sh], seed: 7, base: 0xf4e2cf, tear: 1.4, self: 0, folded: true }));
+  const sheet = new THREE.Mesh(
+    grid(sw, sh, l.phone ? 90 : 160, l.phone ? 150 : 106, onSheet),
+    paper({
+      size: [sw, sh],
+      seed: 7,
+      base: 0xf4e2cf,
+      tear: 1.4,
+      self: 0,
+      folded: true,
+    }),
+  );
   scene.add(sheet);
   const middle = onSheet(sw / 2, sh / 2);
-  addCaster(middle.x, middle.z, sw / 2 - 0.004, sh / 2 - 0.004, sheetTurn, 0.45, 0.005, 0);
+  addCaster(
+    middle.x,
+    middle.z,
+    sw / 2 - 0.004,
+    sh / 2 - 0.004,
+    sheetTurn,
+    0.45,
+    0.005,
+    0,
+  );
 
   // ---------- the cards: each world's map on a torn card, slightly rotated and bowed, with one corner curled ----------
   const pictures: THREE.Texture[] = [];
   const cards: Card[] = [];
   /** Builds card `i` at `c` on the sheet, with its picture and depth `deep`. */
-  const makeCard = (i: number, c: CardPlace, picture: HTMLImageElement | HTMLCanvasElement | null, deep: number): Card => {
+  const makeCard = (
+    i: number,
+    c: CardPlace,
+    picture: HTMLImageElement | HTMLCanvasElement | null,
+    deep: number,
+  ): Card => {
     const r = seeded(500 + i * 13);
     const turn = (r() - 0.5) * 0.09;
     const curled = Math.floor(r() * 4);
     const segs = 56;
-    const [cu, cv] = ([[0, 0], [1, 0], [1, 1], [0, 1]] as const)[curled] ?? [1, 1];
+    const [cu, cv] = (
+      [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+        [0, 1],
+      ] as const
+    )[curled] ?? [1, 1];
     const rest = new Float32Array((segs + 1) ** 2 * 3);
     const flat = new Float32Array((segs + 1) ** 2 * 3);
     const uvs = new Float32Array((segs + 1) ** 2 * 2);
@@ -284,15 +506,24 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
         const lx = (u - 0.5) * c.side;
         const lz = (v - 0.5) * deep;
         // At rest it follows the sheet's folds beneath it, with its own bow and its curled corner.
-        const under = sheetLift(c.x + Math.cos(turn) * lx - Math.sin(turn) * lz, c.y + Math.sin(turn) * lx + Math.cos(turn) * lz) - sheetLift(c.x, c.y);
-        const own = 0.0022 * (2 * u - 1) ** 2 + 0.009 * Math.max(0, 1 - Math.hypot(u - cu, v - cv) / 0.32) ** 2.2;
+        const under =
+          sheetLift(
+            c.x + Math.cos(turn) * lx - Math.sin(turn) * lz,
+            c.y + Math.sin(turn) * lx + Math.cos(turn) * lz,
+          ) - sheetLift(c.x, c.y);
+        const own =
+          0.0022 * (2 * u - 1) ** 2 +
+          0.009 * Math.max(0, 1 - Math.hypot(u - cu, v - cv) / 0.32) ** 2.2;
         rest.set([lx, under + own, lz], k * 3);
         flat.set([lx, 0, lz], k * 3);
         uvs.set([u, 1 - v], k * 2);
       }
     }
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(rest.slice(), 3));
+    geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(rest.slice(), 3),
+    );
     geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
     geometry.setIndex(indices(segs, segs));
     geometry.computeVertexNormals();
@@ -304,24 +535,66 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       texture.needsUpdate = true;
       pictures.push(texture);
     }
-    const mesh = new THREE.Mesh(geometry, paper({ size: [c.side, deep], seed: 40 + i, base: 0xf2e8cc, tear: 0.9, self: i + 1, picture: texture }));
+    const mesh = new THREE.Mesh(
+      geometry,
+      paper({
+        size: [c.side, deep],
+        seed: 40 + i,
+        base: 0xf2e8cc,
+        tear: 0.9,
+        self: i + 1,
+        picture: texture,
+      }),
+    );
     const group = new THREE.Group();
     group.add(mesh);
     group.position.copy(onSheet(c.x, c.y, 0.0009));
-    group.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -(turn + sheetTurn));
-    mesh.material.uniforms.uAxisX?.value.set(1, 0, 0).applyQuaternion(group.quaternion);
-    mesh.material.uniforms.uAxisY?.value.set(0, 0, 1).applyQuaternion(group.quaternion);
+    group.quaternion.setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      -(turn + sheetTurn),
+    );
+    mesh.material.uniforms.uAxisX?.value
+      .set(1, 0, 0)
+      .applyQuaternion(group.quaternion);
+    mesh.material.uniforms.uAxisY?.value
+      .set(0, 0, 1)
+      .applyQuaternion(group.quaternion);
     scene.add(group);
-    const caster = addCaster(group.position.x, group.position.z, c.side / 2 - 0.006, deep / 2 - 0.006, turn + sheetTurn, 0.38, 0.0045, i + 1);
-    return { caster, restTurnAngle: turn + sheetTurn, group, mesh, rest, flat, restAt: group.position.clone(), restTurn: group.quaternion.clone(), side: c.side, deep };
+    const caster = addCaster(
+      group.position.x,
+      group.position.z,
+      c.side / 2 - 0.006,
+      deep / 2 - 0.006,
+      turn + sheetTurn,
+      0.38,
+      0.0045,
+      i + 1,
+    );
+    return {
+      caster,
+      restTurnAngle: turn + sheetTurn,
+      group,
+      mesh,
+      rest,
+      flat,
+      restAt: group.position.clone(),
+      restTurn: group.quaternion.clone(),
+      side: c.side,
+      deep,
+    };
   };
   for (const [i, w] of worlds.entries()) {
     const c = l.cards[i];
     if (c === undefined) break;
     // The card takes its picture's aspect, which is its land's or the wait's sheet's, at the width of its place on the
     // sheet. A picture taller than wide gives a square card.
-    const [pw, ph] = w.picture instanceof HTMLImageElement ? [w.picture.naturalWidth, w.picture.naturalHeight] : [w.picture?.width ?? 1, w.picture?.height ?? 1];
-    cards.push(makeCard(i, c, w.picture, c.side * Math.min(1, ph / Math.max(1, pw))));
+    const [pw, ph] =
+      w.picture instanceof HTMLImageElement
+        ? [w.picture.naturalWidth, w.picture.naturalHeight]
+        : [w.picture?.width ?? 1, w.picture?.height ?? 1];
+    cards.push(
+      makeCard(i, c, w.picture, c.side * Math.min(1, ph / Math.max(1, pw))),
+    );
   }
   /**
    * A fresh card's place. On an empty sheet, it is centered between the heading and the line. Among offered cards, it
@@ -333,27 +606,72 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       return { x: sw / 2, y: (l.say.y + l.line.y) / 2, side, nameWidth: side };
     }
     const side = Math.min(0.22, l.cards[0]?.side ?? 0.22);
-    return { x: (l.line.x0 + l.line.x1) / 2, y: l.line.y, side, nameWidth: side };
+    return {
+      x: (l.line.x0 + l.line.x1) / 2,
+      y: l.line.y,
+      side,
+      nameWidth: side,
+    };
   };
 
   // ---------- the inkwell, the lantern and the quill ----------
-  const solid = (hex: number, o: { gloss?: number; spec?: number; metal?: number; wrap?: number; stain?: number } = {}): THREE.ShaderMaterial =>
-    material(SOLID_FRAGMENT, { uColor: { value: hexToVec3(hex) }, uGloss: { value: o.gloss ?? 30 }, uSpec: { value: o.spec ?? 0.2 }, uMetal: { value: o.metal ?? 0 }, uWrap: { value: o.wrap ?? 0.1 }, uStain: { value: o.stain ?? 0 } }, { side: THREE.DoubleSide });
+  const solid = (
+    hex: number,
+    o: {
+      gloss?: number;
+      spec?: number;
+      metal?: number;
+      wrap?: number;
+      stain?: number;
+    } = {},
+  ): THREE.ShaderMaterial =>
+    material(
+      SOLID_FRAGMENT,
+      {
+        uColor: { value: hexToVec3(hex) },
+        uGloss: { value: o.gloss ?? 30 },
+        uSpec: { value: o.spec ?? 0.2 },
+        uMetal: { value: o.metal ?? 0 },
+        uWrap: { value: o.wrap ?? 0.1 },
+        uStain: { value: o.stain ?? 0 },
+      },
+      { side: THREE.DoubleSide },
+    );
   const brass = solid(0xb8904a, { gloss: 46, spec: 1.2, metal: 1 });
   // A squat glazed pot with a brass collar.
   const [ix, iz] = l.inkwell;
   const pot = new THREE.Mesh(
     new THREE.LatheGeometry(
-      ([[0, 0], [0.033, 0], [0.037, 0.004], [0.038, 0.022], [0.034, 0.036], [0.022, 0.044], [0.0155, 0.048], [0.0155, 0.054], [0.0135, 0.0545], [0.012, 0.05], [0, 0.049]] as const).map(([x, y]) => new THREE.Vector2(x, y)),
+      (
+        [
+          [0, 0],
+          [0.033, 0],
+          [0.037, 0.004],
+          [0.038, 0.022],
+          [0.034, 0.036],
+          [0.022, 0.044],
+          [0.0155, 0.048],
+          [0.0155, 0.054],
+          [0.0135, 0.0545],
+          [0.012, 0.05],
+          [0, 0.049],
+        ] as const
+      ).map(([x, y]) => new THREE.Vector2(x, y)),
       40,
     ),
     solid(0x1a2230, { gloss: 140, spec: 1.6, wrap: 0 }),
   );
   pot.position.set(ix, TOP, iz);
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.0158, 0.0022, 10, 40), brass);
+  const collar = new THREE.Mesh(
+    new THREE.TorusGeometry(0.0158, 0.0022, 10, 40),
+    brass,
+  );
   collar.rotation.x = Math.PI / 2;
   collar.position.set(ix, TOP + 0.0505, iz);
-  const inkPool = new THREE.Mesh(new THREE.CircleGeometry(0.012, 24), solid(0x07060a, { gloss: 200, spec: 2 }));
+  const inkPool = new THREE.Mesh(
+    new THREE.CircleGeometry(0.012, 24),
+    solid(0x07060a, { gloss: 200, spec: 2 }),
+  );
   inkPool.rotation.x = -Math.PI / 2;
   inkPool.position.set(ix, TOP + 0.0495, iz);
   scene.add(pot, collar, inkPool);
@@ -361,7 +679,11 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
 
   // A brass lantern with glass and a candle, lit once the night comes.
   const lantern = new THREE.Group();
-  const lanternPart = (geometry: THREE.BufferGeometry, y: number, m: THREE.Material = brass): THREE.Mesh => {
+  const lanternPart = (
+    geometry: THREE.BufferGeometry,
+    y: number,
+    m: THREE.Material = brass,
+  ): THREE.Mesh => {
     const mesh = new THREE.Mesh(geometry, m);
     mesh.position.y = y;
     lantern.add(mesh);
@@ -369,17 +691,49 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   };
   lanternPart(new THREE.CylinderGeometry(0.052, 0.058, 0.016, 28), 0.008);
   lanternPart(new THREE.ConeGeometry(0.058, 0.045, 28, 1, true), 0.1685);
-  lanternPart(new THREE.CylinderGeometry(0.056, 0.056, 0.008, 28, 1, true), 0.146);
+  lanternPart(
+    new THREE.CylinderGeometry(0.056, 0.056, 0.008, 28, 1, true),
+    0.146,
+  );
   lanternPart(new THREE.TorusGeometry(0.024, 0.0028, 8, 30), 0.206);
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    lanternPart(new THREE.CylinderGeometry(0.0032, 0.0032, 0.13, 8), 0.081).position.set(Math.cos(a) * 0.05, 0.081, Math.sin(a) * 0.05);
+    lanternPart(
+      new THREE.CylinderGeometry(0.0032, 0.0032, 0.13, 8),
+      0.081,
+    ).position.set(Math.cos(a) * 0.05, 0.081, Math.sin(a) * 0.05);
   }
-  lanternPart(new THREE.CylinderGeometry(0.014, 0.015, 0.05, 20), 0.041, solid(0xeee2c4, { wrap: 0.6, spec: 0.1 }));
+  lanternPart(
+    new THREE.CylinderGeometry(0.014, 0.015, 0.05, 20),
+    0.041,
+    solid(0xeee2c4, { wrap: 0.6, spec: 0.1 }),
+  );
   const glow = { glass: { value: 0 }, flame: { value: 0 } };
-  const glass = lanternPart(new THREE.CylinderGeometry(0.046, 0.046, 0.13, 32, 1, true), 0.081, new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: GLASS_FRAGMENT, uniforms: { ...light, uGlow: glow.glass }, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  const glass = lanternPart(
+    new THREE.CylinderGeometry(0.046, 0.046, 0.13, 32, 1, true),
+    0.081,
+    new THREE.ShaderMaterial({
+      vertexShader: VERTEX,
+      fragmentShader: GLASS_FRAGMENT,
+      uniforms: { ...light, uGlow: glow.glass },
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
   glass.renderOrder = 2;
-  const flame = lanternPart(new THREE.PlaneGeometry(0.03, 0.05), 0.086, new THREE.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: FLAME_FRAGMENT, uniforms: { uGlow: glow.flame }, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const flame = lanternPart(
+    new THREE.PlaneGeometry(0.03, 0.05),
+    0.086,
+    new THREE.ShaderMaterial({
+      vertexShader: VERTEX,
+      fragmentShader: FLAME_FRAGMENT,
+      uniforms: { uGlow: glow.flame },
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
   flame.renderOrder = 3;
   lantern.position.set(l.lantern[0], TOP, l.lantern[1]);
   scene.add(lantern);
@@ -392,10 +746,28 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   const featherTexture = new THREE.CanvasTexture(paintFeather(512, 128, 77));
   featherTexture.colorSpace = THREE.NoColorSpace;
   featherTexture.anisotropy = 8;
-  const quill = buildQuill(nib, tip, solid(0xe8e0cc, { gloss: 60, spec: 0.5, wrap: 0.5, stain: 1 }), material(FEATHER_FRAGMENT, { uMap: { value: featherTexture } }, { side: THREE.DoubleSide, alphaToCoverage: true }));
+  const quill = buildQuill(
+    nib,
+    tip,
+    solid(0xe8e0cc, { gloss: 60, spec: 0.5, wrap: 0.5, stain: 1 }),
+    material(
+      FEATHER_FRAGMENT,
+      { uMap: { value: featherTexture } },
+      { side: THREE.DoubleSide, alphaToCoverage: true },
+    ),
+  );
   scene.add(quill);
   const along = nib.clone().lerp(tip, 0.5);
-  addCaster(along.x, along.z, nib.distanceTo(tip) * 0.4, 0.002, Math.atan2(tip.z - nib.z, tip.x - nib.x), 0.3, 0.004, -4);
+  addCaster(
+    along.x,
+    along.z,
+    nib.distanceTo(tip) * 0.4,
+    0.002,
+    Math.atan2(tip.z - nib.z, tip.x - nib.x),
+    0.3,
+    0.004,
+    -4,
+  );
 
   // ---------- the focus: everything at the sheet's distance is sharp ----------
   let target: THREE.WebGLRenderTarget | null = null;
@@ -427,7 +799,8 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   postQuad.frustumCulled = false;
   const postCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   const pu = post.uniforms as Record<string, THREE.IUniform>;
-  const setU = (name: string, value: number): void => void ((pu[name] as THREE.IUniform).value = value);
+  const setU = (name: string, value: number): void =>
+    void ((pu[name] as THREE.IUniform).value = value);
 
   /** Backs the camera off until the whole sheet fits, with the table showing round it, seen from a little above. */
   function place(): void {
@@ -436,11 +809,25 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const pitch = THREE.MathUtils.degToRad(l.phone ? 64 : 56);
     const at = onSheet(sw / 2, sh * (l.phone ? 0.5 : 0.52));
     const back = new THREE.Vector3(0, Math.sin(pitch), Math.cos(pitch));
-    const corners = [onSheet(0, 0), onSheet(sw, 0), onSheet(0, sh), onSheet(sw, sh)];
+    const corners = [
+      onSheet(0, 0),
+      onSheet(sw, 0),
+      onSheet(0, sh),
+      onSheet(sw, sh),
+    ];
     // The lantern and the inkwell must also fit in the view, though nearer its edge than the sheet may be. These are the
     // corners of each one's box.
-    const things = ([[l.lantern, LANTERN_BOX], [l.inkwell, INKWELL_BOX]] as const).flatMap(([[x, z], { r, h }]) =>
-      [-r, r].flatMap((dx) => [-r, r].flatMap((dz) => [0, h].map((dy) => new THREE.Vector3(x + dx, TOP + dy, z + dz)))),
+    const things = (
+      [
+        [l.lantern, LANTERN_BOX],
+        [l.inkwell, INKWELL_BOX],
+      ] as const
+    ).flatMap(([[x, z], { r, h }]) =>
+      [-r, r].flatMap((dx) =>
+        [-r, r].flatMap((dz) =>
+          [0, h].map((dy) => new THREE.Vector3(x + dx, TOP + dy, z + dz)),
+        ),
+      ),
     );
     const inView = (c: THREE.Vector3, edge: number): boolean => {
       const p = c.clone().project(camera);
@@ -453,7 +840,11 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       camera.updateMatrixWorld(true);
       const fits = corners.every((c) => {
         const p = c.clone().project(camera);
-        return Math.abs(p.x) < (l.phone ? 0.97 : 0.86) && p.y < (l.phone ? 0.86 : 0.9) && p.y > (l.phone ? -0.93 : -0.92);
+        return (
+          Math.abs(p.x) < (l.phone ? 0.97 : 0.86) &&
+          p.y < (l.phone ? 0.86 : 0.9) &&
+          p.y > (l.phone ? -0.93 : -0.92)
+        );
       });
       if (fits && things.every((c) => inView(c, THINGS_EDGE))) break;
     }
@@ -462,12 +853,31 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     restFar = Math.max(...reach) * 1.03;
     // The table top grows to reach past every corner of the view, so a very wide or tall window never shows its edge.
     // Where it already reaches, it keeps its own size.
-    const seen = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([x, y]) => {
-      const ray = new THREE.Vector3(x, y, 0.5).unproject(camera).sub(camera.position).normalize();
-      return camera.position.clone().addScaledVector(ray, (TOP - camera.position.y) / Math.min(-1e-3, ray.y));
+    const seen = [
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
+    ].map(([x, y]) => {
+      const ray = new THREE.Vector3(x, y, 0.5)
+        .unproject(camera)
+        .sub(camera.position)
+        .normalize();
+      return camera.position
+        .clone()
+        .addScaledVector(
+          ray,
+          (TOP - camera.position.y) / Math.min(-1e-3, ray.y),
+        );
     });
-    const w = Math.max(l.table.w, ...seen.map((p) => 2 * Math.abs(p.x) + TABLE_SPARE));
-    const d = Math.max(l.table.d, ...seen.map((p) => 2 * Math.abs(p.z) + TABLE_SPARE));
+    const w = Math.max(
+      l.table.w,
+      ...seen.map((p) => 2 * Math.abs(p.x) + TABLE_SPARE),
+    );
+    const d = Math.max(
+      l.table.d,
+      ...seen.map((p) => 2 * Math.abs(p.z) + TABLE_SPARE),
+    );
     const box = top.geometry.parameters;
     if (w !== box.width || d !== box.depth) {
       top.geometry.dispose();
@@ -484,14 +894,20 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     applyLight(light, look.light);
     applySky(light, look);
     // The table faces so the sun comes from behind it on the left, raking across the paper toward the person.
-    const turn = SUN_FROM - Math.atan2(light.uSunDirection.value.x, light.uSunDirection.value.z);
+    const turn =
+      SUN_FROM -
+      Math.atan2(light.uSunDirection.value.x, light.uSunDirection.value.z);
     const up = new THREE.Vector3(0, 1, 0);
     light.uSunDirection.value.applyAxisAngle(up, turn);
     light.uMoonDirection.value.applyAxisAngle(up, turn);
     ground.apply(look);
     shadow.frame(new THREE.Vector3(0, TOP, 0), 1.2);
     shadowDirty = true;
-    light.uLanternPosition.value.set(l.lantern[0], TOP + flame.position.y, l.lantern[1]);
+    light.uLanternPosition.value.set(
+      l.lantern[0],
+      TOP + flame.position.y,
+      l.lantern[1],
+    );
     glow.flame.value = light.uLanternIntensity.value / LANTERN.intensity;
     glow.glass.value = glow.flame.value * 0.9;
     return true;
@@ -506,9 +922,14 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
   /** How much of the wait's sheet's shadow the risen card casts, as it becomes that sheet. */
   let shadowShown = 0;
   function shape(c: Card, flatness: number): void {
-    const position = c.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const position = c.mesh.geometry.getAttribute(
+      "position",
+    ) as THREE.BufferAttribute;
     const at = position.array as Float32Array;
-    for (let i = 0; i < at.length; i++) at[i] = (c.rest[i] as number) + ((c.flat[i] as number) - (c.rest[i] as number)) * flatness;
+    for (let i = 0; i < at.length; i++)
+      at[i] =
+        (c.rest[i] as number) +
+        ((c.flat[i] as number) - (c.rest[i] as number)) * flatness;
     position.needsUpdate = true;
     c.mesh.geometry.computeVertexNormals();
   }
@@ -537,20 +958,39 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     shape(c, Math.max(a, b));
     // A fresh card comes down onto the sheet from above, on the person's side, as a card laid on a table does.
     const down = 1 - ease((t + LAY_S) / LAY_S);
-    const raised = c.restAt.clone().add(new THREE.Vector3(0, 0.04 * a + 0.22 * down, 0.3 * down));
+    const raised = c.restAt
+      .clone()
+      .add(new THREE.Vector3(0, 0.04 * a + 0.22 * down, 0.3 * down));
     const straight = c.restTurn.clone().slerp(new THREE.Quaternion(), a);
     // The end pose faces the view, at the wait's sheet's size and position on screen. The sheet took the card's aspect
     // when the card was chosen.
-    const end = to ?? { x: size.w * 0.05, y: (size.h - size.w * 0.9 * (c.deep / c.side)) / 2, w: size.w * 0.9, h: size.w * 0.9 * (c.deep / c.side) };
+    const end = to ?? {
+      x: size.w * 0.05,
+      y: (size.h - size.w * 0.9 * (c.deep / c.side)) / 2,
+      w: size.w * 0.9,
+      h: size.w * 0.9 * (c.deep / c.side),
+    };
     const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
     const depth = (c.deep * size.h) / (2 * end.h * tan);
     const ndcX = ((end.x + end.w / 2) / size.w) * 2 - 1;
     const ndcY = 1 - ((end.y + end.h / 2) / size.h) * 2;
-    const finalAt = new THREE.Vector3(ndcX * depth * tan * camera.aspect, ndcY * depth * tan, -depth).applyMatrix4(camera.matrixWorld);
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    const finalAt = new THREE.Vector3(
+      ndcX * depth * tan * camera.aspect,
+      ndcY * depth * tan,
+      -depth,
+    ).applyMatrix4(camera.matrixWorld);
+    const right = new THREE.Vector3().setFromMatrixColumn(
+      camera.matrixWorld,
+      0,
+    );
     const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-    const facing = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2);
-    const finalTurn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, facing, up.clone().negate()));
+    const facing = new THREE.Vector3().setFromMatrixColumn(
+      camera.matrixWorld,
+      2,
+    );
+    const finalTurn = new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(right, facing, up.clone().negate()),
+    );
     c.group.position.copy(raised).lerp(finalAt, b);
     c.group.position.y += Math.sin(b * Math.PI) * 0.05;
     c.group.quaternion.copy(straight).slerp(finalTurn, b);
@@ -562,21 +1002,52 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     (u.uSheetPx as THREE.IUniform<THREE.Vector2>).value.set(end.w, end.h);
     (u.uSheetNight as THREE.IUniform).value = to?.night ?? 0;
     c.group.updateMatrixWorld(true);
-    const corners = ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as const).map(([sx, sz]) => new THREE.Vector3((sx * c.side) / 2, 0, (sz * c.deep) / 2).applyMatrix4(c.group.matrixWorld).project(camera));
+    const corners = (
+      [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ] as const
+    ).map(([sx, sz]) =>
+      new THREE.Vector3((sx * c.side) / 2, 0, (sz * c.deep) / 2)
+        .applyMatrix4(c.group.matrixWorld)
+        .project(camera),
+    );
     const xs = corners.map((p) => ((p.x + 1) / 2) * size.w * size.dpr);
     const ys = corners.map((p) => ((p.y + 1) / 2) * size.h * size.dpr);
-    (pu.uShadowBox as THREE.IUniform<THREE.Vector4>).value.set(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+    (pu.uShadowBox as THREE.IUniform<THREE.Vector4>).value.set(
+      Math.min(...xs),
+      Math.min(...ys),
+      Math.max(...xs),
+      Math.max(...ys),
+    );
     shadowShown = flat;
     (u.uLifted as THREE.IUniform).value = b > 0 ? 1 : 0;
     (casterSoft[c.caster] as THREE.Vector4).y = 0.38 * (1 - a) * (1 - down);
     // Its shadow is a soft box placed where the sun's shadow map would draw it, so it softens, slides away from the light
     // and fades as the card rises, without popping off the table.
     const height = c.group.position.y - c.restAt.y;
-    const from = light.uSunIntensity.value > 0.05 ? light.uSunDirection.value : light.uMoonDirection.value;
+    const from =
+      light.uSunIntensity.value > 0.05
+        ? light.uSunDirection.value
+        : light.uMoonDirection.value;
     const away = height / Math.max(0.35, from.y);
-    heldBox.set(c.restAt.x - from.x * away, c.restAt.z - from.z * away, c.side / 2 - 0.004, c.deep / 2 - 0.004);
+    heldBox.set(
+      c.restAt.x - from.x * away,
+      c.restAt.z - from.z * away,
+      c.side / 2 - 0.004,
+      c.deep / 2 - 0.004,
+    );
     // Like a paper shadow under an open sky, its edge spreads over a few centimetres as the card rises.
-    heldShade.set(c.restTurnAngle * (1 - a), 0.75 * THREE.MathUtils.smoothstep(height, 0, 0.01) * (1 - THREE.MathUtils.smoothstep(height, 0.03, 0.3)), 0.004 + height * 0.3, c.group.position.y - 0.003);
+    heldShade.set(
+      c.restTurnAngle * (1 - a),
+      0.75 *
+        THREE.MathUtils.smoothstep(height, 0, 0.01) *
+        (1 - THREE.MathUtils.smoothstep(height, 0.03, 0.3)),
+      0.004 + height * 0.3,
+      c.group.position.y - 0.003,
+    );
     // The focus follows the card up, so the table blurs as it rises.
     const toCard = camera.position.distanceTo(c.group.position);
     setU("uFocus", THREE.MathUtils.lerp(restFocus, toCard * 0.97, b));
@@ -590,13 +1061,18 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     const h = Math.round(size.h * size.dpr);
     if (target === null || target.width !== w || target.height !== h) {
       target?.dispose();
-      target = new THREE.WebGLRenderTarget(w, h, { samples: 4, depthTexture: new THREE.DepthTexture(w, h) });
+      target = new THREE.WebGLRenderTarget(w, h, {
+        samples: 4,
+        depthTexture: new THREE.DepthTexture(w, h),
+      });
       (pu.tColor as THREE.IUniform).value = target.texture;
       (pu.tDepth as THREE.IUniform).value = target.depthTexture;
       (pu.uRes as THREE.IUniform<THREE.Vector2>).value.set(w, h);
     }
     light.uEye.value.copy(camera.position);
-    const rising = lifted !== null && (lifted.mesh.material.uniforms.uLifted as THREE.IUniform).value > 0;
+    const rising =
+      lifted !== null &&
+      (lifted.mesh.material.uniforms.uLifted as THREE.IUniform).value > 0;
     // The risen card is no longer drawn once the wait's sheet has replaced it.
     const showing = rising && liftShown > 0;
     if (shadowDirty || lifted !== null) {
@@ -604,7 +1080,18 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       // the moon gives it.
       scene.overrideMaterial = depthOnly;
       // A chosen card shades the table with its own soft box instead (`choose`).
-      shadow.render(renderer, scene, [], [ground.mesh, glass, flame, ...(light.uLanternIntensity.value > 0.3 ? [lantern] : []), ...(lifted === null ? [] : [lifted.group])]);
+      shadow.render(
+        renderer,
+        scene,
+        [],
+        [
+          ground.mesh,
+          glass,
+          flame,
+          ...(light.uLanternIntensity.value > 0.3 ? [lantern] : []),
+          ...(lifted === null ? [] : [lifted.group]),
+        ],
+      );
       scene.overrideMaterial = null;
       shadowDirty = false;
     }
@@ -613,7 +1100,11 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     renderer.clear();
     renderer.render(scene, camera);
     if (lifted !== null && showing) {
-      if (liftTarget === null || liftTarget.width !== w || liftTarget.height !== h) {
+      if (
+        liftTarget === null ||
+        liftTarget.width !== w ||
+        liftTarget.height !== h
+      ) {
         liftTarget?.dispose();
         liftTarget = new THREE.WebGLRenderTarget(w, h, { samples: 4 });
         (pu.tLift as THREE.IUniform).value = liftTarget.texture;
@@ -633,10 +1124,20 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
 
   /** Returns the canvas rectangle of a box on the sheet. */
   const onScreen = (box: SheetBox): Rect => {
-    const points = [onSheet(box[0], box[1]), onSheet(box[2], box[1]), onSheet(box[0], box[3]), onSheet(box[2], box[3])].map((p) => p.project(camera));
+    const points = [
+      onSheet(box[0], box[1]),
+      onSheet(box[2], box[1]),
+      onSheet(box[0], box[3]),
+      onSheet(box[2], box[3]),
+    ].map((p) => p.project(camera));
     const xs = points.map((p) => ((p.x + 1) / 2) * size.w);
     const ys = points.map((p) => ((1 - p.y) / 2) * size.h);
-    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    return {
+      x: Math.min(...xs),
+      y: Math.min(...ys),
+      w: Math.max(...xs) - Math.min(...xs),
+      h: Math.max(...ys) - Math.min(...ys),
+    };
   };
 
   const api: TableScene = {
@@ -650,7 +1151,9 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
     choose,
     fresh(aspect, face) {
       const at = freshPlace();
-      cards.push(makeCard(cards.length, at, face, at.side / Math.max(1, aspect)));
+      cards.push(
+        makeCard(cards.length, at, face, at.side / Math.max(1, aspect)),
+      );
       shadowDirty = true;
       return cards.length - 1;
     },
@@ -679,8 +1182,18 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
           const deep = c.deep / 2 + 0.004;
           return onScreen([at.x - half, at.y - deep, at.x + half, at.y + deep]);
         }),
-        line: onScreen([l.line.x0 - 0.02, l.line.y - l.line.size * 2, l.line.x1 + 0.02, l.line.y + l.line.size * 0.6]),
-        folder: onScreen([folder[0] - 0.01, folder[1], folder[2] + 0.01, folder[3]]),
+        line: onScreen([
+          l.line.x0 - 0.02,
+          l.line.y - l.line.size * 2,
+          l.line.x1 + 0.02,
+          l.line.y + l.line.size * 0.6,
+        ]),
+        folder: onScreen([
+          folder[0] - 0.01,
+          folder[1],
+          folder[2] + 0.01,
+          folder[3],
+        ]),
       };
     },
     async compile() {
@@ -695,9 +1208,17 @@ export function createTableScene(l: TableLayout, worlds: readonly TableWorld[], 
       scene.traverse((o) => {
         if (!(o instanceof THREE.Mesh)) return;
         o.geometry.dispose();
-        for (const m of Array.isArray(o.material) ? o.material : [o.material]) (m as THREE.Material).dispose();
+        for (const m of Array.isArray(o.material) ? o.material : [o.material])
+          (m as THREE.Material).dispose();
       });
-      for (const t of [ink, writing, featherTexture, deckleTexture, ...pictures]) t.dispose();
+      for (const t of [
+        ink,
+        writing,
+        featherTexture,
+        deckleTexture,
+        ...pictures,
+      ])
+        t.dispose();
       postQuad.geometry.dispose();
       post.dispose();
       depthOnly.dispose();
@@ -724,7 +1245,13 @@ function indices(nx: number, ny: number): number[] {
 }
 
 /** Builds an `nx` by `ny` cell grid over the sheet, placing each point in the world with `at`. */
-function grid(w: number, h: number, nx: number, ny: number, at: (sx: number, sy: number) => THREE.Vector3): THREE.BufferGeometry {
+function grid(
+  w: number,
+  h: number,
+  nx: number,
+  ny: number,
+  at: (sx: number, sy: number) => THREE.Vector3,
+): THREE.BufferGeometry {
   const position = new Float32Array((nx + 1) * (ny + 1) * 3);
   const uv = new Float32Array((nx + 1) * (ny + 1) * 2);
   for (let iy = 0; iy <= ny; iy++)
@@ -743,7 +1270,12 @@ function grid(w: number, h: number, nx: number, ny: number, at: (sx: number, sy:
 }
 
 /** Builds a quill from its nib to the tip of its vane: a tapering shaft that bows up off the paper, and a vane tilted on one edge. */
-function buildQuill(nib: THREE.Vector3, tip: THREE.Vector3, shaft: THREE.Material, vane: THREE.Material): THREE.Group {
+function buildQuill(
+  nib: THREE.Vector3,
+  tip: THREE.Vector3,
+  shaft: THREE.Material,
+  vane: THREE.Material,
+): THREE.Group {
   const group = new THREE.Group();
   const dir = tip.clone().sub(nib);
   const len = dir.length();
@@ -754,7 +1286,13 @@ function buildQuill(nib: THREE.Vector3, tip: THREE.Vector3, shaft: THREE.Materia
     nib
       .clone()
       .addScaledVector(dir, t * len)
-      .addScaledVector(up, 0.0022 + Math.sin(Math.min(1, t * 1.6) * Math.PI * 0.5) * 0.006 * (1 - t * 0.4))
+      .addScaledVector(
+        up,
+        0.0022 +
+          Math.sin(Math.min(1, t * 1.6) * Math.PI * 0.5) *
+            0.006 *
+            (1 - t * 0.4),
+      )
       .addScaledVector(side, Math.sin(t * Math.PI) * 0.012);
   const rings = 70;
   const segs = 10;
@@ -763,14 +1301,21 @@ function buildQuill(nib: THREE.Vector3, tip: THREE.Vector3, shaft: THREE.Materia
   for (let i = 0; i <= rings; i++) {
     const t = i / rings;
     const c = at(t);
-    const along = at(Math.min(1, t + 0.01)).sub(at(Math.max(0, t - 0.01))).normalize();
+    const along = at(Math.min(1, t + 0.01))
+      .sub(at(Math.max(0, t - 0.01)))
+      .normalize();
     const n1 = new THREE.Vector3().crossVectors(along, up).normalize();
     const n2 = new THREE.Vector3().crossVectors(n1, along).normalize();
     // The cut end is a slanted nib.
-    const r = (0.0024 * (1 - t * 0.78) + 0.0003) * (t < 0.035 ? 0.35 + (t / 0.035) * 0.65 : 1);
+    const r =
+      (0.0024 * (1 - t * 0.78) + 0.0003) *
+      (t < 0.035 ? 0.35 + (t / 0.035) * 0.65 : 1);
     for (let j = 0; j <= segs; j++) {
       const a = (j / segs) * Math.PI * 2;
-      const p = c.clone().addScaledVector(n1, Math.cos(a) * r).addScaledVector(n2, Math.sin(a) * r);
+      const p = c
+        .clone()
+        .addScaledVector(n1, Math.cos(a) * r)
+        .addScaledVector(n2, Math.sin(a) * r);
       position.push(p.x, p.y, p.z);
       uv.push(t, j / segs);
     }
@@ -800,11 +1345,13 @@ function buildQuill(nib: THREE.Vector3, tip: THREE.Vector3, shaft: THREE.Materia
     }
   }
   const strip = new THREE.BufferGeometry();
-  strip.setAttribute("position", new THREE.Float32BufferAttribute(vanePosition, 3));
+  strip.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(vanePosition, 3),
+  );
   strip.setAttribute("uv", new THREE.Float32BufferAttribute(vaneUv, 2));
   strip.setIndex(indices(crosswise, lengthwise));
   strip.computeVertexNormals();
   group.add(new THREE.Mesh(strip, vane));
   return group;
 }
-

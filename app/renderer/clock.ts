@@ -3,7 +3,8 @@
 // packages are pure and receive the hour as a number.
 
 /** The local hour of `d`, 0 to 24, with minutes and seconds as a fraction. */
-export const localHour = (d: Date): number => d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+export const localHour = (d: Date): number =>
+  d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
 
 export interface Clock {
   /** The hour to show now. */

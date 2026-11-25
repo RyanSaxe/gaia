@@ -14,7 +14,21 @@ describe("a far form's key", () => {
     const same = contentHash([part(1)], { sway: 1 }, "bake@1", 128);
     expect(contentHash([part(1)], { sway: 1 }, "bake@1", 128)).toBe(same);
     // Object key order doesn't change the hash. Every value does.
-    expect(contentHash([{ channels: part(1).channels, indices: part(1).indices, positions: part(1).positions, swatch: "leaf" }], { sway: 1 }, "bake@1", 128)).toBe(same);
+    expect(
+      contentHash(
+        [
+          {
+            channels: part(1).channels,
+            indices: part(1).indices,
+            positions: part(1).positions,
+            swatch: "leaf",
+          },
+        ],
+        { sway: 1 },
+        "bake@1",
+        128,
+      ),
+    ).toBe(same);
     for (const changed of [
       contentHash([part(1.0001)], { sway: 1 }, "bake@1", 128),
       contentHash([part(1), part(1)], { sway: 1 }, "bake@1", 128),

@@ -19,7 +19,12 @@ export const LAND_ASPECT = 1040 / 660;
 const SQUIRCLE = 3.7081;
 
 /** Half the land's width (`x`) and half its depth (`z`), in meters. */
-export const landReach = (land: LandOutline): { readonly x: number; readonly z: number } => ({ x: land.size / 2, z: land.size / 2 / (land.aspect ?? 1) });
+export const landReach = (
+  land: LandOutline,
+): { readonly x: number; readonly z: number } => ({
+  x: land.size / 2,
+  z: land.size / 2 / (land.aspect ?? 1),
+});
 
 /**
  * Signed distance in meters from (x, z) to the land's edge, negative inside
@@ -44,7 +49,12 @@ export function landArea(land: LandOutline): number {
 }
 
 /** Whether (x, z) lies inside the land's rectangle, at least `margin` meters in from its sides. It ignores the rounded corners. */
-export function withinLand(land: LandOutline, x: number, z: number, margin = 0): boolean {
+export function withinLand(
+  land: LandOutline,
+  x: number,
+  z: number,
+  margin = 0,
+): boolean {
   const h = landReach(land);
   return Math.abs(x) <= h.x - margin && Math.abs(z) <= h.z - margin;
 }

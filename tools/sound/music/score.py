@@ -4,6 +4,7 @@ for sfizz_render (one file per part).
 Every part's humanising comes from a random generator seeded with its song's and its own name, so the same score
 always writes the same MIDI.
 """
+
 import json
 import random
 from pathlib import Path
@@ -55,7 +56,10 @@ class Clock:
         return b0 + (t - t0) * bpm / 60.0
 
     def table(self):
-        return [{"from": t0, "to": t1, "beats": n, "meter": f"{num}/4", "bpm": round(bpm, 1)} for t0, t1, b0, n, num, bpm in self.segs]
+        return [
+            {"from": t0, "to": t1, "beats": n, "meter": f"{num}/4", "bpm": round(bpm, 1)}
+            for t0, t1, b0, n, num, bpm in self.segs
+        ]
 
 
 class Part:
@@ -187,7 +191,9 @@ class Song:
             info[p.name] = {"sfz": str(p.sfz), "notes": len(p.notes), "seat": p.seat}
         full.save(out / f"{self.name}.mid")
         json.dump(info, open(out / "parts.json", "w"), indent=1)
-        json.dump({"clock": c.table(), "events": self.markers, **(meta or {})}, open(out / "timing.json", "w"), indent=1)
+        json.dump(
+            {"clock": c.table(), "events": self.markers, **(meta or {})}, open(out / "timing.json", "w"), indent=1
+        )
         print(f"{self.name}: {len(info)} parts, {sum(v['notes'] for v in info.values())} notes")
         for row in c.table():
             print("  ", row)
@@ -197,11 +203,13 @@ class Song:
 # P1 rises a sixth and steps down. P2 answers and stops on the dominant. P3 climbs to the high sixth and is left open.
 # P4 comes down to the tonic.
 THEME4 = {
-    "P1": [("G4", 1), ("E5", 1.5), ("D5", .5), ("C5", 1), ("D5", 1), ("E5", 1), ("G5", 2)],
-    "P2": [("F5", 1.5), ("E5", .5), ("D5", 1), ("A4", 1), ("D5", 3), (None, 1)],
-    "P3": [("G4", 1), ("E5", 1.5), ("D5", .5), ("C5", 1), ("D5", 1), ("E5", 1), ("A5", 2)],
-    "P4": [("G5", 1.5), ("F5", .5), ("E5", 1), ("D5", 1), ("C5", 4)],
+    "P1": [("G4", 1), ("E5", 1.5), ("D5", 0.5), ("C5", 1), ("D5", 1), ("E5", 1), ("G5", 2)],
+    "P2": [("F5", 1.5), ("E5", 0.5), ("D5", 1), ("A4", 1), ("D5", 3), (None, 1)],
+    "P3": [("G4", 1), ("E5", 1.5), ("D5", 0.5), ("C5", 1), ("D5", 1), ("E5", 1), ("A5", 2)],
+    "P4": [("G5", 1.5), ("F5", 0.5), ("E5", 1), ("D5", 1), ("C5", 4)],
 }
+
+
 def tr(rhythm, semis, minor=False):
     """Transposes a phrase. minor=True flattens the 3rd, 6th and 7th degrees of C (E, A, B) before transposing."""
     out = []

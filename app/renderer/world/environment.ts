@@ -363,7 +363,10 @@ export interface GroundUniforms {
   readonly uVitality: { value: number };
 }
 
-export function createGround(light: SceneLight, shared: GroundUniforms): Ground {
+export function createGround(
+  light: SceneLight,
+  shared: GroundUniforms,
+): Ground {
   const u = {
     uSoil: { value: new THREE.Vector3() },
     uLow: { value: new THREE.Vector3() },

@@ -2,9 +2,35 @@
 // softly faceted painted stone, partly sunk into the ground. Moss covers their
 // upward faces, and as vitality falls it recedes and dries to lichen grey.
 
-import { type Anchor, type BuildContext, type Built, CUT, type Part, type Rand, type Resolved, type Vec3 } from "@gaia/schema";
-import type { boulderParams, flatStoneParams, mossParams, outcropParams, stoneClusterParams } from "../rock.ts";
-import { type Channels, PartBuilder, type V3, clamp, cross, cutOf, fbm3, icosphere, normalize, sub } from "./kit.ts";
+import {
+  type Anchor,
+  type BuildContext,
+  type Built,
+  CUT,
+  type Part,
+  type Rand,
+  type Resolved,
+  type Vec3,
+} from "@gaia/schema";
+import type {
+  boulderParams,
+  flatStoneParams,
+  mossParams,
+  outcropParams,
+  stoneClusterParams,
+} from "../rock.ts";
+import {
+  type Channels,
+  PartBuilder,
+  type V3,
+  clamp,
+  cross,
+  cutOf,
+  fbm3,
+  icosphere,
+  normalize,
+  sub,
+} from "./kit.ts";
 
 /** One stone's body in the rock's local frame. */
 interface Stone {
@@ -31,13 +57,23 @@ interface Stone {
    * at `angle`, on `side` 1 or -1. Two halves make one stone. As vitality
    * falls they slump apart, so a crack opens along the split.
    */
-  readonly split?: { readonly angle: number; readonly side: number; readonly droop: number };
+  readonly split?: {
+    readonly angle: number;
+    readonly side: number;
+    readonly droop: number;
+  };
 }
 
 /** The body is flattened below this depth. That part is always underground, so it needs no detail. */
 const HIDDEN_DEPTH = 0.2;
 
-function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdiv: number): void {
+function emitStone(
+  out: PartBuilder,
+  s: Stone,
+  r: Rand,
+  anchors: Anchor[],
+  subdiv: number,
+): void {
   const sphere = icosphere(subdiv);
   const seed = Math.floor(r.next() * 1e6);
   const planeCount = Math.round(6 + s.facets * 10);
@@ -47,11 +83,19 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     const a = r.next() * Math.PI * 2;
     const y = r.range(-0.25, 0.85);
     const h = Math.sqrt(1 - y * y);
-    planes.push({ n: [Math.cos(a) * h, y, Math.sin(a) * h], d: r.range(0.66, 0.86), hue: r.range(-0.035, 0.035) });
+    planes.push({
+      n: [Math.cos(a) * h, y, Math.sin(a) * h],
+      d: r.range(0.66, 0.86),
+      hue: r.range(-0.035, 0.035),
+    });
   }
   const cut = 0.35 + 0.65 * s.facets;
   const tiltAxis = r.next() * Math.PI * 2;
-  const topNormal = normalize([Math.cos(tiltAxis) * Math.sin(s.topTilt), Math.cos(s.topTilt), Math.sin(tiltAxis) * Math.sin(s.topTilt)]);
+  const topNormal = normalize([
+    Math.cos(tiltAxis) * Math.sin(s.topTilt),
+    Math.cos(s.topTilt),
+    Math.sin(tiltAxis) * Math.sin(s.topTilt),
+  ]);
   // Half extents: the body's center sits so that `embed` of its height is buried.
   const ry = s.size[1] / (2 * (1 - s.embed));
   const cy = ry * (1 - 2 * s.embed);
@@ -69,16 +113,26 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
   const fracture = new Float32Array(sphere.points.length);
   const faceHue = new Float32Array(sphere.points.length);
   const inCrack = new Float32Array(sphere.points.length);
-  const splitN: V3 | null = s.split === undefined ? null : [Math.cos(s.split.angle), 0, Math.sin(s.split.angle)];
+  const splitN: V3 | null =
+    s.split === undefined
+      ? null
+      : [Math.cos(s.split.angle), 0, Math.sin(s.split.angle)];
   const positions: V3[] = sphere.points.map((n, vi) => {
     let q: V3 = [n[0], n[1], n[2]];
-    const lump = 1 + 0.16 * fbm3(n[0] * 1.3 + seed * 0.001, n[1] * 1.3, n[2] * 1.3, seed, 3) + 0.05 * fbm3(n[0] * 3.7, n[1] * 3.7, n[2] * 3.7, seed + 5, 2);
+    const lump =
+      1 +
+      0.16 * fbm3(n[0] * 1.3 + seed * 0.001, n[1] * 1.3, n[2] * 1.3, seed, 3) +
+      0.05 * fbm3(n[0] * 3.7, n[1] * 3.7, n[2] * 3.7, seed + 5, 2);
     q = [q[0] * lump, q[1] * lump, q[2] * lump];
     let deepest = 0;
     for (const p of planes) {
       const over = q[0] * p.n[0] + q[1] * p.n[1] + q[2] * p.n[2] - p.d;
       if (over <= 0) continue;
-      q = [q[0] - p.n[0] * over * cut, q[1] - p.n[1] * over * cut, q[2] - p.n[2] * over * cut];
+      q = [
+        q[0] - p.n[0] * over * cut,
+        q[1] - p.n[1] * over * cut,
+        q[2] - p.n[2] * over * cut,
+      ];
       if (over > deepest) {
         deepest = over;
         faceHue[vi] = p.hue;
@@ -86,8 +140,14 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     }
     fracture[vi] = clamp(deepest / 0.08, 0, 1) * cut;
     if (s.top > 0) {
-      const over = q[0] * topNormal[0] + q[1] * topNormal[1] + q[2] * topNormal[2] - s.top;
-      if (over > 0) q = [q[0] - topNormal[0] * over, q[1] - topNormal[1] * over, q[2] - topNormal[2] * over];
+      const over =
+        q[0] * topNormal[0] + q[1] * topNormal[1] + q[2] * topNormal[2] - s.top;
+      if (over > 0)
+        q = [
+          q[0] - topNormal[0] * over,
+          q[1] - topNormal[1] * over,
+          q[2] - topNormal[2] * over,
+        ];
     }
     if (splitN !== null && s.split !== undefined) {
       const along = q[0] * splitN[0] + q[2] * splitN[2];
@@ -98,7 +158,8 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     }
     if (s.strata > 0) {
       // Ledges: each layer's lower edge steps in a little.
-      const band = (q[1] * 3.2 + 0.37 * fbm3(q[0] * 1.5, 0, q[2] * 1.5, seed + 9, 1)) % 1;
+      const band =
+        (q[1] * 3.2 + 0.37 * fbm3(q[0] * 1.5, 0, q[2] * 1.5, seed + 9, 1)) % 1;
       const step = 1 - s.strata * 0.07 * (band < 0 ? band + 1 : band);
       q = [q[0] * step, q[1], q[2] * step];
     }
@@ -123,7 +184,11 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     const px = splitN[0] * s.size[0] * 0.5;
     const pz = splitN[2] * s.size[2] * 0.5;
     const back = -0.45 * s.split.side;
-    pivot = [s.base[0] + (px * cosY - pz * sinY) * back, s.base[1], s.base[2] + (px * sinY + pz * cosY) * back];
+    pivot = [
+      s.base[0] + (px * cosY - pz * sinY) * back,
+      s.base[1],
+      s.base[2] + (px * sinY + pz * cosY) * back,
+    ];
   }
   const height = Math.max(0.05, s.size[1]);
   positions.forEach((p, i) => {
@@ -135,23 +200,39 @@ function emitStone(out: PartBuilder, s: Stone, r: Rand, anchors: Anchor[], subdi
     // Rain streaks down the sides, from noise stretched vertically.
     const streak = fbm3(p[0] * 4.5, p[1] * 0.6, p[2] * 4.5, seed + 6, 2);
     const shade =
-      (0.46 + 0.16 * mottle + 0.12 * (fracture[i] as number) + 0.08 * streak + 0.16 * clamp(above, 0, 1) - 0.2 * (1 - ground * ground) + 0.06 * n[1]) *
+      (0.46 +
+        0.16 * mottle +
+        0.12 * (fracture[i] as number) +
+        0.08 * streak +
+        0.16 * clamp(above, 0, 1) -
+        0.2 * (1 - ground * ground) +
+        0.06 * n[1]) *
       (1 - 0.55 * (inCrack[i] as number));
     out.vertex(p, n, shade, {
       loss: 0,
       droop: s.split?.droop ?? 0,
-      wither: clamp(0.5 + 0.35 * fbm3(p[0] * 2.3, p[1] * 2.3, p[2] * 2.3, seed + 4, 2), 0.2, 0.9),
+      wither: clamp(
+        0.5 + 0.35 * fbm3(p[0] * 2.3, p[1] * 2.3, p[2] * 2.3, seed + 4, 2),
+        0.2,
+        0.9,
+      ),
       glow: 0,
       pivot,
-      tint: tint + 0.02 * mottle + (faceHue[i] as number) * (fracture[i] as number),
+      tint:
+        tint + 0.02 * mottle + (faceHue[i] as number) * (fracture[i] as number),
     });
-    if (n[1] > 0.75 && above > 0.55 && i % 7 === 0) anchors.push({ position: p, normal: n, size: clamp(height, 0, 1) });
+    if (n[1] > 0.75 && above > 0.55 && i % 7 === 0)
+      anchors.push({ position: p, normal: n, size: clamp(height, 0, 1) });
   });
-  for (const [a, b, c] of sphere.triangles) out.triangle(first + a, first + b, first + c);
+  for (const [a, b, c] of sphere.triangles)
+    out.triangle(first + a, first + b, first + c);
 }
 
 /** Smooth normals from area-weighted face normals, so cut planes stay flat-lit inside and soft at their edges. */
-function vertexNormals(points: readonly V3[], triangles: readonly (readonly [number, number, number])[]): V3[] {
+function vertexNormals(
+  points: readonly V3[],
+  triangles: readonly (readonly [number, number, number])[],
+): V3[] {
   const acc: V3[] = points.map(() => [0, 0, 0]);
   for (const [a, b, c] of triangles) {
     const pa = points[a] as V3;
@@ -166,9 +247,13 @@ function vertexNormals(points: readonly V3[], triangles: readonly (readonly [num
   return acc.map((v) => normalize(v));
 }
 
-const sizeOf = (ctx: BuildContext): number => 0.75 + 0.25 * (ctx.facts.scale ?? 1);
+const sizeOf = (ctx: BuildContext): number =>
+  0.75 + 0.25 * (ctx.facts.scale ?? 1);
 
-const built = (out: PartBuilder, anchors: Anchor[]): Built => ({ parts: [out.part()], anchors });
+const built = (out: PartBuilder, anchors: Anchor[]): Built => ({
+  parts: [out.part()],
+  anchors,
+});
 
 // ---------- boulder ----------
 
@@ -182,7 +267,10 @@ const BOULDER_SHAPES = {
 /** How far a split boulder's halves slump apart at vitality 0. */
 const CRACK_DROOP = 0.08;
 
-export function buildBoulder(p: Resolved<typeof boulderParams>, ctx: BuildContext): Built {
+export function buildBoulder(
+  p: Resolved<typeof boulderParams>,
+  ctx: BuildContext,
+): Built {
   const out = new PartBuilder("stone", "solid");
   const r = ctx.rand.fork("boulder");
   const h = p.size * sizeOf(ctx);
@@ -202,13 +290,23 @@ export function buildBoulder(p: Resolved<typeof boulderParams>, ctx: BuildContex
   };
   // One stone in two halves that meet exactly. It looks whole at high vitality and cracks open as vitality falls.
   const angle = r.next() * Math.PI;
-  for (const side of [1, -1]) emitStone(out, { ...stone, split: { angle, side, droop: CRACK_DROOP } }, r.fork("body"), anchors, 3);
+  for (const side of [1, -1])
+    emitStone(
+      out,
+      { ...stone, split: { angle, side, droop: CRACK_DROOP } },
+      r.fork("body"),
+      anchors,
+      3,
+    );
   return built(out, anchors);
 }
 
 // ---------- flat-topped stone ----------
 
-export function buildFlatStone(p: Resolved<typeof flatStoneParams>, ctx: BuildContext): Built {
+export function buildFlatStone(
+  p: Resolved<typeof flatStoneParams>,
+  ctx: BuildContext,
+): Built {
   const out = new PartBuilder("stone", "walkable");
   const r = ctx.rand.fork("flat-stone");
   const w = p.size * sizeOf(ctx);
@@ -222,7 +320,11 @@ export function buildFlatStone(p: Resolved<typeof flatStoneParams>, ctx: BuildCo
       out,
       {
         base: [shift, 0, sr.range(-0.08, 0.08) * w],
-        size: [w * (tops === 1 ? 1 : 0.7), w * (0.3 + 0.14 * k) * sr.range(0.9, 1.1), w * sr.range(0.65, 0.85)],
+        size: [
+          w * (tops === 1 ? 1 : 0.7),
+          w * (0.3 + 0.14 * k) * sr.range(0.9, 1.1),
+          w * sr.range(0.65, 0.85),
+        ],
         yaw,
         lean: 0.03,
         leanDir: sr.next() * Math.PI * 2,
@@ -242,7 +344,10 @@ export function buildFlatStone(p: Resolved<typeof flatStoneParams>, ctx: BuildCo
 
 // ---------- stone cluster ----------
 
-export function buildStoneCluster(p: Resolved<typeof stoneClusterParams>, ctx: BuildContext): Built {
+export function buildStoneCluster(
+  p: Resolved<typeof stoneClusterParams>,
+  ctx: BuildContext,
+): Built {
   const out = new PartBuilder("stone", "solid");
   const r = ctx.rand.fork("cluster");
   const h = p.size * sizeOf(ctx);
@@ -253,7 +358,11 @@ export function buildStoneCluster(p: Resolved<typeof stoneClusterParams>, ctx: B
     const sr = r.fork(`stone${k}`);
     // The first stone is the largest, and the rest are smaller and placed around it.
     const scale = k === 0 ? 1 : sr.range(0.3, 0.7) * Math.pow(0.9, k);
-    const size: V3 = [h * scale * sr.range(1, 1.6), h * scale, h * scale * sr.range(0.9, 1.4)];
+    const size: V3 = [
+      h * scale * sr.range(1, 1.6),
+      h * scale,
+      h * scale * sr.range(0.9, 1.4),
+    ];
     const rad = Math.max(size[0], size[2]) * 0.45;
     let x = 0;
     let z = 0;
@@ -264,7 +373,12 @@ export function buildStoneCluster(p: Resolved<typeof stoneClusterParams>, ctx: B
         const d = (host?.rad ?? 0) + rad * sr.range(0.6, 1.1);
         x = (host?.x ?? 0) + Math.cos(a) * d;
         z = (host?.z ?? 0) + Math.sin(a) * d;
-        if (placed.every((q) => Math.hypot(q.x - x, q.z - z) > (q.rad + rad) * 0.7)) break;
+        if (
+          placed.every(
+            (q) => Math.hypot(q.x - x, q.z - z) > (q.rad + rad) * 0.7,
+          )
+        )
+          break;
       }
     }
     placed.push({ x, z, rad });
@@ -298,7 +412,10 @@ const LAYERING = {
   blocky: { strata: 0.3, facets: 1, top: 0.3, blocks: 3 },
 } as const;
 
-export function buildOutcrop(p: Resolved<typeof outcropParams>, ctx: BuildContext): Built {
+export function buildOutcrop(
+  p: Resolved<typeof outcropParams>,
+  ctx: BuildContext,
+): Built {
   const out = new PartBuilder("stone", "walkable");
   const r = ctx.rand.fork("outcrop");
   const k = sizeOf(ctx);
@@ -319,9 +436,16 @@ export function buildOutcrop(p: Resolved<typeof outcropParams>, ctx: BuildContex
     emitStone(
       out,
       {
-        base: [along, 0, bend * along * along * 0.2 / Math.max(1, length) + sr.range(-0.2, 0.2)],
+        base: [
+          along,
+          0,
+          (bend * along * along * 0.2) / Math.max(1, length) +
+            sr.range(-0.2, 0.2),
+        ],
         size: [blockW, blockH, blockW * sr.range(0.55, 0.8) + height * 0.5],
-        yaw: Math.atan(bend * along * 0.4 / Math.max(1, length)) + sr.range(-0.2, 0.2),
+        yaw:
+          Math.atan((bend * along * 0.4) / Math.max(1, length)) +
+          sr.range(-0.2, 0.2),
         lean: sr.range(0.04, 0.16),
         leanDir: Math.PI / 2 + sr.range(-0.4, 0.4),
         facets: style.facets,
@@ -348,21 +472,41 @@ const GROWTH = {
 
 /** Moss grows only on solid stone and bark parts. It never grows on bare cut wood, so a cut face keeps its rings, or inside a hollow. */
 const MOSSY: ReadonlySet<string> = new Set(["stone", "bark"]);
-const mossy = (part: Part): boolean => MOSSY.has(part.swatch) && part.collision !== "none";
+const mossy = (part: Part): boolean =>
+  MOSSY.has(part.swatch) && part.collision !== "none";
 
 /**
  * The decline channels of vertex `i` of `part`, so moss on it slumps, falls,
  * breaks off and rots away with it.
  */
-function carriedBy(part: Part, i: number): Pick<Channels, "loss" | "droop" | "pivot" | "bough" | "fall" | "rot" | "grain"> {
+function carriedBy(
+  part: Part,
+  i: number,
+): Pick<
+  Channels,
+  "loss" | "droop" | "pivot" | "bough" | "fall" | "rot" | "grain"
+> {
   const c = part.channels;
-  const three = (a: Float32Array): Vec3 => [a[i * 3] as number, a[i * 3 + 1] as number, a[i * 3 + 2] as number];
+  const three = (a: Float32Array): Vec3 => [
+    a[i * 3] as number,
+    a[i * 3 + 1] as number,
+    a[i * 3 + 2] as number,
+  ];
   return {
     loss: c.loss[i] as number,
     droop: c.droop[i] as number,
     pivot: three(c.pivot),
     bough: three(c.bough),
-    ...(c.fall === undefined ? {} : { fall: [c.fall[i * 4] as number, c.fall[i * 4 + 1] as number, c.fall[i * 4 + 2] as number, c.fall[i * 4 + 3] as number] as const }),
+    ...(c.fall === undefined
+      ? {}
+      : {
+          fall: [
+            c.fall[i * 4] as number,
+            c.fall[i * 4 + 1] as number,
+            c.fall[i * 4 + 2] as number,
+            c.fall[i * 4 + 3] as number,
+          ] as const,
+        }),
     ...(c.rot === undefined ? {} : { rot: c.rot[i] as number }),
     ...(c.grain === undefined ? {} : { grain: three(c.grain) }),
   };
@@ -377,7 +521,11 @@ function carriedBy(part: Part, i: number): Pick<Channels, "loss" | "droop" | "pi
  * edge, so it meets the stone flush. As vitality falls the edge recedes toward
  * each patch's center and the rest dries to lichen grey.
  */
-export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, base: Built): Built {
+export function buildMoss(
+  p: Resolved<typeof mossParams>,
+  ctx: BuildContext,
+  base: Built,
+): Built {
   const out = new PartBuilder("moss");
   const r = ctx.rand.fork("moss");
   const seed = Math.floor(r.next() * 1e6);
@@ -392,7 +540,8 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
     const nrm = part.normals;
     const count = pos.length / 3;
     let top = -Infinity;
-    for (let i = 0; i < count; i++) top = Math.max(top, pos[i * 3 + 1] as number);
+    for (let i = 0; i < count; i++)
+      top = Math.max(top, pos[i * 3 + 1] as number);
     const mask = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       const x = pos[i * 3] as number;
@@ -402,7 +551,8 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const patch = fbm3(x * 1.8, y * 1.8, z * 1.8, seed, 3);
       const high = clamp(y / Math.max(0.1, top), 0, 1);
       const want = up * 0.6 + 0.9 * patch + 0.25 * high - 0.3;
-      mask[i] = clamp((want - threshold + 0.15) / 0.3, 0, 1) * (y > 0.02 ? 1 : 0);
+      mask[i] =
+        clamp((want - threshold + 0.15) / 0.3, 0, 1) * (y > 0.02 ? 1 : 0);
     }
     const idx = part.indices;
     // Each stone vertex maps to one skin vertex, so the skin stays smooth.
@@ -410,26 +560,63 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
     const skinVertex = (i: number): number => {
       const hit = skin.get(i);
       if (hit !== undefined) return hit;
-      const q: V3 = [pos[i * 3] as number, pos[i * 3 + 1] as number, pos[i * 3 + 2] as number];
-      const n: V3 = [nrm[i * 3] as number, nrm[i * 3 + 1] as number, nrm[i * 3 + 2] as number];
+      const q: V3 = [
+        pos[i * 3] as number,
+        pos[i * 3 + 1] as number,
+        pos[i * 3 + 2] as number,
+      ];
+      const n: V3 = [
+        nrm[i * 3] as number,
+        nrm[i * 3 + 1] as number,
+        nrm[i * 3 + 2] as number,
+      ];
       const m = mask[i] as number;
       // Noise at two scales, so the moss forms uneven mounds rather than one even coat.
-      const lump = 1 + g.lumps * (0.6 * fbm3(q[0] * 4, q[1] * 4, q[2] * 4, seed + 19, 2) + 0.4 * fbm3(q[0] * 9, q[1] * 9, q[2] * 9, seed + 17, 2));
-      const lift = 0.004 + g.thick * onBark * smoothstep(0.15, 0.75, m) * Math.max(0.3, lump);
-      const at: V3 = [q[0] + n[0] * lift, q[1] + n[1] * lift, q[2] + n[2] * lift];
-      const jitter = clamp(0.5 + 0.9 * fbm3(q[0] * 6.3, q[1] * 6.3, q[2] * 6.3, seed + 23, 2), 0, 1);
+      const lump =
+        1 +
+        g.lumps *
+          (0.6 * fbm3(q[0] * 4, q[1] * 4, q[2] * 4, seed + 19, 2) +
+            0.4 * fbm3(q[0] * 9, q[1] * 9, q[2] * 9, seed + 17, 2));
+      const lift =
+        0.004 +
+        g.thick * onBark * smoothstep(0.15, 0.75, m) * Math.max(0.3, lump);
+      const at: V3 = [
+        q[0] + n[0] * lift,
+        q[1] + n[1] * lift,
+        q[2] + n[2] * lift,
+      ];
+      const jitter = clamp(
+        0.5 + 0.9 * fbm3(q[0] * 6.3, q[1] * 6.3, q[2] * 6.3, seed + 23, 2),
+        0,
+        1,
+      );
       // Moss on a stone that slumps or a log that splits moves with it (`carriedBy`).
       const v = out.vertex(
         at,
         n,
         // Mounds are lighter and the hollows between them darker. Noise patches vary the green like older and fresher moss.
-        g.shade + 0.12 * m + 0.3 * (lump - 1) + 0.08 * n[1] + 0.25 * clamp(2 * fbm3(q[0] * 4, q[1] * 4, q[2] * 4, seed + 29, 2), -1, 1),
+        g.shade +
+          0.12 * m +
+          0.3 * (lump - 1) +
+          0.08 * n[1] +
+          0.25 *
+            clamp(2 * fbm3(q[0] * 4, q[1] * 4, q[2] * 4, seed + 29, 2), -1, 1),
         {
           ...carriedBy(part, i),
           wither: 0.85,
           glow: 0,
           // Patches of yellower and bluer green, like fresh and old moss side by side.
-          tint: clamp(0.05 * fbm3(q[0] * 0.7, q[1] * 0.7, q[2] * 0.7, seed + 13, 2) + 0.07 * clamp(2.5 * fbm3(q[0] * 2.2, q[1] * 2.2, q[2] * 2.2, seed + 31, 2), -1, 1), -0.09, 0.09),
+          tint: clamp(
+            0.05 * fbm3(q[0] * 0.7, q[1] * 0.7, q[2] * 0.7, seed + 13, 2) +
+              0.07 *
+                clamp(
+                  2.5 * fbm3(q[0] * 2.2, q[1] * 2.2, q[2] * 2.2, seed + 31, 2),
+                  -1,
+                  1,
+                ),
+            -0.09,
+            0.09,
+          ),
         },
         [m, jitter, cut],
       );
@@ -441,7 +628,10 @@ export function buildMoss(p: Resolved<typeof mossParams>, ctx: BuildContext, bas
       const b = idx[t + 1] as number;
       const c = idx[t + 2] as number;
       // Skip faces with every vertex below mask 0.12. The patch edge never reaches them, and the shader would cut them away.
-      if (Math.max(mask[a] as number, mask[b] as number, mask[c] as number) < 0.12) continue;
+      if (
+        Math.max(mask[a] as number, mask[b] as number, mask[c] as number) < 0.12
+      )
+        continue;
       out.triangle(skinVertex(a), skinVertex(b), skinVertex(c));
     }
   }

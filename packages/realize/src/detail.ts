@@ -43,7 +43,12 @@ export interface PieceReach {
  */
 export function pieceReach(size: number, index: number): PieceReach {
   const start = DETAIL.reach * size;
-  return { start: Math.fround(start), leave: Math.fround(Math.min(start / Math.sqrt(pieceSeed(index)), DETAIL.never)) };
+  return {
+    start: Math.fround(start),
+    leave: Math.fround(
+      Math.min(start / Math.sqrt(pieceSeed(index)), DETAIL.never),
+    ),
+  };
 }
 
 export interface PieceFrames {
@@ -60,7 +65,11 @@ export function pieceFrames(part: Part): PieceFrames {
   const hi = new Map<number, [number, number, number]>();
   for (let i = 0; i < n; i++) {
     const id = part.piece[i * 2] as number;
-    const p = [part.positions[i * 3] as number, part.positions[i * 3 + 1] as number, part.positions[i * 3 + 2] as number] as const;
+    const p = [
+      part.positions[i * 3] as number,
+      part.positions[i * 3 + 1] as number,
+      part.positions[i * 3 + 2] as number,
+    ] as const;
     const a = lo.get(id);
     const b = hi.get(id);
     if (a === undefined || b === undefined) {
@@ -79,7 +88,8 @@ export function pieceFrames(part: Part): PieceFrames {
     const id = part.piece[i * 2] as number;
     const a = lo.get(id) as [number, number, number];
     const b = hi.get(id) as [number, number, number];
-    for (let k = 0; k < 3; k++) center[i * 3 + k] = ((a[k] as number) + (b[k] as number)) / 2;
+    for (let k = 0; k < 3; k++)
+      center[i * 3 + k] = ((a[k] as number) + (b[k] as number)) / 2;
     const r = pieceReach(part.piece[i * 2 + 1] as number, id);
     reach[i * 2] = r.start;
     reach[i * 2 + 1] = r.leave;
@@ -98,7 +108,11 @@ export function detailAt(part: Part, distance: number): Part {
   const map = new Int32Array(n).fill(-1);
   let kept = 0;
   for (let i = 0; i < n; i++) {
-    if (pieceReach(part.piece[i * 2 + 1] as number, part.piece[i * 2] as number).leave <= distance) continue;
+    if (
+      pieceReach(part.piece[i * 2 + 1] as number, part.piece[i * 2] as number)
+        .leave <= distance
+    )
+      continue;
     keep[i] = 1;
     map[i] = kept++;
   }
@@ -107,7 +121,8 @@ export function detailAt(part: Part, distance: number): Part {
     const out = new Float32Array(kept * width);
     for (let i = 0; i < n; i++) {
       if (keep[i] === 0) continue;
-      for (let k = 0; k < width; k++) out[(map[i] as number) * width + k] = a[i * width + k] as number;
+      for (let k = 0; k < width; k++)
+        out[(map[i] as number) * width + k] = a[i * width + k] as number;
     }
     return out;
   };
@@ -115,7 +130,11 @@ export function detailAt(part: Part, distance: number): Part {
   for (let t = 0; t < part.indices.length; t += 3) {
     const a = part.indices[t] as number;
     if (keep[a] === 0) continue;
-    indices.push(map[a] as number, map[part.indices[t + 1] as number] as number, map[part.indices[t + 2] as number] as number);
+    indices.push(
+      map[a] as number,
+      map[part.indices[t + 1] as number] as number,
+      map[part.indices[t + 2] as number] as number,
+    );
   }
   const c = part.channels;
   return {

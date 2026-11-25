@@ -23,13 +23,25 @@ export function contentHash(value: unknown): string {
     h1 = Math.imul(h1 ^ c, 2654435761);
     h2 = Math.imul(h2 ^ c, 1597334677);
   }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0");
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0))
+    .toString(16)
+    .padStart(14, "0");
 }
 
 /** Names a blueprint by its contents, so equal answers always name the same blueprint. */
-export function blueprintOf(kind: string, slots: Readonly<Record<string, FilledSlot>>): Blueprint {
+export function blueprintOf(
+  kind: string,
+  slots: Readonly<Record<string, FilledSlot>>,
+): Blueprint {
   const content = { kind, slots };
-  return { id: `bp-${contentHash(content).slice(0, 8)}` as BlueprintId, ...content };
+  return {
+    id: `bp-${contentHash(content).slice(0, 8)}` as BlueprintId,
+    ...content,
+  };
 }

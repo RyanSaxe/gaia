@@ -17,14 +17,18 @@ import { handleTelemetry } from "./telemetry.ts";
 
 const PORT = Number(process.env.LAB_PORT ?? 5180);
 if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
-  console.error(`LAB_PORT must be a port number; it is ${process.env.LAB_PORT}.`);
+  console.error(
+    `LAB_PORT must be a port number; it is ${process.env.LAB_PORT}.`,
+  );
   process.exit(1);
 }
 const TELEMETRY = resolve(import.meta.dirname, "../.lab/telemetry.jsonl");
 
 const host = tailscaleAddress(networkInterfaces());
 if (host === null) {
-  console.error("This machine has no Tailscale address (100.64.0.0/10). Start Tailscale, then run pnpm lab:serve again.");
+  console.error(
+    "This machine has no Tailscale address (100.64.0.0/10). Start Tailscale, then run pnpm lab:serve again.",
+  );
   process.exit(1);
 }
 
@@ -40,11 +44,15 @@ const ctx = await context({
         build.onEnd((result) => {
           const at = new Date().toLocaleTimeString();
           if (result.errors.length > 0) {
-            console.error(`${at} The build failed; the page stays at the last good build.`);
+            console.error(
+              `${at} The build failed; the page stays at the last good build.`,
+            );
             return;
           }
           bundle = labBundle(result);
-          console.log(`${at} Built the lab (${((bundle.js.length + bundle.css.length) / 1024).toFixed(0)} KiB).`);
+          console.log(
+            `${at} Built the lab (${((bundle.js.length + bundle.css.length) / 1024).toFixed(0)} KiB).`,
+          );
         });
       },
     },
@@ -67,11 +75,18 @@ const server = createServer((req, res) => {
     return;
   }
   if (bundle === null) {
-    res.writeHead(503, { "content-type": "text/plain" }).end("The lab has not built yet. The terminal running pnpm lab:serve shows why.");
+    res
+      .writeHead(503, { "content-type": "text/plain" })
+      .end(
+        "The lab has not built yet. The terminal running pnpm lab:serve shows why.",
+      );
     return;
   }
   // The meta tag makes the page post its smoothness reports here.
-  const html = labPage(bundle).replace("</head>", () => '<meta name="gaia-telemetry" content="/telemetry">\n</head>');
+  const html = labPage(bundle).replace(
+    "</head>",
+    () => '<meta name="gaia-telemetry" content="/telemetry">\n</head>',
+  );
   const gzip = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
   const body = gzip ? gzipSync(html) : Buffer.from(html);
   res.writeHead(200, {
@@ -84,12 +99,18 @@ const server = createServer((req, res) => {
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {
-  console.error(error.code === "EADDRINUSE" ? `Port ${PORT} on ${host} is in use. Is another pnpm lab:serve running?` : error.message);
+  console.error(
+    error.code === "EADDRINUSE"
+      ? `Port ${PORT} on ${host} is in use. Is another pnpm lab:serve running?`
+      : error.message,
+  );
   process.exit(1);
 });
 server.listen(PORT, host, () => {
   console.log(`Serving the lab on Tailscale only: http://${host}:${PORT}/`);
-  console.log(`Reload the page after a change. Smoothness reports append to ${TELEMETRY}. Ctrl-C stops the server.`);
+  console.log(
+    `Reload the page after a change. Smoothness reports append to ${TELEMETRY}. Ctrl-C stops the server.`,
+  );
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

@@ -2,22 +2,70 @@
 // covered once it is listed there, with no tests written per primitive.
 
 import { describe, expect, it } from "vitest";
-import { type AnyPrimitive, type Built, type BuildingPlan, CUT, type Field, GRAIN, Library, type Part, type Skeleton, rand } from "@gaia/schema";
+import {
+  type AnyPrimitive,
+  type Built,
+  type BuildingPlan,
+  CUT,
+  type Field,
+  GRAIN,
+  Library,
+  type Part,
+  type Skeleton,
+  rand,
+} from "@gaia/schema";
 import * as primitivesModule from "@gaia/primitives";
-import { LANDMARK_SHAPES, PRIMITIVES, bandOf, landmarkShape } from "@gaia/primitives";
+import {
+  LANDMARK_SHAPES,
+  PRIMITIVES,
+  bandOf,
+  landmarkShape,
+} from "@gaia/primitives";
 import { applyVitality, resolveParams } from "@gaia/realize";
 
 const lib = new Library(PRIMITIVES);
 const facts = { scale: 1, age: 120 };
-const GEOMETRY_ROLES = new Set(["Surface", "Foliage", "Ornament", "Walls", "Roof", "Openings", "Dressing", "Feature", "Rock", "Overgrowth", "Drift", "Landmark"]);
+const GEOMETRY_ROLES = new Set([
+  "Surface",
+  "Foliage",
+  "Ornament",
+  "Walls",
+  "Roof",
+  "Openings",
+  "Dressing",
+  "Feature",
+  "Rock",
+  "Overgrowth",
+  "Drift",
+  "Landmark",
+]);
 /** Roles that build against a building's plan. */
-const PLAN_ROLES = new Set(["Walls", "Roof", "Openings", "Dressing", "Feature"]);
+const PLAN_ROLES = new Set([
+  "Walls",
+  "Roof",
+  "Openings",
+  "Dressing",
+  "Feature",
+]);
 /** Roles that build from nothing. */
-const SOURCE_ROLES = new Set(["Skeleton", "Motion", "Palette", "Footprint", "Rock", "Drift", "Route", "Landmark"]);
+const SOURCE_ROLES = new Set([
+  "Skeleton",
+  "Motion",
+  "Palette",
+  "Footprint",
+  "Rock",
+  "Drift",
+  "Route",
+  "Landmark",
+]);
 const TRIANGLE_BUDGET = 40_000;
 
 type Stored = Record<string, string | boolean | string[]>;
-type Erased = (params: unknown, ctx: { rand: ReturnType<typeof rand>; facts: Record<string, number> }, input: unknown) => unknown;
+type Erased = (
+  params: unknown,
+  ctx: { rand: ReturnType<typeof rand>; facts: Record<string, number> },
+  input: unknown,
+) => unknown;
 
 /**
  * The lowest, middle and highest level of every scale, with every choice
@@ -25,37 +73,67 @@ type Erased = (params: unknown, ctx: { rand: ReturnType<typeof rand>; facts: Rec
  * options gets one more sample for each, so every option is built.
  */
 function samples(p: AnyPrimitive): Stored[] {
-  const options = Math.max(3, ...(Object.values(p.params) as Field[]).map((f) => (f.type === "choice" ? Object.keys(f.options).length : 0)));
-  return Array.from({ length: options }, (_, i) => [0, 0.5, 1][i % 3] as number).map((at, i) => {
+  const options = Math.max(
+    3,
+    ...(Object.values(p.params) as Field[]).map((f) =>
+      f.type === "choice" ? Object.keys(f.options).length : 0,
+    ),
+  );
+  return Array.from(
+    { length: options },
+    (_, i) => [0, 0.5, 1][i % 3] as number,
+  ).map((at, i) => {
     const out: Stored = {};
     for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
-      if (f.type === "scale") out[name] = f.levels[Math.round(at * (f.levels.length - 1))]?.words ?? "";
+      if (f.type === "scale")
+        out[name] =
+          f.levels[Math.round(at * (f.levels.length - 1))]?.words ?? "";
       else if (f.type === "choice") {
         const keys = Object.keys(f.options);
         out[name] = keys[i % keys.length] ?? "";
       } else if (f.type === "flag") out[name] = i % 2 === 0;
-      else out[name] = Object.keys(f.members).filter((_, k) => (k + i) % 2 === 0);
+      else
+        out[name] = Object.keys(f.members).filter((_, k) => (k + i) % 2 === 0);
     }
     return out;
   });
 }
 
-function build(p: AnyPrimitive, stored: Stored, input: unknown, seed: number): unknown {
+function build(
+  p: AnyPrimitive,
+  stored: Stored,
+  input: unknown,
+  seed: number,
+): unknown {
   const params = resolveParams(p, stored, rand(seed), p.id);
-  return (p.build as Erased)(params, { rand: rand(seed).fork(p.id), facts }, input);
+  return (p.build as Erased)(
+    params,
+    { rand: rand(seed).fork(p.id), facts },
+    input,
+  );
 }
 
-const skeletons: Skeleton[] = lib.forRole("Skeleton").flatMap((p) => samples(p).map((s) => build(p, s, null, 11) as Skeleton));
+const skeletons: Skeleton[] = lib
+  .forRole("Skeleton")
+  .flatMap((p) => samples(p).map((s) => build(p, s, null, 11) as Skeleton));
 const anchors = skeletons.flatMap((s) => s.tips).slice(0, 64);
-const plans: BuildingPlan[] = lib.forRole("Footprint").flatMap((p) => samples(p).map((s) => build(p, s, null, 13) as BuildingPlan));
+const plans: BuildingPlan[] = lib
+  .forRole("Footprint")
+  .flatMap((p) => samples(p).map((s) => build(p, s, null, 13) as BuildingPlan));
 /** What overgrowth grows on: every rock body at its lowest, middle and highest levels. */
-const rocks: Built[] = lib.forRole("Rock").flatMap((p) => samples(p).map((s) => build(p, s, null, 13) as Built));
+const rocks: Built[] = lib
+  .forRole("Rock")
+  .flatMap((p) => samples(p).map((s) => build(p, s, null, 13) as Built));
 const inputFor = (p: AnyPrimitive): unknown[] =>
-  p.role === "Ornament" ? [anchors]
-  : p.role === "Overgrowth" ? rocks
-  : PLAN_ROLES.has(p.role) ? plans
-  : SOURCE_ROLES.has(p.role) ? [null]
-  : skeletons;
+  p.role === "Ornament"
+    ? [anchors]
+    : p.role === "Overgrowth"
+      ? rocks
+      : PLAN_ROLES.has(p.role)
+        ? plans
+        : SOURCE_ROLES.has(p.role)
+          ? [null]
+          : skeletons;
 
 const allFinite = (a: Float32Array): boolean => a.every(Number.isFinite);
 const inUnit = (a: Float32Array): boolean => a.every((x) => x >= 0 && x <= 1);
@@ -63,7 +141,12 @@ const CUTS = new Set<number>(Object.values(CUT));
 /** Whether every vertex's position across its card is within -1 to 1 and its cut is one of `CUT`. */
 const cutsKnown = (part: Part): boolean =>
   part.cutout.length === part.shade.length * 3 &&
-  part.cutout.every((x, i) => Number.isFinite(x) && (i % 3 !== 0 || Math.abs(x) <= 1) && (i % 3 !== 2 || CUTS.has(Math.floor(x))));
+  part.cutout.every(
+    (x, i) =>
+      Number.isFinite(x) &&
+      (i % 3 !== 0 || Math.abs(x) <= 1) &&
+      (i % 3 !== 2 || CUTS.has(Math.floor(x))),
+  );
 
 /** Swatches the renderer draws front faces only (CLOSED in @gaia/render), so a triangle wound inward shows the far wall's inside. */
 const CLOSED = new Set(["bark", "stone", "wood"]);
@@ -73,11 +156,31 @@ function outwardTriangles(part: Part): number {
   const n = part.normals;
   let out = 0;
   for (let t = 0; t < part.indices.length; t += 3) {
-    const [a, b, c] = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
-    const e = [0, 1, 2].map((k) => (p[b * 3 + k] as number) - (p[a * 3 + k] as number));
-    const f = [0, 1, 2].map((k) => (p[c * 3 + k] as number) - (p[a * 3 + k] as number));
-    const face = [(e[1] as number) * (f[2] as number) - (e[2] as number) * (f[1] as number), (e[2] as number) * (f[0] as number) - (e[0] as number) * (f[2] as number), (e[0] as number) * (f[1] as number) - (e[1] as number) * (f[0] as number)];
-    const facing = [0, 1, 2].reduce((sum, k) => sum + (face[k] as number) * ((n[a * 3 + k] as number) + (n[b * 3 + k] as number) + (n[c * 3 + k] as number)), 0);
+    const [a, b, c] = [
+      part.indices[t] as number,
+      part.indices[t + 1] as number,
+      part.indices[t + 2] as number,
+    ];
+    const e = [0, 1, 2].map(
+      (k) => (p[b * 3 + k] as number) - (p[a * 3 + k] as number),
+    );
+    const f = [0, 1, 2].map(
+      (k) => (p[c * 3 + k] as number) - (p[a * 3 + k] as number),
+    );
+    const face = [
+      (e[1] as number) * (f[2] as number) - (e[2] as number) * (f[1] as number),
+      (e[2] as number) * (f[0] as number) - (e[0] as number) * (f[2] as number),
+      (e[0] as number) * (f[1] as number) - (e[1] as number) * (f[0] as number),
+    ];
+    const facing = [0, 1, 2].reduce(
+      (sum, k) =>
+        sum +
+        (face[k] as number) *
+          ((n[a * 3 + k] as number) +
+            (n[b * 3 + k] as number) +
+            (n[c * 3 + k] as number)),
+      0,
+    );
     if (facing > 0) out++;
   }
   return out;
@@ -86,10 +189,17 @@ function outwardTriangles(part: Part): number {
 describe("manifest", () => {
   it("lists every exported primitive", () => {
     const exported = (Object.values(primitivesModule) as unknown[]).filter(
-      (v): v is AnyPrimitive => typeof v === "object" && v !== null && "build" in v && "role" in v && "id" in v,
+      (v): v is AnyPrimitive =>
+        typeof v === "object" &&
+        v !== null &&
+        "build" in v &&
+        "role" in v &&
+        "id" in v,
     );
     const listed = new Set(PRIMITIVES.map((p) => p.id));
-    expect(exported.map((p) => p.id).filter((id) => !listed.has(id))).toEqual([]);
+    expect(exported.map((p) => p.id).filter((id) => !listed.has(id))).toEqual(
+      [],
+    );
   });
 });
 
@@ -97,194 +207,363 @@ describe("manifest", () => {
 // Needles on a bush build a juniper of 280 tufts per sample, about 12 s alone and over 20 s on a busy CI runner.
 const SLOW: Readonly<Record<string, number>> = { "needles@1": 60_000 };
 
-describe.each(PRIMITIVES.map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
-  const timeout = SLOW[p.id] ?? 20_000;
-  it("builds the same output from the same seed", { timeout }, () => {
-    for (const s of samples(p)) {
-      for (const input of inputFor(p).slice(0, 2)) {
-        expect(JSON.stringify(build(p, s, input, 3), replacer)).toBe(JSON.stringify(build(p, s, input, 3), replacer));
-      }
-    }
-  });
-
-  if (!GEOMETRY_ROLES.has(p.role)) return;
-
-  it("writes finite geometry with channels in range, within the triangle budget", { timeout }, () => {
-    for (const s of samples(p)) {
-      for (const input of inputFor(p)) {
-        for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
-          expect(allFinite(part.positions) && allFinite(part.normals) && allFinite(part.channels.pivot) && allFinite(part.channels.bough) && allFinite(part.channels.twig)).toBe(true);
-          expect(part.channels.bough.length === part.shade.length * 3 && part.channels.twig.length === part.shade.length * 3).toBe(true);
-          const c = part.channels;
-          expect([c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(inUnit)).toBe(true);
-          expect(c.close.length).toBe(part.shade.length);
-          // Optional channels, when present, cover every vertex and stay in range.
-          expect([c.grow, c.rot].every((a) => a === undefined || (a.length === part.shade.length && inUnit(a)))).toBe(true);
-          expect(c.fall === undefined || (c.fall.length === part.shade.length * 4 && allFinite(c.fall) && c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1)))).toBe(true);
-          expect(c.spin === undefined || (c.spin.length === part.shade.length * 3 && allFinite(c.spin))).toBe(true);
-          // A grain's kind is one of `GRAIN`, which the shader can rot.
-          expect(c.grain === undefined || (c.grain.length === part.shade.length * 3 && allFinite(c.grain) && c.grain.every((x, i) => i % 3 !== 2 || Object.values(GRAIN).includes(x as never)))).toBe(true);
-          expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
-          expect(cutsKnown(part)).toBe(true);
-          expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);
+describe.each(PRIMITIVES.map((p) => [p.id, p] as const))(
+  "%s",
+  { timeout: 20_000 },
+  (_id, p) => {
+    const timeout = SLOW[p.id] ?? 20_000;
+    it("builds the same output from the same seed", { timeout }, () => {
+      for (const s of samples(p)) {
+        for (const input of inputFor(p).slice(0, 2)) {
+          expect(JSON.stringify(build(p, s, input, 3), replacer)).toBe(
+            JSON.stringify(build(p, s, input, 3), replacer),
+          );
         }
-      }
-    }
-  });
-
-  it("winds bark, stone and wood with their front faces outward", { timeout }, () => {
-    for (const s of samples(p)) {
-      for (const input of inputFor(p).slice(0, 2)) {
-        for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
-          if (!CLOSED.has(part.swatch)) continue;
-          const tris = part.indices.length / 3;
-          expect(outwardTriangles(part) / Math.max(1, tris)).toBeGreaterThan(0.9);
-        }
-      }
-    }
-  });
-
-  // `detailAt` in @gaia/realize leaves a piece out by its number and size, so a piece with one size leaves whole.
-  it("builds whole pieces, each of one size, so far detail leaves out whole pieces", { timeout }, () => {
-    for (const s of samples(p)) {
-      for (const input of inputFor(p).slice(0, 2)) {
-        for (const part of (build(p, s, input, 5) as Built).parts as Part[]) {
-          const n = part.shade.length;
-          const id = (v: number): number => part.piece[v * 2] as number;
-          expect(part.piece.length).toBe(n * 2);
-          let split = 0;
-          for (let t = 0; t < part.indices.length; t += 3) {
-            const a = id(part.indices[t] as number);
-            if (id(part.indices[t + 1] as number) !== a || id(part.indices[t + 2] as number) !== a) split++;
-          }
-          const sizes = new Map<number, number>();
-          let mixed = 0;
-          for (let v = 0; v < n; v++) {
-            const size = part.piece[v * 2 + 1] as number;
-            const was = sizes.get(id(v));
-            if (was === undefined) sizes.set(id(v), size);
-            else if (!Object.is(was, size)) mixed++;
-          }
-          expect(split, "triangles across two pieces").toBe(0);
-          expect(mixed, "vertices sized unlike their piece").toBe(0);
-        }
-      }
-    }
-  });
-
-  it("responds to vitality in every part, on everything it is built on", { timeout }, () => {
-    const unchanged: string[] = [];
-    inputFor(p).forEach((input, k) => {
-      const built = build(p, samples(p)[1] as Stored, input, 5) as Built;
-      expect(built.parts.length, `input ${k}`).toBeGreaterThan(0);
-      for (const part of built.parts as Part[]) {
-        const healthy = applyVitality(part, 1);
-        const failing = applyVitality(part, 0);
-        const moved = healthy.positions.some((x, i) => x !== failing.positions[i]);
-        if (!moved && !healthy.colors.some((x, i) => x !== failing.colors[i])) unchanged.push(`${part.swatch} on input ${k}`);
       }
     });
-    expect(unchanged).toEqual([]);
-  });
-});
+
+    if (!GEOMETRY_ROLES.has(p.role)) return;
+
+    it(
+      "writes finite geometry with channels in range, within the triangle budget",
+      { timeout },
+      () => {
+        for (const s of samples(p)) {
+          for (const input of inputFor(p)) {
+            for (const part of (build(p, s, input, 5) as Built)
+              .parts as Part[]) {
+              expect(
+                allFinite(part.positions) &&
+                  allFinite(part.normals) &&
+                  allFinite(part.channels.pivot) &&
+                  allFinite(part.channels.bough) &&
+                  allFinite(part.channels.twig),
+              ).toBe(true);
+              expect(
+                part.channels.bough.length === part.shade.length * 3 &&
+                  part.channels.twig.length === part.shade.length * 3,
+              ).toBe(true);
+              const c = part.channels;
+              expect(
+                [c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(
+                  inUnit,
+                ),
+              ).toBe(true);
+              expect(c.close.length).toBe(part.shade.length);
+              // Optional channels, when present, cover every vertex and stay in range.
+              expect(
+                [c.grow, c.rot].every(
+                  (a) =>
+                    a === undefined ||
+                    (a.length === part.shade.length && inUnit(a)),
+                ),
+              ).toBe(true);
+              expect(
+                c.fall === undefined ||
+                  (c.fall.length === part.shade.length * 4 &&
+                    allFinite(c.fall) &&
+                    c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1))),
+              ).toBe(true);
+              expect(
+                c.spin === undefined ||
+                  (c.spin.length === part.shade.length * 3 &&
+                    allFinite(c.spin)),
+              ).toBe(true);
+              // A grain's kind is one of `GRAIN`, which the shader can rot.
+              expect(
+                c.grain === undefined ||
+                  (c.grain.length === part.shade.length * 3 &&
+                    allFinite(c.grain) &&
+                    c.grain.every(
+                      (x, i) =>
+                        i % 3 !== 2 ||
+                        Object.values(GRAIN).includes(x as never),
+                    )),
+              ).toBe(true);
+              expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
+              expect(cutsKnown(part)).toBe(true);
+              expect(part.indices.length / 3).toBeLessThanOrEqual(
+                TRIANGLE_BUDGET,
+              );
+            }
+          }
+        }
+      },
+    );
+
+    it(
+      "winds bark, stone and wood with their front faces outward",
+      { timeout },
+      () => {
+        for (const s of samples(p)) {
+          for (const input of inputFor(p).slice(0, 2)) {
+            for (const part of (build(p, s, input, 5) as Built)
+              .parts as Part[]) {
+              if (!CLOSED.has(part.swatch)) continue;
+              const tris = part.indices.length / 3;
+              expect(
+                outwardTriangles(part) / Math.max(1, tris),
+              ).toBeGreaterThan(0.9);
+            }
+          }
+        }
+      },
+    );
+
+    // `detailAt` in @gaia/realize leaves a piece out by its number and size, so a piece with one size leaves whole.
+    it(
+      "builds whole pieces, each of one size, so far detail leaves out whole pieces",
+      { timeout },
+      () => {
+        for (const s of samples(p)) {
+          for (const input of inputFor(p).slice(0, 2)) {
+            for (const part of (build(p, s, input, 5) as Built)
+              .parts as Part[]) {
+              const n = part.shade.length;
+              const id = (v: number): number => part.piece[v * 2] as number;
+              expect(part.piece.length).toBe(n * 2);
+              let split = 0;
+              for (let t = 0; t < part.indices.length; t += 3) {
+                const a = id(part.indices[t] as number);
+                if (
+                  id(part.indices[t + 1] as number) !== a ||
+                  id(part.indices[t + 2] as number) !== a
+                )
+                  split++;
+              }
+              const sizes = new Map<number, number>();
+              let mixed = 0;
+              for (let v = 0; v < n; v++) {
+                const size = part.piece[v * 2 + 1] as number;
+                const was = sizes.get(id(v));
+                if (was === undefined) sizes.set(id(v), size);
+                else if (!Object.is(was, size)) mixed++;
+              }
+              expect(split, "triangles across two pieces").toBe(0);
+              expect(mixed, "vertices sized unlike their piece").toBe(0);
+            }
+          }
+        }
+      },
+    );
+
+    it(
+      "responds to vitality in every part, on everything it is built on",
+      { timeout },
+      () => {
+        const unchanged: string[] = [];
+        inputFor(p).forEach((input, k) => {
+          const built = build(p, samples(p)[1] as Stored, input, 5) as Built;
+          expect(built.parts.length, `input ${k}`).toBeGreaterThan(0);
+          for (const part of built.parts as Part[]) {
+            const healthy = applyVitality(part, 1);
+            const failing = applyVitality(part, 0);
+            const moved = healthy.positions.some(
+              (x, i) => x !== failing.positions[i],
+            );
+            if (
+              !moved &&
+              !healthy.colors.some((x, i) => x !== failing.colors[i])
+            )
+              unchanged.push(`${part.swatch} on input ${k}`);
+          }
+        });
+        expect(unchanged).toEqual([]);
+      },
+    );
+  },
+);
 
 /** Every combination of a primitive's choices, flags and sets, its scales at their middle level. */
 function combinations(p: AnyPrimitive): Stored[] {
   let out: Stored[] = [{}];
   for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
     const values: Stored[string][] =
-      f.type === "scale" ? [f.levels[Math.floor(f.levels.length / 2)]?.words ?? ""]
-      : f.type === "choice" ? Object.keys(f.options)
-      : f.type === "flag" ? [false, true]
-      : Object.keys(f.members).reduce<string[][]>((subsets, m) => [...subsets, ...subsets.map((s) => [...s, m])], [[]]);
+      f.type === "scale"
+        ? [f.levels[Math.floor(f.levels.length / 2)]?.words ?? ""]
+        : f.type === "choice"
+          ? Object.keys(f.options)
+          : f.type === "flag"
+            ? [false, true]
+            : Object.keys(f.members).reduce<string[][]>(
+                (subsets, m) => [...subsets, ...subsets.map((s) => [...s, m])],
+                [[]],
+              );
     out = out.flatMap((s) => values.map((v) => ({ ...s, [name]: v })));
   }
   return out;
 }
 
 /** True when a point lies within a mass's footprint. A round mass's octagon reaches past its inscribed circle at the corners. */
-const inFootprint = (m: BuildingPlan["masses"][number], x: number, z: number): boolean =>
-  m.round ? Math.hypot(x - m.x, z - m.z) < m.width / 2 / Math.cos(Math.PI / 8) : Math.abs(x - m.x) < m.width / 2 && Math.abs(z - m.z) < m.depth / 2;
+const inFootprint = (
+  m: BuildingPlan["masses"][number],
+  x: number,
+  z: number,
+): boolean =>
+  m.round
+    ? Math.hypot(x - m.x, z - m.z) < m.width / 2 / Math.cos(Math.PI / 8)
+    : Math.abs(x - m.x) < m.width / 2 && Math.abs(z - m.z) < m.depth / 2;
 
 /** Dressings that can fence a garden round a building. */
 const gardens = lib.forRole("Dressing").filter((p) => "extras" in p.params);
 
-describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
-  // A building is solid, so this is about reaching its door, not walking in.
-  it("leaves every door reachable from outside: no other wing stands in front of it, and a garden's fence leaves its walk open", () => {
-    for (const stored of combinations(p)) {
-      for (const seed of [1, 2]) {
-        const plan = build(p, stored, null, seed) as BuildingPlan;
-        const door = plan.openings.find((o) => o.kind === "door");
-        const m = door === undefined ? undefined : plan.masses[door.mass];
-        if (door === undefined || m === undefined) throw new Error(`${JSON.stringify(stored)}: no door`);
-        const [nx, , nz] = door.normal;
-        const [ux, uz] = [nz, -nx];
-        const half = (ax: number, az: number): number => Math.abs(ax) * (m.width / 2) + Math.abs(az) * ((m.round ? m.width : m.depth) / 2);
-        const [dx, dz] = [door.position[0] - m.x, door.position[2] - m.z];
-        // In its wall's face, and the whole door between the wall's ends.
-        expect(Math.abs(dx * nx + dz * nz - half(nx, nz)), JSON.stringify(stored)).toBeLessThan(0.01);
-        expect(Math.abs(dx * ux + dz * uz) + door.width / 2, JSON.stringify(stored)).toBeLessThanOrEqual(half(ux, uz));
-        // Nothing of another mass stands just outside it.
-        for (const along of [-door.width / 2, 0, door.width / 2]) {
-          const [x, z] = [door.position[0] + ux * along + nx * 0.06, door.position[2] + uz * along + nz * 0.06];
-          expect(plan.masses.some((o, i) => i !== door.mass && inFootprint(o, x, z)), JSON.stringify(stored)).toBe(false);
-        }
-        // A walk half a meter wide leads straight out from the door, and no triangle of a garden's fence in front of the door reaches into it.
-        for (const garden of gardens) {
-          const fence = (build(garden, { extras: ["fence"], walk: "stepping stones" }, plan, seed) as Built).parts.find((part) => part.swatch === "wall");
-          if (fence === undefined) throw new Error(`${garden.id} ${JSON.stringify(stored)}: no fence`);
-          let across = 0;
-          for (let t = 0; t < fence.indices.length; t += 3) {
-            const vs = [0, 1, 2].map((k) => fence.indices[t + k] as number);
-            const out = vs.map((v) => ((fence.positions[v * 3] as number) - door.position[0]) * nx + ((fence.positions[v * 3 + 2] as number) - door.position[2]) * nz);
-            const side = vs.map((v) => ((fence.positions[v * 3] as number) - door.position[0]) * ux + ((fence.positions[v * 3 + 2] as number) - door.position[2]) * uz);
-            if (Math.min(...out) > 0 && Math.min(...side) < 0.25 && Math.max(...side) > -0.25) across++;
+describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))(
+  "%s",
+  { timeout: 20_000 },
+  (_id, p) => {
+    // A building is solid, so this is about reaching its door, not walking in.
+    it("leaves every door reachable from outside: no other wing stands in front of it, and a garden's fence leaves its walk open", () => {
+      for (const stored of combinations(p)) {
+        for (const seed of [1, 2]) {
+          const plan = build(p, stored, null, seed) as BuildingPlan;
+          const door = plan.openings.find((o) => o.kind === "door");
+          const m = door === undefined ? undefined : plan.masses[door.mass];
+          if (door === undefined || m === undefined)
+            throw new Error(`${JSON.stringify(stored)}: no door`);
+          const [nx, , nz] = door.normal;
+          const [ux, uz] = [nz, -nx];
+          const half = (ax: number, az: number): number =>
+            Math.abs(ax) * (m.width / 2) +
+            Math.abs(az) * ((m.round ? m.width : m.depth) / 2);
+          const [dx, dz] = [door.position[0] - m.x, door.position[2] - m.z];
+          // In its wall's face, and the whole door between the wall's ends.
+          expect(
+            Math.abs(dx * nx + dz * nz - half(nx, nz)),
+            JSON.stringify(stored),
+          ).toBeLessThan(0.01);
+          expect(
+            Math.abs(dx * ux + dz * uz) + door.width / 2,
+            JSON.stringify(stored),
+          ).toBeLessThanOrEqual(half(ux, uz));
+          // Nothing of another mass stands just outside it.
+          for (const along of [-door.width / 2, 0, door.width / 2]) {
+            const [x, z] = [
+              door.position[0] + ux * along + nx * 0.06,
+              door.position[2] + uz * along + nz * 0.06,
+            ];
+            expect(
+              plan.masses.some(
+                (o, i) => i !== door.mass && inFootprint(o, x, z),
+              ),
+              JSON.stringify(stored),
+            ).toBe(false);
           }
-          expect(across, `${garden.id} ${JSON.stringify(stored)}`).toBe(0);
+          // A walk half a meter wide leads straight out from the door, and no triangle of a garden's fence in front of the door reaches into it.
+          for (const garden of gardens) {
+            const fence = (
+              build(
+                garden,
+                { extras: ["fence"], walk: "stepping stones" },
+                plan,
+                seed,
+              ) as Built
+            ).parts.find((part) => part.swatch === "wall");
+            if (fence === undefined)
+              throw new Error(
+                `${garden.id} ${JSON.stringify(stored)}: no fence`,
+              );
+            let across = 0;
+            for (let t = 0; t < fence.indices.length; t += 3) {
+              const vs = [0, 1, 2].map((k) => fence.indices[t + k] as number);
+              const out = vs.map(
+                (v) =>
+                  ((fence.positions[v * 3] as number) - door.position[0]) * nx +
+                  ((fence.positions[v * 3 + 2] as number) - door.position[2]) *
+                    nz,
+              );
+              const side = vs.map(
+                (v) =>
+                  ((fence.positions[v * 3] as number) - door.position[0]) * ux +
+                  ((fence.positions[v * 3 + 2] as number) - door.position[2]) *
+                    uz,
+              );
+              if (
+                Math.min(...out) > 0 &&
+                Math.min(...side) < 0.25 &&
+                Math.max(...side) > -0.25
+              )
+                across++;
+            }
+            expect(across, `${garden.id} ${JSON.stringify(stored)}`).toBe(0);
+          }
         }
       }
-    }
-  });
-});
+    });
+  },
+);
 
-describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))("%s", { timeout: 20_000 }, (_id, p) => {
-  it("lays a floor just under the door's sill with no holes, so none of the ground under the house shows", () => {
-    for (const plan of plans) {
-      const parts = (build(p, samples(p)[0] as Stored, plan, 5) as Built).parts;
-      // Every upward face just under the sill, as its corners' x and z.
-      const floor: number[][] = [];
-      for (const part of parts) {
-        for (let t = 0; t < part.indices.length; t += 3) {
-          const [a, b, c] = [part.indices[t] as number, part.indices[t + 1] as number, part.indices[t + 2] as number];
-          const y = part.positions[a * 3 + 1] as number;
-          if ((part.normals[a * 3 + 1] as number) < 0.99 || y < plan.floor - 0.06 || y > plan.floor) continue;
-          floor.push([a, b, c].flatMap((v) => [part.positions[v * 3] as number, part.positions[v * 3 + 2] as number]));
-        }
-      }
-      const covered = (x: number, z: number): boolean =>
-        floor.some(([ax, az, bx, bz, cx, cz]) => {
-          const d1 = (x - (bx as number)) * ((az as number) - (bz as number)) - ((ax as number) - (bx as number)) * (z - (bz as number));
-          const d2 = (x - (cx as number)) * ((bz as number) - (cz as number)) - ((bx as number) - (cx as number)) * (z - (cz as number));
-          const d3 = (x - (ax as number)) * ((cz as number) - (az as number)) - ((cx as number) - (ax as number)) * (z - (az as number));
-          return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
-        });
-      for (const m of plan.masses.filter((mass) => !mass.round)) {
-        // Points a hand apart over the whole block inside its walls, which stand less than 0.2 m thick.
-        const [hx, hz] = [m.width / 2 - 0.2, m.depth / 2 - 0.2];
-        const [nx, nz] = [Math.ceil((2 * hx) / 0.1), Math.ceil((2 * hz) / 0.1)];
-        const holes: string[] = [];
-        for (let i = 0; i <= nx; i++) {
-          for (let k = 0; k <= nz; k++) {
-            const [x, z] = [m.x - hx + (2 * hx * i) / nx, m.z - hz + (2 * hz * k) / nz];
-            if (!covered(x, z)) holes.push(`(${x.toFixed(2)}, ${z.toFixed(2)})`);
+describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))(
+  "%s",
+  { timeout: 20_000 },
+  (_id, p) => {
+    it("lays a floor just under the door's sill with no holes, so none of the ground under the house shows", () => {
+      for (const plan of plans) {
+        const parts = (build(p, samples(p)[0] as Stored, plan, 5) as Built)
+          .parts;
+        // Every upward face just under the sill, as its corners' x and z.
+        const floor: number[][] = [];
+        for (const part of parts) {
+          for (let t = 0; t < part.indices.length; t += 3) {
+            const [a, b, c] = [
+              part.indices[t] as number,
+              part.indices[t + 1] as number,
+              part.indices[t + 2] as number,
+            ];
+            const y = part.positions[a * 3 + 1] as number;
+            if (
+              (part.normals[a * 3 + 1] as number) < 0.99 ||
+              y < plan.floor - 0.06 ||
+              y > plan.floor
+            )
+              continue;
+            floor.push(
+              [a, b, c].flatMap((v) => [
+                part.positions[v * 3] as number,
+                part.positions[v * 3 + 2] as number,
+              ]),
+            );
           }
         }
-        expect(holes.slice(0, 5), `${holes.length} holes`).toEqual([]);
+        const covered = (x: number, z: number): boolean =>
+          floor.some(([ax, az, bx, bz, cx, cz]) => {
+            const d1 =
+              (x - (bx as number)) * ((az as number) - (bz as number)) -
+              ((ax as number) - (bx as number)) * (z - (bz as number));
+            const d2 =
+              (x - (cx as number)) * ((bz as number) - (cz as number)) -
+              ((bx as number) - (cx as number)) * (z - (cz as number));
+            const d3 =
+              (x - (ax as number)) * ((cz as number) - (az as number)) -
+              ((cx as number) - (ax as number)) * (z - (az as number));
+            return !(
+              (d1 < 0 || d2 < 0 || d3 < 0) &&
+              (d1 > 0 || d2 > 0 || d3 > 0)
+            );
+          });
+        for (const m of plan.masses.filter((mass) => !mass.round)) {
+          // Points a hand apart over the whole block inside its walls, which stand less than 0.2 m thick.
+          const [hx, hz] = [m.width / 2 - 0.2, m.depth / 2 - 0.2];
+          const [nx, nz] = [
+            Math.ceil((2 * hx) / 0.1),
+            Math.ceil((2 * hz) / 0.1),
+          ];
+          const holes: string[] = [];
+          for (let i = 0; i <= nx; i++) {
+            for (let k = 0; k <= nz; k++) {
+              const [x, z] = [
+                m.x - hx + (2 * hx * i) / nx,
+                m.z - hz + (2 * hz * k) / nz,
+              ];
+              if (!covered(x, z))
+                holes.push(`(${x.toFixed(2)}, ${z.toFixed(2)})`);
+            }
+          }
+          expect(holes.slice(0, 5), `${holes.length} holes`).toEqual([]);
+        }
       }
-    }
-  });
-});
+    });
+  },
+);
 
 // Every primitive resolves its scales with one formula, so one test covers them all.
 describe("scales", () => {
@@ -293,11 +572,22 @@ describe("scales", () => {
       for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
         if (f.type !== "scale") continue;
         f.levels.forEach((level, k) => {
-          const below = (level.value + (f.levels[k - 1]?.value ?? level.value)) / 2;
-          const above = (level.value + (f.levels[k + 1]?.value ?? level.value)) / 2;
+          const below =
+            (level.value + (f.levels[k - 1]?.value ?? level.value)) / 2;
+          const above =
+            (level.value + (f.levels[k + 1]?.value ?? level.value)) / 2;
           for (let seed = 1; seed <= 32; seed++) {
-            const value = resolveParams(p, { ...(samples(p)[0] as Stored), [name]: level.words }, rand(seed), p.id)[name] as number;
-            expect(value >= Math.min(below, above) && value <= Math.max(below, above), `${p.id} ${name}: ${level.words}`).toBe(true);
+            const value = resolveParams(
+              p,
+              { ...(samples(p)[0] as Stored), [name]: level.words },
+              rand(seed),
+              p.id,
+            )[name] as number;
+            expect(
+              value >= Math.min(below, above) &&
+                value <= Math.max(below, above),
+              `${p.id} ${name}: ${level.words}`,
+            ).toBe(true);
           }
         });
       }
@@ -310,56 +600,105 @@ describe("scales", () => {
  * the ground, each over its height. Fallen stone that grows in is left out.
  */
 function proportions(built: Built): number[] {
-  let [x0, x1, z0, z1, top, ground] = [Infinity, -Infinity, Infinity, -Infinity, 0, 0];
+  let [x0, x1, z0, z1, top, ground] = [
+    Infinity,
+    -Infinity,
+    Infinity,
+    -Infinity,
+    0,
+    0,
+  ];
   for (const part of built.parts) {
     for (let v = 0; v < part.shade.length; v++) {
       if ((part.channels.grow?.[v] ?? 0) > 0) continue;
-      const [x, y, z] = [part.positions[v * 3] as number, part.positions[v * 3 + 1] as number, part.positions[v * 3 + 2] as number];
-      [x0, x1, z0, z1, top] = [Math.min(x0, x), Math.max(x1, x), Math.min(z0, z), Math.max(z1, z), Math.max(top, y)];
+      const [x, y, z] = [
+        part.positions[v * 3] as number,
+        part.positions[v * 3 + 1] as number,
+        part.positions[v * 3 + 2] as number,
+      ];
+      [x0, x1, z0, z1, top] = [
+        Math.min(x0, x),
+        Math.max(x1, x),
+        Math.min(z0, z),
+        Math.max(z1, z),
+        Math.max(top, y),
+      ];
       if (y < 1) ground = Math.max(ground, Math.hypot(x, z));
     }
   }
   return [(x1 - x0) / top, (z1 - z0) / top, ground / top];
 }
 
-describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))("%s", (_id, p) => {
-  // Builds every sample from four seeds, a few seconds alone and more on a busy machine.
-  it("stands in proportions of its own from each seed, given the same answers", { timeout: 60_000 }, () => {
-    for (const s of samples(p)) {
-      // The same answers, their scales resolved alike. Only the build's own seed differs.
-      const params = resolveParams(p, s, rand(1), p.id);
-      const seen = [1, 2, 3, 4].map((seed) => proportions((p.build as Erased)(params, { rand: rand(seed).fork(p.id), facts }, null) as Built).join(" "));
-      // No two seeds build it in the same proportions.
-      expect(new Set(seen).size, JSON.stringify(s)).toBe(seen.length);
-    }
-  });
+describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))(
+  "%s",
+  (_id, p) => {
+    // Builds every sample from four seeds, a few seconds alone and more on a busy machine.
+    it(
+      "stands in proportions of its own from each seed, given the same answers",
+      { timeout: 60_000 },
+      () => {
+        for (const s of samples(p)) {
+          // The same answers, their scales resolved alike. Only the build's own seed differs.
+          const params = resolveParams(p, s, rand(1), p.id);
+          const seen = [1, 2, 3, 4].map((seed) =>
+            proportions(
+              (p.build as Erased)(
+                params,
+                { rand: rand(seed).fork(p.id), facts },
+                null,
+              ) as Built,
+            ).join(" "),
+          );
+          // No two seeds build it in the same proportions.
+          expect(new Set(seen).size, JSON.stringify(s)).toBe(seen.length);
+        }
+      },
+    );
 
-  const bands = LANDMARK_SHAPES[p.id];
-  if (bands === undefined) return;
+    const bands = LANDMARK_SHAPES[p.id];
+    if (bands === undefined) return;
 
-  it("picks each measure of its shape within the band its words allow, and no two words' bands meet", () => {
-    for (const [name, measure] of Object.entries(bands)) {
-      if (!("by" in measure)) continue;
-      // A measure set by a field has a band, or null, for every option of that field.
-      const field = p.params[measure.by] as Field | undefined;
-      expect(field?.type, name).toBe("choice");
-      if (field?.type === "choice") expect(Object.keys(measure.bands).sort(), name).toEqual(Object.keys(field.options).sort());
-      const set = Object.values(measure.bands).filter((b) => b !== null).sort((a, b) => a[0] - b[0]);
-      for (let k = 1; k < set.length; k++) expect((set[k - 1] as readonly [number, number])[1], name).toBeLessThan((set[k] as readonly [number, number])[0]);
-    }
-    for (const stored of combinations(p)) {
-      for (let seed = 1; seed <= 16; seed++) {
-        const params = resolveParams(p, stored, rand(seed), p.id);
-        const shape = landmarkShape(bands, params, { rand: rand(seed).fork(p.id), facts });
-        for (const [name, measure] of Object.entries(bands)) {
-          const band = bandOf(measure, params);
-          const value = shape[name] as number;
-          expect(band === null ? value === 0 : value >= band[0] && value <= band[1], `${name} ${JSON.stringify(stored)}`).toBe(true);
+    it("picks each measure of its shape within the band its words allow, and no two words' bands meet", () => {
+      for (const [name, measure] of Object.entries(bands)) {
+        if (!("by" in measure)) continue;
+        // A measure set by a field has a band, or null, for every option of that field.
+        const field = p.params[measure.by] as Field | undefined;
+        expect(field?.type, name).toBe("choice");
+        if (field?.type === "choice")
+          expect(Object.keys(measure.bands).sort(), name).toEqual(
+            Object.keys(field.options).sort(),
+          );
+        const set = Object.values(measure.bands)
+          .filter((b) => b !== null)
+          .sort((a, b) => a[0] - b[0]);
+        for (let k = 1; k < set.length; k++)
+          expect(
+            (set[k - 1] as readonly [number, number])[1],
+            name,
+          ).toBeLessThan((set[k] as readonly [number, number])[0]);
+      }
+      for (const stored of combinations(p)) {
+        for (let seed = 1; seed <= 16; seed++) {
+          const params = resolveParams(p, stored, rand(seed), p.id);
+          const shape = landmarkShape(bands, params, {
+            rand: rand(seed).fork(p.id),
+            facts,
+          });
+          for (const [name, measure] of Object.entries(bands)) {
+            const band = bandOf(measure, params);
+            const value = shape[name] as number;
+            expect(
+              band === null
+                ? value === 0
+                : value >= band[0] && value <= band[1],
+              `${name} ${JSON.stringify(stored)}`,
+            ).toBe(true);
+          }
         }
       }
-    }
-  });
-});
+    });
+  },
+);
 
 function replacer(_key: string, value: unknown): unknown {
   return ArrayBuffer.isView(value) ? Array.from(value as Float32Array) : value;

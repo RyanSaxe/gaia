@@ -10,7 +10,14 @@
 // first of all. This module records only each entry's subject, list and pages,
 // and the journal UI draws the rest.
 
-import type { CodeArea, CodePatch, NaturalThing, CodeSymbol, CodeThing, CodeTrail } from "./code-world.ts";
+import type {
+  CodeArea,
+  CodePatch,
+  NaturalThing,
+  CodeSymbol,
+  CodeThing,
+  CodeTrail,
+} from "./code-world.ts";
 
 export interface JournalEntry {
   /**
@@ -62,11 +69,17 @@ export interface JournalSource {
   readonly name: string;
   readonly areas: readonly Pick<CodeArea, "path" | "name" | "parent">[];
   readonly patches: readonly Pick<CodePatch, "path" | "name" | "area">[];
-  readonly symbols: readonly Pick<CodeSymbol, "id" | "file" | "parent" | "name" | "line">[];
+  readonly symbols: readonly Pick<
+    CodeSymbol,
+    "id" | "file" | "parent" | "name" | "line"
+  >[];
   /** Buildings and landmarks. Only an entity's gets its own spread, since a file's or definition's is shown on that file's or definition's page. */
   readonly things?: readonly Pick<CodeThing, "path" | "name" | "of">[];
   /** Files and entities that appear as flowers, a stone, a bush or a tree. */
-  readonly naturalThings?: readonly Pick<NaturalThing, "path" | "name" | "of">[];
+  readonly naturalThings?: readonly Pick<
+    NaturalThing,
+    "path" | "name" | "of"
+  >[];
   readonly trails?: readonly Pick<CodeTrail, "from" | "to">[];
 }
 
@@ -82,7 +95,9 @@ interface Item {
 }
 
 /** Sorts names like a file explorer: by letter, ignoring case, with numbers in numeric order. */
-const byName = (a: Item, b: Item): number => a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" }) || (a.of < b.of ? -1 : a.of > b.of ? 1 : 0);
+const byName = (a: Item, b: Item): number =>
+  a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" }) ||
+  (a.of < b.of ? -1 : a.of > b.of ? 1 : 0);
 
 const push = <K, V>(m: Map<K, V[]>, k: K, v: V): void => {
   const list = m.get(k);
@@ -90,16 +105,31 @@ const push = <K, V>(m: Map<K, V[]>, k: K, v: V): void => {
   else list.push(v);
 };
 
-export function journalOf(world: JournalSource, room: PageRoom = { first: Infinity, next: Infinity }): Journal {
+export function journalOf(
+  world: JournalSource,
+  room: PageRoom = { first: Infinity, next: Infinity },
+): Journal {
   // Child items by parent path. "" is the root, whose list is the contents.
   const chapters = new Map<string, Item[]>();
   const files = new Map<string, Item[]>();
   const definitions = new Map<string, { item: Item; line: number }[]>();
-  for (const a of world.areas) if (a.parent !== null) push(chapters, a.parent, { kind: "chapter", of: a.path, name: a.name });
-  for (const p of world.patches) push(files, p.area, { kind: "file", of: p.path, name: p.name });
-  for (const s of world.symbols) push(definitions, s.parent ?? s.file, { item: { kind: "definition", of: s.id, name: s.name }, line: s.line });
+  for (const a of world.areas)
+    if (a.parent !== null)
+      push(chapters, a.parent, { kind: "chapter", of: a.path, name: a.name });
+  for (const p of world.patches)
+    push(files, p.area, { kind: "file", of: p.path, name: p.name });
+  for (const s of world.symbols)
+    push(definitions, s.parent ?? s.file, {
+      item: { kind: "definition", of: s.id, name: s.name },
+      line: s.line,
+    });
   // Every entity gets a spread for its thing, whatever form it has.
-  const things = new Map([...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"), ...(world.naturalThings ?? []).filter((t) => t.of === "entity")].map((t) => [t.path, t]));
+  const things = new Map(
+    [
+      ...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"),
+      ...(world.naturalThings ?? []).filter((t) => t.of === "entity"),
+    ].map((t) => [t.path, t]),
+  );
   // A trail runs from the importing entity to the entity it imports from.
   const usesOf = new Map<string, Set<string>>();
   const usedByOf = new Map<string, Set<string>>();
@@ -110,21 +140,44 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
     usesOf.get(t.from)?.add(t.to);
     usedByOf.get(t.to)?.add(t.from);
   }
-  const entityItem = (path: string): Item => ({ kind: "entity", of: entityOf(path), name: things.get(path)?.name ?? path });
+  const entityItem = (path: string): Item => ({
+    kind: "entity",
+    of: entityOf(path),
+    name: things.get(path)?.name ?? path,
+  });
   /** Each folder's README, which its entity's page shows. */
   const readmes = new Map<string, string>();
-  for (const p of world.patches) if (/^readme(\.(md|markdown|txt|rst))?$/i.test(p.name) && !readmes.has(p.area)) readmes.set(p.area, p.path);
+  for (const p of world.patches)
+    if (
+      /^readme(\.(md|markdown|txt|rst))?$/i.test(p.name) &&
+      !readmes.has(p.area)
+    )
+      readmes.set(p.area, p.path);
   const listOf = (item: Item | { kind: "root"; of: string }): Item[] => {
     // A container lists its own thing first.
-    if (item.kind === "chapter" || item.kind === "root") return [...(things.has(item.of) ? [entityItem(item.of)] : []), ...(chapters.get(item.of) ?? []).sort(byName), ...(files.get(item.of) ?? []).sort(byName)];
+    if (item.kind === "chapter" || item.kind === "root")
+      return [
+        ...(things.has(item.of) ? [entityItem(item.of)] : []),
+        ...(chapters.get(item.of) ?? []).sort(byName),
+        ...(files.get(item.of) ?? []).sort(byName),
+      ];
     if (item.kind === "entity") {
       // An entity's page shows its folder's README. Without one, it lists the folder's contents so the reader can go deeper.
       const folder = item.of.slice("entity:".length);
-      return readmes.has(folder) ? [] : [...(chapters.get(folder) ?? []).sort(byName), ...(files.get(folder) ?? []).sort(byName)];
+      return readmes.has(folder)
+        ? []
+        : [
+            ...(chapters.get(folder) ?? []).sort(byName),
+            ...(files.get(folder) ?? []).sort(byName),
+          ];
     }
     if (item.kind === "own") return [];
-    const held = (definitions.get(item.of) ?? []).sort((a, b) => a.line - b.line || byName(a.item, b.item)).map((d) => d.item);
-    return item.kind === "file" && held.length > 0 ? [{ kind: "own", of: ownOf(item.of), name: item.name }, ...held] : held;
+    const held = (definitions.get(item.of) ?? [])
+      .sort((a, b) => a.line - b.line || byName(a.item, b.item))
+      .map((d) => d.item);
+    return item.kind === "file" && held.length > 0
+      ? [{ kind: "own", of: ownOf(item.of), name: item.name }, ...held]
+      : held;
   };
   /** Rows on the page about `item`. A file counts every definition in it, nested ones included. */
   const rowsOf = (item: Item, lists: readonly Item[]): number => {
@@ -141,24 +194,52 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
     walk(item.of);
     return n;
   };
-  const pagesFor = (rows: number): number => (rows <= room.first ? 1 : 1 + Math.ceil((rows - room.first) / room.next));
+  const pagesFor = (rows: number): number =>
+    rows <= room.first ? 1 : 1 + Math.ceil((rows - room.first) / room.next);
 
   const entries: JournalEntry[] = [];
   const index = new Map<string, JournalEntry>();
   /** The next left-hand page, where an entry's picture goes. */
   let picture = 0;
-  const add = (item: Item, under: string | undefined, lists: readonly Item[]): void => {
+  const add = (
+    item: Item,
+    under: string | undefined,
+    lists: readonly Item[],
+  ): void => {
     const rows = rowsOf(item, lists);
     // A file with two or more definitions, or a folder with two or more files, opens with a snippet of its most
     // important one. The snippet takes rows of its first page.
-    const parts = item.kind === "file" ? rows - 1 : item.kind === "chapter" ? (files.get(item.of)?.length ?? 0) : 0;
+    const parts =
+      item.kind === "file"
+        ? rows - 1
+        : item.kind === "chapter"
+          ? (files.get(item.of)?.length ?? 0)
+          : 0;
     const lead = parts >= 2 ? (room.lead ?? 0) : 0;
     const pages = pagesFor(rows + lead);
-    const text = item.kind === "entity" ? readmes.get(item.of.slice("entity:".length)) : undefined;
-    const folder = item.kind === "entity" ? item.of.slice("entity:".length) : null;
-    const way = (m: ReadonlyMap<string, ReadonlySet<string>>): string[] => [...(m.get(folder as string) ?? [])].map(entityItem).sort(byName).map((i) => i.of);
-    const trails = folder === null ? {} : { uses: way(usesOf), usedBy: way(usedByOf) };
-    const entry: JournalEntry = { ...item, ...(under === undefined ? {} : { under }), lists: lists.map((l) => l.of), ...(text === undefined ? {} : { text }), page: picture + 1, pages, ...(lead > 0 ? { lead } : {}), ...trails };
+    const text =
+      item.kind === "entity"
+        ? readmes.get(item.of.slice("entity:".length))
+        : undefined;
+    const folder =
+      item.kind === "entity" ? item.of.slice("entity:".length) : null;
+    const way = (m: ReadonlyMap<string, ReadonlySet<string>>): string[] =>
+      [...(m.get(folder as string) ?? [])]
+        .map(entityItem)
+        .sort(byName)
+        .map((i) => i.of);
+    const trails =
+      folder === null ? {} : { uses: way(usesOf), usedBy: way(usedByOf) };
+    const entry: JournalEntry = {
+      ...item,
+      ...(under === undefined ? {} : { under }),
+      lists: lists.map((l) => l.of),
+      ...(text === undefined ? {} : { text }),
+      page: picture + 1,
+      pages,
+      ...(lead > 0 ? { lead } : {}),
+      ...trails,
+    };
     entries.push(entry);
     index.set(entry.of, entry);
     // The next picture needs a left-hand page. Text that ends on a left-hand page leaves the right-hand page after it blank.
@@ -168,9 +249,15 @@ export function journalOf(world: JournalSource, room: PageRoom = { first: Infini
     const lists = listOf(item);
     add(item, under, lists);
     // Don't recurse into an entity's list, since those entries follow in the folder's own chapter. An own entry lists nothing.
-    if (item.kind !== "entity" && item.kind !== "own") for (const l of lists) visit(l, item.of);
+    if (item.kind !== "entity" && item.kind !== "own")
+      for (const l of lists) visit(l, item.of);
   };
   const contents = listOf({ kind: "root", of: "" });
   for (const item of contents) visit(item, undefined);
-  return { name: world.name, contents: contents.map((c) => c.of), entries, entry: (of) => index.get(of) };
+  return {
+    name: world.name,
+    contents: contents.map((c) => c.of),
+    entries,
+    entry: (of) => index.get(of),
+  };
 }

@@ -23,6 +23,7 @@ bar 1, so each stem is its own steady state and loops without a seam.
 
 Usage: compose.py OUT_DIR   (writes OUT_DIR/<song>/ MIDI, parts.json and timing.json for the loop and each phrase)
 """
+
 import json
 import sys
 from pathlib import Path
@@ -32,43 +33,131 @@ from .score import THEME4, Clock, P, Part, Song, dia, extra, tr
 K = 5  # F major
 TH = {k: tr(THEME4[k], K) for k in THEME4}
 
-SEATS = {"cl": [0, -0.2, 0.4, 120, -9, 1.0], "fl": [2, 0.15, 0.4, 250, -8, 1.5], "ob": [-1, 0.05, 0.4, 200, -8, 1.0],
-         "bn": [-8, 0.3, 0.4, 60, -10, 0.0], "bns": [-7, 0.3, 0.4, 60, -10, 0.0],
-         "cel": [-6, -0.35, 0.6, 300, -6, 1.0], "hp": [-5, -0.5, 0.6, 70, -8, 1.5], "hpl": [-5, -0.3, 0.5, 70, -8, 1.5], "glk": [-12, 0.3, 0.5, 400, -6, 0.0],
-         "sv": [3, -0.15, 0.4, 200, -8, 2.5], "vn": [-2, -0.45, 0.7, 180, -9, 2.0], "va": [-4, 0.15, 0.7, 120, -9, 1.5],
-         "vc": [-3, 0.35, 0.7, 50, -10, 0.0], "cb": [-9, 0.5, 0.6, 35, -12, 0.0],
-         "vnp": [-9, -0.4, 0.6, 200, -10, 1.5], "vap": [-10, 0.15, 0.6, 120, -10, 1.0], "vcp": [-7, 0.35, 0.6, 50, -11, 0.0]}
-PATCH = {"cl": "ClarinetSus.sfz", "fl": "gaia-FluteSusVib.sfz", "ob": "OboeSusVib.sfz", "bn": "BassoonStac.sfz",
-         "bns": "BassoonSus.sfz", "cel": extra("fs-celesta"), "hp": extra("vcsl-harp"), "hpl": extra("vcsl-harp"), "glk": extra("vcsl-glock"),
-         "sv": "gaia-SViolinVib.sfz", "vn": "gaia-ViolinEnsSusVib.sfz", "va": "gaia-ViolaEnsSusVib.sfz",
-         "vc": "gaia-CelloEnsSusVib.sfz", "cb": "gaia-ContrabassSusVB.sfz", "vnp": "ViolinEnsPizz.sfz",
-         "vap": "ViolaEnsPizz.sfz", "vcp": "CelloEnsPizz.sfz"}
-LEAD = {"cl": 0.03, "fl": 0.05, "ob": 0.03, "bn": 0.01, "bns": 0.03, "cel": 0.004, "hp": 0.02, "hpl": 0.02, "glk": 0.005,
-        "sv": 0.05, "vn": 0.14, "va": 0.12, "vc": 0.08, "cb": 0.06, "vnp": 0.004, "vap": 0.004, "vcp": 0.004}
+SEATS = {
+    "cl": [0, -0.2, 0.4, 120, -9, 1.0],
+    "fl": [2, 0.15, 0.4, 250, -8, 1.5],
+    "ob": [-1, 0.05, 0.4, 200, -8, 1.0],
+    "bn": [-8, 0.3, 0.4, 60, -10, 0.0],
+    "bns": [-7, 0.3, 0.4, 60, -10, 0.0],
+    "cel": [-6, -0.35, 0.6, 300, -6, 1.0],
+    "hp": [-5, -0.5, 0.6, 70, -8, 1.5],
+    "hpl": [-5, -0.3, 0.5, 70, -8, 1.5],
+    "glk": [-12, 0.3, 0.5, 400, -6, 0.0],
+    "sv": [3, -0.15, 0.4, 200, -8, 2.5],
+    "vn": [-2, -0.45, 0.7, 180, -9, 2.0],
+    "va": [-4, 0.15, 0.7, 120, -9, 1.5],
+    "vc": [-3, 0.35, 0.7, 50, -10, 0.0],
+    "cb": [-9, 0.5, 0.6, 35, -12, 0.0],
+    "vnp": [-9, -0.4, 0.6, 200, -10, 1.5],
+    "vap": [-10, 0.15, 0.6, 120, -10, 1.0],
+    "vcp": [-7, 0.35, 0.6, 50, -11, 0.0],
+}
+PATCH = {
+    "cl": "ClarinetSus.sfz",
+    "fl": "gaia-FluteSusVib.sfz",
+    "ob": "OboeSusVib.sfz",
+    "bn": "BassoonStac.sfz",
+    "bns": "BassoonSus.sfz",
+    "cel": extra("fs-celesta"),
+    "hp": extra("vcsl-harp"),
+    "hpl": extra("vcsl-harp"),
+    "glk": extra("vcsl-glock"),
+    "sv": "gaia-SViolinVib.sfz",
+    "vn": "gaia-ViolinEnsSusVib.sfz",
+    "va": "gaia-ViolaEnsSusVib.sfz",
+    "vc": "gaia-CelloEnsSusVib.sfz",
+    "cb": "gaia-ContrabassSusVB.sfz",
+    "vnp": "ViolinEnsPizz.sfz",
+    "vap": "ViolaEnsPizz.sfz",
+    "vcp": "CelloEnsPizz.sfz",
+}
+LEAD = {
+    "cl": 0.03,
+    "fl": 0.05,
+    "ob": 0.03,
+    "bn": 0.01,
+    "bns": 0.03,
+    "cel": 0.004,
+    "hp": 0.02,
+    "hpl": 0.02,
+    "glk": 0.005,
+    "sv": 0.05,
+    "vn": 0.14,
+    "va": 0.12,
+    "vc": 0.08,
+    "cb": 0.06,
+    "vnp": 0.004,
+    "vap": 0.004,
+    "vcp": 0.004,
+}
 CROSSFADED = ("fl", "sv", "vn", "va", "vc", "cb")  # gaia-* patches: CC1 picks the layer, CC11 is the volume
 
 # chords: (bass pitch class name, pitch classes above the root)
-CHORDS = {"F": ("F", "F", [0, 4, 7]), "Am": ("A", "A", [0, 3, 7]), "Bb": ("Bb", "Bb", [0, 4, 7]),
-          "Csus": ("C", "C", [0, 5, 7, 10]), "C7": ("C", "C", [0, 4, 7, 10]), "Dm": ("D", "D", [0, 3, 7]),
-          "Gm": ("G", "G", [0, 3, 7]), "Gm7": ("G", "G", [0, 3, 7, 10]), "F/A": ("A", "F", [0, 4, 7]),
-          "F/C": ("C", "F", [0, 4, 7]), "Fadd9": ("F", "F", [0, 4, 7, 14]),
-          "Fm": ("F", "F", [0, 3, 7]), "Ab": ("Ab", "Ab", [0, 4, 7]), "Bbm": ("Bb", "Bb", [0, 3, 7]),
-          "Db": ("Db", "Db", [0, 4, 7]), "Gh7": ("G", "G", [0, 3, 6, 10]), "Fm/Ab": ("Ab", "F", [0, 3, 7]),
-          "Fm/C": ("C", "F", [0, 3, 7]), "Fmadd9": ("F", "F", [0, 3, 7, 14]), "Dbmaj7": ("Db", "Db", [0, 4, 7, 11]),
-          "Bbm6": ("Bb", "Bb", [0, 3, 7, 9]), "C": ("C", "C", [0, 4, 7])}
+CHORDS = {
+    "F": ("F", "F", [0, 4, 7]),
+    "Am": ("A", "A", [0, 3, 7]),
+    "Bb": ("Bb", "Bb", [0, 4, 7]),
+    "Csus": ("C", "C", [0, 5, 7, 10]),
+    "C7": ("C", "C", [0, 4, 7, 10]),
+    "Dm": ("D", "D", [0, 3, 7]),
+    "Gm": ("G", "G", [0, 3, 7]),
+    "Gm7": ("G", "G", [0, 3, 7, 10]),
+    "F/A": ("A", "F", [0, 4, 7]),
+    "F/C": ("C", "F", [0, 4, 7]),
+    "Fadd9": ("F", "F", [0, 4, 7, 14]),
+    "Fm": ("F", "F", [0, 3, 7]),
+    "Ab": ("Ab", "Ab", [0, 4, 7]),
+    "Bbm": ("Bb", "Bb", [0, 3, 7]),
+    "Db": ("Db", "Db", [0, 4, 7]),
+    "Gh7": ("G", "G", [0, 3, 6, 10]),
+    "Fm/Ab": ("Ab", "F", [0, 3, 7]),
+    "Fm/C": ("C", "F", [0, 3, 7]),
+    "Fmadd9": ("F", "F", [0, 3, 7, 14]),
+    "Dbmaj7": ("Db", "Db", [0, 4, 7, 11]),
+    "Bbm6": ("Bb", "Bb", [0, 3, 7, 9]),
+    "C": ("C", "C", [0, 4, 7]),
+}
 PC = {"C": 0, "Db": 1, "D": 2, "Eb": 3, "E": 4, "F": 5, "Gb": 6, "G": 7, "Ab": 8, "A": 9, "Bb": 10, "B": 11}
 
 # string voicings (cb, vc, va, vn), led so each voice moves by step where it can
-STR = {"F": ("F2", "C3", "A3", "F4"), "Fadd9": ("F2", "C3", "A3", "G4"), "Am": ("A2", "E3", "A3", "E4"),
-       "Bb": ("Bb2", "F3", "Bb3", "D4"), "Csus": ("C3", "G3", "Bb3", "F4"), "C7": ("C3", "G3", "Bb3", "E4"),
-       "Dm": ("D3", "F3", "A3", "F4"), "Gm7": ("G2", "F3", "Bb3", "D4"), "Gm": ("G2", "G3", "Bb3", "D4"),
-       "F/A": ("A2", "F3", "A3", "C4"), "F/C": ("C3", "F3", "A3", "C4")}
+STR = {
+    "F": ("F2", "C3", "A3", "F4"),
+    "Fadd9": ("F2", "C3", "A3", "G4"),
+    "Am": ("A2", "E3", "A3", "E4"),
+    "Bb": ("Bb2", "F3", "Bb3", "D4"),
+    "Csus": ("C3", "G3", "Bb3", "F4"),
+    "C7": ("C3", "G3", "Bb3", "E4"),
+    "Dm": ("D3", "F3", "A3", "F4"),
+    "Gm7": ("G2", "F3", "Bb3", "D4"),
+    "Gm": ("G2", "G3", "Bb3", "D4"),
+    "F/A": ("A2", "F3", "A3", "C4"),
+    "F/C": ("C3", "F3", "A3", "C4"),
+}
 # the minor bed: lower, no violins
-STRM = {"Fm": ("F2", "C3", "Ab3"), "Ab": ("Ab2", "Eb3", "C4"), "Bbm": ("Bb2", "F3", "Db4"), "Csus": ("C3", "F3", "Bb3"),
-        "C7": ("C3", "G3", "E4"), "Db": ("Db3", "F3", "Ab3"), "Gh7": ("G2", "F3", "Db4"), "Fm/Ab": ("Ab2", "F3", "C4"),
-        "Fm/C": ("C3", "F3", "Ab3")}
-TO_MINOR = {"F": "Fm", "Fadd9": "Fm", "Am": "Ab", "Bb": "Bbm", "Csus": "Csus", "C7": "C7", "Dm": "Db", "Gm7": "Gh7",
-            "Gm": "Gh7", "F/A": "Fm/Ab", "F/C": "Fm/C"}
+STRM = {
+    "Fm": ("F2", "C3", "Ab3"),
+    "Ab": ("Ab2", "Eb3", "C4"),
+    "Bbm": ("Bb2", "F3", "Db4"),
+    "Csus": ("C3", "F3", "Bb3"),
+    "C7": ("C3", "G3", "E4"),
+    "Db": ("Db3", "F3", "Ab3"),
+    "Gh7": ("G2", "F3", "Db4"),
+    "Fm/Ab": ("Ab2", "F3", "C4"),
+    "Fm/C": ("C3", "F3", "Ab3"),
+}
+TO_MINOR = {
+    "F": "Fm",
+    "Fadd9": "Fm",
+    "Am": "Ab",
+    "Bb": "Bbm",
+    "Csus": "Csus",
+    "C7": "C7",
+    "Dm": "Db",
+    "Gm7": "Gh7",
+    "Gm": "Gh7",
+    "F/A": "Fm/Ab",
+    "F/C": "Fm/C",
+}
 
 
 def pcs(ch):
@@ -108,8 +197,12 @@ class Band:
         if inst.startswith("_") or inst not in PATCH:
             raise AttributeError(inst)
         if inst not in self.parts:
-            p = self.song.part(self.prefix + inst, PATCH[inst], lead=LEAD[inst],
-                               jitter=0.006 if inst in ("cel", "glk", "hp", "hpl") else 0.010)
+            p = self.song.part(
+                self.prefix + inst,
+                PATCH[inst],
+                lead=LEAD[inst],
+                jitter=0.006 if inst in ("cel", "glk", "hp", "hpl") else 0.010,
+            )
             if inst in CROSSFADED:
                 p.cc(0, 1, 34)
                 p.cc(0, 11, 60)
@@ -204,10 +297,38 @@ PRE = 4  # one bar of pre-roll before bar 1, so notes that lead in (strings 0.14
 TAIL = 12  # three bars after bar 32 for every release and the harp's ring, which the mixer folds onto bar 1
 
 PROG = [
-    [("F", 4)], [("Am", 4)], [("Bb", 4)], [("Csus", 2), ("C7", 2)], [("Dm", 4)], [("Bb", 4)], [("Gm7", 2), ("C7", 2)], [("F", 4)],
-    [("Bb", 4)], [("F/A", 4)], [("Gm", 4)], [("Dm", 4)], [("Bb", 4)], [("F/A", 4)], [("Gm7", 2), ("C7", 2)], [("Csus", 4)],
-    [("F", 4)], [("Am", 4)], [("Bb", 4)], [("Csus", 2), ("C7", 2)], [("Dm", 4)], [("Bb", 4)], [("Gm7", 2), ("C7", 2)], [("Fadd9", 4)],
-    [("Bb", 4)], [("F/A", 4)], [("Gm7", 4)], [("Dm", 4)], [("Bb", 4)], [("F/C", 4)], [("Gm7", 4)], [("Csus", 2), ("C7", 2)],
+    [("F", 4)],
+    [("Am", 4)],
+    [("Bb", 4)],
+    [("Csus", 2), ("C7", 2)],
+    [("Dm", 4)],
+    [("Bb", 4)],
+    [("Gm7", 2), ("C7", 2)],
+    [("F", 4)],
+    [("Bb", 4)],
+    [("F/A", 4)],
+    [("Gm", 4)],
+    [("Dm", 4)],
+    [("Bb", 4)],
+    [("F/A", 4)],
+    [("Gm7", 2), ("C7", 2)],
+    [("Csus", 4)],
+    [("F", 4)],
+    [("Am", 4)],
+    [("Bb", 4)],
+    [("Csus", 2), ("C7", 2)],
+    [("Dm", 4)],
+    [("Bb", 4)],
+    [("Gm7", 2), ("C7", 2)],
+    [("Fadd9", 4)],
+    [("Bb", 4)],
+    [("F/A", 4)],
+    [("Gm7", 4)],
+    [("Dm", 4)],
+    [("Bb", 4)],
+    [("F/C", 4)],
+    [("Gm7", 4)],
+    [("Csus", 2), ("C7", 2)],
 ]
 assert len(PROG) == BARS and all(sum(d for _, d in bar) == 4 for bar in PROG)
 
@@ -245,8 +366,21 @@ def piece(out):
     strings(bed, bb(1), flat, v=80)
     for inst, off in (("cb", -4), ("vc", 0), ("va", -2), ("vn", -8)):
         p = getattr(bed, inst)
-        pts = [(bb(1), 46), (bb(5), 50), (bb(8, 2), 46), (bb(9), 44), (bb(13), 50), (bb(16), 52), (bb(17), 48),
-               (bb(21), 54), (bb(24, 2), 48), (bb(25), 44), (bb(29), 46), (bb(32), 46), (bb(33), 46)]
+        pts = [
+            (bb(1), 46),
+            (bb(5), 50),
+            (bb(8, 2), 46),
+            (bb(9), 44),
+            (bb(13), 50),
+            (bb(16), 52),
+            (bb(17), 48),
+            (bb(21), 54),
+            (bb(24, 2), 48),
+            (bb(25), 44),
+            (bb(29), 46),
+            (bb(32), 46),
+            (bb(33), 46),
+        ]
         p.env([(T(b), v + off) for b, v in pts])
         p.env([(T(bb(1)), 30), (T(bb(13)), 36), (T(bb(21)), 40), (T(bb(25)), 30), (T(bb(33)), 30)], num=1)
     for bar in list(range(1, 9)) + list(range(17, 25)):  # A and A': harp eighths
@@ -284,22 +418,59 @@ def piece(out):
         swell(mel.cl, bb(a), bb(z), 64, 82)
     # B: the answer, flute and solo violin
     fl, sv = mel.fl, mel.sv
-    fl.line(bb(9), [("D5", 1), ("Bb5", 1.5), ("A5", .5), ("G5", 1), ("A5", 1), ("C6", 1), ("F5", 1.5)], 66, legato=0.05)
+    fl.line(
+        bb(9), [("D5", 1), ("Bb5", 1.5), ("A5", 0.5), ("G5", 1), ("A5", 1), ("C6", 1), ("F5", 1.5)], 66, legato=0.05
+    )
     swell(fl, bb(9) - 0.2, bb(10, 3.6), 58, 76)
-    sv.line(bb(11), [("Bb4", 1), ("G5", 1.5), ("F5", .5), ("D5", 1), ("E5", 1), ("F5", 1), ("A4", 1.6)], 62, legato=0.05)
+    sv.line(
+        bb(11), [("Bb4", 1), ("G5", 1.5), ("F5", 0.5), ("D5", 1), ("E5", 1), ("F5", 1), ("A4", 1.6)], 62, legato=0.05
+    )
     swell(sv, bb(11) - 0.2, bb(12, 3.6), 62, 80)
-    fl.line(bb(13), [("F5", 1), ("D6", 1.5), ("C6", .5), ("Bb5", 1), ("A5", 1), ("Bb5", 1), ("C6", 2),
-                     ("Bb5", 1), ("C6", 1), ("D6", 1), ("E6", 1), ("F6", 3.4)], 68, legato=0.05)
+    fl.line(
+        bb(13),
+        [
+            ("F5", 1),
+            ("D6", 1.5),
+            ("C6", 0.5),
+            ("Bb5", 1),
+            ("A5", 1),
+            ("Bb5", 1),
+            ("C6", 2),
+            ("Bb5", 1),
+            ("C6", 1),
+            ("D6", 1),
+            ("E6", 1),
+            ("F6", 3.4),
+        ],
+        68,
+        legato=0.05,
+    )
     swell(fl, bb(13) - 0.2, bb(16, 3.4), 58, 80, peak=0.8)
     fl.env([(T(bb(16, 3.0)), 60), (T(bb(16, 3.4)), 44)])
     sv.line(bb(13), [("D5", 4), ("C5", 4), ("Bb4", 2), ("C5", 2), ("C5", 3.5)], 56, legato=0.05)
     sv.env([(T(bb(13)) - 0.2, 40), (T(bb(14)), 54), (T(bb(16)), 56), (T(bb(16, 3.5)), 38)])
-    sv.env([(T(bb(10)), 34), (T(bb(11)) - 0.3, 34), (T(bb(11)), 58), (T(bb(13)) - 0.2, 58), (T(bb(13)), 38),
-            (T(bb(17)) - 0.4, 38), (T(bb(17)) - 0.2, 52), (T(bb(21)), 52)], num=1)
+    sv.env(
+        [
+            (T(bb(10)), 34),
+            (T(bb(11)) - 0.3, 34),
+            (T(bb(11)), 58),
+            (T(bb(13)) - 0.2, 58),
+            (T(bb(13)), 38),
+            (T(bb(17)) - 0.4, 38),
+            (T(bb(17)) - 0.2, 52),
+            (T(bb(21)), 52),
+        ],
+        num=1,
+    )
     # A': the theme on the solo violin with the clarinet below, the oboe's P3, then flute and clarinet in thirds
     sv.line(bb(17), TH["P1"] + TH["P2"], lambda i, b: 66 + (5 if i in (1, 6) else 0), legato=0.05)
     swell(sv, bb(17) - 0.2, bb(21), 52, 74)
-    mel.cl.line(bb(17), [("F4", 2), ("A4", 2), ("E4", 2), ("G4", 2), ("D4", 2), ("F4", 2), ("F4", 2), ("E4", 1.6)], 54, legato=0.05)
+    mel.cl.line(
+        bb(17),
+        [("F4", 2), ("A4", 2), ("E4", 2), ("G4", 2), ("D4", 2), ("F4", 2), ("F4", 2), ("E4", 1.6)],
+        54,
+        legato=0.05,
+    )
     mel.ob.line(bb(21), TH["P3"], lambda i, b: 60 + (5 if i in (1, 6) else 0), legato=0.05)
     swell(mel.ob, bb(21) - 0.1, bb(23), 66, 84)
     fl.line(bb(23), TH["P4"][:-1] + [("F5", 3.4)], 66, legato=0.05)
@@ -308,7 +479,9 @@ def piece(out):
     mel.cl.line(bb(23), third, 58, legato=0.05)
     mel.cl.env([(T(bb(17)), 60), (T(bb(21)), 62), (T(bb(23)), 68), (T(bb(24, 3.4)), 58)])
     # the coda: the head low on the clarinet, a far flute, and a pickup back into bar 1
-    mel.cl.line(bb(26), [("C4", 1), ("A4", 1.5), ("G4", .5), ("F4", 1), ("G4", 1), ("A4", 1), ("F4", 1.6)], 58, legato=0.05)
+    mel.cl.line(
+        bb(26), [("C4", 1), ("A4", 1.5), ("G4", 0.5), ("F4", 1), ("G4", 1), ("A4", 1), ("F4", 1.6)], 58, legato=0.05
+    )
     swell(mel.cl, bb(26) - 0.1, bb(27, 3.6), 60, 74, peak=0.4)
     fl.line(bb(29), [("F5", 1), ("D6", 1.5), ("C6", 1.3)], 60, legato=0.05)
     swell(fl, bb(29) - 0.2, bb(29, 3.8), 50, 66, peak=0.45)
@@ -342,7 +515,15 @@ def piece(out):
     strings(mi, bb(1), mflat, v=80, voices=("cb", "vc", "va"), table=STRM)
     for inst, off in (("cb", -4), ("vc", 0), ("va", -2)):
         p = getattr(mi, inst)
-        p.env([(T(bb(1)), 44 + off), (T(bb(9)), 42 + off), (T(bb(17)), 46 + off), (T(bb(25)), 42 + off), (T(bb(33)), 44 + off)])
+        p.env(
+            [
+                (T(bb(1)), 44 + off),
+                (T(bb(9)), 42 + off),
+                (T(bb(17)), 46 + off),
+                (T(bb(25)), 42 + off),
+                (T(bb(33)), 44 + off),
+            ]
+        )
         p.cc(T(bb(1)), 1, 24)
     for bar in range(1, BARS + 1):
         b = bb(bar)
@@ -371,20 +552,49 @@ def piece(out):
     seats["sh_hp"][4] += 2
     seats["min_hp"][4] += 1
     seats["min_bns"][0] += 4
-    stems = {"bed": [f"bed_{i}" for i in bed.parts], "melody": [f"mel_{i}" for i in mel.parts],
-             "shimmer": [f"sh_{i}" for i in sh.parts], "minor": [f"min_{i}" for i in mi.parts]}
+    stems = {
+        "bed": [f"bed_{i}" for i in bed.parts],
+        "melody": [f"mel_{i}" for i in mel.parts],
+        "shimmer": [f"sh_{i}" for i in sh.parts],
+        "minor": [f"min_{i}" for i in mi.parts],
+    }
     even_out(s, seats, stems)
-    s.write(Path(out) / "piece", meta={
-        "kind": "loop", "bpm": BPM, "bars": BARS, "loop_start": T(PRE), "loop_seconds": L, "key": "F major",
-        "seats": seats, "reverb": {"rt": [2.4, 2.1, 1.7, 1.0], "length": 3.0}, "stems": stems})
+    s.write(
+        Path(out) / "piece",
+        meta={
+            "kind": "loop",
+            "bpm": BPM,
+            "bars": BARS,
+            "loop_start": T(PRE),
+            "loop_seconds": L,
+            "key": "F major",
+            "seats": seats,
+            "reverb": {"rt": [2.4, 2.1, 1.7, 1.0], "length": 3.0},
+            "stems": stems,
+        },
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------
 # phrases: each from silence, one bar of harp and strings before the lead comes in, a last chord left to ring
 
 
-def phrase(out, name, bpm, prog, lead, extra_fn=None, intro=1, ring=2, bed="eighths", strings_level=46,
-           voices=("cb", "vc", "va", "vn"), table=STR, harp_v=40, seats_adj=None):
+def phrase(
+    out,
+    name,
+    bpm,
+    prog,
+    lead,
+    extra_fn=None,
+    intro=1,
+    ring=2,
+    bed="eighths",
+    strings_level=46,
+    voices=("cb", "vc", "va", "vn"),
+    table=STR,
+    harp_v=40,
+    seats_adj=None,
+):
     """prog: per-bar chord lists after the intro bar, which plays the first chord. lead(band, b0) writes the tune from
     the first bar after the intro. The last chord rings for `ring` bars."""
     bars = [[(prog[0][0][0], 4)]] * intro + prog
@@ -425,36 +635,103 @@ def phrase(out, name, bpm, prog, lead, extra_fn=None, intro=1, ring=2, bed="eigh
             seats[inst][i] += dv
     stems = {"all": list(band.parts)}
     even_out(s, seats, stems)
-    s.write(Path(out) / name, meta={"kind": "phrase", "bpm": bpm, "bars": nb + ring, "seats": seats,
-                                    "reverb": {"rt": [2.4, 2.1, 1.7, 1.0], "length": 3.0}, "stems": stems})
+    s.write(
+        Path(out) / name,
+        meta={
+            "kind": "phrase",
+            "bpm": bpm,
+            "bars": nb + ring,
+            "seats": seats,
+            "reverb": {"rt": [2.4, 2.1, 1.7, 1.0], "length": 3.0},
+            "stems": stems,
+        },
+    )
 
 
-A_PROG = [[("F", 4)], [("Am", 4)], [("Bb", 4)], [("Csus", 2), ("C7", 2)], [("Dm", 4)], [("Bb", 4)], [("Gm7", 2), ("C7", 2)], [("F", 4)]]
+A_PROG = [
+    [("F", 4)],
+    [("Am", 4)],
+    [("Bb", 4)],
+    [("Csus", 2), ("C7", 2)],
+    [("Dm", 4)],
+    [("Bb", 4)],
+    [("Gm7", 2), ("C7", 2)],
+    [("F", 4)],
+]
 
 
 def day1(out):
     """The theme on the clarinet, whole, over harp eighths and soft strings."""
+
     def lead(band, b0, T):
-        band.cl.line(b0, TH["P1"] + TH["P2"] + TH["P3"] + TH["P4"][:-1] + [("F5", 5)],
-                     lambda i, b: 60 + (5 if i in (1, 6) else 0), legato=0.05)
+        band.cl.line(
+            b0,
+            TH["P1"] + TH["P2"] + TH["P3"] + TH["P4"][:-1] + [("F5", 5)],
+            lambda i, b: 60 + (5 if i in (1, 6) else 0),
+            legato=0.05,
+        )
         swell(band.cl, b0, b0 + 16, 64, 82)
         swell(band.cl, b0 + 16, b0 + 34, 66, 84, peak=0.45)
 
     def pluck(band, start, T, fin):
         for k in range(1, 9):
             band.vcp.n(start + 4 * k, 0.5, bass_pitch(A_PROG[k - 1][0][0], 36), 54)
+
     phrase(out, "phrase-day-1", 76, A_PROG, lead, pluck, seats_adj={"cl": (0, 2)})
 
 
 def day2(out):
     """The flute's variation: the same contour, lighter, with turns, over tiptoe pizzicato and a rolled harp."""
-    prog = [[("F", 4)], [("C7", 4)], [("Bb", 4)], [("Csus", 2), ("C7", 2)], [("F/A", 4)], [("Bb", 4)], [("Gm7", 2), ("C7", 2)], [("F", 4)]]
+    prog = [
+        [("F", 4)],
+        [("C7", 4)],
+        [("Bb", 4)],
+        [("Csus", 2), ("C7", 2)],
+        [("F/A", 4)],
+        [("Bb", 4)],
+        [("Gm7", 2), ("C7", 2)],
+        [("F", 4)],
+    ]
 
     def lead(band, b0, T):
-        tune = [("C5", 1), ("A5", 1), ("G5", .5), ("A5", .5), ("F5", 1), ("G5", .5), ("A5", .5), ("Bb5", .5), ("A5", .5), ("C6", 2),
-                ("Bb5", 1), ("A5", .5), ("G5", .5), ("F5", .5), ("G5", .5), ("D5", 1), ("G5", 2.5), (None, 1.5),
-                ("C5", 1), ("A5", 1), ("G5", .5), ("A5", .5), ("F5", 1), ("G5", .5), ("A5", .5), ("C6", .5), ("D6", .5), ("D6", 2),
-                ("C6", 1), ("Bb5", .5), ("A5", .5), ("G5", .5), ("F5", .5), ("E5", .5), ("G5", .5), ("F5", 5)]
+        tune = [
+            ("C5", 1),
+            ("A5", 1),
+            ("G5", 0.5),
+            ("A5", 0.5),
+            ("F5", 1),
+            ("G5", 0.5),
+            ("A5", 0.5),
+            ("Bb5", 0.5),
+            ("A5", 0.5),
+            ("C6", 2),
+            ("Bb5", 1),
+            ("A5", 0.5),
+            ("G5", 0.5),
+            ("F5", 0.5),
+            ("G5", 0.5),
+            ("D5", 1),
+            ("G5", 2.5),
+            (None, 1.5),
+            ("C5", 1),
+            ("A5", 1),
+            ("G5", 0.5),
+            ("A5", 0.5),
+            ("F5", 1),
+            ("G5", 0.5),
+            ("A5", 0.5),
+            ("C6", 0.5),
+            ("D6", 0.5),
+            ("D6", 2),
+            ("C6", 1),
+            ("Bb5", 0.5),
+            ("A5", 0.5),
+            ("G5", 0.5),
+            ("F5", 0.5),
+            ("E5", 0.5),
+            ("G5", 0.5),
+            ("F5", 5),
+        ]
         band.fl.line(b0, tune, 66, legato=0.04)
         swell(band.fl, b0 - 0.2, b0 + 8, 56, 76)
         swell(band.fl, b0 + 8, b0 + 16, 58, 80)
@@ -473,35 +750,81 @@ def day2(out):
                 b += d
         band.cel.n(fin + 0.5, 2, "C7", 34)
         band.cel.n(fin + 0.52, 2, "F6", 32)
-    phrase(out, "phrase-day-2", 80, prog, lead, tiptoe, bed="rolls", strings_level=42, harp_v=36,
-           seats_adj={"fl": (0, 2)})
+
+    phrase(
+        out, "phrase-day-2", 80, prog, lead, tiptoe, bed="rolls", strings_level=42, harp_v=36, seats_adj={"fl": (0, 2)}
+    )
 
 
 def day3(out):
     """The solo violin sings the head and its sequences over the harp alone, a cello far below."""
-    prog = [[("F", 4)], [("Am", 4)], [("Gm", 4)], [("Dm", 2), ("C7", 2)], [("Bb", 4)], [("F/A", 4)], [("Gm7", 2), ("C7", 2)], [("F", 4)]]
+    prog = [
+        [("F", 4)],
+        [("Am", 4)],
+        [("Gm", 4)],
+        [("Dm", 2), ("C7", 2)],
+        [("Bb", 4)],
+        [("F/A", 4)],
+        [("Gm7", 2), ("C7", 2)],
+        [("F", 4)],
+    ]
 
     def lead(band, b0, T):
-        tune = TH["P1"] + [("Bb4", 1), ("G5", 1.5), ("F5", .5), ("D5", 1), ("E5", 1), ("F5", 1), ("G5", 1.6), (None, .4),
-                           ("F5", 1), ("D6", 1.5), ("C6", .5), ("Bb5", 1), ("A5", 1), ("G5", 1), ("F5", 1.6), (None, .4),
-                           ("C6", 1.5), ("Bb5", .5), ("A5", 1), ("G5", 1), ("F5", 5)]
+        tune = TH["P1"] + [
+            ("Bb4", 1),
+            ("G5", 1.5),
+            ("F5", 0.5),
+            ("D5", 1),
+            ("E5", 1),
+            ("F5", 1),
+            ("G5", 1.6),
+            (None, 0.4),
+            ("F5", 1),
+            ("D6", 1.5),
+            ("C6", 0.5),
+            ("Bb5", 1),
+            ("A5", 1),
+            ("G5", 1),
+            ("F5", 1.6),
+            (None, 0.4),
+            ("C6", 1.5),
+            ("Bb5", 0.5),
+            ("A5", 1),
+            ("G5", 1),
+            ("F5", 5),
+        ]
         band.sv.line(b0, tune, lambda i, b: 66 + (5 if i in (1, 8, 15) else 0), legato=0.05)
         for a in (0, 8, 16, 24):
             swell(band.sv, b0 + a - 0.2, b0 + a + 8 + (3 if a == 24 else 0), 50, 76, peak=0.5)
-    phrase(out, "phrase-day-3", 72, prog, lead, ring=1.5, voices=("vc",), table={k: (v[1],) for k, v in STR.items()},
-           strings_level=44, harp_v=42, seats_adj={"vc": (0, -2), "sv": (0, 5)})
+
+    phrase(
+        out,
+        "phrase-day-3",
+        72,
+        prog,
+        lead,
+        ring=1.5,
+        voices=("vc",),
+        table={k: (v[1],) for k, v in STR.items()},
+        strings_level=44,
+        harp_v=42,
+        seats_adj={"vc": (0, -2), "sv": (0, 5)},
+    )
 
 
 def day4(out):
     """The oboe states the head and the bassoon answers below, then the two play together in tenths, landing on F."""
+
     def lead(band, b0, T):
         ob, bn = band.ob, band.bns
         ob.line(b0, TH["P1"], 62, legato=0.05)
-        bn.line(b0 + 8, [("D3", 1), ("Bb3", 1.5), ("A3", .5), ("G3", 1), ("F3", 1), ("G3", 1), ("C3", 2)], 58, legato=0.05)
+        bn.line(
+            b0 + 8, [("D3", 1), ("Bb3", 1.5), ("A3", 0.5), ("G3", 1), ("F3", 1), ("G3", 1), ("C3", 2)], 58, legato=0.05
+        )
         ob.line(b0 + 16, TH["P3"], 64, legato=0.05)
         bn.line(b0 + 16, [("A3", 2), ("F3", 2), ("D3", 2), ("Bb2", 2)], 54, legato=0.05)
         ob.line(b0 + 24, TH["P4"][:-1] + [("F5", 5)], 64, legato=0.05)
-        bn.line(b0 + 24, [("A3", 1.5), ("G3", .5), ("F3", 1), ("E3", 1), ("F3", 5)], 56, legato=0.05)
+        bn.line(b0 + 24, [("A3", 1.5), ("G3", 0.5), ("F3", 1), ("E3", 1), ("F3", 5)], 56, legato=0.05)
         swell(ob, b0 - 0.1, b0 + 8, 66, 84)
         swell(ob, b0 + 16, b0 + 24, 68, 86)
         swell(ob, b0 + 24, b0 + 34, 70, 84, peak=0.3)
@@ -513,18 +836,40 @@ def day4(out):
             ch = A_PROG[k - 1][0][0]
             band.vcp.n(start + 4 * k, 0.5, bass_pitch(ch, 36), 54)
             band.vcp.n(start + 4 * k + 2, 0.5, bass_pitch(ch, 36) + 7, 46)
-    phrase(out, "phrase-day-4", 76, A_PROG, lead, bounce, bed="quarters", strings_level=40, harp_v=36,
-           seats_adj={"ob": (0, 2), "bns": (0, 12)})
+
+    phrase(
+        out,
+        "phrase-day-4",
+        76,
+        A_PROG,
+        lead,
+        bounce,
+        bed="quarters",
+        strings_level=40,
+        harp_v=36,
+        seats_adj={"ob": (0, 2), "bns": (0, 12)},
+    )
 
 
 def night1(out):
     """Celesta and harp, slow: the head on the celesta, the harp's echo, P3 and the falling close, over high violins."""
-    prog = [[("F", 4)], [("Dm", 4)], [("Bb", 4)], [("Csus", 4)], [("F", 4)], [("Bb", 4)], [("Gm7", 2), ("C7", 2)], [("Fadd9", 4)]]
+    prog = [
+        [("F", 4)],
+        [("Dm", 4)],
+        [("Bb", 4)],
+        [("Csus", 4)],
+        [("F", 4)],
+        [("Bb", 4)],
+        [("Gm7", 2), ("C7", 2)],
+        [("Fadd9", 4)],
+    ]
 
     def lead(band, b0, T):
         cel = band.cel
         cel.line(b0, [(P(p) + 12 if p else None, d) for p, d in TH["P1"]], 40, legato=0.3)
-        band.hpl.line(b0 + 8, [("D5", 1), ("Bb5", 1.5), ("A5", .5), ("G5", 1), ("F5", 1), ("G5", 1), ("C5", 2)], 44, legato=0.6)
+        band.hpl.line(
+            b0 + 8, [("D5", 1), ("Bb5", 1.5), ("A5", 0.5), ("G5", 1), ("F5", 1), ("G5", 1), ("C5", 2)], 44, legato=0.6
+        )
         cel.line(b0 + 16, [(P(p) + 12 if p else None, d) for p, d in TH["P3"]], 40, legato=0.3)
         cel.line(b0 + 24, [(P(p) + 12 if p else None, d) for p, d in TH["P4"]], 38, legato=0.4)
         band.glk.n(b0 + 28, 4, "C7", 30)
@@ -535,9 +880,22 @@ def night1(out):
             band.vn.n(start, fin - start + 6, p_, 70, legato=0.0)
         band.vn.env([(T(start), 0), (T(start + 6), 30), (T(fin), 32), (T(fin + 7), 0)])
         band.vn.cc(0, 1, 22)
-    phrase(out, "phrase-night-1", 66, prog, lead, high, ring=1.25, bed="rolls", voices=("vc", "va"),
-           table={k: v[1:3] for k, v in STR.items()}, strings_level=33,
-           harp_v=34, seats_adj={"vn": (0, -4), "cel": (0, 4), "hpl": (0, 3)})
+
+    phrase(
+        out,
+        "phrase-night-1",
+        66,
+        prog,
+        lead,
+        high,
+        ring=1.25,
+        bed="rolls",
+        voices=("vc", "va"),
+        table={k: v[1:3] for k, v in STR.items()},
+        strings_level=33,
+        harp_v=34,
+        seats_adj={"vn": (0, -4), "cel": (0, 4), "hpl": (0, 3)},
+    )
 
 
 def night2(out):
@@ -559,9 +917,22 @@ def night2(out):
     def soft(band, start, T, fin):
         band.cel.n(fin + 1, 3, "G6", 28)
         band.cel.n(fin + 2.5, 3, "C7", 26)
-    phrase(out, "phrase-night-2", 60, prog, lead, soft, ring=1, bed="rolls", voices=("vc", "va", "vn"),
-           table={k: v[1:] for k, v in STR.items()}, strings_level=34, harp_v=30,
-           seats_adj={"hpl": (0, 4), "cel": (0, 3)})
+
+    phrase(
+        out,
+        "phrase-night-2",
+        60,
+        prog,
+        lead,
+        soft,
+        ring=1,
+        bed="rolls",
+        voices=("vc", "va", "vn"),
+        table={k: v[1:] for k, v in STR.items()},
+        strings_level=34,
+        harp_v=30,
+        seats_adj={"hpl": (0, 4), "cel": (0, 3)},
+    )
 
 
 def ruin1(out):
@@ -573,9 +944,19 @@ def ruin1(out):
 
     def lead(band, b0, T):
         ob = band.ob
-        ob.line(b0, [("C5", 1), ("Ab5", 1.5), ("G5", .5), ("F5", 1), ("G5", 1), ("Ab5", 1), ("C6", 1.6), (None, .4)], 56, legato=0.05)
-        ob.line(b0 + 12, [("Db5", 1), ("Bb5", 1.5), ("Ab5", .5), ("F5", 1), ("E5", 2), (None, 2)], 54, legato=0.05)
-        ob.line(b0 + 16, [("C5", 1), ("Ab5", 1.5), ("G5", .5), ("F5", 1), ("Eb5", 1), ("F5", 1), ("G5", 6)], 54, legato=0.05)
+        ob.line(
+            b0,
+            [("C5", 1), ("Ab5", 1.5), ("G5", 0.5), ("F5", 1), ("G5", 1), ("Ab5", 1), ("C6", 1.6), (None, 0.4)],
+            56,
+            legato=0.05,
+        )
+        ob.line(b0 + 12, [("Db5", 1), ("Bb5", 1.5), ("Ab5", 0.5), ("F5", 1), ("E5", 2), (None, 2)], 54, legato=0.05)
+        ob.line(
+            b0 + 16,
+            [("C5", 1), ("Ab5", 1.5), ("G5", 0.5), ("F5", 1), ("Eb5", 1), ("F5", 1), ("G5", 6)],
+            54,
+            legato=0.05,
+        )
         swell(ob, b0 - 0.1, b0 + 8, 60, 76)
         swell(ob, b0 + 12, b0 + 16, 58, 72)
         swell(ob, b0 + 16, b0 + 30, 60, 74, peak=0.35)
@@ -591,8 +972,22 @@ def ruin1(out):
         for k in range(0, 8, 2):
             ch = ([[("Fm", 4)]] + prog)[k][0][0]
             band.vcp.n(start + 4 * k, 0.5, bass_pitch(ch, 36), 50)
-    phrase(out, "phrase-ruin-1", 66, prog, lead, dust, ring=1.5, bed="quarters", voices=("cb", "vc", "va"), table=table,
-           strings_level=42, harp_v=32, seats_adj={"ob": (0, 2)})
+
+    phrase(
+        out,
+        "phrase-ruin-1",
+        66,
+        prog,
+        lead,
+        dust,
+        ring=1.5,
+        bed="quarters",
+        voices=("cb", "vc", "va"),
+        table=table,
+        strings_level=42,
+        harp_v=32,
+        seats_adj={"ob": (0, 2)},
+    )
 
 
 def main(out):

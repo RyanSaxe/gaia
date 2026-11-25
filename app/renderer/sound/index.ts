@@ -10,7 +10,13 @@ import { type Solo, createSoundscape } from "./soundscape.ts";
 import { sizeOf } from "./shelf.ts";
 import { type BookState, type Moment, createListener } from "./listener.ts";
 import { loadBank, loadMusic } from "./bank.ts";
-import { type Chunk, type MusicPlan, PHRASES, STEMS, createMusic } from "./music.ts";
+import {
+  type Chunk,
+  type MusicPlan,
+  PHRASES,
+  STEMS,
+  createMusic,
+} from "./music.ts";
 import { BEDS } from "./hearing.ts";
 import { gainOf, soundLevels } from "./levels.ts";
 
@@ -45,22 +51,48 @@ function seeded(seed: number): () => number {
 }
 
 /** Renders a walk's moments offline, stereo at `rate`, as the page would have played them. */
-async function renderWalk(moments: readonly Moment[], how: Rendering, rate = 48000): Promise<AudioBuffer> {
+async function renderWalk(
+  moments: readonly Moment[],
+  how: Rendering,
+  rate = 48000,
+): Promise<AudioBuffer> {
   const first = moments[0];
   const last = moments.at(-1);
-  if (first === undefined || last === undefined) throw new Error("Nothing was recorded: call record(true) and walk first.");
+  if (first === undefined || last === undefined)
+    throw new Error("Nothing was recorded: call record(true) and walk first.");
   const seconds = last.t - first.t + 0.5;
-  const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: Math.ceil(seconds * rate), sampleRate: rate });
+  const ctx = new OfflineAudioContext({
+    numberOfChannels: 2,
+    length: Math.ceil(seconds * rate),
+    sampleRate: rate,
+  });
   const random = seeded(17);
   // An offline render runs in one pass, so every recording must be decoded before it starts.
   const bank = await loadBank(ctx, true);
   await bank.beds.ready(BEDS);
-  const scape = createSoundscape(ctx, bank, ctx.destination, 0, random, how.solo ?? null);
+  const scape = createSoundscape(
+    ctx,
+    bank,
+    ctx.destination,
+    0,
+    random,
+    how.solo ?? null,
+  );
   if (how.world === false) scape.world.gain.value = 0;
   let music = null;
   if (how.music !== undefined && how.music !== null) {
     const score = loadMusic(ctx, true);
-    await Promise.all([score.chunks.ready(STEMS.flatMap((stem) => Array.from({ length: score.chunk.count }, (_, k): Chunk => `${stem}:${k}`))), score.phrases.ready(PHRASES)]);
+    await Promise.all([
+      score.chunks.ready(
+        STEMS.flatMap((stem) =>
+          Array.from(
+            { length: score.chunk.count },
+            (_, k): Chunk => `${stem}:${k}`,
+          ),
+        ),
+      ),
+      score.phrases.ready(PHRASES),
+    ]);
     music = createMusic(ctx, score, scape.music, how.music, 0, seeded(29));
   }
   const listener = createListener(scape, music);
@@ -72,7 +104,8 @@ async function renderWalk(moments: readonly Moment[], how: Rendering, rate = 480
 function wavBase64(b: AudioBuffer): string {
   const n = b.length;
   const view = new DataView(new ArrayBuffer(44 + n * 4));
-  const text = (at: number, s: string): void => [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  const text = (at: number, s: string): void =>
+    [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
   text(0, "RIFF");
   view.setUint32(4, 36 + n * 4, true);
   text(8, "WAVEfmt ");
@@ -88,24 +121,39 @@ function wavBase64(b: AudioBuffer): string {
   const l = b.getChannelData(0);
   const r = b.getChannelData(1);
   for (let i = 0; i < n; i++) {
-    view.setInt16(44 + i * 4, Math.max(-1, Math.min(1, l[i] as number)) * 32767, true);
-    view.setInt16(46 + i * 4, Math.max(-1, Math.min(1, r[i] as number)) * 32767, true);
+    view.setInt16(
+      44 + i * 4,
+      Math.max(-1, Math.min(1, l[i] as number)) * 32767,
+      true,
+    );
+    view.setInt16(
+      46 + i * 4,
+      Math.max(-1, Math.min(1, r[i] as number)) * 32767,
+      true,
+    );
   }
   const bytes = new Uint8Array(view.buffer);
   let s = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
 }
 
 export function createSound(world: WorldHandle, book: () => BookState): Sound {
-  const recording = new URLSearchParams(location.search).get("sound") === "record";
+  const recording =
+    new URLSearchParams(location.search).get("sound") === "record";
   const moments: Moment[] = [];
   let keeping = false;
 
   if (recording) {
     return {
       frame() {
-        if (keeping) moments.push({ t: performance.now() / 1000, ear: world.earshot(), book: book() });
+        if (keeping)
+          moments.push({
+            t: performance.now() / 1000,
+            ear: world.earshot(),
+            book: book(),
+          });
       },
       hook: {
         /** Starts logging what the person hears each frame, clearing the log first, or stops. */
@@ -115,9 +163,16 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
           return moments.length;
         },
         /** The log's size so far, in frames and seconds. */
-        kept: () => ({ frames: moments.length, seconds: moments.length < 2 ? 0 : (moments.at(-1) as Moment).t - (moments[0] as Moment).t }),
+        kept: () => ({
+          frames: moments.length,
+          seconds:
+            moments.length < 2
+              ? 0
+              : (moments.at(-1) as Moment).t - (moments[0] as Moment).t,
+        }),
         /** Renders the logged walk as the page would have played it, as base64 WAV. */
-        render: async (how: Rendering = {}) => wavBase64(await renderWalk(moments, how)),
+        render: async (how: Rendering = {}) =>
+          wavBase64(await renderWalk(moments, how)),
         /** The log itself, for checking what was heard. */
         moments: () => moments,
         /** Loads a log that `moments` returned, so a walk can be rendered again without walking it. */
@@ -139,19 +194,37 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
   const score = loadMusic(ctx);
   let held = (): number => score.chunks.held() + score.phrases.held();
   // The first chunk of each always-playing part decodes while the world bakes. The rest decode as they come due.
-  const loaded = Promise.all([loadBank(ctx), score.chunks.ready(["bed:0", "melody:0"])]);
+  const loaded = Promise.all([
+    loadBank(ctx),
+    score.chunks.ready(["bed:0", "melody:0"]),
+  ]);
   // Sound starts once the world is built and the wait has lifted, and fades in from there.
   world.onLifted(() => {
     void loaded.then(([bank]) => {
-      const short = [...Object.values(bank.paper), ...Object.values(bank.steps).map((s) => s.buffer)].reduce((sum, b) => sum + sizeOf(b), 0);
-      held = () => bank.beds.held() + short + score.chunks.held() + score.phrases.held();
+      const short = [
+        ...Object.values(bank.paper),
+        ...Object.values(bank.steps).map((s) => s.buffer),
+      ].reduce((sum, b) => sum + sizeOf(b), 0);
+      held = () =>
+        bank.beds.held() + short + score.chunks.held() + score.phrases.held();
       const start = ctx.currentTime + 0.1;
       const scape = createSoundscape(ctx, bank, meter, start, Math.random);
       soundLevels().watch((l) => {
-        scape.music.gain.setTargetAtTime(gainOf(l.music), ctx.currentTime, LEVEL_EASE);
-        scape.world.gain.setTargetAtTime(gainOf(l.world), ctx.currentTime, LEVEL_EASE);
+        scape.music.gain.setTargetAtTime(
+          gainOf(l.music),
+          ctx.currentTime,
+          LEVEL_EASE,
+        );
+        scape.world.gain.setTargetAtTime(
+          gainOf(l.world),
+          ctx.currentTime,
+          LEVEL_EASE,
+        );
       });
-      listener = createListener(scape, createMusic(ctx, score, scape.music, PLAN, start, Math.random));
+      listener = createListener(
+        scape,
+        createMusic(ctx, score, scape.music, PLAN, start, Math.random),
+      );
     });
   });
   // Browsers allow sound only after the person interacts with the page, and a hidden page plays none.
@@ -160,11 +233,18 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
   };
   window.addEventListener("pointerdown", wake);
   window.addEventListener("keydown", wake);
-  document.addEventListener("visibilitychange", () => (document.hidden ? void ctx.suspend() : wake()));
+  document.addEventListener("visibilitychange", () =>
+    document.hidden ? void ctx.suspend() : wake(),
+  );
   const samples = new Float32Array(meter.fftSize);
   return {
     frame() {
-      if (listener !== null && ctx.state === "running") listener.hear({ t: ctx.currentTime, ear: world.earshot(), book: book() });
+      if (listener !== null && ctx.state === "running")
+        listener.hear({
+          t: ctx.currentTime,
+          ear: world.earshot(),
+          book: book(),
+        });
     },
     hook: {
       /** The audio context's state: running, suspended until a touch, or closed. */

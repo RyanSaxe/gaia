@@ -10,7 +10,8 @@ import { TILE, type WorldSpec, frameOf, worldOf } from "@gaia/terrain";
 import { goneAt } from "./woods.ts";
 
 /** How far a thing of `radius` meters stays visible on a screen of `focal` device pixels per radian: until it is too small (`goneAt`) or the air dissolves it. */
-export const seenTo = (radius: number, focal: number): number => Math.min(AIR.dissolveEnd, goneAt(radius, focal));
+export const seenTo = (radius: number, focal: number): number =>
+  Math.min(AIR.dissolveEnd, goneAt(radius, focal));
 
 export interface TileLayer<T> {
   /** Its name in reports. */
@@ -29,7 +30,10 @@ export interface ThingTiles {
    * Opens a new world and drops every tile. `given` has the things the bake
    * already placed for some tiles, by layer name and then by "ti,tj".
    */
-  open(spec: WorldSpec, given?: ReadonlyMap<string, ReadonlyMap<string, readonly unknown[]>>): void;
+  open(
+    spec: WorldSpec,
+    given?: ReadonlyMap<string, ReadonlyMap<string, readonly unknown[]>>,
+  ): void;
   /**
    * Call every frame with the person's position. It keeps the near tiles,
    * drops far ones, and places one changed layer. Without `requesting` it
@@ -52,11 +56,18 @@ export interface ThingTiles {
    * layer's sight, so its things could have been seen appearing: the
    * layer, the person's distance and that sight.
    */
-  late(): readonly { readonly layer: string; readonly distance: number; readonly sight: number }[];
+  late(): readonly {
+    readonly layer: string;
+    readonly distance: number;
+    readonly sight: number;
+  }[];
   /** How many tiles each layer has, for reports. */
   held(): Record<string, number>;
   /** The tiles each layer has requested and not yet received, by name: a count and a few keys. */
-  pending(): Record<string, { readonly count: number; readonly some: readonly string[] }>;
+  pending(): Record<
+    string,
+    { readonly count: number; readonly some: readonly string[] }
+  >;
 }
 
 /** Meters beyond its sight at which a tile is requested, so a tile from a worker arrives before any of it can be seen. */
@@ -101,7 +112,9 @@ export function createThingTiles(focal: () => number): ThingTiles {
     const frame = frameOf(spec as WorldSpec);
     const per = Math.ceil(frame.n / TILE.size);
     const out: [number, number][] = [];
-    for (let tj = 0; tj < per; tj++) for (let ti = 0; ti < per; ti++) if (distance(ti, tj, x, z) <= reach) out.push([ti, tj]);
+    for (let tj = 0; tj < per; tj++)
+      for (let ti = 0; ti < per; ti++)
+        if (distance(ti, tj, x, z) <= reach) out.push([ti, tj]);
     return out;
   };
   /** How far a layer's tiles reach: as far as its largest thing can be seen. */
@@ -111,7 +124,12 @@ export function createThingTiles(focal: () => number): ThingTiles {
    * meters that it does not have. The promises resolve when the tiles arrive.
    * A failed tile is dropped with a warning and requested again next time.
    */
-  const request = <T>(h: Held<T>, x: number, z: number, lead = AHEAD): Promise<void>[] => {
+  const request = <T>(
+    h: Held<T>,
+    x: number,
+    z: number,
+    lead = AHEAD,
+  ): Promise<void>[] => {
     const mine = generation;
     const waits: Promise<void>[] = [];
     for (const [ti, tj] of within(x, z, sight(h) + lead)) {
@@ -137,7 +155,10 @@ export function createThingTiles(focal: () => number): ThingTiles {
         },
         (error: unknown) => {
           h.pending.delete(key);
-          console.warn(`tiles: ${h.layer.name} tile ${key} failed and will be requested again`, error);
+          console.warn(
+            `tiles: ${h.layer.name} tile ${key} failed and will be requested again`,
+            error,
+          );
         },
       );
       h.pending.set(key, wait);
@@ -153,17 +174,29 @@ export function createThingTiles(focal: () => number): ThingTiles {
         if (h.placed.has(key)) continue;
         const [ti, tj] = key.split(",").map(Number) as [number, number];
         const d = distance(ti, tj, person.x, person.z);
-        if (d < sight(h)) lates.push({ layer: h.layer.name, distance: Math.round(d), sight: Math.round(sight(h)) });
+        if (d < sight(h))
+          lates.push({
+            layer: h.layer.name,
+            distance: Math.round(d),
+            sight: Math.round(sight(h)),
+          });
       }
     }
     h.placed = new Set(keys);
     const things: T[] = [];
-    for (const key of keys) for (const t of h.tiles.get(key) as readonly T[]) things.push(t);
+    for (const key of keys)
+      for (const t of h.tiles.get(key) as readonly T[]) things.push(t);
     h.layer.place(things);
   };
   return {
     add(layer) {
-      all.push({ layer: layer, tiles: new Map(), pending: new Map(), placed: new Set(), dirty: false } as Held<unknown>);
+      all.push({
+        layer: layer,
+        tiles: new Map(),
+        pending: new Map(),
+        placed: new Set(),
+        dirty: false,
+      } as Held<unknown>);
     },
     open(next, given) {
       spec = next;
@@ -175,7 +208,8 @@ export function createThingTiles(focal: () => number): ThingTiles {
         h.tiles.clear();
         h.pending.clear();
         h.placed = new Set();
-        for (const [key, things] of given?.get(h.layer.name) ?? []) h.tiles.set(key, things);
+        for (const [key, things] of given?.get(h.layer.name) ?? [])
+          h.tiles.set(key, things);
         h.dirty = true;
       }
     },
@@ -217,7 +251,14 @@ export function createThingTiles(focal: () => number): ThingTiles {
       lates = [];
       return out;
     },
-    held: () => Object.fromEntries(all.map((h) => [h.layer.name, h.tiles.size])),
-    pending: () => Object.fromEntries(all.map((h) => [h.layer.name, { count: h.pending.size, some: [...h.pending.keys()].slice(0, 6) }])),
+    held: () =>
+      Object.fromEntries(all.map((h) => [h.layer.name, h.tiles.size])),
+    pending: () =>
+      Object.fromEntries(
+        all.map((h) => [
+          h.layer.name,
+          { count: h.pending.size, some: [...h.pending.keys()].slice(0, 6) },
+        ]),
+      ),
   };
 }

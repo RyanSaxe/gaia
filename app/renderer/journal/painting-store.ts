@@ -24,7 +24,10 @@ export function browserPaintings(): PaintingStore {
         resolve(null);
       }
     }));
-  const run = <T>(mode: IDBTransactionMode, act: (shelf: IDBObjectStore) => IDBRequest<T>): Promise<T | null> =>
+  const run = <T>(
+    mode: IDBTransactionMode,
+    act: (shelf: IDBObjectStore) => IDBRequest<T>,
+  ): Promise<T | null> =>
     db().then(
       (d) =>
         new Promise((resolve) => {

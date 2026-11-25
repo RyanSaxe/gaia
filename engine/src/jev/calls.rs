@@ -256,17 +256,30 @@ fn nearness(a: &str, b: &str) -> usize {
         let rest = rest.split('#').next().unwrap_or(rest);
         rest.split('/').map(str::to_string).collect()
     };
-    path(a).iter().zip(path(b).iter()).take_while(|(x, y)| x == y).count()
+    path(a)
+        .iter()
+        .zip(path(b).iter())
+        .take_while(|(x, y)| x == y)
+        .count()
 }
 
 /// A link question over `candidates`, each described by `words`, plus "outside". When the candidates don't all
 /// fit in `QUESTION_MOST`, it offers as many as fit, nearest to the question's file first, so the question always
 /// goes out.
-fn link_choice(text: &str, file: &str, candidates: &[String], words: impl Fn(&String) -> String, outside: &str) -> Value {
+fn link_choice(
+    text: &str,
+    file: &str,
+    candidates: &[String],
+    words: impl Fn(&String) -> String,
+    outside: &str,
+) -> Value {
     let all: BTreeMap<String, String> = candidates
         .iter()
         .map(|c| (c.clone(), words(c)))
-        .chain(std::iter::once(("outside".to_string(), outside.to_string())))
+        .chain(std::iter::once((
+            "outside".to_string(),
+            outside.to_string(),
+        )))
         .collect();
     let whole = choice(text, &all);
     if tokens(&whole.to_string()) <= QUESTION_MOST {
@@ -278,7 +291,10 @@ fn link_choice(text: &str, file: &str, candidates: &[String], words: impl Fn(&St
         let options: BTreeMap<String, String> = near[..n]
             .iter()
             .map(|(_, c)| ((*c).clone(), words(c)))
-            .chain(std::iter::once(("outside".to_string(), outside.to_string())))
+            .chain(std::iter::once((
+                "outside".to_string(),
+                outside.to_string(),
+            )))
             .collect();
         choice(text, &options)
     };
@@ -554,7 +570,10 @@ mod tests {
         let words = "[a]\nx = \"one\"\n";
         let commented = "# Why a is here.\n[a]\n\n# A note.\nx   =   \"one\" # trailing\n";
         assert_eq!(vocab_version(words, 1), vocab_version(commented, 1));
-        assert_ne!(vocab_version(words, 1), vocab_version("[a]\nx = \"two\"\n", 1));
+        assert_ne!(
+            vocab_version(words, 1),
+            vocab_version("[a]\nx = \"two\"\n", 1)
+        );
         assert_ne!(vocab_version(words, 1), vocab_version(words, 2));
     }
 
@@ -587,7 +606,9 @@ mod tests {
                             q.id
                         ),
                         Some("score") => assert!(
-                            q.json["criteria"].as_array().is_some_and(|levels| levels.len() > 1),
+                            q.json["criteria"]
+                                .as_array()
+                                .is_some_and(|levels| levels.len() > 1),
                             "{} has levels",
                             q.id
                         ),

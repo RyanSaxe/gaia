@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { BIOME_PRIMITIVES, RELIEF_PRIMITIVES } from "@gaia/primitives";
-import { type CodeFacts, type FileFacts, Library, rand, seedOf } from "@gaia/schema";
-import { OPENING, type Terrain, amongCode, bakeTerrain, clearOfCode, openingSpot, openingView, returnTo, lastSpotAt, waterDepthAt } from "@gaia/terrain";
+import {
+  type CodeFacts,
+  type FileFacts,
+  Library,
+  rand,
+  seedOf,
+} from "@gaia/schema";
+import {
+  OPENING,
+  type Terrain,
+  amongCode,
+  bakeTerrain,
+  clearOfCode,
+  openingSpot,
+  openingView,
+  returnTo,
+  lastSpotAt,
+  waterDepthAt,
+} from "@gaia/terrain";
 import { composeWorld, judgeWorld, layoutWorld } from "@gaia/world";
 import { fakeJevClient } from "@gaia/world/testing";
 import type { WorldDocument } from "../../world-service/protocol.ts";
@@ -11,9 +28,17 @@ import { LOOKS } from "./looks.ts";
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 
 /** A world's terrain as the page bakes it, and where the world opens the person. */
-function landing(document: WorldDocument): { terrain: Terrain; at: ReturnType<typeof openingSpot>; world: WorldDocument["world"] } {
+function landing(document: WorldDocument): {
+  terrain: Terrain;
+  at: ReturnType<typeof openingSpot>;
+  world: WorldDocument["world"];
+} {
   const terrain = bakeTerrain(openedWorld(document).spec, lib);
-  return { terrain, at: openingSpot(terrain, document.world), world: document.world };
+  return {
+    terrain,
+    at: openingSpot(terrain, document.world),
+    world: document.world,
+  };
 }
 
 /** A random codebase from `seed`: a few packages of folders and files of every size, with random imports and dependencies. */
@@ -28,11 +53,33 @@ function randomFacts(seed: number): CodeFacts {
       for (let k = 0; k < count; k++) {
         const path = `packages/p${p}/src/f${f}/file${k}.ts`;
         const lines = 20 + Math.floor(r.next() ** 2 * 900);
-        files.push({ path, language: "typescript", lines, symbols: [{ name: `main${k}`, kind: "function", exported: true, line: 1, lines: Math.max(1, Math.round(lines / 2)) }], imports: [], importedBy: [] });
+        files.push({
+          path,
+          language: "typescript",
+          lines,
+          symbols: [
+            {
+              name: `main${k}`,
+              kind: "function",
+              exported: true,
+              line: 1,
+              lines: Math.max(1, Math.round(lines / 2)),
+            },
+          ],
+          imports: [],
+          importedBy: [],
+        });
       }
     }
   }
-  files.push({ path: "README.md", language: "markdown", lines: 80, symbols: [], imports: [], importedBy: [] });
+  files.push({
+    path: "README.md",
+    language: "markdown",
+    lines: 80,
+    symbols: [],
+    imports: [],
+    importedBy: [],
+  });
   for (const f of files) {
     if (r.next() < 0.5) continue;
     const other = files[Math.floor(r.next() * files.length)] as FileFacts;
@@ -40,32 +87,85 @@ function randomFacts(seed: number): CodeFacts {
     (f.imports as string[]).push(other.path);
     (other.importedBy as string[]).push(f.path);
   }
-  const entities = Array.from({ length: packages }, (_, p) => ({ path: `packages/p${p}`, name: `@demo/p${p}`, form: "package" as const, manifest: `packages/p${p}/package.json`, files: files.filter((f) => f.path.startsWith(`packages/p${p}/`)).length, lines: 600, exports: 10, dependsOn: p > 0 ? ["packages/p0"] : [], dependents: p === 0 ? Array.from({ length: packages - 1 }, (_, q) => `packages/p${q + 1}`) : [] }));
-  return { projectId: `opening-${seed}`, files, entities, repository: { name: `demo-${seed}`, files: files.length, lines: files.reduce((n, f) => n + f.lines, 0) } };
+  const entities = Array.from({ length: packages }, (_, p) => ({
+    path: `packages/p${p}`,
+    name: `@demo/p${p}`,
+    form: "package" as const,
+    manifest: `packages/p${p}/package.json`,
+    files: files.filter((f) => f.path.startsWith(`packages/p${p}/`)).length,
+    lines: 600,
+    exports: 10,
+    dependsOn: p > 0 ? ["packages/p0"] : [],
+    dependents:
+      p === 0
+        ? Array.from({ length: packages - 1 }, (_, q) => `packages/p${q + 1}`)
+        : [],
+  }));
+  return {
+    projectId: `opening-${seed}`,
+    files,
+    entities,
+    repository: {
+      name: `demo-${seed}`,
+      files: files.length,
+      lines: files.reduce((n, f) => n + f.lines, 0),
+    },
+  };
 }
 
 async function randomWorld(seed: number): Promise<WorldDocument> {
   const facts = randomFacts(seed);
   const jev = fakeJevClient();
-  const world = layoutWorld(facts, await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev)));
-  return { root: facts.repository.name, facts, world, summary: "a test", judged: {} };
+  const world = layoutWorld(
+    facts,
+    await composeWorld(facts, LOOKS, jev, await judgeWorld(facts, LOOKS, jev)),
+  );
+  return {
+    root: facts.repository.name,
+    facts,
+    world,
+    summary: "a test",
+    judged: {},
+  };
 }
 
 /** The person stands among the code, on dry ground, clear of things, with something that stands for code in view. */
-function expectAmongCode({ terrain, at, world }: ReturnType<typeof landing>, what: string): void {
-  expect(amongCode(world, at.x, at.z), `${what} lands among the code`).toBe(true);
-  expect(waterDepthAt(terrain, at.x, at.z), `${what} lands on dry ground`).toBeLessThanOrEqual(OPENING.dry);
+function expectAmongCode(
+  { terrain, at, world }: ReturnType<typeof landing>,
+  what: string,
+): void {
+  expect(amongCode(world, at.x, at.z), `${what} lands among the code`).toBe(
+    true,
+  );
+  expect(
+    waterDepthAt(terrain, at.x, at.z),
+    `${what} lands on dry ground`,
+  ).toBeLessThanOrEqual(OPENING.dry);
   // A few meters clear of every tree, bush, stone, building and landmark, so turning around never fills the view.
-  expect(clearOfCode(world, at.x, at.z), `${what} lands clear of what stands for code`).toBe(true);
+  expect(
+    clearOfCode(world, at.x, at.z),
+    `${what} lands clear of what stands for code`,
+  ).toBe(true);
   expect(Number.isFinite(at.yaw), what).toBe(true);
-  expect(openingView(terrain, world, at.x, at.z, at.yaw).seen, `${what}: something that stands for code is in view`).toBeGreaterThan(0);
+  expect(
+    openingView(terrain, world, at.x, at.z, at.yaw).seen,
+    `${what}: something that stands for code is in view`,
+  ).toBeGreaterThan(0);
 }
 
 describe("where a person first stands in a world from code", () => {
   // A fake Jev judges each random world, which then bakes whole, in five to eight seconds each.
-  it("is among the code in made-up codebases of every shape, wherever their rivers run", { timeout: 300_000 }, async () => {
-    for (const seed of [2, 4, 5]) expectAmongCode(landing(await randomWorld(seed)), `made-up world ${seed}`);
-  });
+  it(
+    "is among the code in made-up codebases of every shape, wherever their rivers run",
+    { timeout: 300_000 },
+    async () => {
+      for (const seed of [2, 4, 5])
+        expectAmongCode(
+          landing(await randomWorld(seed)),
+          `made-up world ${seed}`,
+        );
+    },
+  );
 });
 
 describe("where a person comes back to in a world they were in before", () => {
@@ -74,12 +174,35 @@ describe("where a person comes back to in a world they were in before", () => {
   const house = world.things[0] as (typeof world.things)[number];
   const stood = lastSpotAt(world, house.x + 6, house.z - 2, Math.PI / 2);
   /** The world after an edit: `edit` changes its things, and so its layout. */
-  const edited = (edit: (things: (typeof world.things)[number][]) => (typeof world.things)[number][]): typeof world => ({ ...world, things: edit([...world.things]) });
+  const edited = (
+    edit: (
+      things: (typeof world.things)[number][],
+    ) => (typeof world.things)[number][],
+  ): typeof world => ({ ...world, things: edit([...world.things]) });
 
   it("is exactly where they stood while the code is laid out as it was, beside the thing they stood by once an edit has moved it, and the opening view once it is gone", () => {
-    expect(returnTo(structuredClone(world), stood)).toEqual({ x: house.x + 6, z: house.z - 2, yaw: Math.PI / 2, exact: true });
-    const moved = edited((things) => things.map((t) => (t.path === house.path ? { ...t, x: t.x + 40, z: t.z - 25 } : t)));
-    expect(returnTo(moved, stood)).toEqual({ x: house.x + 46, z: house.z - 27, yaw: Math.PI / 2, exact: false });
-    expect(returnTo(edited((things) => things.filter((t) => t.path !== house.path)), stood)).toBeNull();
+    expect(returnTo(structuredClone(world), stood)).toEqual({
+      x: house.x + 6,
+      z: house.z - 2,
+      yaw: Math.PI / 2,
+      exact: true,
+    });
+    const moved = edited((things) =>
+      things.map((t) =>
+        t.path === house.path ? { ...t, x: t.x + 40, z: t.z - 25 } : t,
+      ),
+    );
+    expect(returnTo(moved, stood)).toEqual({
+      x: house.x + 46,
+      z: house.z - 27,
+      yaw: Math.PI / 2,
+      exact: false,
+    });
+    expect(
+      returnTo(
+        edited((things) => things.filter((t) => t.path !== house.path)),
+        stood,
+      ),
+    ).toBeNull();
   });
 });

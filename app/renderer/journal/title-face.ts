@@ -9,8 +9,11 @@ export const TITLE_FAMILY = `"Gaia title", Georgia, "Times New Roman", serif`;
 
 /** Starts loading the face when the journal is created, so it is ready before the book first opens. */
 export function loadTitleFace(): void {
-  if (typeof FontFace === "undefined" || typeof document === "undefined") return;
-  const face = new FontFace("Gaia title", `url(${NAME_FACE})`, { weight: "600" });
+  if (typeof FontFace === "undefined" || typeof document === "undefined")
+    return;
+  const face = new FontFace("Gaia title", `url(${NAME_FACE})`, {
+    weight: "600",
+  });
   document.fonts.add(face);
   void face.load();
 }

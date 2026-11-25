@@ -16,12 +16,17 @@ export interface LevelStore {
 
 const KEY = "gaia.sound";
 const FULL: Levels = { music: 1, world: 1 };
-const clamp01 = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1);
+const clamp01 = (v: unknown): number =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
 
 function stored(): Levels {
   try {
-    const kept = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Levels> | null;
-    return kept === null ? FULL : { music: clamp01(kept.music), world: clamp01(kept.world) };
+    const kept = JSON.parse(
+      localStorage.getItem(KEY) ?? "null",
+    ) as Partial<Levels> | null;
+    return kept === null
+      ? FULL
+      : { music: clamp01(kept.music), world: clamp01(kept.world) };
   } catch {
     return FULL;
   }

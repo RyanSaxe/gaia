@@ -30,11 +30,15 @@ export const WILDS = {
 } as const;
 
 /** Radius of a circle just inside the lattice's square. Past it, region covers continue outward from the land's edge. */
-export const landRadius = (t: Terrain): number => t.spec.size / 2 + TERRAIN.skirt - 8;
+export const landRadius = (t: Terrain): number =>
+  t.spec.size / 2 + TERRAIN.skirt - 8;
 
 /** The integer hash shared with the GLSL twin. It maps a lattice corner and an octave to a number in [0, 1). */
 export function wildHash(ix: number, iz: number, octave: number): number {
-  let h = Math.imul(ix | 0, 0x27d4eb2d) ^ Math.imul(iz | 0, 0x165667b1) ^ Math.imul(octave + 1, 0x5bd1e995);
+  let h =
+    Math.imul(ix | 0, 0x27d4eb2d) ^
+    Math.imul(iz | 0, 0x165667b1) ^
+    Math.imul(octave + 1, 0x5bd1e995);
   h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
   h = Math.imul(h ^ (h >>> 12), 0x297a2d39);
   h ^= h >>> 15;
@@ -63,7 +67,8 @@ export function wildNoise(x: number, z: number): number {
     const b = wildHash(ix + 1, iz, o);
     const c = wildHash(ix, iz + 1, o);
     const d = wildHash(ix + 1, iz + 1, o);
-    sum += amp * (a + (b - a) * u + (c - a + (a - b - c + d) * u) * v - 0.5) * 2;
+    sum +=
+      amp * (a + (b - a) * u + (c - a + (a - b - c + d) * u) * v - 0.5) * 2;
     norm += amp;
     amp *= 0.5;
     wave *= 0.5;
@@ -73,7 +78,8 @@ export function wildNoise(x: number, z: number): number {
 
 const bases = new WeakMap<Terrain, number>();
 /** Sets the wild base for a window of the land (`Lattice.beyond`) from its whole world, since the window cannot measure it. */
-export const knowWildBase = (t: Terrain, base: number): void => void bases.set(t, base);
+export const knowWildBase = (t: Terrain, base: number): void =>
+  void bases.set(t, base);
 /** The wild roll's mean height: the mean height of the land just inside the rim, so the wild is level with the land and the rim is a crest between them. */
 export function wildBase(t: Terrain): number {
   let base = bases.get(t);
@@ -83,7 +89,11 @@ export function wildBase(t: Terrain): number {
     let sum = 0;
     for (let s = 0; s < n; s++) {
       const a = (s / n) * Math.PI * 2;
-      sum += heightAt(t.lattice, Math.cos(a) * (h.x - TERRAIN.rimWidth), Math.sin(a) * (h.z - TERRAIN.rimWidth));
+      sum += heightAt(
+        t.lattice,
+        Math.cos(a) * (h.x - TERRAIN.rimWidth),
+        Math.sin(a) * (h.z - TERRAIN.rimWidth),
+      );
     }
     base = sum / n;
     bases.set(t, base);
@@ -94,14 +104,17 @@ export function wildBase(t: Terrain): number {
 const smooth = (t: number): number => fade(Math.max(0, Math.min(1, t)));
 
 /** Half the side of the square where the baked lattice ends and the wild land begins. The lattice includes the rim and skirt. */
-export const landHalf = (t: Pick<Terrain, "spec">): number => -frameOf(t.spec).origin - TERRAIN.spacing;
+export const landHalf = (t: Pick<Terrain, "spec">): number =>
+  -frameOf(t.spec).origin - TERRAIN.spacing;
 
 /** Signed distance from a point to the `landHalf` square, negative inside it. */
 export function wildPast(t: Terrain, x: number, z: number): number {
   const h = landHalf(t);
   const qx = Math.abs(x) - h;
   const qz = Math.abs(z) - h;
-  return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0);
+  return (
+    Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0)
+  );
 }
 
 /**
@@ -110,9 +123,22 @@ export function wildPast(t: Terrain, x: number, z: number): number {
  * `WILDS.settle` meters past the land's square, it is the ground itself.
  */
 export function wildRollAt(t: Terrain, x: number, z: number): number {
-  const swell = smooth((wildPast(t, x, z) - WILDS.hillsIn[0]) / (WILDS.hillsIn[1] - WILDS.hillsIn[0]));
-  const hill = Math.max(-1, Math.min(1, wildNoise(x * WILDS.hillScale + 5000, z * WILDS.hillScale - 3000) * 1.6));
-  return wildBase(t) + Math.max(-1, Math.min(1, wildNoise(x, z) * 1.6)) * (WILDS.variation / 2) + swell * hill * (WILDS.hills / 2);
+  const swell = smooth(
+    (wildPast(t, x, z) - WILDS.hillsIn[0]) /
+      (WILDS.hillsIn[1] - WILDS.hillsIn[0]),
+  );
+  const hill = Math.max(
+    -1,
+    Math.min(
+      1,
+      wildNoise(x * WILDS.hillScale + 5000, z * WILDS.hillScale - 3000) * 1.6,
+    ),
+  );
+  return (
+    wildBase(t) +
+    Math.max(-1, Math.min(1, wildNoise(x, z) * 1.6)) * (WILDS.variation / 2) +
+    swell * hill * (WILDS.hills / 2)
+  );
 }
 
 /**
@@ -131,7 +157,8 @@ export function wildHeightAt(t: Terrain, x: number, z: number): number {
 }
 
 /** Whether a point lies past the land, in the wild that represents no code. */
-export const inWilds = (t: Terrain, x: number, z: number): boolean => Math.max(Math.abs(x), Math.abs(z)) > landHalf(t);
+export const inWilds = (t: Terrain, x: number, z: number): boolean =>
+  Math.max(Math.abs(x), Math.abs(z)) > landHalf(t);
 
 /** The ground's height anywhere: the baked lattice on the land, the wild land past it. */
 export function groundHeightAt(t: Terrain, x: number, z: number): number {
@@ -144,7 +171,8 @@ export function groundHeightAt(t: Terrain, x: number, z: number): number {
 // them. The field map draws the same functions, so the map and the world
 // agree.
 
-const smoothstep = (a: number, b: number, v: number): number => smooth((v - a) / (b - a));
+const smoothstep = (a: number, b: number, v: number): number =>
+  smooth((v - a) / (b - a));
 
 /** The wild cover's share at a point, 0 to 1: 0 on the land and 1 farther out, with a noisy, patchy boundary between. */
 export function wildShare(t: Terrain, x: number, z: number): number {
@@ -154,10 +182,12 @@ export function wildShare(t: Terrain, x: number, z: number): number {
 }
 
 /** The blend between the wild's two covers at a point, 0 for tall green grass and 1 for golden steppe, in patches a hundred meters or more across. */
-export const wildPatch = (x: number, z: number): number => smoothstep(-0.3, 0.3, wildNoise(x * 1.5 + 97, z * 1.5 + 97));
+export const wildPatch = (x: number, z: number): number =>
+  smoothstep(-0.3, 0.3, wildNoise(x * 1.5 + 97, z * 1.5 + 97));
 
 /** How scrubby the wild is at a point, 0 to 1, in patches a few hundred meters across. Thickets are denser where it is high. */
-export const wildScrub = (x: number, z: number): number => smoothstep(-0.1, 0.5, wildNoise(x * 0.6 + 1000, z * 0.6 + 1000));
+export const wildScrub = (x: number, z: number): number =>
+  smoothstep(-0.1, 0.5, wildNoise(x * 0.6 + 1000, z * 0.6 + 1000));
 
 export const WILD_THICKETS = {
   /** Side in meters of the world grid cells that may hold a thicket, and the base chance a cell holds one. */
@@ -188,17 +218,27 @@ export interface WildBush {
  * sparser over open grass. Each bush is the one for the cover it grows in
  * (`wildPatch`).
  */
-export function wildThicket(t: Terrain, ci: number, cj: number): { readonly bushes: readonly WildBush[] } | null {
+export function wildThicket(
+  t: Terrain,
+  ci: number,
+  cj: number,
+): { readonly bushes: readonly WildBush[] } | null {
   const g = WILD_THICKETS;
   const cx = (ci + 0.5) * g.cell;
   const cz = (cj + 0.5) * g.cell;
   const past = wildPast(t, cx, cz);
   if (past < 0) return null;
   const scrub = 0.15 + 1.7 * wildScrub(cx, cz);
-  if (wildHash(ci, cj, 101) >= g.chance * scrub * smoothstep(g.thinIn[0], g.thinIn[1], past)) return null;
+  if (
+    wildHash(ci, cj, 101) >=
+    g.chance * scrub * smoothstep(g.thinIn[0], g.thinIn[1], past)
+  )
+    return null;
   const tx = (ci + wildHash(ci, cj, 102)) * g.cell;
   const tz = (cj + wildHash(ci, cj, 103)) * g.cell;
-  const members = g.members[0] + Math.floor(wildHash(ci, cj, 104) * (g.members[1] - g.members[0] + 1));
+  const members =
+    g.members[0] +
+    Math.floor(wildHash(ci, cj, 104) * (g.members[1] - g.members[0] + 1));
   const bushes: WildBush[] = [];
   for (let m = 0; m < members; m++) {
     const a = wildHash(ci, cj, 110 + m) * Math.PI * 2;
@@ -209,7 +249,9 @@ export function wildThicket(t: Terrain, ci: number, cj: number): { readonly bush
     bushes.push({
       x,
       z,
-      scale: (g.scale[0] + (g.scale[1] - g.scale[0]) * wildHash(ci, cj, 140 + m)) * (m === 0 ? 1 : 0.85),
+      scale:
+        (g.scale[0] + (g.scale[1] - g.scale[0]) * wildHash(ci, cj, 140 + m)) *
+        (m === 0 ? 1 : 0.85),
       yaw: wildHash(ci, cj, 130 + m) * Math.PI * 2,
       hue: (wildHash(ci, cj, 150 + m) - 0.5) * 0.04,
       seed: wildHash(ci, cj, 160 + m),

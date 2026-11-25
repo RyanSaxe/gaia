@@ -9,7 +9,13 @@
 // each copy crosses the band as it would if the person walked away from it.
 
 import type * as THREE from "three";
-import { type FarForm, type FarFormData, farFormData, farFormFrom, startFarBake } from "@gaia/render";
+import {
+  type FarForm,
+  type FarFormData,
+  farFormData,
+  farFormFrom,
+  startFarBake,
+} from "@gaia/render";
 import { contentHash, type FarStore } from "./far-store.ts";
 import { FAR, type FarForms, GONE } from "./woods.ts";
 
@@ -23,7 +29,12 @@ import { FAR, type FarForms, GONE } from "./woods.ts";
  * with a slot keeps it until a form without one weighs `outweigh` times as
  * much, so a few copies crossing the band never trade slots.
  */
-export const FAR_TURN = { seconds: 280, weighEvery: 0.5, weighAfter: 8, outweigh: 2 } as const;
+export const FAR_TURN = {
+  seconds: 280,
+  weighEvery: 0.5,
+  weighAfter: 8,
+  outweigh: 2,
+} as const;
 
 /** A bake's budget per frame: at most `views` views of a form, within `ms` milliseconds. */
 export interface BakePace {
@@ -78,14 +89,20 @@ interface Form {
   failed: boolean;
 }
 
-const nextFrame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+const nextFrame = (): Promise<void> =>
+  new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
 /**
  * Streams `forms`' far forms into the cards' slots, reading and storing them
  * in `store`. Bakes run at `pace.opening` until the world opens and at
  * `pace.walking` after.
  */
-export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, store: Promise<FarStore | null>, pace: { readonly opening: BakePace; readonly walking: BakePace }): FarStream {
+export function createFarStream(
+  renderer: THREE.WebGLRenderer,
+  forms: FarForms,
+  store: Promise<FarStore | null>,
+  pace: { readonly opening: BakePace; readonly walking: BakePace },
+): FarStream {
   let slots = 0;
   const state: Form[] = [];
   /** The form in each slot, or -1. `open` creates it after `fit` sizes the slots, with no more slots than forms. */
@@ -102,7 +119,16 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
   let undecided = true;
 
   const formOf = (k: number): Form => {
-    while (state.length <= k) state.push({ slot: -1, turn: 0, target: 0, weight: 0, key: null, held: 0, failed: false });
+    while (state.length <= k)
+      state.push({
+        slot: -1,
+        turn: 0,
+        target: 0,
+        weight: 0,
+        key: null,
+        held: 0,
+        failed: false,
+      });
     return state[k] as Form;
   };
   /**
@@ -126,14 +152,17 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
     const t0 = performance.now();
     const f = formOf(k);
     const entry = forms.plants[k];
-    if (entry === undefined) throw new Error(`No far form ${k}; there are ${forms.count}.`);
+    if (entry === undefined)
+      throw new Error(`No far form ${k}; there are ${forms.count}.`);
     const kept = await store;
     let plant = entry.plant;
     if (f.key === null) {
       plant ??= await entry.again();
       f.key = contentHash(plant.parts, plant.motion, plant.palette, entry.px);
     }
-    const data = (await kept?.get(f.key).catch(() => undefined)) as FarFormData | undefined;
+    const data = (await kept?.get(f.key).catch(() => undefined)) as
+      | FarFormData
+      | undefined;
     const stored = data === undefined ? null : farFormFrom(data);
     let form: FarForm;
     if (stored !== null) {
@@ -192,7 +221,10 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
         f.slot = -1;
         f.failed = true;
         undecided = true;
-        console.warn(`far forms: form ${k} could not be brought and draws its full form`, error);
+        console.warn(
+          `far forms: form ${k} could not be brought and draws its full form`,
+          error,
+        );
       },
     );
     bringing = run.finally(() => {
@@ -208,10 +240,17 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
   const ranked = (): number[] => {
     const score = (k: number): number => {
       const f = formOf(k);
-      return f.held > 0 ? Number.POSITIVE_INFINITY : f.slot !== -1 && f.target === 1 ? f.weight * FAR_TURN.outweigh + 1 : f.weight;
+      return f.held > 0
+        ? Number.POSITIVE_INFINITY
+        : f.slot !== -1 && f.target === 1
+          ? f.weight * FAR_TURN.outweigh + 1
+          : f.weight;
     };
     return Array.from({ length: forms.count }, (_, k) => k)
-      .filter((k) => !formOf(k).failed && (formOf(k).weight > 0 || formOf(k).held > 0))
+      .filter(
+        (k) =>
+          !formOf(k).failed && (formOf(k).weight > 0 || formOf(k).held > 0),
+      )
       .sort((a, b) => score(b) - score(a) || a - b);
   };
 
@@ -235,7 +274,9 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
     const want = new Set(ranked().slice(0, slots));
     const lacking = [...want].filter((k) => formOf(k).slot === -1).length;
     let freeing = Math.max(0, lacking - owner.filter((o) => o === -1).length);
-    const unwanted = state.flatMap((f, k) => (f.slot >= 0 && !want.has(k) ? [k] : [])).sort((a, b) => formOf(a).weight - formOf(b).weight || a - b);
+    const unwanted = state
+      .flatMap((f, k) => (f.slot >= 0 && !want.has(k) ? [k] : []))
+      .sort((a, b) => formOf(a).weight - formOf(b).weight || a - b);
     for (const k of unwanted) {
       formOf(k).target = freeing > 0 ? 0 : 1;
       freeing--;
@@ -259,7 +300,10 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
     for (const [k, f] of state.entries()) {
       if (f.slot < 0) continue;
       const was = f.turn;
-      f.turn = f.target === 1 ? Math.min(1, f.turn + step) : Math.max(0, f.turn - step);
+      f.turn =
+        f.target === 1
+          ? Math.min(1, f.turn + step)
+          : Math.max(0, f.turn - step);
       if (f.turn !== f.target) moving = true;
       if (f.turn === 0 && f.target === 0) {
         owner[f.slot] = -1;
@@ -298,13 +342,22 @@ export function createFarStream(renderer: THREE.WebGLRenderer, forms: FarForms, 
       const moving = turn(dt);
       if (opened) {
         sinceWeighed += dt;
-        if (sinceWeighed >= FAR_TURN.weighEvery || Math.hypot(eye.x - weighedAt.x, eye.y - weighedAt.y, eye.z - weighedAt.z) >= FAR_TURN.weighAfter) weigh(eye, focal);
+        if (
+          sinceWeighed >= FAR_TURN.weighEvery ||
+          Math.hypot(
+            eye.x - weighedAt.x,
+            eye.y - weighedAt.y,
+            eye.z - weighedAt.z,
+          ) >= FAR_TURN.weighAfter
+        )
+          weigh(eye, focal);
         if (undecided && bringing === null) {
           undecided = false;
           decide();
         }
       }
-      if (opened && waiting.length > 0 && idle(moving)) for (const wake of waiting.splice(0)) wake();
+      if (opened && waiting.length > 0 && idle(moving))
+        for (const wake of waiting.splice(0)) wake();
     },
     async hold(k) {
       const f = formOf(k);

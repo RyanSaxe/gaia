@@ -54,13 +54,19 @@ impl Snapshot {
     /// there is no commit or the commit has nothing under `root`.
     pub fn of(root: &Path) -> Snapshot {
         let at = head_of(root).and_then(|commit| At::read(root, commit));
-        Snapshot { root: root.to_path_buf(), at }
+        Snapshot {
+            root: root.to_path_buf(),
+            at,
+        }
     }
 
     /// `root` as it was at `commit`, when that commit has anything under it.
     pub fn at(root: &Path, commit: &str) -> Option<Snapshot> {
         let at = At::read(root, commit.to_string())?;
-        Some(Snapshot { root: root.to_path_buf(), at: Some(at) })
+        Some(Snapshot {
+            root: root.to_path_buf(),
+            at: Some(at),
+        })
     }
 
     /// The commit read, or None when the snapshot is the disk.
@@ -73,7 +79,10 @@ impl Snapshot {
         match &self.at {
             Some(at) => {
                 let files = at.files(&self.root);
-                let texts = files.iter().map(|f| (f.path.clone(), f.text.as_deref().map(Arc::from))).collect();
+                let texts = files
+                    .iter()
+                    .map(|f| (f.path.clone(), f.text.as_deref().map(Arc::from)))
+                    .collect();
                 if let Ok(mut cache) = texts_cache().lock() {
                     cache.insert(self.root.clone(), (at.commit.clone(), Arc::new(texts)));
                 }
@@ -89,13 +98,22 @@ impl Snapshot {
     /// texts per commit, or per change on disk.
     pub fn text(&self, path: &str) -> Option<Arc<str>> {
         let relative = Path::new(path);
-        if path.is_empty() || !relative.components().all(|c| matches!(c, Component::Normal(_))) {
+        if path.is_empty()
+            || !relative
+                .components()
+                .all(|c| matches!(c, Component::Normal(_)))
+        {
             return None;
         }
         let Some(at) = &self.at else {
             return disk_text(&self.root, relative);
         };
-        let cached = |cache: &Texts| cache.get(&self.root).filter(|(c, _)| *c == at.commit).map(|(_, t)| t.clone());
+        let cached = |cache: &Texts| {
+            cache
+                .get(&self.root)
+                .filter(|(c, _)| *c == at.commit)
+                .map(|(_, t)| t.clone())
+        };
         let texts = match texts_cache().lock().ok().and_then(|c| cached(&c)) {
             Some(t) => t,
             None => {
@@ -123,15 +141,24 @@ fn git(root: &Path) -> Command {
 
 /// The commit checked out, when `root` is in git and has one.
 fn head_of(root: &Path) -> Option<String> {
-    let out = git(root).args(["rev-parse", "--verify", "-q", "HEAD"]).output().ok()?;
-    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|c| !c.is_empty())
+    let out = git(root)
+        .args(["rev-parse", "--verify", "-q", "HEAD"])
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+        .filter(|c| !c.is_empty())
 }
 
 impl At {
     /// The blobs of `commit`'s tree under `root`, or None when it has none there.
     fn read(root: &Path, commit: String) -> Option<At> {
         // Run in the root, `ls-tree` lists only the blobs under it, with paths relative to it.
-        let out = git(root).args(["ls-tree", "-r", "-z", "-l", &commit]).output().ok()?;
+        let out = git(root)
+            .args(["ls-tree", "-r", "-z", "-l", &commit])
+            .output()
+            .ok()?;
         if !out.status.success() {
             return None;
         }
@@ -142,7 +169,9 @@ impl At {
                 continue;
             };
             let mut meta = meta.split_whitespace();
-            let (Some(mode), Some(kind), Some(object), Some(size)) = (meta.next(), meta.next(), meta.next(), meta.next()) else {
+            let (Some(mode), Some(kind), Some(object), Some(size)) =
+                (meta.next(), meta.next(), meta.next(), meta.next())
+            else {
                 continue;
             };
             // Skip submodules, which point to another project, and symlinks, which could point anywhere.
@@ -161,10 +190,20 @@ impl At {
 
     /// Every blob's bytes, from one `git cat-file --batch`. It leaves out a blob that a partial clone never fetched.
     fn files(&self, root: &Path) -> Vec<Walked> {
-        let Ok(mut child) = git(root).args(["cat-file", "--batch"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn() else {
+        let Ok(mut child) = git(root)
+            .args(["cat-file", "--batch"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
             return Vec::new();
         };
-        let ids: String = self.blobs.iter().map(|(_, id, _)| format!("{id}\n")).collect();
+        let ids: String = self
+            .blobs
+            .iter()
+            .map(|(_, id, _)| format!("{id}\n"))
+            .collect();
         let mut stdin = child.stdin.take();
         let writer = std::thread::spawn(move || {
             if let Some(s) = stdin.as_mut() {
@@ -179,7 +218,11 @@ impl At {
                 if reader.read_line(&mut header).unwrap_or(0) == 0 {
                     break;
                 }
-                let Some(size) = header.split_whitespace().nth(2).and_then(|s| s.parse::<usize>().ok()) else {
+                let Some(size) = header
+                    .split_whitespace()
+                    .nth(2)
+                    .and_then(|s| s.parse::<usize>().ok())
+                else {
                     continue;
                 };
                 let mut bytes = vec![0; size + 1];
@@ -219,7 +262,10 @@ fn disk_text(root: &Path, relative: &Path) -> Option<Arc<str>> {
     }
     let meta = std::fs::metadata(&full).ok()?;
     let stamp = (meta.modified().ok()?, meta.len());
-    let mut cache = CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock().ok()?;
+    let mut cache = CACHE
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .ok()?;
     if let Some((m, l, text)) = cache.get(&full)
         && (*m, *l) == stamp
     {
@@ -243,7 +289,12 @@ fn disk(root: &Path) -> Vec<Walked> {
         .require_git(false)
         // A symlink could point anywhere on the disk, and a cloned repository's author chooses its targets.
         .follow_links(false)
-        .filter_entry(|e| e.file_name() != ".git" && !(e.depth() > 0 && e.file_type().is_some_and(|t| t.is_dir()) && e.path().join(".git").exists()))
+        .filter_entry(|e| {
+            e.file_name() != ".git"
+                && !(e.depth() > 0
+                    && e.file_type().is_some_and(|t| t.is_dir())
+                    && e.path().join(".git").exists())
+        })
         .build();
     for entry in walker.flatten() {
         if !entry.file_type().is_some_and(|t| t.is_file()) {
@@ -271,7 +322,8 @@ mod tests {
 
     /// A fresh folder for one test, and a function that runs git in it.
     fn repo(name: &str) -> (PathBuf, impl Fn(&[&str]) -> String) {
-        let root = std::env::temp_dir().join(format!("gaia-snapshot-{name}-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("gaia-snapshot-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         let at = root.clone();
@@ -283,7 +335,11 @@ mod tests {
                 .args(args)
                 .output()
                 .unwrap();
-            assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+            assert!(
+                out.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&out.stderr)
+            );
             String::from_utf8_lossy(&out.stdout).trim().to_string()
         };
         (root, git)
@@ -301,7 +357,12 @@ mod tests {
         git(&["commit", "-q", "-m", "one"]);
         // A submodule is only a pointer to another project's commit.
         let one = git(&["rev-parse", "HEAD"]);
-        git(&["update-index", "--add", "--cacheinfo", &format!("160000,{one},vendor/lib")]);
+        git(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("160000,{one},vendor/lib"),
+        ]);
         git(&["commit", "-q", "-m", "a submodule"]);
         let head = git(&["rev-parse", "HEAD"]);
         std::fs::write(root.join("a.ts"), "export const a = 2;\n").unwrap();
@@ -311,8 +372,18 @@ mod tests {
         let snapshot = Snapshot::of(&root);
         assert_eq!(snapshot.commit(), Some(head.as_str()));
         let paths: Vec<String> = snapshot.files().into_iter().map(|w| w.path).collect();
-        assert_eq!(paths, vec![".gitignore".to_string(), "a.ts".to_string(), "sub/b.ts".to_string()]);
-        assert_eq!(snapshot.text("a.ts").as_deref(), Some("export const a = 1;\n"));
+        assert_eq!(
+            paths,
+            vec![
+                ".gitignore".to_string(),
+                "a.ts".to_string(),
+                "sub/b.ts".to_string()
+            ]
+        );
+        assert_eq!(
+            snapshot.text("a.ts").as_deref(),
+            Some("export const a = 1;\n")
+        );
         assert_eq!(snapshot.text("new.ts"), None);
         assert_eq!(snapshot.text("ignored.ts"), None);
         assert_eq!(snapshot.text("../a.ts"), None);
@@ -336,8 +407,16 @@ mod tests {
         std::fs::write(root.join("ignored.ts"), "export const i = 4;\n").unwrap();
         // A worktree's .git is a file that points at its repository. A nested repository's .git is a folder.
         std::fs::create_dir_all(root.join(".claude/worktrees/agent")).unwrap();
-        std::fs::write(root.join(".claude/worktrees/agent/.git"), "gitdir: /elsewhere\n").unwrap();
-        std::fs::write(root.join(".claude/worktrees/agent/a.ts"), "export const a = 1;\n").unwrap();
+        std::fs::write(
+            root.join(".claude/worktrees/agent/.git"),
+            "gitdir: /elsewhere\n",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join(".claude/worktrees/agent/a.ts"),
+            "export const a = 1;\n",
+        )
+        .unwrap();
         std::fs::create_dir_all(root.join("vendor/lib/.git")).unwrap();
         std::fs::write(root.join("vendor/lib/b.ts"), "export const b = 2;\n").unwrap();
         let snapshot = Snapshot::of(&root);
@@ -346,5 +425,4 @@ mod tests {
         assert_eq!(paths, vec![".gitignore".to_string(), "a.ts".to_string()]);
         std::fs::remove_dir_all(&root).unwrap();
     }
-
 }

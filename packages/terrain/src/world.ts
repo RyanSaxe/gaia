@@ -4,13 +4,44 @@
 // continuous. A tile baked alone (`bakeTile`) matches a whole-world bake byte
 // for byte.
 
-import { type AnyPrimitive, type BuildContext, type Blueprint, type Landform, type Library, rand, seedOf } from "@gaia/schema";
+import {
+  type AnyPrimitive,
+  type BuildContext,
+  type Blueprint,
+  type Landform,
+  type Library,
+  rand,
+  seedOf,
+} from "@gaia/schema";
 import { fbm, fieldAt } from "@gaia/primitives";
 import { resolveParams } from "@gaia/realize";
-import { RELIEF_BUDGET, type ReliefReport, measureRelief, withinBudget } from "./budget.ts";
+import {
+  RELIEF_BUDGET,
+  type ReliefReport,
+  measureRelief,
+  withinBudget,
+} from "./budget.ts";
 import { type LandSite, LAND_WARP, warpPoint } from "./land.ts";
-import { type Lattice, type LatticeFrame, createLattice, worldOf, worldOfZ } from "./lattice.ts";
-import { BANK_REACH, POND_REACH, type SolvedPond, type SolvedStream, carvePond, carveStream, nearPond, shoreField, shoreMargin, solvePond, solveStream } from "./water.ts";
+import {
+  type Lattice,
+  type LatticeFrame,
+  createLattice,
+  worldOf,
+  worldOfZ,
+} from "./lattice.ts";
+import {
+  BANK_REACH,
+  POND_REACH,
+  type SolvedPond,
+  type SolvedStream,
+  carvePond,
+  carveStream,
+  nearPond,
+  shoreField,
+  shoreMargin,
+  solvePond,
+  solveStream,
+} from "./water.ts";
 import { type LandOutline, pastTheEdge, withinLand } from "./edge.ts";
 import { routeRivers, valleySurface } from "./rivers.ts";
 
@@ -123,9 +154,14 @@ export const planOf = (t: Terrain): TerrainPlan => ({
   ponds: t.ponds.map((pond, i) => ({ pond, depth: t.pondDepths[i] as number })),
 });
 
-type ErasedBuild = (params: unknown, ctx: BuildContext, input: unknown) => unknown;
+type ErasedBuild = (
+  params: unknown,
+  ctx: BuildContext,
+  input: unknown,
+) => unknown;
 
-export const regionExtent = (spec: WorldSpec): number => spec.size / Math.sqrt(Math.max(1, spec.regions.length));
+export const regionExtent = (spec: WorldSpec): number =>
+  spec.size / Math.sqrt(Math.max(1, spec.regions.length));
 
 /** Builds each region's landform from its stored biome blueprint. */
 export function landformsOf(spec: WorldSpec, lib: Library): Landform[] {
@@ -134,17 +170,29 @@ export function landformsOf(spec: WorldSpec, lib: Library): Landform[] {
     const slot = r.biome.slots.relief;
     if (slot === undefined) throw new Error(`Region ${r.id} has no relief.`);
     const p: AnyPrimitive = lib.get(slot.use);
-    if (p.role !== "Relief") throw new Error(`${p.id} is not a Relief primitive.`);
+    if (p.role !== "Relief")
+      throw new Error(`${p.id} is not a Relief primitive.`);
     const root = rand(seedOf(r.id));
-    const params = resolveParams(p, slot.params, root.fork("params"), `${r.id}.relief`);
-    return (p.build as ErasedBuild)(params, { rand: root.fork("relief"), facts: { extent } }, null) as Landform;
+    const params = resolveParams(
+      p,
+      slot.params,
+      root.fork("params"),
+      `${r.id}.relief`,
+    );
+    return (p.build as ErasedBuild)(
+      params,
+      { rand: root.fork("relief"), facts: { extent } },
+      null,
+    ) as Landform;
   });
   // `routeRivers` routes rivers over the composed ground, rim included, and carves their valleys into every landform.
   const weights = new Float64Array(spec.regions.length);
-  const ground = (lfs: readonly Landform[]) => (x: number, z: number): number => {
-    regionWeights(spec, x, z, weights);
-    return blended(spec, lfs, weights, x, z) + rimAt(spec, x, z);
-  };
+  const ground =
+    (lfs: readonly Landform[]) =>
+    (x: number, z: number): number => {
+      regionWeights(spec, x, z, weights);
+      return blended(spec, lfs, weights, x, z) + rimAt(spec, x, z);
+    };
   return routeRivers(spec, own, ground, (x, z) => regionAt(spec, x, z));
 }
 
@@ -177,7 +225,9 @@ const fields = new WeakMap<WorldSpec, RegionField>();
 function regionField(spec: WorldSpec): RegionField {
   const had = fields.get(spec);
   if (had !== undefined) return had;
-  const sites = spec.regions.map((r) => r.sites ?? [{ x: r.x, z: r.z, reach: r.reach ?? 0 }]);
+  const sites = spec.regions.map(
+    (r) => r.sites ?? [{ x: r.x, z: r.z, reach: r.reach ?? 0 }],
+  );
   const half = spec.size / 2 + TERRAIN.skirt + TERRAIN.warp * 2;
   const x0 = -half;
   const n = Math.max(1, Math.ceil((half * 2) / FIELD_CELL));
@@ -199,8 +249,14 @@ function regionField(spec: WorldSpec): RegionField {
         list.forEach((s, k) => {
           const dx = Math.max(ax - s.x, 0, s.x - ax - FIELD_CELL);
           const dz = Math.max(az - s.z, 0, s.z - az - FIELD_CELL);
-          const fx = Math.max(Math.abs(s.x - ax), Math.abs(s.x - ax - FIELD_CELL));
-          const fz = Math.max(Math.abs(s.z - az), Math.abs(s.z - az - FIELD_CELL));
+          const fx = Math.max(
+            Math.abs(s.x - ax),
+            Math.abs(s.x - ax - FIELD_CELL),
+          );
+          const fz = Math.max(
+            Math.abs(s.z - az),
+            Math.abs(s.z - az - FIELD_CELL),
+          );
           const reach = s.reach ?? 0;
           const l = Math.hypot(dx, dz) - reach;
           los[k] = l;
@@ -217,13 +273,21 @@ function regionField(spec: WorldSpec): RegionField {
         if ((regionLo[r] as number) > bestHi + TERRAIN.blend) return;
         const los = lo[r] as Float64Array;
         const from = order.length;
-        for (let k = 0; k < list.length; k++) if ((los[k] as number) <= (regionHi[r] as number)) order.push(k);
+        for (let k = 0; k < list.length; k++)
+          if ((los[k] as number) <= (regionHi[r] as number)) order.push(k);
         runs.push(r, from, order.length);
       });
     }
   }
   starts[n * n] = runs.length;
-  const field = { x0, n, sites, starts, runs: Int32Array.from(runs), order: Int32Array.from(order) };
+  const field = {
+    x0,
+    n,
+    sites,
+    starts,
+    runs: Int32Array.from(runs),
+    order: Int32Array.from(order),
+  };
   fields.set(spec, field);
   return field;
 }
@@ -245,7 +309,12 @@ export function regionAt(spec: WorldSpec, x: number, z: number): number {
  * measures distances from the warped point (`warpPoint`), so region borders
  * curve. Heights blend by these weights.
  */
-export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
+export function regionWeights(
+  spec: WorldSpec,
+  x: number,
+  z: number,
+  out: Float64Array,
+): void {
   const [wx, wz] = warpPoint(x, z);
   const f = regionField(spec);
   const i = Math.floor((wx - f.x0) / FIELD_CELL);
@@ -256,11 +325,19 @@ export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float6
   const within = i >= 0 && j >= 0 && i < f.n && j < f.n;
   if (within) {
     const c = j * f.n + i;
-    for (let q = f.starts[c] as number; q < (f.starts[c + 1] as number); q += 3) {
+    for (
+      let q = f.starts[c] as number;
+      q < (f.starts[c + 1] as number);
+      q += 3
+    ) {
       const r = f.runs[q] as number;
       const list = f.sites[r] as readonly LandSite[];
       let d = Infinity;
-      for (let o = f.runs[q + 1] as number; o < (f.runs[q + 2] as number); o++) {
+      for (
+        let o = f.runs[q + 1] as number;
+        o < (f.runs[q + 2] as number);
+        o++
+      ) {
         const s = list[f.order[o] as number] as LandSite;
         d = Math.min(d, Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0));
       }
@@ -270,27 +347,50 @@ export function regionWeights(spec: WorldSpec, x: number, z: number, out: Float6
   } else {
     nearest = outsideDistances(f, wx, wz, out);
   }
-  for (let r = 0; r < count; r++) out[r] = 1 - smooth(((out[r] as number) - nearest) / TERRAIN.blend);
+  for (let r = 0; r < count; r++)
+    out[r] = 1 - smooth(((out[r] as number) - nearest) / TERRAIN.blend);
 }
 
 /** Side in meters of the cells `siteCellsOf` sorts sites into, for points outside the region field. */
 const OUTSIDE_CELL = 64;
 /** Every region's sites sorted into cells, with each cell's corner and largest reach. Cached per `RegionField`. */
 interface SiteCells {
-  readonly cells: readonly { readonly x0: number; readonly z0: number; readonly reach: number; readonly sites: readonly (readonly [number, LandSite])[] }[];
+  readonly cells: readonly {
+    readonly x0: number;
+    readonly z0: number;
+    readonly reach: number;
+    readonly sites: readonly (readonly [number, LandSite])[];
+  }[];
 }
 const siteCells = new WeakMap<RegionField, SiteCells>();
 function siteCellsOf(f: RegionField): SiteCells {
   let had = siteCells.get(f);
   if (had !== undefined) return had;
-  const byCell = new Map<string, { x0: number; z0: number; reach: number; sites: (readonly [number, LandSite])[] }>();
+  const byCell = new Map<
+    string,
+    {
+      x0: number;
+      z0: number;
+      reach: number;
+      sites: (readonly [number, LandSite])[];
+    }
+  >();
   f.sites.forEach((list, r) => {
     for (const s of list) {
       const cx = Math.floor(s.x / OUTSIDE_CELL);
       const cz = Math.floor(s.z / OUTSIDE_CELL);
       const key = `${cx},${cz}`;
       let cell = byCell.get(key);
-      if (cell === undefined) byCell.set(key, (cell = { x0: cx * OUTSIDE_CELL, z0: cz * OUTSIDE_CELL, reach: 0, sites: [] }));
+      if (cell === undefined)
+        byCell.set(
+          key,
+          (cell = {
+            x0: cx * OUTSIDE_CELL,
+            z0: cz * OUTSIDE_CELL,
+            reach: 0,
+            sites: [],
+          }),
+        );
       cell.sites.push([r, s]);
       cell.reach = Math.max(cell.reach, s.reach ?? 0);
     }
@@ -307,18 +407,37 @@ function siteCellsOf(f: RegionField): SiteCells {
  * within `TERRAIN.blend` of the nearest, and gives the same distances as
  * measuring every site.
  */
-function outsideDistances(f: RegionField, wx: number, wz: number, out: Float64Array): number {
+function outsideDistances(
+  f: RegionField,
+  wx: number,
+  wz: number,
+  out: Float64Array,
+): number {
   const { cells } = siteCellsOf(f);
   // A lower bound on the distance to any site in each cell, from the cell's bounds and its largest reach.
-  const least = cells.map((c) => Math.hypot(Math.max(c.x0 - wx, 0, wx - c.x0 - OUTSIDE_CELL), Math.max(c.z0 - wz, 0, wz - c.z0 - OUTSIDE_CELL)) - c.reach);
+  const least = cells.map(
+    (c) =>
+      Math.hypot(
+        Math.max(c.x0 - wx, 0, wx - c.x0 - OUTSIDE_CELL),
+        Math.max(c.z0 - wz, 0, wz - c.z0 - OUTSIDE_CELL),
+      ) - c.reach,
+  );
   // Start from the cell with the smallest bound, so the first pass skips nearly every other cell.
   let first = 0;
-  for (let k = 1; k < least.length; k++) if ((least[k] as number) < (least[first] as number)) first = k;
+  for (let k = 1; k < least.length; k++)
+    if ((least[k] as number) < (least[first] as number)) first = k;
   let nearest = Infinity;
-  for (const [, s] of cells[first]?.sites ?? []) nearest = Math.min(nearest, Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0));
+  for (const [, s] of cells[first]?.sites ?? [])
+    nearest = Math.min(
+      nearest,
+      Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0),
+    );
   for (let pass = 0; pass < 2; pass++) {
     // Pass 0 finds the nearest distance. Pass 1 records every site within `TERRAIN.blend` of it, since no other has weight.
-    const within = pass === 0 ? (): number => nearest : (): number => nearest + TERRAIN.blend;
+    const within =
+      pass === 0
+        ? (): number => nearest
+        : (): number => nearest + TERRAIN.blend;
     cells.forEach((c, k) => {
       if ((least[k] as number) > within()) return;
       for (const [r, s] of c.sites) {
@@ -338,36 +457,71 @@ function outsideDistances(f: RegionField, wx: number, wz: number, out: Float64Ar
  * gradient. A region with 0 blend weight gets no share, so each region's core
  * shows only its own cover.
  */
-export function coverWeights(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
+export function coverWeights(
+  spec: WorldSpec,
+  x: number,
+  z: number,
+  out: Float64Array,
+): void {
   regionWeights(spec, x, z, out);
   coverFromBlend(spec, x, z, out);
 }
 
-function coverFromBlend(spec: WorldSpec, x: number, z: number, out: Float64Array): void {
+function coverFromBlend(
+  spec: WorldSpec,
+  x: number,
+  z: number,
+  out: Float64Array,
+): void {
   const u = x / TERRAIN.driftWavelength;
   const v = z / TERRAIN.driftWavelength;
   let total = 0;
   for (let i = 0; i < spec.regions.length; i++) {
     const w = out[i] as number;
     if (w <= 0) continue;
-    const patch = Math.exp(TERRAIN.drift * fbm(DRIFT_SEED + i * 131, u, v, 2, 0.5));
+    const patch = Math.exp(
+      TERRAIN.drift * fbm(DRIFT_SEED + i * 131, u, v, 2, 0.5),
+    );
     const c = (w * patch) ** TERRAIN.driftEdge;
     out[i] = c;
     total += c;
   }
-  for (let i = 0; i < spec.regions.length; i++) out[i] = (out[i] as number) / total;
+  for (let i = 0; i < spec.regions.length; i++)
+    out[i] = (out[i] as number) / total;
 }
 
 /** Height of the rim around the land's rounded rectangle (`pastTheEdge`), varied by noise. */
 export function rimAt(land: LandOutline, x: number, z: number): number {
-  const rise = smooth((pastTheEdge(land, x, z) - TERRAIN.rimOvershoot + TERRAIN.rimWidth) / TERRAIN.rimWidth);
+  const rise = smooth(
+    (pastTheEdge(land, x, z) - TERRAIN.rimOvershoot + TERRAIN.rimWidth) /
+      TERRAIN.rimWidth,
+  );
   if (rise === 0) return 0;
-  const wander = fieldAt({ op: "noise", seed: 77, wavelength: 70, octaves: 2, gain: 0.5, angle: 0, stretch: 1, style: "smooth" }, x, z);
+  const wander = fieldAt(
+    {
+      op: "noise",
+      seed: 77,
+      wavelength: 70,
+      octaves: 2,
+      gain: 0.5,
+      angle: 0,
+      stretch: 1,
+      style: "smooth",
+    },
+    x,
+    z,
+  );
   return TERRAIN.rim * rise * (0.8 + 0.3 * wander);
 }
 
 /** The weighted mean of every region's landform height at (x, z), without the rim. */
-function blended(spec: WorldSpec, landforms: readonly Landform[], weights: Float64Array, x: number, z: number): number {
+function blended(
+  spec: WorldSpec,
+  landforms: readonly Landform[],
+  weights: Float64Array,
+  x: number,
+  z: number,
+): number {
   let total = 0;
   let sum = 0;
   for (let i = 0; i < spec.regions.length; i++) {
@@ -382,16 +536,29 @@ function blended(spec: WorldSpec, landforms: readonly Landform[], weights: Float
 }
 
 /** Returns the composed ground height before fitting and water. It is continuous everywhere. */
-export function composer(spec: WorldSpec, landforms: readonly Landform[]): (x: number, z: number) => number {
+export function composer(
+  spec: WorldSpec,
+  landforms: readonly Landform[],
+): (x: number, z: number) => number {
   const weights = new Float64Array(spec.regions.length);
   return (x, z) => {
     regionWeights(spec, x, z, weights);
-    return cutToValleys(landforms, x, z, blended(spec, landforms, weights, x, z) + rimAt(spec, x, z));
+    return cutToValleys(
+      landforms,
+      x,
+      z,
+      blended(spec, landforms, weights, x, z) + rimAt(spec, x, z),
+    );
   };
 }
 
 /** Height `h` at (x, z), lowered to the river valley surface (`valleySurface`) where the valleys reach. */
-function cutToValleys(landforms: readonly Landform[], x: number, z: number, h: number): number {
+function cutToValleys(
+  landforms: readonly Landform[],
+  x: number,
+  z: number,
+  h: number,
+): number {
   const net = landforms[0]?.valleys;
   return net === undefined ? h : Math.min(h, valleySurface(net, x, z));
 }
@@ -412,12 +579,21 @@ export interface ComposedRows {
 }
 
 /** The world's baked lattice, with a sample every `TERRAIN.spacing` meters over a square of `size` plus the skirt on each side. */
-export const latticeOf = (spec: WorldSpec): Lattice => createLattice(spec.size + TERRAIN.skirt * 2, TERRAIN.spacing);
+export const latticeOf = (spec: WorldSpec): Lattice =>
+  createLattice(spec.size + TERRAIN.skirt * 2, TERRAIN.spacing);
 
 /** The frame of `latticeOf`'s lattice without allocating its samples. Use it to convert positions, not to read heights. */
-export function frameOf(spec: WorldSpec): { readonly n: number; readonly spacing: number; readonly origin: number } {
+export function frameOf(spec: WorldSpec): {
+  readonly n: number;
+  readonly spacing: number;
+  readonly origin: number;
+} {
   const n = Math.round((spec.size + TERRAIN.skirt * 2) / TERRAIN.spacing) + 1;
-  return { n, spacing: TERRAIN.spacing, origin: (-(n - 1) * TERRAIN.spacing) / 2 };
+  return {
+    n,
+    spacing: TERRAIN.spacing,
+    origin: (-(n - 1) * TERRAIN.spacing) / 2,
+  };
 }
 
 /**
@@ -425,9 +601,18 @@ export function frameOf(spec: WorldSpec): { readonly n: number; readonly spacing
  * Rows are independent, so a bake can compose them in parts on several
  * threads and get the same bytes as composing them at once.
  */
-export function composeRows(spec: WorldSpec, landforms: readonly Landform[], z0: number, z1: number): ComposedRows {
+export function composeRows(
+  spec: WorldSpec,
+  landforms: readonly Landform[],
+  z0: number,
+  z1: number,
+): ComposedRows {
   const lattice = frameOf(spec);
-  return { z0, z1, ...composeRect(spec, landforms, lattice, 0, lattice.n, z0, z1) };
+  return {
+    z0,
+    z1,
+    ...composeRect(spec, landforms, lattice, 0, lattice.n, z0, z1),
+  };
 }
 
 /** The composed ground of columns [x0, x1) of rows [z0, z1), row-major, before fitting and water. */
@@ -438,9 +623,20 @@ type ComposedRect = Omit<ComposedRows, "z0" | "z1">;
  * world's lattice, a coarser survey of it, or a tile. Each sample depends
  * only on its world position, so a point gives the same bytes in any of them.
  */
-function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: LatticeFrame, x0: number, x1: number, z0: number, z1: number): ComposedRect {
+function composeRect(
+  spec: WorldSpec,
+  landforms: readonly Landform[],
+  l: LatticeFrame,
+  x0: number,
+  x1: number,
+  z0: number,
+  z1: number,
+): ComposedRect {
   const count = spec.regions.length;
-  if (count > 255) throw new Error(`A world holds at most 255 regions; this one has ${count}.`);
+  if (count > 255)
+    throw new Error(
+      `A world holds at most 255 regions; this one has ${count}.`,
+    );
   const n = x1 - x0;
   const rows = z1 - z0;
   const raw = new Float32Array(rows * n);
@@ -455,7 +651,12 @@ function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: Lattice
       const x = worldOf(l, ix);
       const k = (iz - z0) * n + ix - x0;
       regionWeights(spec, x, z, weights);
-      raw[k] = cutToValleys(landforms, x, z, blended(spec, landforms, weights, x, z) + rimAt(spec, x, z));
+      raw[k] = cutToValleys(
+        landforms,
+        x,
+        z,
+        blended(spec, landforms, weights, x, z) + rimAt(spec, x, z),
+      );
       coverFromBlend(spec, x, z, weights);
       // Keep the `COVER_TAPS` largest shares in `top`, largest first. Ties keep the lower index.
       top.fill(-1);
@@ -472,17 +673,21 @@ function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: Lattice
         }
       }
       let kept = 0;
-      for (let t = 0; t < COVER_TAPS; t++) if ((top[t] as number) >= 0) kept += weights[top[t] as number] as number;
+      for (let t = 0; t < COVER_TAPS; t++)
+        if ((top[t] as number) >= 0)
+          kept += weights[top[t] as number] as number;
       let given = 0;
       for (let t = 0; t < COVER_TAPS; t++) {
         const i = top[t] as number;
-        const share = i < 0 ? 0 : Math.round(((weights[i] as number) / kept) * 255);
+        const share =
+          i < 0 ? 0 : Math.round(((weights[i] as number) / kept) * 255);
         coverRegions[k * COVER_TAPS + t] = Math.max(0, i);
         coverShares[k * COVER_TAPS + t] = share;
         given += share;
       }
       // Rounding leftovers go to the largest share, so every sample's shares sum to 255.
-      coverShares[k * COVER_TAPS] = (coverShares[k * COVER_TAPS] as number) + 255 - given;
+      coverShares[k * COVER_TAPS] =
+        (coverShares[k * COVER_TAPS] as number) + 255 - given;
       region[k] = Math.max(0, top[0] as number);
     }
   }
@@ -490,7 +695,11 @@ function composeRect(spec: WorldSpec, landforms: readonly Landform[], l: Lattice
 }
 
 /** Fits composed rows into the relief budget, then solves and cuts the water. The parts must cover every lattice row once, in any order. */
-export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], parts: readonly ComposedRows[]): Terrain {
+export function finishTerrain(
+  spec: WorldSpec,
+  landforms: readonly Landform[],
+  parts: readonly ComposedRows[],
+): Terrain {
   const lattice = latticeOf(spec);
   const { n } = lattice;
   const raw = new Float32Array(n * n);
@@ -499,7 +708,10 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
   const coverShares = new Uint8Array(n * n * COVER_TAPS);
   let filled = 0;
   for (const p of [...parts].sort((a, b) => a.z0 - b.z0)) {
-    if (p.z0 !== filled) throw new Error(`Composed rows ${p.z0} to ${p.z1} leave a gap or overlap at row ${filled}.`);
+    if (p.z0 !== filled)
+      throw new Error(
+        `Composed rows ${p.z0} to ${p.z1} leave a gap or overlap at row ${filled}.`,
+      );
     raw.set(p.raw, p.z0 * n);
     region.set(p.region, p.z0 * n);
     coverRegions.set(p.coverRegions, p.z0 * n * COVER_TAPS);
@@ -517,23 +729,37 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
   const s = TERRAIN.survey;
   const sn = Math.floor((n - 1) / s) + 1;
   const surveyed = new Float32Array(sn * sn);
-  for (let j = 0; j < sn; j++) for (let i = 0; i < sn; i++) surveyed[j * sn + i] = raw[j * s * n + i * s] as number;
-  const survey: Lattice = { ...lattice, n: sn, spacing: lattice.spacing * s, heights: surveyed };
+  for (let j = 0; j < sn; j++)
+    for (let i = 0; i < sn; i++)
+      surveyed[j * sn + i] = raw[j * s * n + i * s] as number;
+  const survey: Lattice = {
+    ...lattice,
+    n: sn,
+    spacing: lattice.spacing * s,
+    heights: surveyed,
+  };
   let { mean, fit } = fitRelief(spec, survey);
   if (fit < 1) fit *= 1 - TERRAIN.surveyMargin;
-  if (!fitsBudget(spec, lattice, raw, mean, fit)) ({ mean, fit } = fitRelief(spec, { ...lattice, heights: raw }));
+  if (!fitsBudget(spec, lattice, raw, mean, fit))
+    ({ mean, fit } = fitRelief(spec, { ...lattice, heights: raw }));
   const heights = raw.map((h) => mean + (h - mean) * fit);
   const final: Lattice = { ...lattice, heights };
 
   // Solve the water from the fitted ground and cut it in.
-  const { streams, ponds } = solveWater(spec, landforms, lattice, (x0, z0, side) => {
-    const out = new Float32Array(side * side);
-    for (let j = 0; j < side; j++) {
-      const row = Math.min(n - 1, z0 + j) * n;
-      for (let i = 0; i < side; i++) out[j * side + i] = heights[row + Math.min(n - 1, x0 + i)] as number;
-    }
-    return out;
-  });
+  const { streams, ponds } = solveWater(
+    spec,
+    landforms,
+    lattice,
+    (x0, z0, side) => {
+      const out = new Float32Array(side * side);
+      for (let j = 0; j < side; j++) {
+        const row = Math.min(n - 1, z0 + j) * n;
+        for (let i = 0; i < side; i++)
+          out[j * side + i] = heights[row + Math.min(n - 1, x0 + i)] as number;
+      }
+      return out;
+    },
+  );
   const waterLevel = new Float32Array(n * n).fill(DRY);
   for (const s of streams) carveStream(final, heights, waterLevel, s);
   for (const p of ponds) carvePond(final, heights, waterLevel, p.pond, p.depth);
@@ -544,7 +770,13 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
     lattice: final,
     waterLevel,
     shore,
-    nearPond: nearPond(final, heights, waterLevel, ponds.map((p) => p.pond), shore),
+    nearPond: nearPond(
+      final,
+      heights,
+      waterLevel,
+      ponds.map((p) => p.pond),
+      shore,
+    ),
     region,
     coverRegions,
     coverShares,
@@ -553,7 +785,9 @@ export function finishTerrain(spec: WorldSpec, landforms: readonly Landform[], p
     fit,
     mean,
     pondDepths: ponds.map((p) => p.depth),
-    report: measureRelief(final, heights, (ix, iz) => withinLand(spec, worldOf(final, ix), worldOf(final, iz))),
+    report: measureRelief(final, heights, (ix, iz) =>
+      withinLand(spec, worldOf(final, ix), worldOf(final, iz)),
+    ),
     landforms,
   };
 }
@@ -578,15 +812,41 @@ function solveWater(
     const [x0, x1, z0, z1] = bed.rect;
     const side = Math.max(x1 - x0, z1 - z0);
     const heights = groundOf(x0, z0, side);
-    const window: Lattice = { n: side, spacing: world.spacing, origin: worldOf(world, x0), originZ: worldOfZ(world, z0), heights };
+    const window: Lattice = {
+      n: side,
+      spacing: world.spacing,
+      origin: worldOf(world, x0),
+      originZ: worldOfZ(world, z0),
+      heights,
+    };
     const level = new Float32Array(side * side).fill(DRY);
     for (const s of streams) carveStream(window, heights, level, s);
     for (const p of ponds) carvePond(window, heights, level, p.pond, p.depth);
     if (bed.kind === "stream") {
-      const solved = solveStream(window, bed.path, bed.width, bed.depth, bed.widths === undefined ? {} : { widths: bed.widths, seep: bed.seep ?? true, water: level, ...(bed.floors === undefined ? {} : { floors: bed.floors }) });
+      const solved = solveStream(
+        window,
+        bed.path,
+        bed.width,
+        bed.depth,
+        bed.widths === undefined
+          ? {}
+          : {
+              widths: bed.widths,
+              seep: bed.seep ?? true,
+              water: level,
+              ...(bed.floors === undefined ? {} : { floors: bed.floors }),
+            },
+      );
       if (solved !== null) streams.push(solved);
     } else {
-      const solved = solvePond(window, heights, bed.x, bed.z, bed.radius, level);
+      const solved = solvePond(
+        window,
+        heights,
+        bed.x,
+        bed.z,
+        bed.radius,
+        level,
+      );
       if (solved !== null) ponds.push({ pond: solved, depth: bed.depth });
     }
   }
@@ -595,14 +855,38 @@ function solveWater(
 
 /** One water bed for `solveWater`. `rect` is the lattice rectangle [x0, x1) by [z0, z1) where it reads and cuts the ground. */
 type WaterBed = { readonly rect: readonly [number, number, number, number] } & (
-  | { readonly kind: "stream"; readonly path: Float32Array; readonly width: number; readonly depth: number; readonly widths?: Float32Array; readonly seep?: boolean; readonly floors?: Float32Array }
-  | { readonly kind: "pond"; readonly x: number; readonly z: number; readonly radius: number; readonly depth: number }
+  | {
+      readonly kind: "stream";
+      readonly path: Float32Array;
+      readonly width: number;
+      readonly depth: number;
+      readonly widths?: Float32Array;
+      readonly seep?: boolean;
+      readonly floors?: Float32Array;
+    }
+  | {
+      readonly kind: "pond";
+      readonly x: number;
+      readonly z: number;
+      readonly radius: number;
+      readonly depth: number;
+    }
 );
 
 /** Every water bed in the order `solveWater` solves them: all regions' streams, then all regions' ponds. */
-function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice | LatticeFrame): WaterBed[] {
+function waterBeds(
+  spec: WorldSpec,
+  landforms: readonly Landform[],
+  l: Lattice | LatticeFrame,
+): WaterBed[] {
   const toIndex = (w: number): number => (w - l.origin) / l.spacing;
-  const rect = (minX: number, maxX: number, minZ: number, maxZ: number, reach: number): [number, number, number, number] => [
+  const rect = (
+    minX: number,
+    maxX: number,
+    minZ: number,
+    maxZ: number,
+    reach: number,
+  ): [number, number, number, number] => [
     Math.max(0, Math.floor(toIndex(minX - reach)) - 1),
     Math.min(l.n, Math.ceil(toIndex(maxX + reach)) + 2),
     Math.max(0, Math.floor(toIndex(minZ - reach)) - 1),
@@ -613,7 +897,10 @@ function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice |
     for (const bed of (landforms[ri] as Landform).water) {
       if (bed.kind !== "stream") continue;
       // A river, which has `widths`, keeps its whole course. A valley's own stream keeps only its run inside its region (`keptRun`).
-      const path = bed.widths !== undefined ? Float32Array.from(bed.path, (v, k) => v + (k % 2 === 0 ? r.x : r.z)) : keptRun(spec, ri, bed.path);
+      const path =
+        bed.widths !== undefined
+          ? Float32Array.from(bed.path, (v, k) => v + (k % 2 === 0 ? r.x : r.z))
+          : keptRun(spec, ri, bed.path);
       if (path === null) continue;
       let minX = Infinity;
       let maxX = -Infinity;
@@ -625,7 +912,26 @@ function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice |
         minZ = Math.min(minZ, path[k + 1] as number);
         maxZ = Math.max(maxZ, path[k + 1] as number);
       }
-      beds.push({ kind: "stream", path, width: bed.width, depth: bed.depth, ...(bed.widths === undefined ? {} : { widths: bed.widths, seep: bed.seep ?? true, ...(bed.floors === undefined ? {} : { floors: bed.floors }) }), rect: rect(minX, maxX, minZ, maxZ, Math.max(1.1, bed.width / 2) + BANK_REACH) });
+      beds.push({
+        kind: "stream",
+        path,
+        width: bed.width,
+        depth: bed.depth,
+        ...(bed.widths === undefined
+          ? {}
+          : {
+              widths: bed.widths,
+              seep: bed.seep ?? true,
+              ...(bed.floors === undefined ? {} : { floors: bed.floors }),
+            }),
+        rect: rect(
+          minX,
+          maxX,
+          minZ,
+          maxZ,
+          Math.max(1.1, bed.width / 2) + BANK_REACH,
+        ),
+      });
     }
   });
   spec.regions.forEach((r, ri) => {
@@ -633,7 +939,14 @@ function waterBeds(spec: WorldSpec, landforms: readonly Landform[], l: Lattice |
       if (bed.kind !== "pond") continue;
       const x = r.x + bed.x;
       const z = r.z + bed.z;
-      beds.push({ kind: "pond", x, z, radius: bed.radius, depth: bed.depth, rect: rect(x, x, z, z, bed.radius * POND_REACH) });
+      beds.push({
+        kind: "pond",
+        x,
+        z,
+        radius: bed.radius,
+        depth: bed.depth,
+        rect: rect(x, x, z, z, bed.radius * POND_REACH),
+      });
     }
   });
   return beds;
@@ -647,7 +960,10 @@ export interface TerrainPlan {
   readonly mean: number;
   readonly fit: number;
   readonly streams: readonly SolvedStream[];
-  readonly ponds: readonly { readonly pond: SolvedPond; readonly depth: number }[];
+  readonly ponds: readonly {
+    readonly pond: SolvedPond;
+    readonly depth: number;
+  }[];
 }
 
 /**
@@ -657,24 +973,49 @@ export interface TerrainPlan {
  * `finishTerrain`'s check at every sample keeps the survey's fit. That holds
  * for every world up to 3 km and for the 5 km sample world.
  */
-export function planTerrain(spec: WorldSpec, landforms: readonly Landform[]): TerrainPlan {
+export function planTerrain(
+  spec: WorldSpec,
+  landforms: readonly Landform[],
+): TerrainPlan {
   const lattice = latticeOf(spec);
   const { n } = lattice;
   const s = TERRAIN.survey;
   const sn = Math.floor((n - 1) / s) + 1;
-  const surveyFrame: Lattice = { ...lattice, n: sn, spacing: lattice.spacing * s };
-  const surveyed = fitRelief(spec, { ...surveyFrame, heights: composeRect(spec, landforms, surveyFrame, 0, sn, 0, sn).raw });
+  const surveyFrame: Lattice = {
+    ...lattice,
+    n: sn,
+    spacing: lattice.spacing * s,
+  };
+  const surveyed = fitRelief(spec, {
+    ...surveyFrame,
+    heights: composeRect(spec, landforms, surveyFrame, 0, sn, 0, sn).raw,
+  });
   const { mean } = surveyed;
   const fit = surveyed.fit < 1 ? surveyed.fit * (1 - TERRAIN.surveyMargin) : 1;
-  const { streams, ponds } = solveWater(spec, landforms, lattice, (x0, z0, side) => {
-    const frame: LatticeFrame = { n: side, spacing: lattice.spacing, origin: worldOf(lattice, x0), originZ: worldOfZ(lattice, z0) };
-    return composeRect(spec, landforms, frame, 0, side, 0, side).raw.map((h) => mean + (h - mean) * fit);
-  });
+  const { streams, ponds } = solveWater(
+    spec,
+    landforms,
+    lattice,
+    (x0, z0, side) => {
+      const frame: LatticeFrame = {
+        n: side,
+        spacing: lattice.spacing,
+        origin: worldOf(lattice, x0),
+        originZ: worldOfZ(lattice, z0),
+      };
+      return composeRect(spec, landforms, frame, 0, side, 0, side).raw.map(
+        (h) => mean + (h - mean) * fit,
+      );
+    },
+  );
   return { spec, landforms, mean, fit, streams, ponds };
 }
 
 /** Tiles are `size` samples square. Each is composed with a `margin` wide enough to measure its shore. */
-export const TILE = { size: 256, margin: shoreMargin(TERRAIN.spacing) } as const;
+export const TILE = {
+  size: 256,
+  margin: shoreMargin(TERRAIN.spacing),
+} as const;
 
 /** One tile of a world's land, with the values a whole-world bake has for those samples. */
 export interface TerrainTile {
@@ -702,23 +1043,60 @@ export interface TerrainTile {
  * and cover then match the world's at those samples, and the shore is
  * measured between the tile's own samples.
  */
-export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number = TILE.size, stride = 1): TerrainTile {
+export function bakeTile(
+  plan: TerrainPlan,
+  x0: number,
+  z0: number,
+  size: number = TILE.size,
+  stride = 1,
+): TerrainTile {
   const world = frameOf(plan.spec);
   const m = stride === 1 ? TILE.margin : shoreMargin(world.spacing * stride);
   const side = size + 2 * m;
-  const frame: Lattice = { n: side, spacing: world.spacing * stride, origin: worldOf(world, x0 - m * stride), originZ: worldOf(world, z0 - m * stride), heights: new Float32Array(0) };
-  const composed = composeRect(plan.spec, plan.landforms, frame, 0, side, 0, side);
-  const heights = composed.raw.map((h) => plan.mean + (h - plan.mean) * plan.fit);
+  const frame: Lattice = {
+    n: side,
+    spacing: world.spacing * stride,
+    origin: worldOf(world, x0 - m * stride),
+    originZ: worldOf(world, z0 - m * stride),
+    heights: new Float32Array(0),
+  };
+  const composed = composeRect(
+    plan.spec,
+    plan.landforms,
+    frame,
+    0,
+    side,
+    0,
+    side,
+  );
+  const heights = composed.raw.map(
+    (h) => plan.mean + (h - plan.mean) * plan.fit,
+  );
   const window: Lattice = { ...frame, heights };
   const waterLevel = new Float32Array(side * side).fill(DRY);
-  for (const stream of plan.streams) carveStream(window, heights, waterLevel, stream);
-  for (const { pond, depth } of plan.ponds) carvePond(window, heights, waterLevel, pond, depth);
+  for (const stream of plan.streams)
+    carveStream(window, heights, waterLevel, stream);
+  for (const { pond, depth } of plan.ponds)
+    carvePond(window, heights, waterLevel, pond, depth);
   const shore = shoreField(window, heights, waterLevel);
-  const pond = nearPond(window, heights, waterLevel, plan.ponds.map((p) => p.pond), shore);
+  const pond = nearPond(
+    window,
+    heights,
+    waterLevel,
+    plan.ponds.map((p) => p.pond),
+    shore,
+  );
   /** The tile's own samples, `per` values each, without the margin. */
   const inner = <T extends Float32Array | Uint8Array>(a: T, per: number): T => {
     const out = a.slice(0, size * size * per) as T;
-    for (let j = 0; j < size; j++) out.set(a.subarray(((j + m) * side + m) * per, ((j + m) * side + m + size) * per), j * size * per);
+    for (let j = 0; j < size; j++)
+      out.set(
+        a.subarray(
+          ((j + m) * side + m) * per,
+          ((j + m) * side + m + size) * per,
+        ),
+        j * size * per,
+      );
     return out;
   };
   return {
@@ -737,9 +1115,23 @@ export function bakeTile(plan: TerrainPlan, x0: number, z0: number, size: number
 }
 
 /** Whether `heights` scaled about `mean` by `fit` keep the walkable land inside the relief budget, with room for water. */
-function fitsBudget(spec: WorldSpec, l: Lattice, heights: Float32Array, mean: number, fit: number): boolean {
-  const inside = (ix: number, iz: number): boolean => withinLand(spec, worldOf(l, ix), worldOf(l, iz));
-  return withinBudget(measureRelief(l, heights.map((h) => mean + (h - mean) * fit), inside), TERRAIN.waterMargin);
+function fitsBudget(
+  spec: WorldSpec,
+  l: Lattice,
+  heights: Float32Array,
+  mean: number,
+  fit: number,
+): boolean {
+  const inside = (ix: number, iz: number): boolean =>
+    withinLand(spec, worldOf(l, ix), worldOf(l, iz));
+  return withinBudget(
+    measureRelief(
+      l,
+      heights.map((h) => mean + (h - mean) * fit),
+      inside,
+    ),
+    TERRAIN.waterMargin,
+  );
 }
 
 /** The largest scale about the mean that keeps `l`'s heights inside the budget. It is 1 when they already fit, else a 14-step bisection between 0.1 and 1. */
@@ -762,7 +1154,9 @@ function fitRelief(spec: WorldSpec, l: Lattice): { mean: number; fit: number } {
 /** Bakes the whole world's terrain in one pass. */
 export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
   const landforms = landformsOf(spec, lib);
-  return finishTerrain(spec, landforms, [composeRows(spec, landforms, 0, frameOf(spec).n)]);
+  return finishTerrain(spec, landforms, [
+    composeRows(spec, landforms, 0, frameOf(spec).n),
+  ]);
 }
 
 /**
@@ -770,7 +1164,11 @@ export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
  * where each point is at least 30 m inside the land (`withinLand`) and no
  * other region's weight reaches 0.75. Returns null for a run under 12 points.
  */
-function keptRun(spec: WorldSpec, ri: number, local: Float32Array): Float32Array | null {
+function keptRun(
+  spec: WorldSpec,
+  ri: number,
+  local: Float32Array,
+): Float32Array | null {
   const r = spec.regions[ri] as RegionSpec;
   const weights = new Float64Array(spec.regions.length);
   let best: [number, number] = [0, 0];

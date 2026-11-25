@@ -495,7 +495,11 @@ impl Rules<'_> {
             .filter(|p| s == p.name || s.starts_with(&format!("{}/", p.name)))
             .max_by_key(|p| p.name.len())?;
         let sub = s[pkg.name.len()..].trim_start_matches('/');
-        let key = if sub.is_empty() { ".".to_string() } else { format!("./{sub}") };
+        let key = if sub.is_empty() {
+            ".".to_string()
+        } else {
+            format!("./{sub}")
+        };
         let target = match (pkg.exports.get(&key), sub.is_empty()) {
             (Some(t), _) => t.clone(),
             (None, true) => pkg.entry?.to_string(),
@@ -865,7 +869,9 @@ pub fn run(
                     .into_iter()
                     .flat_map(|(f, n)| {
                         let defs = by_name.get(n).map(Vec::as_slice).unwrap_or_default();
-                        defs.iter().copied().filter(move |&(kk, i)| kk == f && own(kk, i))
+                        defs.iter()
+                            .copied()
+                            .filter(move |&(kk, i)| kk == f && own(kk, i))
                     })
                     .collect()
             } else {
@@ -968,7 +974,11 @@ pub fn run(
             ];
             let mut chosen: Vec<(usize, usize)> = Vec::new();
             for tier in tiers {
-                chosen = pool.iter().copied().filter(|(kk, i)| tier(*kk, *i)).collect();
+                chosen = pool
+                    .iter()
+                    .copied()
+                    .filter(|(kk, i)| tier(*kk, *i))
+                    .collect();
                 if !chosen.is_empty() {
                     break;
                 }

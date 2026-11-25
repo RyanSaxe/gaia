@@ -47,7 +47,16 @@ export interface MapStyle {
    * are in paper pixels. On ground steeper than the grade `thin`, only the heavier lines are drawn, as survey maps thin
    * lines that would crowd.
    */
-  readonly contour: { readonly interval: number; readonly index: number; readonly ink: string; readonly width: number; readonly alpha: number; readonly indexWidth: number; readonly indexAlpha: number; readonly thin: number };
+  readonly contour: {
+    readonly interval: number;
+    readonly index: number;
+    readonly ink: string;
+    readonly width: number;
+    readonly alpha: number;
+    readonly indexWidth: number;
+    readonly indexAlpha: number;
+    readonly thin: number;
+  };
   /** How a wash follows vitality. Above the top `health` stop, `rich` saturates and deepens it. As `dryness` rises, `streaks` dry-brush streaks show the paper through. */
   readonly wilt: { readonly rich: number; readonly streaks: number };
   /** The green every area's wash starts from. On the map, color shows vitality and nothing else. */
@@ -56,7 +65,11 @@ export interface MapStyle {
    * The vitality ramp as [shown vitality, color, mix] stops. At each stop the land mixes toward the color by that
    * share. Land is green at 0.85 and above, gold around 0.55, russet around 0.25 and ash brown at 0.
    */
-  readonly health: readonly (readonly [number, readonly [number, number, number], number])[];
+  readonly health: readonly (readonly [
+    number,
+    readonly [number, number, number],
+    number,
+  ])[];
   /** How far in meters a file's vitality spreads over the ground around it, across area borders too. */
   readonly spread: number;
 }
@@ -71,7 +84,11 @@ export const MAP_STYLE: MapStyle = {
   washAlpha: 0.84,
   bleed: 0.5,
   bleedPx: 7,
-  pool: [[22, 0.05], [10, 0.07], [4, 0.09]],
+  pool: [
+    [22, 0.05],
+    [10, 0.07],
+    [4, 0.09],
+  ],
   strokes: 2600,
   fade: [0.002, 0.012],
   ragged: 0.006,
@@ -83,7 +100,16 @@ export const MAP_STYLE: MapStyle = {
   light: "#fff0c4",
   lightAlpha: 0.42,
   trail: "rgba(122,80,42,0.92)",
-  contour: { interval: 1.2, index: 5, ink: "#5a4128", width: 1.8, alpha: 0.3, indexWidth: 3, indexAlpha: 0.46, thin: 0.22 },
+  contour: {
+    interval: 1.2,
+    index: 5,
+    ink: "#5a4128",
+    width: 1.8,
+    alpha: 0.3,
+    indexWidth: 3,
+    indexAlpha: 0.46,
+    thin: 0.22,
+  },
   wilt: { rich: 0.3, streaks: 46 },
   land: [104, 160, 66],
   health: [
@@ -108,7 +134,16 @@ const channels = (h: string): [number, number, number] => {
   const v = parseInt(h.slice(1), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
 };
-const mix3 = (a: readonly number[], b: readonly number[], t: number): [number, number, number] => [0, 1, 2].map((i) => (a[i] as number) * (1 - t) + (b[i] as number) * t) as [number, number, number];
+const mix3 = (
+  a: readonly number[],
+  b: readonly number[],
+  t: number,
+): [number, number, number] =>
+  [0, 1, 2].map((i) => (a[i] as number) * (1 - t) + (b[i] as number) * t) as [
+    number,
+    number,
+    number,
+  ];
 const LIGHTER = channels("#fbf5e6");
 const DARKER = channels("#5b5040");
 const WARMER = channels("#e2bd62");
@@ -119,7 +154,11 @@ const COOLER = channels("#5f9aa6");
  * saturated and deeper, and below it turns gold, russet and ash. The result is continuous in vitality, so a vitality
  * field has no visible steps.
  */
-export function healthColor(style: MapStyle, rgb: readonly [number, number, number], vitality: number): [number, number, number] {
+export function healthColor(
+  style: MapStyle,
+  rgb: readonly [number, number, number],
+  vitality: number,
+): [number, number, number] {
   const v = Math.max(0, Math.min(1, vitality));
   const stops = style.health;
   const top = stops[0] as (typeof stops)[number];
@@ -127,29 +166,56 @@ export function healthColor(style: MapStyle, rgb: readonly [number, number, numb
     // Above the top stop, saturates and darkens the color by up to `style.wilt.rich`.
     const grey = rgb[0] * 0.3 + rgb[1] * 0.59 + rgb[2] * 0.11;
     const rich = Math.min(1, (v - top[0]) / (1 - top[0])) * style.wilt.rich;
-    return rgb.map((c) => Math.round(Math.max(0, Math.min(255, (grey + (c - grey) * (1 + rich)) * (1 - rich * 0.25))))) as [number, number, number];
+    return rgb.map((c) =>
+      Math.round(
+        Math.max(
+          0,
+          Math.min(255, (grey + (c - grey) * (1 + rich)) * (1 - rich * 0.25)),
+        ),
+      ),
+    ) as [number, number, number];
   }
   let k = 1;
-  while (k < stops.length - 1 && v < (stops[k] as (typeof stops)[number])[0]) k++;
+  while (k < stops.length - 1 && v < (stops[k] as (typeof stops)[number])[0])
+    k++;
   const [v0, c0, m0] = stops[k - 1] as (typeof stops)[number];
   const [v1, c1, m1] = stops[k] as (typeof stops)[number];
   const u = Math.max(0, Math.min(1, (v0 - v) / (v0 - v1)));
   const m = m0 + (m1 - m0) * u;
-  return [0, 1, 2].map((i) => Math.round((rgb[i] as number) * (1 - m) + ((c0[i] as number) + ((c1[i] as number) - (c0[i] as number)) * u) * m)) as [number, number, number];
+  return [0, 1, 2].map((i) =>
+    Math.round(
+      (rgb[i] as number) * (1 - m) +
+        ((c0[i] as number) + ((c1[i] as number) - (c0[i] as number)) * u) * m,
+    ),
+  ) as [number, number, number];
 }
 
 /** Shifts a color lighter or darker and warmer or cooler, seeded by `path`, so neighboring areas differ in tone. */
-function toned(style: MapStyle, rgb: readonly [number, number, number], path: string): [number, number, number] {
+function toned(
+  style: MapStyle,
+  rgb: readonly [number, number, number],
+  path: string,
+): [number, number, number] {
   const r = rand(seedOf(`wash:${path}`));
   const light = r.range(-1, 1) * style.toneStep;
   const warmth = r.range(-1, 1) * style.toneStep * 0.38;
-  const lit = light > 0 ? mix3(rgb, LIGHTER, light * 0.5) : mix3(rgb, DARKER, -light * 0.3);
+  const lit =
+    light > 0
+      ? mix3(rgb, LIGHTER, light * 0.5)
+      : mix3(rgb, DARKER, -light * 0.3);
   return warmth > 0 ? mix3(lit, WARMER, warmth) : mix3(lit, COOLER, -warmth);
 }
 
 /** An area's wash before vitality: `style.land` lifted toward the paper and toned by its path. */
-export const landWash = (style: MapStyle, path: string): [number, number, number] =>
-  toned(style, mix3(style.land, channels(style.paper), style.landLift), path).map(Math.round) as [number, number, number];
+export const landWash = (
+  style: MapStyle,
+  path: string,
+): [number, number, number] =>
+  toned(
+    style,
+    mix3(style.land, channels(style.paper), style.landLift),
+    path,
+  ).map(Math.round) as [number, number, number];
 
 /** A file's vitality at its place on the land, with its position, its ground's radius (`reach`) and its code size. */
 export interface FileHealth {
@@ -161,20 +227,33 @@ export interface FileHealth {
 }
 
 /** A file's weight at (x, z): its size times a Gaussian falloff of width `spread` meters past its own ground, and 0 beyond 4 * `spread`. */
-export function healthWeight(f: Omit<FileHealth, "vitality">, x: number, z: number, spread: number): number {
+export function healthWeight(
+  f: Omit<FileHealth, "vitality">,
+  x: number,
+  z: number,
+  spread: number,
+): number {
   const d = Math.max(0, Math.hypot(f.x - x, f.z - z) - f.reach);
-  return d > spread * 4 ? 0 : f.size * Math.exp((-d * d) / (2 * spread * spread));
+  return d > spread * 4
+    ? 0
+    : f.size * Math.exp((-d * d) / (2 * spread * spread));
 }
 
 /** The weight of a point's area vitality against its files' weights: a hundredth of the mean file size. */
-export const healthPrior = (files: readonly { readonly size: number }[]): number => (files.reduce((a, f) => a + f.size, 0) / Math.max(1, files.length)) * 0.01;
+export const healthPrior = (
+  files: readonly { readonly size: number }[],
+): number =>
+  (files.reduce((a, f) => a + f.size, 0) / Math.max(1, files.length)) * 0.01;
 
 /**
  * Returns vitality over the land from each file's own vitality. At a point, it averages the nearby files weighted by
  * `healthWeight`, across area borders too. Far from every file it approaches `fallback`, the vitality of the point's
  * area, with no step.
  */
-export function healthField(files: readonly FileHealth[], spread: number): (x: number, z: number, fallback: number) => number {
+export function healthField(
+  files: readonly FileHealth[],
+  spread: number,
+): (x: number, z: number, fallback: number) => number {
   const far = spread * 4;
   const prior = healthPrior(files);
   // Buckets files on a grid whose cells are wide enough that every file with weight at a point lies in the point's
@@ -182,7 +261,8 @@ export function healthField(files: readonly FileHealth[], spread: number): (x: n
   const size = far + files.reduce((m, f) => Math.max(m, f.reach), 0);
   const cell = (v: number): number => Math.floor(v / size);
   const buckets = new Map<number, FileHealth[]>();
-  const keyOf = (i: number, j: number): number => (i + 4096) * 8192 + (j + 4096);
+  const keyOf = (i: number, j: number): number =>
+    (i + 4096) * 8192 + (j + 4096);
   for (const f of files) {
     const key = keyOf(cell(f.x), cell(f.z));
     const bucket = buckets.get(key);
@@ -224,7 +304,13 @@ export const DECKLE_MASK = ((): string => {
   const side = (k: number, t: number): [number, number] => {
     const inset = 3 + hash(k, 5) * 4 + (hash(k, 9) > 0.93 ? 4 : 0);
     const along = t * 1000;
-    return k < 1000 ? [along, inset] : k < 2000 ? [1000 - inset, along] : k < 3000 ? [1000 - along, 1000 - inset] : [inset, 1000 - along];
+    return k < 1000
+      ? [along, inset]
+      : k < 2000
+        ? [1000 - inset, along]
+        : k < 3000
+          ? [1000 - along, 1000 - inset]
+          : [inset, 1000 - along];
   };
   for (let k = 0; k < 4000; k += 6) {
     const [x, y] = side(k, (k % 1000) / 1000);

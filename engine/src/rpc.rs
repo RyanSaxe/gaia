@@ -59,21 +59,33 @@ pub fn handle(line: &str) -> Value {
                     None => Some(crate::graph::walk::Snapshot::of(root)),
                 };
                 let lines = snapshot.and_then(|s| s.text(path)).map(|text| {
-                    text.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l).to_string()).collect::<Vec<_>>()
+                    text.split('\n')
+                        .map(|l| l.strip_suffix('\r').unwrap_or(l).to_string())
+                        .collect::<Vec<_>>()
                 });
                 Ok(json!({ "lines": lines }))
             }
-            _ => Err((INVALID_PARAMS, "project.source needs a root and a path.".into())),
+            _ => Err((
+                INVALID_PARAMS,
+                "project.source needs a root and a path.".into(),
+            )),
         },
         "project.commit" => match p["root"].as_str() {
             // The commit that `project.graph` would read the root at now.
-            Some(root) => Ok(json!({ "commit": crate::graph::walk::Snapshot::of(Path::new(root)).commit() })),
+            Some(root) => {
+                Ok(json!({ "commit": crate::graph::walk::Snapshot::of(Path::new(root)).commit() }))
+            }
             None => Err((INVALID_PARAMS, "project.commit needs a root.".into())),
         },
         "project.commits" => match (p["root"].as_str(), p["from"].as_str(), p["to"].as_str()) {
             // How many commits after `from` up to `to` changed a file under the root, or null when `from` is not in `to`'s history.
-            (Some(root), Some(from), Some(to)) => Ok(json!({ "commits": crate::graph::git::commits_between(Path::new(root), from, to) })),
-            _ => Err((INVALID_PARAMS, "project.commits needs a root, a from and a to.".into())),
+            (Some(root), Some(from), Some(to)) => Ok(
+                json!({ "commits": crate::graph::git::commits_between(Path::new(root), from, to) }),
+            ),
+            _ => Err((
+                INVALID_PARAMS,
+                "project.commits needs a root, a from and a to.".into(),
+            )),
         },
         "understanding.plan" => match p["root"].as_str() {
             Some(root) => crate::jev::runner::plan(Path::new(root)).map_err(|e| (FAILED, e)),

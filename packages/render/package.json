@@ -7,8 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@gaia/schema": "workspace:*",
     "@gaia/realize": "workspace:*",
+    "@gaia/schema": "workspace:*",
     "three": "^0.186.1"
   },
   "devDependencies": {

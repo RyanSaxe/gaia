@@ -45,7 +45,9 @@ export function contentHash(...values: unknown[]): string {
       mix(v.length);
       for (const item of v) visit(item);
     } else if (v instanceof Map) {
-      visit([...v.entries()].sort(([a], [b]) => String(a).localeCompare(String(b))));
+      visit(
+        [...v.entries()].sort(([a], [b]) => String(a).localeCompare(String(b))),
+      );
     } else if (v !== null && typeof v === "object") {
       mix(0x0b1e);
       for (const key of Object.keys(v).sort()) {
@@ -82,16 +84,26 @@ export async function openFarStore(version: number): Promise<FarStore | null> {
   if (db === null) return null;
   const store = db;
   const visit = await prune(store).catch(() => Date.now());
-  const request = <T>(name: "forms" | "used", mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> =>
+  const request = <T>(
+    name: "forms" | "used",
+    mode: IDBTransactionMode,
+    run: (s: IDBObjectStore) => IDBRequest<T>,
+  ): Promise<T> =>
     new Promise((resolve, reject) => {
       const r = run(store.transaction(name, mode).objectStore(name));
       r.onsuccess = () => resolve(r.result);
-      r.onerror = () => reject(r.error ?? new Error("The far-form store failed."));
+      r.onerror = () =>
+        reject(r.error ?? new Error("The far-form store failed."));
     });
   return {
     get: async (key) => {
-      const form = await request("forms", "readonly", (forms) => forms.get(key));
-      if (form !== undefined) void request("used", "readwrite", (used) => used.put(visit, key)).catch(() => undefined);
+      const form = await request("forms", "readonly", (forms) =>
+        forms.get(key),
+      );
+      if (form !== undefined)
+        void request("used", "readwrite", (used) => used.put(visit, key)).catch(
+          () => undefined,
+        );
       return form;
     },
     put: (key, data) =>
@@ -100,7 +112,8 @@ export async function openFarStore(version: number): Promise<FarStore | null> {
         t.objectStore("forms").put(data, key);
         t.objectStore("used").put(visit, key);
         t.oncomplete = () => resolve();
-        t.onabort = () => reject(t.error ?? new Error("The far-form store failed."));
+        t.onabort = () =>
+          reject(t.error ?? new Error("The far-form store failed."));
       }),
   };
 }
@@ -113,7 +126,8 @@ function openDatabase(version: number): Promise<IDBDatabase | null> {
       const open = indexedDB.open(NAME, version);
       open.onupgradeneeded = () => {
         const db = open.result;
-        for (const name of ["forms", "used"]) if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
+        for (const name of ["forms", "used"])
+          if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
         db.createObjectStore("forms");
         // Maps each form's key to the time of the last visit that read or stored it.
         db.createObjectStore("used");
@@ -160,7 +174,9 @@ function prune(db: IDBDatabase): Promise<number> {
     const usedAt = used.getAll();
     let visit = Date.now();
     usedAt.onsuccess = () => {
-      const lastUse = new Map(usedKeys.result.map((key, i) => [key, usedAt.result[i] as number]));
+      const lastUse = new Map(
+        usedKeys.result.map((key, i) => [key, usedAt.result[i] as number]),
+      );
       const last = Math.max(0, ...lastUse.values());
       // If the clock was set back, this visit still counts as no older than the last.
       visit = Math.max(visit, last);
@@ -172,6 +188,7 @@ function prune(db: IDBDatabase): Promise<number> {
       }
     };
     t.oncomplete = () => resolve(visit);
-    t.onabort = () => reject(t.error ?? new Error("The far-form store failed."));
+    t.onabort = () =>
+      reject(t.error ?? new Error("The far-form store failed."));
   });
 }

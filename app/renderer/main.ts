@@ -26,11 +26,13 @@ setFavicon();
 
 const shell = document.getElementById("shell");
 const root = document.querySelector<HTMLElement>(".world");
-if (shell === null || root === null) throw new Error("Missing the world's container.");
+if (shell === null || root === null)
+  throw new Error("Missing the world's container.");
 
 // The first touch shows the touch controls, even where the primary pointer is a mouse.
 window.addEventListener("pointerdown", (e) => {
-  if (e.pointerType === "touch") document.documentElement.classList.add("touch");
+  if (e.pointerType === "touch")
+    document.documentElement.classList.add("touch");
 });
 
 /** The last engine status text from the world service. */
@@ -42,7 +44,8 @@ watchEngine((text) => {
 const clock = createClock();
 // `?hour=22` pins the hour from the start, so a phone can see the world at night.
 const askedHour = new URLSearchParams(location.search).get("hour");
-if (askedHour !== null && Number.isFinite(Number(askedHour))) clock.pin(Number(askedHour));
+if (askedHour !== null && Number.isFinite(Number(askedHour)))
+  clock.pin(Number(askedHour));
 
 const stats = createStats();
 
@@ -70,10 +73,20 @@ function loop(now: number): void {
 // The wait's sheet shows first, so the world's empty first frame is never visible. The world is built after the
 // sheet has been drawn.
 // The start sky's darkness at the clock's hour, rounded to the nearest 0.05 as the world's first frame rounds it.
-const sky = realizeSky({ blueprint: START_SKY, kind: worldKind }, new Library(WORLD_PRIMITIVES), seedOf("terrain-lab/sky"), clock.hour());
+const sky = realizeSky(
+  { blueprint: START_SKY, kind: worldKind },
+  new Library(WORLD_PRIMITIVES),
+  seedOf("terrain-lab/sky"),
+  clock.hour(),
+);
 // In the app every world opens from the start page's map table, whether chosen there or opened directly, so the sheet
 // starts under the table.
-startWaitEarly(shell, Math.round(sky.light.nightness * 20) / 20, OPENING_ASPECT, window.gaiaShell !== undefined);
+startWaitEarly(
+  shell,
+  Math.round(sky.light.nightness * 20) / 20,
+  OPENING_ASPECT,
+  window.gaiaShell !== undefined,
+);
 const drawn = new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
 /** Resolves once the world is built. Scripted checks wait for it, so they see the world as a person does. */
 const opened: Promise<World> = drawn.then(() => {
@@ -93,8 +106,17 @@ const opened: Promise<World> = drawn.then(() => {
 // When `pnpm lab:serve` serves the page to a device, the page reports each
 // opening stage and any error, so a failing device shows where it stopped.
 reportStage("page");
-window.addEventListener("error", (e) => reportStage("error", { message: String(e.message).slice(0, 300) }));
-window.addEventListener("unhandledrejection", (e) => reportStage("error", { message: String((e.reason as Error | undefined)?.message ?? e.reason).slice(0, 300) }));
+window.addEventListener("error", (e) =>
+  reportStage("error", { message: String(e.message).slice(0, 300) }),
+);
+window.addEventListener("unhandledrejection", (e) =>
+  reportStage("error", {
+    message: String((e.reason as Error | undefined)?.message ?? e.reason).slice(
+      0,
+      300,
+    ),
+  }),
+);
 
 // When `pnpm lab:serve` serves the page to a device, the page reports its frame smoothness.
 if (
@@ -128,7 +150,10 @@ declare global {
 window.__lab = {
   /** Resolves once the first world is ready and three frames have drawn. The only view is "immersive". */
   open: async (view = "immersive") => {
-    if (view !== "immersive") throw new Error(`No view named ${view}: the page shows only the world, "immersive".`);
+    if (view !== "immersive")
+      throw new Error(
+        `No view named ${view}: the page shows only the world, "immersive".`,
+      );
     const made = await opened;
     await made.ready;
     await frames(3);

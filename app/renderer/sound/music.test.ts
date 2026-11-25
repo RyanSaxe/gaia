@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Earshot } from "../terrain/world.ts";
-import { type Chunk, type MusicBank, type Phrase, createMusic } from "./music.ts";
+import {
+  type Chunk,
+  type MusicBank,
+  type Phrase,
+  createMusic,
+} from "./music.ts";
 import type { Shelf } from "./shelf.ts";
 
 interface Started {
@@ -27,7 +32,11 @@ class Source {
 }
 
 /** A fake audio context that keeps each gain's latest target and when each source played, which is enough to read what the music plays. */
-function listeningContext(): { ctx: BaseAudioContext; gains: { target: number }[]; started: Started[] } {
+function listeningContext(): {
+  ctx: BaseAudioContext;
+  gains: { target: number }[];
+  started: Started[];
+} {
   const gains: { target: number }[] = [];
   const started: Started[] = [];
   const node = { connect: (n: unknown) => n, disconnect: () => undefined };
@@ -35,7 +44,14 @@ function listeningContext(): { ctx: BaseAudioContext; gains: { target: number }[
     createGain() {
       const g = { target: 0 };
       gains.push(g);
-      return { ...node, gain: { value: 0, setValueAtTime: () => undefined, setTargetAtTime: (v: number) => void (g.target = v) } };
+      return {
+        ...node,
+        gain: {
+          value: 0,
+          setValueAtTime: () => undefined,
+          setTargetAtTime: (v: number) => void (g.target = v),
+        },
+      };
     },
     createBufferSource() {
       return new Source(started);
@@ -45,12 +61,33 @@ function listeningContext(): { ctx: BaseAudioContext; gains: { target: number }[
 }
 
 function shelf<K extends string>(): Shelf<K> {
-  return { take: (name) => ({ name, duration: 30 }) as unknown as AudioBuffer, put: () => undefined, ready: async () => undefined, held: () => 0 };
+  return {
+    take: (name) => ({ name, duration: 30 }) as unknown as AudioBuffer,
+    put: () => undefined,
+    ready: async () => undefined,
+    held: () => 0,
+  };
 }
 
 const CHUNK = { count: 8, seconds: 12.8, margin: 0.1 };
-const BANK: MusicBank = { chunks: shelf<Chunk>(), chunk: CHUNK, phrases: shelf<Phrase>(), lufs: { piece: -21, phrases: -21 } };
-const NOON: Earshot = { speed: 0, travelling: false, underfoot: "ground", depth: 0, night: 0, gust: 0.3, decline: 0, canopy: 0, stream: null, mill: null };
+const BANK: MusicBank = {
+  chunks: shelf<Chunk>(),
+  chunk: CHUNK,
+  phrases: shelf<Phrase>(),
+  lufs: { piece: -21, phrases: -21 },
+};
+const NOON: Earshot = {
+  speed: 0,
+  travelling: false,
+  underfoot: "ground",
+  depth: 0,
+  night: 0,
+  gust: 0.3,
+  decline: 0,
+  canopy: 0,
+  stream: null,
+  mill: null,
+};
 
 describe("the piece, streamed a chunk at a time", () => {
   /** What the bed played over `seconds` of noon, updating the music every tenth of a second. */
@@ -62,7 +99,8 @@ describe("the piece, streamed a chunk at a time", () => {
   }
 
   /** Where in the piece a start plays from, in seconds: its chunk's place in the piece and how far into the chunk it begins. */
-  const from = (s: Started): number => Number(s.name.split(":")[1]) * CHUNK.seconds + s.offset - CHUNK.margin;
+  const from = (s: Started): number =>
+    Number(s.name.split(":")[1]) * CHUNK.seconds + s.offset - CHUNK.margin;
   const piece = CHUNK.count * CHUNK.seconds;
   /** Each start plays the piece where the music's clock stands, and begins as the one before it ends. */
   function expectSeamless(bed: readonly Started[], joinAt: number): void {
@@ -71,14 +109,18 @@ describe("the piece, streamed a chunk at a time", () => {
       const behind = (((from(s) - s.at) % piece) + piece) % piece;
       expect(Math.min(behind, piece - behind), `start ${k}`).toBeLessThan(1e-6);
       const next = bed[k + 1];
-      if (next !== undefined) expect(next.at, `start ${k + 1}`).toBeCloseTo(s.at + s.duration, 9);
+      if (next !== undefined)
+        expect(next.at, `start ${k + 1}`).toBeCloseTo(s.at + s.duration, 9);
     }
   }
 
   it("plays on without a gap, a skip or a part out of time, round the piece and back to its start, and a part that joins late in time with the rest", () => {
     const bed = bedOver(110);
     expectSeamless(bed, 0);
-    expect(bed.some((s, k) => k > 0 && from(s) < from(bed[k - 1] as Started)), "the piece comes round to its start").toBe(true);
+    expect(
+      bed.some((s, k) => k > 0 && from(s) < from(bed[k - 1] as Started)),
+      "the piece comes round to its start",
+    ).toBe(true);
     expectSeamless(bedOver(30, 20), 20);
   });
 });

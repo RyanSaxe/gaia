@@ -51,7 +51,14 @@ import { build } from "esbuild";
 import { webglErrors } from "../app/main/webgl-errors.ts";
 import { LAB_BUILD, labBundle, labPage } from "./lab-page.ts";
 
-const MEASURES = ["drawn", "steps", "hitch", "stress", "swap", "paint"] as const;
+const MEASURES = [
+  "drawn",
+  "steps",
+  "hitch",
+  "stress",
+  "swap",
+  "paint",
+] as const;
 type Measure = (typeof MEASURES)[number];
 
 /** Where each world is measured: by the stream at the valley, turned 120° from it, and the proving ground's woods. */
@@ -82,12 +89,25 @@ const HEIGHT = 800;
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
-  options: { dpr: { type: "string", default: "2" }, json: { type: "string" }, world: { type: "string", multiple: true }, spot: { type: "string", multiple: true } },
+  options: {
+    dpr: { type: "string", default: "2" },
+    json: { type: "string" },
+    world: { type: "string", multiple: true },
+    spot: { type: "string", multiple: true },
+  },
 });
 const asked = positionals.length === 0 ? [...MEASURES] : positionals;
-for (const m of asked) if (!(MEASURES as readonly string[]).includes(m)) throw new Error(`No measure named ${m}; choose from ${MEASURES.join(", ")}.`);
+for (const m of asked)
+  if (!(MEASURES as readonly string[]).includes(m))
+    throw new Error(
+      `No measure named ${m}; choose from ${MEASURES.join(", ")}.`,
+    );
 const measures = new Set(asked as Measure[]);
-for (const w of values.world ?? []) if (!(w in SPOTS)) throw new Error(`No world named ${w}; choose from ${Object.keys(SPOTS).join(", ")}.`);
+for (const w of values.world ?? [])
+  if (!(w in SPOTS))
+    throw new Error(
+      `No world named ${w}; choose from ${Object.keys(SPOTS).join(", ")}.`,
+    );
 const dpr = Number(values.dpr);
 
 /** One page load: the world to open, then each call's JavaScript, run in order with `T` as `__lab.terrain`. */
@@ -119,11 +139,24 @@ for (const [world, preset] of Object.entries(SPOTS)) {
   const spots = values.spot ?? preset;
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const spot of spots) {
-    if (measures.has("drawn")) calls.push({ key: `drawn ${spot}`, js: `(${go(spot)}, ${settle}, { ms: ${bench}, drawn: T.drawn(), woods: T.scale(), understory: T.understoryDrawn() })` });
-    if (measures.has("steps")) calls.push({ key: `steps ${spot}`, js: `(${go(spot)}, ${settle}, T.steps(${WALK.meters}, ${WALK.step}, ${WALK.at}))` });
+    if (measures.has("drawn"))
+      calls.push({
+        key: `drawn ${spot}`,
+        js: `(${go(spot)}, ${settle}, { ms: ${bench}, drawn: T.drawn(), woods: T.scale(), understory: T.understoryDrawn() })`,
+      });
+    if (measures.has("steps"))
+      calls.push({
+        key: `steps ${spot}`,
+        js: `(${go(spot)}, ${settle}, T.steps(${WALK.meters}, ${WALK.step}, ${WALK.at}))`,
+      });
   }
   if (measures.has("hitch")) {
-    for (let w = 0; w < HITCH_WINDOWS; w++) calls.push({ key: `hitch ${w}`, shown: true, js: `(${w === 0 ? `${go("valley")}, await __lab.frames(60), ` : ""}await T.wander(10), __lab.smoothness())` });
+    for (let w = 0; w < HITCH_WINDOWS; w++)
+      calls.push({
+        key: `hitch ${w}`,
+        shown: true,
+        js: `(${w === 0 ? `${go("valley")}, await __lab.frames(60), ` : ""}await T.wander(10), __lab.smoothness())`,
+      });
   }
   if (calls.length > 1) jobs.push({ world, calls });
 }
@@ -131,7 +164,10 @@ if (measures.has("swap")) {
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const hour of [15.5, 22]) {
     // Each preset's far form is brought into a slot for its test, so each test waits for it.
-    calls.push({ key: `swap ${hour}`, js: `(await __lab.hour(${hour}), ${go("valley")}, ${settle}, await (async () => { const rows = []; for (const name of T.swap()) for (const vitality of [1, 0.5, 0.15]) rows.push({ name, vitality, ...(await T.swap(name, vitality)) }); return rows; })())` });
+    calls.push({
+      key: `swap ${hour}`,
+      js: `(await __lab.hour(${hour}), ${go("valley")}, ${settle}, await (async () => { const rows = []; for (const name of T.swap()) for (const vitality of [1, 0.5, 0.15]) rows.push({ name, vitality, ...(await T.swap(name, vitality)) }); return rows; })())`,
+    });
   }
   // The showcase unless worlds are named.
   for (const world of values.world ?? ["showcase"]) jobs.push({ world, calls });
@@ -139,9 +175,29 @@ if (measures.has("swap")) {
 if (measures.has("paint")) {
   // Looking at the view draws frames of its own, so the check counts the page's frames again over paintings made
   // without looking.
-  jobs.push({ world: "showcase", calls: [{ key: "open", js: OPEN }, { key: "paint", js: `(${go("valley")}, ${settle}, { painter: await T.paintCheck(6), idle: await T.standCheck(30) })` }, { key: "paint unwatched", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))` }, { key: "paint unwatched near", js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))` }] });
+  jobs.push({
+    world: "showcase",
+    calls: [
+      { key: "open", js: OPEN },
+      {
+        key: "paint",
+        js: `(${go("valley")}, ${settle}, { painter: await T.paintCheck(6), idle: await T.standCheck(30) })`,
+      },
+      {
+        key: "paint unwatched",
+        js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false))`,
+      },
+      {
+        key: "paint unwatched near",
+        js: `(${go("turned")}, ${settle}, await T.paintCheck(6, false, true))`,
+      },
+    ],
+  });
 }
-if (measures.has("stress") && (values.world === undefined || values.world.includes("proving"))) {
+if (
+  measures.has("stress") &&
+  (values.world === undefined || values.world.includes("proving"))
+) {
   // The proving ground as it is, then with every tree that represents code placed five times.
   const measure = `${go("valley")}, ${settle}, { trees: T.scale().trees, ms: ${bench}, drawn: T.drawn() }`;
   jobs.push({
@@ -224,105 +280,252 @@ app.whenReady().then(probe).then(
 );
 
 const load = loadavg()[0] ?? 0;
-const electron = createRequire(resolve(repo, "app/package.json"))("electron") as string;
-const env: NodeJS.ProcessEnv = { ...process.env, GAIA_PROBE: JSON.stringify({ page, out, profile, jobs, width: WIDTH, height: HEIGHT, dpr }) };
+const electron = createRequire(resolve(repo, "app/package.json"))(
+  "electron",
+) as string;
+const env: NodeJS.ProcessEnv = {
+  ...process.env,
+  GAIA_PROBE: JSON.stringify({
+    page,
+    out,
+    profile,
+    jobs,
+    width: WIDTH,
+    height: HEIGHT,
+    dpr,
+  }),
+};
 delete env.ELECTRON_RUN_AS_NODE;
-const run = spawnSync(electron, [main], { env, stdio: ["ignore", "inherit", "inherit"] });
-const probed = run.status === 0 ? (JSON.parse(readFileSync(out, "utf8")) as { results: Record<string, Record<string, unknown>>; messages: string[]; gpu: string }) : null;
+const run = spawnSync(electron, [main], {
+  env,
+  stdio: ["ignore", "inherit", "inherit"],
+});
+const probed =
+  run.status === 0
+    ? (JSON.parse(readFileSync(out, "utf8")) as {
+        results: Record<string, Record<string, unknown>>;
+        messages: string[];
+        gpu: string;
+      })
+    : null;
 rmSync(scratch, { recursive: true, force: true });
-if (probed === null) throw new Error(`Electron exited with ${run.status ?? run.signal}`);
+if (probed === null)
+  throw new Error(`Electron exited with ${run.status ?? run.signal}`);
 const { results } = probed;
-if (values.json !== undefined) writeFileSync(values.json, JSON.stringify({ dpr, load: [load, loadavg()[0]], results }, null, 1));
+if (values.json !== undefined)
+  writeFileSync(
+    values.json,
+    JSON.stringify({ dpr, load: [load, loadavg()[0]], results }, null, 1),
+  );
 
 // ---------- the report ----------
 
-type Tally = Record<"shadow" | "mirror" | "view", Record<string, { calls: number; triangles: number }>>;
+type Tally = Record<
+  "shadow" | "mirror" | "view",
+  Record<string, { calls: number; triangles: number }>
+>;
 /** A set of far forms as `__lab.terrain.scale()` reports it. */
-type FarCardsReport = { slots: number; forms: number; held: number; mb: number; farCopies: number; carded: number; read: number; baked: number };
+type FarCardsReport = {
+  slots: number;
+  forms: number;
+  held: number;
+  mb: number;
+  farCopies: number;
+  carded: number;
+  read: number;
+  baked: number;
+};
 const m = (n: number): string => (n / 1e6).toFixed(2);
 const f = (n: number, d = 1): string => n.toFixed(d);
 const line = (s: string): void => void process.stdout.write(`${s}\n`);
 
-const ratios = [...new Set(Object.values(results).map((calls) => (calls as { ratio?: number }).ratio).filter((r): r is number => r !== undefined))];
+const ratios = [
+  ...new Set(
+    Object.values(results)
+      .map((calls) => (calls as { ratio?: number }).ratio)
+      .filter((r): r is number => r !== undefined),
+  ),
+];
 const drewAt = ratios.length === 0 ? `${dpr}` : ratios.join(" and ");
-line(`Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${drewAt}${ratios.some((r) => r !== dpr) ? ` (asked for ${dpr}; Electron draws at the screen's own ratio, so compare runs only on the same screen)` : ""}; drawn by ${probed.gpu}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`);
+line(
+  `Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${drewAt}${ratios.some((r) => r !== dpr) ? ` (asked for ${dpr}; Electron draws at the screen's own ratio, so compare runs only on the same screen)` : ""}; drawn by ${probed.gpu}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`,
+);
 for (const [world, calls] of Object.entries(results)) {
   line(`\n${world}`);
   for (const [key, value] of Object.entries(calls)) {
     if (key.startsWith("drawn ") || key.startsWith("stress ")) {
-      const { ms, drawn, trees, woods, understory } = value as { ms: number; drawn: Tally; trees?: number; woods?: { treesDrawn: number; treesInBand: number; treesFar: number; swapPx: number; treeCards?: FarCardsReport; bushCards?: FarCardsReport }; understory?: Record<string, { copies: number; triangles: number }> };
-      const kinds = [...new Set(Object.values(drawn).flatMap((p) => Object.keys(p)))].sort((a, b) => (drawn.view[b]?.triangles ?? 0) - (drawn.view[a]?.triangles ?? 0));
-      const sum = (pass: keyof Tally, k: "calls" | "triangles"): number => Object.values(drawn[pass]).reduce((n, d) => n + d[k], 0);
-      line(`  ${key}${trees === undefined ? "" : ` (${trees} trees)`}: ${f(ms, 2)} ms a frame; triangles (millions) and draw calls, view / mirror / shadow:`);
-      line(`    all          ${m(sum("view", "triangles"))} / ${m(sum("mirror", "triangles"))} / ${m(sum("shadow", "triangles"))}   calls ${sum("view", "calls")} / ${sum("mirror", "calls")} / ${sum("shadow", "calls")}`);
+      const { ms, drawn, trees, woods, understory } = value as {
+        ms: number;
+        drawn: Tally;
+        trees?: number;
+        woods?: {
+          treesDrawn: number;
+          treesInBand: number;
+          treesFar: number;
+          swapPx: number;
+          treeCards?: FarCardsReport;
+          bushCards?: FarCardsReport;
+        };
+        understory?: Record<string, { copies: number; triangles: number }>;
+      };
+      const kinds = [
+        ...new Set(Object.values(drawn).flatMap((p) => Object.keys(p))),
+      ].sort(
+        (a, b) =>
+          (drawn.view[b]?.triangles ?? 0) - (drawn.view[a]?.triangles ?? 0),
+      );
+      const sum = (pass: keyof Tally, k: "calls" | "triangles"): number =>
+        Object.values(drawn[pass]).reduce((n, d) => n + d[k], 0);
+      line(
+        `  ${key}${trees === undefined ? "" : ` (${trees} trees)`}: ${f(ms, 2)} ms a frame; triangles (millions) and draw calls, view / mirror / shadow:`,
+      );
+      line(
+        `    all          ${m(sum("view", "triangles"))} / ${m(sum("mirror", "triangles"))} / ${m(sum("shadow", "triangles"))}   calls ${sum("view", "calls")} / ${sum("mirror", "calls")} / ${sum("shadow", "calls")}`,
+      );
       for (const k of kinds) {
-        const at = (pass: keyof Tally) => drawn[pass][k] ?? { calls: 0, triangles: 0 };
-        line(`    ${k.padEnd(12)} ${m(at("view").triangles)} / ${m(at("mirror").triangles)} / ${m(at("shadow").triangles)}   calls ${at("view").calls} / ${at("mirror").calls} / ${at("shadow").calls}`);
+        const at = (pass: keyof Tally) =>
+          drawn[pass][k] ?? { calls: 0, triangles: 0 };
+        line(
+          `    ${k.padEnd(12)} ${m(at("view").triangles)} / ${m(at("mirror").triangles)} / ${m(at("shadow").triangles)}   calls ${at("view").calls} / ${at("mirror").calls} / ${at("shadow").calls}`,
+        );
       }
-      if (woods !== undefined) line(`    trees in view: ${woods.treesDrawn - woods.treesInBand} full, ${woods.treesInBand} in the band, ${woods.treesFar} far; turning far at ${woods.swapPx} px`);
-      for (const [set, c] of [["trees", woods?.treeCards], ["understory", woods?.bushCards]] as const) {
-        if (c !== undefined) line(`    far ${set}: ${c.held} of ${c.forms} forms in ${c.slots} slots (${c.mb} MB); ${c.carded} of ${c.farCopies} far copies as cards; ${c.read} read, ${c.baked} baked`);
+      if (woods !== undefined)
+        line(
+          `    trees in view: ${woods.treesDrawn - woods.treesInBand} full, ${woods.treesInBand} in the band, ${woods.treesFar} far; turning far at ${woods.swapPx} px`,
+        );
+      for (const [set, c] of [
+        ["trees", woods?.treeCards],
+        ["understory", woods?.bushCards],
+      ] as const) {
+        if (c !== undefined)
+          line(
+            `    far ${set}: ${c.held} of ${c.forms} forms in ${c.slots} slots (${c.mb} MB); ${c.carded} of ${c.farCopies} far copies as cards; ${c.read} read, ${c.baked} baked`,
+          );
       }
       if (understory !== undefined) {
-        const kinds = Object.entries(understory).sort(([, a], [, b]) => b.triangles - a.triangles);
-        line(`    understory in view, by kind: ${kinds.map(([k, d]) => `${k} ${m(d.triangles)}M (${d.copies})`).join(", ")}`);
+        const kinds = Object.entries(understory).sort(
+          ([, a], [, b]) => b.triangles - a.triangles,
+        );
+        line(
+          `    understory in view, by kind: ${kinds.map(([k, d]) => `${k} ${m(d.triangles)}M (${d.copies})`).join(", ")}`,
+        );
       }
     } else if (key.startsWith("steps ")) {
       // Each step: [meters walked, mean change, worst block's change]. A step above the walk's typical wind, and visible, is a pop.
-      const { steps, wind } = value as { steps: [number, number, number][]; wind: number[] };
-      const typical = [...wind].sort((a, b) => a - b)[Math.floor(wind.length / 2)] ?? 0;
+      const { steps, wind } = value as {
+        steps: [number, number, number][];
+        wind: number[];
+      };
+      const typical =
+        [...wind].sort((a, b) => a - b)[Math.floor(wind.length / 2)] ?? 0;
       const bar = Math.max(typical, POP_FLOOR);
       const worst = steps.reduce((a, b) => (b[2] > a[2] ? b : a));
       const pops = steps.filter((s) => s[2] > bar);
       // A walk where neither the steps nor the wind changed a pixel never drew its frames, as on an overloaded machine, so it proves nothing.
       if (typical === 0 && worst[2] === 0) {
-        line(`  ${key}: no frame changed, not even with the wind, so the walk measured nothing; run it again`);
+        line(
+          `  ${key}: no frame changed, not even with the wind, so the walk measured nothing; run it again`,
+        );
         process.exitCode = 1;
         continue;
       }
-      line(`  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`);
+      line(
+        `  ${key}: ${steps.length} steps; worst block ${f(worst[2])} at ${f(worst[0], 0)} m; the wind's ${f(typical)} (its median along the walk); ${pops.length} pops${pops.length > 0 ? ` (at ${pops.map((s) => f(s[0], 0)).join(", ")} m)` : ""}`,
+      );
       if (pops.length > 0) process.exitCode = 1;
     } else if (key === "paint unwatched" || key === "paint unwatched near") {
-      const { painted, intervals } = value as { painted: string[]; intervals: number[] };
+      const { painted, intervals } = value as {
+        painted: string[];
+        intervals: number[];
+      };
       const sorted = [...intervals].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
       const late = intervals.filter((t) => t > median * 1.5 + 4);
-      line(`  ${key}: ${painted.length} ${key.endsWith("near") ? "near" : "far"} paintings; frames ${intervals.length}, median ${f(median)} ms, ${late.length} late (${late.map((t) => f(t, 0)).join(", ")} ms)`);
+      line(
+        `  ${key}: ${painted.length} ${key.endsWith("near") ? "near" : "far"} paintings; frames ${intervals.length}, median ${f(median)} ms, ${late.length} late (${late.map((t) => f(t, 0)).join(", ")} ms)`,
+      );
     } else if (key === "paint") {
       // Any change at all to the person's view while either painter paints fails, because nothing there moved.
-      const { painter, idle } = value as { painter: { painted: string[]; worst: number; checks: number; intervals: number[] }; idle: { worst: number; looks: [number, number, string][] } };
+      const { painter, idle } = value as {
+        painter: {
+          painted: string[];
+          worst: number;
+          checks: number;
+          intervals: number[];
+        };
+        idle: { worst: number; looks: [number, number, string][] };
+      };
       const worst = Math.max(painter.worst, idle.worst);
       const sorted = [...painter.intervals].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
       const late = painter.intervals.filter((t) => t > median * 1.5 + 4);
-      line(`  paint: ${painter.painted.length} far paintings with ${painter.checks} looks at the person's view, then ${idle.looks.length} looks over 30 s still with the app's painter at work; worst block changed ${f(worst, 2)} levels${worst >= SWAP_FLOOR ? " (it must not change)" : ""}`);
-      line(`    frames while painting: ${painter.intervals.length}, median ${f(median)} ms, ${late.length} late (worst ${f(Math.max(0, ...painter.intervals))} ms)`);
+      line(
+        `  paint: ${painter.painted.length} far paintings with ${painter.checks} looks at the person's view, then ${idle.looks.length} looks over 30 s still with the app's painter at work; worst block changed ${f(worst, 2)} levels${worst >= SWAP_FLOOR ? " (it must not change)" : ""}`,
+      );
+      line(
+        `    frames while painting: ${painter.intervals.length}, median ${f(median)} ms, ${late.length} late (worst ${f(Math.max(0, ...painter.intervals))} ms)`,
+      );
       if (worst >= SWAP_FLOOR) process.exitCode = 1;
     } else if (key.startsWith("swap ")) {
       // A step passes when it changes the plant's part of the screen no more than the wind does there in half a second, or too little to show.
-      type Step = { change: { mean: number; worst: number }; wind: { mean: number; worst: number }; distance: number };
-      const STEPS = ["middle", "whole", "leaving", "end", "dissolving", "gone"] as const;
-      const rows = value as ({ name: string; vitality: number } & Record<(typeof STEPS)[number], Step>)[];
-      const over = (s: Step): boolean => s.change.worst > SWAP_FLOOR && (s.change.worst > s.wind.worst || s.change.mean > s.wind.mean);
-      const failing = (r: (typeof rows)[number]): boolean => STEPS.some((k) => over(r[k]));
+      type Step = {
+        change: { mean: number; worst: number };
+        wind: { mean: number; worst: number };
+        distance: number;
+      };
+      const STEPS = [
+        "middle",
+        "whole",
+        "leaving",
+        "end",
+        "dissolving",
+        "gone",
+      ] as const;
+      const rows = value as ({ name: string; vitality: number } & Record<
+        (typeof STEPS)[number],
+        Step
+      >)[];
+      const over = (s: Step): boolean =>
+        s.change.worst > SWAP_FLOOR &&
+        (s.change.worst > s.wind.worst || s.change.mean > s.wind.mean);
+      const failing = (r: (typeof rows)[number]): boolean =>
+        STEPS.some((k) => over(r[k]));
       const failed = rows.filter(failing);
       // A test where the wind moved no plant at any step never saw one, so it proves nothing.
       if (!rows.some((r) => STEPS.some((k) => r[k].wind.worst > 0))) {
-        line(`  ${key}: the wind moved no plant at any step, so the test saw none and proves nothing`);
+        line(
+          `  ${key}: the wind moved no plant at any step, so the test saw none and proves nothing`,
+        );
         process.exitCode = 1;
         continue;
       }
-      line(`  ${key}: ${rows.length - failed.length} of ${rows.length} presets and healths under the wind or a level (mean / worst block over the plant, the step against the wind)`);
+      line(
+        `  ${key}: ${rows.length - failed.length} of ${rows.length} presets and healths under the wind or a level (mean / worst block over the plant, the step against the wind)`,
+      );
       if (failed.length > 0) process.exitCode = 1;
-      const say = (s: Step): string => `${f(s.change.mean, 2)} / ${f(s.change.worst)} against ${f(s.wind.mean, 2)} / ${f(s.wind.worst)}`;
+      const say = (s: Step): string =>
+        `${f(s.change.mean, 2)} / ${f(s.change.worst)} against ${f(s.wind.mean, 2)} / ${f(s.wind.worst)}`;
       for (const r of rows) {
-        line(`    ${failing(r) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; whole ${say(r.whole)}`);
-        line(`                            dissolving ${say(r.leaving)}; the full form leaving ${say(r.end)} at ${f(r.end.distance, 0)} m`);
-        line(`                            too small: dissolving ${say(r.dissolving)}; gone ${say(r.gone)} at ${f(r.gone.distance, 0)} m`);
+        line(
+          `    ${failing(r) ? "over " : "     "} ${r.name.padEnd(16)} ${f(r.vitality, 2)}  middle of the band ${say(r.middle)} at ${f(r.middle.distance, 0)} m; whole ${say(r.whole)}`,
+        );
+        line(
+          `                            dissolving ${say(r.leaving)}; the full form leaving ${say(r.end)} at ${f(r.end.distance, 0)} m`,
+        );
+        line(
+          `                            too small: dissolving ${say(r.dissolving)}; gone ${say(r.gone)} at ${f(r.gone.distance, 0)} m`,
+        );
       }
     } else if (key.startsWith("hitch ")) {
-      const s = value as { medianMs: number; p99Ms: number; maxMs: number; stutters: number };
-      line(`  ${key}: median ${f(s.medianMs, 2)} ms, p99 ${f(s.p99Ms, 1)}, max ${f(s.maxMs, 1)}, ${s.stutters} stutters`);
+      const s = value as {
+        medianMs: number;
+        p99Ms: number;
+        maxMs: number;
+        stutters: number;
+      };
+      line(
+        `  ${key}: median ${f(s.medianMs, 2)} ms, p99 ${f(s.p99Ms, 1)}, max ${f(s.maxMs, 1)}, ${s.stutters} stutters`,
+      );
     }
   }
 }

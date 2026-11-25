@@ -38,21 +38,40 @@ export interface Realized {
 const STILL: MotionSpec = { sway: 0, frequency: 0 };
 
 /** The erased build signature. Stored values are checked against `params` before the call. */
-type ErasedBuild = (params: unknown, ctx: BuildContext, input: unknown) => unknown;
+type ErasedBuild = (
+  params: unknown,
+  ctx: BuildContext,
+  input: unknown,
+) => unknown;
 
 /** Turns stored words into what `build` receives. Each scale gets its own seeded unit. */
-export function resolveParams(p: AnyPrimitive, stored: Blueprint["slots"][string]["params"], r: ReturnType<typeof rand>, where: string): Record<string, unknown> {
+export function resolveParams(
+  p: AnyPrimitive,
+  stored: Blueprint["slots"][string]["params"],
+  r: ReturnType<typeof rand>,
+  where: string,
+): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, field] of Object.entries(p.params)) {
     const value = stored[name];
-    if (!isStoredValue(field, value)) throw new Error(`${where}.${name} has an invalid value for ${p.id}.`);
-    out[name] = field.type === "scale" ? resolveScale(field, value as string, r.fork(`${where}.${name}`).next()) : value;
+    if (!isStoredValue(field, value))
+      throw new Error(`${where}.${name} has an invalid value for ${p.id}.`);
+    out[name] =
+      field.type === "scale"
+        ? resolveScale(
+            field,
+            value as string,
+            r.fork(`${where}.${name}`).next(),
+          )
+        : value;
   }
   return out;
 }
 
-const isSkeleton = (x: unknown): x is Skeleton => typeof x === "object" && x !== null && "limbs" in x && "tips" in x;
-const isBuilt = (x: unknown): x is Built => typeof x === "object" && x !== null && "parts" in x && "anchors" in x;
+const isSkeleton = (x: unknown): x is Skeleton =>
+  typeof x === "object" && x !== null && "limbs" in x && "tips" in x;
+const isBuilt = (x: unknown): x is Built =>
+  typeof x === "object" && x !== null && "parts" in x && "anchors" in x;
 
 function anchorsOf(source: unknown): readonly Anchor[] {
   if (isBuilt(source)) return source.anchors;
@@ -70,17 +89,27 @@ export interface BuiltSlot {
  * Builds every filled slot of a blueprint in dependency order, feeding each
  * slot its `on` slot's output. Kinds then collect the outputs they need.
  */
-export function buildSlots(bp: Blueprint, k: AnyKind, lib: Library, opts: RealizeOptions): Map<string, BuiltSlot> {
-  if (bp.kind !== k.id) throw new Error(`Blueprint ${bp.id} is a ${bp.kind}, not a ${k.id}.`);
+export function buildSlots(
+  bp: Blueprint,
+  k: AnyKind,
+  lib: Library,
+  opts: RealizeOptions,
+): Map<string, BuiltSlot> {
+  if (bp.kind !== k.id)
+    throw new Error(`Blueprint ${bp.id} is a ${bp.kind}, not a ${k.id}.`);
   const root = rand(opts.seed);
   const built = new Map<string, BuiltSlot>();
   for (const name of slotOrder(k)) {
     const slot = k.slots[name];
     const filled = bp.slots[name];
     if (slot === undefined || filled === undefined) continue;
-    if (filled.slots !== undefined) throw new Error(`${name}: nested slots are not supported by this realizer yet.`);
+    if (filled.slots !== undefined)
+      throw new Error(
+        `${name}: nested slots are not supported by this realizer yet.`,
+      );
     const p = lib.get(filled.use);
-    if (p.role !== slot.role) throw new Error(`${name} needs a ${slot.role}, not ${p.id}.`);
+    if (p.role !== slot.role)
+      throw new Error(`${name} needs a ${slot.role}, not ${p.id}.`);
     let input: unknown = null;
     if (slot.on !== undefined) {
       const source = built.get(slot.on)?.output;
@@ -90,12 +119,20 @@ export function buildSlots(bp: Blueprint, k: AnyKind, lib: Library, opts: Realiz
     }
     const params = resolveParams(p, filled.params, root.fork("params"), name);
     const ctx: BuildContext = { rand: root.fork(name), facts: opts.facts };
-    built.set(name, { role: p.role, output: (p.build as ErasedBuild)(params, ctx, input) });
+    built.set(name, {
+      role: p.role,
+      output: (p.build as ErasedBuild)(params, ctx, input),
+    });
   }
   return built;
 }
 
-export function realize(bp: Blueprint, k: AnyKind, lib: Library, opts: RealizeOptions): Realized {
+export function realize(
+  bp: Blueprint,
+  k: AnyKind,
+  lib: Library,
+  opts: RealizeOptions,
+): Realized {
   const parts: Part[] = [];
   let motion: MotionSpec | undefined;
   let palette: Palette | undefined;
@@ -105,11 +142,13 @@ export function realize(bp: Blueprint, k: AnyKind, lib: Library, opts: RealizeOp
     else if (role === "Palette") palette = output as Palette;
     else if (isBuilt(output)) parts.push(...output.parts);
   }
-  if (palette === undefined) throw new Error(`Blueprint ${bp.id} has no Palette slot to color it.`);
+  if (palette === undefined)
+    throw new Error(`Blueprint ${bp.id} has no Palette slot to color it.`);
   return { parts, motion: motion ?? STILL, palette, slots };
 }
 
-export const triangleCount = (parts: readonly Part[]): number => parts.reduce((n, p) => n + p.indices.length / 3, 0);
+export const triangleCount = (parts: readonly Part[]): number =>
+  parts.reduce((n, p) => n + p.indices.length / 3, 0);
 
 /**
  * Joins parts that share a swatch and a collision into one, so a building of
@@ -126,7 +165,9 @@ export function mergeParts(parts: readonly Part[]): Part[] {
   return [...groups.values()].map((list) => {
     if (list.length === 1) return list[0] as Part;
     const join = (pick: (p: Part) => Float32Array): Float32Array => {
-      const out = new Float32Array(list.reduce((n, p) => n + pick(p).length, 0));
+      const out = new Float32Array(
+        list.reduce((n, p) => n + pick(p).length, 0),
+      );
       let at = 0;
       for (const p of list) {
         out.set(pick(p), at);
@@ -134,18 +175,31 @@ export function mergeParts(parts: readonly Part[]): Part[] {
       }
       return out;
     };
-    const indices = new Uint32Array(list.reduce((n, p) => n + p.indices.length, 0));
+    const indices = new Uint32Array(
+      list.reduce((n, p) => n + p.indices.length, 0),
+    );
     let at = 0;
     let base = 0;
     for (const p of list) {
-      for (let i = 0; i < p.indices.length; i++) indices[at + i] = (p.indices[i] as number) + base;
+      for (let i = 0; i < p.indices.length; i++)
+        indices[at + i] = (p.indices[i] as number) + base;
       at += p.indices.length;
       base += p.shade.length;
     }
     const first = list[0] as Part;
     /** An optional channel joins only if some part has it. Parts without it contribute zeros. */
-    const optional = (name: "fall" | "grow" | "rot" | "spin" | "grain", size: number): Partial<Part["channels"]> =>
-      list.some((p) => p.channels[name] !== undefined) ? { [name]: join((p) => p.channels[name] ?? new Float32Array(p.shade.length * size)) } : {};
+    const optional = (
+      name: "fall" | "grow" | "rot" | "spin" | "grain",
+      size: number,
+    ): Partial<Part["channels"]> =>
+      list.some((p) => p.channels[name] !== undefined)
+        ? {
+            [name]: join(
+              (p) =>
+                p.channels[name] ?? new Float32Array(p.shade.length * size),
+            ),
+          }
+        : {};
     return {
       swatch: first.swatch,
       collision: first.collision,

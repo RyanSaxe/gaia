@@ -31,7 +31,8 @@ export interface Steered {
   readonly hurry: boolean;
 }
 
-const isSide = (key: WalkKey): key is "left" | "right" => key === "left" || key === "right";
+const isSide = (key: WalkKey): key is "left" | "right" =>
+  key === "left" || key === "right";
 /** Turning left increases yaw. */
 const sign = (key: "left" | "right"): number => (key === "left" ? 1 : -1);
 
@@ -42,7 +43,10 @@ export function steering(): Steering {
 /** Records a key press at time `t`. ← or → adds a nudge. */
 export function steerPress(s: Steering, key: WalkKey, t: number): Steering {
   if (s.down.has(key)) return s;
-  return { down: new Map(s.down).set(key, t), owed: isSide(key) ? s.owed + sign(key) * STEER.nudge : s.owed };
+  return {
+    down: new Map(s.down).set(key, t),
+    owed: isSide(key) ? s.owed + sign(key) * STEER.nudge : s.owed,
+  };
 }
 
 /** Records a key release. With no key, it releases every key, as when the page loses focus. */
@@ -58,7 +62,12 @@ export function steerAlong(s: Steering): Steering {
 }
 
 /** One step of `dt` seconds from `t`, the person facing `yaw`. */
-export function steerStep(s: Steering, t: number, yaw: number, dt: number): Steered {
+export function steerStep(
+  s: Steering,
+  t: number,
+  yaw: number,
+  dt: number,
+): Steered {
   let y = yaw;
   let owed = s.owed;
   // Owed nudges turn at `STEER.rate`. A held key turns only in the time the nudges leave in the step, and only after
@@ -74,6 +83,17 @@ export function steerStep(s: Steering, t: number, yaw: number, dt: number): Stee
   }
   const forward = s.down.has("ahead");
   // ↓ walks backward and keeps the facing. ↑ and ↓ together stop. Shift hurries only forward walking.
-  const ahead = s.down.has("back") ? (forward ? 0 : -STEER.back) : forward ? 1 : 0;
-  return { steering: { ...s, owed }, yaw: y, ahead, hurry: ahead > 0 && s.down.has("shift") };
+  const ahead = s.down.has("back")
+    ? forward
+      ? 0
+      : -STEER.back
+    : forward
+      ? 1
+      : 0;
+  return {
+    steering: { ...s, owed },
+    yaw: y,
+    ahead,
+    hurry: ahead > 0 && s.down.has("shift"),
+  };
 }

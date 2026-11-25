@@ -8,9 +8,9 @@
     "./testing": "./test/worlds.ts"
   },
   "dependencies": {
-    "@gaia/schema": "workspace:*",
     "@gaia/primitives": "workspace:*",
-    "@gaia/realize": "workspace:*"
+    "@gaia/realize": "workspace:*",
+    "@gaia/schema": "workspace:*"
   },
   "devDependencies": {
     "@gaia/kinds": "workspace:*",

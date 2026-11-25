@@ -69,11 +69,19 @@ void main() {
 }
 `;
 
-export function createSmokeMaterial(light: SceneLight, shared: { uVitality: { value: number } }, healthy: THREE.Vector3): THREE.ShaderMaterial {
+export function createSmokeMaterial(
+  light: SceneLight,
+  shared: { uVitality: { value: number } },
+  healthy: THREE.Vector3,
+): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     vertexShader: SMOKE_VERT,
     fragmentShader: SMOKE_FRAG,
-    uniforms: { ...light, uVitality: shared.uVitality, uHealthy: { value: healthy } },
+    uniforms: {
+      ...light,
+      uVitality: shared.uVitality,
+      uHealthy: { value: healthy },
+    },
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,

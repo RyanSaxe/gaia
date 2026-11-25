@@ -5,7 +5,14 @@
 // and since realize is pure the build is the same either way.
 
 import { type Blueprint, type Library, seedOf } from "@gaia/schema";
-import { bush, landmark, rock, structure, tree, wildflowers } from "@gaia/kinds";
+import {
+  bush,
+  landmark,
+  rock,
+  structure,
+  tree,
+  wildflowers,
+} from "@gaia/kinds";
 import { type Realized, realize } from "@gaia/realize";
 import type { MakeReply } from "./make-worker.ts";
 import MakeWorker from "./make-worker.ts?worker";
@@ -19,8 +26,14 @@ export type BuildKind = keyof typeof KINDS;
  * Its seed comes from the blueprint's content alone, so the same blueprint builds the same in every world.
  */
 export function plantAsk(blueprint: Blueprint): BuildAsk {
-  if (!(blueprint.kind in KINDS)) throw new Error(`No build is made for a ${blueprint.kind} blueprint.`);
-  return { kind: blueprint.kind as BuildKind, blueprint, seed: seedOf(`build/${blueprint.id}`), facts: { scale: 1, age: 120 } };
+  if (!(blueprint.kind in KINDS))
+    throw new Error(`No build is made for a ${blueprint.kind} blueprint.`);
+  return {
+    kind: blueprint.kind as BuildKind,
+    blueprint,
+    seed: seedOf(`build/${blueprint.id}`),
+    facts: { scale: 1, age: 120 },
+  };
 }
 
 /** One build request as plain data a worker accepts: the inputs to realize. */
@@ -35,15 +48,21 @@ export interface BuildAsk {
 const ready = new Map<string, Realized>();
 /** Builds being made ahead that have not arrived. One requested meanwhile is realized in place, and the worker's copy is dropped on arrival. */
 const making = new Set<string>();
-const keyOf = (ask: BuildAsk): string => JSON.stringify([ask.kind, ask.seed, ask.facts, ask.blueprint]);
+const keyOf = (ask: BuildAsk): string =>
+  JSON.stringify([ask.kind, ask.seed, ask.facts, ask.blueprint]);
 
 /**
  * Makes `asks` on worker threads, each taking the next build as it finishes
  * one, and resolves once all are made. A thread that fails ends early, and the
  * builds it did not make are realized in place when requested.
  */
-export function makeAhead(asks: readonly BuildAsk[], threads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2))): Promise<void> {
-  const left = asks.filter((ask) => !ready.has(keyOf(ask)) && !making.has(keyOf(ask)));
+export function makeAhead(
+  asks: readonly BuildAsk[],
+  threads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 2)),
+): Promise<void> {
+  const left = asks.filter(
+    (ask) => !ready.has(keyOf(ask)) && !making.has(keyOf(ask)),
+  );
   for (const ask of left) making.add(keyOf(ask));
   let next = 0;
   const work = (): Promise<void> =>
@@ -61,13 +80,16 @@ export function makeAhead(asks: readonly BuildAsk[], threads = Math.max(1, Math.
       };
       worker.onmessage = (e: MessageEvent<MakeReply>) => {
         const ask = left[e.data.id];
-        if (ask !== undefined && making.delete(keyOf(ask)) && "built" in e.data) ready.set(keyOf(ask), e.data.built);
+        if (ask !== undefined && making.delete(keyOf(ask)) && "built" in e.data)
+          ready.set(keyOf(ask), e.data.built);
         give();
       };
       worker.onerror = finish;
       give();
     });
-  return Promise.all(Array.from({ length: Math.min(threads, left.length) }, work)).then(() => undefined);
+  return Promise.all(
+    Array.from({ length: Math.min(threads, left.length) }, work),
+  ).then(() => undefined);
 }
 
 /** Returns the build `ask` names: the one made ahead, which can be taken once, or else one realized now from `lib`. */
@@ -76,11 +98,20 @@ export function made(ask: BuildAsk, lib: Library): Realized {
   const built = ready.get(key);
   ready.delete(key);
   making.delete(key);
-  return built ?? realize(ask.blueprint, KINDS[ask.kind], lib, { seed: ask.seed, facts: ask.facts });
+  return (
+    built ??
+    realize(ask.blueprint, KINDS[ask.kind], lib, {
+      seed: ask.seed,
+      facts: ask.facts,
+    })
+  );
 }
 
 /** Makes the build `ask` names on a worker thread now, so a build dropped earlier returns without blocking the page. */
-export async function makeLater(ask: BuildAsk, lib: Library): Promise<Realized> {
+export async function makeLater(
+  ask: BuildAsk,
+  lib: Library,
+): Promise<Realized> {
   await makeAhead([ask], 1);
   return made(ask, lib);
 }

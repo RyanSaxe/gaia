@@ -7,7 +7,8 @@ import { STIFF, WIND, type WindLevel } from "@gaia/realize";
 import { WIND_FIELD_GLSL } from "./wind-field.ts";
 
 const f = (x: number): string => x.toFixed(5);
-const level = (l: WindLevel): string => `vec4(${f(l.lean)}, ${f(l.swing)}, ${f(l.rate)}, ${f(l.most)})`;
+const level = (l: WindLevel): string =>
+  `vec4(${f(l.lean)}, ${f(l.swing)}, ${f(l.rate)}, ${f(l.most)})`;
 
 /** The plant's bend from `WIND_FIELD_GLSL`'s gusts: `jointPhase`, `trunkGive`, `windLean`, `windBendAt`, `windFlutter`, `windStiff`, `bendUp` and each level's numbers. */
 export const SWAY_GLSL = /* glsl */ `

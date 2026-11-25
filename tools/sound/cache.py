@@ -12,6 +12,7 @@ cache is GAIA_SOUND_CACHE, or ~/.cache/gaia-sound:
 
 A symbolic link can point one of these at a folder already on the machine, and it is checked like a download.
 """
+
 import hashlib
 import json
 import os
@@ -102,11 +103,32 @@ def sfizz():
         t.extractall(build, filter="data")
     src = build / f"sfizz-{s['version']}"
     print("building sfizz_render (a few minutes)", flush=True)
-    subprocess.run(["nice", "-n", "10", "cmake", "-S", str(src), "-B", str(build / "out"), "-G", "Ninja",
-                    "-DCMAKE_BUILD_TYPE=Release", "-DSFIZZ_SHARED=OFF", "-DSFIZZ_JACK=OFF", "-DSFIZZ_RENDER=ON",
-                    "-DSFIZZ_GIT_SUBMODULE_CHECK=OFF"], check=True, stdout=subprocess.DEVNULL)
-    subprocess.run(["nice", "-n", "10", "cmake", "--build", str(build / "out"), "--target", "sfizz_render", "-j", "2"],
-                   check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(
+        [
+            "nice",
+            "-n",
+            "10",
+            "cmake",
+            "-S",
+            str(src),
+            "-B",
+            str(build / "out"),
+            "-G",
+            "Ninja",
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DSFIZZ_SHARED=OFF",
+            "-DSFIZZ_JACK=OFF",
+            "-DSFIZZ_RENDER=ON",
+            "-DSFIZZ_GIT_SUBMODULE_CHECK=OFF",
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["nice", "-n", "10", "cmake", "--build", str(build / "out"), "--target", "sfizz_render", "-j", "2"],
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
     SFIZZ.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(build / "out" / "library" / "bin" / "sfizz_render", SFIZZ)
     shutil.rmtree(build)

@@ -6,7 +6,8 @@ import { contextBridge, ipcRenderer } from "electron";
 
 contextBridge.exposeInMainWorld("gaiaShell", {
   app: "electron",
-  chooseFolder: (): Promise<string | null> => ipcRenderer.invoke("gaia:choose-folder") as Promise<string | null>,
+  chooseFolder: (): Promise<string | null> =>
+    ipcRenderer.invoke("gaia:choose-folder") as Promise<string | null>,
 });
 
 ipcRenderer.on("gaia:world-port", (event) => {

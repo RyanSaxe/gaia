@@ -81,21 +81,29 @@ const EDGE_RUN = 2.5;
  * there the paint fades into paper instead. The loading screen's pen and
  * hedgerows and the field map's borders all draw this path.
  */
-export function borderPath(rings: readonly (readonly number[])[], land: LandOutline): string {
+export function borderPath(
+  rings: readonly (readonly number[])[],
+  land: LandOutline,
+): string {
   const f = (v: number): string => v.toFixed(1);
   let d = "";
   for (const raw of rings) {
     const count = raw.length / 2;
     if (count < 3) continue;
     const ring = easeRing(raw);
-    const at = (k: number): [number, number] => [ring[k * 2] as number, ring[k * 2 + 1] as number];
+    const at = (k: number): [number, number] => [
+      ring[k * 2] as number,
+      ring[k * 2 + 1] as number,
+    ];
     const mid = (a: number, b: number): string => {
       const [ax, az] = at(a);
       const [bx, bz] = at(b);
       return `${f((ax + bx) / 2)} ${f((az + bz) / 2)}`;
     };
     // Tests the raw traced point, not the smoothed one, because smoothing pulls a stretch along a rounded corner inward.
-    const inner = (k: number): boolean => pastTheEdge(land, raw[k * 2] as number, raw[k * 2 + 1] as number) < -EDGE_RUN;
+    const inner = (k: number): boolean =>
+      pastTheEdge(land, raw[k * 2] as number, raw[k * 2 + 1] as number) <
+      -EDGE_RUN;
     const step = count < 12 ? 1 : 2;
     const kept: number[] = [];
     for (let k = 0; k < count; k += step) kept.push(k);
@@ -104,7 +112,12 @@ export function borderPath(rings: readonly (readonly number[])[], land: LandOutl
       // A ring that never meets the edge is one closed curve.
       const n = kept.length;
       d += `M${mid(kept[0] as number, kept[1 % n] as number)}`;
-      for (let q = 1; q <= n; q++) d += `Q${at(kept[q % n] as number).map(f).join(" ")} ${mid(kept[q % n] as number, kept[(q + 1) % n] as number)}`;
+      for (let q = 1; q <= n; q++)
+        d += `Q${at(kept[q % n] as number)
+          .map(f)
+          .join(
+            " ",
+          )} ${mid(kept[q % n] as number, kept[(q + 1) % n] as number)}`;
       d += "Z";
       continue;
     }
@@ -113,9 +126,16 @@ export function borderPath(rings: readonly (readonly number[])[], land: LandOutl
     let run: number[] = [];
     const flush = (): void => {
       if (run.length >= 3) {
-        d += `M${at(run[0] as number).map(f).join(" ")}`;
-        for (let q = 1; q < run.length - 1; q++) d += `Q${at(run[q] as number).map(f).join(" ")} ${mid(run[q] as number, run[q + 1] as number)}`;
-        d += `L${at(run[run.length - 1] as number).map(f).join(" ")}`;
+        d += `M${at(run[0] as number)
+          .map(f)
+          .join(" ")}`;
+        for (let q = 1; q < run.length - 1; q++)
+          d += `Q${at(run[q] as number)
+            .map(f)
+            .join(" ")} ${mid(run[q] as number, run[q + 1] as number)}`;
+        d += `L${at(run[run.length - 1] as number)
+          .map(f)
+          .join(" ")}`;
       }
       run = [];
     };
@@ -135,7 +155,10 @@ export function borderPath(rings: readonly (readonly number[])[], land: LandOutl
  * of its edges with the corners as control points, so a traced lattice's
  * steps read as a smooth line.
  */
-export function ringsPath(rings: readonly (readonly number[])[], px: (v: number) => number): Path2D {
+export function ringsPath(
+  rings: readonly (readonly number[])[],
+  px: (v: number) => number,
+): Path2D {
   const p = new Path2D();
   for (const ring of rings) {
     const count = ring.length / 2;
@@ -158,7 +181,11 @@ export function ringsPath(rings: readonly (readonly number[])[], px: (v: number)
 }
 
 /** Returns points in meters around the land's edge, `inset` meters inside it (`pastTheEdge`). */
-export function rimPoints(land: LandOutline, inset: number, count = 180): [number, number][] {
+export function rimPoints(
+  land: LandOutline,
+  inset: number,
+  count = 180,
+): [number, number][] {
   const size = land.size;
   const out: [number, number][] = [];
   for (let k = 0; k <= count; k++) {
@@ -179,16 +206,26 @@ export function rimPoints(land: LandOutline, inset: number, count = 180): [numbe
 }
 
 /** The land's edge `inset` meters inside it as a Path2D through `px`, for clipping a pen to the land. */
-export function rimPath(land: LandOutline, inset: number, px: (v: number) => number = (v) => v): Path2D {
+export function rimPath(
+  land: LandOutline,
+  inset: number,
+  px: (v: number) => number = (v) => v,
+): Path2D {
   const p = new Path2D();
-  rimPoints(land, inset).forEach(([x, z], k) => (k === 0 ? p.moveTo(px(x), px(z)) : p.lineTo(px(x), px(z))));
+  rimPoints(land, inset).forEach(([x, z], k) =>
+    k === 0 ? p.moveTo(px(x), px(z)) : p.lineTo(px(x), px(z)),
+  );
   p.closePath();
   return p;
 }
 
 const noises = new Map<string, HTMLCanvasElement>();
 /** A small cached canvas of random alpha in one color. Drawn scaled up, image smoothing turns its pixels into soft mottling. */
-export function noiseCanvas(cells: number, seed: number, rgb: readonly [number, number, number]): HTMLCanvasElement {
+export function noiseCanvas(
+  cells: number,
+  seed: number,
+  rgb: readonly [number, number, number],
+): HTMLCanvasElement {
   const key = `${cells}|${seed}|${rgb.join(",")}`;
   const kept = noises.get(key);
   if (kept !== undefined) return kept;
@@ -196,7 +233,11 @@ export function noiseCanvas(cells: number, seed: number, rgb: readonly [number, 
   c.width = c.height = cells;
   const g = c.getContext("2d") as CanvasRenderingContext2D;
   const img = g.createImageData(cells, cells);
-  for (let k = 0; k < cells * cells; k++) img.data.set([rgb[0], rgb[1], rgb[2], Math.round(255 * hash(k + seed, seed))], k * 4);
+  for (let k = 0; k < cells * cells; k++)
+    img.data.set(
+      [rgb[0], rgb[1], rgb[2], Math.round(255 * hash(k + seed, seed))],
+      k * 4,
+    );
   g.putImageData(img, 0, 0);
   noises.set(key, c);
   return c;
@@ -218,11 +259,21 @@ function valueNoise(x: number, y: number, seed: number): number {
 }
 
 /** The paint amount from 0 to 1 at (u, v), where the sheet's corners are 0 and 1. It is full inside and fades raggedly to bare paper at the edge. */
-export function paintAt(style: MapStyle, u: number, v: number, aspect = 1): number {
+export function paintAt(
+  style: MapStyle,
+  u: number,
+  v: number,
+  aspect = 1,
+): number {
   // The sheet spans the land's width. To the north and south, the paint ends where the land does.
   const edge = Math.min(u, 1 - u, 0.5 / aspect - Math.abs(v - 0.5));
-  const rag = (valueNoise(u * 22, v * 22, 3) - 0.5) * 2 * style.ragged + (valueNoise(u * 96, v * 96, 11) - 0.5) * style.ragged * 0.7;
-  const t = Math.max(0, Math.min(1, (edge + rag - style.fade[0]) / (style.fade[1] - style.fade[0])));
+  const rag =
+    (valueNoise(u * 22, v * 22, 3) - 0.5) * 2 * style.ragged +
+    (valueNoise(u * 96, v * 96, 11) - 0.5) * style.ragged * 0.7;
+  const t = Math.max(
+    0,
+    Math.min(1, (edge + rag - style.fade[0]) / (style.fade[1] - style.fade[0])),
+  );
   return t * t * (3 - 2 * t);
 }
 
@@ -230,14 +281,26 @@ export function paintAt(style: MapStyle, u: number, v: number, aspect = 1): numb
 const FADE_CELLS = 384;
 
 /** Paints the fade mask (`paintAt`) into a small canvas's alpha, yielding after each band of 96 rows. */
-export function* fadeMask(style: MapStyle, aspect = 1): Generator<void, HTMLCanvasElement> {
+export function* fadeMask(
+  style: MapStyle,
+  aspect = 1,
+): Generator<void, HTMLCanvasElement> {
   const fade = document.createElement("canvas");
   fade.width = fade.height = FADE_CELLS;
   const g = fade.getContext("2d") as CanvasRenderingContext2D;
   const img = g.createImageData(FADE_CELLS, FADE_CELLS);
   for (let j0 = 0; j0 < FADE_CELLS; j0 += 96) {
     for (let j = j0; j < Math.min(FADE_CELLS, j0 + 96); j++) {
-      for (let i = 0; i < FADE_CELLS; i++) img.data[(j * FADE_CELLS + i) * 4 + 3] = Math.round(255 * paintAt(style, (i + 0.5) / FADE_CELLS, (j + 0.5) / FADE_CELLS, aspect));
+      for (let i = 0; i < FADE_CELLS; i++)
+        img.data[(j * FADE_CELLS + i) * 4 + 3] = Math.round(
+          255 *
+            paintAt(
+              style,
+              (i + 0.5) / FADE_CELLS,
+              (j + 0.5) / FADE_CELLS,
+              aspect,
+            ),
+        );
     }
     yield;
   }
@@ -246,7 +309,12 @@ export function* fadeMask(style: MapStyle, aspect = 1): Generator<void, HTMLCanv
 }
 
 /** Strokes an area's outline in a darker shade, clipped inside it, so the rim looks like pooled pigment. */
-function poolRim(g: CanvasRenderingContext2D, path: Path2D, rgb: readonly [number, number, number], pool: MapStyle["pool"]): void {
+function poolRim(
+  g: CanvasRenderingContext2D,
+  path: Path2D,
+  rgb: readonly [number, number, number],
+  pool: MapStyle["pool"],
+): void {
   g.save();
   g.clip(path, "evenodd");
   const rim = rgb.map((c) => Math.round(c * 0.6)).join(",");
@@ -264,9 +332,18 @@ function poolRim(g: CanvasRenderingContext2D, path: Path2D, rgb: readonly [numbe
  * and `inside` says whether a point is the area's own ground. The streaks go
  * into two paths, so a dry area costs two draws however large it is.
  */
-function dryBrush(g: CanvasRenderingContext2D, box: Box, dry: number, style: MapStyle, seed: number, inside: (x: number, y: number) => boolean): void {
+function dryBrush(
+  g: CanvasRenderingContext2D,
+  box: Box,
+  dry: number,
+  style: MapStyle,
+  seed: number,
+  inside: (x: number, y: number) => boolean,
+): void {
   const [x0, y0, x1, y1] = box;
-  const count = Math.round(((x1 - x0) * (y1 - y0) * style.wilt.streaks * dry) / 4000);
+  const count = Math.round(
+    ((x1 - x0) * (y1 - y0) * style.wilt.streaks * dry) / 4000,
+  );
   const strokes = [new Path2D(), new Path2D()];
   for (let k = 0; k < count; k++) {
     const x = x0 + hash(k + seed * 101, 31) * (x1 - x0);
@@ -289,7 +366,8 @@ function dryBrush(g: CanvasRenderingContext2D, box: Box, dry: number, style: Map
   g.restore();
 }
 
-const overlaps = (a: Box, b: Box): boolean => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+const overlaps = (a: Box, b: Box): boolean =>
+  a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
 /**
  * Paints the wash on `g`, whose transform maps sheet pixels to its own.
@@ -299,7 +377,13 @@ const overlaps = (a: Box, b: Box): boolean => a[0] < b[2] && a[2] > b[0] && a[1]
  * granulation and the edge fade. Each draws only where paint is, so a cell
  * without paint stays bare.
  */
-export function* layWash(g: CanvasRenderingContext2D, under: CanvasImageSource, sheet: WashSheet, style: MapStyle, box: Box = [0, 0, PAPER, PAPER]): Generator<void> {
+export function* layWash(
+  g: CanvasRenderingContext2D,
+  under: CanvasImageSource,
+  sheet: WashSheet,
+  style: MapStyle,
+  box: Box = [0, 0, PAPER, PAPER],
+): Generator<void> {
   const { n, cell, reach, nearest } = sheet;
   const scale = PAPER / (reach * 2);
   const px = (v: number): number => (v + reach) * scale;
@@ -315,17 +399,45 @@ export function* layWash(g: CanvasRenderingContext2D, under: CanvasImageSource, 
     const i = c % n;
     const j = Math.floor(c / n);
     const b = spans.get(k);
-    spans.set(k, b === undefined ? [i, j, i, j] : [Math.min(b[0], i), Math.min(b[1], j), Math.max(b[2], i), Math.max(b[3], j)]);
+    spans.set(
+      k,
+      b === undefined
+        ? [i, j, i, j]
+        : [
+            Math.min(b[0], i),
+            Math.min(b[1], j),
+            Math.max(b[2], i),
+            Math.max(b[3], j),
+          ],
+    );
   }
   const extent = (k: number): Box | null => {
     const b = spans.get(k);
-    return b === undefined ? null : [b[0] * cell * scale, b[1] * cell * scale, (b[2] + 1) * cell * scale, (b[3] + 1) * cell * scale];
+    return b === undefined
+      ? null
+      : [
+          b[0] * cell * scale,
+          b[1] * cell * scale,
+          (b[2] + 1) * cell * scale,
+          (b[3] + 1) * cell * scale,
+        ];
   };
   // Clips pooling to 8 m inside the land's edge, so no rim is drawn along the edge.
   g.save();
   g.globalCompositeOperation = "source-atop";
-  g.clip(rimPath({ size: sheet.half * 2, ...(sheet.aspect === undefined ? {} : { aspect: sheet.aspect }) }, 8, px));
-  const pooled = [...sheet.areas.entries()].sort(([, a], [, b]) => a.depth - b.depth);
+  g.clip(
+    rimPath(
+      {
+        size: sheet.half * 2,
+        ...(sheet.aspect === undefined ? {} : { aspect: sheet.aspect }),
+      },
+      8,
+      px,
+    ),
+  );
+  const pooled = [...sheet.areas.entries()].sort(
+    ([, a], [, b]) => a.depth - b.depth,
+  );
   for (const [step, [k, a]] of pooled.entries()) {
     const at = extent(k);
     if (a.pool === null || (at !== null && !overlaps(at, box))) continue;
@@ -335,7 +447,8 @@ export function* layWash(g: CanvasRenderingContext2D, under: CanvasImageSource, 
   g.restore();
   // Dry-brush streaks follow each cell's nearest area, so cells past the land's edge take their neighbor's streaks and
   // nothing marks the edge.
-  const cellAt = (x: number, y: number): number => Math.floor(y / scale / cell) * n + Math.floor(x / scale / cell);
+  const cellAt = (x: number, y: number): number =>
+    Math.floor(y / scale / cell) * n + Math.floor(x / scale / cell);
   for (const [k, a] of sheet.areas.entries()) {
     const at = extent(k);
     if (a.dry <= 0.05 || at === null || !overlaps(at, box)) continue;
@@ -349,21 +462,42 @@ export function* layWash(g: CanvasRenderingContext2D, under: CanvasImageSource, 
   for (let k = 0; k < style.strokes; k++) {
     const x = hash(k, 71) * PAPER;
     const y = hash(71, k) * PAPER;
-    if (x + reachOf < box[0] || x - reachOf > box[2] || y + reachOf < box[1] || y - reachOf > box[3]) continue;
+    if (
+      x + reachOf < box[0] ||
+      x - reachOf > box[2] ||
+      y + reachOf < box[1] ||
+      y - reachOf > box[3]
+    )
+      continue;
     const a = -0.5 + (hash(k, 72) - 0.5) * 0.9;
     const len = 50 + hash(k, 73) * 120;
     const tone = hash(k, 74);
-    g.strokeStyle = tone < 0.3 ? "rgba(255,236,170,0.09)" : tone < 0.55 ? "rgba(70,110,120,0.07)" : tone < 0.8 ? "rgba(255,255,240,0.08)" : "rgba(70,56,30,0.07)";
+    g.strokeStyle =
+      tone < 0.3
+        ? "rgba(255,236,170,0.09)"
+        : tone < 0.55
+          ? "rgba(70,110,120,0.07)"
+          : tone < 0.8
+            ? "rgba(255,255,240,0.08)"
+            : "rgba(70,56,30,0.07)";
     g.lineWidth = 12 + hash(k, 75) * 22;
     g.beginPath();
     g.moveTo(x, y);
-    g.quadraticCurveTo(x + Math.cos(a) * len * 0.5 + (hash(k, 76) - 0.5) * 30, y + Math.sin(a) * len * 0.5 + (hash(k, 77) - 0.5) * 30, x + Math.cos(a) * len, y + Math.sin(a) * len);
+    g.quadraticCurveTo(
+      x + Math.cos(a) * len * 0.5 + (hash(k, 76) - 0.5) * 30,
+      y + Math.sin(a) * len * 0.5 + (hash(k, 77) - 0.5) * 30,
+      x + Math.cos(a) * len,
+      y + Math.sin(a) * len,
+    );
     g.stroke();
     if (k % 900 === 899) yield;
   }
   // Granulation: two noise layers, fine specks and broad blooms, like pigment settling into the paper's texture.
   g.imageSmoothingEnabled = true;
-  for (const [cells, strength, seed] of [[420, 0.16, 3.1], [36, 0.12, 9.7]] as const) {
+  for (const [cells, strength, seed] of [
+    [420, 0.16, 3.1],
+    [36, 0.12, 9.7],
+  ] as const) {
     g.globalAlpha = strength;
     g.drawImage(noiseCanvas(cells, seed, [60, 46, 26]), 0, 0, PAPER, PAPER);
   }
@@ -380,7 +514,14 @@ export function* layWash(g: CanvasRenderingContext2D, under: CanvasImageSource, 
  * goes down first so each area bleeds into its neighbors, then the wash
  * itself. `k` is how many of `ctx`'s pixels one sheet pixel covers.
  */
-export function* floatWash(ctx: CanvasRenderingContext2D, wash: CanvasImageSource, x: number, y: number, style: MapStyle, k = 1): Generator<void> {
+export function* floatWash(
+  ctx: CanvasRenderingContext2D,
+  wash: CanvasImageSource,
+  x: number,
+  y: number,
+  style: MapStyle,
+  k = 1,
+): Generator<void> {
   ctx.filter = `blur(${(style.bleedPx * k).toFixed(2)}px)`;
   ctx.globalAlpha = style.bleed;
   ctx.drawImage(wash, x, y);

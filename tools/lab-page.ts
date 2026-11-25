@@ -5,13 +5,26 @@
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { type BuildOptions, type BuildResult, type Plugin, build } from "esbuild";
+import {
+  type BuildOptions,
+  type BuildResult,
+  type Plugin,
+  build,
+} from "esbuild";
 import { provingGroundEsbuild } from "./proving-ground.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const renderer = resolve(root, "app/renderer");
 
-const SCRIPT = { bundle: true, format: "iife", minify: true, write: false, target: "es2022", tsconfig: resolve(root, "tsconfig.json"), legalComments: "none" } as const;
+const SCRIPT = {
+  bundle: true,
+  format: "iife",
+  minify: true,
+  write: false,
+  target: "es2022",
+  tsconfig: resolve(root, "tsconfig.json"),
+  legalComments: "none",
+} as const;
 
 /**
  * `import X from "./file.ts?worker"`, as Vite handles it for the app: the file
@@ -21,14 +34,23 @@ const SCRIPT = { bundle: true, format: "iife", minify: true, write: false, targe
 const inlineWorkers: Plugin = {
   name: "inline-workers",
   setup(b) {
-    b.onResolve({ filter: /\?worker$/ }, (args) => ({ path: resolve(args.resolveDir, args.path.replace(/\?worker$/, "")), namespace: "inline-worker" }));
+    b.onResolve({ filter: /\?worker$/ }, (args) => ({
+      path: resolve(args.resolveDir, args.path.replace(/\?worker$/, "")),
+      namespace: "inline-worker",
+    }));
     b.onLoad({ filter: /.*/, namespace: "inline-worker" }, async (args) => {
-      const result = await build({ ...SCRIPT, entryPoints: [args.path], metafile: true });
+      const result = await build({
+        ...SCRIPT,
+        entryPoints: [args.path],
+        metafile: true,
+      });
       const code = result.outputFiles[0]?.text ?? "";
       return {
         loader: "js",
         contents: `const url = URL.createObjectURL(new Blob([${JSON.stringify(code)}], { type: "text/javascript" }));\nexport default class { constructor() { return new Worker(url); } }`,
-        watchFiles: Object.keys(result.metafile.inputs).map((f) => resolve(process.cwd(), f)),
+        watchFiles: Object.keys(result.metafile.inputs).map((f) =>
+          resolve(process.cwd(), f),
+        ),
       };
     });
   },
@@ -38,8 +60,15 @@ const inlineWorkers: Plugin = {
 const rawText: Plugin = {
   name: "raw-text",
   setup(b) {
-    b.onResolve({ filter: /\?raw$/ }, (args) => ({ path: resolve(args.resolveDir, args.path.replace(/\?raw$/, "")), namespace: "raw-text" }));
-    b.onLoad({ filter: /.*/, namespace: "raw-text" }, (args) => ({ loader: "text", contents: readFileSync(args.path, "utf8"), watchFiles: [args.path] }));
+    b.onResolve({ filter: /\?raw$/ }, (args) => ({
+      path: resolve(args.resolveDir, args.path.replace(/\?raw$/, "")),
+      namespace: "raw-text",
+    }));
+    b.onLoad({ filter: /.*/, namespace: "raw-text" }, (args) => ({
+      loader: "text",
+      contents: readFileSync(args.path, "utf8"),
+      watchFiles: [args.path],
+    }));
   },
 };
 
@@ -63,7 +92,10 @@ export function labBundle(result: Pick<BuildResult, "outputFiles">): LabBundle {
     if (file === undefined) throw new Error(`esbuild produced no ${ext} file.`);
     return file.text;
   };
-  return { js: output(".js").replace(/<\/script/gi, "<\\/script"), css: output(".css") };
+  return {
+    js: output(".js").replace(/<\/script/gi, "<\\/script"),
+    css: output(".css"),
+  };
 }
 
 /**
@@ -75,7 +107,10 @@ export function labPage(bundle: LabBundle): string {
   // The page's CSP allows only 'self', which an inline bundle is not.
   const csp = /<meta http-equiv="Content-Security-Policy"[^>]*>\n/;
   const entry = '<script type="module" src="./main.ts"></script>';
-  if (!csp.test(page) || !page.includes(entry)) throw new Error("app/renderer/index.html changed shape; update tools/lab-page.ts.");
+  if (!csp.test(page) || !page.includes(entry))
+    throw new Error(
+      "app/renderer/index.html changed shape; update tools/lab-page.ts.",
+    );
   return page
     .replace(csp, "")
     .replace("</head>", () => `<style>${bundle.css}</style>\n</head>`)

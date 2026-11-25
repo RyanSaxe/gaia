@@ -22,7 +22,13 @@ export interface Minimap {
   /** Sets the thing the person walks toward, which the scrap rings, or null for none. */
   heading(thing: Heading | null): void;
   /** What the scrap shows and how long its last window redraw took in ms, for scripted checks. */
-  state(): { readonly area: string | null; readonly marked: string | null; readonly tucked: boolean; readonly redraws: number; readonly redrawMs: number };
+  state(): {
+    readonly area: string | null;
+    readonly marked: string | null;
+    readonly tucked: boolean;
+    readonly redraws: number;
+    readonly redrawMs: number;
+  };
 }
 
 /** The scrap's side in CSS pixels, and the meters of land across it. */
@@ -38,11 +44,21 @@ const TAP = { edge: 16, past: 6 } as const;
 /** Seconds a person must stay in a new area before its name is lettered, so walking along a border does not flicker names. */
 const SETTLE = 2.5;
 /** The distance in px from the traveller to the scrap's farthest corner. The window must cover this radius at any heading. */
-const REACH = Math.ceil(Math.hypot(Math.max(HERE.x, 1 - HERE.x) * SIDE, Math.max(HERE.y, 1 - HERE.y) * SIDE));
+const REACH = Math.ceil(
+  Math.hypot(
+    Math.max(HERE.x, 1 - HERE.x) * SIDE,
+    Math.max(HERE.y, 1 - HERE.y) * SIDE,
+  ),
+);
 /** How far in px the person may walk from the window's center before it must be drawn again. */
 const SLACK = 90;
 /** The area name's lettering in px, as the field map letters areas. A long name shrinks from `size` to fit `room`, but not below `least`. */
-const NAME = { size: 13.5, least: 9.5, spacing: 0.17, room: SIDE - 32 } as const;
+const NAME = {
+  size: 13.5,
+  least: 9.5,
+  spacing: 0.17,
+  room: SIDE - 32,
+} as const;
 const SERIF = `"Iowan Old Style", Georgia, "Times New Roman", serif`;
 /**
  * The ring and name of the thing the person walks toward stay `keep` px inside the torn edge, where the paint is
@@ -59,7 +75,10 @@ const MARK = { keep: EDGE.bare + EDGE.fade, gap: 3, under: 30 } as const;
  * the same pause it letters nothing. `next` returns the area to letter when
  * that changes, null for none, and undefined when nothing changes.
  */
-export function createNamer(settle = SETTLE): { next(area: PlaceArea, dt: number): PlaceArea | null | undefined; reset(): void } {
+export function createNamer(settle = SETTLE): {
+  next(area: PlaceArea, dt: number): PlaceArea | null | undefined;
+  reset(): void;
+} {
   let announced: string | null = null;
   let candidate: string | null = null;
   let held = 0;
@@ -95,7 +114,11 @@ export function createNamer(settle = SETTLE): { next(area: PlaceArea, dt: number
  * `TAP.edge` px inside the edge or `TAP.past` px outside it, the tap tucks the
  * scrap. Farther in, it unfolds the field map. Farther out, it does nothing.
  */
-export function tapOn(x: number, y: number, side = SIDE): "tuck" | "unfold" | null {
+export function tapOn(
+  x: number,
+  y: number,
+  side = SIDE,
+): "tuck" | "unfold" | null {
   const inward = Math.min(x, y, side - x, side - y);
   if (inward < -TAP.past) return null;
   return inward < TAP.edge ? "tuck" : "unfold";
@@ -107,13 +130,27 @@ export function tapOn(x: number, y: number, side = SIDE): "tuck" | "unfold" | nu
  * or below it when there is no room above, and shifted sideways to stay on the paper. Both positions are px from the
  * scrap's top left, the name's by its top left corner.
  */
-export function markAt(x: number, y: number, r: number, w: number, h: number, side = SIDE): { ring: [number, number]; name: [number, number] } {
-  const within = (v: number, least: number, most: number): number => Math.max(least, Math.min(most, v));
+export function markAt(
+  x: number,
+  y: number,
+  r: number,
+  w: number,
+  h: number,
+  side = SIDE,
+): { ring: [number, number]; name: [number, number] } {
+  const within = (v: number, least: number, most: number): number =>
+    Math.max(least, Math.min(most, v));
   const rx = within(x, MARK.keep + r, side - MARK.keep - r);
   const ry = within(y, MARK.keep + r, side - MARK.keep - r);
   const above = ry - r - MARK.gap - h;
-  const top = above >= MARK.under ? above : within(ry + r + MARK.gap, MARK.keep, side - MARK.keep - h);
-  return { ring: [rx, ry], name: [within(rx - w / 2, MARK.keep, side - MARK.keep - w), top] };
+  const top =
+    above >= MARK.under
+      ? above
+      : within(ry + r + MARK.gap, MARK.keep, side - MARK.keep - h);
+  return {
+    ring: [rx, ry],
+    name: [within(rx - w / 2, MARK.keep, side - MARK.keep - w), top],
+  };
 }
 
 /** Deterministic value noise from 0 to 1, smoothly interpolated over a grid of unit cells. */
@@ -128,7 +165,10 @@ function noise(x: number, y: number, seed: number): number {
   const v = y - j;
   const su = u * u * (3 - 2 * u);
   const sv = v * v * (3 - 2 * v);
-  return (at(i, j) * (1 - su) + at(i + 1, j) * su) * (1 - sv) + (at(i, j + 1) * (1 - su) + at(i + 1, j + 1) * su) * sv;
+  return (
+    (at(i, j) * (1 - su) + at(i + 1, j) * su) * (1 - sv) +
+    (at(i, j + 1) * (1 - su) + at(i + 1, j + 1) * su) * sv
+  );
 }
 
 /**
@@ -153,18 +193,33 @@ function paintMask(dpr: number): string {
       const y = (py + 0.5) / dpr;
       const dx = Math.min(x, SIDE - x);
       const dy = Math.min(y, SIDE - y);
-      const d = dx < round && dy < round ? round - Math.hypot(round - dx, round - dy) : Math.min(dx, dy);
+      const d =
+        dx < round && dy < round
+          ? round - Math.hypot(round - dx, round - dy)
+          : Math.min(dx, dy);
       const a = Math.atan2(y - SIDE / 2, x - SIDE / 2);
-      const wander = 0.55 * Math.sin(a * 5 + 1.3) + 0.3 * Math.sin(a * 13 + 4.1) + 0.15 * Math.sin(a * 31 + 2.2);
-      const blot = (noise(x / 8, y / 8, 3) - 0.5) * 4 + (noise(x / 2.5, y / 2.5, 4) - 0.5) * 0.4;
-      image.data[(py * n + px) * 4 + 3] = Math.round(smooth(EDGE.bare, EDGE.bare + EDGE.fade, d + wander * 1.6 + blot) * 255);
+      const wander =
+        0.55 * Math.sin(a * 5 + 1.3) +
+        0.3 * Math.sin(a * 13 + 4.1) +
+        0.15 * Math.sin(a * 31 + 2.2);
+      const blot =
+        (noise(x / 8, y / 8, 3) - 0.5) * 4 +
+        (noise(x / 2.5, y / 2.5, 4) - 0.5) * 0.4;
+      image.data[(py * n + px) * 4 + 3] = Math.round(
+        smooth(EDGE.bare, EDGE.bare + EDGE.fade, d + wander * 1.6 + blot) * 255,
+      );
     }
   }
   ctx.putImageData(image, 0, 0);
   return `url("${canvas.toDataURL()}")`;
 }
 
-const el = (tag: string, cls: string, parent: HTMLElement, html = ""): HTMLElement => {
+const el = (
+  tag: string,
+  cls: string,
+  parent: HTMLElement,
+  html = "",
+): HTMLElement => {
   const node = document.createElement(tag);
   node.className = cls;
   if (html !== "") node.innerHTML = html;
@@ -172,7 +227,13 @@ const el = (tag: string, cls: string, parent: HTMLElement, html = ""): HTMLEleme
   return node;
 };
 
-export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => BakedWorld, places: () => WorldPlaces, unfold: () => void = () => map.open(true)): Minimap {
+export function createMinimap(
+  root: HTMLElement,
+  map: FieldMap,
+  baked: () => BakedWorld,
+  places: () => WorldPlaces,
+  unfold: () => void = () => map.open(true),
+): Minimap {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const scrap = el("div", "minimap", root);
   scrap.style.setProperty("--deckle", DECKLE_MASK);
@@ -185,8 +246,16 @@ export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => Bak
   el("div", "minimap-here", face, TRAVELLER_SVG);
   const band = el("div", "minimap-names", face);
   band.setAttribute("aria-live", "polite");
-  const names = [el("div", "minimap-name", band), el("div", "minimap-name", band)];
-  const mark = el("div", "minimap-mark", face, `<svg viewBox="-24 -24 48 48" aria-hidden="true"><path pathLength="1" d="M-1 -15C9 -16 16 -8 15 1S6 15 -2 14S-16 6 -15 -3S-9 -13 3 -15"/></svg><span></span>`);
+  const names = [
+    el("div", "minimap-name", band),
+    el("div", "minimap-name", band),
+  ];
+  const mark = el(
+    "div",
+    "minimap-mark",
+    face,
+    `<svg viewBox="-24 -24 48 48" aria-hidden="true"><path pathLength="1" d="M-1 -15C9 -16 16 -8 15 1S6 15 -2 14S-16 6 -15 -3S-9 -13 3 -15"/></svg><span></span>`,
+  );
   const markName = mark.querySelector("span") as HTMLElement;
   const markRing = mark.querySelector("svg") as SVGSVGElement;
   // Taps go to a layer that extends a little past the torn edge, so a finger hits the edge easily.
@@ -224,7 +293,15 @@ export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => Bak
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = paper.style.paper;
     ctx.fillRect(0, 0, span, span);
-    drawLand(ctx, span, span, paper, baked(), { x: anchor.x, z: anchor.z, zoom: SCALE }, 0.85);
+    drawLand(
+      ctx,
+      span,
+      span,
+      paper,
+      baked(),
+      { x: anchor.x, z: anchor.z, zoom: SCALE },
+      0.85,
+    );
     redraws++;
     redrawMs = performance.now() - t0;
     place();
@@ -247,7 +324,13 @@ export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => Bak
       const s = Math.sin(person.yaw);
       const rx = (marked.x - person.x) * SCALE;
       const rz = (marked.z - person.z) * SCALE;
-      const { ring, name } = markAt(HERE.x * SIDE + rx * c - rz * s, HERE.y * SIDE + rx * s + rz * c, markSize.r, markSize.w, markSize.h);
+      const { ring, name } = markAt(
+        HERE.x * SIDE + rx * c - rz * s,
+        HERE.y * SIDE + rx * s + rz * c,
+        markSize.r,
+        markSize.w,
+        markSize.h,
+      );
       const at = `translate(${q(ring[0])}px, ${q(ring[1])}px)`;
       if (at !== last.mark) mark.style.transform = last.mark = at;
       const by = `translate(${q(name[0] - ring[0])}px, ${q(name[1] - ring[1])}px)`;
@@ -263,12 +346,25 @@ export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => Bak
     if (!shown) return null;
     const layer = root.getBoundingClientRect();
     const r = sheet.getBoundingClientRect();
-    return { rect: new DOMRect(r.left - layer.left, r.top - layer.top, r.width, r.height), scale: SCALE, turn: person.yaw, at: [HERE.x, HERE.y] };
+    return {
+      rect: new DOMRect(
+        r.left - layer.left,
+        r.top - layer.top,
+        r.width,
+        r.height,
+      ),
+      scale: SCALE,
+      turn: person.yaw,
+      at: [HERE.x, HERE.y],
+    };
   });
   function tuck(on: boolean): void {
     tucked = on;
     scrap.classList.toggle("tucked", on);
-    touch.setAttribute("aria-label", on ? "Bring the minimap back" : "Unfold the map");
+    touch.setAttribute(
+      "aria-label",
+      on ? "Bring the minimap back" : "Unfold the map",
+    );
   }
   onTap(touch, (e) => {
     if (tucked) {
@@ -291,13 +387,18 @@ export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => Bak
   let current = 0;
   /** The parent folders lettered above each repeated area name, as on the field map, computed once per world. */
   let tails: { of: WorldPlaces; above: Map<string, string> } | null = null;
-  const measure = document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D;
+  const measure = document
+    .createElement("canvas")
+    .getContext("2d") as CanvasRenderingContext2D;
   /** The largest font size, from `NAME.least` to `NAME.size`, at which `label` in spaced capitals fits `NAME.room`. */
   function fitted(label: string): number {
     measure.font = `600 ${NAME.size}px ${SERIF}`;
     measure.letterSpacing = `${(NAME.size * NAME.spacing).toFixed(2)}px`;
     const width = measure.measureText(label).width;
-    return Math.max(NAME.least, Math.min(NAME.size, (NAME.size * NAME.room) / Math.max(1, width)));
+    return Math.max(
+      NAME.least,
+      Math.min(NAME.size, (NAME.size * NAME.room) / Math.max(1, width)),
+    );
   }
   /** Fades out the current name and letters `area`'s in its place. Null letters nothing. */
   function write(area: PlaceArea | null): void {
@@ -305,10 +406,17 @@ export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => Bak
     if (area === null) return;
     const next = names[1 - current] as HTMLElement;
     const all = places();
-    if (tails?.of !== all) tails = { of: all, above: nameTails(all.areas.filter((a) => a.depth > 0).map((a) => a.path)) };
+    if (tails?.of !== all)
+      tails = {
+        of: all,
+        above: nameTails(
+          all.areas.filter((a) => a.depth > 0).map((a) => a.path),
+        ),
+      };
     const above = tails.above.get(area.path) ?? "";
     next.innerHTML = `${above === "" ? "" : `<span class="minimap-above"></span>`}<span class="minimap-area"></span>`;
-    if (above !== "") (next.querySelector(".minimap-above") as HTMLElement).textContent = above;
+    if (above !== "")
+      (next.querySelector(".minimap-above") as HTMLElement).textContent = above;
     const label = next.querySelector(".minimap-area") as HTMLElement;
     label.textContent = area.name;
     label.style.fontSize = `${fitted(area.name.toUpperCase()).toFixed(1)}px`;
@@ -324,10 +432,14 @@ export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => Bak
       if (!shown) return;
       // Redraws the window only as the person nears its edge. Past 45% of `SLACK` it redraws in idle time, and past
       // 85% it redraws at once.
-      const off = Math.max(Math.abs(x - anchor.x), Math.abs(z - anchor.z)) * SCALE;
+      const off =
+        Math.max(Math.abs(x - anchor.x), Math.abs(z - anchor.z)) * SCALE;
       if (!(off < SLACK * 0.85)) redraw();
       else {
-        if (off > SLACK * 0.45 && idle === 0) idle = window.requestIdleCallback(() => ((idle = 0), redraw()), { timeout: 2000 });
+        if (off > SLACK * 0.45 && idle === 0)
+          idle = window.requestIdleCallback(() => ((idle = 0), redraw()), {
+            timeout: 2000,
+          });
         place();
       }
       const lettered = namer.next(at.area, dt);
@@ -344,14 +456,23 @@ export function createMinimap(root: HTMLElement, map: FieldMap, baked: () => Bak
       marked = thing;
       mark.classList.remove("on");
       if (thing === null) return;
-      markName.replaceChildren(...nameBreaks(thing.name).flatMap((piece, k) => (k === 0 ? [piece] : [document.createElement("wbr"), piece])));
+      markName.replaceChildren(
+        ...nameBreaks(thing.name).flatMap((piece, k) =>
+          k === 0 ? [piece] : [document.createElement("wbr"), piece],
+        ),
+      );
       markSize.r = Math.max(9, Math.min(26, thing.reach * SCALE + 6));
       markSize.w = markName.offsetWidth;
       markSize.h = markName.offsetHeight;
-      markRing.style.width = markRing.style.height = `${(markSize.r * 2 * 48) / 30}px`;
+      markRing.style.width =
+        markRing.style.height = `${(markSize.r * 2 * 48) / 30}px`;
       place();
       // Waits two frames so the ring's draw transition starts from empty.
-      requestAnimationFrame(() => requestAnimationFrame(() => mark.classList.toggle("on", marked === thing)));
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() =>
+          mark.classList.toggle("on", marked === thing),
+        ),
+      );
     },
     state: () => {
       const lettered = names.find((n) => n.classList.contains("on"));

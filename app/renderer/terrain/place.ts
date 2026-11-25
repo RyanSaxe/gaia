@@ -6,9 +6,55 @@
 // bake worker runs it, and the same terrain and request give the same result
 // on any thread.
 
-import { type Blueprint, type BuildingPlan, type Built, type Library, type RouteSpec, seedOf } from "@gaia/schema";
+import {
+  type Blueprint,
+  type BuildingPlan,
+  type Built,
+  type Library,
+  type RouteSpec,
+  seedOf,
+} from "@gaia/schema";
 import { areaVitality } from "@gaia/world";
-import { type BuildingSite, type Capsule, type Circle, clearingsOf, discOf, type EdgeStone, edgeStones, type Extent, findBankSite, findLandmarkSite, findSite, regionAt, groundedBase, groundSlope, heightAt, isWet, type LandEdits, type LandmarkSite, type LandSite, levelPad, levelTrails, type Occupied, type OwnGround, type OwnedSite, type PadEdit, type Placement, PLANT_SLOPE, planTrails, siteAt, siteToWorld, slopeAt, type Terrain, trailDiscs, type TrailEnd, type TrailNetwork, type TrailRequest, type WayEdit, waterDepthAt } from "@gaia/terrain";
+import {
+  type BuildingSite,
+  type Capsule,
+  type Circle,
+  clearingsOf,
+  discOf,
+  type EdgeStone,
+  edgeStones,
+  type Extent,
+  findBankSite,
+  findLandmarkSite,
+  findSite,
+  regionAt,
+  groundedBase,
+  groundSlope,
+  heightAt,
+  isWet,
+  type LandEdits,
+  type LandmarkSite,
+  type LandSite,
+  levelPad,
+  levelTrails,
+  type Occupied,
+  type OwnGround,
+  type OwnedSite,
+  type PadEdit,
+  type Placement,
+  PLANT_SLOPE,
+  planTrails,
+  siteAt,
+  siteToWorld,
+  slopeAt,
+  type Terrain,
+  trailDiscs,
+  type TrailEnd,
+  type TrailNetwork,
+  type TrailRequest,
+  type WayEdit,
+  waterDepthAt,
+} from "@gaia/terrain";
 
 /** A building to site: its plan, what is beside it, the name its trails use, and its wheel if it needs a stream's bank. */
 export interface BuildingToPlace {
@@ -25,7 +71,9 @@ export interface BuildingToPlace {
 /** Whether a building's feature needs running water, which puts the building on a stream's bank. */
 export function needsBank(blueprint: Blueprint, lib: Library): boolean {
   const use = blueprint.slots.feature?.use;
-  return use !== undefined && (lib.get(use).needs ?? []).includes("running water");
+  return (
+    use !== undefined && (lib.get(use).needs ?? []).includes("running water")
+  );
 }
 
 /** A landmark's ground radius in meters, and whether it is a great tree, whose crown other trees keep clear of. */
@@ -69,7 +117,10 @@ export interface CodeLayout {
   /** Each building's lot, in the order of `buildings`. */
   readonly lots: readonly LayoutLot[];
   /** Each landmark that represents a thing: its index in `landmarks` and its lot. */
-  readonly landmarks: readonly { readonly landmark: number; readonly lot: LayoutLot }[];
+  readonly landmarks: readonly {
+    readonly landmark: number;
+    readonly lot: LayoutLot;
+  }[];
   /** Each entity that appears as neither a building nor a landmark, by path. Its trails end at its lot's center. */
   readonly places?: readonly LayoutLot[];
   readonly patches: readonly LayoutPatch[];
@@ -77,10 +128,18 @@ export interface CodeLayout {
    * The land's cells. `patch` is the cell's patch index, or -1 for a lot, and a definition goes only on its own patch's
    * cells. `area` indexes the world's areas, the directory the cell's ground belongs to.
    */
-  readonly cells: readonly (LandSite & { readonly patch: number; readonly area: number })[];
+  readonly cells: readonly (LandSite & {
+    readonly patch: number;
+    readonly area: number;
+  })[];
   readonly symbols: readonly LayoutSymbol[];
   /** Trails between lots by id, each with the route Jev composed for it, most wanted first. */
-  readonly trails: readonly { readonly from: string; readonly to: string; readonly want: number; readonly style: RouteSpec }[];
+  readonly trails: readonly {
+    readonly from: string;
+    readonly to: string;
+    readonly want: number;
+    readonly style: RouteSpec;
+  }[];
 }
 
 export interface PlaceRequest {
@@ -88,7 +147,10 @@ export interface PlaceRequest {
   /** Each landmark Jev composed, in the order `CodeLayout.landmarks` names them. */
   readonly landmarks: readonly LandmarkToPlace[];
   /** Each tree build's trunk and crown radius, by variant. A tree copies its blueprint's single build. */
-  readonly trees: { readonly bases: readonly number[]; readonly crowns: readonly number[] };
+  readonly trees: {
+    readonly bases: readonly number[];
+    readonly crowns: readonly number[];
+  };
   readonly code: CodeLayout;
 }
 
@@ -150,7 +212,14 @@ export function landmarkBase(built: Pick<Built, "parts">): number {
   for (const part of built.parts) {
     for (let k = 0; k < part.positions.length; k += 3) {
       if ((part.channels.grow?.[k / 3] ?? 0) > 0) continue;
-      if ((part.positions[k + 1] as number) < 1) base = Math.max(base, Math.hypot(part.positions[k] as number, part.positions[k + 2] as number));
+      if ((part.positions[k + 1] as number) < 1)
+        base = Math.max(
+          base,
+          Math.hypot(
+            part.positions[k] as number,
+            part.positions[k + 2] as number,
+          ),
+        );
     }
   }
   return base;
@@ -163,7 +232,10 @@ export function landmarkBase(built: Pick<Built, "parts">): number {
 export const landmarkGround = (base: number): number => base + 1.5;
 
 /** The radius around a house that no landmark's ground may enter, 2 m past its walls and what is beside it. */
-export const houseGround = (b: { readonly plan: BuildingPlan; readonly beside: Extent | null }): number => reachOf(b) + 2;
+export const houseGround = (b: {
+  readonly plan: BuildingPlan;
+  readonly beside: Extent | null;
+}): number => reachOf(b) + 2;
 
 /**
  * Where a landmark meets the ground, in its own frame: a disc around each solid piece that touches the ground, such as
@@ -171,17 +243,26 @@ export const houseGround = (b: { readonly plan: BuildingPlan; readonly beside: E
  * inside a larger one is dropped. The grass is cleared under each, however far the landmark reaches. Fallen stone that
  * grows in does not count.
  */
-export function landmarkFeet(built: Pick<Built, "parts">): { readonly x: number; readonly z: number; readonly radius: number }[] {
+export function landmarkFeet(
+  built: Pick<Built, "parts">,
+): { readonly x: number; readonly z: number; readonly radius: number }[] {
   const feet: { x: number; z: number; radius: number }[] = [];
   for (const part of built.parts) {
     if (part.collision === "none") continue;
     const pieces = new Map<number, number[]>();
     for (let v = 0; v * 3 < part.positions.length; v++) {
-      if ((part.channels.grow?.[v] ?? 0) > 0 || (part.positions[v * 3 + 1] as number) >= 0.3) continue;
+      if (
+        (part.channels.grow?.[v] ?? 0) > 0 ||
+        (part.positions[v * 3 + 1] as number) >= 0.3
+      )
+        continue;
       const id = part.piece[v * 2] as number;
       let points = pieces.get(id);
       if (points === undefined) pieces.set(id, (points = []));
-      points.push(part.positions[v * 3] as number, part.positions[v * 3 + 2] as number);
+      points.push(
+        part.positions[v * 3] as number,
+        part.positions[v * 3 + 2] as number,
+      );
     }
     for (const points of pieces.values()) {
       let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
@@ -194,12 +275,22 @@ export function landmarkFeet(built: Pick<Built, "parts">): { readonly x: number;
       const x = (x0 + x1) / 2;
       const z = (z0 + z1) / 2;
       let reach = 0;
-      for (let k = 0; k < points.length; k += 2) reach = Math.max(reach, Math.hypot((points[k] as number) - x, (points[k + 1] as number) - z));
+      for (let k = 0; k < points.length; k += 2)
+        reach = Math.max(
+          reach,
+          Math.hypot((points[k] as number) - x, (points[k + 1] as number) - z),
+        );
       feet.push({ x, z, radius: reach + 0.2 });
     }
   }
   feet.sort((a, b) => b.radius - a.radius);
-  return feet.filter((f, i) => !feet.some((g, k) => k < i && Math.hypot(f.x - g.x, f.z - g.z) + f.radius <= g.radius));
+  return feet.filter(
+    (f, i) =>
+      !feet.some(
+        (g, k) =>
+          k < i && Math.hypot(f.x - g.x, f.z - g.z) + f.radius <= g.radius,
+      ),
+  );
 }
 
 /**
@@ -208,8 +299,15 @@ export function landmarkFeet(built: Pick<Built, "parts">): { readonly x: number;
  * area's index. The ground then shows its file's vitality, or on a lot its
  * area's.
  */
-export function groundSites(code: Pick<CodeLayout, "cells" | "patches">): OwnedSite[] {
-  return code.cells.map((c) => ({ x: c.x, z: c.z, ...(c.reach === undefined ? {} : { reach: c.reach }), owner: c.patch >= 0 ? c.patch : code.patches.length + c.area }));
+export function groundSites(
+  code: Pick<CodeLayout, "cells" | "patches">,
+): OwnedSite[] {
+  return code.cells.map((c) => ({
+    x: c.x,
+    z: c.z,
+    ...(c.reach === undefined ? {} : { reach: c.reach }),
+    owner: c.patch >= 0 ? c.patch : code.patches.length + c.area,
+  }));
 }
 
 /**
@@ -219,10 +317,23 @@ export function groundSites(code: Pick<CodeLayout, "cells" | "patches">): OwnedS
  * vitality of the owner's area, which its water follows.
  */
 export function ownerVitality(
-  world: { readonly patches: readonly { readonly path: string; readonly area: string; readonly radius: number }[]; readonly areas: readonly { readonly path: string }[] },
+  world: {
+    readonly patches: readonly {
+      readonly path: string;
+      readonly area: string;
+      readonly radius: number;
+    }[];
+    readonly areas: readonly { readonly path: string }[];
+  },
   vitalityOf: (file: string) => number,
 ): { ground: Float32Array; area: Float32Array } {
-  const pooled = areaVitality(world.patches.map((p) => ({ area: p.area, vitality: vitalityOf(p.path), size: p.radius * p.radius })));
+  const pooled = areaVitality(
+    world.patches.map((p) => ({
+      area: p.area,
+      vitality: vitalityOf(p.path),
+      size: p.radius * p.radius,
+    })),
+  );
   const count = world.patches.length;
   const ground = new Float32Array(count + world.areas.length);
   const area = new Float32Array(count + world.areas.length);
@@ -242,7 +353,10 @@ export function ownerVitality(
  * is the vitality of the symbol it represents (`symbolVitality`, by index in
  * `CodeLayout.symbols`), so it follows a live change.
  */
-export function understoryVitality(placed: Pick<Placed, "placements" | "symbols">, symbolVitality: (symbol: number) => number): Float32Array {
+export function understoryVitality(
+  placed: Pick<Placed, "placements" | "symbols">,
+  symbolVitality: (symbol: number) => number,
+): Float32Array {
   const shown = new Float32Array(placed.placements.length).fill(1);
   placed.symbols.forEach((i, k) => {
     if (i >= 0) shown[i] = symbolVitality(k);
@@ -251,16 +365,23 @@ export function understoryVitality(placed: Pick<Placed, "placements" | "symbols"
 }
 
 /** The center of a building's door along its front wall, in its own frame. */
-const doorOf = (plan: BuildingPlan): number => plan.openings.find((o) => o.kind === "door")?.position[0] ?? 0;
+const doorOf = (plan: BuildingPlan): number =>
+  plan.openings.find((o) => o.kind === "door")?.position[0] ?? 0;
 
 /** Where a person stops to read a building's sign and look at it. */
-export function readingSpotOf(plan: BuildingPlan, site: BuildingSite): { x: number; z: number } {
+export function readingSpotOf(
+  plan: BuildingPlan,
+  site: BuildingSite,
+): { x: number; z: number } {
   const [x, z] = siteToWorld(site, doorOf(plan) + 0.5, plan.depth / 2 + 6.6);
   return { x, z };
 }
 
 /** Where a building's signboard goes, facing anyone coming up its walk. */
-export function signOf(plan: BuildingPlan, site: BuildingSite): { x: number; z: number; yaw: number } {
+export function signOf(
+  plan: BuildingPlan,
+  site: BuildingSite,
+): { x: number; z: number; yaw: number } {
   const [x, z] = siteToWorld(site, doorOf(plan) + 1.35, plan.depth / 2 + 4.9);
   return { x, z, yaw: site.yaw };
 }
@@ -274,22 +395,45 @@ function local(site: BuildingSite, x: number, z: number): [number, number] {
 }
 
 /** Whether a building's walls or what is beside it lie within `margin` meters of (x, z). */
-export function blockedBy(b: { readonly plan: BuildingPlan; readonly beside: Extent | null }, site: BuildingSite, x: number, z: number, margin: number): boolean {
+export function blockedBy(
+  b: { readonly plan: BuildingPlan; readonly beside: Extent | null },
+  site: BuildingSite,
+  x: number,
+  z: number,
+  margin: number,
+): boolean {
   const [lx, lz] = local(site, x, z);
-  const inHouse = Math.abs(lx) < b.plan.width / 2 + margin && Math.abs(lz) < b.plan.depth / 2 + margin;
+  const inHouse =
+    Math.abs(lx) < b.plan.width / 2 + margin &&
+    Math.abs(lz) < b.plan.depth / 2 + margin;
   const e = b.beside;
-  return inHouse || (e !== null && lx > e.x0 - margin && lx < e.x1 + margin && lz > e.z0 - margin && lz < e.z1 + margin);
+  return (
+    inHouse ||
+    (e !== null &&
+      lx > e.x0 - margin &&
+      lx < e.x1 + margin &&
+      lz > e.z0 - margin &&
+      lz < e.z1 + margin)
+  );
 }
 
 /** How far in meters a building's walls and what is beside it reach from its center. */
-function reachOf(b: { readonly plan: BuildingPlan; readonly beside: Extent | null }): number {
+function reachOf(b: {
+  readonly plan: BuildingPlan;
+  readonly beside: Extent | null;
+}): number {
   const house = Math.hypot(b.plan.width, b.plan.depth) / 2;
   const e = b.beside;
-  return e === null ? house : Math.max(house, Math.hypot(Math.max(-e.x0, e.x1), Math.max(-e.z0, e.z1)));
+  return e === null
+    ? house
+    : Math.max(house, Math.hypot(Math.max(-e.x0, e.x1), Math.max(-e.z0, e.z1)));
 }
 
 /** Ground under a building, along its walk and under what is beside it, where nothing grows. */
-export function buildingClearings(b: { readonly plan: BuildingPlan; readonly beside: Extent | null }, site: BuildingSite): Capsule[] {
+export function buildingClearings(
+  b: { readonly plan: BuildingPlan; readonly beside: Extent | null },
+  site: BuildingSite,
+): Capsule[] {
   const out = clearingsOf(b.plan, site);
   const e = b.beside;
   if (e !== null) {
@@ -298,8 +442,16 @@ export function buildingClearings(b: { readonly plan: BuildingPlan; readonly bes
     const cx = (e.x0 + e.x1) / 2;
     const cz = (e.z0 + e.z1) / 2;
     const run = Math.abs(e.x1 - e.x0 - (e.z1 - e.z0)) / 2;
-    const [ax, az] = siteToWorld(site, wide ? cx - run : cx, wide ? cz : cz - run);
-    const [bx, bz] = siteToWorld(site, wide ? cx + run : cx, wide ? cz : cz + run);
+    const [ax, az] = siteToWorld(
+      site,
+      wide ? cx - run : cx,
+      wide ? cz : cz - run,
+    );
+    const [bx, bz] = siteToWorld(
+      site,
+      wide ? cx + run : cx,
+      wide ? cz : cz + run,
+    );
     out.push({ ax, az, bx, bz, radius: r });
   }
   return out;
@@ -309,7 +461,8 @@ export function buildingClearings(b: { readonly plan: BuildingPlan; readonly bes
 const SHRINKS = [1, 0.75, 0.55] as const;
 
 /** How far trees keep from a landmark's center. A great tree's crown needs more room. */
-const treeClearance = (lm: LandmarkToPlace): number => lm.base + (lm.tree ? 12 : 5);
+const treeClearance = (lm: LandmarkToPlace): number =>
+  lm.base + (lm.tree ? 12 : 5);
 
 /** How far in meters a trail end moved out of water keeps from it, and the farthest it moves to find such ground. */
 const DRY_END = { clearance: 1, reach: 40 } as const;
@@ -324,7 +477,10 @@ function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
     const steps = Math.ceil(2 * Math.PI * r);
     for (let k = 0; k < steps; k++) {
       const a = (k / steps) * Math.PI * 2;
-      if (!isWet(t, x + Math.cos(a) * r, z + Math.sin(a) * r, DRY_END.clearance)) return { x: x + Math.cos(a) * r, z: z + Math.sin(a) * r };
+      if (
+        !isWet(t, x + Math.cos(a) * r, z + Math.sin(a) * r, DRY_END.clearance)
+      )
+        return { x: x + Math.cos(a) * r, z: z + Math.sin(a) * r };
     }
   }
   return { x, z };
@@ -334,9 +490,12 @@ function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
  * The ground a building or landmark stands for, by its lot: the ground of the file's patch or the entity's lot its
  * lot's center is on, as `placeAt` reads it.
  */
-function ownGround(code: Pick<CodeLayout, "cells" | "patches">): (lot: Circle) => OwnGround {
+function ownGround(
+  code: Pick<CodeLayout, "cells" | "patches">,
+): (lot: Circle) => OwnGround {
   const sites = groundSites(code);
-  const ownerAt = (x: number, z: number): number | undefined => sites[siteAt(sites, x, z)]?.owner;
+  const ownerAt = (x: number, z: number): number | undefined =>
+    sites[siteAt(sites, x, z)]?.owner;
   return (lot) => {
     const mine = ownerAt(lot.x, lot.z);
     return (x, z) => ownerAt(x, z) === mine;
@@ -347,9 +506,23 @@ function ownGround(code: Pick<CodeLayout, "cells" | "patches">): (lot: Circle) =
  * Places each landmark on its lot and routes the trails Jev chose between
  * the sited buildings and the landmarks, leveled into the ground.
  */
-function settleCode(t: Terrain, req: PlaceRequest, code: CodeLayout, sites: readonly BuildingSite[], offGround: string[]): { landmarks: PlacedLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
-  const homes = req.buildings.map((b, i) => ({ ...b, site: sites[i] as BuildingSite, id: code.lots[i]?.id ?? b.name }));
-  const avoid: Occupied[] = homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: houseGround(b) }));
+function settleCode(
+  t: Terrain,
+  req: PlaceRequest,
+  code: CodeLayout,
+  sites: readonly BuildingSite[],
+  offGround: string[],
+): { landmarks: PlacedLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
+  const homes = req.buildings.map((b, i) => ({
+    ...b,
+    site: sites[i] as BuildingSite,
+    id: code.lots[i]?.id ?? b.name,
+  }));
+  const avoid: Occupied[] = homes.map((b) => ({
+    x: b.site.x,
+    z: b.site.z,
+    radius: houseGround(b),
+  }));
   const own = ownGround(code);
   const landmarks: PlacedLandmark[] = [];
   const ids: string[] = [];
@@ -357,7 +530,14 @@ function settleCode(t: Terrain, req: PlaceRequest, code: CodeLayout, sites: read
     const lm = req.landmarks[landmark];
     if (lm === undefined) continue;
     const mine = own(lot);
-    const site = findLandmarkSite(t, 0, landmarkGround(lm.base), avoid, lot, mine);
+    const site = findLandmarkSite(
+      t,
+      0,
+      landmarkGround(lm.base),
+      avoid,
+      lot,
+      mine,
+    );
     if (site === null) continue;
     if (!mine(site.x, site.z)) offGround.push(lot.id);
     landmarks.push({ landmark, id: lot.id, site });
@@ -367,26 +547,42 @@ function settleCode(t: Terrain, req: PlaceRequest, code: CodeLayout, sites: read
   // A trail ends at a building's door, at a landmark's foot on the side facing the mean direction to its trails' other
   // ends, or for an entity that is neither, at its lot's center. Each place has one end spot that its trails share. A
   // foot or lot in water moves to the nearest dry ground, so no trail begins or ends in water.
-  const end = (id: string, toward: { x: number; z: number } | null): TrailEnd | null => {
+  const end = (
+    id: string,
+    toward: { x: number; z: number } | null,
+  ): TrailEnd | null => {
     const home = homes.find((b) => b.id === id);
-    if (home !== undefined) return { id, ...readingSpotOf(home.plan, home.site) };
+    if (home !== undefined)
+      return { id, ...readingSpotOf(home.plan, home.site) };
     const k = ids.indexOf(id);
     const s = landmarks[k];
     if (s === undefined) {
       const place = code.places?.find((p) => p.id === id);
-      return place === undefined ? null : { id, ...dryNear(t, place.x, place.z) };
+      return place === undefined
+        ? null
+        : { id, ...dryNear(t, place.x, place.z) };
     }
     if (toward === null) return { id, x: s.site.x, z: s.site.z };
     const d = Math.hypot(toward.x - s.site.x, toward.z - s.site.z) || 1;
     const r = (req.landmarks[s.landmark]?.base ?? 2) + 1.8;
-    return { id, ...dryNear(t, s.site.x + ((toward.x - s.site.x) / d) * r, s.site.z + ((toward.z - s.site.z) / d) * r) };
+    return {
+      id,
+      ...dryNear(
+        t,
+        s.site.x + ((toward.x - s.site.x) / d) * r,
+        s.site.z + ((toward.z - s.site.z) / d) * r,
+      ),
+    };
   };
   const toward = new Map<string, { x: number; z: number }>();
   for (const w of code.trails) {
     const a = end(w.from, null);
     const b = end(w.to, null);
     if (a === null || b === null) continue;
-    for (const [p, q] of [[a, b], [b, a]] as const) {
+    for (const [p, q] of [
+      [a, b],
+      [b, a],
+    ] as const) {
       const d = Math.hypot(q.x - p.x, q.z - p.z) || 1;
       const s = toward.get(p.id) ?? { x: 0, z: 0 };
       toward.set(p.id, { x: s.x + (q.x - p.x) / d, z: s.z + (q.z - p.z) / d });
@@ -395,17 +591,29 @@ function settleCode(t: Terrain, req: PlaceRequest, code: CodeLayout, sites: read
   const spot = (id: string): TrailEnd | null => {
     const at = end(id, null);
     const dir = toward.get(id);
-    return at === null || dir === undefined ? at : end(id, { x: at.x + dir.x, z: at.z + dir.z });
+    return at === null || dir === undefined
+      ? at
+      : end(id, { x: at.x + dir.x, z: at.z + dir.z });
   };
   const requests: TrailRequest[] = code.trails.flatMap((w) => {
     const from = spot(w.from);
     const to = spot(w.to);
     if (from === null || to === null) return [];
-    return [{ id: `${w.from}->${w.to}`, from, to, style: w.style, want: w.want }];
+    return [
+      { id: `${w.from}->${w.to}`, from, to, style: w.style, want: w.want },
+    ];
   });
   const keepOut: Occupied[] = [
-    ...homes.map((b) => ({ x: b.site.x, z: b.site.z, radius: Math.hypot(b.plan.width, b.plan.depth) / 2 + 0.6 })),
-    ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 0.8 })),
+    ...homes.map((b) => ({
+      x: b.site.x,
+      z: b.site.z,
+      radius: Math.hypot(b.plan.width, b.plan.depth) / 2 + 0.6,
+    })),
+    ...landmarks.map((s) => ({
+      x: s.site.x,
+      z: s.site.z,
+      radius: (req.landmarks[s.landmark]?.base ?? 2) + 0.8,
+    })),
   ];
   const network = planTrails(t, requests, 41, keepOut);
   return { landmarks, network, ways: levelTrails(t, network.ways) };
@@ -441,38 +649,84 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
     const b = req.buildings[i] as BuildingToPlace;
     const lot = code.lots[i] ?? null;
     const mine = lot === null ? null : own(lot);
-    let site: BuildingSite = findSite(t, b.plan, taken, 30, b.beside, lot, pads, mine);
+    let site: BuildingSite = findSite(
+      t,
+      b.plan,
+      taken,
+      30,
+      b.beside,
+      lot,
+      pads,
+      mine,
+    );
     if (onBank(i)) {
-      const bank = findBankSite(t, b.plan, b.beside as Extent, b.wheel as Extent, regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z), taken, lot, pads);
+      const bank = findBankSite(
+        t,
+        b.plan,
+        b.beside as Extent,
+        b.wheel as Extent,
+        regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z),
+        taken,
+        lot,
+        pads,
+      );
       if (bank === null) dry.push(b.name);
       else site = bank;
-    } else if (lot !== null && mine !== null && !mine(site.x, site.z)) offGround.push(lot.id);
+    } else if (lot !== null && mine !== null && !mine(site.x, site.z))
+      offGround.push(lot.id);
     pads.push(levelPad(t, b.plan, site, b.beside));
     taken.push(site);
     sites[i] = site;
   }
   mark("sites");
-  const { landmarks, network, ways } = settleCode(t, req, code, sites, offGround);
+  const { landmarks, network, ways } = settleCode(
+    t,
+    req,
+    code,
+    sites,
+    offGround,
+  );
   mark("ways");
 
   // Trees keep off the trails and their cairns, out of the buildings and out from under a landmark.
-  const clear: Occupied[] = [...trailDiscs(network, 1.6), ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: treeClearance(req.landmarks[s.landmark] as LandmarkToPlace) }))];
-  const blocked = (x: number, z: number): boolean => req.buildings.some((b, k) => blockedBy(b, sites[k] as BuildingSite, x, z, 6)) || clear.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius);
+  const clear: Occupied[] = [
+    ...trailDiscs(network, 1.6),
+    ...landmarks.map((s) => ({
+      x: s.site.x,
+      z: s.site.z,
+      radius: treeClearance(req.landmarks[s.landmark] as LandmarkToPlace),
+    })),
+  ];
+  const blocked = (x: number, z: number): boolean =>
+    req.buildings.some((b, k) =>
+      blockedBy(b, sites[k] as BuildingSite, x, z, 6),
+    ) || clear.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius);
   const { bases, crowns } = req.trees;
   // Every tree represents a definition, file or entity, and is placed with the other symbols below.
   const trees: PlacedTree[] = [];
   // No stone, bush or flowers goes in a building, on its walk, on a trail or under a landmark.
   const homes = req.buildings.flatMap((b, k) =>
     buildingClearings(b, sites[k] as BuildingSite).flatMap((c) => {
-      const steps = Math.max(1, Math.ceil(Math.hypot(c.bx - c.ax, c.bz - c.az)));
-      return Array.from({ length: steps + 1 }, (_, j) => ({ x: c.ax + ((c.bx - c.ax) * j) / steps, z: c.az + ((c.bz - c.az) * j) / steps, radius: c.radius + 0.5 }));
+      const steps = Math.max(
+        1,
+        Math.ceil(Math.hypot(c.bx - c.ax, c.bz - c.az)),
+      );
+      return Array.from({ length: steps + 1 }, (_, j) => ({
+        x: c.ax + ((c.bx - c.ax) * j) / steps,
+        z: c.az + ((c.bz - c.az) * j) / steps,
+        radius: c.radius + 0.5,
+      }));
     }),
   );
   const occupied: Occupied[] = [
     ...trees.map((tr) => ({ x: tr.x, z: tr.z, radius: 1.6 })),
     ...homes,
     ...trailDiscs(network, 0.5),
-    ...landmarks.map((s) => ({ x: s.site.x, z: s.site.z, radius: (req.landmarks[s.landmark]?.base ?? 2) + 1 })),
+    ...landmarks.map((s) => ({
+      x: s.site.x,
+      z: s.site.z,
+      radius: (req.landmarks[s.landmark]?.base ?? 2) + 1,
+    })),
   ];
   // Place a file's definitions where the layout put them, off water, steep ground and everything already placed,
   // largest footprint first. A definition whose spot is taken moves a little, or elsewhere on its patch if nothing
@@ -483,30 +737,54 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
   const placements: Placement[] = [];
   /** The crowns of the trees placed so far, which the first pass keeps every other symbol out from under. */
   const crowned: Occupied[] = [];
-  const crownOf = (sym: LayoutSymbol): number => Math.max(TRUNK_GAP / 2, (crowns[sym.variant] ?? 4) * 0.55);
-  const footprint = (sym: LayoutSymbol): number => (sym.rule === "trees" ? crownOf(sym) : sym.radius) * sym.scale;
+  const crownOf = (sym: LayoutSymbol): number =>
+    Math.max(TRUNK_GAP / 2, (crowns[sym.variant] ?? 4) * 0.55);
+  const footprint = (sym: LayoutSymbol): number =>
+    (sym.rule === "trees" ? crownOf(sym) : sym.radius) * sym.scale;
   const syms = code.symbols;
   const cells = code.cells;
   const symbols = syms.map(() => -1);
-  const order = syms.map((_, i) => i).sort((a, b) => footprint(syms[b] as LayoutSymbol) - footprint(syms[a] as LayoutSymbol) || a - b);
+  const order = syms
+    .map((_, i) => i)
+    .sort(
+      (a, b) =>
+        footprint(syms[b] as LayoutSymbol) -
+          footprint(syms[a] as LayoutSymbol) || a - b,
+    );
   for (const i of order) {
     const sym = syms[i] as LayoutSymbol;
     if (sym.rule === AS_THING) continue;
     const tree = sym.rule === "trees";
     let at: [number, number, number] | null = null;
     // Try around its plot's center, then around each of its patch's cells, nearest first.
-    const own = sym.patch === undefined || cells.length === 0 ? [] : cells.filter((c) => c.patch === sym.patch).sort((a, b) => Math.hypot(a.x - sym.x, a.z - sym.z) - Math.hypot(b.x - sym.x, b.z - sym.z));
+    const own =
+      sym.patch === undefined || cells.length === 0
+        ? []
+        : cells
+            .filter((c) => c.patch === sym.patch)
+            .sort(
+              (a, b) =>
+                Math.hypot(a.x - sym.x, a.z - sym.z) -
+                Math.hypot(b.x - sym.x, b.z - sym.z),
+            );
     for (const crowded of [false, true]) {
       for (const from of [{ x: sym.x, z: sym.z }, ...own]) {
         for (const shrink of SHRINKS) {
           const reach = footprint(sym) * shrink;
           const clash = (x: number, z: number): boolean =>
-            (sym.patch !== undefined && cells.length > 0 && cells[siteAt(cells, x, z)]?.patch !== sym.patch) ||
+            (sym.patch !== undefined &&
+              cells.length > 0 &&
+              cells[siteAt(cells, x, z)]?.patch !== sym.patch) ||
             isWet(t, x, z) ||
             slopeAt(t.lattice, x, z) > (tree ? PLANT_SLOPE : 24) ||
             ((!crowded || tree) && blocked(x, z)) ||
-            occupied.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach) ||
-            (!crowded && crowned.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach));
+            occupied.some(
+              (o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach,
+            ) ||
+            (!crowded &&
+              crowned.some(
+                (o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach,
+              ));
           for (let k = 0; at === null && k <= 24; k++) {
             const a = k * 2.4;
             const x = from.x + Math.cos(a) * k * 0.6;
@@ -520,24 +798,63 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
       if (at !== null) break;
     }
     // With no room anywhere on its patch even then, place it where the layout put it, at its smallest scale.
-    const [x, z, shrink] = at ?? [sym.x, sym.z, SHRINKS[SHRINKS.length - 1] as number];
+    const [x, z, shrink] = at ?? [
+      sym.x,
+      sym.z,
+      SHRINKS[SHRINKS.length - 1] as number,
+    ];
     const scale = sym.scale * shrink;
     const reach = footprint(sym) * shrink;
     const slope = groundSlope(t.lattice, x, z);
     if (tree) {
       // Record the crown, which the first pass keeps other symbols out from under.
       const variant = sym.variant;
-      trees.push({ index: trees.length, x, y: groundedBase(t.lattice, x, z, (bases[variant] ?? 0.5) * scale), z, variant, scale, yaw: (i * 2.399) % (Math.PI * 2), slope, symbol: i });
+      trees.push({
+        index: trees.length,
+        x,
+        y: groundedBase(t.lattice, x, z, (bases[variant] ?? 0.5) * scale),
+        z,
+        variant,
+        scale,
+        yaw: (i * 2.399) % (Math.PI * 2),
+        slope,
+        symbol: i,
+      });
       occupied.push({ x, z, radius: 1.6 });
       crowned.push({ x, z, radius: reach });
       continue;
     }
     occupied.push({ x, z, radius: reach + 0.4 });
-    placements.push({ rule: sym.rule, variant: sym.variant, x, y: heightAt(t.lattice, x, z) - 0.05, z, yaw: (i * 2.399) % (Math.PI * 2), scale, radius: reach, vitality: sym.vitality, slope });
+    placements.push({
+      rule: sym.rule,
+      variant: sym.variant,
+      x,
+      y: heightAt(t.lattice, x, z) - 0.05,
+      z,
+      yaw: (i * 2.399) % (Math.PI * 2),
+      scale,
+      radius: reach,
+      vitality: sym.vitality,
+      slope,
+    });
     symbols[i] = placements.length - 1;
   }
   mark("symbols");
-  const edging = network.ways.map((way) => edgeStones(t, way, seedOf(`${way.id}/edging`)));
+  const edging = network.ways.map((way) =>
+    edgeStones(t, way, seedOf(`${way.id}/edging`)),
+  );
   mark("edging");
-  return { sites, landmarks, network, trees, placements, symbols, edging, edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways }, took, dry, offGround };
+  return {
+    sites,
+    landmarks,
+    network,
+    trees,
+    placements,
+    symbols,
+    edging,
+    edits: { pads, discs: landmarks.map((s) => discOf(s.site)), ways },
+    took,
+    dry,
+    offGround,
+  };
 }

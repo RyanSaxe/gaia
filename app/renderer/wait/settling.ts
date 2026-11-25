@@ -38,7 +38,10 @@ export const SHOWN: readonly [number, number] = [0.55, 0.95];
 
 export interface SettlingHealth {
   /** Settles files' vitality by path. Returns the changed cell box and the areas whose own ground's vitality is now known. */
-  settle(vitality: Readonly<Record<string, number>>): { readonly cells: CellBox | null; readonly grounds: readonly string[] };
+  settle(vitality: Readonly<Record<string, number>>): {
+    readonly cells: CellBox | null;
+    readonly grounds: readonly string[];
+  };
   /** The settled share of a cell's weight, 0 to 1, and the cell's vitality from its settled part. */
   settled(c: number): number;
   vitality(c: number): number;
@@ -57,7 +60,11 @@ const smooth = (a: number, b: number, v: number): number => {
  * Builds the settling vitality of `land` from its files, yielding between steps so a caller can spread the work over
  * idle time. It sums every cell's total weight first, which gives the share each settled file contributes.
  */
-export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile[], spread: number): Generator<void, SettlingHealth> {
+export function* settlingHealth(
+  land: SettlingLand,
+  files: readonly SettlingFile[],
+  spread: number,
+): Generator<void, SettlingHealth> {
   const { n, cell, reach, nearest, areas } = land;
   const whole = new Float32Array(n * n);
   const weight = new Float32Array(n * n);
@@ -66,7 +73,10 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
   whole.fill(prior);
   const center = (i: number): number => -reach + (i + 0.5) * cell;
   /** Calls `each` with every cell a file's vitality reaches and its weight there, and returns their box. */
-  const reachOf = (f: SettlingFile, each: (c: number, w: number) => void): CellBox | null => {
+  const reachOf = (
+    f: SettlingFile,
+    each: (c: number, w: number) => void,
+  ): CellBox | null => {
     const r = f.reach + spread * 4;
     const i0 = Math.max(0, Math.floor((f.x - r + reach) / cell));
     const i1 = Math.min(n - 1, Math.floor((f.x + r + reach) / cell));
@@ -91,9 +101,16 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
   const pools = new Map<string, SettlingFile[]>();
   for (const path of areas) {
     const own = files.filter((f) => f.area === path);
-    pools.set(path, own.length > 0 ? own : files.filter((f) => path === "" || f.area.startsWith(`${path}/`)));
+    pools.set(
+      path,
+      own.length > 0
+        ? own
+        : files.filter((f) => path === "" || f.area.startsWith(`${path}/`)),
+    );
   }
-  const waiting = new Map([...pools].map(([path, pool]) => [path, new Set(pool.map((f) => f.path))]));
+  const waiting = new Map(
+    [...pools].map(([path, pool]) => [path, new Set(pool.map((f) => f.path))]),
+  );
   const health = new Map<string, number>();
   const grounds = new Map<string, number>();
   const cellsOf = new Map<number, number[]>();
@@ -107,11 +124,29 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
   yield;
 
   const grow = (box: CellBox | null, more: CellBox | null): CellBox | null =>
-    box === null ? more : more === null ? box : [Math.min(box[0], more[0]), Math.min(box[1], more[1]), Math.max(box[2], more[2]), Math.max(box[3], more[3])];
+    box === null
+      ? more
+      : more === null
+        ? box
+        : [
+            Math.min(box[0], more[0]),
+            Math.min(box[1], more[1]),
+            Math.max(box[2], more[2]),
+            Math.max(box[3], more[3]),
+          ];
   /** Settles an area's ground vitality and adds it, at the prior weight, to every cell nearest the area. */
   const settleGround = (k: number, path: string): CellBox | null => {
     const pool = pools.get(path) ?? [];
-    const v = pool.length === 0 ? 1 : (groundVitality(pool.map((f) => ({ area: f.area, vitality: health.get(f.path) ?? 1, size: f.size }))).get(path) ?? 1);
+    const v =
+      pool.length === 0
+        ? 1
+        : (groundVitality(
+            pool.map((f) => ({
+              area: f.area,
+              vitality: health.get(f.path) ?? 1,
+              size: f.size,
+            })),
+          ).get(path) ?? 1);
     grounds.set(path, v);
     let box: CellBox | null = null;
     for (const c of cellsOf.get(k) ?? []) {
@@ -125,7 +160,9 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
   };
   // An area with no files has its ground vitality from the start.
   let first: CellBox | null = null;
-  for (const [k, path] of areas.entries()) if ((waiting.get(path)?.size ?? 0) === 0) first = grow(first, settleGround(k, path));
+  for (const [k, path] of areas.entries())
+    if ((waiting.get(path)?.size ?? 0) === 0)
+      first = grow(first, settleGround(k, path));
   void first;
 
   return {
@@ -136,22 +173,30 @@ export function* settlingHealth(land: SettlingLand, files: readonly SettlingFile
         const f = byPath.get(path);
         if (f === undefined || health.has(path)) continue;
         health.set(path, v);
-        cells = grow(cells, reachOf(f, (c, w) => {
-          weight[c] = (weight[c] as number) + w;
-          sum[c] = (sum[c] as number) + w * v;
-        }));
+        cells = grow(
+          cells,
+          reachOf(f, (c, w) => {
+            weight[c] = (weight[c] as number) + w;
+            sum[c] = (sum[c] as number) + w * v;
+          }),
+        );
         for (const [area, left] of waiting) {
           if (!left.delete(path) || left.size > 0) continue;
           waiting.delete(area);
           done.push(area);
         }
       }
-      for (const area of done) cells = grow(cells, settleGround(areas.indexOf(area), area));
+      for (const area of done)
+        cells = grow(cells, settleGround(areas.indexOf(area), area));
       return { cells, grounds: done };
     },
     settled: (c) => Math.min(1, (weight[c] as number) / (whole[c] as number)),
-    vitality: (c) => ((weight[c] as number) > 0 ? (sum[c] as number) / (weight[c] as number) : 1),
-    paint: (c) => smooth(SHOWN[0], SHOWN[1], (weight[c] as number) / (whole[c] as number)),
+    vitality: (c) =>
+      (weight[c] as number) > 0
+        ? (sum[c] as number) / (weight[c] as number)
+        : 1,
+    paint: (c) =>
+      smooth(SHOWN[0], SHOWN[1], (weight[c] as number) / (whole[c] as number)),
     ground: (path) => grounds.get(path),
   };
 }

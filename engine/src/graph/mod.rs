@@ -685,7 +685,11 @@ mod tests {
             let loaded = languages::from_wasm("lua", &wasm, tags).unwrap();
             let p = parse::parse(&loaded, src).unwrap();
             assert_eq!(p.unparsed, 0, "parses cleanly with tags {}", tags.is_some());
-            assert!(!p.defs.is_empty(), "finds definitions with tags {}", tags.is_some());
+            assert!(
+                !p.defs.is_empty(),
+                "finds definitions with tags {}",
+                tags.is_some()
+            );
         }
     }
 
@@ -727,7 +731,10 @@ mod tests {
         let dir = project(
             "rules",
             &[
-                ("package.json", r#"{ "name": "demo", "dependencies": { "react": "19" } }"#),
+                (
+                    "package.json",
+                    r#"{ "name": "demo", "dependencies": { "react": "19" } }"#,
+                ),
                 ("aliases.json", r#"{ "@lib": "./lib" }"#),
                 ("lib/a.ts", "export const a = 1;\n"),
                 (
@@ -749,9 +756,22 @@ mod tests {
         assert!(pending("./b").is_none() && pending("helper").is_none());
         // A link with several goes to Jev with only those as its candidates. A local alias a configuration names
         // could mean a folder here, so it goes to Jev too.
-        let render: BTreeSet<&str> = pending("render").expect("obj.render goes to Jev").candidates.iter().map(String::as_str).collect();
-        assert_eq!(render, BTreeSet::from(["def:src/b.ts#Panel.render", "def:src/b.ts#Tool.render"]));
-        assert!(pending("@lib/a").expect("@lib/a goes to Jev").candidates.contains(&"file:lib/a.ts".to_string()));
+        let render: BTreeSet<&str> = pending("render")
+            .expect("obj.render goes to Jev")
+            .candidates
+            .iter()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(
+            render,
+            BTreeSet::from(["def:src/b.ts#Panel.render", "def:src/b.ts#Tool.render"])
+        );
+        assert!(
+            pending("@lib/a")
+                .expect("@lib/a goes to Jev")
+                .candidates
+                .contains(&"file:lib/a.ts".to_string())
+        );
         // An installed package and the standard library are outside, so they never go to Jev.
         assert!(pending("react").is_none() && pending("node:path").is_none());
         std::fs::remove_dir_all(dir).unwrap();
@@ -768,37 +788,73 @@ mod tests {
                     "export function buildSite() {\n  return 1;\n}\n\nexport default function legacy() {\n  return 2;\n}\n",
                 ),
                 ("src/walk.ts", "export function walk() {\n  return 3;\n}\n"),
-                ("src/make.ts", "function make() {\n  return 4;\n}\n\nexport default make;\n"),
-                ("src/strings.ts", "export function join() {\n  return 5;\n}\n"),
+                (
+                    "src/make.ts",
+                    "function make() {\n  return 4;\n}\n\nexport default make;\n",
+                ),
+                (
+                    "src/strings.ts",
+                    "export function join() {\n  return 5;\n}\n",
+                ),
                 (
                     "src/cli.ts",
                     "import { buildSite as buildV1 } from \"./v1/index\";\nimport * as walker from \"./walk\";\nimport legacyBuild from \"./v1/index\";\nimport made from \"./make\";\nimport * as path from \"node:path\";\n\nexport function buildSite() {\n  buildV1();\n  walker.walk();\n  legacyBuild();\n  made();\n  path.join(\"a\", \"b\");\n}\n",
                 ),
-                ("lib/tools.js", "export function helper() {\n  return 6;\n}\n\nexport function other() {\n  return 7;\n}\n"),
+                (
+                    "lib/tools.js",
+                    "export function helper() {\n  return 6;\n}\n\nexport function other() {\n  return 7;\n}\n",
+                ),
                 (
                     "lib/main.js",
                     "import { helper as assist } from \"./tools.js\";\nimport * as tools from \"./tools.js\";\n\nexport function main() {\n  assist();\n  tools.other();\n}\n",
                 ),
                 // A package's index that re-exports, with a cycle and a chain longer than `HOPS`.
-                ("packages/geo/package.json", r#"{ "name": "@demo/geo", "main": "src/index.ts" }"#),
+                (
+                    "packages/geo/package.json",
+                    r#"{ "name": "@demo/geo", "main": "src/index.ts" }"#,
+                ),
                 (
                     "packages/geo/src/index.ts",
                     "export { area } from \"./shapes/area\";\nexport { perimeter as edge } from \"./shapes/perimeter\";\nexport * from \"./more\";\nexport * as units from \"./units/convert\";\nexport * from \"./loop/a\";\nexport * from \"./far/f1\";\nexport * from \"./hidden\";\n",
                 ),
-                ("packages/geo/src/shapes/area.ts", "export function area() {\n  return 1;\n}\n"),
-                ("packages/geo/src/shapes/perimeter.ts", "export function perimeter() {\n  return 2;\n}\n"),
-                ("packages/geo/src/more.js", "export * from \"./deep/scale\";\n"),
-                ("packages/geo/src/deep/scale.ts", "export function scale() {\n  return 3;\n}\n"),
-                ("packages/geo/src/units/convert.ts", "export function toMeters() {\n  return 4;\n}\n"),
-                ("packages/geo/src/hidden.ts", "function tidy() {\n  return 7;\n}\n\nexport const kept = tidy();\n"),
+                (
+                    "packages/geo/src/shapes/area.ts",
+                    "export function area() {\n  return 1;\n}\n",
+                ),
+                (
+                    "packages/geo/src/shapes/perimeter.ts",
+                    "export function perimeter() {\n  return 2;\n}\n",
+                ),
+                (
+                    "packages/geo/src/more.js",
+                    "export * from \"./deep/scale\";\n",
+                ),
+                (
+                    "packages/geo/src/deep/scale.ts",
+                    "export function scale() {\n  return 3;\n}\n",
+                ),
+                (
+                    "packages/geo/src/units/convert.ts",
+                    "export function toMeters() {\n  return 4;\n}\n",
+                ),
+                (
+                    "packages/geo/src/hidden.ts",
+                    "function tidy() {\n  return 7;\n}\n\nexport const kept = tidy();\n",
+                ),
                 ("packages/geo/src/loop/a.ts", "export * from \"./b\";\n"),
                 ("packages/geo/src/loop/b.ts", "export * from \"./a\";\n"),
                 ("packages/geo/src/far/f1.ts", "export * from \"./f2\";\n"),
                 ("packages/geo/src/far/f2.ts", "export * from \"./f3\";\n"),
                 ("packages/geo/src/far/f3.ts", "export * from \"./f4\";\n"),
                 ("packages/geo/src/far/f4.ts", "export * from \"./f5\";\n"),
-                ("packages/geo/src/far/f5.ts", "export function distant() {\n  return 5;\n}\n"),
-                ("apps/web/scale.ts", "export function scale() {\n  return 6;\n}\n"),
+                (
+                    "packages/geo/src/far/f5.ts",
+                    "export function distant() {\n  return 5;\n}\n",
+                ),
+                (
+                    "apps/web/scale.ts",
+                    "export function scale() {\n  return 6;\n}\n",
+                ),
                 (
                     "apps/web/app.ts",
                     "import { area, edge, scale, units, missing, distant } from \"@demo/geo\";\nimport * as geo from \"@demo/geo\";\n\nexport function draw() {\n  area();\n  edge();\n  scale();\n  units.toMeters();\n  missing();\n  distant();\n  tidy();\n}\n\nexport function drawAll() {\n  geo.area();\n}\n",
@@ -818,7 +874,10 @@ mod tests {
                 ),
                 ("shop/billing/invoice.py", "def total():\n    return 1\n"),
                 ("shop/billing/tax.py", "def rate():\n    return 2\n"),
-                ("shop/catalog/__init__.py", "from .store.items import find\n"),
+                (
+                    "shop/catalog/__init__.py",
+                    "from .store.items import find\n",
+                ),
                 ("shop/catalog/store/items.py", "def find():\n    return 3\n"),
                 ("shop/cli/helpers.py", "def find():\n    return 4\n"),
                 (
@@ -852,51 +911,281 @@ mod tests {
         // Each row is a language, a form, where it is used, the target it names and whether the link reaches it. From
         // a definition the link is a call, and from a file it is an import.
         let forms = [
-            ("TypeScript", "a renamed import of a name the file also defines", "def:src/cli.ts#buildSite", "def:src/v1/index.ts#buildSite", true),
-            ("TypeScript", "a namespace import", "def:src/cli.ts#buildSite", "def:src/walk.ts#walk", true),
-            ("TypeScript", "a default import of `export default function`", "def:src/cli.ts#buildSite", "def:src/v1/index.ts#legacy", true),
-            ("TypeScript", "a default import of `export default name`", "def:src/cli.ts#buildSite", "def:src/make.ts#make", true),
-            ("TypeScript", "a namespace from outside the repository", "def:src/cli.ts#buildSite", "def:src/strings.ts#join", false),
-            ("JavaScript", "a renamed import", "def:lib/main.js#main", "def:lib/tools.js#helper", true),
-            ("JavaScript", "a namespace import", "def:lib/main.js#main", "def:lib/tools.js#other", true),
-            ("TypeScript", "`export { a }` in a package's index", "def:apps/web/app.ts#draw", "def:packages/geo/src/shapes/area.ts#area", true),
-            ("TypeScript", "a namespace import of a package's index", "def:apps/web/app.ts#drawAll", "def:packages/geo/src/shapes/area.ts#area", true),
-            ("TypeScript", "`export { a as b }`", "def:apps/web/app.ts#draw", "def:packages/geo/src/shapes/perimeter.ts#perimeter", true),
-            ("TypeScript", "two `export *`, one in JavaScript", "def:apps/web/app.ts#draw", "def:packages/geo/src/deep/scale.ts#scale", true),
-            ("TypeScript", "`export * as ns`", "def:apps/web/app.ts#draw", "def:packages/geo/src/units/convert.ts#toMeters", true),
-            ("TypeScript", "a neighbour that shares a re-exported name", "def:apps/web/app.ts#draw", "def:apps/web/scale.ts#scale", false),
-            ("TypeScript", "`export *` of a module that does not export the name", "def:apps/web/app.ts#draw", "def:packages/geo/src/hidden.ts#tidy", false),
-            ("TypeScript", "a chain of re-exports longer than `HOPS`", "def:apps/web/app.ts#draw", "def:packages/geo/src/far/f5.ts#distant", false),
-            ("Python", "`from .x import a as b`", "def:pkg/app.py#renamed", "def:pkg/core.py#run", true),
-            ("Python", "`from . import x as y`", "def:pkg/app.py#module", "def:pkg/core.py#run", true),
-            ("Python", "`import a.x as y`", "def:pkg/app.py#dotted", "def:pkg/core.py#run", true),
-            ("Python", "a module from outside the repository", "def:pkg/app.py#outside", "def:pkg/core.py#Loader.load", false),
-            ("Python", "an import inside a function", "def:pkg/app.py#begin", "def:pkg/core.py#run", true),
-            ("Python", "an import inside another function", "def:pkg/app.py#end", "def:pkg/core.py#stop", true),
-            ("Python", "a name another function imports", "def:pkg/app.py#end", "def:pkg/core.py#run", false),
-            ("Python", "`from .x import a` in a package's `__init__`", "def:shop/cli/main.py#run", "def:shop/billing/invoice.py#total", true),
-            ("Python", "`from .x import a as b` in a package's `__init__`", "def:shop/cli/main.py#run", "def:shop/billing/tax.py#rate", true),
-            ("Python", "`from .x import *`, then `from .x import a`", "def:shop/cli/main.py#run", "def:shop/catalog/store/items.py#find", true),
-            ("Python", "a neighbour that shares a re-exported name", "def:shop/cli/main.py#run", "def:shop/cli/helpers.py#find", false),
-            ("Rust", "`use x::a as b` of a name the file also defines", "def:src/main.rs#main", "def:src/util.rs#format", true),
-            ("Rust", "`use x::T as U`", "def:src/main.rs#main", "def:src/util.rs#Tool.new", true),
-            ("Rust", "`use x::module as m`", "def:src/main.rs#main", "def:src/graph/resolve.rs#run", true),
-            ("Rust", "`use x::module as m` names the module, not the folder above it", "file:src/main.rs", "file:src/graph/resolve.rs", true),
-            ("Rust", "`pub use x::a`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#area", true),
-            ("Rust", "`pub use x::a as b`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#perimeter", true),
-            ("Rust", "`pub use x::{a}`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#span", true),
-            ("Rust", "`pub use x::{a as b}`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#mass", true),
-            ("Rust", "`pub use x::*`", "def:src/main.rs#shapes", "def:src/geo/shapes/solid.rs#volume", true),
-            ("Rust", "a private `use`", "def:src/main.rs#shapes", "def:src/geo/shapes/flat.rs#hidden", false),
+            (
+                "TypeScript",
+                "a renamed import of a name the file also defines",
+                "def:src/cli.ts#buildSite",
+                "def:src/v1/index.ts#buildSite",
+                true,
+            ),
+            (
+                "TypeScript",
+                "a namespace import",
+                "def:src/cli.ts#buildSite",
+                "def:src/walk.ts#walk",
+                true,
+            ),
+            (
+                "TypeScript",
+                "a default import of `export default function`",
+                "def:src/cli.ts#buildSite",
+                "def:src/v1/index.ts#legacy",
+                true,
+            ),
+            (
+                "TypeScript",
+                "a default import of `export default name`",
+                "def:src/cli.ts#buildSite",
+                "def:src/make.ts#make",
+                true,
+            ),
+            (
+                "TypeScript",
+                "a namespace from outside the repository",
+                "def:src/cli.ts#buildSite",
+                "def:src/strings.ts#join",
+                false,
+            ),
+            (
+                "JavaScript",
+                "a renamed import",
+                "def:lib/main.js#main",
+                "def:lib/tools.js#helper",
+                true,
+            ),
+            (
+                "JavaScript",
+                "a namespace import",
+                "def:lib/main.js#main",
+                "def:lib/tools.js#other",
+                true,
+            ),
+            (
+                "TypeScript",
+                "`export { a }` in a package's index",
+                "def:apps/web/app.ts#draw",
+                "def:packages/geo/src/shapes/area.ts#area",
+                true,
+            ),
+            (
+                "TypeScript",
+                "a namespace import of a package's index",
+                "def:apps/web/app.ts#drawAll",
+                "def:packages/geo/src/shapes/area.ts#area",
+                true,
+            ),
+            (
+                "TypeScript",
+                "`export { a as b }`",
+                "def:apps/web/app.ts#draw",
+                "def:packages/geo/src/shapes/perimeter.ts#perimeter",
+                true,
+            ),
+            (
+                "TypeScript",
+                "two `export *`, one in JavaScript",
+                "def:apps/web/app.ts#draw",
+                "def:packages/geo/src/deep/scale.ts#scale",
+                true,
+            ),
+            (
+                "TypeScript",
+                "`export * as ns`",
+                "def:apps/web/app.ts#draw",
+                "def:packages/geo/src/units/convert.ts#toMeters",
+                true,
+            ),
+            (
+                "TypeScript",
+                "a neighbour that shares a re-exported name",
+                "def:apps/web/app.ts#draw",
+                "def:apps/web/scale.ts#scale",
+                false,
+            ),
+            (
+                "TypeScript",
+                "`export *` of a module that does not export the name",
+                "def:apps/web/app.ts#draw",
+                "def:packages/geo/src/hidden.ts#tidy",
+                false,
+            ),
+            (
+                "TypeScript",
+                "a chain of re-exports longer than `HOPS`",
+                "def:apps/web/app.ts#draw",
+                "def:packages/geo/src/far/f5.ts#distant",
+                false,
+            ),
+            (
+                "Python",
+                "`from .x import a as b`",
+                "def:pkg/app.py#renamed",
+                "def:pkg/core.py#run",
+                true,
+            ),
+            (
+                "Python",
+                "`from . import x as y`",
+                "def:pkg/app.py#module",
+                "def:pkg/core.py#run",
+                true,
+            ),
+            (
+                "Python",
+                "`import a.x as y`",
+                "def:pkg/app.py#dotted",
+                "def:pkg/core.py#run",
+                true,
+            ),
+            (
+                "Python",
+                "a module from outside the repository",
+                "def:pkg/app.py#outside",
+                "def:pkg/core.py#Loader.load",
+                false,
+            ),
+            (
+                "Python",
+                "an import inside a function",
+                "def:pkg/app.py#begin",
+                "def:pkg/core.py#run",
+                true,
+            ),
+            (
+                "Python",
+                "an import inside another function",
+                "def:pkg/app.py#end",
+                "def:pkg/core.py#stop",
+                true,
+            ),
+            (
+                "Python",
+                "a name another function imports",
+                "def:pkg/app.py#end",
+                "def:pkg/core.py#run",
+                false,
+            ),
+            (
+                "Python",
+                "`from .x import a` in a package's `__init__`",
+                "def:shop/cli/main.py#run",
+                "def:shop/billing/invoice.py#total",
+                true,
+            ),
+            (
+                "Python",
+                "`from .x import a as b` in a package's `__init__`",
+                "def:shop/cli/main.py#run",
+                "def:shop/billing/tax.py#rate",
+                true,
+            ),
+            (
+                "Python",
+                "`from .x import *`, then `from .x import a`",
+                "def:shop/cli/main.py#run",
+                "def:shop/catalog/store/items.py#find",
+                true,
+            ),
+            (
+                "Python",
+                "a neighbour that shares a re-exported name",
+                "def:shop/cli/main.py#run",
+                "def:shop/cli/helpers.py#find",
+                false,
+            ),
+            (
+                "Rust",
+                "`use x::a as b` of a name the file also defines",
+                "def:src/main.rs#main",
+                "def:src/util.rs#format",
+                true,
+            ),
+            (
+                "Rust",
+                "`use x::T as U`",
+                "def:src/main.rs#main",
+                "def:src/util.rs#Tool.new",
+                true,
+            ),
+            (
+                "Rust",
+                "`use x::module as m`",
+                "def:src/main.rs#main",
+                "def:src/graph/resolve.rs#run",
+                true,
+            ),
+            (
+                "Rust",
+                "`use x::module as m` names the module, not the folder above it",
+                "file:src/main.rs",
+                "file:src/graph/resolve.rs",
+                true,
+            ),
+            (
+                "Rust",
+                "`pub use x::a`",
+                "def:src/main.rs#shapes",
+                "def:src/geo/shapes/flat.rs#area",
+                true,
+            ),
+            (
+                "Rust",
+                "`pub use x::a as b`",
+                "def:src/main.rs#shapes",
+                "def:src/geo/shapes/flat.rs#perimeter",
+                true,
+            ),
+            (
+                "Rust",
+                "`pub use x::{a}`",
+                "def:src/main.rs#shapes",
+                "def:src/geo/shapes/flat.rs#span",
+                true,
+            ),
+            (
+                "Rust",
+                "`pub use x::{a as b}`",
+                "def:src/main.rs#shapes",
+                "def:src/geo/shapes/flat.rs#mass",
+                true,
+            ),
+            (
+                "Rust",
+                "`pub use x::*`",
+                "def:src/main.rs#shapes",
+                "def:src/geo/shapes/solid.rs#volume",
+                true,
+            ),
+            (
+                "Rust",
+                "a private `use`",
+                "def:src/main.rs#shapes",
+                "def:src/geo/shapes/flat.rs#hidden",
+                false,
+            ),
         ];
         let wrong: Vec<String> = forms
             .iter()
             .filter(|(_, _, from, to, reaches)| {
-                let kind = if from.starts_with("file:") { "imports" } else { "calls" };
-                g.edges.iter().any(|e| e.from == *from && e.to == *to && e.kind == kind) != *reaches
+                let kind = if from.starts_with("file:") {
+                    "imports"
+                } else {
+                    "calls"
+                };
+                g.edges
+                    .iter()
+                    .any(|e| e.from == *from && e.to == *to && e.kind == kind)
+                    != *reaches
             })
             .map(|(language, form, _, to, reaches)| {
-                format!("{language}: {form} {} {to}", if *reaches { "should reach" } else { "should not reach" })
+                format!(
+                    "{language}: {form} {} {to}",
+                    if *reaches {
+                        "should reach"
+                    } else {
+                        "should not reach"
+                    }
+                )
             })
             .collect();
         assert!(wrong.is_empty(), "{wrong:#?}");
@@ -906,7 +1195,12 @@ mod tests {
     #[test]
     fn a_folder_inside_a_repository_is_a_project_of_its_own() {
         let dir = project("inside", &[("sub/a.ts", "export const a = 1;\n")]);
-        let beside = |suffix: &str| dir.with_file_name(format!("{}-{suffix}", dir.file_name().unwrap().to_string_lossy()));
+        let beside = |suffix: &str| {
+            dir.with_file_name(format!(
+                "{}-{suffix}",
+                dir.file_name().unwrap().to_string_lossy()
+            ))
+        };
         let (worktree, clone) = (beside("worktree"), beside("clone"));
         let _ = std::fs::remove_dir_all(&worktree);
         let _ = std::fs::remove_dir_all(&clone);
@@ -924,13 +1218,25 @@ mod tests {
         git(&["init", "-q"]);
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "one"]);
-        git(&["worktree", "add", "-q", "-b", "other", worktree.to_str().unwrap()]);
+        git(&[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "other",
+            worktree.to_str().unwrap(),
+        ]);
         git(&["clone", "-q", ".", clone.to_str().unwrap()]);
         assert_ne!(project_id(&dir.join("sub")), project_id(&dir));
         // A clone elsewhere and a worktree are the same projects, so their saved answers apply.
         for other in [&clone, &worktree] {
             assert_eq!(project_id(other), project_id(&dir), "{}", other.display());
-            assert_eq!(project_id(&other.join("sub")), project_id(&dir.join("sub")), "{}", other.display());
+            assert_eq!(
+                project_id(&other.join("sub")),
+                project_id(&dir.join("sub")),
+                "{}",
+                other.display()
+            );
         }
         // The name enters every request, so a worktree takes its main checkout's.
         assert_eq!(graph(&worktree).unwrap().name, graph(&dir).unwrap().name);

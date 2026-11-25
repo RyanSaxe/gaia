@@ -14,7 +14,15 @@ import { REFUSALS, type StartPage, askFolder, placeOf } from "./choice.ts";
 import type { Writing } from "./table-ink.ts";
 import { tableLayout } from "./table-layout.ts";
 import { drawTally } from "./tally.ts";
-import { LAY_S, LIFT_S, RISE_S, type Rect, type Sheet, type TableScene, createTableScene } from "./table-scene.ts";
+import {
+  LAY_S,
+  LIFT_S,
+  RISE_S,
+  type Rect,
+  type Sheet,
+  type TableScene,
+  createTableScene,
+} from "./table-scene.ts";
 
 /** Seconds for the darker stroke to run along the line, and for an answer to be written in. */
 const READING_S = 1.2;
@@ -46,7 +54,10 @@ export interface TableOptions {
   readonly landed?: () => void;
 }
 
-export function createTable(veil: HTMLElement, options: TableOptions): StartPage {
+export function createTable(
+  veil: HTMLElement,
+  options: TableOptions,
+): StartPage {
   const root = document.createElement("div");
   root.className = "start start-table";
   root.innerHTML = /* html */ `
@@ -91,7 +102,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   // ---------- drawing, only when something changes ----------
   let frame = 0;
   const draw = (): void => {
-    if (frame === 0 && scene !== null && !gone) frame = requestAnimationFrame(tick);
+    if (frame === 0 && scene !== null && !gone)
+      frame = requestAnimationFrame(tick);
   };
   function tick(now: number): void {
     frame = 0;
@@ -132,8 +144,16 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   const toSheet = (): Sheet => {
     const s = options.sheet();
     const r = root.getBoundingClientRect();
-    const night = Number.parseFloat(getComputedStyle(veil).getPropertyValue("--night"));
-    return { x: s.left - r.left, y: s.top - r.top, w: s.width, h: s.height, night: Number.isFinite(night) ? night : 0 };
+    const night = Number.parseFloat(
+      getComputedStyle(veil).getPropertyValue("--night"),
+    );
+    return {
+      x: s.left - r.left,
+      y: s.top - r.top,
+      w: s.width,
+      h: s.height,
+      night: Number.isFinite(night) ? night : 0,
+    };
   };
   function write(next: Writing): void {
     writing = next;
@@ -183,7 +203,13 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   // ---------- building the table for an offer ----------
   /** Builds the table for the worlds offered and readies it to draw. */
   async function build(recent: StartOffer["recent"]): Promise<void> {
-    const [logo, deckle, ...paintings] = await Promise.all([decoded(SHEET_LOGO), decoded(DECKLE_MASK.slice(5, -2)), ...recent.map((r) => (r.painting === undefined ? null : decoded(r.painting).catch(() => null)))]);
+    const [logo, deckle, ...paintings] = await Promise.all([
+      decoded(SHEET_LOGO),
+      decoded(DECKLE_MASK.slice(5, -2)),
+      ...recent.map((r) =>
+        r.painting === undefined ? null : decoded(r.painting).catch(() => null),
+      ),
+    ]);
     const w = Math.max(1, root.clientWidth);
     const h = Math.max(1, root.clientHeight);
     phone = w / h < UPRIGHT;
@@ -191,13 +217,23 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
     // bare sheet in the sheet's aspect, so it rises into the sheet as a fresh card does.
     const bare = paintings.includes(null) ? (options.face?.() ?? null) : null;
     // A world whose code has moved on since the person last opened it gets a tally of the commits since.
-    const tallies = recent.map((r) => (r.commitsSince === undefined ? null : tallyOf(r.commitsSince, r.root)));
+    const tallies = recent.map((r) =>
+      r.commitsSince === undefined ? null : tallyOf(r.commitsSince, r.root),
+    );
     const faces = recent.map((_, i) => {
       const painting = paintings[i] ?? null;
       const face = painting ?? bare;
-      return face === null ? null : tallied(face, tallies[i] ?? null, painting !== null);
+      return face === null
+        ? null
+        : tallied(face, tallies[i] ?? null, painting !== null);
     });
-    const next = createTableScene(tableLayout(phone, recent.length), recent.map((world, i) => ({ world, picture: faces[i] ?? null })), logo as HTMLImageElement, deckle as HTMLImageElement, { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) });
+    const next = createTableScene(
+      tableLayout(phone, recent.length),
+      recent.map((world, i) => ({ world, picture: faces[i] ?? null })),
+      logo as HTMLImageElement,
+      deckle as HTMLImageElement,
+      { w, h, dpr: Math.min(window.devicePixelRatio || 1, 2) },
+    );
     next.canvas.className = "table-view";
     next.hour(hour);
     next.write(writing);
@@ -221,7 +257,8 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
           // A card with a painting or a tally becomes the wait's sheet face up, then flips to the sheet's bare paper for the
           // map. A bare card already shows the sheet.
           const face = faces[i];
-          if (face !== null && face !== undefined && face !== bare) options.chosen?.(face);
+          if (face !== null && face !== undefined && face !== bare)
+            options.chosen?.(face);
           lift(i, performance.now());
           choose(placeOf(r));
         });
@@ -232,14 +269,30 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   }
 
   /** Draws the tally of `commits` on a card's face, with the same strokes for the same world. On a painting, a paper-toned halo goes under it. */
-  type Pencilled = (c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, onPaint?: boolean) => void;
-  const tallyOf = (commits: number | null, root: string): Pencilled => (c, x, y, w, h, onPaint = false) => drawTally(c, x, y, w, h, commits, root, onPaint);
+  type Pencilled = (
+    c: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    onPaint?: boolean,
+  ) => void;
+  const tallyOf =
+    (commits: number | null, root: string): Pencilled =>
+    (c, x, y, w, h, onPaint = false) =>
+      drawTally(c, x, y, w, h, commits, root, onPaint);
   /** Returns a copy of `face` with `pencilled` drawn on it, or `face` itself when there is nothing to draw. `onPaint` is true when the face is a painting. */
-  function tallied<F extends HTMLCanvasElement | HTMLImageElement>(face: F, pencilled: Pencilled | null, onPaint: boolean): F | HTMLCanvasElement {
+  function tallied<F extends HTMLCanvasElement | HTMLImageElement>(
+    face: F,
+    pencilled: Pencilled | null,
+    onPaint: boolean,
+  ): F | HTMLCanvasElement {
     if (pencilled === null) return face;
     const copy = document.createElement("canvas");
-    copy.width = face instanceof HTMLImageElement ? face.naturalWidth : face.width;
-    copy.height = face instanceof HTMLImageElement ? face.naturalHeight : face.height;
+    copy.width =
+      face instanceof HTMLImageElement ? face.naturalWidth : face.width;
+    copy.height =
+      face instanceof HTMLImageElement ? face.naturalHeight : face.height;
     const c = copy.getContext("2d") as CanvasRenderingContext2D;
     c.drawImage(face, 0, 0);
     pencilled(c, 0, 0, copy.width, copy.height, onPaint);
@@ -259,7 +312,10 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   function liftFresh(after = 0): void {
     if (scene === null || chosen !== null) return;
     const s = options.sheet();
-    lift(scene.fresh(s.width / Math.max(1, s.height), options.face?.() ?? null), performance.now() + after + LAY_S * 1000);
+    lift(
+      scene.fresh(s.width / Math.max(1, s.height), options.face?.() ?? null),
+      performance.now() + after + LAY_S * 1000,
+    );
   }
   /** Shows the table once its first frame is drawn, so it fades in complete, in front of the wait. */
   function show(): void {
@@ -290,7 +346,15 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
   return {
     offer(offer) {
       const recent = offer.recent.slice(0, RECENT_KEPT);
-      const same = scene !== null && recent.length === shown.length && recent.every((r, i) => r.root === shown[i]?.root && r.painting === shown[i]?.painting && r.commitsSince === shown[i]?.commitsSince);
+      const same =
+        scene !== null &&
+        recent.length === shown.length &&
+        recent.every(
+          (r, i) =>
+            r.root === shown[i]?.root &&
+            r.painting === shown[i]?.painting &&
+            r.commitsSince === shown[i]?.commitsSince,
+        );
       shown = recent;
       chosen = null;
       arrived = false;
@@ -305,7 +369,12 @@ export function createTable(veil: HTMLElement, options: TableOptions): StartPage
         input.value = offer.refused.address;
         said.textContent = REFUSALS[offer.refused.why];
         answerFrom = performance.now();
-        writing = { typed: offer.refused.address, reading: 0, answer: REFUSALS[offer.refused.why], answered: 0 };
+        writing = {
+          typed: offer.refused.address,
+          reading: 0,
+          answer: REFUSALS[offer.refused.why],
+          answered: 0,
+        };
         input.focus({ preventScroll: true });
       } else if (recent.length === 0) input.focus({ preventScroll: true });
       void (same ? Promise.resolve() : build(recent)).then(() => {

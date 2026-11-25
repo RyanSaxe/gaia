@@ -8,7 +8,22 @@
 
 import * as THREE from "three";
 import { AIR, type Realized, shownVitality } from "@gaia/realize";
-import { type FarCards, type FarCopies, type FarTurn, type InstanceSpot, type LevelCopies, type PlantView, type SceneLight, createFarCards, createPlantInstances, crownsOf, farChoice, farness as farnessOf, PLACE_STRIDE, placesOf } from "@gaia/render";
+import {
+  type FarCards,
+  type FarCopies,
+  type FarTurn,
+  type InstanceSpot,
+  type LevelCopies,
+  type PlantView,
+  type SceneLight,
+  createFarCards,
+  createPlantInstances,
+  crownsOf,
+  farChoice,
+  farness as farnessOf,
+  PLACE_STRIDE,
+  placesOf,
+} from "@gaia/render";
 
 /** The side of a cell, in meters. */
 export const COPY_CELL = 32;
@@ -30,7 +45,15 @@ export type DetailMode = "auto" | "full" | "far";
  * memory. A bush switches 120 to 230 m away, so most bushes in view draw
  * their far form. In the proving ground's valley, 36 of 601 keep the full form.
  */
-export const FAR = { swapPx: typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches ? 64 : 128, band: 1.25, bush: 0.25, leave: 1.15 } as const;
+export const FAR = {
+  swapPx:
+    typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches
+      ? 64
+      : 128,
+  band: 1.25,
+  bush: 0.25,
+  leave: 1.15,
+} as const;
 
 /**
  * Far form slots per card set, fixed for any world size. A tree form's slot
@@ -53,7 +76,8 @@ export const FAR_SLOTS = { trees: 24, bushes: 96 } as const;
 export const GONE = { start: 8, end: 4 } as const;
 
 /** Meters from the eye past which a crown of `radius` meters is gone, on a pass of `focal` device pixels' focal length. */
-export const goneAt = (radius: number, focal: number): number => (2 * radius * focal) / GONE.end;
+export const goneAt = (radius: number, focal: number): number =>
+  (2 * radius * focal) / GONE.end;
 
 /** The `FAR` and `GONE` thresholds in the form the far card shader takes. */
 export const TURN: FarTurn = { band: FAR.band, leave: FAR.leave, gone: GONE };
@@ -63,7 +87,8 @@ export const TURN: FarTurn = { band: FAR.band, leave: FAR.leave, gone: GONE };
  * switch at `swapPx`. 0 draws the full form alone, 1 draws the far form
  * alone, and a value between draws the far form over the full one.
  */
-export const farness = (px: number, swapPx: number = FAR.swapPx): number => farnessOf(px, swapPx, FAR.band);
+export const farness = (px: number, swapPx: number = FAR.swapPx): number =>
+  farnessOf(px, swapPx, FAR.band);
 
 /**
  * A pass's scale for choosing detail. `smaller` is how many times smaller than the view it draws. `focal` is its
@@ -114,22 +139,35 @@ export interface FarForms {
   /** Puts `form` in `slot`, or in none for -1, with its copies switching at `swapPx`. Its cards and full forms change from the next pass. */
   set(form: number, slot: number, swapPx: number): void;
   /** Returns the cards for one plant's copies of `form`, which draw while `anchor` is visible. `far` counts how many of them a view would draw far. */
-  join(form: number, anchor: THREE.Object3D, far: (eye: THREE.Vector3, focal: number) => number): FarCopies;
+  join(
+    form: number,
+    anchor: THREE.Object3D,
+    far: (eye: THREE.Vector3, focal: number) => number,
+  ): FarCopies;
   /** Counts, for each form, the copies a view from `eye` with a focal length of `focal` device pixels would draw far in any direction. */
   weigh(eye: THREE.Vector3, focal: number): Float64Array;
 }
 
 /** Whether `o` and every ancestor are visible. */
 const shows = (o: THREE.Object3D): boolean => {
-  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) if (!a.visible) return false;
+  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent)
+    if (!a.visible) return false;
   return true;
 };
 
 /** Creates far forms whose cards have `slots` slots and use `light`. `bareEdge` sharpens a bare copy's card (`createFarCards`). */
-export function createFarForms(light: SceneLight, slots: number, bareEdge?: readonly [number, number]): FarForms {
+export function createFarForms(
+  light: SceneLight,
+  slots: number,
+  bareEdge?: readonly [number, number],
+): FarForms {
   const plants: FarPlant[] = [];
   const state: { slot: number; swapPx: number }[] = [];
-  const members: { copies: FarCopies; anchor: THREE.Object3D; far: (eye: THREE.Vector3, focal: number) => number }[][] = [];
+  const members: {
+    copies: FarCopies;
+    anchor: THREE.Object3D;
+    far: (eye: THREE.Vector3, focal: number) => number;
+  }[][] = [];
   const cards = createFarCards(light, TURN, slots, bareEdge);
   const forms: FarForms = {
     get count() {
@@ -147,7 +185,8 @@ export function createFarForms(light: SceneLight, slots: number, bareEdge?: read
     swapPx: (form) => state[form]?.swapPx ?? 0,
     set(form, slot, swapPx) {
       const s = state[form];
-      if (s === undefined) throw new Error(`No far form ${form}; there are ${plants.length}.`);
+      if (s === undefined)
+        throw new Error(`No far form ${form}; there are ${plants.length}.`);
       s.slot = slot;
       s.swapPx = slot < 0 ? 0 : swapPx;
       if (slot >= 0) cards.turnAt(slot, s.swapPx);
@@ -155,7 +194,8 @@ export function createFarForms(light: SceneLight, slots: number, bareEdge?: read
     },
     join(form, anchor, far) {
       const list = members[form];
-      if (list === undefined) throw new Error(`No far form ${form}; there are ${plants.length}.`);
+      if (list === undefined)
+        throw new Error(`No far form ${form}; there are ${plants.length}.`);
       const own = cards.copies(anchor);
       own.slot = forms.slotOf(form);
       const copies: FarCopies = {
@@ -180,7 +220,9 @@ export function createFarForms(light: SceneLight, slots: number, bareEdge?: read
     },
     // A hidden plant draws nothing far, such as the swap test's copies between its runs.
     weigh(eye, focal) {
-      return Float64Array.from(members, (list) => list.reduce((n, m) => n + (shows(m.anchor) ? m.far(eye, focal) : 0), 0));
+      return Float64Array.from(members, (list) =>
+        list.reduce((n, m) => n + (shows(m.anchor) ? m.far(eye, focal) : 0), 0),
+      );
     },
   };
   return forms;
@@ -236,7 +278,11 @@ interface Cell {
 }
 
 /** Groups a plant's copies into cells, given the plant's built bounds at scale 1 and how far past them it reaches as drawn. */
-function cellsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere, reach: number): Cell[] {
+function cellsOf(
+  spots: readonly InstanceSpot[],
+  sphere: THREE.Sphere,
+  reach: number,
+): Cell[] {
   const byCell = new Map<string, number[]>();
   spots.forEach((s, k) => {
     const key = `${Math.floor(s.x / COPY_CELL)},${Math.floor(s.z / COPY_CELL)}`;
@@ -253,12 +299,27 @@ function cellsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere, reach: nu
     for (const k of copies) {
       const s = spots[k] as InstanceSpot;
       const tilt = 1 + Math.hypot(...(s.slope ?? [0, 0]));
-      center.copy(sphere.center).multiplyScalar(s.scale).add(point.set(s.x, s.y, s.z));
-      built.union(new THREE.Box3().setFromCenterAndSize(center, size.setScalar(sphere.radius * 2 * s.scale * tilt)));
+      center
+        .copy(sphere.center)
+        .multiplyScalar(s.scale)
+        .add(point.set(s.x, s.y, s.z));
+      built.union(
+        new THREE.Box3().setFromCenterAndSize(
+          center,
+          size.setScalar(sphere.radius * 2 * s.scale * tilt),
+        ),
+      );
     }
     const b = built.getBoundingSphere(new THREE.Sphere());
-    const radii = copies.map((k) => sphere.radius * (spots[k] as InstanceSpot).scale);
-    cells.push({ copies, built: b, bounds: new THREE.Sphere(b.center.clone(), b.radius + reach), crowns: [Math.min(...radii), Math.max(...radii)] });
+    const radii = copies.map(
+      (k) => sphere.radius * (spots[k] as InstanceSpot).scale,
+    );
+    cells.push({
+      copies,
+      built: b,
+      bounds: new THREE.Sphere(b.center.clone(), b.radius + reach),
+      crowns: [Math.min(...radii), Math.max(...radii)],
+    });
   }
   return cells;
 }
@@ -269,7 +330,12 @@ function cellsOf(spots: readonly InstanceSpot[], sphere: THREE.Sphere, reach: nu
  * has a slot, each copy also has a card that draws where the copy is small on
  * a pass's screen, and the full form stops drawing there.
  */
-export function createCopies(plant: Realized, light: SceneLight, spots: readonly InstanceSpot[], far?: FarOf): Copies {
+export function createCopies(
+  plant: Realized,
+  light: SceneLight,
+  spots: readonly InstanceSpot[],
+  far?: FarOf,
+): Copies {
   const view = createPlantInstances(plant, light, spots);
   const levels = view.levels;
   let cells = cellsOf(spots, view.built, view.reach);
@@ -293,7 +359,11 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     const top = formPx * FAR.band;
     for (let k = 0; k < crowns.length; k += 4) {
       const r = crowns[k + 3] as number;
-      const d = Math.hypot((crowns[k] as number) - eye.x, (crowns[k + 1] as number) - eye.y, (crowns[k + 2] as number) - eye.z);
+      const d = Math.hypot(
+        (crowns[k] as number) - eye.x,
+        (crowns[k + 1] as number) - eye.y,
+        (crowns[k + 2] as number) - eye.z,
+      );
       if (d - r >= AIR.dissolveEnd) continue;
       const px = (2 * r * focal) / Math.max(d, 1);
       if (px > GONE.end && px <= top) n++;
@@ -301,15 +371,19 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
     return n;
   };
   /** The copies' cards, which draw from their form's slot while it has one. */
-  const cards: FarCopies | null = far === undefined ? null : far.forms.join(far.form, view.object, farCount);
+  const cards: FarCopies | null =
+    far === undefined ? null : far.forms.join(far.form, view.object, farCount);
   cards?.place(places, crowns);
 
   const levelFor = (cell: Cell, smaller: number): number => {
     if (detail === "full") return 0;
     if (detail === "far") return levels.length - 1;
-    const near = (cell.built.center.distanceTo(light.uEye.value) - cell.built.radius) * smaller;
+    const near =
+      (cell.built.center.distanceTo(light.uEye.value) - cell.built.radius) *
+      smaller;
     let pick = 0;
-    for (let k = 1; k < levels.length; k++) if ((levels[k] as number) <= near - LEVEL_MARGIN) pick = k;
+    for (let k = 1; k < levels.length; k++)
+      if ((levels[k] as number) <= near - LEVEL_MARGIN) pick = k;
     return pick;
   };
 
@@ -349,34 +423,61 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
       cards?.setVitalityAt(index, v);
     },
     cull(camera, size = VIEW_SIZE) {
-      frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+      frustum.setFromProjectionMatrix(
+        viewProjection.multiplyMatrices(
+          camera.projectionMatrix,
+          camera.matrixWorldInverse,
+        ),
+      );
       for (const list of parts) list.length = 0;
       const eye = light.uEye.value;
       // A crown's span on this pass's screen, in device pixels, at distance d.
-      const span = (radius: number, d: number): number => (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
+      const span = (radius: number, d: number): number =>
+        (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
       const sized = size.focal > 0;
       // The card shader chooses each card on the GPU by the same rule as the full form below, at the form's current
       // `swapPx`. No card draws while the form has no slot or while detail is forced.
       const swapPx = far === undefined ? 0 : far.forms.swapPx(far.form);
-      if (cards !== null && far !== undefined) cards.slot = detail === "auto" ? far.forms.slotOf(far.form) : -1;
+      if (cards !== null && far !== undefined)
+        cards.slot = detail === "auto" ? far.forms.slotOf(far.form) : -1;
       const swapping = swapPx > 0 && detail === "auto" && sized;
       // Below `swapPx`, a perspective pass dissolves the full form under its whole card until the crown spans
       // `leavePx`. The sun's shadow is orthographic, so it keeps the full form down to `swapPx` and the card casts the
       // shadow below that.
       const leaves = swapping && !size.ortho;
       const leavePx = leaves ? swapPx / FAR.leave : swapPx;
-      view.nearLeaves(sized && !size.ortho ? size.focal : 0, leaves ? swapPx : 0, leaves ? leavePx : 0, [GONE.start, GONE.end]);
+      view.nearLeaves(
+        sized && !size.ortho ? size.focal : 0,
+        leaves ? swapPx : 0,
+        leaves ? leavePx : 0,
+        [GONE.start, GONE.end],
+      );
       inBand = 0;
       farAway = 0;
       cells.forEach((cell, i) => {
         const d = cell.built.center.distanceTo(eye);
         // Skip a cell past `AIR.dissolveEnd`, outside the frustum, or whose largest crown is too small to see.
-        if (d - cell.built.radius >= AIR.dissolveEnd || !frustum.intersectsSphere(cell.bounds)) return;
-        if (sized && !size.ortho && span(cell.crowns[1], d - cell.built.radius) <= GONE.end) return;
-        const level = parts[levelFor(cell, size.smaller)] as (number | readonly number[])[];
+        if (
+          d - cell.built.radius >= AIR.dissolveEnd ||
+          !frustum.intersectsSphere(cell.bounds)
+        )
+          return;
+        if (
+          sized &&
+          !size.ortho &&
+          span(cell.crowns[1], d - cell.built.radius) <= GONE.end
+        )
+          return;
+        const level = parts[levelFor(cell, size.smaller)] as (
+          | number
+          | readonly number[]
+        )[];
         // A cell wholly above the band draws whole, and one wholly below `leavePx` draws only cards. Only a cell that
         // straddles the band checks each copy.
-        if (!swapping || span(cell.crowns[0], d + cell.built.radius) >= swapPx * FAR.band) {
+        if (
+          !swapping ||
+          span(cell.crowns[0], d + cell.built.radius) >= swapPx * FAR.band
+        ) {
           level.push(i);
           return;
         }
@@ -386,7 +487,14 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
         }
         const kept: number[] = [];
         for (const k of cell.copies) {
-          const px = span(crowns[k * 4 + 3] as number, Math.hypot((crowns[k * 4] as number) - eye.x, (crowns[k * 4 + 1] as number) - eye.y, (crowns[k * 4 + 2] as number) - eye.z));
+          const px = span(
+            crowns[k * 4 + 3] as number,
+            Math.hypot(
+              (crowns[k * 4] as number) - eye.x,
+              (crowns[k * 4 + 1] as number) - eye.y,
+              (crowns[k * 4 + 2] as number) - eye.z,
+            ),
+          );
           const { full, card: fade } = farChoice(px, swapPx, TURN, size.ortho);
           if (full) kept.push(k);
           else if (fade > 0) farAway++;
@@ -396,9 +504,18 @@ export function createCopies(plant: Realized, light: SceneLight, spots: readonly
         else if (kept.length > 0) level.push(kept);
       });
       packed = parts.map((list, k) => {
-        const key = list.map((p) => (typeof p === "number" ? p : `[${p.join(".")}]`)).join(",");
+        const key = list
+          .map((p) => (typeof p === "number" ? p : `[${p.join(".")}]`))
+          .join(",");
         const was = packed[k] as LevelCopies;
-        return was.key === key ? was : { key, copies: list.flatMap((p) => (typeof p === "number" ? (cells[p] as Cell).copies : p)) };
+        return was.key === key
+          ? was
+          : {
+              key,
+              copies: list.flatMap((p) =>
+                typeof p === "number" ? (cells[p] as Cell).copies : p,
+              ),
+            };
       });
       view.draw(packed);
     },

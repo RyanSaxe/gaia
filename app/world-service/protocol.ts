@@ -21,7 +21,11 @@ export type FromMain =
 export type ToMain =
   | { readonly type: "engine.send"; readonly line: string }
   /** The world chosen on the start page opened. Main titles the window with its name and reopens it when the page reloads. */
-  | { readonly type: "world.opened"; readonly root: string; readonly name: string };
+  | {
+      readonly type: "world.opened";
+      readonly root: string;
+      readonly name: string;
+    };
 
 /** A world opened before. The start page lists them newest first. */
 export interface RecentWorld {
@@ -61,7 +65,9 @@ export interface StartOffer {
 }
 
 /** A choice on the start page: a local folder or a GitHub address. */
-export type StartChoice = { readonly folder: string } | { readonly address: string };
+export type StartChoice =
+  | { readonly folder: string }
+  | { readonly address: string };
 
 export type EngineStatus =
   | { readonly state: "starting" }
@@ -123,28 +129,50 @@ export type Opening =
    * places on it, so its position is enough for the wait's sheet to keep
    * names clear of the building or landmark to come.
    */
-  | { readonly stage: "land"; readonly name: string; readonly size: number; readonly aspect?: number; readonly areas: readonly Outline[]; readonly patches: readonly FilePatch[]; readonly lots: readonly LotPlace[] }
+  | {
+      readonly stage: "land";
+      readonly name: string;
+      readonly size: number;
+      readonly aspect?: number;
+      readonly areas: readonly Outline[];
+      readonly patches: readonly FilePatch[];
+      readonly lots: readonly LotPlace[];
+    }
   /**
    * Jev is answering requests. `answered` counts the requests Jev has answered in this opening, and `total` counts
    * every request to send. With a spend limit, `total` includes the planned understanding requests from the start.
    * Without one, it grows as the pass finds requests. `settled` lists every area whose requests are all answered,
    * including its region's own request. An area is a directory's path, or "" for the root. Land is composed after the
-    * understanding pass, so `settled` does not cover land. `asking` lists the areas with a request to Jev in
+   * understanding pass, so `settled` does not cover land. `asking` lists the areas with a request to Jev in
    * flight. A request Jev cannot answer fails the opening with `world.failed`, so this message has no failure count.
    */
-  | { readonly stage: "asking"; readonly name: string; readonly total: number; readonly answered: number; readonly settled: readonly string[]; readonly asking: readonly string[] }
+  | {
+      readonly stage: "asking";
+      readonly name: string;
+      readonly total: number;
+      readonly answered: number;
+      readonly settled: readonly string[];
+      readonly asking: readonly string[];
+    }
   /**
    * The final vitality of each file settled since the last `health` message, by path. Each value matches the finished
    * world. Files are sent as the understanding pass judges them, and files it did not cover are sent just before
    * `world.document`. Every file appears exactly once, whether or not Jev is asked.
    */
-  | { readonly stage: "health"; readonly vitality: Readonly<Record<string, number>> }
+  | {
+      readonly stage: "health";
+      readonly vitality: Readonly<Record<string, number>>;
+    }
   /**
    * The files and areas whose requests in one stage of the understanding pass are now all answered. A file appears
    * once for its links and again for itself. An area appears once, as the pass works down the folders. The wait draws
    * a pencil stroke over that code.
    */
-  | { readonly stage: "understood"; readonly files: readonly string[]; readonly areas: readonly string[] }
+  | {
+      readonly stage: "understood";
+      readonly files: readonly string[];
+      readonly areas: readonly string[];
+    }
   /**
    * Requests Jev settled after the understanding pass (`settledByState`). `chosen` lists the files and areas whose
    * forms Jev chose, with an entity's listed by its area. `composed` lists those whose building, landmark, land or sky
@@ -152,7 +180,11 @@ export type Opening =
    * the sky. Each appears once. The wait draws one more pencil stroke over that code, so the sheet keeps changing until
    * the world is laid out.
    */
-  | { readonly stage: "composed"; readonly chosen: Settled; readonly composed: Settled };
+  | {
+      readonly stage: "composed";
+      readonly chosen: Settled;
+      readonly composed: Settled;
+    };
 
 /** Files and areas that a request settled. An area is a directory's path, or "" for the root. */
 export interface Settled {
@@ -169,10 +201,22 @@ export type ToRenderer =
   /** No folder is named, so the page shows the start page and answers with `world.choose`. Sent again with `refused` when a typed address fails. */
   | { readonly type: "world.start"; readonly offer: StartOffer }
   /** The laid-out world, and where the person was when they last left it, if they opened it before (`RecentWorld.stood`). */
-  | { readonly type: "world.document"; readonly document: WorldDocument; readonly stood?: LastSpot }
-  | { readonly type: "world.failed"; readonly root: string; readonly message: string }
+  | {
+      readonly type: "world.document";
+      readonly document: WorldDocument;
+      readonly stood?: LastSpot;
+    }
+  | {
+      readonly type: "world.failed";
+      readonly root: string;
+      readonly message: string;
+    }
   /** The answer to `world.source`: the file's lines, or null when it cannot be read or is outside the folder. */
-  | { readonly type: "world.source"; readonly path: string; readonly lines: readonly string[] | null }
+  | {
+      readonly type: "world.source";
+      readonly path: string;
+      readonly lines: readonly string[] | null;
+    }
   /**
    * The shown world's folder has a new commit, and `refreshWorld` judged the world again from it. `vitality` gives the
    * new vitality of each thing in the shown world whose vitality changed, by id: a file's path, a definition's
@@ -195,7 +239,10 @@ export type ToRenderer =
     };
 
 /** The `world.vitality` message that `refreshWorld` returns for a new commit. */
-export type VitalityUpdate = Extract<ToRenderer, { readonly type: "world.vitality" }>;
+export type VitalityUpdate = Extract<
+  ToRenderer,
+  { readonly type: "world.vitality" }
+>;
 
 /** Renderer → world service. */
 export type FromRenderer =

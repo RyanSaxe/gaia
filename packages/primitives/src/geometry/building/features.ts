@@ -3,11 +3,42 @@
 // night, which crumbles from the top down. Each goes on the side away from the
 // chimney (`featureSide`), so the two never meet.
 
-import { type BuildContext, type BuildingPlan, type Built, GRAIN, type Mass, type Opening, type Resolved, type Vec3 } from "@gaia/schema";
+import {
+  type BuildContext,
+  type BuildingPlan,
+  type Built,
+  GRAIN,
+  type Mass,
+  type Opening,
+  type Resolved,
+  type Vec3,
+} from "@gaia/schema";
 import type { towerParams, waterwheelParams } from "../../structure.ts";
-import { type Channels, LOSS_BAND, PartBuilder, type V3, add, addScaled, clamp, fbm3, lossThreshold, normalize } from "../kit.ts";
+import {
+  type Channels,
+  LOSS_BAND,
+  PartBuilder,
+  type V3,
+  add,
+  addScaled,
+  clamp,
+  fbm3,
+  lossThreshold,
+  normalize,
+} from "../kit.ts";
 import { UP, beam, box, log, quad, tri } from "../blocks.ts";
-import { PLASTER, chimneyEnd, on, ruinAt, ruinOf, still, wallGrain, wallRot, wallTop, wallsOf } from "./frame.ts";
+import {
+  PLASTER,
+  chimneyEnd,
+  on,
+  ruinAt,
+  ruinOf,
+  still,
+  wallGrain,
+  wallRot,
+  wallTop,
+  wallsOf,
+} from "./frame.ts";
 import { type Hold, ivy, rubble, wallSheet } from "./ruin.ts";
 
 /** A `PartBuilder` that moves every vertex and pivot by `off`, so a feature built in its own frame sits beside the house. */
@@ -20,17 +51,34 @@ class Moved extends PartBuilder {
     super(swatch, collision);
   }
 
-  override vertex(p: Vec3, n: Vec3, shade: number, c: Channels, cut?: Vec3): number {
-    return super.vertex(add(p, this.off), n, shade, { ...c, pivot: add(c.pivot, this.off) }, cut);
+  override vertex(
+    p: Vec3,
+    n: Vec3,
+    shade: number,
+    c: Channels,
+    cut?: Vec3,
+  ): number {
+    return super.vertex(
+      add(p, this.off),
+      n,
+      shade,
+      { ...c, pivot: add(c.pivot, this.off) },
+      cut,
+    );
   }
 }
 
 /** The side wall (+1 or -1 along x) a feature takes: away from a gable chimney. */
-export const featureSide = (plan: BuildingPlan): 1 | -1 => (plan.masses[0]?.ridge === "x" ? (chimneyEnd(plan) === 1 ? -1 : 1) : 1);
+export const featureSide = (plan: BuildingPlan): 1 | -1 =>
+  plan.masses[0]?.ridge === "x" ? (chimneyEnd(plan) === 1 ? -1 : 1) : 1;
 
 // ---------- waterwheel ----------
 
-export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: BuildContext, plan: BuildingPlan): Built {
+export function buildWaterwheel(
+  p: Resolved<typeof waterwheelParams>,
+  ctx: BuildContext,
+  plan: BuildingPlan,
+): Built {
   const r = ctx.rand.fork("waterwheel");
   const wood = new PartBuilder("timber", "solid");
   const stone = new PartBuilder("masonry", "solid");
@@ -44,9 +92,22 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
   const center: V3 = [cx, cy, cz];
   const rate = p.drive === "overshot" ? 0.11 : -0.09;
   const spin: Vec3 = [rate, 0, 0];
-  const on3 = (x: number, angle: number, radius: number): V3 => [cx + x, cy + Math.sin(angle) * radius, cz + Math.cos(angle) * radius];
+  const on3 = (x: number, angle: number, radius: number): V3 => [
+    cx + x,
+    cy + Math.sin(angle) * radius,
+    cz + Math.cos(angle) * radius,
+  ];
   /** Channels for a wheel piece. Every piece turns about the axle and some rot through as vitality falls. None comes loose, so nothing hangs in the air. */
-  const turning = (wither: number, lost: number, top = 0.4): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot: center, tint: (r.next() - 0.5) * 0.04, spin, ...(r.next() < lost ? { rot: clamp(0.5 + top, 0, 1) } : {}) });
+  const turning = (wither: number, lost: number, top = 0.4): Channels => ({
+    loss: 0,
+    droop: 0,
+    wither,
+    glow: 0,
+    pivot: center,
+    tint: (r.next() - 0.5) * 0.04,
+    spin,
+    ...(r.next() < lost ? { rot: clamp(0.5 + top, 0, 1) } : {}),
+  });
 
   // Two rims of short beams, spokes from the hub, and paddles between the rims.
   const segments = 22;
@@ -54,11 +115,29 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
     for (let k = 0; k < segments; k++) {
       const a0 = (k / segments) * Math.PI * 2;
       const a1 = ((k + 1) / segments) * Math.PI * 2;
-      beam(wood, on3(x, a0, R), on3(x, a1, R), 0.14, 0.08, [1, 0, 0], 0.42 + 0.08 * r.next(), turning(0.55, 0.12, 0.2));
+      beam(
+        wood,
+        on3(x, a0, R),
+        on3(x, a1, R),
+        0.14,
+        0.08,
+        [1, 0, 0],
+        0.42 + 0.08 * r.next(),
+        turning(0.55, 0.12, 0.2),
+      );
     }
     for (let k = 0; k < 8; k++) {
       const a = (k / 8) * Math.PI * 2 + 0.2;
-      beam(wood, on3(x, a, 0.2), on3(x, a, R - 0.05), 0.1, 0.07, [1, 0, 0], 0.45, turning(0.5, 0.15, 0.18));
+      beam(
+        wood,
+        on3(x, a, 0.2),
+        on3(x, a, R - 0.05),
+        0.1,
+        0.07,
+        [1, 0, 0],
+        0.45,
+        turning(0.5, 0.15, 0.18),
+      );
     }
   }
   const paddles = Math.round(14 + 4 * R);
@@ -72,29 +151,77 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
     const mid: V3 = [cx, (inner[1] + outer[1]) / 2, (inner[2] + outer[2]) / 2];
     const len = Math.hypot(outer[1] - inner[1], outer[2] - inner[2]);
     const across = normalize([0, -radial[2], radial[1]]);
-    box(wood, mid, [[1, 0, 0], radial, across], [W / 2 + 0.03, len / 2, 0.025], 0.5 + 0.1 * r.next(), turning(0.6, 0.55, 0.45));
+    box(
+      wood,
+      mid,
+      [[1, 0, 0], radial, across],
+      [W / 2 + 0.03, len / 2, 0.025],
+      0.5 + 0.1 * r.next(),
+      turning(0.6, 0.55, 0.45),
+    );
   }
-  log(wood, [cx - W / 2 - 0.08, cy, cz], [cx + W / 2 + 0.08, cy, cz], 0.2, 0.4, turning(0.5, 0), 8);
+  log(
+    wood,
+    [cx - W / 2 - 0.08, cy, cz],
+    [cx + W / 2 + 0.08, cy, cz],
+    0.2,
+    0.4,
+    turning(0.5, 0),
+    8,
+  );
   // The axle runs into the wall on one side and onto a stone pier on the other.
-  const still0 = (c: Vec3, wither: number): Channels => still(c, wither, { tint: (r.next() - 0.5) * 0.04 });
-  log(wood, [side * (plan.width / 2 - 0.05), cy, cz], [cx + side * (W / 2 + 0.55), cy, cz], 0.08, 0.35, still0(center, 0.5), 6);
+  const still0 = (c: Vec3, wither: number): Channels =>
+    still(c, wither, { tint: (r.next() - 0.5) * 0.04 });
+  log(
+    wood,
+    [side * (plan.width / 2 - 0.05), cy, cz],
+    [cx + side * (W / 2 + 0.55), cy, cz],
+    0.08,
+    0.35,
+    still0(center, 0.5),
+    6,
+  );
   const pierX = cx + side * (W / 2 + 0.42);
   for (let k = 0, y = -0.6; y < cy - 0.1; k++) {
     const h = Math.min(0.38, cy - 0.1 - y);
     const c: V3 = [pierX + (r.next() - 0.5) * 0.04, y + h / 2, cz];
-    box(stone, c, [[1, 0, 0], UP, [0, 0, 1]], [0.24 + 0.03 * r.next(), h / 2 - 0.01, 0.3 + 0.03 * r.next()], 0.45 + 0.2 * r.next(), still0(c, 0.45));
+    box(
+      stone,
+      c,
+      [[1, 0, 0], UP, [0, 0, 1]],
+      [0.24 + 0.03 * r.next(), h / 2 - 0.01, 0.3 + 0.03 * r.next()],
+      0.45 + 0.2 * r.next(),
+      still0(c, 0.45),
+    );
     y += h;
     if (k > 20) break;
   }
-  box(stone, [pierX, cy - 0.04, cz], [[1, 0, 0], UP, [0, 0, 1]], [0.3, 0.07, 0.36], 0.62, still0([pierX, cy, cz], 0.45));
+  box(
+    stone,
+    [pierX, cy - 0.04, cz],
+    [[1, 0, 0], UP, [0, 0, 1]],
+    [0.3, 0.07, 0.36],
+    0.62,
+    still0([pierX, cy, cz], 0.45),
+  );
   // A stone-lined pit for the wheel, with low walls on either side.
   for (const x of [cx - W / 2 - 0.2, cx + W / 2 + 0.2]) {
     if (Math.abs(x) < plan.width / 2 + 0.05) continue;
-    for (let s = -R * 0.85; s < R * 0.85; ) {
+    for (let s = -R * 0.85; s < R * 0.85;) {
       const len = 0.42 + 0.25 * r.next();
-      for (const [y, h] of [[-0.35, 0.3], [0.0, 0.26]] as const) {
+      for (const [y, h] of [
+        [-0.35, 0.3],
+        [0.0, 0.26],
+      ] as const) {
         const c: V3 = [x, y + h / 2, cz + s + len / 2];
-        box(stone, c, [[1, 0, 0], UP, [0, 0, 1]], [0.15, h / 2, len / 2 - 0.01], 0.42 + 0.2 * r.next(), still0(c, 0.5));
+        box(
+          stone,
+          c,
+          [[1, 0, 0], UP, [0, 0, 1]],
+          [0.15, h / 2, len / 2 - 0.01],
+          0.42 + 0.2 * r.next(),
+          still0(c, 0.5),
+        );
       }
       s += len;
     }
@@ -111,23 +238,78 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
     const spread = 0.34;
     const crossbeams: number[] = [];
     for (let z = z0 + 0.3; z < cz - R - 0.2; z += 1.4) crossbeams.push(z);
-    const rest = (z: number): number => crossbeams.reduce((best, c) => (Math.abs(c - z) < Math.abs(best - z) ? c : best), crossbeams[0] ?? z0);
+    const rest = (z: number): number =>
+      crossbeams.reduce(
+        (best, c) => (Math.abs(c - z) < Math.abs(best - z) ? c : best),
+        crossbeams[0] ?? z0,
+      );
     const steps = Math.max(2, Math.round((z1 - z0) / 1.3));
     for (let k = 0; k < steps; k++) {
       const a = z0 + ((z1 - z0) * k) / steps;
       const b = z0 + ((z1 - z0) * (k + 1)) / steps;
       const mid: V3 = [cx, y, (a + b) / 2];
-      const ch: Channels = { loss: spread + 2 * LOSS_BAND + 0.03 * r.next(), droop: 0, wither: 0.65, glow: 0, pivot: [cx, y - 0.02, rest((a + b) / 2)], tint: (r.next() - 0.5) * 0.03, rot: 0.55 };
-      box(wood, mid, [[1, 0, 0], UP, [0, 0, 1]], [W * 0.42, 0.03, (b - a) / 2 + 0.01], 0.48, ch);
-      for (const sx of [-1, 1]) box(wood, [cx + sx * W * 0.42, y + 0.14, (a + b) / 2], [[1, 0, 0], UP, [0, 0, 1]], [0.03, 0.15, (b - a) / 2 + 0.01], 0.44, ch);
+      const ch: Channels = {
+        loss: spread + 2 * LOSS_BAND + 0.03 * r.next(),
+        droop: 0,
+        wither: 0.65,
+        glow: 0,
+        pivot: [cx, y - 0.02, rest((a + b) / 2)],
+        tint: (r.next() - 0.5) * 0.03,
+        rot: 0.55,
+      };
+      box(
+        wood,
+        mid,
+        [[1, 0, 0], UP, [0, 0, 1]],
+        [W * 0.42, 0.03, (b - a) / 2 + 0.01],
+        0.48,
+        ch,
+      );
+      for (const sx of [-1, 1])
+        box(
+          wood,
+          [cx + sx * W * 0.42, y + 0.14, (a + b) / 2],
+          [[1, 0, 0], UP, [0, 0, 1]],
+          [0.03, 0.15, (b - a) / 2 + 0.01],
+          0.44,
+          ch,
+        );
     }
     for (const z of crossbeams) {
       for (const sx of [-1, 1]) {
         const base: V3 = [cx + sx * W * 0.45, -0.3, z];
         const tip = sx * (0.12 + 0.2 * r.next());
-        beam(wood, base, [cx + sx * W * 0.4, y - 0.04, z], 0.1, 0.1, [0, 0, 1], 0.42, { loss: 0, droop: 0, wither: 0.6, glow: 0, pivot: base, fall: [0, 0, tip, spread] });
+        beam(
+          wood,
+          base,
+          [cx + sx * W * 0.4, y - 0.04, z],
+          0.1,
+          0.1,
+          [0, 0, 1],
+          0.42,
+          {
+            loss: 0,
+            droop: 0,
+            wither: 0.6,
+            glow: 0,
+            pivot: base,
+            fall: [0, 0, tip, spread],
+          },
+        );
       }
-      beam(wood, [cx - W * 0.5, y - 0.06, z], [cx + W * 0.5, y - 0.06, z], 0.1, 0.1, [0, 0, 1], 0.44, still([cx - W * 0.4, y - 0.06, z], 0.55, { loss: spread + LOSS_BAND + 0.005, tint: (r.next() - 0.5) * 0.04 }));
+      beam(
+        wood,
+        [cx - W * 0.5, y - 0.06, z],
+        [cx + W * 0.5, y - 0.06, z],
+        0.1,
+        0.1,
+        [0, 0, 1],
+        0.44,
+        still([cx - W * 0.4, y - 0.06, z], 0.55, {
+          loss: spread + LOSS_BAND + 0.005,
+          tint: (r.next() - 0.5) * 0.04,
+        }),
+      );
     }
   }
 
@@ -142,11 +324,30 @@ export function buildWaterwheel(p: Resolved<typeof waterwheelParams>, ctx: Build
  * apart at the eave run up to the apex, the first along the hip, so what is left of the courses rests on them. The
  * rafter ends meet at the apex or sit on the soffit out of sight, so they are built open.
  */
-function capFace(b: PartBuilder, frame: PartBuilder, corners: readonly [V3, V3], apex: V3, rows: number, rotAt: (q: V3) => number, pivot: V3): void {
+function capFace(
+  b: PartBuilder,
+  frame: PartBuilder,
+  corners: readonly [V3, V3],
+  apex: V3,
+  rows: number,
+  rotAt: (q: V3) => number,
+  pivot: V3,
+): void {
   const [a, c] = corners;
   const n = normalize(cross3(sub3(c, a), sub3(apex, a)));
   const count = Math.max(1, Math.round(Math.hypot(...sub3(c, a)) / 0.75));
-  for (let k = 0; k < count; k++) beam(frame, addScaled(lerp3(a, c, k / count), n, -0.05), addScaled(apex, n, -0.05), 0.07, 0.08, n, 0.42, still(pivot, 0.55, { droop: 0.05 }), { open: true });
+  for (let k = 0; k < count; k++)
+    beam(
+      frame,
+      addScaled(lerp3(a, c, k / count), n, -0.05),
+      addScaled(apex, n, -0.05),
+      0.07,
+      0.08,
+      n,
+      0.42,
+      still(pivot, 0.55, { droop: 0.05 }),
+      { open: true },
+    );
   for (let j = 0; j < rows; j++) {
     const t0 = j / rows;
     const t1 = (j + 1) / rows;
@@ -156,8 +357,16 @@ function capFace(b: PartBuilder, frame: PartBuilder, corners: readonly [V3, V3],
     const q1 = lerp3(c, apex, t1);
     // Each course laps a little over the one below.
     const lip = addScaled([0, 0, 0], n, 0.035);
-    const ch = (q: V3): Channels => ({ loss: 0, droop: 0.05, wither: 0.6, glow: 0, pivot, rot: rotAt(q) });
-    if (j === rows - 1) tri(b, [add(p0, lip), add(p1, lip), apex], n, 0.55, ch(p0));
+    const ch = (q: V3): Channels => ({
+      loss: 0,
+      droop: 0.05,
+      wither: 0.6,
+      glow: 0,
+      pivot,
+      rot: rotAt(q),
+    });
+    if (j === rows - 1)
+      tri(b, [add(p0, lip), add(p1, lip), apex], n, 0.55, ch(p0));
     else {
       const i0 = b.vertex(add(p0, lip), n, 0.5 + 0.05 * (j % 2), ch(p0));
       const i1 = b.vertex(add(p1, lip), n, 0.5 + 0.05 * (j % 2), ch(p1));
@@ -170,17 +379,35 @@ function capFace(b: PartBuilder, frame: PartBuilder, corners: readonly [V3, V3],
 }
 
 const sub3 = (a: Vec3, b: Vec3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross3 = (a: Vec3, b: Vec3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const lerp3 = (a: Vec3, b: Vec3, t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const cross3 = (a: Vec3, b: Vec3): V3 => [
+  a[1] * b[2] - a[2] * b[1],
+  a[2] * b[0] - a[0] * b[2],
+  a[0] * b[1] - a[1] * b[0],
+];
+const lerp3 = (a: Vec3, b: Vec3, t: number): V3 => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+  a[2] + (b[2] - a[2]) * t,
+];
 
-export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, plan: BuildingPlan): Built {
+export function buildTower(
+  p: Resolved<typeof towerParams>,
+  ctx: BuildContext,
+  plan: BuildingPlan,
+): Built {
   const r = ctx.rand.fork("tower");
   const side = featureSide(plan);
   const T = clamp(Math.min(plan.width, plan.depth) * 0.62, 3, 3.8);
-  const houseTop = Math.max(...plan.masses.map((m) => wallTop(plan, m) + m.rise));
+  const houseTop = Math.max(
+    ...plan.masses.map((m) => wallTop(plan, m) + m.rise),
+  );
   const H = clamp(houseTop + p.height + 2.5 * (ctx.facts.reach ?? 0.5), 8, 19);
   // At the back corner on the free side, overlapping the house a little and clear of its windows.
-  const off: V3 = [side * (plan.width / 2 + T / 2 - 0.35), 0, -plan.depth / 2 - T / 2 + 1.05];
+  const off: V3 = [
+    side * (plan.width / 2 + T / 2 - 0.35),
+    0,
+    -plan.depth / 2 - T / 2 + 1.05,
+  ];
   const render = new Moved("render", "solid", off);
   const stone = new Moved("masonry", "solid", off);
   const glass = new Moved("glass", "none", off);
@@ -189,14 +416,44 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const moss = new Moved("moss", "none", off);
   const storey = 2.7;
   const windows: Opening[] = [];
-  const body: Mass = { x: 0, z: 0, width: T, depth: T, round: false, wallHeight: H - plan.floor, storeys: 1, rise: 0, ridge: "x", roof: "hip", fall: 1, ends: [true, true] };
-  const tower0: BuildingPlan = { width: T, depth: T, floor: plan.floor, footing: 1.4, masses: [body], settle: plan.settle, openings: [] };
+  const body: Mass = {
+    x: 0,
+    z: 0,
+    width: T,
+    depth: T,
+    round: false,
+    wallHeight: H - plan.floor,
+    storeys: 1,
+    rise: 0,
+    ridge: "x",
+    roof: "hip",
+    fall: 1,
+    ends: [true, true],
+  };
+  const tower0: BuildingPlan = {
+    width: T,
+    depth: T,
+    floor: plan.floor,
+    footing: 1.4,
+    masses: [body],
+    settle: plan.settle,
+    openings: [],
+  };
   const faces = wallsOf(tower0);
   for (let y = plan.floor + 1.0; y + 1.3 < H - 0.5; y += storey) {
     for (const w of faces) {
       // Windows face away from the house, and face every way once above its roof.
-      const outward = w.n[0] * side > 0.5 || w.n[2] < -0.5 || y > houseTop - 0.5;
-      if (outward) windows.push({ kind: "window", mass: 0, position: on(w, w.length / 2, y), normal: w.n, width: 0.52, height: 1.15 });
+      const outward =
+        w.n[0] * side > 0.5 || w.n[2] < -0.5 || y > houseTop - 0.5;
+      if (outward)
+        windows.push({
+          kind: "window",
+          mass: 0,
+          position: on(w, w.length / 2, y),
+          normal: w.n,
+          width: 0.52,
+          height: 1.15,
+        });
     }
   }
   const tower: BuildingPlan = { ...tower0, openings: windows };
@@ -204,13 +461,23 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
   const seed = Math.floor(r.next() * 1e6);
 
   // Rendered walls in hand-laid cells. As vitality falls they rot through from the top, a patch of render at a time.
-  const rendered: Hold = (w, q) => ({ rot: clamp(wallRot(tower, body, ruin, q) * 0.7 + 0.35 * clamp(q[1] / H, 0, 1) ** 2, 0, 1), grain: wallGrain(w, GRAIN.plaster, PLASTER) });
+  const rendered: Hold = (w, q) => ({
+    rot: clamp(
+      wallRot(tower, body, ruin, q) * 0.7 + 0.35 * clamp(q[1] / H, 0, 1) ** 2,
+      0,
+      1,
+    ),
+    grain: wallGrain(w, GRAIN.plaster, PLASTER),
+  });
   for (const w of faces) {
     const pivot = on(w, w.length / 2, H / 2);
     wallSheet(render, tower, w, -tower.footing, 0.01, 0.7, (q) => {
       const n = fbm3(q[0] * 1.4, q[1] * 1.4, q[2] * 1.4, seed, 2);
       const up = clamp(q[1] / H, 0, 1);
-      return { shade: 0.56 + 0.1 * n, c: still(pivot, 0.55 + 0.2 * up, { ...rendered(w, q), tint: 0.02 * n }) };
+      return {
+        shade: 0.56 + 0.1 * n,
+        c: still(pivot, 0.55 + 0.2 * up, { ...rendered(w, q), tint: 0.02 * n }),
+      };
     });
   }
   // Quoins up every corner and a string course at every storey, with the top
@@ -226,59 +493,176 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
       const long = k % 2 === 0;
       const c = on(w, (long ? 0.36 : 0.24) - 0.02, y + h / 2, 0.04);
       const up = y / H;
-      const own = up > 0.6 && r.next() < 0.7 ? lossThreshold(r.next(), 0.1 + 0.35 * (up - 0.6) * 2.5, 0.04) : 0;
+      const own =
+        up > 0.6 && r.next() < 0.7
+          ? lossThreshold(r.next(), 0.1 + 0.35 * (up - 0.6) * 2.5, 0.04)
+          : 0;
       under = own > 0 || under > 0 ? Math.max(own, under) : 0;
       column.push({ y: y + h, loss: under });
-      box(stone, c, [w.u, UP, w.n], [long ? 0.38 : 0.26, h / 2 - 0.012, 0.06], 0.52 + 0.14 * r.next(), still(on(w, 0.3, 0, 0.04), 0.45, { loss: under, tint: (r.next() - 0.5) * 0.04 }));
+      box(
+        stone,
+        c,
+        [w.u, UP, w.n],
+        [long ? 0.38 : 0.26, h / 2 - 0.012, 0.06],
+        0.52 + 0.14 * r.next(),
+        still(on(w, 0.3, 0, 0.04), 0.45, {
+          loss: under,
+          tint: (r.next() - 0.5) * 0.04,
+        }),
+      );
       y += h;
     }
-    const quoinAt = (y: number): number => Math.max(0, ...column.filter((q) => q.y >= y - 0.4 && q.y <= y + 0.4).map((q) => q.loss));
+    const quoinAt = (y: number): number =>
+      Math.max(
+        0,
+        ...column
+          .filter((q) => q.y >= y - 0.4 && q.y <= y + 0.4)
+          .map((q) => q.loss),
+      );
     for (let y = plan.floor + storey - 0.35; y < H - 0.6; y += storey) {
       const c = on(w, w.length / 2, y, 0.05);
       const own = y / H > 0.65 ? lossThreshold(r.next(), 0.22, 0.05) : 0;
       const held = quoinAt(y);
-      box(stone, c, [w.u, UP, w.n], [w.length / 2 + 0.06, 0.07, 0.07], 0.6, still(on(w, w.length / 2, y, -0.1), 0.45, { loss: own > 0 || held > 0 ? Math.max(own, held + LOSS_BAND + 0.01) : 0 }));
+      box(
+        stone,
+        c,
+        [w.u, UP, w.n],
+        [w.length / 2 + 0.06, 0.07, 0.07],
+        0.6,
+        still(on(w, w.length / 2, y, -0.1), 0.45, {
+          loss:
+            own > 0 || held > 0 ? Math.max(own, held + LOSS_BAND + 0.01) : 0,
+        }),
+      );
     }
     highest = Math.max(highest, quoinAt(H - 0.2));
   }
   for (const w of faces) {
     const top = on(w, w.length / 2, H - 0.1, 0.07);
-    box(stone, top, [w.u, UP, w.n], [w.length / 2 + 0.12, 0.12, 0.1], 0.6, still(on(w, w.length / 2, H - 0.22, -0.1), 0.45, { loss: Math.max(lossThreshold(r.next(), 0.25, 0.08), highest + LOSS_BAND + 0.01) }));
+    box(
+      stone,
+      top,
+      [w.u, UP, w.n],
+      [w.length / 2 + 0.12, 0.12, 0.1],
+      0.6,
+      still(on(w, w.length / 2, H - 0.22, -0.1), 0.45, {
+        loss: Math.max(
+          lossThreshold(r.next(), 0.25, 0.08),
+          highest + LOSS_BAND + 0.01,
+        ),
+      }),
+    );
   }
   // Tall, narrow windows, lit at night. As vitality falls they go dark one at a time.
   for (const o of windows) {
-    const w = faces.find((f) => f.n[0] === o.normal[0] && f.n[2] === o.normal[2]);
+    const w = faces.find(
+      (f) => f.n[0] === o.normal[0] && f.n[2] === o.normal[2],
+    );
     if (w === undefined) continue;
     const s = w.length / 2;
     const y = o.position[1];
     const hw = o.width / 2;
-    const at = (ds: number, dy: number, d: number): V3 => on(w, s + ds, y + dy, d);
+    const at = (ds: number, dy: number, d: number): V3 =>
+      on(w, s + ds, y + dy, d);
     const pivot = at(0, o.height / 2, 0);
-    quad(glass, [at(-hw, 0, -0.02), at(hw, 0, -0.02), at(hw, o.height, -0.02), at(-hw, o.height, -0.02)], w.n, 0.2, still(pivot, 1, { rot: 0.8 }));
-    const lit: Channels = { loss: lossThreshold(r.next(), 0.68, 0.22), droop: 0, wither: 0.25, glow: 0.75 + 0.25 * r.next(), pivot };
-    quad(glass, [at(-hw, 0, -0.01), at(hw, 0, -0.01), at(hw, o.height, -0.01), at(-hw, o.height, -0.01)], w.n, [0.55, 0.55, 0.85, 0.85], lit);
+    quad(
+      glass,
+      [
+        at(-hw, 0, -0.02),
+        at(hw, 0, -0.02),
+        at(hw, o.height, -0.02),
+        at(-hw, o.height, -0.02),
+      ],
+      w.n,
+      0.2,
+      still(pivot, 1, { rot: 0.8 }),
+    );
+    const lit: Channels = {
+      loss: lossThreshold(r.next(), 0.68, 0.22),
+      droop: 0,
+      wither: 0.25,
+      glow: 0.75 + 0.25 * r.next(),
+      pivot,
+    };
+    quad(
+      glass,
+      [
+        at(-hw, 0, -0.01),
+        at(hw, 0, -0.01),
+        at(hw, o.height, -0.01),
+        at(-hw, o.height, -0.01),
+      ],
+      w.n,
+      [0.55, 0.55, 0.85, 0.85],
+      lit,
+    );
     const axes = [w.u, UP, w.n] as const;
-    const surround = (c: V3, half: Vec3): void => box(stone, c, axes, half, 0.62, still(c, 0.45));
+    const surround = (c: V3, half: Vec3): void =>
+      box(stone, c, axes, half, 0.62, still(c, 0.45));
     surround(at(0, -0.07, 0.06), [hw + 0.16, 0.07, 0.1]);
-    for (const sx of [-1, 1]) surround(at(sx * (hw + 0.08), o.height / 2, 0.05), [0.08, o.height / 2 + 0.02, 0.07]);
+    for (const sx of [-1, 1])
+      surround(at(sx * (hw + 0.08), o.height / 2, 0.05), [
+        0.08,
+        o.height / 2 + 0.02,
+        0.07,
+      ]);
     // A round head of five voussoirs.
     for (let k = 0; k < 5; k++) {
       const a0 = (k / 5) * Math.PI;
       const a1 = ((k + 1) / 5) * Math.PI;
       const R = hw + 0.08;
-      beam(stone, at(Math.cos(a0) * R, o.height + Math.sin(a0) * R * 0.7, 0.06), at(Math.cos(a1) * R, o.height + Math.sin(a1) * R * 0.7, 0.06), 0.15, 0.14, w.n, 0.6, still(pivot, 0.45));
+      beam(
+        stone,
+        at(Math.cos(a0) * R, o.height + Math.sin(a0) * R * 0.7, 0.06),
+        at(Math.cos(a1) * R, o.height + Math.sin(a1) * R * 0.7, 0.06),
+        0.15,
+        0.14,
+        w.n,
+        0.6,
+        still(pivot, 0.45),
+      );
     }
     // A shadowed reveal fills the round head behind the voussoirs.
     const head: V3[] = [];
-    for (let k = 0; k <= 6; k++) head.push(at(Math.cos((k / 6) * Math.PI) * hw, o.height + Math.sin((k / 6) * Math.PI) * hw * 0.7, -0.015));
-    for (let k = 0; k < 6; k++) tri(glass, [at(0, o.height, -0.015), head[k] as V3, head[k + 1] as V3], w.n, 0.15, still(pivot, 1));
+    for (let k = 0; k <= 6; k++)
+      head.push(
+        at(
+          Math.cos((k / 6) * Math.PI) * hw,
+          o.height + Math.sin((k / 6) * Math.PI) * hw * 0.7,
+          -0.015,
+        ),
+      );
+    for (let k = 0; k < 6; k++)
+      tri(
+        glass,
+        [at(0, o.height, -0.015), head[k] as V3, head[k + 1] as V3],
+        w.n,
+        0.15,
+        still(pivot, 1),
+      );
   }
   // The roof of the tower: a ceiling over its top, then the chosen cap.
   const eave = T / 2 + 0.32;
-  const ring: V3[] = [[-eave, H, eave], [eave, H, eave], [eave, H, -eave], [-eave, H, -eave]];
+  const ring: V3[] = [
+    [-eave, H, eave],
+    [eave, H, eave],
+    [eave, H, -eave],
+    [-eave, H, -eave],
+  ];
   const capPivot: V3 = [0, H, 0];
-  quad(roof, [ring[0] as V3, ring[3] as V3, ring[2] as V3, ring[1] as V3], [0, -1, 0], 0.25, still(capPivot, 0.6));
-  const capRot = (q: V3): number => clamp(0.35 + 0.5 * (1 - (q[1] - H) / (T * 0.9)) + 0.3 * ruinAt(ruin, q), 0, 1);
+  quad(
+    roof,
+    [ring[0] as V3, ring[3] as V3, ring[2] as V3, ring[1] as V3],
+    [0, -1, 0],
+    0.25,
+    still(capPivot, 0.6),
+  );
+  const capRot = (q: V3): number =>
+    clamp(
+      0.35 + 0.5 * (1 - (q[1] - H) / (T * 0.9)) + 0.3 * ruinAt(ruin, q),
+      0,
+      1,
+    );
   let apex: V3;
   if (p.cap === "lantern") {
     // An open lantern room: four posts round a lamp lit at night, under a
@@ -286,39 +670,148 @@ export function buildTower(p: Resolved<typeof towerParams>, ctx: BuildContext, p
     // between them go one by one, each shrinking back onto a post.
     const lh = 1.7;
     const post = T / 2 - 0.2;
-    for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const) {
+    for (const [x, z] of [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ] as const) {
       const base: V3 = [x * post, H, z * post];
-      beam(wood, base, [x * post, H + lh, z * post], 0.16, 0.16, [1, 0, 0], 0.42, still(base, 0.55));
+      beam(
+        wood,
+        base,
+        [x * post, H + lh, z * post],
+        0.16,
+        0.16,
+        [1, 0, 0],
+        0.42,
+        still(base, 0.55),
+      );
     }
     for (const y of [H + 0.55, H + lh - 0.05]) {
-      for (const [a, b2] of [[[-post, -post], [post, -post]], [[post, -post], [post, post]], [[post, post], [-post, post]], [[-post, post], [-post, -post]]] as const) {
-        beam(wood, [a[0], y, a[1]], [b2[0], y, b2[1]], 0.08, 0.08, UP, 0.45, still([a[0], y, a[1]], 0.55, { loss: lossThreshold(r.next(), 0.2, 0.05) }));
+      for (const [a, b2] of [
+        [
+          [-post, -post],
+          [post, -post],
+        ],
+        [
+          [post, -post],
+          [post, post],
+        ],
+        [
+          [post, post],
+          [-post, post],
+        ],
+        [
+          [-post, post],
+          [-post, -post],
+        ],
+      ] as const) {
+        beam(
+          wood,
+          [a[0], y, a[1]],
+          [b2[0], y, b2[1]],
+          0.08,
+          0.08,
+          UP,
+          0.45,
+          still([a[0], y, a[1]], 0.55, {
+            loss: lossThreshold(r.next(), 0.2, 0.05),
+          }),
+        );
       }
     }
     // The lamp sits on a low table on the room's floor, and collapses into it when it goes.
     const lampC: V3 = [0, H + 0.1 + 0.45, 0];
-    box(glass, lampC, [[1, 0, 0], UP, [0, 0, 1]], [0.32, 0.45, 0.32], 0.85, { loss: lossThreshold(r.next(), 0.5, 0.3), droop: 0, wither: 0.4, glow: 1, pivot: [0, H + 0.1, 0] });
-    box(wood, [0, H + 0.05, 0], [[1, 0, 0], UP, [0, 0, 1]], [0.42, 0.05, 0.42], 0.4, still([0, H, 0], 0.5));
+    box(glass, lampC, [[1, 0, 0], UP, [0, 0, 1]], [0.32, 0.45, 0.32], 0.85, {
+      loss: lossThreshold(r.next(), 0.5, 0.3),
+      droop: 0,
+      wither: 0.4,
+      glow: 1,
+      pivot: [0, H + 0.1, 0],
+    });
+    box(
+      wood,
+      [0, H + 0.05, 0],
+      [[1, 0, 0], UP, [0, 0, 1]],
+      [0.42, 0.05, 0.42],
+      0.4,
+      still([0, H, 0], 0.5),
+    );
     const top = H + lh;
-    const cap: V3[] = [[-eave + 0.15, top, eave - 0.15], [eave - 0.15, top, eave - 0.15], [eave - 0.15, top, -eave + 0.15], [-eave + 0.15, top, -eave + 0.15]];
+    const cap: V3[] = [
+      [-eave + 0.15, top, eave - 0.15],
+      [eave - 0.15, top, eave - 0.15],
+      [eave - 0.15, top, -eave + 0.15],
+      [-eave + 0.15, top, -eave + 0.15],
+    ];
     apex = [0, top + T * 0.75, 0];
-    quad(roof, [cap[0] as V3, cap[3] as V3, cap[2] as V3, cap[1] as V3], [0, -1, 0], 0.25, still(capPivot, 0.6));
-    for (let k = 0; k < 4; k++) capFace(roof, wood, [cap[k] as V3, cap[(k + 1) % 4] as V3], apex, 4, capRot, capPivot);
+    quad(
+      roof,
+      [cap[0] as V3, cap[3] as V3, cap[2] as V3, cap[1] as V3],
+      [0, -1, 0],
+      0.25,
+      still(capPivot, 0.6),
+    );
+    for (let k = 0; k < 4; k++)
+      capFace(
+        roof,
+        wood,
+        [cap[k] as V3, cap[(k + 1) % 4] as V3],
+        apex,
+        4,
+        capRot,
+        capPivot,
+      );
   } else {
     apex = [0, H + T * 0.95, 0];
-    for (let k = 0; k < 4; k++) capFace(roof, wood, [ring[k] as V3, ring[(k + 1) % 4] as V3], apex, 6, capRot, capPivot);
+    for (let k = 0; k < 4; k++)
+      capFace(
+        roof,
+        wood,
+        [ring[k] as V3, ring[(k + 1) % 4] as V3],
+        apex,
+        6,
+        capRot,
+        capPivot,
+      );
   }
   // A finial that leans and falls as vitality falls, coming to rest along the
   // cap's hip with its foot at the apex.
   const corner = p.cap === "lantern" ? eave - 0.15 : eave;
   const eaveY = p.cap === "lantern" ? H + 1.7 : H;
-  const tip = Math.PI / 2 + Math.atan2(apex[1] - eaveY, corner * Math.SQRT2) - 0.03;
-  const finial: Channels = { loss: 0, droop: 0, wither: 0.5, glow: 0, pivot: apex, fall: [tip * Math.SQRT1_2, 0, tip * Math.SQRT1_2, 0.28] };
-  log(wood, addScaled(apex, UP, -0.1), addScaled(apex, UP, 0.75), 0.045, 0.45, finial, 6);
-  box(wood, addScaled(apex, UP, 0.8), [[1, 0, 0], UP, [0, 0, 1]], [0.08, 0.08, 0.08], 0.5, finial);
+  const tip =
+    Math.PI / 2 + Math.atan2(apex[1] - eaveY, corner * Math.SQRT2) - 0.03;
+  const finial: Channels = {
+    loss: 0,
+    droop: 0,
+    wither: 0.5,
+    glow: 0,
+    pivot: apex,
+    fall: [tip * Math.SQRT1_2, 0, tip * Math.SQRT1_2, 0.28],
+  };
+  log(
+    wood,
+    addScaled(apex, UP, -0.1),
+    addScaled(apex, UP, 0.75),
+    0.045,
+    0.45,
+    finial,
+    6,
+  );
+  box(
+    wood,
+    addScaled(apex, UP, 0.8),
+    [[1, 0, 0], UP, [0, 0, 1]],
+    [0.08, 0.08, 0.08],
+    0.5,
+    finial,
+  );
 
   ivy(moss, tower, ruin, r.fork("ivy"), 1, rendered);
   rubble(stone, tower, ruin, r.fork("rubble"), 0.24, 22);
-  const parts = [render, stone, glass, roof, wood, moss].filter((b) => b.triangleCount > 0).map((b) => b.part());
+  const parts = [render, stone, glass, roof, wood, moss]
+    .filter((b) => b.triangleCount > 0)
+    .map((b) => b.part());
   return { parts, anchors: [] };
 }
