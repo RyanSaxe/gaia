@@ -92,6 +92,74 @@ interface Form {
 const nextFrame = (): Promise<void> =>
   new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
+function formScore(f: Form): number {
+  if (f.held > 0) return Number.POSITIVE_INFINITY;
+  if (f.slot !== -1 && f.target === 1) return f.weight * FAR_TURN.outweigh + 1;
+  return f.weight;
+}
+
+async function readStoredForm(
+  kept: FarStore | null,
+  key: string,
+): Promise<FarForm | null> {
+  if (kept === null) return null;
+  const data = (await kept.get(key).catch(() => undefined)) as
+    | FarFormData
+    | undefined;
+  return data === undefined ? null : farFormFrom(data);
+}
+
+async function bakeFarForm(
+  renderer: THREE.WebGLRenderer,
+  plant: Parameters<typeof startFarBake>[1],
+  px: number,
+  getPace: () => BakePace,
+): Promise<FarForm> {
+  const bake = startFarBake(renderer, plant, px);
+  await bake.ready;
+  for (;;) {
+    const p = getPace();
+    const done = bake.step(p.ms, p.views);
+    if (done !== null) return done;
+    await nextFrame();
+  }
+}
+
+async function uploadFarForm(
+  renderer: THREE.WebGLRenderer,
+  forms: FarForms,
+  slot: number,
+  form: FarForm,
+  staggered: boolean,
+): Promise<void> {
+  if (!staggered) {
+    forms.cards.fill(renderer, slot, form);
+    return;
+  }
+  // After the world opens, a stored form uploads one atlas layer a frame, so no single frame uploads them all.
+  for (const layer of form.atlas.layers.keys()) {
+    forms.cards.fill(renderer, slot, form, layer);
+    await nextFrame();
+  }
+}
+
+function finishFarForm(
+  renderer: THREE.WebGLRenderer,
+  form: FarForm,
+  kept: FarStore | null,
+  key: string,
+): void {
+  if (kept !== null) {
+    // A failed write only means the form bakes again on the next visit.
+    void farFormData(renderer, form)
+      .then((d) => kept.put(key, d))
+      .catch(() => undefined)
+      .finally(() => form.dispose());
+    return;
+  }
+  form.dispose();
+}
+
 /**
  * Streams `forms`' far forms into the cards' slots, reading and storing them
  * in `store`. Bakes run at `pace.opening` until the world opens and at
@@ -162,44 +230,20 @@ export function createFarStream(
       plant ??= await entry.again();
       f.key = contentHash(plant.parts, plant.motion, plant.palette, entry.px);
     }
-    const data = (await kept?.get(f.key).catch(() => undefined)) as
-      | FarFormData
-      | undefined;
-    const stored = data === undefined ? null : farFormFrom(data);
+    const stored = await readStoredForm(kept, f.key);
     let form: FarForm;
-    if (stored !== null) {
+    if (stored === null) {
+      plant ??= await entry.again();
+      form = await bakeFarForm(renderer, plant, entry.px, () =>
+        opened ? pace.walking : pace.opening,
+      );
+      baked++;
+    } else {
       form = stored;
       read++;
-    } else {
-      plant ??= await entry.again();
-      const bake = startFarBake(renderer, plant, entry.px);
-      await bake.ready;
-      for (;;) {
-        const p = opened ? pace.walking : pace.opening;
-        const done = bake.step(p.ms, p.views);
-        if (done !== null) {
-          form = done;
-          break;
-        }
-        await nextFrame();
-      }
-      baked++;
     }
-    if (stored !== null && opened) {
-      // After the world opens, a stored form uploads one atlas layer a frame, so no single frame uploads them all.
-      for (const layer of form.atlas.layers.keys()) {
-        forms.cards.fill(renderer, slot, form, layer);
-        await nextFrame();
-      }
-    } else forms.cards.fill(renderer, slot, form);
-    if (stored === null && kept !== null) {
-      // A failed write only means the form bakes again on the next visit.
-      const key = f.key;
-      void farFormData(renderer, form)
-        .then((d) => kept.put(key, d))
-        .catch(() => undefined)
-        .finally(() => form.dispose());
-    } else form.dispose();
+    await uploadFarForm(renderer, forms, slot, form, stored !== null && opened);
+    finishFarForm(renderer, form, stored === null ? kept : null, f.key);
     // Drop the realized plant once its form is made. A later bake realizes it again with `again`.
     entry.plant = null;
     ms += performance.now() - t0;
@@ -239,22 +283,13 @@ export function createFarStream(
    * Forms by weight, heaviest first. A held form ranks first, and a form with a slot counts `outweigh` times its
    * weight, so only a much heavier form takes the slot.
    */
-  const ranked = (): number[] => {
-    const score = (k: number): number => {
-      const f = formOf(k);
-      return f.held > 0
-        ? Number.POSITIVE_INFINITY
-        : f.slot !== -1 && f.target === 1
-          ? f.weight * FAR_TURN.outweigh + 1
-          : f.weight;
-    };
-    return Array.from({ length: forms.count }, (_, k) => k)
+  const ranked = (): number[] =>
+    Array.from({ length: forms.count }, (_, k) => k)
       .filter(
         (k) =>
           !formOf(k).failed && (formOf(k).weight > 0 || formOf(k).held > 0),
       )
-      .sort((a, b) => score(b) - score(a) || a - b);
-  };
+      .toSorted((a, b) => formScore(formOf(b)) - formScore(formOf(a)) || a - b);
 
   const weigh = (eye: THREE.Vector3, focal: number): void => {
     const weights = forms.weigh(eye, focal);
@@ -278,7 +313,7 @@ export function createFarStream(
     let freeing = Math.max(0, lacking - owner.filter((o) => o === -1).length);
     const unwanted = state
       .flatMap((f, k) => (f.slot >= 0 && !want.has(k) ? [k] : []))
-      .sort((a, b) => formOf(a).weight - formOf(b).weight || a - b);
+      .toSorted((a, b) => formOf(a).weight - formOf(b).weight || a - b);
     for (const k of unwanted) {
       formOf(k).target = freeing > 0 ? 0 : 1;
       freeing--;
@@ -325,7 +360,7 @@ export function createFarStream(
   };
 
   return {
-    async open(eye, focal) {
+    async open(eye, focal): Promise<void> {
       forms.cards.fit(forms.count);
       slots = forms.cards.slots;
       owner = Array.from({ length: slots }, () => -1);
@@ -340,7 +375,7 @@ export function createFarStream(
       for (const p of forms.plants) p.plant = null;
       opened = true;
     },
-    follow(eye, focal, dt) {
+    follow(eye, focal, dt): void {
       const moving = turn(dt);
       if (opened) {
         sinceWeighed += dt;
@@ -363,13 +398,13 @@ export function createFarStream(
         for (const wake of waiting.splice(0)) wake();
       }
     },
-    async hold(k) {
+    async hold(k): Promise<() => void> {
       const f = formOf(k);
       f.held++;
       if (f.slot === -1 && !owner.includes(-1)) {
         // Free the lightest form's slot at once without a fade, since the swap test hides every other copy while it runs.
         const lightest = ranked()
-          .reverse()
+          .toReversed()
           .find((j) => formOf(j).slot >= 0 && formOf(j).held === 0);
         if (lightest !== undefined) {
           const l = formOf(lightest);
@@ -394,7 +429,7 @@ export function createFarStream(
       };
     },
     settled: () => new Promise((wake) => waiting.push(wake)),
-    stats() {
+    stats(): FarStreamStats {
       const inSlots = state.filter((f) => f.slot >= 0);
       const far = state.reduce((n, f) => n + f.weight, 0);
       return {

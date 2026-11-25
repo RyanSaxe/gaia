@@ -57,22 +57,59 @@ describe("a copy's form by its crown's size on a pass's screen", () => {
   });
 });
 
+function meshesOf(cards: FarCards): [THREE.Mesh, THREE.Mesh] {
+  const [solid, fading] = cards.object.children;
+  if (!(solid instanceof THREE.Mesh) || !(fading instanceof THREE.Mesh)) {
+    throw new Error("expected two far card meshes");
+  }
+  return [solid, fading];
+}
+
+const zeros = (k: number): Float32Array => new Float32Array(2 * k);
+
+/** A trunk point that never sags and a bough's tip that sags about its joint on the trunk, as a primitive writes them. */
+const droopPlant = (tipDroop: number): Part => {
+  const positions = new Float32Array([0, 2, 0, 3, 4, 0]);
+  return {
+    swatch: "bark",
+    positions,
+    normals: new Float32Array([1, 0, 0, 0, 1, 0]),
+    indices: new Uint32Array(0),
+    shade: zeros(1),
+    tint: zeros(1),
+    cutout: zeros(3),
+    piece: zeros(2),
+    collision: "none",
+    channels: {
+      loss: zeros(1),
+      droop: new Float32Array([0, tipDroop]),
+      wither: zeros(1),
+      glow: zeros(1),
+      pivot: positions.slice(),
+      bough: new Float32Array([0, 0, 0, 0, 4, 0]),
+      twig: new Float32Array([0, 0, 0, 0, 4, 0]),
+      close: zeros(1),
+    },
+  };
+};
+
+/** The movement the field holds in the cell at `cell`. */
+const readDroopCell = (
+  field: ReturnType<typeof droopField>,
+  [x, y, z]: readonly [number, number, number],
+): number[] => {
+  const at = ((z * DROOP_CELLS + y) * DROOP_CELLS + x) * 4;
+  return [0, 1, 2].map(
+    (a) => ((field.cells[at + a] as number) / 127.5 - 1) * field.scale,
+  );
+};
+
 describe("a set's far cards", () => {
   const spots: InstanceSpot[] = [
     { x: 10, y: 1, z: -40, yaw: 0.3, scale: 1.2, vitality: 0.7 },
     { x: -30, y: 2, z: 80, yaw: 2, scale: 0.8 },
   ];
   const crown = new THREE.Sphere(new THREE.Vector3(0.2, 3, -0.1), 4);
-  const meshesOf = (
-    cards: FarCards,
-  ): [
-    THREE.Mesh<THREE.InstancedBufferGeometry>,
-    THREE.Mesh<THREE.InstancedBufferGeometry>,
-  ] =>
-    cards.object.children as [
-      THREE.Mesh<THREE.InstancedBufferGeometry>,
-      THREE.Mesh<THREE.InstancedBufferGeometry>,
-    ];
 
   it("draw every plant's copies in one batch, two draws whatever forms they show, every copy kept as they grow", () => {
     const cards = createFarCards(createSceneLight(), TURN, 2);
@@ -92,23 +129,27 @@ describe("a set's far cards", () => {
     const [solid, fading] = meshesOf(cards);
     // The solid and the fading set read the same copies.
     expect(fading.geometry).toBe(solid.geometry);
+    if (!(solid.geometry instanceof THREE.InstancedBufferGeometry)) {
+      throw new Error("expected instanced far card geometry");
+    }
+    const { instanceCount } = solid.geometry;
     const spot = solid.geometry.getAttribute("aSpot").array;
     const more = solid.geometry.getAttribute("aMore").array;
     // Each plant's copies occupy a stretch of their own, marked with their member. Spare room belongs to no member.
     const xs = (member: number): number[] =>
-      Array.from({ length: solid.geometry.instanceCount }, (_, i) => i)
+      Array.from({ length: instanceCount }, (_, i) => i)
         .filter((i) => more[i * 4 + 3] === member)
         .map((i) => spot[i * 4] as number);
     const members = [
       ...new Set(
         Array.from(
-          { length: solid.geometry.instanceCount },
+          { length: instanceCount },
           (_, i) => more[i * 4 + 3] as number,
         ),
       ),
     ].filter((m) => m > 0);
     expect(members).toHaveLength(2);
-    expect(members.map((m) => xs(m).length).sort((a, b) => a - b)).toEqual([
+    expect(members.map((m) => xs(m).length).toSorted((a, b) => a - b)).toEqual([
       2, 40,
     ]);
     expect(members.map(xs).find((x) => x.length === 40)).toEqual(
@@ -133,44 +174,8 @@ describe("a set's far forms in memory", () => {
 });
 
 describe("a far form's droop field", () => {
-  /** A trunk point that never sags and a bough's tip that sags about its joint on the trunk, as a primitive writes them. */
-  const plant = (tipDroop: number): Part => {
-    const positions = new Float32Array([0, 2, 0, 3, 4, 0]);
-    const zeros = (k: number): Float32Array => new Float32Array(2 * k);
-    return {
-      swatch: "bark",
-      positions,
-      normals: new Float32Array([1, 0, 0, 0, 1, 0]),
-      indices: new Uint32Array(0),
-      shade: zeros(1),
-      tint: zeros(1),
-      cutout: zeros(3),
-      piece: zeros(2),
-      collision: "none",
-      channels: {
-        loss: zeros(1),
-        droop: new Float32Array([0, tipDroop]),
-        wither: zeros(1),
-        glow: zeros(1),
-        pivot: positions.slice(),
-        bough: new Float32Array([0, 0, 0, 0, 4, 0]),
-        twig: new Float32Array([0, 0, 0, 0, 4, 0]),
-        close: zeros(1),
-      },
-    };
-  };
   const center = new THREE.Vector3(0, 3, 0);
   const radius = 5;
-  /** The movement the field holds in the cell at `cell`. */
-  const read = (
-    field: ReturnType<typeof droopField>,
-    [x, y, z]: readonly [number, number, number],
-  ): number[] => {
-    const at = ((z * DROOP_CELLS + y) * DROOP_CELLS + x) * 4;
-    return [0, 1, 2].map(
-      (a) => ((field.cells[at + a] as number) / 127.5 - 1) * field.scale,
-    );
-  };
   const cellOf = (p: readonly number[]): [number, number, number] =>
     [0, 1, 2].map((a) =>
       Math.floor(
@@ -180,7 +185,7 @@ describe("a far form's droop field", () => {
     ) as [number, number, number];
 
   it("holds where each point moves as its boughs sag all the way, as the plant's own droop moves it", () => {
-    const part = plant(0.2);
+    const part = droopPlant(0.2);
     const field = droopField([part], center, radius);
     const sagged = applyVitality(part, 0).positions;
     const moved = [0, 1, 2].map(
@@ -188,20 +193,20 @@ describe("a far form's droop field", () => {
     );
     expect(moved[1]).toBeLessThan(-0.1);
     const tolerance = field.scale / 127;
-    read(field, cellOf([3, 4, 0])).forEach((m, a) =>
+    readDroopCell(field, cellOf([3, 4, 0])).forEach((m, a) =>
       expect(Math.abs(m - (moved[a] as number))).toBeLessThanOrEqual(tolerance),
     );
-    read(field, cellOf([0, 2, 0])).forEach((m) =>
+    readDroopCell(field, cellOf([0, 2, 0])).forEach((m) =>
       expect(Math.abs(m)).toBeLessThanOrEqual(tolerance),
     );
     expect(field.reach).toBeCloseTo(Math.hypot(...moved), 5);
     // A cell holding no vertex takes the movement of the boughs beside it.
     const [x, y, z] = cellOf([3, 4, 0]);
-    read(field, [x + 1, y, z]).forEach((m, a) =>
+    readDroopCell(field, [x + 1, y, z]).forEach((m, a) =>
       expect(Math.abs(m - (moved[a] as number))).toBeLessThanOrEqual(tolerance),
     );
     // A plant that never sags moves nothing.
-    const still = droopField([plant(0)], center, radius);
+    const still = droopField([droopPlant(0)], center, radius);
     expect(still.scale).toBe(0);
     expect(still.reach).toBe(0);
   });

@@ -87,6 +87,26 @@ export function bakeEditedTile(
   };
 }
 
+function sampleTileWindow(
+  t: Terrain,
+  cols: Int32Array,
+  rows: Int32Array,
+  side: number,
+): { readonly heights: Float32Array; readonly waterLevel: Float32Array } {
+  const l = t.lattice;
+  const heights = new Float32Array(side * side);
+  const waterLevel = new Float32Array(side * side);
+  for (let j = 0; j < side; j++) {
+    const r = (rows[j] as number) * l.n;
+    for (let i = 0; i < side; i++) {
+      const w = r + (cols[i] as number);
+      heights[j * side + i] = l.heights[w] as number;
+      waterLevel[j * side + i] = t.waterLevel[w] as number;
+    }
+  }
+  return { heights, waterLevel };
+}
+
 /**
  * Cuts tile (`x0`, `z0`) from `t`, a whole world's land with its edits
  * applied, matching what `bakeEditedTile` bakes from the plan. It takes every
@@ -114,16 +134,7 @@ export function cutTile(
   const rows = Int32Array.from({ length: side }, (_, j) =>
     clamp(z0 + (j - m) * stride),
   );
-  const heights = new Float32Array(side * side);
-  const waterLevel = new Float32Array(side * side);
-  for (let j = 0; j < side; j++) {
-    const r = (rows[j] as number) * l.n;
-    for (let i = 0; i < side; i++) {
-      const w = r + (cols[i] as number);
-      heights[j * side + i] = l.heights[w] as number;
-      waterLevel[j * side + i] = t.waterLevel[w] as number;
-    }
-  }
+  const { heights, waterLevel } = sampleTileWindow(t, cols, rows, side);
   // A coarser tile measures its shore between its own samples, as its bake does. A full-resolution tile copies the world's.
   const coarse = {
     n: side,

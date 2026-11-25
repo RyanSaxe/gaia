@@ -103,8 +103,11 @@ function bodyAt(
   ];
 }
 
-const mixColor = (a: Rgb, b: Rgb, t: number): Rgb =>
-  t <= 0 ? a : t >= 1 ? b : mixLab(a, b, t);
+const mixColor = (a: Rgb, b: Rgb, t: number): Rgb => {
+  if (t <= 0) return a;
+  if (t >= 1) return b;
+  return mixLab(a, b, t);
+};
 
 function mixLight(
   a: LightSpec,

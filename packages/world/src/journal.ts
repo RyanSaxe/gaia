@@ -94,10 +94,16 @@ interface Item {
   readonly name: string;
 }
 
+const compareText = (a: string, b: string): number => {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+};
+
 /** Sorts names like a file explorer: by letter, ignoring case, with numbers in numeric order. */
 const byName = (a: Item, b: Item): number =>
   a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" }) ||
-  (a.of < b.of ? -1 : a.of > b.of ? 1 : 0);
+  compareText(a.of, b.of);
 
 const push = <K, V>(m: Map<K, V[]>, k: K, v: V): void => {
   const list = m.get(k);
@@ -105,14 +111,23 @@ const push = <K, V>(m: Map<K, V[]>, k: K, v: V): void => {
   else list.push(v);
 };
 
-export function journalOf(
+interface JournalIndex {
+  readonly chapters: Map<string, Item[]>;
+  readonly files: Map<string, Item[]>;
+  readonly definitions: Map<string, { item: Item; line: number }[]>;
+  readonly things: Map<string, { path: string; name: string }>;
+  readonly usesOf: Map<string, Set<string>>;
+  readonly usedByOf: Map<string, Set<string>>;
+  readonly readmes: Map<string, string>;
+}
+
+function collectJournalChildren(
   world: JournalSource,
-  room: PageRoom = { first: Infinity, next: Infinity },
-): Journal {
-  // Child items by parent path. "" is the root, whose list is the contents.
+): Pick<JournalIndex, "chapters" | "files" | "definitions" | "readmes"> {
   const chapters = new Map<string, Item[]>();
   const files = new Map<string, Item[]>();
   const definitions = new Map<string, { item: Item; line: number }[]>();
+  const readmes = new Map<string, string>();
   for (const a of world.areas) {
     if (a.parent !== null) {
       push(chapters, a.parent, { kind: "chapter", of: a.path, name: a.name });
@@ -120,6 +135,12 @@ export function journalOf(
   }
   for (const p of world.patches) {
     push(files, p.area, { kind: "file", of: p.path, name: p.name });
+    if (
+      /^readme(\.(md|markdown|txt|rst))?$/i.test(p.name) &&
+      !readmes.has(p.area)
+    ) {
+      readmes.set(p.area, p.path);
+    }
   }
   for (const s of world.symbols) {
     push(definitions, s.parent ?? s.file, {
@@ -127,13 +148,13 @@ export function journalOf(
       line: s.line,
     });
   }
-  // Every entity gets a spread for its thing, whatever form it has.
-  const things = new Map(
-    [
-      ...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"),
-      ...(world.naturalThings ?? []).filter((t) => t.of === "entity"),
-    ].map((t) => [t.path, t]),
-  );
+  return { chapters, files, definitions, readmes };
+}
+
+function collectEntityTrails(
+  world: JournalSource,
+  things: ReadonlyMap<string, { path: string; name: string }>,
+): Pick<JournalIndex, "usesOf" | "usedByOf"> {
   // A trail runs from the importing entity to the entity it imports from.
   const usesOf = new Map<string, Set<string>>();
   const usedByOf = new Map<string, Set<string>>();
@@ -144,48 +165,110 @@ export function journalOf(
     usesOf.get(t.from)?.add(t.to);
     usedByOf.get(t.to)?.add(t.from);
   }
+  return { usesOf, usedByOf };
+}
+
+function indexJournalSource(world: JournalSource): JournalIndex {
+  const { chapters, files, definitions, readmes } =
+    collectJournalChildren(world);
+  // Every entity gets a spread for its thing, whatever form it has.
+  const things = new Map(
+    [
+      ...(world.things ?? []).filter((t) => (t.of ?? "entity") === "entity"),
+      ...(world.naturalThings ?? []).filter((t) => t.of === "entity"),
+    ].map((t) => [t.path, t]),
+  );
+  const { usesOf, usedByOf } = collectEntityTrails(world, things);
+  return {
+    chapters,
+    files,
+    definitions,
+    things,
+    usesOf,
+    usedByOf,
+    readmes,
+  };
+}
+
+function folderItems(index: JournalIndex, folder: string): Item[] {
+  return [
+    ...(index.chapters.get(folder) ?? []).toSorted(byName),
+    ...(index.files.get(folder) ?? []).toSorted(byName),
+  ];
+}
+
+function listOfItem(
+  index: JournalIndex,
+  entityItem: (path: string) => Item,
+  item: Item | { kind: "root"; of: string },
+): Item[] {
+  // A container lists its own thing first.
+  if (item.kind === "chapter" || item.kind === "root") {
+    return [
+      ...(index.things.has(item.of) ? [entityItem(item.of)] : []),
+      ...folderItems(index, item.of),
+    ];
+  }
+  if (item.kind === "entity") {
+    // An entity's page shows its folder's README. Without one, it lists the folder's contents so the reader can go deeper.
+    const folder = item.of.slice("entity:".length);
+    return index.readmes.has(folder) ? [] : folderItems(index, folder);
+  }
+  if (item.kind === "own") return [];
+  const held = (index.definitions.get(item.of) ?? [])
+    .toSorted((a, b) => a.line - b.line || byName(a.item, b.item))
+    .map((d) => d.item);
+  if (item.kind === "file" && held.length > 0) {
+    return [{ kind: "own", of: ownOf(item.of), name: item.name }, ...held];
+  }
+  return held;
+}
+
+function leadPartsOf(
+  item: Item,
+  rows: number,
+  files: ReadonlyMap<string, readonly Item[]>,
+): number {
+  if (item.kind === "file") return rows - 1;
+  if (item.kind === "chapter") return files.get(item.of)?.length ?? 0;
+  return 0;
+}
+
+function entityExtras(
+  item: Item,
+  idx: JournalIndex,
+  entityItem: (path: string) => Item,
+): {
+  text?: string;
+  uses?: readonly string[];
+  usedBy?: readonly string[];
+} {
+  if (item.kind !== "entity") return {};
+  const folder = item.of.slice("entity:".length);
+  const text = idx.readmes.get(folder);
+  const way = (m: ReadonlyMap<string, ReadonlySet<string>>): string[] =>
+    [...(m.get(folder) ?? [])]
+      .map(entityItem)
+      .toSorted(byName)
+      .map((i) => i.of);
+  return {
+    ...(text === undefined ? {} : { text }),
+    uses: way(idx.usesOf),
+    usedBy: way(idx.usedByOf),
+  };
+}
+
+export function journalOf(
+  world: JournalSource,
+  room: PageRoom = { first: Infinity, next: Infinity },
+): Journal {
+  // Child items by parent path. "" is the root, whose list is the contents.
+  const idx = indexJournalSource(world);
   const entityItem = (path: string): Item => ({
     kind: "entity",
     of: entityOf(path),
-    name: things.get(path)?.name ?? path,
+    name: idx.things.get(path)?.name ?? path,
   });
-  /** Each folder's README, which its entity's page shows. */
-  const readmes = new Map<string, string>();
-  for (const p of world.patches) {
-    if (
-      /^readme(\.(md|markdown|txt|rst))?$/i.test(p.name) &&
-      !readmes.has(p.area)
-    ) {
-      readmes.set(p.area, p.path);
-    }
-  }
-  const listOf = (item: Item | { kind: "root"; of: string }): Item[] => {
-    // A container lists its own thing first.
-    if (item.kind === "chapter" || item.kind === "root") {
-      return [
-        ...(things.has(item.of) ? [entityItem(item.of)] : []),
-        ...(chapters.get(item.of) ?? []).sort(byName),
-        ...(files.get(item.of) ?? []).sort(byName),
-      ];
-    }
-    if (item.kind === "entity") {
-      // An entity's page shows its folder's README. Without one, it lists the folder's contents so the reader can go deeper.
-      const folder = item.of.slice("entity:".length);
-      return readmes.has(folder)
-        ? []
-        : [
-            ...(chapters.get(folder) ?? []).sort(byName),
-            ...(files.get(folder) ?? []).sort(byName),
-          ];
-    }
-    if (item.kind === "own") return [];
-    const held = (definitions.get(item.of) ?? [])
-      .sort((a, b) => a.line - b.line || byName(a.item, b.item))
-      .map((d) => d.item);
-    return item.kind === "file" && held.length > 0
-      ? [{ kind: "own", of: ownOf(item.of), name: item.name }, ...held]
-      : held;
-  };
   /** Rows on the page about `item`. A file counts every definition in it, nested ones included. */
   const rowsOf = (item: Item, lists: readonly Item[]): number => {
     if (item.kind === "definition" || item.kind === "own") return 0;
@@ -193,7 +276,7 @@ export function journalOf(
     // A file with definitions has a row for its own code, then one per definition.
     let n = lists.length > 0 ? 1 : 0;
     const walk = (of: string): void => {
-      for (const d of definitions.get(of) ?? []) {
+      for (const d of idx.definitions.get(of) ?? []) {
         n++;
         walk(d.item.of);
       }
@@ -216,36 +299,16 @@ export function journalOf(
     const rows = rowsOf(item, lists);
     // A file with two or more definitions, or a folder with two or more files, opens with a snippet of its most
     // important one. The snippet takes rows of its first page.
-    const parts =
-      item.kind === "file"
-        ? rows - 1
-        : item.kind === "chapter"
-          ? (files.get(item.of)?.length ?? 0)
-          : 0;
-    const lead = parts >= 2 ? (room.lead ?? 0) : 0;
+    const lead = leadPartsOf(item, rows, idx.files) >= 2 ? (room.lead ?? 0) : 0;
     const pages = pagesFor(rows + lead);
-    const text =
-      item.kind === "entity"
-        ? readmes.get(item.of.slice("entity:".length))
-        : undefined;
-    const folder =
-      item.kind === "entity" ? item.of.slice("entity:".length) : null;
-    const way = (m: ReadonlyMap<string, ReadonlySet<string>>): string[] =>
-      [...(m.get(folder as string) ?? [])]
-        .map(entityItem)
-        .sort(byName)
-        .map((i) => i.of);
-    const trails =
-      folder === null ? {} : { uses: way(usesOf), usedBy: way(usedByOf) };
     const entry: JournalEntry = {
       ...item,
       ...(under === undefined ? {} : { under }),
       lists: lists.map((l) => l.of),
-      ...(text === undefined ? {} : { text }),
       page: picture + 1,
       pages,
       ...(lead > 0 ? { lead } : {}),
-      ...trails,
+      ...entityExtras(item, idx, entityItem),
     };
     entries.push(entry);
     index.set(entry.of, entry);
@@ -253,14 +316,14 @@ export function journalOf(
     picture += pages % 2 === 1 ? pages + 1 : pages + 2;
   };
   const visit = (item: Item, under: string | undefined): void => {
-    const lists = listOf(item);
+    const lists = listOfItem(idx, entityItem, item);
     add(item, under, lists);
     // Don't recurse into an entity's list, since those entries follow in the folder's own chapter. An own entry lists nothing.
     if (item.kind !== "entity" && item.kind !== "own") {
       for (const l of lists) visit(l, item.of);
     }
   };
-  const contents = listOf({ kind: "root", of: "" });
+  const contents = listOfItem(idx, entityItem, { kind: "root", of: "" });
   for (const item of contents) visit(item, undefined);
   return {
     name: world.name,

@@ -85,13 +85,15 @@ function polygon(
     b.face.push(face);
   });
   // Wind so the face points along n.
-  const [a, c1, c2] = [corners[0], corners[1], corners[2]] as const;
-  const ux = (c1?.[0] ?? 0) - (a?.[0] ?? 0),
-    uy = (c1?.[1] ?? 0) - (a?.[1] ?? 0),
-    uz = (c1?.[2] ?? 0) - (a?.[2] ?? 0);
-  const vx = (c2?.[0] ?? 0) - (a?.[0] ?? 0),
-    vy = (c2?.[1] ?? 0) - (a?.[1] ?? 0),
-    vz = (c2?.[2] ?? 0) - (a?.[2] ?? 0);
+  const a = corners[0] ?? ([0, 0, 0] as const);
+  const c1 = corners[1] ?? ([0, 0, 0] as const);
+  const c2 = corners[2] ?? ([0, 0, 0] as const);
+  const ux = c1[0] - a[0];
+  const uy = c1[1] - a[1];
+  const uz = c1[2] - a[2];
+  const vx = c2[0] - a[0];
+  const vy = c2[1] - a[1];
+  const vz = c2[2] - a[2];
   const facing =
     (uy * vz - uz * vy) * n[0] +
       (uz * vx - ux * vz) * n[1] +
@@ -209,8 +211,8 @@ function postGeometry(): THREE.BufferGeometry {
     [s, -s, 0, -1],
   ];
   for (const [ax, az, nx, nz] of sides) {
-    const bx = nz !== 0 ? -ax : ax;
-    const bz = nx !== 0 ? -az : az;
+    const bx = nz === 0 ? ax : -ax;
+    const bz = nx === 0 ? az : -az;
     polygon(
       b,
       [
@@ -427,14 +429,19 @@ function atlas(
   return { canvas, ctx, texture };
 }
 
-/** Returns each point index where a trail passes from one area into another, ignoring short runs along a border. */
-function crossingsOf(
+interface AreaRun {
+  area: PlaceArea;
+  start: number;
+  end: number;
+}
+
+function collectAreaRuns(
   trail: Way,
   areaAt: (x: number, z: number) => PlaceArea,
-): { i: number; from: PlaceArea; to: PlaceArea }[] {
+): AreaRun[] {
   const p = trail.points;
   const count = p.length / 2;
-  const runs: { area: PlaceArea; start: number; end: number }[] = [];
+  const runs: AreaRun[] = [];
   for (let i = 0; i < count; i++) {
     const area = areaAt(p[i * 2] as number, p[i * 2 + 1] as number);
     const last = runs[runs.length - 1];
@@ -446,8 +453,12 @@ function crossingsOf(
       last.end = i;
     } else runs.push({ area, start: i, end: i });
   }
+  return runs;
+}
+
+function mergeShortRuns(runs: readonly AreaRun[]): AreaRun[] {
   // A short run is a wobble along a border, so it merges into the run before it.
-  const kept: typeof runs = [];
+  const kept: AreaRun[] = [];
   for (const r of runs) {
     const last = kept[kept.length - 1];
     if (
@@ -458,10 +469,19 @@ function crossingsOf(
       last.end = r.end;
     } else kept.push({ ...r });
   }
+  return kept;
+}
+
+/** Returns each point index where a trail passes from one area into another, ignoring short runs along a border. */
+function crossingsOf(
+  trail: Way,
+  areaAt: (x: number, z: number) => PlaceArea,
+): { i: number; from: PlaceArea; to: PlaceArea }[] {
+  const kept = mergeShortRuns(collectAreaRuns(trail, areaAt));
   const out: { i: number; from: PlaceArea; to: PlaceArea }[] = [];
   for (let k = 1; k < kept.length; k++) {
-    const a = kept[k - 1] as (typeof kept)[number];
-    const b = kept[k] as (typeof kept)[number];
+    const a = kept[k - 1] as AreaRun;
+    const b = kept[k] as AreaRun;
     if (a.area.path !== b.area.path && a.area.depth >= 0 && b.area.depth >= 0) {
       out.push({ i: b.start, from: a.area, to: b.area });
     }
@@ -518,7 +538,7 @@ export function createMarkers(light: SceneLight): Markers {
 
   return {
     group,
-    place(baked, areaAt) {
+    place(baked, areaAt): Furnishing {
       clear();
       const t = baked.terrain;
       const found: {
@@ -541,11 +561,11 @@ export function createMarkers(light: SceneLight): Markers {
           const dx = (p[b * 2] as number) - (p[a * 2] as number);
           const dz = (p[b * 2 + 1] as number) - (p[a * 2 + 1] as number);
           const len = Math.hypot(dx, dz) || 1;
-          const pair = [c.from.path, c.to.path].sort().join("|");
+          const pair = [c.from.path, c.to.path].toSorted().join("|");
           if (
             found.some(
               (f) =>
-                [f.from.path, f.to.path].sort().join("|") === pair &&
+                [f.from.path, f.to.path].toSorted().join("|") === pair &&
                 Math.hypot(f.x - x, f.z - z) < SPACING,
             )
           ) {
@@ -693,11 +713,11 @@ export function createMarkers(light: SceneLight): Markers {
             Math.floor(slot / ARM_SLOT.cols) * ARM_SLOT.h + ARM_SLOT.h / 2 + 3;
           actx.setTransform(1 / name.widen, 0, 0, 1, cx, cy);
           actx.font = `italic 600 ${name.size}px ${SERIF}`;
-          name.lines.forEach((line, n) =>
+          name.lines.forEach((line, lineIndex) =>
             actx.fillText(
               line,
               0,
-              (n - (name.lines.length - 1) / 2) * name.size * 1.02,
+              (lineIndex - (name.lines.length - 1) / 2) * name.size * 1.02,
             ),
           );
           actx.setTransform(1, 0, 0, 1, 0, 0);
@@ -785,7 +805,7 @@ export function createMarkers(light: SceneLight): Markers {
       }
       return { capsules, solids };
     },
-    vitality(of) {
+    vitality(of): void {
       const armMark = arms?.geometry.getAttribute("aMark") as
         | THREE.InstancedBufferAttribute
         | undefined;

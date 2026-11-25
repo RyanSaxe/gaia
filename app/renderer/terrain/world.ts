@@ -179,6 +179,7 @@ import {
 import {
   type OpenedWorld,
   type PlantGroup,
+  type SymbolOf,
   codeWorld,
   onVitalityUpdate,
 } from "./code-world.ts";
@@ -859,6 +860,170 @@ const UNDERSTORY_LEAST = 0.3;
 /** Meters around the eye over which declining ground murks the air. It equals the band over which regions' airs blend, so murk changes as gradually as a region's air. */
 const MURK_REACH = TERRAIN.blend;
 
+const landmarkAsks = (c: OpenedWorld): BuildAsk[] =>
+  c.landmarks.map((l) => ({
+    kind: "landmark",
+    blueprint: l.blueprint,
+    seed: seedOf(`terrain-lab/landmark/${l.path}`),
+    facts: Object.fromEntries(
+      Object.entries(landmarkKind.facts).map(([k, bind]) => [k, bind(l.facts)]),
+    ),
+  }));
+
+function variantOf(realizedPlant: Realized): TreeVariant {
+  const bark = realizedPlant.parts.find((part) => part.swatch === "bark");
+  // The trunk's base radius is the farthest bark vertex near the ground, however many sides or lobes the trunk has.
+  let trunk = 0;
+  if (bark !== undefined) {
+    for (let i = 0; i < bark.positions.length; i += 3) {
+      if ((bark.positions[i + 1] as number) < TRUNK_BASE) {
+        trunk = Math.max(
+          trunk,
+          Math.hypot(
+            bark.positions[i] as number,
+            bark.positions[i + 2] as number,
+          ),
+        );
+      }
+    }
+  }
+  const base = Math.max(0.5, trunk);
+  let height = 1;
+  let radius = 1;
+  for (const part of realizedPlant.parts) {
+    for (let i = 0; i < part.positions.length; i += 3) {
+      height = Math.max(height, part.positions[i + 1] as number);
+      radius = Math.max(
+        radius,
+        Math.hypot(
+          part.positions[i] as number,
+          part.positions[i + 2] as number,
+        ),
+      );
+    }
+  }
+  return { base, trunk, height, radius };
+}
+
+function passSizeOf(
+  renderer: THREE.WebGLRenderer,
+  passCamera: THREE.Camera,
+  target: THREE.WebGLRenderTarget | null,
+  viewSize: THREE.Vector2,
+  bufferSize: THREE.Vector2,
+): PassSize {
+  const height =
+    target === null
+      ? renderer.getDrawingBufferSize(bufferSize).y
+      : target.height;
+  if (passCamera instanceof THREE.PerspectiveCamera) {
+    return {
+      smaller:
+        target === null ? 1 : renderer.getSize(viewSize).y / target.height,
+      focal:
+        height / 2 / Math.tan(THREE.MathUtils.degToRad(passCamera.fov) / 2),
+      ortho: false,
+    };
+  }
+  if (passCamera instanceof THREE.OrthographicCamera) {
+    return {
+      smaller: 1,
+      focal: height / (passCamera.top - passCamera.bottom),
+      ortho: true,
+    };
+  }
+  return { smaller: 1, focal: 0, ortho: false };
+}
+
+function solidCylinder(shape: SolidShape): {
+  cx: number;
+  cz: number;
+  r: number;
+} {
+  if (!("points" in shape)) {
+    return { cx: shape.x, cz: shape.z, r: shape.radius };
+  }
+  const n = shape.points.length / 2;
+  let cx = 0;
+  let cz = 0;
+  for (let k = 0; k < n; k++) {
+    cx += (shape.points[k * 2] as number) / n;
+    cz += (shape.points[k * 2 + 1] as number) / n;
+  }
+  let r = 0;
+  for (let k = 0; k < n; k++) {
+    r = Math.max(
+      r,
+      Math.hypot(
+        (shape.points[k * 2] as number) - cx,
+        (shape.points[k * 2 + 1] as number) - cz,
+      ),
+    );
+  }
+  return { cx, cz, r };
+}
+
+function clock(): number {
+  return performance.now() / 1000;
+}
+
+function wayLength(way: readonly Walker[]): number {
+  return way.reduce(
+    (sum, p, i) =>
+      i === 0
+        ? 0
+        : sum +
+          Math.hypot(
+            p.x - (way[i - 1] as Walker).x,
+            p.z - (way[i - 1] as Walker).z,
+          ),
+    0,
+  );
+}
+
+function nextFrame(): Promise<void> {
+  return new Promise((r) => requestAnimationFrame(() => r()));
+}
+
+function cellKey(cx: number, cz: number): number {
+  return (cx + 32768) * 65536 + (cz + 32768);
+}
+
+function underfootOf(footing: {
+  readonly deck: boolean;
+  readonly depth: number;
+}): Earshot["underfoot"] {
+  if (footing.deck) return "deck";
+  if (footing.depth > 0.05) return "water";
+  return "ground";
+}
+
+function crossedStopThreshold(before: number, after: number): boolean {
+  return (
+    (before < STOP_AT.great && after >= STOP_AT.great) ||
+    (before < STOP_AT.small && after >= STOP_AT.small)
+  );
+}
+
+function searchRings(
+  x: number,
+  z: number,
+  startR: number,
+  maxR: number,
+  fits: (px: number, pz: number) => boolean,
+): { x: number; z: number } | null {
+  for (let r = startR; r <= maxR; r += LAND.ring) {
+    const count = Math.max(1, Math.round((Math.PI * 2 * r) / LAND.ring));
+    for (let k = 0; k < count; k++) {
+      const a = (k / count) * Math.PI * 2;
+      const px = x + Math.cos(a) * r;
+      const pz = z + Math.sin(a) * r;
+      if (fits(px, pz)) return { x: px, z: pz };
+    }
+  }
+  return null;
+}
+
 export function createWorld(root: HTMLElement): World {
   root.innerHTML = TEMPLATE;
   const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
@@ -920,19 +1085,6 @@ export function createWorld(root: HTMLElement): World {
   };
   /** The landmarks of the world shown, each as Jev composed it. */
   let landmarks: Landmark[] = [];
-  /** The build requests for the landmarks Jev composed for a codebase's world. */
-  const landmarkAsks = (c: OpenedWorld): BuildAsk[] =>
-    c.landmarks.map((l) => ({
-      kind: "landmark",
-      blueprint: l.blueprint,
-      seed: seedOf(`terrain-lab/landmark/${l.path}`),
-      facts: Object.fromEntries(
-        Object.entries(landmarkKind.facts).map(([k, bind]) => [
-          k,
-          bind(l.facts),
-        ]),
-      ),
-    }));
 
   const canvas = root.querySelector("canvas") as HTMLCanvasElement;
   const stage = root.querySelector(".stage") as HTMLElement;
@@ -1160,8 +1312,11 @@ export function createWorld(root: HTMLElement): World {
   /** Shows each file's vitality on its ground and each area's on its lots and water, where each change has eased to. */
   function showGround(): void {
     if (code === null) return;
-    const { ground, area } = ownerVitality(code.world, shownVitalityOf);
-    showGroundVitality(ground, area);
+    const { ground: fileGround, area } = ownerVitality(
+      code.world,
+      shownVitalityOf,
+    );
+    showGroundVitality(fileGround, area);
   }
   /** Shows on each sign naming one of `ids` the vitality of what it names, where its change has eased to. */
   function showSigns(ids: ReadonlySet<string>): void {
@@ -1173,13 +1328,12 @@ export function createWorld(root: HTMLElement): World {
   }
   /** Each understory placement's shown vitality, which is that of the thing it represents. */
   function understoryShown(): Float32Array {
-    const own = (k: number): number =>
-      thingVitality.get(code?.symbolOf(k)?.represented.id ?? "") ??
-      code?.layout.symbols[k]?.vitality ??
-      1;
     return understoryVitality(
       { placements: understory.placements(), symbols: symbolPlacements },
-      own,
+      (k) =>
+        thingVitality.get(code?.symbolOf(k)?.represented.id ?? "") ??
+        code?.layout.symbols[k]?.vitality ??
+        1,
     );
   }
   function showUnderstoryVitality(): void {
@@ -1282,16 +1436,16 @@ export function createWorld(root: HTMLElement): World {
   let skyLook: SkyLook | null = null;
   function applyHour(h: number): void {
     hour = h;
-    const look = realizeSky(
+    const nextLook = realizeSky(
       { blueprint: skyWorld, kind: worldKind },
       worldLib,
       seedOf("terrain-lab/sky"),
       h,
     );
-    applyLight(light, look.light);
+    applyLight(light, nextLook.light);
     // The wind strength. Every swaying part scales its response to the one wind field by this.
-    light.uWind.value = look.wind.strength;
-    skyLook = look;
+    light.uWind.value = nextLook.wind.strength;
+    skyLook = nextLook;
     applyAir(camera.position);
   }
   /** Each region's air as Jev chose it, the world it was realized for, and a buffer for each region's weight. */
@@ -1328,12 +1482,12 @@ export function createWorld(root: HTMLElement): World {
     const decline = declineAround(eye.x, eye.z, MURK_REACH);
     const height = eye.y - groundHeightAt(terrain, eye.x, eye.z);
     const local =
-      aerial !== null
-        ? overviewAir(world.size)
-        : airFromHeight(
+      aerial === null
+        ? airFromHeight(
             murkyAir(mixAir(airs.airs, airs.weights), decline),
             height,
-          );
+          )
+        : overviewAir(world.size);
     appliedAir = { decline, height, air: local };
     sky.apply({ light: skyLook.light, ...throughAir(skyLook, local) });
   }
@@ -1354,40 +1508,6 @@ export function createWorld(root: HTMLElement): World {
   let treeBuilds: (Realized | null)[] = [];
   const treeBuild = (k: number): Realized =>
     treeBuilds[k] ?? made(treeAsks[k] as BuildAsk, floraLib);
-  const variantOf = (plant: Realized): TreeVariant => {
-    const bark = plant.parts.find((part) => part.swatch === "bark");
-    // The trunk's base radius is the farthest bark vertex near the ground, however many sides or lobes the trunk has.
-    let trunk = 0;
-    if (bark !== undefined) {
-      for (let i = 0; i < bark.positions.length; i += 3) {
-        if ((bark.positions[i + 1] as number) < TRUNK_BASE) {
-          trunk = Math.max(
-            trunk,
-            Math.hypot(
-              bark.positions[i] as number,
-              bark.positions[i + 2] as number,
-            ),
-          );
-        }
-      }
-    }
-    const base = Math.max(0.5, trunk);
-    let height = 1;
-    let radius = 1;
-    for (const part of plant.parts) {
-      for (let i = 0; i < part.positions.length; i += 3) {
-        height = Math.max(height, part.positions[i + 1] as number);
-        radius = Math.max(
-          radius,
-          Math.hypot(
-            part.positions[i] as number,
-            part.positions[i + 2] as number,
-          ),
-        );
-      }
-    }
-    return { base, trunk, height, radius };
-  };
   let variants: TreeVariant[] = [];
   /** Each tree build's map mark, by its variant. */
   let treeMarks: readonly PlantMark[] = [];
@@ -1399,7 +1519,7 @@ export function createWorld(root: HTMLElement): World {
   /** The extra trees `forest` places, by the index of the symbol each copies. Their symbol numbers follow the world's own symbols. */
   let forestOf: readonly number[] = [];
   /** The definition, file or entity a tree represents, which gives its file. */
-  const treeSymbol = (t: { readonly symbol: number }) => {
+  const treeSymbol = (t: { readonly symbol: number }): SymbolOf | undefined => {
     const own = code?.layout.symbols.length ?? 0;
     return code?.symbolOf(
       t.symbol < own ? t.symbol : (forestOf[t.symbol - own] ?? -1),
@@ -1480,9 +1600,9 @@ export function createWorld(root: HTMLElement): World {
     }
     treeAsks = blueprints.map(plantAsk);
     treeBuilds = treeAsks.map((ask) => made(ask, floraLib));
-    variants = treeBuilds.map((built) => variantOf(built as Realized));
-    treeMarks = treeBuilds.map((built, k) =>
-      markOf(blueprints[k] as Blueprint, built as Realized),
+    variants = treeBuilds.map((tree) => variantOf(tree as Realized));
+    treeMarks = treeBuilds.map((tree, k) =>
+      markOf(blueprints[k] as Blueprint, tree as Realized),
     );
     treeFar = variants.map((_, k) =>
       treeForms.add(treeBuild(k), () =>
@@ -1505,7 +1625,7 @@ export function createWorld(root: HTMLElement): World {
   let warming = false;
   const viewSize = new THREE.Vector2();
   const bufferSize = new THREE.Vector2();
-  scene.onBeforeRender = (_renderer, _scene, passCamera) => {
+  scene.onBeforeRender = (_renderer, _scene, passCamera): void => {
     if (warming) return;
     const target = renderer.getRenderTarget();
     // Before every pass, each instanced blueprint packs only the cells that
@@ -1513,30 +1633,7 @@ export function createWorld(root: HTMLElement): World {
     // it chooses detail by its own size. The sun's shadow uses the view's
     // detail, so shade never changes as a person walks. Crowns are measured in
     // each pass's own device pixels.
-    const height =
-      target === null
-        ? renderer.getDrawingBufferSize(bufferSize).y
-        : target.height;
-    const size: PassSize =
-      passCamera instanceof THREE.PerspectiveCamera
-        ? {
-            smaller:
-              target === null
-                ? 1
-                : renderer.getSize(viewSize).y / target.height,
-            focal:
-              height /
-              2 /
-              Math.tan(THREE.MathUtils.degToRad(passCamera.fov) / 2),
-            ortho: false,
-          }
-        : passCamera instanceof THREE.OrthographicCamera
-          ? {
-              smaller: 1,
-              focal: height / (passCamera.top - passCamera.bottom),
-              ortho: true,
-            }
-          : { smaller: 1, focal: 0, ortho: false };
+    const size = passSizeOf(renderer, passCamera, target, viewSize, bufferSize);
     for (const v of swapping === null ? instanced() : [swapping]) {
       v.cull(passCamera, size);
     }
@@ -1656,8 +1753,8 @@ export function createWorld(root: HTMLElement): World {
   let largestTree = 0;
   /** The tile of the land holding (x, z), "ti,tj". */
   const tileKeyOf = (x: number, z: number): string => {
-    const frame = frameOf(world);
-    return `${Math.floor((x - frame.origin) / frame.spacing / TILE.size)},${Math.floor((z - frame.origin) / frame.spacing / TILE.size)}`;
+    const landFrame = frameOf(world);
+    return `${Math.floor((x - landFrame.origin) / landFrame.spacing / TILE.size)},${Math.floor((z - landFrame.origin) / landFrame.spacing / TILE.size)}`;
   };
   /** Places exactly the trees in `held` as copies of their builds. Each build keeps its instances and only moves its copies. */
   function placeTrees(held: readonly Tree[]): void {
@@ -1934,7 +2031,10 @@ export function createWorld(root: HTMLElement): World {
                 height: landmarkViews[i]?.height ?? 6,
                 reach: lm.base + 1,
                 stop: STOP_AT.great,
-                readingSpot: (fx: number, fz: number) => {
+                readingSpot: (
+                  fx: number,
+                  fz: number,
+                ): { x: number; z: number } => {
                   const d = Math.hypot(fx - x, fz - z) || 1;
                   const off = lm.base + 7;
                   return {
@@ -1959,7 +2059,7 @@ export function createWorld(root: HTMLElement): World {
         reach: crown,
         stop: STOP_AT.small,
         // Stop just outside the crown, so the person sees the tree rather than its leaves.
-        readingSpot: (fx: number, fz: number) => {
+        readingSpot: (fx: number, fz: number): { x: number; z: number } => {
           const d = Math.hypot(fx - x, fz - z) || 1;
           const off = Math.max(3, crown * 0.9 + 1.4);
           return { x: x + ((fx - x) / d) * off, z: z + ((fz - z) / d) * off };
@@ -1999,7 +2099,10 @@ export function createWorld(root: HTMLElement): World {
                     p.scale,
                   reach: p.radius + 0.3,
                   stop: STOP_AT.small,
-                  readingSpot: (fx: number, fz: number) => {
+                  readingSpot: (
+                    fx: number,
+                    fz: number,
+                  ): { x: number; z: number } => {
                     const d = Math.hypot(fx - x, fz - z) || 1;
                     const off = p.radius + 2.2;
                     return {
@@ -2218,40 +2321,15 @@ export function createWorld(root: HTMLElement): World {
     if (flat < 1e-9) return null;
     let best: { x: number; z: number; distance: number } | null = null;
     for (const shape of furnished.solids) {
-      let cx: number;
-      let cz: number;
-      let r: number;
-      if ("points" in shape) {
-        const n = shape.points.length / 2;
-        cx = 0;
-        cz = 0;
-        for (let k = 0; k < n; k++) {
-          cx += (shape.points[k * 2] as number) / n;
-          cz += (shape.points[k * 2 + 1] as number) / n;
-        }
-        r = 0;
-        for (let k = 0; k < n; k++) {
-          r = Math.max(
-            r,
-            Math.hypot(
-              (shape.points[k * 2] as number) - cx,
-              (shape.points[k * 2 + 1] as number) - cz,
-            ),
-          );
-        }
-      } else {
-        cx = shape.x;
-        cz = shape.z;
-        r = shape.radius;
-      }
+      const { cx, cz, r } = solidCylinder(shape);
       const s = ((cx - o.x) * d.x + (cz - o.z) * d.z) / flat;
       if (s <= 0 || (best !== null && s > best.distance)) continue;
       const y = o.y + d.y * s;
-      const ground = heightAt(terrain.lattice, cx, cz);
+      const groundY = heightAt(terrain.lattice, cx, cz);
       if (
         Math.hypot(o.x + d.x * s - cx, o.z + d.z * s - cz) > r + 0.25 ||
-        y < ground - 0.2 ||
-        y > ground + FURNISHING_TOP
+        y < groundY - 0.2 ||
+        y > groundY + FURNISHING_TOP
       ) {
         continue;
       }
@@ -2276,26 +2354,25 @@ export function createWorld(root: HTMLElement): World {
   const keys = new Set<string>();
   /** The steering state from held keys, which `steerStep` turns into walking and turning. */
   let steer: Steering = steering();
-  const clock = (): number => performance.now() / 1000;
-  /** Whether a held key other than `code` maps to the same way, as W and the up arrow both walk ahead. */
-  const heldElsewhere = (code: string, way: WalkKey): boolean =>
-    [...keys].some((k) => k !== code && STEER_KEYS.get(k) === way);
-  function press(code: string): void {
-    const way = STEER_KEYS.get(code);
-    if (way !== undefined && !heldElsewhere(code, way)) {
+  /** Whether a held key other than `keyCode` maps to the same way, as W and the up arrow both walk ahead. */
+  const heldElsewhere = (keyCode: string, way: WalkKey): boolean =>
+    [...keys].some((k) => k !== keyCode && STEER_KEYS.get(k) === way);
+  function press(keyCode: string): void {
+    const way = STEER_KEYS.get(keyCode);
+    if (way !== undefined && !heldElsewhere(keyCode, way)) {
       steer = steerPress(steer, way, clock());
     }
-    keys.add(code);
+    keys.add(keyCode);
   }
-  function release(code?: string): void {
-    if (code === undefined) {
+  function release(keyCode?: string): void {
+    if (keyCode === undefined) {
       keys.clear();
       steer = steerRelease(steer);
       return;
     }
-    keys.delete(code);
-    const way = STEER_KEYS.get(code);
-    if (way !== undefined && !heldElsewhere(code, way)) {
+    keys.delete(keyCode);
+    const way = STEER_KEYS.get(keyCode);
+    if (way !== undefined && !heldElsewhere(keyCode, way)) {
       steer = steerRelease(steer, way);
     }
   }
@@ -2416,94 +2493,96 @@ export function createWorld(root: HTMLElement): World {
     } else if (shown === null) headFor(null);
   }
 
+  function subjectAt(x: number, z: number): Subject | undefined {
+    return subjects.find((s) => s.x === x && s.z === z);
+  }
+
+  function landmarkTapHit(): {
+    distance: number;
+    subject: Subject | undefined;
+  } | null {
+    if (code === null) return null;
+    const rise = raycaster.intersectObjects(
+      landmarkViews.map((v) => v.object),
+      true,
+    )[0];
+    if (rise === undefined) return null;
+    const riseAt = landmarkViews.findIndex(
+      (v) => v.object.getObjectById(rise.object.id) !== undefined,
+    );
+    const riseSite = ways.sites[riseAt]?.site;
+    if (riseSite === undefined) return null;
+    return {
+      distance: rise.distance,
+      subject: subjectAt(riseSite.x, riseSite.z),
+    };
+  }
+
+  function nearestTapSubject(
+    ray: THREE.Ray,
+  ): { distance: number; subject: Subject | undefined } | undefined {
+    const hits: { distance: number; subject: Subject | undefined }[] = [];
+    const thing = thingHit(ray);
+    const symbol = thing === null ? undefined : symbolAt.get(thing.at);
+    if (thing !== null && symbol !== undefined) {
+      hits.push({ distance: thing.distance, subject: symbol });
+    }
+    const tree = treeHit(ray);
+    if (tree !== null) {
+      hits.push({
+        distance: tree.distance,
+        subject: subjectAt(tree.tree.x, tree.tree.z),
+      });
+    }
+    const building = settlement.pick(raycaster);
+    if (building !== undefined) {
+      hits.push({
+        distance: building.distance,
+        subject: subjectAt(building.building.site.x, building.building.site.z),
+      });
+    }
+    const sign = raycaster.intersectObject(signs.mesh)[0];
+    if (sign !== undefined) {
+      hits.push({
+        distance: sign.distance,
+        subject: signSubjects[sign.instanceId ?? -1],
+      });
+    }
+    const riseHit = landmarkTapHit();
+    if (riseHit !== null) hits.push(riseHit);
+    return hits.toSorted((a, b) => a.distance - b.distance)[0];
+  }
+
+  function pickSubject(subject: Subject): void {
+    // With a journal listening, a tap on a thing opens its page without moving the person. Otherwise they walk up to it.
+    if (pickListeners.length > 0) {
+      for (const l of pickListeners) l(subject.represented.id);
+    } else approach(subject);
+  }
+
   // A tap on a building, tree or sign walks the person up to it and then shows
   // what it is. A tap on the ground walks there.
   onTap(canvas, (e) => {
     if (aerial !== null) return;
     const ray = aim(e);
-    const land = groundHit(ray);
-    const tree = treeHit(ray);
-    const building = settlement.pick(raycaster);
-    const rise =
-      code === null
-        ? undefined
-        : raycaster.intersectObjects(
-            landmarkViews.map((v) => v.object),
-            true,
-          )[0];
-    const riseAt =
-      rise === undefined
-        ? undefined
-        : landmarkViews.findIndex(
-            (v) => v.object.getObjectById(rise.object.id) !== undefined,
-          );
-    const riseSite =
-      riseAt === undefined ? undefined : ways.sites[riseAt]?.site;
-    const sign = raycaster.intersectObject(signs.mesh)[0];
-    const thing = thingHit(ray);
-    const symbol = thing === null ? undefined : symbolAt.get(thing.at);
-    const hits = [
-      ...(thing === null || symbol === undefined
-        ? []
-        : [{ distance: thing.distance, subject: symbol }]),
-      ...(tree === null
-        ? []
-        : [
-            {
-              distance: tree.distance,
-              subject: subjects.find(
-                (s) => s.x === tree.tree.x && s.z === tree.tree.z,
-              ),
-            },
-          ]),
-      ...(building === undefined
-        ? []
-        : [
-            {
-              distance: building.distance,
-              subject: subjects.find(
-                (s) =>
-                  s.x === building.building.site.x &&
-                  s.z === building.building.site.z,
-              ),
-            },
-          ]),
-      ...(sign === undefined
-        ? []
-        : [
-            {
-              distance: sign.distance,
-              subject: signSubjects[sign.instanceId ?? -1],
-            },
-          ]),
-      ...(rise === undefined || riseSite === undefined
-        ? []
-        : [
-            {
-              distance: rise.distance,
-              subject: subjects.find(
-                (s) => s.x === riseSite.x && s.z === riseSite.z,
-              ),
-            },
-          ]),
-    ].sort((a, b) => a.distance - b.distance);
-    const nearest = hits[0];
+    const groundTap = groundHit(ray);
+    const nearest = nearestTapSubject(ray);
     if (
       nearest !== undefined &&
       nearest.subject !== undefined &&
-      (land === null || nearest.distance < land.distance + 0.5)
+      (groundTap === null || nearest.distance < groundTap.distance + 0.5)
     ) {
-      // With a journal listening, a tap on a thing opens its page without moving the person. Otherwise they walk up to it.
-      if (pickListeners.length > 0) {
-        for (const l of pickListeners) l(nearest.subject.represented.id);
-      } else approach(nearest.subject);
+      pickSubject(nearest.subject);
       return;
     }
     // A tap on a fingerpost or a boundary stone walks up to it, not to the ground hidden behind it.
     const near = furnishingHit(ray);
-    if (near !== null && (land === null || near.distance < land.distance)) {
+    if (
+      near !== null &&
+      (groundTap === null || near.distance < groundTap.distance)
+    ) {
       setGoal(near.x, near.z);
-    } else if (land !== null) setGoal(land.x, land.z);
+    } else if (groundTap !== null) setGoal(groundTap.x, groundTap.z);
   });
 
   /** Switches the ground and growth between walking and a view from above, which uses the whole-world mesh and the wild ring. */
@@ -2573,20 +2652,23 @@ export function createWorld(root: HTMLElement): World {
    * first view (`openingSpot`): on a stream's bank among the code, looking downstream, with the most code things in
    * sight.
    */
-  function valleyView(stood = code?.stood): void {
+  function valleyView(savedSpot?: LastSpot): void {
     if (code === null) return;
-    const back = returnTo(code.world, stood);
+    const back = returnTo(code.world, savedSpot ?? code.stood);
     if (back !== null) {
       const beside =
         back.exact || standable(back.x, back.z)
           ? back
           : landingNear(back.x, back.z);
-      if (beside !== null) return walkTo(beside.x, beside.z, back.yaw, -0.06);
+      if (beside !== null) {
+        walkTo(beside.x, beside.z, back.yaw, -0.06);
+        return;
+      }
     }
     const at = openingSpot(terrain, code.world);
     // Move clear of any solid there, as a landing does.
-    const bank = landingNear(at.x, at.z);
-    walkTo(bank?.x ?? at.x, bank?.z ?? at.z, at.yaw, -0.06);
+    const bank = landingNear(at.x, at.z) ?? at;
+    walkTo(bank.x, bank.z, at.yaw, -0.06);
   }
 
   const forward = new THREE.Vector3();
@@ -2630,11 +2712,9 @@ export function createWorld(root: HTMLElement): World {
       });
     }
     const first = t.marks.findIndex((m) => !m.ready);
-    return first === -1
-      ? Infinity
-      : first === 0
-        ? 0
-        : (t.marks[first - 1] as (typeof t.marks)[number]).s;
+    if (first === -1) return Infinity;
+    if (first === 0) return 0;
+    return (t.marks[first - 1] as (typeof t.marks)[number]).s;
   }
   /**
    * The way a trip takes from `from` to a landing. Within `TRAVEL_NEAR` it
@@ -2645,22 +2725,10 @@ export function createWorld(root: HTMLElement): World {
    * tread at each end, at the off-tread pace, and which route it took.
    */
   function travelWay(from: Walker, at: Walker): TripWay | null {
-    const lengthOf = (way: readonly Walker[]): number =>
-      way.reduce(
-        (sum, p, i) =>
-          i === 0
-            ? 0
-            : sum +
-              Math.hypot(
-                p.x - (way[i - 1] as Walker).x,
-                p.z - (way[i - 1] as Walker).z,
-              ),
-        0,
-      );
     const straight = Math.hypot(at.x - from.x, at.z - from.z);
     if (straight < TRAVEL_NEAR) {
       const way = [...planWalk(terrain, solids, from, at).way];
-      return { way, off: { start: lengthOf(way), end: 0 }, by: "near" };
+      return { way, off: { start: wayLength(way), end: 0 }, by: "near" };
     }
     const tread = trailWay(ways.network, from, at);
     let trails: {
@@ -2678,11 +2746,11 @@ export function createWorld(root: HTMLElement): World {
       ).way;
       trails = {
         way: [...on, ...tread.slice(1, -1), ...leave],
-        off: { start: lengthOf(on), end: lengthOf(leave) },
+        off: { start: wayLength(on), end: wayLength(leave) },
         by: "trails",
       };
     }
-    if (trails !== null && lengthOf(trails.way) <= straight * TRAVEL.detour) {
+    if (trails !== null && wayLength(trails.way) <= straight * TRAVEL.detour) {
       return trails;
     }
     const across = acrossWay(
@@ -2697,7 +2765,7 @@ export function createWorld(root: HTMLElement): World {
     // Go straight across only when that is shorter. Deep water may send it around farther than the trails go.
     if (
       across === null ||
-      (trails !== null && lengthOf(across) >= lengthOf(trails.way))
+      (trails !== null && wayLength(across) >= wayLength(trails.way))
     ) {
       return trails;
     }
@@ -2765,24 +2833,24 @@ export function createWorld(root: HTMLElement): World {
     }
     if ([...keys].some((k) => WALK_KEYS.has(k))) return STAND;
     if (goal === null) return STAND;
-    const heading = wayAhead(goal, at);
-    goal = heading.walk;
-    if (heading.remaining <= WALK_TO.reach) {
+    const nextHeading = wayAhead(goal, at);
+    goal = nextHeading.walk;
+    if (nextHeading.remaining <= WALK_TO.reach) {
       finishWalk();
       return STAND;
     }
     const braking = Math.sqrt(
-      2 * GAIT.arrive * Math.max(0, heading.remaining - WALK_TO.reach * 0.6),
+      2 *
+        GAIT.arrive *
+        Math.max(0, nextHeading.remaining - WALK_TO.reach * 0.6),
     );
     return {
-      dx: heading.aim.x - at.x,
-      dz: heading.aim.z - at.z,
-      speed: Math.min(heading.pace, braking),
+      dx: nextHeading.aim.x - at.x,
+      dz: nextHeading.aim.z - at.z,
+      speed: Math.min(nextHeading.pace, braking),
     };
   }
-  function updateWalk(dt: number): void {
-    const fromX = walker.x;
-    const fromZ = walker.z;
+  function syncBodyToWalker(): Stride {
     // A hook may have moved the walker, so move the body to the walker.
     if (body === null || body.x !== walker.x || body.z !== walker.z) {
       body = {
@@ -2791,95 +2859,110 @@ export function createWorld(root: HTMLElement): World {
         z: walker.z,
       };
     }
-    // The keys turn the view only at one steady rate.
-    const steered = steerStep(steer, clock(), walker.yaw, dt);
-    steer = steered.steering;
-    walker.yaw = steered.yaw;
-    if (trip !== null) {
-      // A trip moves the body along its way and turns the view with the way ahead until a key is pressed. Then it
-      // slows at its steady rate, the keys control the view, and the walk takes over at walking pace.
-      if ([...keys].some((k) => WALK_KEYS.has(k))) trip.stopping = true;
-      // The body goes no farther than the world has loaded, so everything visible from there is placed. While paper
-      // hides the world and the trip hurries, it waits on nothing, and the marks it passes are never requested.
-      if (trip.hurry !== null) {
-        for (const m of trip.marks) {
-          if (m.s < trip.at.s) m.asked = m.ready = true;
-        }
+    return body;
+  }
+  function tripReadyDistance(activeTrip: TripUnderWay, dt: number): number {
+    // The body goes no farther than the world has loaded, so everything visible from there is placed. While paper
+    // hides the world and the trip hurries, it waits on nothing, and the marks it passes are never requested.
+    if (activeTrip.hurry !== null) {
+      for (const m of activeTrip.marks) {
+        if (m.s < activeTrip.at.s) m.asked = m.ready = true;
       }
-      const ready = trip.hurry !== null ? Infinity : readyAlong(trip);
-      if (
-        ready < trip.plan.length &&
-        trip.at.going &&
-        trip.at.v < 1 &&
-        trip.at.s >= ready - 1
-      ) {
-        trip.waited += dt;
-      }
-      // Where the way ahead has not loaded, the trip slows to walking pace but never stops. A person sent somewhere
-      // gets there, and at walking pace things load as they do for a walk.
-      trip.at = travelStep(
-        trip.plan,
-        trip.at,
-        dt * (trip.hurry ?? 1),
-        walker.yaw,
-        trip.stopping,
-        ready,
-        WALK_TO.pace,
-      );
-      if (trip.setOff === null && trip.at.s > 0) {
-        trip.setOff = performance.now();
-      }
-      walker.yaw = trip.at.yaw;
-      body = carry(terrain, decks, body, trip.at.x, trip.at.z, dt);
-      if (trip.at.done || (trip.stopping && trip.at.v <= WALK_TO.pace)) {
-        tripEnd = {
-          done: trip.at.done,
-          s: +trip.at.s.toFixed(1),
-          length: Math.round(trip.plan.length),
-          keys: [...keys],
-          goal: goal !== null,
-        };
-        // Log a trip the person took over, so a trip that ends short is never a mystery.
-        if (!trip.at.done) {
-          console.info(
-            `travel: taken over at ${Math.round(trip.at.s)} of ${Math.round(trip.plan.length)} m by ${goal !== null ? "a tap on the world" : `the keys (${[...keys].join(", ")})`}`,
-          );
-        }
-        trip = null;
-      }
-    } else {
-      // Water and the grade slow the body, solids turn it aside, and it starts and stops at once without overshooting.
-      body = stride(terrain, solids, decks, body, intent(body, steered), dt);
-      if (goal !== null && body.blocked) finishWalk();
+      return Infinity;
     }
-    walker.x = body.x;
-    walker.z = body.z;
-    // Standing still at a thing opens its card. `stopAt` runs only when the still time crosses `STOP_AT.great` or `STOP_AT.small`.
-    if (goal !== null || trip !== null || keys.size > 0) arrived = false;
-    const before = stood;
-    stood =
-      !arrived &&
-      goal === null &&
-      trip === null &&
-      keys.size === 0 &&
-      Math.hypot(walker.x - fromX, walker.z - fromZ) < STILL * dt
-        ? stood + dt
-        : 0;
+    const ready = readyAlong(activeTrip);
     if (
-      (before < STOP_AT.great && stood >= STOP_AT.great) ||
-      (before < STOP_AT.small && stood >= STOP_AT.small)
+      ready < activeTrip.plan.length &&
+      activeTrip.at.going &&
+      activeTrip.at.v < 1 &&
+      activeTrip.at.s >= ready - 1
     ) {
+      activeTrip.waited += dt;
+    }
+    return ready;
+  }
+  function maybeFinishTrip(activeTrip: TripUnderWay): void {
+    if (
+      !activeTrip.at.done &&
+      (!activeTrip.stopping || activeTrip.at.v > WALK_TO.pace)
+    ) {
+      return;
+    }
+    tripEnd = {
+      done: activeTrip.at.done,
+      s: +activeTrip.at.s.toFixed(1),
+      length: Math.round(activeTrip.plan.length),
+      keys: [...keys],
+      goal: goal !== null,
+    };
+    // Log a trip the person took over, so a trip that ends short is never a mystery.
+    if (!activeTrip.at.done) {
+      const takenBy =
+        goal === null
+          ? `the keys (${[...keys].join(", ")})`
+          : "a tap on the world";
+      console.info(
+        `travel: taken over at ${Math.round(activeTrip.at.s)} of ${Math.round(activeTrip.plan.length)} m by ${takenBy}`,
+      );
+    }
+    trip = null;
+  }
+  function advanceTrip(
+    activeTrip: TripUnderWay,
+    currentBody: Stride,
+    dt: number,
+  ): Stride {
+    // A trip moves the body along its way and turns the view with the way ahead until a key is pressed. Then it
+    // slows at its steady rate, the keys control the view, and the walk takes over at walking pace.
+    if ([...keys].some((k) => WALK_KEYS.has(k))) activeTrip.stopping = true;
+    const ready = tripReadyDistance(activeTrip, dt);
+    // Where the way ahead has not loaded, the trip slows to walking pace but never stops. A person sent somewhere
+    // gets there, and at walking pace things load as they do for a walk.
+    activeTrip.at = travelStep(
+      activeTrip.plan,
+      activeTrip.at,
+      dt * (activeTrip.hurry ?? 1),
+      walker.yaw,
+      activeTrip.stopping,
+      ready,
+      WALK_TO.pace,
+    );
+    if (activeTrip.setOff === null && activeTrip.at.s > 0) {
+      activeTrip.setOff = performance.now();
+    }
+    walker.yaw = activeTrip.at.yaw;
+    const nextBody = carry(
+      terrain,
+      decks,
+      currentBody,
+      activeTrip.at.x,
+      activeTrip.at.z,
+      dt,
+    );
+    maybeFinishTrip(activeTrip);
+    return nextBody;
+  }
+  function updateStandingCard(fromX: number, fromZ: number, dt: number): void {
+    // Standing still at a thing opens its card. `stopAt` runs only when the still time crosses `STOP_AT.great` or `STOP_AT.small`.
+    const busy = goal !== null || trip !== null || keys.size > 0;
+    if (busy) arrived = false;
+    const before = stood;
+    const still =
+      !arrived &&
+      !busy &&
+      Math.hypot(walker.x - fromX, walker.z - fromZ) < STILL * dt;
+    stood = still ? stood + dt : 0;
+    if (crossedStopThreshold(before, stood)) {
       stopAt();
     }
-    // A card belongs to the thing it opened at, so walking away closes it.
-    if (
-      cardAt !== null &&
-      Math.hypot(walker.x - cardAt.x, walker.z - cardAt.z) > LEAVE_CARD
-    ) {
-      hideCard();
-    }
+  }
+  function updateEyeAndCamera(
+    currentBody: Stride,
+    fromX: number,
+    fromZ: number,
+  ): void {
     // The eyes are 1.6 m above the ground or a bridge's deck, easing down to just above deep water.
-    walker.eye = body.eye;
+    walker.eye = currentBody.eye;
     const footing = footingAt(terrain, decks, walker.x, walker.z);
     const surface = footing.ground + footing.depth;
     lanternGround =
@@ -2902,6 +2985,41 @@ export function createWorld(root: HTMLElement): World {
     camera.lookAt(camera.position.clone().add(forward));
     walked = Math.hypot(walker.x - fromX, walker.z - fromZ);
   }
+  function updateWalk(dt: number): void {
+    const fromX = walker.x;
+    const fromZ = walker.z;
+    let currentBody = syncBodyToWalker();
+    // The keys turn the view only at one steady rate.
+    const steered = steerStep(steer, clock(), walker.yaw, dt);
+    steer = steered.steering;
+    walker.yaw = steered.yaw;
+    if (trip === null) {
+      // Water and the grade slow the body, solids turn it aside, and it starts and stops at once without overshooting.
+      currentBody = stride(
+        terrain,
+        solids,
+        decks,
+        currentBody,
+        intent(currentBody, steered),
+        dt,
+      );
+      if (goal !== null && currentBody.blocked) finishWalk();
+    } else {
+      currentBody = advanceTrip(trip, currentBody, dt);
+    }
+    body = currentBody;
+    walker.x = currentBody.x;
+    walker.z = currentBody.z;
+    updateStandingCard(fromX, fromZ, dt);
+    // A card belongs to the thing it opened at, so walking away closes it.
+    if (
+      cardAt !== null &&
+      Math.hypot(walker.x - cardAt.x, walker.z - cardAt.z) > LEAVE_CARD
+    ) {
+      hideCard();
+    }
+    updateEyeAndCamera(currentBody, fromX, fromZ);
+  }
 
   // ---------- adopting a baked world ----------
 
@@ -2918,8 +3036,6 @@ export function createWorld(root: HTMLElement): World {
       openingSteps[step] = Math.round(now - since);
       since = now;
     };
-    const nextFrame = (): Promise<void> =>
-      new Promise((r) => requestAnimationFrame(() => r()));
     holding++;
     try {
       // First make what the new world needs that was never made, one thing a frame, while the old world still shows.
@@ -2987,6 +3103,7 @@ export function createWorld(root: HTMLElement): World {
   }
 
   function bakedWorld(): BakedWorld {
+    const shownUnderstory = understoryShown();
     return {
       terrain,
       ways: ways.network.ways,
@@ -3018,26 +3135,27 @@ export function createWorld(root: HTMLElement): World {
         scale: t.scale,
         build: treeMarks[t.variant] as PlantMark,
       })),
-      understory: ((shown) =>
-        understory.placements().flatMap((p, i) => {
-          const build = understory.mark(p.rule, p.variant);
-          return build === undefined
-            ? []
-            : [
-                {
-                  x: p.x,
-                  z: p.z,
-                  vitality: shown[i] ?? 1,
-                  scale: p.scale,
-                  build,
-                },
-              ];
-        }))(understoryShown()),
+      understory: understory.placements().flatMap((p, i) => {
+        const build = understory.mark(p.rule, p.variant);
+        return build === undefined
+          ? []
+          : [
+              {
+                x: p.x,
+                z: p.z,
+                vitality: shownUnderstory[i] ?? 1,
+                scale: p.scale,
+                build,
+              },
+            ];
+      }),
       // An area shows its region's ground.
       grounds: new Map(
         places.areas.flatMap((a, i) => {
-          const ground = regionGrounds[code?.world.areas[i]?.region ?? 0];
-          return ground === undefined ? [] : [[a.path, ground] as const];
+          const regionGround = regionGrounds[code?.world.areas[i]?.region ?? 0];
+          return regionGround === undefined
+            ? []
+            : [[a.path, regionGround] as const];
         }),
       ),
       lots: (code?.world.things ?? []).map(({ x, z }) => ({ x, z })),
@@ -3158,61 +3276,49 @@ export function createWorld(root: HTMLElement): World {
       dt,
     );
   }
-  function frame(dt: number, now: number, at: number): void {
-    if (holding > 0) return;
+  function syncVeilHour(at: number): void {
     if (at !== hour) applyHour(at);
     veil.hour(at);
     // The wait screen follows the hour as the world will.
     const night = Math.round(light.uNightness.value * 20) / 20;
     if (night !== waitNight) veil.night((waitNight = night));
-    light.uTime.value = frozen ?? light.uTime.value + dt;
-    // A change in vitality eases in over the frame's own time, even with the wind's clock frozen.
-    easeVitality(dt);
-    if (aerial === null) {
-      updateWalk(dt);
-      detailEye.set(
-        detailPin?.x ?? camera.position.x,
-        camera.position.y,
-        detailPin?.z ?? camera.position.z,
-      );
-      ground.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-      if (!streamPaused) {
-        land.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-        wildGrowth.follow(detailPin?.x ?? walker.x, detailPin?.z ?? walker.z);
-        // While a trip goes faster than 1.5 times walking pace, only its marks request tiles. Requesting walking's lead as
-        // well would queue tiles ahead of the ones the trip waits on.
-        thingTiles.follow(
-          walker.x,
-          walker.z,
-          trip === null || trip.at.v <= WALK_TO.pace * 1.5,
-        );
-      }
-      lantern.follow(camera.position, forward, lanternGround, walked, dt);
-      grass.follow(detailEye);
-      water.wade(walker.x, walker.z, walker.yaw, walked, dt);
-      const seen = viewPin ?? walker;
-      shadowCenter.set(
-        seen.x - Math.sin(seen.yaw) * 18,
-        seen.eye,
-        seen.z - Math.cos(seen.yaw) * 18,
-      );
-      shadow.frame(shadowCenter, 40);
-    } else {
-      // The lantern stays at the person's position.
-      lanternEye.set(walker.x, walker.eye, walker.z);
-      lantern.follow(lanternEye, forward, lanternGround, 0, dt);
-      shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
-    }
-    applyAir(camera.position);
-    // Every pass thins distant detail by distance from the person's eyes, or from the camera above.
-    light.uEye.value.copy(aerial === null ? detailEye : camera.position);
-    if (aerial === null) drifts.follow(crownsNear, viewFocal());
-    // The far streams follow the person and advance their fades by the frame's own time.
-    if (!streamPaused && aerial === null) {
-      for (const set of farSets) {
-        set.stream.follow(light.uEye.value, viewFocal(), dt);
-      }
-    }
+  }
+  function followStreaming(pinX: number, pinZ: number): void {
+    if (streamPaused) return;
+    land.follow(pinX, pinZ);
+    wildGrowth.follow(pinX, pinZ);
+    // While a trip goes faster than 1.5 times walking pace, only its marks request tiles. Requesting walking's lead as
+    // well would queue tiles ahead of the ones the trip waits on.
+    thingTiles.follow(
+      walker.x,
+      walker.z,
+      trip === null || trip.at.v <= WALK_TO.pace * 1.5,
+    );
+  }
+  function followWalking(dt: number): void {
+    updateWalk(dt);
+    const pin = detailPin;
+    detailEye.set(
+      pin === null ? camera.position.x : pin.x,
+      camera.position.y,
+      pin === null ? camera.position.z : pin.z,
+    );
+    const pinX = pin === null ? walker.x : pin.x;
+    const pinZ = pin === null ? walker.z : pin.z;
+    ground.follow(pinX, pinZ);
+    followStreaming(pinX, pinZ);
+    lantern.follow(camera.position, forward, lanternGround, walked, dt);
+    grass.follow(detailEye);
+    water.wade(walker.x, walker.z, walker.yaw, walked, dt);
+    const seen = viewPin ?? walker;
+    shadowCenter.set(
+      seen.x - Math.sin(seen.yaw) * 18,
+      seen.eye,
+      seen.z - Math.cos(seen.yaw) * 18,
+    );
+    shadow.frame(shadowCenter, 40);
+  }
+  function renderPasses(dt: number): void {
     castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = {
@@ -3231,6 +3337,35 @@ export function createWorld(root: HTMLElement): World {
       calls: renderer.info.render.calls,
       triangles: renderer.info.render.triangles,
     };
+  }
+  function frame(dt: number, now: number, at: number): void {
+    if (holding > 0) return;
+    syncVeilHour(at);
+    light.uTime.value = frozen ?? light.uTime.value + dt;
+    // A change in vitality eases in over the frame's own time, even with the wind's clock frozen.
+    easeVitality(dt);
+    if (aerial === null) {
+      followWalking(dt);
+    } else {
+      // The lantern stays at the person's position.
+      lanternEye.set(walker.x, walker.eye, walker.z);
+      lantern.follow(lanternEye, forward, lanternGround, 0, dt);
+      shadow.frame(shadowCenter.set(0, 0, 0), world.size * 0.62);
+    }
+    applyAir(camera.position);
+    // Every pass thins distant detail by distance from the person's eyes, or from the camera above.
+    light.uEye.value.copy(aerial === null ? detailEye : camera.position);
+    if (aerial === null) {
+      const focal = viewFocal();
+      drifts.follow(crownsNear, focal);
+      // The far streams follow the person and advance their fades by the frame's own time.
+      if (!streamPaused) {
+        for (const set of farSets) {
+          set.stream.follow(light.uEye.value, focal, dt);
+        }
+      }
+    }
+    renderPasses(dt);
   }
 
   /**
@@ -3276,7 +3411,10 @@ export function createWorld(root: HTMLElement): World {
       const judged = update.judged;
       if (judged !== undefined) {
         const was = code.thing;
-        code = { ...code, thing: (of) => judged[of] ?? was(of) };
+        code = {
+          ...code,
+          thing: (of): JudgedThing | undefined => judged[of] ?? was(of),
+        };
       }
       if (update.symbols !== undefined) {
         const was = code.world;
@@ -3375,33 +3513,34 @@ export function createWorld(root: HTMLElement): World {
     );
   }
 
-  /** The landing nearest (x, z), as `WorldHandle.landing` describes. */
-  function landingNear(
-    x: number,
-    z: number,
-    center?: { readonly x: number; readonly z: number },
-  ): Landing | null {
+  function buildingLandingNear(x: number, z: number): Landing | null {
     // A spot on or beside a building lands where a person reads its sign, facing the building.
     const house = settlement.buildings.find(
       (b) =>
         Math.hypot(b.site.x - x, b.site.z - z) <
         Math.max(b.plan.width, b.plan.depth) * 0.5 + 4,
     );
-    if (house !== undefined) {
-      const at = settlement.readingSpotOf(house);
-      if (
-        waterDepthAt(terrain, at.x, at.z) <= LAND.wade &&
-        clearanceAt(solids, at.x, at.z) >= LAND.clear * 0.5
-      ) {
-        return {
-          x: at.x,
-          z: at.z,
-          yaw: Math.atan2(-(house.site.x - at.x), -(house.site.z - at.z)),
-        };
-      }
+    if (house === undefined) return null;
+    const at = settlement.readingSpotOf(house);
+    if (
+      waterDepthAt(terrain, at.x, at.z) > LAND.wade ||
+      clearanceAt(solids, at.x, at.z) < LAND.clear * 0.5
+    ) {
+      return null;
     }
-    const asked = placeAt(places, x, z).area;
-    const fits = (px: number, pz: number, depth: number): boolean => {
+    return {
+      x: at.x,
+      z: at.z,
+      yaw: Math.atan2(-(house.site.x - at.x), -(house.site.z - at.z)),
+    };
+  }
+
+  function findLandingSpot(
+    x: number,
+    z: number,
+  ): { x: number; z: number } | null {
+    const requestedArea = placeAt(places, x, z).area;
+    const fitsInArea = (px: number, pz: number, depth: number): boolean => {
       if (
         waterDepthAt(terrain, px, pz) > depth ||
         clearanceAt(solids, px, pz) < LAND.clear
@@ -3409,49 +3548,34 @@ export function createWorld(root: HTMLElement): World {
         return false;
       }
       const area = placeAt(places, px, pz).area;
-      return asked.depth < 0
+      return requestedArea.depth < 0
         ? area.depth < 0
-        : area.path === asked.path && area.depth === asked.depth;
+        : area.path === requestedArea.path &&
+            area.depth === requestedArea.depth;
     };
-    let spot: { x: number; z: number } | null = null;
     for (const depth of [LAND.dry, LAND.wade]) {
-      for (let r = 0; r <= LAND.reach && spot === null; r += LAND.ring) {
-        const count = Math.max(1, Math.round((Math.PI * 2 * r) / LAND.ring));
-        for (let k = 0; k < count; k++) {
-          const a = (k / count) * Math.PI * 2;
-          const px = x + Math.cos(a) * r;
-          const pz = z + Math.sin(a) * r;
-          if (fits(px, pz, depth)) {
-            spot = { x: px, z: pz };
-            break;
-          }
-        }
-      }
-      if (spot !== null) break;
+      const found = searchRings(x, z, 0, LAND.reach, (px, pz) =>
+        fitsInArea(px, pz, depth),
+      );
+      if (found !== null) return found;
     }
     // If no spot in its own area fits, as in a wide pond or a thicket, take the nearest fit ground in any area, farther out.
-    for (let r = LAND.ring; r <= LAND.far && spot === null; r += LAND.ring) {
-      const count = Math.max(1, Math.round((Math.PI * 2 * r) / LAND.ring));
-      for (let k = 0; k < count && spot === null; k++) {
-        const px = x + Math.cos((k / count) * Math.PI * 2) * r;
-        const pz = z + Math.sin((k / count) * Math.PI * 2) * r;
-        if (
-          waterDepthAt(terrain, px, pz) <= LAND.wade &&
-          clearanceAt(solids, px, pz) >= LAND.clear
-        ) {
-          spot = { x: px, z: pz };
-        }
-      }
-    }
-    if (spot === null) {
-      console.warn(
-        `landing: no dry ground clear of everything within ${LAND.far} m of (${Math.round(x)}, ${Math.round(z)})`,
-      );
-      return null;
-    }
-    const { x: lx, z: lz } = spot;
-    const toward = (tx: number, tz: number): number =>
-      Math.atan2(-(tx - lx), -(tz - lz));
+    return searchRings(
+      x,
+      z,
+      LAND.ring,
+      LAND.far,
+      (px, pz) =>
+        waterDepthAt(terrain, px, pz) <= LAND.wade &&
+        clearanceAt(solids, px, pz) >= LAND.clear,
+    );
+  }
+
+  function landingTarget(
+    lx: number,
+    lz: number,
+    center?: { readonly x: number; readonly z: number },
+  ): { readonly x: number; readonly z: number } | null {
     // The person faces the area's building or landmark if one is near, else `center`.
     const area = placeAt(places, lx, lz).area;
     const baked = bakedWorld();
@@ -3462,13 +3586,18 @@ export function createWorld(root: HTMLElement): World {
       )
       .map((t) => ({ t, d: Math.hypot(t.x - lx, t.z - lz) }))
       .filter(({ d }) => d > 6 && d < FACE_THING)
-      .sort((a, b) => a.d - b.d)[0]?.t;
-    const aim =
-      thing ??
-      (center !== undefined && Math.hypot(center.x - lx, center.z - lz) > 8
-        ? center
-        : null);
-    // On a path, face along it in the direction closer to what the person would face.
+      .toSorted((a, b) => a.d - b.d)[0]?.t;
+    if (thing !== undefined) return thing;
+    if (center !== undefined && Math.hypot(center.x - lx, center.z - lz) > 8) {
+      return center;
+    }
+    return null;
+  }
+
+  function nearestTrailTangent(
+    lx: number,
+    lz: number,
+  ): { d: number; tx: number; tz: number } | null {
     let best: { d: number; tx: number; tz: number } | null = null;
     for (const way of ways.network.ways) {
       const p = way.points;
@@ -3483,9 +3612,32 @@ export function createWorld(root: HTMLElement): World {
         }
       }
     }
+    return best;
+  }
+
+  /** The landing nearest (x, z), as `WorldHandle.landing` describes. */
+  function landingNear(
+    x: number,
+    z: number,
+    center?: { readonly x: number; readonly z: number },
+  ): Landing | null {
+    const houseLanding = buildingLandingNear(x, z);
+    if (houseLanding !== null) return houseLanding;
+    const spot = findLandingSpot(x, z);
+    if (spot === null) {
+      console.warn(
+        `landing: no dry ground clear of everything within ${LAND.far} m of (${Math.round(x)}, ${Math.round(z)})`,
+      );
+      return null;
+    }
+    const { x: lx, z: lz } = spot;
+    const target = landingTarget(lx, lz, center);
+    // On a path, face along it in the direction closer to what the person would face.
+    const best = nearestTrailTangent(lx, lz);
     if (best !== null && Math.hypot(best.tx, best.tz) > 1e-6) {
       const sign =
-        aim === null || best.tx * (aim.x - lx) + best.tz * (aim.z - lz) >= 0
+        target === null ||
+        best.tx * (target.x - lx) + best.tz * (target.z - lz) >= 0
           ? 1
           : -1;
       return {
@@ -3497,7 +3649,10 @@ export function createWorld(root: HTMLElement): World {
     return {
       x: lx,
       z: lz,
-      yaw: aim === null ? walker.yaw : toward(aim.x, aim.z),
+      yaw:
+        target === null
+          ? walker.yaw
+          : Math.atan2(-(target.x - lx), -(target.z - lz)),
     };
   }
 
@@ -3519,7 +3674,7 @@ export function createWorld(root: HTMLElement): World {
     if (own !== undefined) return own;
     const largest = subjects
       .filter((s) => s.represented.id.startsWith(`${id}#`))
-      .sort((a, b) => b.height - a.height)[0];
+      .toSorted((a, b) => b.height - a.height)[0];
     if (largest !== undefined) return largest;
     const cells = code?.world.cells.filter((k) => k.file === id) ?? [];
     if (cells.length === 0) return undefined;
@@ -3534,7 +3689,7 @@ export function createWorld(root: HTMLElement): World {
       z,
       height: PATCH_SEEN.height,
       reach,
-      readingSpot: (fx, fz) => {
+      readingSpot: (fx, fz): { x: number; z: number } => {
         const d = Math.hypot(fx - x, fz - z) || 1;
         return {
           x: x + ((fx - x) / d) * (reach + 3),
@@ -3560,7 +3715,7 @@ export function createWorld(root: HTMLElement): World {
     s: Seen,
     distance: number,
     eye: number,
-    aim: number,
+    aimHeight: number,
     half: number,
     wide: boolean,
   ): { x: number; z: number } {
@@ -3622,7 +3777,7 @@ export function createWorld(root: HTMLElement): World {
       ) {
         return false;
       }
-      if (!wide) return lineClear(x, z, 0, aim);
+      if (!wide) return lineClear(x, z, 0, aimHeight);
       const across = s.reach * 0.8;
       return (
         lineClear(x, z, 0, s.height * 0.3) &&
@@ -3685,13 +3840,13 @@ export function createWorld(root: HTMLElement): World {
     const eye = wide
       ? EYE_HEIGHT
       : Math.min(EYE_HEIGHT, Math.max(0.9, s.height * 0.8 + 0.5));
-    const aim = wide
+    const aimHeight = wide
       ? s.height * 0.5 + 2 * tan * PAINTING.wideLow * distance
       : s.height * 0.55;
     return {
-      at: viewpointOf(s, distance, eye, aim, tan * aspect, wide),
+      at: viewpointOf(s, distance, eye, aimHeight, tan * aspect, wide),
       eye,
-      aim,
+      aim: aimHeight,
     };
   }
   function seenFromOf(id: string): Landing | null {
@@ -3748,7 +3903,7 @@ export function createWorld(root: HTMLElement): World {
     wide: boolean,
   ): Promise<{ color: Pixels; mask: Pixels } | null> {
     return atPaintingHour(() => {
-      const { at, eye, aim } = framingOf(s, w / h, wide);
+      const { at, eye, aim: aimHeight } = framingOf(s, w / h, wide);
       const base = heightAt(terrain.lattice, s.x, s.z);
       const from = new THREE.Vector3(
         at.x,
@@ -3763,7 +3918,7 @@ export function createWorld(root: HTMLElement): World {
       };
       return shootView(
         from,
-        new THREE.Vector3(s.x, base + aim, s.z),
+        new THREE.Vector3(s.x, base + aimHeight, s.z),
         PAINTING.fov,
         w,
         h,
@@ -3873,8 +4028,6 @@ export function createWorld(root: HTMLElement): World {
     move: 2,
   } as const;
   const cellOf = (v: number): number => Math.floor(v / EAR.cell);
-  const cellKey = (cx: number, cz: number): number =>
-    (cx + 32768) * 65536 + (cz + 32768);
   function filed<T>(
     items: readonly T[],
     at: (t: T) => { readonly x: number; readonly z: number },
@@ -3948,6 +4101,42 @@ export function createWorld(root: HTMLElement): World {
     canopyAt = { x, z, cover: Math.min(1, cover) };
     return canopyAt.cover;
   }
+  function nearestStreamHeard(
+    stations: Map<number, Station[]>,
+    x: number,
+    z: number,
+    heard: (tx: number, tz: number, d: number) => Heard,
+  ): (Heard & { width: number }) | null {
+    let stream: (Heard & { width: number }) | null = null;
+    for (const p of within(stations, x, z, EAR.reach)) {
+      const d = Math.hypot(p.x - x, p.z - z) - p.halfWidth;
+      if (d <= EAR.reach && (stream === null || d < stream.d)) {
+        stream = { ...heard(p.x, p.z, d), d, width: p.halfWidth * 2 };
+      }
+    }
+    return stream === null ? null : { ...stream, d: Math.max(0, stream.d) };
+  }
+  function nearestMillHeard(
+    wheels: readonly Building[],
+    x: number,
+    z: number,
+    heard: (tx: number, tz: number, d: number) => Heard,
+  ): (Heard & { turning: number }) | null {
+    let mill: (Heard & { turning: number }) | null = null;
+    for (const b of wheels) {
+      const wheel = b.wheel as NonNullable<Building["wheel"]>;
+      const [wx, wz] = siteToWorld(
+        b.site,
+        (wheel.x0 + wheel.x1) / 2,
+        (wheel.z0 + wheel.z1) / 2,
+      );
+      const d = Math.hypot(wx - x, wz - z);
+      if (d <= EAR.reach && (mill === null || d < mill.d)) {
+        mill = { ...heard(wx, wz, d), turning: spinAt(b.vitality) };
+      }
+    }
+    return mill;
+  }
   function earshot(): Earshot {
     const { x, z, yaw } = walker;
     const files = earshotFiles();
@@ -3963,42 +4152,18 @@ export function createWorld(root: HTMLElement): World {
           (Math.atan2(dx * -fz + dz * fx, dx * fx + dz * fz) * 180) / Math.PI,
       };
     };
-    let stream: (Heard & { width: number }) | null = null;
-    for (const p of within(files.stations, x, z, EAR.reach)) {
-      const d = Math.hypot(p.x - x, p.z - z) - p.halfWidth;
-      if (d <= EAR.reach && (stream === null || d < stream.d)) {
-        stream = { ...heard(p.x, p.z, d), d, width: p.halfWidth * 2 };
-      }
-    }
-    let mill: (Heard & { turning: number }) | null = null;
-    for (const b of files.wheels) {
-      const wheel = b.wheel as NonNullable<Building["wheel"]>;
-      const [wx, wz] = siteToWorld(
-        b.site,
-        (wheel.x0 + wheel.x1) / 2,
-        (wheel.z0 + wheel.z1) / 2,
-      );
-      const d = Math.hypot(wx - x, wz - z);
-      if (d <= EAR.reach && (mill === null || d < mill.d)) {
-        mill = { ...heard(wx, wz, d), turning: spinAt(b.vitality) };
-      }
-    }
     const footing = footingAt(terrain, decks, x, z);
     return {
       speed: body === null ? 0 : Math.hypot(body.vx, body.vz),
       travelling: trip !== null,
-      underfoot: footing.deck
-        ? "deck"
-        : footing.depth > 0.05
-          ? "water"
-          : "ground",
+      underfoot: underfootOf(footing),
       depth: footing.depth,
       night: light.uNightness.value,
       gust: gustAt(x, z, light.uTime.value),
       decline: appliedAir?.decline ?? 0,
       canopy: canopyOver(files.crowns, x, z),
-      stream: stream === null ? null : { ...stream, d: Math.max(0, stream.d) },
-      mill,
+      stream: nearestStreamHeard(files.stations, x, z, heard),
+      mill: nearestMillHeard(files.wheels, x, z, heard),
     };
   }
 
@@ -4082,12 +4247,12 @@ export function createWorld(root: HTMLElement): World {
       bakeMs: Math.round(bakeMs),
       farBakeMs: treeSet.stream.stats().ms,
     }),
-    setActive(on: boolean) {
+    setActive(on: boolean): void {
       active = on;
       if (!on) release();
       if (on) resize();
     },
-    frame: (dt: number, now: number, h: number) => {
+    frame: (dt: number, now: number, h: number): void => {
       if (active && !driving) frame(dt, now, h);
     },
     // Each accessor reads or sets the world's own variable the moment a hook uses it, so a hook sees what the world sees.
@@ -4108,20 +4273,20 @@ export function createWorld(root: HTMLElement): World {
       signs,
       understory,
       wildGrowth,
-      get variants() {
+      get variants(): readonly TreeVariant[] {
         return variants;
       },
-      get treeBlueprints() {
+      get treeBlueprints(): readonly Blueprint[] {
         return treeAsks.map((ask) => ask.blueprint);
       },
       groves,
-      get treeFar() {
+      get treeFar(): readonly FarOf[] {
         return treeFar;
       },
       treeSet,
       bushSet,
       bushesBaked,
-      get thingVitality() {
+      get thingVitality(): ReadonlyMap<string, number> {
         return thingVitality;
       },
       entityOfPlace,
@@ -4129,149 +4294,149 @@ export function createWorld(root: HTMLElement): World {
       walker,
       keys,
       passes,
-      get spec() {
+      get spec(): WorldSpec {
         return world;
       },
-      get code() {
+      get code(): OpenedWorld | null {
         return code;
       },
-      get places() {
+      get places(): WorldPlaces {
         return places;
       },
-      get settlement() {
+      get settlement(): Settlement {
         return settlement;
       },
-      get landmarks() {
+      get landmarks(): readonly Landmark[] {
         return landmarks;
       },
-      get landmarkViews() {
+      get landmarkViews(): readonly PlantView[] {
         return landmarkViews;
       },
-      get landmarkEntities() {
+      get landmarkEntities(): readonly Represented[] {
         return landmarkEntities;
       },
-      get ways() {
+      get ways(): Settled {
         return ways;
       },
-      get built() {
+      get built(): Ways | null {
         return built;
       },
-      get trees() {
+      get trees(): readonly Tree[] {
         return trees;
       },
-      get treeViews() {
+      get treeViews(): readonly Copies[] {
         return treeViews;
       },
-      get treeCopies() {
+      get treeCopies(): readonly number[] {
         return treeCopies;
       },
-      get subjects() {
+      get subjects(): readonly Subject[] {
         return subjects;
       },
-      get shown() {
+      get shown(): Represented | null {
         return shown;
       },
-      get symbolPlacements() {
+      get symbolPlacements(): readonly number[] {
         return symbolPlacements;
       },
-      get decks() {
+      get decks(): readonly Footbed[] {
         return decks;
       },
-      get broken() {
+      get broken(): readonly Deck[] {
         return broken;
       },
-      get solids() {
+      get solids(): Solids {
         return solids;
       },
-      get goal() {
+      get goal(): Walk | null {
         return goal;
       },
-      get tripEnd() {
+      get tripEnd(): TripEnd | null {
         return tripEnd;
       },
-      get skyWorld() {
+      get skyWorld(): Blueprint {
         return skyWorld;
       },
       set skyWorld(b) {
         skyWorld = b;
         hour = Number.NaN;
       },
-      get hour() {
+      get hour(): number {
         return hour;
       },
-      get bakeMs() {
+      get bakeMs(): number {
         return bakeMs;
       },
-      get openingSteps() {
+      get openingSteps(): Readonly<Record<string, number>> {
         return openingSteps;
       },
-      get frameCalls() {
+      get frameCalls(): number {
         return frameCalls;
       },
-      get appliedAir() {
+      get appliedAir(): AppliedAir | null {
         return appliedAir;
       },
-      get trip() {
+      get trip(): TripUnderWay | null {
         return trip;
       },
       set trip(t) {
         trip = t;
       },
-      get body() {
+      get body(): Stride | null {
         return body;
       },
       set body(b) {
         body = b;
       },
-      get arrived() {
+      get arrived(): boolean {
         return arrived;
       },
       set arrived(on) {
         arrived = on;
       },
-      get frozen() {
+      get frozen(): number | null {
         return frozen;
       },
       set frozen(t) {
         frozen = t;
       },
-      get detailPin() {
+      get detailPin(): { readonly x: number; readonly z: number } | null {
         return detailPin;
       },
       set detailPin(at) {
         detailPin = at;
       },
-      get viewPin() {
+      get viewPin(): ViewPin | null {
         return viewPin;
       },
       set viewPin(pin) {
         viewPin = pin;
       },
-      get streamPaused() {
+      get streamPaused(): boolean {
         return streamPaused;
       },
       set streamPaused(on) {
         streamPaused = on;
       },
-      get driving() {
+      get driving(): boolean {
         return driving;
       },
       set driving(on) {
         driving = on;
       },
-      get travelPace() {
+      get travelPace(): number {
         return travelPace;
       },
       set travelPace(pace) {
         travelPace = pace;
       },
-      get forestCopies() {
+      get forestCopies(): number {
         return forestCopies;
       },
       set forestCopies(n) {
         forestCopies = n;
       },
-      get swapping() {
+      get swapping(): Copies | null {
         return swapping;
       },
       set swapping(copy) {

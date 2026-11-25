@@ -31,7 +31,7 @@ function written(v1: "broken" | "fixed"): {
   )
     .filter((f) => f.isFile())
     .map((f) => relative(dir, join(f.parentPath, f.name)).split(sep).join("/"))
-    .sort();
+    .toSorted();
   return { dir, files, text: (path) => readFileSync(join(dir, path), "utf8") };
 }
 
@@ -63,7 +63,7 @@ describe("the showcase's code", () => {
           n.kind === "file" ? [[n.path, n.measures.lines] as const] : [],
         ),
       );
-      expect(files).toEqual([...read.keys()].sort());
+      expect(files).toEqual([...read.keys()].toSorted());
       for (const f of files) {
         expect(text(f).split("\n").length - 1, f).toBe(read.get(f));
       }

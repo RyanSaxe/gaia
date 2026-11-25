@@ -24,7 +24,7 @@ export function webglErrors(): WebGLErrors {
   let capped = false;
   const quoted: string[] = [];
   return {
-    note(message) {
+    note(message): void {
       if (message.startsWith(TOO_MANY)) capped = true;
       if (!WEBGL_ERROR.test(message)) return;
       count++;

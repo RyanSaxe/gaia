@@ -82,12 +82,12 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
   update();
 
   return {
-    frame(c, e) {
+    frame(c, e): void {
       center.copy(c);
       extent = e;
       update();
     },
-    render(renderer, scene, plants, hide) {
+    render(renderer, scene, plants, hide): void {
       const visible = hide.map((o) => o.visible);
       for (const o of hide) o.visible = false;
       for (const p of plants) p.useDepth(true);
@@ -99,7 +99,7 @@ export function createSunShadow(light: SceneLight, size = 2048): SunShadow {
       for (const p of plants) p.useDepth(false);
       hide.forEach((o, i) => (o.visible = visible[i] ?? true));
     },
-    dispose() {
+    dispose(): void {
       target.dispose();
     },
   };

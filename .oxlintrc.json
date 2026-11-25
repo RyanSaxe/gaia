@@ -13,6 +13,7 @@
   "plugins": ["typescript", "unicorn", "oxc", "import"],
   "categories": {
     "correctness": "error",
+    "suspicious": "error",
     "perf": "error"
   },
   "rules": {
@@ -26,11 +27,34 @@
     // Pure/immutable transforms use object and array spreads in `.map()` and
     // `.flatMap()` for copy-on-write semantics where in-place mutation is unsafe.
     "oxc/no-map-spread": "off",
+    // tsconfig.base.json enables `noUncheckedIndexedAccess` on a 3D renderer
+    // full of hot-loop typed arrays (`Float64Array`/`Float32Array`), so ~1,550
+    // verified indexed reads use `as number` without per-vertex throw guards.
+    // `no-explicit-any`, `no-non-null-assertion`, and `no-unnecessary-type-assertion`
+    // remain errors.
+    "typescript/consistent-type-assertions": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    // 3D geometry and graphics helpers take positional coordinates (e.g. x, y, z, w)
+    // without allocating per-vertex options objects inside mesh-building loops.
+    "max-params": "off",
+    // oxlint counts `&&`, `||`, `??` and `?:`, so 10 matches Python C901 <= 8.
+    "complexity": ["error", 10],
+    "max-depth": ["error", 4],
+    "max-nested-callbacks": ["error", 3],
+    "import/no-cycle": "error",
+    // Vite and esbuild bundle side-effect CSS imports directly.
+    "import/no-unassigned-import": ["error", { "allow": ["**/*.css"] }],
+    "no-nested-ternary": "error",
+    "unicorn/no-negated-condition": "error",
     "no-unused-vars": [
       "error",
       { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
     ],
     "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/explicit-function-return-type": "error",
     "no-var": "error",
     "prefer-const": "error",
     "eqeqeq": ["error", "always"],

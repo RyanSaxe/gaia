@@ -123,24 +123,26 @@ const lib = new Library([...STRUCTURE_PRIMITIVES, ...FLORA_PRIMITIVES]);
 const wordsOf = (id: string): string =>
   id.replace(/@\d+$/, "").replace(/-/g, " ");
 
+const named = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+const slotUse = (bp: Blueprint, name: string): string | undefined =>
+  bp.slots[name]?.use;
+
 /**
  * What a composed thing is called, from the parts Jev chose: a building by its walls and its feature ("Fieldstone
  * house with a tower"), a tree or a bush by its frame and its crown ("Branching with leaf strands"), flowers by
  * their drift ("Daisies"), and a landmark or a stone by its form ("Lookout tower", "Boulder").
  */
 export function composedName(bp: Blueprint): string {
-  const named = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-  const frame = bp.slots.form?.use;
-  const crown = bp.slots.crown?.use;
+  const frame = slotUse(bp, "form");
+  const crown = slotUse(bp, "crown");
   if (frame !== undefined && crown !== undefined) {
     return named(`${wordsOf(frame)} with ${wordsOf(crown)}`);
   }
-  const drift = bp.slots.drift?.use;
+  const drift = slotUse(bp, "drift");
   if (drift !== undefined) return named(wordsOf(drift));
-  const form = bp.slots.form?.use;
-  if (form !== undefined) return named(wordsOf(form));
-  const walls = bp.slots.body?.use;
-  const feature = bp.slots.feature?.use;
+  if (frame !== undefined) return named(wordsOf(frame));
+  const walls = slotUse(bp, "body");
+  const feature = slotUse(bp, "feature");
   return named(
     `${walls === undefined ? "" : `${wordsOf(walls)} `}house${feature === undefined ? "" : ` with a ${wordsOf(feature)}`}`,
   );
@@ -215,7 +217,9 @@ export function createSettlement(
     string,
     { readonly members: readonly Building[]; readonly batch: PlantBatch }
   >();
-  const atSite = (b: Building) => ({
+  const atSite = (
+    b: Building,
+  ): { x: number; y: number; z: number; yaw: number } => ({
     x: b.site.x,
     y: b.site.level,
     z: b.site.z,
@@ -230,7 +234,7 @@ export function createSettlement(
         beside: b.beside,
         ...(b.byWater ? { wheel: b.wheel } : {}),
       })),
-    seat(sites) {
+    seat(sites): void {
       buildings.forEach((b, i) => {
         b.site = sites[i] ?? b.site;
         if (b.batchSlot !== null) {
@@ -244,7 +248,7 @@ export function createSettlement(
     signOf: (b) => signOf(b.plan, b.site),
     readingSpotOf: (b) => readingSpotOf(b.plan, b.site),
     views: () => [...batches.values()].map((t) => t.batch),
-    place(held, scene, tileOf) {
+    place(held, scene, tileOf): void {
       const want = new Map<string, Building[]>();
       for (const b of held) {
         want.set(tileOf(b), [...(want.get(tileOf(b)) ?? []), b]);
@@ -278,7 +282,7 @@ export function createSettlement(
         batches.set(key, { members, batch });
       }
     },
-    pick(raycaster) {
+    pick(raycaster): { building: Building; distance: number } | undefined {
       let best: { building: Building; distance: number } | undefined;
       for (const { members, batch } of batches.values()) {
         const hit = batch.pick(raycaster);
@@ -293,7 +297,7 @@ export function createSettlement(
       }
       return best;
     },
-    setVitality(b, v) {
+    setVitality(b, v): void {
       b.vitality = v;
       b.batchSlot?.batch.setVitality(b.batchSlot.member, v);
     },

@@ -18,7 +18,10 @@ export type PainterReply =
   | { readonly id: number; readonly failed: string };
 
 interface WorkerScope {
-  onmessage: ((e: MessageEvent<PainterJob>) => void) | null;
+  addEventListener(
+    type: "message",
+    listener: (e: MessageEvent<PainterJob>) => void,
+  ): void;
   postMessage(message: PainterReply, transfer?: Transferable[]): void;
 }
 
@@ -27,16 +30,20 @@ const scope = globalThis as unknown as WorkerScope;
 /** WebP quality for a stored painting, about 150 KB per page. */
 const KEPT = 0.82;
 
-scope.onmessage = async (e) => {
-  const { id } = e.data;
+async function handleJob(job: PainterJob): Promise<void> {
+  const { id } = job;
   try {
-    const canvas = paint(e.data);
+    const canvas = paint(job);
     const kept = await canvas
       .convertToBlob({ type: "image/webp", quality: KEPT })
       .catch(() => null);
     const painting = canvas.transferToImageBitmap();
     scope.postMessage({ id, painting, kept }, [painting]);
   } catch (error) {
-    scope.postMessage({ id, failed: (error as Error).message });
+    scope.postMessage({ id, failed: (error as Error).message }, []);
   }
-};
+}
+
+scope.addEventListener("message", (e: MessageEvent<PainterJob>): void => {
+  void handleJob(e.data);
+});

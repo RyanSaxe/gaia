@@ -23,18 +23,19 @@ function build(
   ).parts as Part[];
 }
 
+function fieldWords(f: Field): string[] {
+  if (f.type === "scale") return f.levels.map((l) => l.words);
+  if (f.type === "choice") return Object.keys(f.options);
+  return [];
+}
+
 /** Every combination of a drift's settings, each scale at every level. */
 function settings(id: string): Record<string, string>[] {
   let out: Record<string, string>[] = [{}];
   for (const [name, f] of Object.entries(
     lib.get(id).params as Record<string, Field>,
   )) {
-    const words =
-      f.type === "scale"
-        ? f.levels.map((l) => l.words)
-        : f.type === "choice"
-          ? Object.keys(f.options)
-          : [];
+    const words = fieldWords(f);
     out = out.flatMap((s) => words.map((w) => ({ ...s, [name]: w })));
   }
   return out;

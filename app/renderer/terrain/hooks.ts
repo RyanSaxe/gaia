@@ -69,6 +69,103 @@ interface SwapStep {
   readonly wind: Change;
   readonly distance: number;
 }
+
+interface TravelTestResult {
+  readonly pace: number;
+  readonly length: number;
+  readonly seconds: number;
+  readonly setOff: number | null;
+  readonly waited: number;
+  readonly lead: number;
+  readonly checks: [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ][];
+  readonly work: number[];
+  readonly late: ReturnType<WorldInside["thingTiles"]["late"]>;
+  readonly ghosts: number;
+}
+
+interface HeldTravel {
+  readonly pin: ViewPin;
+  readonly image: Uint8Array;
+  readonly s: number;
+  readonly windows: string;
+  readonly mirror: number;
+}
+
+function goingSpan(g: number): number {
+  return GONE.start - g * (GONE.start - GONE.end);
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function farCards(set: FarSet): Record<string, number> {
+  const st = set.stream.stats();
+  return {
+    slots: st.slots,
+    forms: set.forms.count,
+    held: st.held,
+    turnedIn: st.turnedIn,
+    mb: Math.round(st.bytes / 2 ** 20),
+    wanted: st.wanted,
+    farCopies: st.farCopies,
+    carded: st.carded,
+    read: st.read,
+    baked: st.baked,
+  };
+}
+
+function movedWindowBits(before: string, after: string): number {
+  const prev = before.split(" ");
+  return after
+    .split(" ")
+    .reduce(
+      (bits, w, level) => (w === prev[level] ? bits : bits | (1 << level)),
+      0,
+    );
+}
+
+function latticeWaterDepth(world: WorldInside): number {
+  const level = heightAt(
+    world.terrain.lattice,
+    world.walker.x,
+    world.walker.z,
+    world.terrain.waterLevel,
+  );
+  if (level <= -500) return 0;
+  return Math.max(
+    0,
+    level - heightAt(world.terrain.lattice, world.walker.x, world.walker.z),
+  );
+}
+
+function travelLandLead(
+  world: WorldInside,
+  s: number,
+  length: number,
+  lead: number,
+): number {
+  if (s <= 60 || s >= length - 60) return lead;
+  const spacing = frameOf(world.terrain.spec).spacing;
+  const o = world.land.origins[0] as { x: number; z: number };
+  return Math.min(
+    lead,
+    world.walker.x - o.x * spacing,
+    (o.x + CLIP.size) * spacing - world.walker.x,
+    world.walker.z - o.z * spacing,
+    (o.z + CLIP.size) * spacing - world.walker.z,
+  );
+}
 /** Returns every hook of `window.__lab.terrain`, which read and drive `world`. */
 export function worldHooks(
   world: WorldInside,
@@ -263,6 +360,57 @@ export function worldHooks(
     return { steps, wind };
   }
 
+  function rampWind(
+    set: (v: number) => void,
+    levels: readonly number[],
+    t: number,
+  ): number[] {
+    const wind: number[] = [];
+    for (const v of levels) {
+      set(v);
+      settleVitality();
+      for (let j = 0; j < 3; j++) {
+        world.frozen = t + j * 1.7;
+        const before = grabFrame();
+        world.frozen = t + j * 1.7 + 0.5;
+        wind.push(frameChange(before, grabFrame()).worst);
+      }
+    }
+    return wind;
+  }
+
+  function runRampFrames(
+    set: (v: number) => void,
+    from: number,
+    to: number,
+    seconds: number,
+    fps: number,
+    hold: number,
+    snaps: readonly number[],
+    shots: Record<number, string>,
+  ): [number, number, number][] {
+    const steps: [number, number, number][] = [];
+    let before = grabFrame();
+    if (snaps.includes(0)) {
+      shots[0] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+    }
+    const frames = Math.round(seconds * fps);
+    for (let k = 1; k <= frames + Math.round(hold * fps); k++) {
+      const v = from + ((to - from) * Math.min(k, frames)) / frames;
+      if (k <= frames) set(v);
+      // Advance one frame of time so the change eases in. The wind's clock stays frozen.
+      world.frame(1 / fps, performance.now(), world.hour);
+      const now = grabFrame(1);
+      if (snaps.includes(k)) {
+        shots[k] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+      }
+      const change = frameChange(before, now);
+      steps.push([+v.toFixed(4), change.mean, change.worst]);
+      before = now;
+    }
+    return steps;
+  }
+
   /**
    * The ramp test. With the wind's clock frozen, ramps vitality from `from` to
    * `to` over `seconds`, calling `set` once a frame at `fps`. Each frame
@@ -290,41 +438,15 @@ export function worldHooks(
   } {
     const was = world.frozen;
     const t = world.light.uTime.value;
-    const steps: [number, number, number][] = [];
-    const wind: number[] = [];
+    let steps: [number, number, number][] = [];
+    let wind: number[] = [];
     const shots: Record<number, string> = {};
     try {
-      for (const v of [from, (from + to) / 2, to]) {
-        set(v);
-        settleVitality();
-        for (let j = 0; j < 3; j++) {
-          world.frozen = t + j * 1.7;
-          const before = grabFrame();
-          world.frozen = t + j * 1.7 + 0.5;
-          wind.push(frameChange(before, grabFrame()).worst);
-        }
-      }
+      wind = rampWind(set, [from, (from + to) / 2, to], t);
       world.frozen = t;
       set(from);
       settleVitality();
-      let before = grabFrame();
-      if (snaps.includes(0)) {
-        shots[0] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
-      }
-      const frames = Math.round(seconds * fps);
-      for (let k = 1; k <= frames + Math.round(hold * fps); k++) {
-        const v = from + ((to - from) * Math.min(k, frames)) / frames;
-        if (k <= frames) set(v);
-        // Advance one frame of time so the change eases in. The wind's clock stays frozen.
-        world.frame(1 / fps, performance.now(), world.hour);
-        const now = grabFrame(1);
-        if (snaps.includes(k)) {
-          shots[k] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
-        }
-        const change = frameChange(before, now);
-        steps.push([+v.toFixed(4), change.mean, change.worst]);
-        before = now;
-      }
+      steps = runRampFrames(set, from, to, seconds, fps, hold, snaps, shots);
     } finally {
       world.frozen = was;
     }
@@ -343,6 +465,130 @@ export function worldHooks(
       world.detailPin = null;
       world.streamPaused = false;
     }
+  }
+
+  const landWindows = (): string =>
+    world.land.origins.map((o) => `${o.x},${o.z}`).join(" ");
+
+  function holdTravelView(s: number): HeldTravel {
+    const pin: ViewPin = {
+      x: world.walker.x,
+      z: world.walker.z,
+      eye: world.walker.eye,
+      yaw: world.walker.yaw,
+      pitch: world.walker.pitch,
+    };
+    return {
+      pin,
+      image: heldView(pin),
+      s,
+      windows: landWindows(),
+      mirror: world.water.stats().mirrorLevel,
+    };
+  }
+
+  function finishTravelCheck(
+    held: HeldTravel,
+    speed: number,
+  ): {
+    check: TravelTestResult["checks"][number];
+    ghost: number;
+  } {
+    const change = frameChange(held.image, heldView(held.pin));
+    const moved = movedWindowBits(held.windows, landWindows());
+    // The water depth under the person, from the land's own water level. Wading spreads rings.
+    const depth = latticeWaterDepth(world);
+    // The water's mirror plane follows the person's eye, not the pinned view's, so record how far it moved between the two draws.
+    const mirrored = +(world.water.stats().mirrorLevel - held.mirror).toFixed(
+      3,
+    );
+    // Compare the depth walking reads (`waterDepthAt`) with the depth from the land's water level above.
+    const cached = waterDepthAt(world.terrain, world.walker.x, world.walker.z);
+    return {
+      ghost: Math.abs(cached - depth),
+      check: [
+        +held.s.toFixed(1),
+        +speed.toFixed(1),
+        +change.mean.toFixed(3),
+        +change.worst.toFixed(2),
+        moved,
+        +depth.toFixed(2),
+        mirrored,
+        Math.round(held.pin.x),
+        Math.round(held.pin.z),
+      ],
+    };
+  }
+
+  async function startTravelTrip(
+    x0: number,
+    z0: number,
+    x1: number,
+    z1: number,
+    pace: number,
+    pitch: number,
+  ): Promise<WorldInside["trip"]> {
+    // Start at a landing, since the given point may be inside a thing.
+    const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
+    world.walkTo(start.x, start.z, 0, pitch);
+    await Promise.all([
+      world.land.around(start.x, start.z),
+      world.thingTiles.ready(start.x, start.z),
+    ]);
+    const at = world.landingNear(x1, z1);
+    world.travelPace = pace;
+    const started = at !== null && world.travelTo(at, false);
+    world.travelPace = TRAVEL.pace;
+    return started ? world.trip : null;
+  }
+
+  async function runTravelLoop(
+    t: NonNullable<WorldInside["trip"]>,
+    every: number,
+    cap: number,
+  ): Promise<{
+    ended: number;
+    lead: number;
+    checks: TravelTestResult["checks"];
+    work: number[];
+    ghosts: number;
+  }> {
+    const gl = world.renderer.getContext();
+    const pixel = new Uint8Array(4);
+    const checks: TravelTestResult["checks"] = [];
+    const work: number[] = [];
+    let lead = Infinity;
+    let ended = Number.NaN;
+    let held: HeldTravel | null = null;
+    /** The largest difference in meters between the depth walking reads and the land's water level under the person. */
+    let ghosts = 0;
+    let last = performance.now();
+    for (
+      let k = 0;
+      world.trip === t && performance.now() - t.began < cap * 1000;
+      k++
+    ) {
+      // Yield so worker replies arrive between frames, as they do in the app.
+      await waitMs(0);
+      if (held === null && k % every === 0) held = holdTravelView(t.at.s);
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+      const w0 = performance.now();
+      world.frame(dt, now, world.hour);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+      work.push(+(performance.now() - w0).toFixed(2));
+      if (world.trip !== t) ended = performance.now();
+      lead = travelLandLead(world, t.at.s, t.plan.length, lead);
+      if (held !== null && (k % every === every - 1 || world.trip !== t)) {
+        const result = finishTravelCheck(held, t.at.v);
+        ghosts = Math.max(ghosts, result.ghost);
+        checks.push(result.check);
+        held = null;
+      }
+    }
+    return { ended, lead, checks, work, ghosts };
   }
 
   /**
@@ -370,152 +616,16 @@ export function worldHooks(
     every = 3,
     cap = 400,
     pitch = -0.05,
-  ) {
-    // Start at a landing, since the given point may be inside a thing.
-    const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
-    const sx = start.x;
-    const sz = start.z;
-    world.walkTo(sx, sz, 0, pitch);
-    await Promise.all([
-      world.land.around(sx, sz),
-      world.thingTiles.ready(sx, sz),
-    ]);
-    const at = world.landingNear(x1, z1);
-    world.travelPace = pace;
-    const started = at !== null && world.travelTo(at, false);
-    world.travelPace = TRAVEL.pace;
-    const t = world.trip;
-    if (!started || t === null) return null;
-    const gl = world.renderer.getContext();
-    const pixel = new Uint8Array(4);
+  ): Promise<TravelTestResult | null> {
+    const t = await startTravelTrip(x0, z0, x1, z1, pace, pitch);
+    if (t === null) return null;
     const was = world.frozen;
     world.frozen = world.light.uTime.value;
     world.driving = true;
     world.thingTiles.late();
-    const checks: [
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-      number,
-    ][] = [];
-    /** Each land level's window origin, to find which levels moved since `held`'s view was drawn. */
-    const windows = (): string =>
-      world.land.origins.map((o) => `${o.x},${o.z}`).join(" ");
-    const work: number[] = [];
-    let lead = Infinity;
-    let ended = Number.NaN;
-    let held: {
-      pin: ViewPin;
-      image: Uint8Array;
-      s: number;
-      windows: string;
-      mirror: number;
-    } | null = null;
-    /** The largest difference in meters between the depth walking reads and the land's water level under the person. */
-    let ghosts = 0;
-    let last = performance.now();
+    let run: Awaited<ReturnType<typeof runTravelLoop>>;
     try {
-      for (
-        let k = 0;
-        world.trip === t && performance.now() - t.began < cap * 1000;
-        k++
-      ) {
-        // Yield so worker replies arrive between frames, as they do in the app.
-        await new Promise((r) => setTimeout(r, 0));
-        if (held === null && k % every === 0) {
-          const pin = {
-            x: world.walker.x,
-            z: world.walker.z,
-            eye: world.walker.eye,
-            yaw: world.walker.yaw,
-            pitch: world.walker.pitch,
-          };
-          held = {
-            pin,
-            image: heldView(pin),
-            s: t.at.s,
-            windows: windows(),
-            mirror: world.water.stats().mirrorLevel,
-          };
-        }
-        const now = performance.now();
-        const dt = Math.min(0.1, (now - last) / 1000);
-        last = now;
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        const w0 = performance.now();
-        world.frame(dt, now, world.hour);
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-        work.push(+(performance.now() - w0).toFixed(2));
-        if (world.trip !== t) ended = performance.now();
-        if (t.at.s > 60 && t.at.s < t.plan.length - 60) {
-          const spacing = frameOf(world.terrain.spec).spacing;
-          const o = world.land.origins[0] as { x: number; z: number };
-          lead = Math.min(
-            lead,
-            world.walker.x - o.x * spacing,
-            (o.x + CLIP.size) * spacing - world.walker.x,
-            world.walker.z - o.z * spacing,
-            (o.z + CLIP.size) * spacing - world.walker.z,
-          );
-        }
-        if (held !== null && (k % every === every - 1 || world.trip !== t)) {
-          const change = frameChange(held.image, heldView(held.pin));
-          const before = held.windows.split(" ");
-          const moved = windows()
-            .split(" ")
-            .reduce(
-              (bits, w, k) => (w === before[k] ? bits : bits | (1 << k)),
-              0,
-            );
-          // The water depth under the person, from the land's own water level. Wading spreads rings.
-          const level = heightAt(
-            world.terrain.lattice,
-            world.walker.x,
-            world.walker.z,
-            world.terrain.waterLevel,
-          );
-          const depth =
-            level > -500
-              ? Math.max(
-                  0,
-                  level -
-                    heightAt(
-                      world.terrain.lattice,
-                      world.walker.x,
-                      world.walker.z,
-                    ),
-                )
-              : 0;
-          // The water's mirror plane follows the person's eye, not the pinned view's, so record how far it moved between the two draws.
-          const mirrored = +(
-            world.water.stats().mirrorLevel - held.mirror
-          ).toFixed(3);
-          // Compare the depth walking reads (`waterDepthAt`) with the depth from the land's water level above.
-          const cached = waterDepthAt(
-            world.terrain,
-            world.walker.x,
-            world.walker.z,
-          );
-          ghosts = Math.max(ghosts, Math.abs(cached - depth));
-          checks.push([
-            +held.s.toFixed(1),
-            +t.at.v.toFixed(1),
-            +change.mean.toFixed(3),
-            +change.worst.toFixed(2),
-            moved,
-            +depth.toFixed(2),
-            mirrored,
-            Math.round(held.pin.x),
-            Math.round(held.pin.z),
-          ]);
-          held = null;
-        }
-      }
+      run = await runTravelLoop(t, every, cap);
     } finally {
       world.driving = false;
       world.frozen = was;
@@ -526,16 +636,16 @@ export function worldHooks(
       pace,
       length: Math.round(t.plan.length),
       seconds: +(
-        ((Number.isNaN(ended) ? performance.now() : ended) - t.began) /
+        ((Number.isNaN(run.ended) ? performance.now() : run.ended) - t.began) /
         1000
       ).toFixed(1),
       setOff: t.setOff === null ? null : Math.round(t.setOff - t.began),
       waited: +t.waited.toFixed(1),
-      lead: Math.round(lead),
-      checks,
-      work,
+      lead: Math.round(run.lead),
+      checks: run.checks,
+      work: run.work,
       late: world.thingTiles.late(),
-      ghosts: +ghosts.toFixed(2),
+      ghosts: +run.ghosts.toFixed(2),
     };
   }
 
@@ -639,8 +749,6 @@ export function worldHooks(
       swapPx * FAR.band - f * swapPx * (FAR.band - 1);
     const leavePx = swapPx / FAR.leave;
     const leaving = (g: number): number => swapPx - g * (swapPx - leavePx);
-    const going = (g: number): number =>
-      GONE.start - g * (GONE.start - GONE.end);
     const others = world.instanced().filter((o) => o.far !== undefined);
     const hidden = others.map((o) => o.object.visible);
     for (const o of others) o.object.visible = false;
@@ -733,7 +841,7 @@ export function worldHooks(
         leaving: step(copy, leaving(0.5), leaving(0.55)),
         end: step(copy, leavePx + 0.1, leavePx - 0.1),
         // A crown too small to see dissolves over hundreds of meters, so each of these is one step of walking, measured over a block.
-        dissolving: walk(copy, going(0.5), WALK_STEP, 64),
+        dissolving: walk(copy, goingSpan(0.5), WALK_STEP, 64),
         gone: walk(
           copy,
           (2 * crown.radius * focal) / (at(GONE.end) - WALK_STEP / 2),
@@ -788,22 +896,26 @@ export function worldHooks(
     });
   }
 
-  /** A far form set's slot usage as plain numbers, for reports. */
-  const farCards = (set: FarSet): Record<string, number> => {
-    const st = set.stream.stats();
-    return {
-      slots: st.slots,
-      forms: set.forms.count,
-      held: st.held,
-      turnedIn: st.turnedIn,
-      mb: Math.round(st.bytes / 2 ** 20),
-      wanted: st.wanted,
-      farCopies: st.farCopies,
-      carded: st.carded,
-      read: st.read,
-      baked: st.baked,
-    };
-  };
+  async function watchPaintJob(
+    job: Promise<void>,
+    base: Uint8Array | null,
+    changes: number[],
+  ): Promise<void> {
+    if (base !== null) {
+      const settled = Symbol("settled");
+      const done = job.then(
+        () => settled,
+        () => settled,
+      );
+      for (;;) {
+        const raced = await Promise.race([done, waitMs(100)]);
+        if (raced === settled) break;
+        changes.push(frameChange(base, grabFrame()).worst);
+      }
+    }
+    await job;
+    if (base !== null) changes.push(frameChange(base, grabFrame()).worst);
+  }
 
   return {
     /**
@@ -830,7 +942,7 @@ export function worldHooks(
         triangles: world.landmarkViews[i]?.triangles,
       })),
     /** Sets the vitality of every landmark's entity, 0 to 1, which also changes the trails they join. */
-    landmarkVitality: (v: number) => {
+    landmarkVitality: (v: number): void => {
       world.setVitality(new Map(world.landmarkEntities.map((e) => [e.id, v])));
       for (const view of world.landmarkPool.values()) view.setVitality(v);
     },
@@ -838,7 +950,7 @@ export function worldHooks(
      * Sets vitality live by a thing's path, or for every building or landmark entity with that name. It changes
      * everywhere the thing shows and the wear of every trail it joins.
      */
-    entityVitality: (key: string, v: number) => {
+    entityVitality: (key: string, v: number): void => {
       const named = [
         ...world.settlement.buildings.map((b) => b.represented),
         ...world.landmarkEntities,
@@ -909,12 +1021,12 @@ export function worldHooks(
         readingSpot: world.settlement.readingSpotOf(b),
       })),
     /** Sets building `i`'s vitality, and its sign's. */
-    vitality: (i: number, v: number) => {
+    vitality: (i: number, v: number): void => {
       const b = world.settlement.buildings[i];
       if (b !== undefined) world.setVitality(new Map([[b.represented.id, v]]));
     },
     /** Walks up to subject `i` (buildings first, then trees) and shows its card on arrival. */
-    inspect: (i: number) => {
+    inspect: (i: number): void => {
       const s = world.subjects[i];
       if (s !== undefined) world.approach(s);
     },
@@ -936,7 +1048,7 @@ export function worldHooks(
     walk: (x: number, z: number, yawDeg: number, pitchDeg = -3) =>
       world.walkTo(x, z, (yawDeg * Math.PI) / 180, (pitchDeg * Math.PI) / 180),
     /** Sends the person to the landing nearest (x, z), as a pick on the map does, at `pace` along the tread or straight across. Returns false when neither route reaches it. */
-    travel: (x: number, z: number, pace: number = TRAVEL.pace) => {
+    travel: (x: number, z: number, pace: number = TRAVEL.pace): boolean => {
       const at = world.landingNear(x, z);
       world.travelPace = pace;
       const going = at !== null && world.travelTo(at, false);
@@ -944,7 +1056,7 @@ export function worldHooks(
       return going;
     },
     /** How far inside each land level's window the person is, in meters, finest first. This is the land's lead, which a trip must not outrun. */
-    landLead: () => {
+    landLead: (): number[] => {
       const spacing = frameOf(world.terrain.spec).spacing;
       return world.land.origins.map((o, k) => {
         const unit = spacing * 2 ** k;
@@ -1002,7 +1114,22 @@ export function worldHooks(
      * at 60 frames a second without moving the person. Returns its length,
      * how much of it is on the tread and how long it takes.
      */
-    tripTime: (x0: number, z0: number, x1: number, z1: number) => {
+    tripTime: (
+      x0: number,
+      z0: number,
+      x1: number,
+      z1: number,
+    ): {
+      by: "near" | "trails" | "across";
+      planMs: number;
+      gap: number;
+      off: [number, number];
+      straight: number;
+      length: number;
+      trails: number | null;
+      seconds: number;
+      walking: number;
+    } | null => {
       // Start at a landing, since the given point may be inside a thing.
       const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
       const sx = start.x;
@@ -1065,7 +1192,12 @@ export function worldHooks(
      * "stepping stones", "cairn" or "watermill (ruin)", walks there facing it
      * and returns the stop, or null when this world has none.
      */
-    tour: (name?: string) => {
+    tour: (
+      name?: string,
+    ):
+      | { name: string; what: string; x: number; z: number }[]
+      | TourStop
+      | null => {
       const stops = tour();
       if (name === undefined) {
         return stops.map((s) => ({
@@ -1116,7 +1248,7 @@ export function worldHooks(
         yaw: number;
         pitch: number;
       } | null,
-    ) => {
+    ): void => {
       world.viewPin = pin;
       if (pin === null) return;
       world.walkTo(pin.x, pin.z, pin.yaw, pin.pitch);
@@ -1146,7 +1278,7 @@ export function worldHooks(
      * patches and what grows there, and the lots and water of the areas that
      * pool them. Nothing rebakes. Returns how many files it set.
      */
-    fileVitality: (path: string, v: number) => {
+    fileVitality: (path: string, v: number): number => {
       const under = (p: string): boolean =>
         path === "" || p === path || p.startsWith(`${path}/`);
       const files = (world.code?.world.patches ?? []).filter((p) =>
@@ -1192,13 +1324,13 @@ export function worldHooks(
     placements: () => world.understory.placements(),
     showUnderstory: (on: boolean) => world.understory.show(on),
     /** Shows or hides what drifts through the air, for comparing frame costs. */
-    showDrifts: (on: boolean) => {
+    showDrifts: (on: boolean): void => {
       world.drifts.object.visible = on;
     },
     /** For each drifting form: its density in its densest region, 0 to 1, how many of its pieces can show, and how many trees shed it now. */
     drifts: () => world.drifts.state(),
     /** Shows or hides the grass, for comparing frame costs and looking at the bare ground. */
-    showGrass: (on: boolean) => {
+    showGrass: (on: boolean): void => {
       world.grass.mesh.visible = on;
     },
     /**
@@ -1208,7 +1340,7 @@ export function worldHooks(
      * the ground's rings and the wild bushes. Moving only this point shows
      * exactly what a step of walking changes in the detail drawn.
      */
-    detailCenter: (at: [number, number] | null) => {
+    detailCenter: (at: [number, number] | null): void => {
       world.detailPin = at === null ? null : { x: at[0], z: at[1] };
     },
     /**
@@ -1216,7 +1348,7 @@ export function worldHooks(
      * pass, from what the renderer drew. The passes are the sun's shadow, the
      * water's mirror and the view.
      */
-    drawn: () => {
+    drawn: (): ReturnType<typeof tallyFrame> => {
       const kinds = new Map<THREE.Object3D, string>();
       const name = (
         kind: string,
@@ -1290,17 +1422,17 @@ export function worldHooks(
      * first. Nothing the person sees may change. Returns the worst change and
      * each look's [seconds, change, level 0's window origin].
      */
-    standCheck: async (seconds = 30) => {
+    standCheck: async (
+      seconds = 30,
+    ): Promise<{ worst: number; looks: [number, number, string][] }> => {
       const was = world.frozen;
       world.frozen = world.light.uTime.value;
-      const wait = (ms: number): Promise<void> =>
-        new Promise((r) => setTimeout(r, ms));
       try {
-        await wait(300);
+        await waitMs(300);
         const base = grabFrame();
         const looks: [number, number, string][] = [];
         for (let t = 0.5; t <= seconds; t += 0.5) {
-          await wait(500);
+          await waitMs(500);
           const o = world.land.origins[0] as { x: number; z: number };
           looks.push([
             t,
@@ -1325,17 +1457,27 @@ export function worldHooks(
      * painter's own cost. With `near` it paints the nearest things instead,
      * which need no land of their own, to measure a painting by itself.
      */
-    paintCheck: async (count = 6, look = true, near = false) => {
+    paintCheck: async (
+      count = 6,
+      look = true,
+      near = false,
+    ): Promise<{
+      painted: string[];
+      worst: number;
+      checks: number;
+      intervals: number[];
+      first: string | null;
+    }> => {
       const from = (s: Subject): number =>
         Math.hypot(s.x - world.walker.x, s.z - world.walker.z);
       const far = near
         ? world.subjects
             .filter((s) => from(s) <= PAINTING.near)
-            .sort((a, b) => from(a) - from(b))
+            .toSorted((a, b) => from(a) - from(b))
             .slice(0, count)
         : world.subjects
             .filter((s) => from(s) > PAINTING.near)
-            .sort((a, b) => from(b) - from(a))
+            .toSorted((a, b) => from(b) - from(a))
             .slice(0, count);
       const was = world.frozen;
       world.frozen = world.light.uTime.value;
@@ -1348,37 +1490,24 @@ export function worldHooks(
         if (going) requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
-      const wait = (ms: number): Promise<void> =>
-        new Promise((r) => setTimeout(r, ms));
       try {
-        await wait(300);
+        await waitMs(300);
         const base = look ? grabFrame() : null;
         const changes: number[] = [];
         let first: string | null = null;
         for (const s of far) {
-          let done = false;
-          const job = world
-            .viewOf(s.represented.id, 520, 660)
-            .then((p) => {
-              if (first !== null || p === null) return;
-              const out = document.createElement("canvas");
-              out.width = p.color.width;
-              out.height = p.color.height;
-              const ctx = out.getContext("2d") as CanvasRenderingContext2D;
-              const image = ctx.createImageData(p.color.width, p.color.height);
-              image.data.set(p.color.data);
-              ctx.putImageData(image, 0, 0);
-              first = out.toDataURL("image/jpeg", 0.9);
-            })
-            .finally(() => {
-              done = true;
-            });
-          while (!done && base !== null) {
-            await wait(100);
-            changes.push(frameChange(base, grabFrame()).worst);
-          }
-          await job;
-          if (base !== null) changes.push(frameChange(base, grabFrame()).worst);
+          const job = world.viewOf(s.represented.id, 520, 660).then((p) => {
+            if (first !== null || p === null) return;
+            const out = document.createElement("canvas");
+            out.width = p.color.width;
+            out.height = p.color.height;
+            const ctx = out.getContext("2d") as CanvasRenderingContext2D;
+            const image = ctx.createImageData(p.color.width, p.color.height);
+            image.data.set(p.color.data);
+            ctx.putImageData(image, 0, 0);
+            first = out.toDataURL("image/jpeg", 0.9);
+          });
+          await watchPaintJob(job, base, changes);
         }
         return {
           painted: far.map((s) => s.represented.id),
@@ -1410,11 +1539,11 @@ export function worldHooks(
     /** Shows or hides the far tree cards, to see what they draw. */
     showFarTrees: (on: boolean) => world.treeSet.forms.cards.show(on),
     /** Shows or hides every tree, for comparing frame costs. */
-    showTrees: (on: boolean) => {
+    showTrees: (on: boolean): void => {
       for (const v of world.treeViews) v.object.visible = on;
     },
     /** Draw calls in one whole frame: the shadow, mirror and view passes together. */
-    calls: () => {
+    calls: (): number => {
       world.renderer.info.autoReset = false;
       world.renderer.info.reset();
       world.frame(0, performance.now(), world.hour);
@@ -1423,7 +1552,7 @@ export function worldHooks(
       return calls;
     },
     /** Draws `count` frames back to back and waits for the GPU: milliseconds per frame, shadows included. */
-    bench: (count: number) => {
+    bench: (count: number): number => {
       const gl = world.renderer.getContext();
       const pixel = new Uint8Array(4);
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
@@ -1433,7 +1562,7 @@ export function worldHooks(
       return (performance.now() - t0) / count;
     },
     /** Walks straight ahead for `seconds` at walking pace, as if W were held, and reports where the walk ended. */
-    stride: (seconds: number) => {
+    stride: (seconds: number): { x: number; z: number; depth: number } => {
       for (let k = 0; k < Math.round(seconds * 60); k++) {
         const next = walkStep(
           world.terrain,
@@ -1521,7 +1650,7 @@ export function worldHooks(
         hold?: number;
         to?: readonly [number, number];
       },
-    ) => {
+    ): number[][] => {
       world.release();
       if (drive.to !== undefined) world.setGoal(drive.to[0], drive.to[1]);
       for (const k of drive.keys ?? []) world.press(k);
@@ -1566,7 +1695,7 @@ export function worldHooks(
     /** The eye height, the water depth and how far the person swims at their spot. */
     stance: () => stanceAt(world.terrain, world.walker.x, world.walker.z),
     /** Where the ground at (x, z) shows on screen, in CSS pixels from the page's top left. Null when it is behind the view. */
-    onScreen: (x: number, z: number) => {
+    onScreen: (x: number, z: number): { x: number; y: number } | null => {
       const p = new THREE.Vector3(
         x,
         groundHeightAt(world.terrain, x, z),
@@ -1594,7 +1723,9 @@ export function worldHooks(
      * Places every code tree `copies` times, each copy on its own patch, to measure at scale. 1 restores the world as
      * it is. The bake thread places them again. Not for a world a person walks.
      */
-    forest: async (copies: number) => {
+    forest: async (
+      copies: number,
+    ): Promise<{ trees: number; understory: Record<string, number> }> => {
       world.forestCopies = Math.max(1, Math.round(copies));
       await world.rebake(world.spec);
       return {
@@ -1603,7 +1734,7 @@ export function worldHooks(
       };
     },
     /** Forces every instanced blueprint's detail ("full" or "far"), or lets distance choose ("auto"). */
-    detail: (mode: DetailMode) => {
+    detail: (mode: DetailMode): void => {
       for (const v of world.instanced()) v.detail = mode;
     },
     /** Trees, builds, each blueprint's levels, and the copies and triangles the last pass drew. */

@@ -75,7 +75,7 @@ type Erased = (
 function samples(p: AnyPrimitive): Stored[] {
   const options = Math.max(
     3,
-    ...(Object.values(p.params) as Field[]).map((f) =>
+    ...Object.values<Field>(p.params).map((f) =>
       f.type === "choice" ? Object.keys(f.options).length : 0,
     ),
   );
@@ -84,7 +84,7 @@ function samples(p: AnyPrimitive): Stored[] {
     (_, i) => [0, 0.5, 1][i % 3] as number,
   ).map((at, i) => {
     const out: Stored = {};
-    for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
+    for (const [name, f] of Object.entries<Field>(p.params)) {
       if (f.type === "scale") {
         out[name] =
           f.levels[Math.round(at * (f.levels.length - 1))]?.words ?? "";
@@ -125,16 +125,13 @@ const plans: BuildingPlan[] = lib
 const rocks: Built[] = lib
   .forRole("Rock")
   .flatMap((p) => samples(p).map((s) => build(p, s, null, 13) as Built));
-const inputFor = (p: AnyPrimitive): unknown[] =>
-  p.role === "Ornament"
-    ? [anchors]
-    : p.role === "Overgrowth"
-      ? rocks
-      : PLAN_ROLES.has(p.role)
-        ? plans
-        : SOURCE_ROLES.has(p.role)
-          ? [null]
-          : skeletons;
+function inputFor(p: AnyPrimitive): unknown[] {
+  if (p.role === "Ornament") return [anchors];
+  if (p.role === "Overgrowth") return rocks;
+  if (PLAN_ROLES.has(p.role)) return plans;
+  if (SOURCE_ROLES.has(p.role)) return [null];
+  return skeletons;
+}
 
 const allFinite = (a: Float32Array): boolean => a.every(Number.isFinite);
 const inUnit = (a: Float32Array): boolean => a.every((x) => x >= 0 && x <= 1);
@@ -208,6 +205,93 @@ describe("manifest", () => {
 // Needles on a bush build a juniper of 280 tufts per sample, about 12 s alone and over 20 s on a busy CI runner.
 const SLOW: Readonly<Record<string, number>> = { "needles@1": 60_000 };
 
+function expectOptionalChannels(part: Part): void {
+  const c = part.channels;
+  // Optional channels, when present, cover every vertex and stay in range.
+  expect(
+    [c.grow, c.rot].every(
+      (a) => a === undefined || (a.length === part.shade.length && inUnit(a)),
+    ),
+  ).toBe(true);
+  expect(
+    c.fall === undefined ||
+      (c.fall.length === part.shade.length * 4 &&
+        allFinite(c.fall) &&
+        c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1))),
+  ).toBe(true);
+  expect(
+    c.spin === undefined ||
+      (c.spin.length === part.shade.length * 3 && allFinite(c.spin)),
+  ).toBe(true);
+  // A grain's kind is one of `GRAIN`, which the shader can rot.
+  expect(
+    c.grain === undefined ||
+      (c.grain.length === part.shade.length * 3 &&
+        allFinite(c.grain) &&
+        c.grain.every(
+          (x, i) => i % 3 !== 2 || Object.values(GRAIN).includes(x as never),
+        )),
+  ).toBe(true);
+}
+
+function expectValidPart(part: Part): void {
+  const c = part.channels;
+  expect(
+    allFinite(part.positions) &&
+      allFinite(part.normals) &&
+      allFinite(c.pivot) &&
+      allFinite(c.bough) &&
+      allFinite(c.twig),
+  ).toBe(true);
+  expect(
+    c.bough.length === part.shade.length * 3 &&
+      c.twig.length === part.shade.length * 3,
+  ).toBe(true);
+  expect(
+    [c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(inUnit),
+  ).toBe(true);
+  expect(c.close.length).toBe(part.shade.length);
+  expectOptionalChannels(part);
+  expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
+  expect(cutsKnown(part)).toBe(true);
+  expect(part.indices.length / 3).toBeLessThanOrEqual(TRIANGLE_BUDGET);
+}
+
+function expectWholePieces(part: Part): void {
+  const n = part.shade.length;
+  const id = (v: number): number => part.piece[v * 2] as number;
+  expect(part.piece.length).toBe(n * 2);
+  let split = 0;
+  for (let t = 0; t < part.indices.length; t += 3) {
+    const a = id(part.indices[t] as number);
+    if (
+      id(part.indices[t + 1] as number) !== a ||
+      id(part.indices[t + 2] as number) !== a
+    ) {
+      split++;
+    }
+  }
+  const sizes = new Map<number, number>();
+  let mixed = 0;
+  for (let v = 0; v < n; v++) {
+    const size = part.piece[v * 2 + 1] as number;
+    const was = sizes.get(id(v));
+    if (was === undefined) sizes.set(id(v), size);
+    else if (!Object.is(was, size)) mixed++;
+  }
+  expect(split, "triangles across two pieces").toBe(0);
+  expect(mixed, "vertices sized unlike their piece").toBe(0);
+}
+
+function partRespondsToVitality(part: Part): boolean {
+  const healthy = applyVitality(part, 1);
+  const failing = applyVitality(part, 0);
+  return (
+    healthy.positions.some((x, i) => x !== failing.positions[i]) ||
+    healthy.colors.some((x, i) => x !== failing.colors[i])
+  );
+}
+
 describe.each(PRIMITIVES.map((p) => [p.id, p] as const))(
   "%s",
   { timeout: 20_000 },
@@ -233,59 +317,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))(
           for (const input of inputFor(p)) {
             for (const part of (build(p, s, input, 5) as Built)
               .parts as Part[]) {
-              expect(
-                allFinite(part.positions) &&
-                  allFinite(part.normals) &&
-                  allFinite(part.channels.pivot) &&
-                  allFinite(part.channels.bough) &&
-                  allFinite(part.channels.twig),
-              ).toBe(true);
-              expect(
-                part.channels.bough.length === part.shade.length * 3 &&
-                  part.channels.twig.length === part.shade.length * 3,
-              ).toBe(true);
-              const c = part.channels;
-              expect(
-                [c.loss, c.droop, c.wither, c.glow, c.close, part.shade].every(
-                  inUnit,
-                ),
-              ).toBe(true);
-              expect(c.close.length).toBe(part.shade.length);
-              // Optional channels, when present, cover every vertex and stay in range.
-              expect(
-                [c.grow, c.rot].every(
-                  (a) =>
-                    a === undefined ||
-                    (a.length === part.shade.length && inUnit(a)),
-                ),
-              ).toBe(true);
-              expect(
-                c.fall === undefined ||
-                  (c.fall.length === part.shade.length * 4 &&
-                    allFinite(c.fall) &&
-                    c.fall.every((x, i) => i % 4 !== 3 || (x >= 0 && x <= 1))),
-              ).toBe(true);
-              expect(
-                c.spin === undefined ||
-                  (c.spin.length === part.shade.length * 3 &&
-                    allFinite(c.spin)),
-              ).toBe(true);
-              // A grain's kind is one of `GRAIN`, which the shader can rot.
-              expect(
-                c.grain === undefined ||
-                  (c.grain.length === part.shade.length * 3 &&
-                    allFinite(c.grain) &&
-                    c.grain.every(
-                      (x, i) =>
-                        i % 3 !== 2 ||
-                        Object.values(GRAIN).includes(x as never),
-                    )),
-              ).toBe(true);
-              expect(part.tint.every((x) => x >= -0.1 && x <= 0.1)).toBe(true);
-              expect(cutsKnown(part)).toBe(true);
-              expect(part.indices.length / 3).toBeLessThanOrEqual(
-                TRIANGLE_BUDGET,
-              );
+              expectValidPart(part);
             }
           }
         }
@@ -320,29 +352,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))(
           for (const input of inputFor(p).slice(0, 2)) {
             for (const part of (build(p, s, input, 5) as Built)
               .parts as Part[]) {
-              const n = part.shade.length;
-              const id = (v: number): number => part.piece[v * 2] as number;
-              expect(part.piece.length).toBe(n * 2);
-              let split = 0;
-              for (let t = 0; t < part.indices.length; t += 3) {
-                const a = id(part.indices[t] as number);
-                if (
-                  id(part.indices[t + 1] as number) !== a ||
-                  id(part.indices[t + 2] as number) !== a
-                ) {
-                  split++;
-                }
-              }
-              const sizes = new Map<number, number>();
-              let mixed = 0;
-              for (let v = 0; v < n; v++) {
-                const size = part.piece[v * 2 + 1] as number;
-                const was = sizes.get(id(v));
-                if (was === undefined) sizes.set(id(v), size);
-                else if (!Object.is(was, size)) mixed++;
-              }
-              expect(split, "triangles across two pieces").toBe(0);
-              expect(mixed, "vertices sized unlike their piece").toBe(0);
+              expectWholePieces(part);
             }
           }
         }
@@ -358,15 +368,7 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))(
           const built = build(p, samples(p)[1] as Stored, input, 5) as Built;
           expect(built.parts.length, `input ${k}`).toBeGreaterThan(0);
           for (const part of built.parts as Part[]) {
-            const healthy = applyVitality(part, 1);
-            const failing = applyVitality(part, 0);
-            const moved = healthy.positions.some(
-              (x, i) => x !== failing.positions[i],
-            );
-            if (
-              !moved &&
-              !healthy.colors.some((x, i) => x !== failing.colors[i])
-            ) {
+            if (!partRespondsToVitality(part)) {
               unchanged.push(`${part.swatch} on input ${k}`);
             }
           }
@@ -385,18 +387,20 @@ function memberSubsets(members: readonly string[]): string[][] {
   return subsets;
 }
 
+function fieldValues(f: Field): Stored[string][] {
+  if (f.type === "scale") {
+    return [f.levels[Math.floor(f.levels.length / 2)]?.words ?? ""];
+  }
+  if (f.type === "choice") return Object.keys(f.options);
+  if (f.type === "flag") return [false, true];
+  return memberSubsets(Object.keys(f.members));
+}
+
 /** Every combination of a primitive's choices, flags and sets, its scales at their middle level. */
 function combinations(p: AnyPrimitive): Stored[] {
   let out: Stored[] = [{}];
-  for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
-    const values: Stored[string][] =
-      f.type === "scale"
-        ? [f.levels[Math.floor(f.levels.length / 2)]?.words ?? ""]
-        : f.type === "choice"
-          ? Object.keys(f.options)
-          : f.type === "flag"
-            ? [false, true]
-            : memberSubsets(Object.keys(f.members));
+  for (const [name, f] of Object.entries<Field>(p.params)) {
+    const values = fieldValues(f);
     out = out.flatMap((s) => values.map((v) => ({ ...s, [name]: v })));
   }
   return out;
@@ -415,6 +419,94 @@ const inFootprint = (
 /** Dressings that can fence a garden round a building. */
 const gardens = lib.forRole("Dressing").filter((p) => "extras" in p.params);
 
+function fenceWalkCrossings(
+  fence: Part,
+  door: BuildingPlan["openings"][number],
+  nx: number,
+  nz: number,
+  ux: number,
+  uz: number,
+): number {
+  let across = 0;
+  for (let t = 0; t < fence.indices.length; t += 3) {
+    const vs = [0, 1, 2].map((k) => fence.indices[t + k] as number);
+    const out = vs.map(
+      (v) =>
+        ((fence.positions[v * 3] as number) - door.position[0]) * nx +
+        ((fence.positions[v * 3 + 2] as number) - door.position[2]) * nz,
+    );
+    const side = vs.map(
+      (v) =>
+        ((fence.positions[v * 3] as number) - door.position[0]) * ux +
+        ((fence.positions[v * 3 + 2] as number) - door.position[2]) * uz,
+    );
+    if (
+      Math.min(...out) > 0 &&
+      Math.min(...side) < 0.25 &&
+      Math.max(...side) > -0.25
+    ) {
+      across++;
+    }
+  }
+  return across;
+}
+
+function expectDoorReachable(
+  plan: BuildingPlan,
+  stored: Stored,
+  seed: number,
+): void {
+  const door = plan.openings.find((o) => o.kind === "door");
+  const m = door === undefined ? undefined : plan.masses[door.mass];
+  if (door === undefined || m === undefined) {
+    throw new Error(`${JSON.stringify(stored)}: no door`);
+  }
+  const [nx, , nz] = door.normal;
+  const [ux, uz] = [nz, -nx];
+  const half = (ax: number, az: number): number =>
+    Math.abs(ax) * (m.width / 2) +
+    Math.abs(az) * ((m.round ? m.width : m.depth) / 2);
+  const [dx, dz] = [door.position[0] - m.x, door.position[2] - m.z];
+  // In its wall's face, and the whole door between the wall's ends.
+  expect(
+    Math.abs(dx * nx + dz * nz - half(nx, nz)),
+    JSON.stringify(stored),
+  ).toBeLessThan(0.01);
+  expect(
+    Math.abs(dx * ux + dz * uz) + door.width / 2,
+    JSON.stringify(stored),
+  ).toBeLessThanOrEqual(half(ux, uz));
+  // Nothing of another mass stands just outside it.
+  for (const along of [-door.width / 2, 0, door.width / 2]) {
+    const [x, z] = [
+      door.position[0] + ux * along + nx * 0.06,
+      door.position[2] + uz * along + nz * 0.06,
+    ];
+    expect(
+      plan.masses.some((o, i) => i !== door.mass && inFootprint(o, x, z)),
+      JSON.stringify(stored),
+    ).toBe(false);
+  }
+  // A walk half a meter wide leads straight out from the door, and no triangle of a garden's fence in front of the door reaches into it.
+  for (const garden of gardens) {
+    const fence = (
+      build(
+        garden,
+        { extras: ["fence"], walk: "stepping stones" },
+        plan,
+        seed,
+      ) as Built
+    ).parts.find((part) => part.swatch === "wall");
+    if (fence === undefined) {
+      throw new Error(`${garden.id} ${JSON.stringify(stored)}: no fence`);
+    }
+    expect(
+      fenceWalkCrossings(fence, door, nx, nz, ux, uz),
+      `${garden.id} ${JSON.stringify(stored)}`,
+    ).toBe(0);
+  }
+}
+
 describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))(
   "%s",
   { timeout: 20_000 },
@@ -423,85 +515,88 @@ describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))(
     it("leaves every door reachable from outside: no other wing stands in front of it, and a garden's fence leaves its walk open", () => {
       for (const stored of combinations(p)) {
         for (const seed of [1, 2]) {
-          const plan = build(p, stored, null, seed) as BuildingPlan;
-          const door = plan.openings.find((o) => o.kind === "door");
-          const m = door === undefined ? undefined : plan.masses[door.mass];
-          if (door === undefined || m === undefined) {
-            throw new Error(`${JSON.stringify(stored)}: no door`);
-          }
-          const [nx, , nz] = door.normal;
-          const [ux, uz] = [nz, -nx];
-          const half = (ax: number, az: number): number =>
-            Math.abs(ax) * (m.width / 2) +
-            Math.abs(az) * ((m.round ? m.width : m.depth) / 2);
-          const [dx, dz] = [door.position[0] - m.x, door.position[2] - m.z];
-          // In its wall's face, and the whole door between the wall's ends.
-          expect(
-            Math.abs(dx * nx + dz * nz - half(nx, nz)),
-            JSON.stringify(stored),
-          ).toBeLessThan(0.01);
-          expect(
-            Math.abs(dx * ux + dz * uz) + door.width / 2,
-            JSON.stringify(stored),
-          ).toBeLessThanOrEqual(half(ux, uz));
-          // Nothing of another mass stands just outside it.
-          for (const along of [-door.width / 2, 0, door.width / 2]) {
-            const [x, z] = [
-              door.position[0] + ux * along + nx * 0.06,
-              door.position[2] + uz * along + nz * 0.06,
-            ];
-            expect(
-              plan.masses.some(
-                (o, i) => i !== door.mass && inFootprint(o, x, z),
-              ),
-              JSON.stringify(stored),
-            ).toBe(false);
-          }
-          // A walk half a meter wide leads straight out from the door, and no triangle of a garden's fence in front of the door reaches into it.
-          for (const garden of gardens) {
-            const fence = (
-              build(
-                garden,
-                { extras: ["fence"], walk: "stepping stones" },
-                plan,
-                seed,
-              ) as Built
-            ).parts.find((part) => part.swatch === "wall");
-            if (fence === undefined) {
-              throw new Error(
-                `${garden.id} ${JSON.stringify(stored)}: no fence`,
-              );
-            }
-            let across = 0;
-            for (let t = 0; t < fence.indices.length; t += 3) {
-              const vs = [0, 1, 2].map((k) => fence.indices[t + k] as number);
-              const out = vs.map(
-                (v) =>
-                  ((fence.positions[v * 3] as number) - door.position[0]) * nx +
-                  ((fence.positions[v * 3 + 2] as number) - door.position[2]) *
-                    nz,
-              );
-              const side = vs.map(
-                (v) =>
-                  ((fence.positions[v * 3] as number) - door.position[0]) * ux +
-                  ((fence.positions[v * 3 + 2] as number) - door.position[2]) *
-                    uz,
-              );
-              if (
-                Math.min(...out) > 0 &&
-                Math.min(...side) < 0.25 &&
-                Math.max(...side) > -0.25
-              ) {
-                across++;
-              }
-            }
-            expect(across, `${garden.id} ${JSON.stringify(stored)}`).toBe(0);
-          }
+          expectDoorReachable(
+            build(p, stored, null, seed) as BuildingPlan,
+            stored,
+            seed,
+          );
         }
       }
     });
   },
 );
+
+function collectFloorTriangles(
+  parts: readonly Part[],
+  floorY: number,
+): number[][] {
+  const floor: number[][] = [];
+  for (const part of parts) {
+    for (let t = 0; t < part.indices.length; t += 3) {
+      const [a, b, c] = [
+        part.indices[t] as number,
+        part.indices[t + 1] as number,
+        part.indices[t + 2] as number,
+      ];
+      const y = part.positions[a * 3 + 1] as number;
+      if (
+        (part.normals[a * 3 + 1] as number) < 0.99 ||
+        y < floorY - 0.06 ||
+        y > floorY
+      ) {
+        continue;
+      }
+      floor.push(
+        [a, b, c].flatMap((v) => [
+          part.positions[v * 3] as number,
+          part.positions[v * 3 + 2] as number,
+        ]),
+      );
+    }
+  }
+  return floor;
+}
+
+function pointCoveredByFloor(
+  floor: readonly number[][],
+  x: number,
+  z: number,
+): boolean {
+  return floor.some(([ax, az, bx, bz, cx, cz]) => {
+    const d1 =
+      (x - (bx as number)) * ((az as number) - (bz as number)) -
+      ((ax as number) - (bx as number)) * (z - (bz as number));
+    const d2 =
+      (x - (cx as number)) * ((bz as number) - (cz as number)) -
+      ((bx as number) - (cx as number)) * (z - (cz as number));
+    const d3 =
+      (x - (ax as number)) * ((cz as number) - (az as number)) -
+      ((cx as number) - (ax as number)) * (z - (az as number));
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  });
+}
+
+function findMassFloorHoles(
+  m: BuildingPlan["masses"][number],
+  floor: readonly number[][],
+): string[] {
+  // Points a hand apart over the whole block inside its walls, which stand less than 0.2 m thick.
+  const [hx, hz] = [m.width / 2 - 0.2, m.depth / 2 - 0.2];
+  const [nx, nz] = [Math.ceil((2 * hx) / 0.1), Math.ceil((2 * hz) / 0.1)];
+  const holes: string[] = [];
+  for (let i = 0; i <= nx; i++) {
+    for (let k = 0; k <= nz; k++) {
+      const [x, z] = [
+        m.x - hx + (2 * hx * i) / nx,
+        m.z - hz + (2 * hz * k) / nz,
+      ];
+      if (!pointCoveredByFloor(floor, x, z)) {
+        holes.push(`(${x.toFixed(2)}, ${z.toFixed(2)})`);
+      }
+    }
+  }
+  return holes;
+}
 
 describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))(
   "%s",
@@ -511,66 +606,9 @@ describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))(
       for (const plan of plans) {
         const parts = (build(p, samples(p)[0] as Stored, plan, 5) as Built)
           .parts;
-        // Every upward face just under the sill, as its corners' x and z.
-        const floor: number[][] = [];
-        for (const part of parts) {
-          for (let t = 0; t < part.indices.length; t += 3) {
-            const [a, b, c] = [
-              part.indices[t] as number,
-              part.indices[t + 1] as number,
-              part.indices[t + 2] as number,
-            ];
-            const y = part.positions[a * 3 + 1] as number;
-            if (
-              (part.normals[a * 3 + 1] as number) < 0.99 ||
-              y < plan.floor - 0.06 ||
-              y > plan.floor
-            ) {
-              continue;
-            }
-            floor.push(
-              [a, b, c].flatMap((v) => [
-                part.positions[v * 3] as number,
-                part.positions[v * 3 + 2] as number,
-              ]),
-            );
-          }
-        }
-        const covered = (x: number, z: number): boolean =>
-          floor.some(([ax, az, bx, bz, cx, cz]) => {
-            const d1 =
-              (x - (bx as number)) * ((az as number) - (bz as number)) -
-              ((ax as number) - (bx as number)) * (z - (bz as number));
-            const d2 =
-              (x - (cx as number)) * ((bz as number) - (cz as number)) -
-              ((bx as number) - (cx as number)) * (z - (cz as number));
-            const d3 =
-              (x - (ax as number)) * ((cz as number) - (az as number)) -
-              ((cx as number) - (ax as number)) * (z - (az as number));
-            return !(
-              (d1 < 0 || d2 < 0 || d3 < 0) &&
-              (d1 > 0 || d2 > 0 || d3 > 0)
-            );
-          });
+        const floor = collectFloorTriangles(parts, plan.floor);
         for (const m of plan.masses.filter((mass) => !mass.round)) {
-          // Points a hand apart over the whole block inside its walls, which stand less than 0.2 m thick.
-          const [hx, hz] = [m.width / 2 - 0.2, m.depth / 2 - 0.2];
-          const [nx, nz] = [
-            Math.ceil((2 * hx) / 0.1),
-            Math.ceil((2 * hz) / 0.1),
-          ];
-          const holes: string[] = [];
-          for (let i = 0; i <= nx; i++) {
-            for (let k = 0; k <= nz; k++) {
-              const [x, z] = [
-                m.x - hx + (2 * hx * i) / nx,
-                m.z - hz + (2 * hz * k) / nz,
-              ];
-              if (!covered(x, z)) {
-                holes.push(`(${x.toFixed(2)}, ${z.toFixed(2)})`);
-              }
-            }
-          }
+          const holes = findMassFloorHoles(m, floor);
           expect(holes.slice(0, 5), `${holes.length} holes`).toEqual([]);
         }
       }
@@ -582,7 +620,7 @@ describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))(
 describe("scales", () => {
   it("resolves each scale's words within their own band, short of a neighbour's", () => {
     for (const p of PRIMITIVES) {
-      for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
+      for (const [name, f] of Object.entries<Field>(p.params)) {
         if (f.type !== "scale") continue;
         f.levels.forEach((level, k) => {
           const below =
@@ -642,6 +680,31 @@ function proportions(built: Built): number[] {
   return [(x1 - x0) / top, (z1 - z0) / top, ground / top];
 }
 
+function expectDisjointShapeBands(
+  p: AnyPrimitive,
+  bands: NonNullable<(typeof LANDMARK_SHAPES)[string]>,
+): void {
+  for (const [name, measure] of Object.entries(bands)) {
+    if (!("by" in measure)) continue;
+    // A measure set by a field has a band, or null, for every option of that field.
+    const field = p.params[measure.by];
+    expect(field?.type, name).toBe("choice");
+    if (field?.type === "choice") {
+      expect(Object.keys(measure.bands).toSorted(), name).toEqual(
+        Object.keys(field.options).toSorted(),
+      );
+    }
+    const set = Object.values(measure.bands)
+      .filter((b) => b !== null)
+      .toSorted((a, b) => a[0] - b[0]);
+    for (let k = 1; k < set.length; k++) {
+      expect((set[k - 1] as readonly [number, number])[1], name).toBeLessThan(
+        (set[k] as readonly [number, number])[0],
+      );
+    }
+  }
+}
+
 describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))(
   "%s",
   (_id, p) => {
@@ -672,26 +735,7 @@ describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))(
     if (bands === undefined) return;
 
     it("picks each measure of its shape within the band its words allow, and no two words' bands meet", () => {
-      for (const [name, measure] of Object.entries(bands)) {
-        if (!("by" in measure)) continue;
-        // A measure set by a field has a band, or null, for every option of that field.
-        const field = p.params[measure.by] as Field | undefined;
-        expect(field?.type, name).toBe("choice");
-        if (field?.type === "choice") {
-          expect(Object.keys(measure.bands).sort(), name).toEqual(
-            Object.keys(field.options).sort(),
-          );
-        }
-        const set = Object.values(measure.bands)
-          .filter((b) => b !== null)
-          .sort((a, b) => a[0] - b[0]);
-        for (let k = 1; k < set.length; k++) {
-          expect(
-            (set[k - 1] as readonly [number, number])[1],
-            name,
-          ).toBeLessThan((set[k] as readonly [number, number])[0]);
-        }
-      }
+      expectDisjointShapeBands(p, bands);
       for (const stored of combinations(p)) {
         for (let seed = 1; seed <= 16; seed++) {
           const params = resolveParams(p, stored, rand(seed), p.id);

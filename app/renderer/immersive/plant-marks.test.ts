@@ -7,6 +7,39 @@ import { markOf } from "../terrain/plant-mark.ts";
 import type { MarkBox } from "./marks.ts";
 import { type PlantComposition, drawPlant, plantRoom } from "./plant-marks.ts";
 
+interface PathRecorder {
+  moveTo: (x: number, y: number) => void;
+  lineTo: (x: number, y: number) => void;
+  quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => void;
+  arcTo: (x1: number, y1: number, x2: number, y2: number) => void;
+  arc: (x: number, y: number, r: number) => void;
+  ellipse: (x: number, y: number, rx: number, ry: number) => void;
+  closePath: () => void;
+}
+
+function pathInto(into: [number, number][]): PathRecorder {
+  const near = (x: number, y: number, r = 0): void => {
+    into.push([x - r, y - r], [x + r, y + r]);
+  };
+  return {
+    moveTo: (x: number, y: number): void => near(x, y),
+    lineTo: (x: number, y: number): void => near(x, y),
+    quadraticCurveTo: (cx: number, cy: number, x: number, y: number): void => {
+      near(cx, cy);
+      near(x, y);
+    },
+    arcTo: (x1: number, y1: number, x2: number, y2: number): void => {
+      near(x1, y1);
+      near(x2, y2);
+    },
+    arc: (x: number, y: number, r: number): void => near(x, y, r),
+    ellipse: (x: number, y: number, rx: number, ry: number): void => {
+      into.push([x - rx, y - ry], [x + rx, y + ry]);
+    },
+    closePath: (): void => {},
+  };
+}
+
 /**
  * A canvas that only records the points a drawing shows. A path's points count once it is filled or stroked. Paint
  * inside a clip shows only within the clip shape, so it does not count.
@@ -16,27 +49,6 @@ function recorder(): {
   points: [number, number][];
 } {
   const points: [number, number][] = [];
-  const pathInto = (into: [number, number][]) => {
-    const near = (x: number, y: number, r = 0): void => {
-      into.push([x - r, y - r], [x + r, y + r]);
-    };
-    return {
-      moveTo: (x: number, y: number) => near(x, y),
-      lineTo: (x: number, y: number) => near(x, y),
-      quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => (
-        near(cx, cy),
-        near(x, y)
-      ),
-      arcTo: (x1: number, y1: number, x2: number, y2: number) => (
-        near(x1, y1),
-        near(x2, y2)
-      ),
-      arc: (x: number, y: number, r: number) => near(x, y, r),
-      ellipse: (x: number, y: number, rx: number, ry: number) =>
-        into.push([x - rx, y - ry], [x + rx, y + ry]),
-      closePath: () => {},
-    };
-  };
   class Path2DRecorder {
     readonly placed: [number, number][] = [];
     constructor() {
@@ -55,21 +67,40 @@ function recorder(): {
     }
   };
   const ctx = new Proxy(path, {
-    get: (target, key) => {
+    get: (target, key): unknown => {
       if (key in target) return target[key as keyof typeof path];
-      if (key === "beginPath") return () => (current.length = 0);
-      if (key === "fill" || key === "stroke") return paint;
-      if (key === "save") return () => clips.push(clipped);
-      if (key === "restore") return () => (clipped = clips.pop() ?? false);
-      if (key === "clip") return () => (clipped = true);
-      if (key === "getTransform") return () => ({ a: 2, b: 0 });
-      if (key === "fillRect") {
-        return (x: number, y: number, w: number, h: number) =>
-          clipped ? undefined : points.push([x, y], [x + w, y + h]);
+      if (key === "beginPath") {
+        return (): void => {
+          current.length = 0;
+        };
       }
-      return () => {};
+      if (key === "fill" || key === "stroke") return paint;
+      if (key === "save") {
+        return (): void => {
+          clips.push(clipped);
+        };
+      }
+      if (key === "restore") {
+        return (): void => {
+          clipped = clips.pop() ?? false;
+        };
+      }
+      if (key === "clip") {
+        return (): void => {
+          clipped = true;
+        };
+      }
+      if (key === "getTransform") {
+        return (): { a: number; b: number } => ({ a: 2, b: 0 });
+      }
+      if (key === "fillRect") {
+        return (x: number, y: number, w: number, h: number): void => {
+          if (!clipped) points.push([x, y], [x + w, y + h]);
+        };
+      }
+      return (): void => {};
     },
-    set: () => true,
+    set: (): boolean => true,
   }) as unknown as CanvasRenderingContext2D;
   return { ctx, points };
 }
@@ -97,18 +128,18 @@ const plants: [string, PlantComposition][] = (
   }),
 );
 
-describe("a plant's mark composed from its blueprint", () => {
-  // Strokes and the wash offset to the southeast extend a little past the points a mark places.
-  const inside = (
-    box: MarkBox,
-    [x, y]: [number, number],
-    slack: number,
-  ): boolean =>
-    x >= box[0] - slack &&
-    x <= box[2] + slack &&
-    y >= box[1] - slack &&
-    y <= box[3] + slack;
+// Strokes and the wash offset to the southeast extend a little past the points a mark places.
+const inside = (
+  box: MarkBox,
+  [x, y]: [number, number],
+  slack: number,
+): boolean =>
+  x >= box[0] - slack &&
+  x <= box[2] + slack &&
+  y >= box[1] - slack &&
+  y <= box[3] + slack;
 
+describe("a plant's mark composed from its blueprint", () => {
   // Zooms from the whole sheet's to the closest, in pixels per meter.
   it.each([
     [1, 1.25],

@@ -167,6 +167,112 @@ function meets(a: Mushroom, b: Mushroom): boolean {
   );
 }
 
+const away = (x: number, z: number): V3 => normalize([x + 1e-3, 0, z]);
+
+type SpotFn = (
+  x: number,
+  z: number,
+  height: number,
+  lean: V3,
+  tilt?: number,
+  size?: number,
+) => void;
+
+function layoutRing(
+  tallest: number,
+  r: Rand,
+  spot: SpotFn,
+  jitter: () => V3,
+): void {
+  const radius = 0.45 + 0.9 * tallest;
+  const n = Math.round((Math.PI * 2 * radius) / (0.12 + 0.6 * tallest));
+  const gap = Math.floor(r.next() * n);
+  for (let k = 0; k < n; k++) {
+    if (k === gap) continue;
+    const a = ((k + r.range(-0.25, 0.25)) / n) * Math.PI * 2;
+    const d = radius * r.range(0.9, 1.08);
+    spot(
+      Math.cos(a) * d,
+      Math.sin(a) * d,
+      tallest * r.range(0.62, 1),
+      add(away(Math.cos(a), Math.sin(a)), scale(jitter(), 0.7)),
+    );
+  }
+}
+
+function layoutCluster(
+  tallest: number,
+  r: Rand,
+  spot: SpotFn,
+  jitter: () => V3,
+): void {
+  const n = 7 + Math.floor(r.next() * 4);
+  for (let k = 0; k < n; k++) {
+    const a = r.next() * Math.PI * 2;
+    const d =
+      k === 0 ? 0 : (0.03 + 0.1 * Math.sqrt(r.next())) * (0.6 + tallest);
+    const edge = d / (0.13 * (0.6 + tallest));
+    // Small caps of similar size. The outer ones lean out and sit a little lower, so the cluster forms tiers.
+    spot(
+      Math.cos(a) * d,
+      Math.sin(a) * d,
+      tallest * (1 - 0.25 * edge) * r.range(0.8, 1.05),
+      k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)),
+      k === 0 ? 0.04 : 0.2 + 0.25 * edge,
+      r.range(0.55, 0.75),
+    );
+  }
+}
+
+function scatteredCenters(
+  groups: number,
+  tallest: number,
+  r: Rand,
+): [number, number][] {
+  const reach = 0.7 + 1.1 * tallest;
+  const centers: [number, number][] = [];
+  for (let tries = 0; centers.length < groups && tries < 300; tries++) {
+    const a = r.next() * Math.PI * 2;
+    const d = reach * Math.sqrt(r.next());
+    const x = Math.cos(a) * d;
+    const z = Math.sin(a) * d;
+    if (
+      centers.some(
+        ([cx, cz]) => Math.hypot(cx - x, cz - z) < 0.3 + 0.35 * tallest,
+      )
+    ) {
+      continue;
+    }
+    centers.push([x, z]);
+  }
+  return centers;
+}
+
+function layoutScattered(
+  shape: CapShape,
+  tallest: number,
+  r: Rand,
+  spot: SpotFn,
+  jitter: () => V3,
+): void {
+  // Small groups spaced apart, each of one to three mushrooms, or two to four with pointed caps.
+  const groups = (shape === "pointed" ? 6 : 4) + Math.floor(r.next() * 3);
+  const centers = scatteredCenters(groups, tallest, r);
+  for (const [cx, cz] of centers) {
+    const count = (shape === "pointed" ? 2 : 1) + Math.floor(r.next() * 3);
+    for (let k = 0; k < count; k++) {
+      const a = r.next() * Math.PI * 2;
+      const d = k === 0 ? 0 : r.range(0.05, 0.12) * (0.6 + tallest);
+      spot(
+        cx + Math.cos(a) * d,
+        cz + Math.sin(a) * d,
+        tallest * r.range(0.6, 1) * (k === 0 ? 1 : 0.85),
+        k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)),
+      );
+    }
+  }
+}
+
 function layout(
   grouping: Grouping,
   shape: CapShape,
@@ -175,11 +281,11 @@ function layout(
 ): Mushroom[] {
   const form = FORM[shape];
   const wants: Mushroom[] = [];
-  const spot = (
-    x: number,
-    z: number,
-    height: number,
-    lean: V3,
+  const spot: SpotFn = (
+    x,
+    z,
+    height,
+    lean,
     tilt = r.range(0.03, 0.18),
     size = r.range(0.85, 1.15),
   ): void => {
@@ -195,75 +301,13 @@ function layout(
       r: fr,
     });
   };
-  const away = (x: number, z: number): V3 => normalize([x + 1e-3, 0, z]);
   const jitter = (): V3 => [r.range(-1, 1), 0, r.range(-1, 1)];
   if (grouping === "ring") {
-    const radius = 0.45 + 0.9 * tallest;
-    const n = Math.round((Math.PI * 2 * radius) / (0.12 + 0.6 * tallest));
-    const gap = Math.floor(r.next() * n);
-    for (let k = 0; k < n; k++) {
-      if (k === gap) continue;
-      const a = ((k + r.range(-0.25, 0.25)) / n) * Math.PI * 2;
-      const d = radius * r.range(0.9, 1.08);
-      spot(
-        Math.cos(a) * d,
-        Math.sin(a) * d,
-        tallest * r.range(0.62, 1),
-        add(away(Math.cos(a), Math.sin(a)), scale(jitter(), 0.7)),
-      );
-    }
+    layoutRing(tallest, r, spot, jitter);
   } else if (grouping === "cluster") {
-    const n = 7 + Math.floor(r.next() * 4);
-    for (let k = 0; k < n; k++) {
-      const a = r.next() * Math.PI * 2;
-      const d =
-        k === 0 ? 0 : (0.03 + 0.1 * Math.sqrt(r.next())) * (0.6 + tallest);
-      const edge = d / (0.13 * (0.6 + tallest));
-      // Small caps of similar size. The outer ones lean out and sit a little lower, so the cluster forms tiers.
-      spot(
-        Math.cos(a) * d,
-        Math.sin(a) * d,
-        tallest * (1 - 0.25 * edge) * r.range(0.8, 1.05),
-        k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)),
-        k === 0 ? 0.04 : 0.2 + 0.25 * edge,
-        r.range(0.55, 0.75),
-      );
-    }
+    layoutCluster(tallest, r, spot, jitter);
   } else {
-    // Small groups spaced apart, each of one to three mushrooms, or two to four with pointed caps.
-    const groups =
-      shape === "pointed"
-        ? 6 + Math.floor(r.next() * 3)
-        : 4 + Math.floor(r.next() * 3);
-    const reach = 0.7 + 1.1 * tallest;
-    const centers: [number, number][] = [];
-    for (let tries = 0; centers.length < groups && tries < 300; tries++) {
-      const a = r.next() * Math.PI * 2;
-      const d = reach * Math.sqrt(r.next());
-      const x = Math.cos(a) * d;
-      const z = Math.sin(a) * d;
-      if (
-        centers.some(
-          ([cx, cz]) => Math.hypot(cx - x, cz - z) < 0.3 + 0.35 * tallest,
-        )
-      ) {
-        continue;
-      }
-      centers.push([x, z]);
-    }
-    for (const [cx, cz] of centers) {
-      const count = (shape === "pointed" ? 2 : 1) + Math.floor(r.next() * 3);
-      for (let k = 0; k < count; k++) {
-        const a = r.next() * Math.PI * 2;
-        const d = k === 0 ? 0 : r.range(0.05, 0.12) * (0.6 + tallest);
-        spot(
-          cx + Math.cos(a) * d,
-          cz + Math.sin(a) * d,
-          tallest * r.range(0.6, 1) * (k === 0 ? 1 : 0.85),
-          k === 0 ? jitter() : away(Math.cos(a), Math.sin(a)),
-        );
-      }
-    }
+    layoutScattered(shape, tallest, r, spot, jitter);
   }
   // Scale every mushroom so the tallest is `tallest`.
   const most = Math.max(...wants.map((m) => m.height));
@@ -293,32 +337,291 @@ function layout(
   return settle(sized);
 }
 
+function nudgeMushroom(m: Mushroom, step: number): Mushroom {
+  if (step === 0) return { ...m, tilt: Math.min(0.5, m.tilt + 0.07) };
+  if (step === 1) {
+    return { ...m, radius: m.radius * 0.88, crown: m.crown * 0.94 };
+  }
+  return {
+    ...m,
+    height: m.height * 0.9,
+    radius: m.radius * 0.95,
+    crown: m.crown * 0.92,
+  };
+}
+
 /** Places the tallest first. Each later one leans further out, gets shorter or gets a smaller cap until its cap meets no other cap or stalk, or it is left out. */
 function settle(wants: readonly Mushroom[]): Mushroom[] {
   const placed: Mushroom[] = [];
-  for (const want of [...wants].sort((a, b) => b.height - a.height)) {
+  for (const want of wants.toSorted((a, b) => b.height - a.height)) {
     let m = want;
     for (
       let tries = 0;
       tries < 18 && placed.some((o) => meets(m, o) || meets(o, m));
       tries++
     ) {
-      const step = tries % 3;
-      m =
-        step === 0
-          ? { ...m, tilt: Math.min(0.5, m.tilt + 0.07) }
-          : step === 1
-            ? { ...m, radius: m.radius * 0.88, crown: m.crown * 0.94 }
-            : {
-                ...m,
-                height: m.height * 0.9,
-                radius: m.radius * 0.95,
-                crown: m.crown * 0.92,
-              };
+      m = nudgeMushroom(m, tries % 3);
     }
     if (!placed.some((o) => meets(m, o) || meets(o, m))) placed.push(m);
   }
   return placed;
+}
+
+interface CapContext {
+  readonly m: Mushroom;
+  readonly shape: CapShape;
+  readonly axis: V3;
+  readonly sides: number;
+  readonly seed: number;
+  readonly tint: number;
+  readonly profile: readonly (readonly [number, number])[];
+  readonly capCh: {
+    readonly loss: number;
+    readonly droop: number;
+    readonly wither: number;
+    readonly glow: number;
+    readonly pivot: V3;
+    readonly bough: V3;
+    readonly tint: number;
+  };
+  readonly around: (rho: number, eta: number, a: number) => V3;
+  readonly radialAt: (a: number) => V3;
+  readonly mottle: (p: V3) => number;
+  readonly hue: (p: V3) => number;
+  readonly shadeOf: (i: number) => number;
+  readonly normalOf: (i: number, a: number) => V3;
+}
+
+function emitSpots(
+  spots: PartBuilder,
+  ctx: CapContext,
+  at: readonly (readonly V3[])[],
+): void {
+  const { m, sides, profile, capCh, mottle, hue, shadeOf, normalOf } = ctx;
+  const { radius } = m;
+  const count = 8 + Math.floor(m.r.next() * 6);
+  for (let k = 0; k < count; k++) {
+    const a = m.r.next() * Math.PI * 2;
+    const rho = 0.1 + 0.62 * Math.sqrt(m.r.next());
+    const i = profile.findIndex(([pr]) => pr >= rho);
+    const [r0] = profile[i - 1] as readonly [number, number];
+    const [r1] = profile[i] as readonly [number, number];
+    const along = (rho - r0) / (r1 - r0);
+    // Each spot lies on a cap facet, placed from the four vertices round it, so no spot sticks out past the cap's outline.
+    const turn = (a / (Math.PI * 2)) * sides;
+    const j0 = Math.floor(turn) % sides;
+    const j1 = (j0 + 1) % sides;
+    const f = turn - Math.floor(turn);
+    const rowAt = (rowIdx: number): V3 => {
+      const row = at[rowIdx] as readonly V3[];
+      return add(scale(row[j0] as V3, 1 - f), scale(row[j1] as V3, f));
+    };
+    const onCap = add(scale(rowAt(i - 1), 1 - along), scale(rowAt(i), along));
+    // The spot uses the cap's interpolated normal, so only the swatch color tells a spot from its cap.
+    const n = normalize(
+      add(scale(normalOf(i - 1, a), 1 - along), scale(normalOf(i, a), along)),
+    );
+    const center = addScaled(onCap, n, 0.004 * radius);
+    const [su, sv] = basis(n);
+    const size = radius * m.r.range(0.045, 0.085);
+    const shade =
+      shadeOf(i - 1) + (shadeOf(i) - shadeOf(i - 1)) * along + mottle(center);
+    const ch = { ...capCh, tint: hue(center) };
+    const hub = spots.vertex(center, n, shade, ch);
+    for (let j = 0; j < 6; j++) {
+      const b = (j / 6) * Math.PI * 2;
+      spots.vertex(
+        addScaled(
+          addScaled(center, su, Math.cos(b) * size * m.r.range(0.75, 1.2)),
+          sv,
+          Math.sin(b) * size * m.r.range(0.75, 1.2),
+        ),
+        n,
+        shade,
+        ch,
+      );
+    }
+    for (let j = 0; j < 6; j++) {
+      spots.triangle(hub, hub + 1 + j, hub + 1 + ((j + 1) % 6));
+    }
+  }
+}
+
+function emitGills(
+  flesh: PartBuilder,
+  ctx: CapContext,
+  stalkTop: number,
+  lastR: number,
+  lastE: number,
+): void {
+  const { m, axis, sides, tint, capCh, around, radialAt } = ctx;
+  const gillCh = { ...capCh, wither: 0.85, glow: 0.12, tint: tint * 0.5 };
+  const under: number[] = [];
+  for (const [rho, eta, shade] of [
+    [lastR, lastE, 0.5],
+    [0.62, lastE + 0.1, 0.4],
+    [(stalkTop / m.radius) * 1.15, lastE + 0.2, 0.34],
+  ] as const) {
+    under.push(flesh.vertexCount);
+    for (let j = 0; j < sides; j++) {
+      const a = (j / sides) * Math.PI * 2;
+      let ridge = 0;
+      if (rho < lastR && rho > 0.3) ridge = j % 2 === 0 ? 0.025 : -0.025;
+      flesh.vertex(
+        around(rho, eta + ridge, a),
+        normalize(addScaled(scale(axis, -1), radialAt(a), 0.25)),
+        shade,
+        gillCh,
+      );
+    }
+  }
+  for (let k = 0; k + 1 < under.length; k++) {
+    band(flesh, under[k] as number, under[k + 1] as number, sides);
+  }
+}
+
+function emitStalkAndSkirt(
+  flesh: PartBuilder,
+  ctx: CapContext,
+  rim: V3,
+  stalkTop: number,
+  lastE: number,
+  stubborn: boolean,
+): void {
+  const { m, shape, axis, seed, tint, capCh } = ctx;
+  const form = FORM[shape];
+  const stalkCh = {
+    loss: stubborn ? 0 : clamp(capCh.loss * 0.5, 0.02, 0.3),
+    droop: 0,
+    wither: 0.7,
+    glow: 0,
+    pivot: m.foot,
+    bough: m.foot,
+    tint: tint * 0.4,
+  };
+  const into = addScaled(rim, axis, (lastE + 0.36) * m.crown);
+  const side = normalize(cross([0, 1, 0], m.lean));
+  const bow = m.r.range(-0.04, 0.04) * m.height;
+  // The stalk leaves its foot leaning out and turns up under its cap. It moves out quickly low down and runs straight up near the top.
+  const rise: V3 = [0, into[1] - m.foot[1], 0];
+  const reach: V3 = [into[0] - m.foot[0], 0, into[2] - m.foot[2]];
+  const stalkFrame = (t: number): { c: V3; along: V3; su: V3; sv: V3 } => {
+    const c = add(
+      add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))),
+      scale(side, Math.sin(2 * Math.PI * t) * bow),
+    );
+    const along = normalize(add(rise, scale(reach, 2 * (1 - t))));
+    const su = normalize(
+      addScaled(
+        side,
+        along,
+        -(side[0] * along[0] + side[1] * along[1] + side[2] * along[2]),
+      ),
+    );
+    const sv = normalize(cross(along, su));
+    return { c, along, su, sv };
+  };
+  const stalkRows: number[] = [];
+  STALK_RINGS.forEach((t, k) => {
+    const { c, su, sv } = stalkFrame(t);
+    stalkRows.push(flesh.vertexCount);
+    for (let j = 0; j < STALK_SIDES; j++) {
+      const a = (j / STALK_SIDES) * Math.PI * 2;
+      const n = add(scale(su, Math.cos(a)), scale(sv, Math.sin(a)));
+      const rough =
+        1 + 0.06 * noise3(Math.cos(a) * 2, t * 4, Math.sin(a) * 2, seed + 3);
+      flesh.vertex(
+        addScaled(c, n, stalkTop * (form.girth[k] ?? 1) * rough),
+        n,
+        0.34 + 0.4 * Math.sqrt(t) + 0.05 * noise3(j * 0.9, t * 6, 0, seed + 5),
+        stalkCh,
+      );
+    }
+  });
+  for (let k = 0; k + 1 < stalkRows.length; k++) {
+    band(
+      flesh,
+      stalkRows[k + 1] as number,
+      stalkRows[k] as number,
+      STALK_SIDES,
+    );
+  }
+  // 75% of grown domed and flat mushrooms get a skirt round the stalk under the cap, like fly agarics and parasols.
+  if (shape === "pointed" || m.young || m.r.next() >= 0.75) return;
+  const { c, along, su, sv } = stalkFrame(0.8);
+  const skirt: number[] = [];
+  for (const [reachOut, drop, shade] of [
+    [1.05, 0, 0.62],
+    [2, 0.045, 0.5],
+  ] as const) {
+    skirt.push(flesh.vertexCount);
+    for (let j = 0; j < STALK_SIDES; j++) {
+      const a = (j / STALK_SIDES) * Math.PI * 2;
+      const n = add(scale(su, Math.cos(a)), scale(sv, Math.sin(a)));
+      const frill =
+        1 + 0.12 * noise3(Math.cos(a) * 2.5, Math.sin(a) * 2.5, 1, seed + 9);
+      flesh.vertex(
+        addScaled(
+          addScaled(c, n, stalkTop * 0.92 * reachOut * frill),
+          along,
+          -drop * m.height,
+        ),
+        normalize(addScaled(n, along, 0.6)),
+        shade,
+        stalkCh,
+      );
+    }
+  }
+  band(flesh, skirt[0] as number, skirt[1] as number, STALK_SIDES);
+}
+
+function emitCapMesh(caps: PartBuilder, ctx: CapContext): V3[][] {
+  const {
+    axis,
+    sides,
+    profile,
+    capCh,
+    around,
+    mottle,
+    hue,
+    shadeOf,
+    normalOf,
+  } = ctx;
+  const capShade = (i: number, p: V3): number => shadeOf(i) + mottle(p);
+  const apexAt = around(0, 1, 0);
+  const apex = caps.vertex(apexAt, axis, capShade(0, apexAt), {
+    ...capCh,
+    tint: hue(apexAt),
+  });
+  const rows: number[] = [];
+  /** Each cap vertex position by profile row and side, so spots can lie on the cap's facets. */
+  const at: V3[][] = [Array.from({ length: sides }, () => apexAt)];
+  for (let i = 1; i < profile.length; i++) {
+    const [rho, eta] = profile[i] as readonly [number, number];
+    rows.push(caps.vertexCount);
+    const row: V3[] = [];
+    for (let j = 0; j < sides; j++) {
+      const a = (j / sides) * Math.PI * 2;
+      const p = around(rho, eta, a);
+      row.push(p);
+      caps.vertex(p, normalOf(i, a), capShade(i, p), {
+        ...capCh,
+        tint: hue(p),
+      });
+    }
+    at.push(row);
+  }
+  for (let j = 0; j < sides; j++) {
+    caps.triangle(
+      apex,
+      (rows[0] as number) + j,
+      (rows[0] as number) + ((j + 1) % sides),
+    );
+  }
+  for (let k = 0; k + 1 < rows.length; k++) {
+    band(caps, rows[k] as number, rows[k + 1] as number, sides);
+  }
+  return at;
 }
 
 function emitMushroom(
@@ -404,7 +707,6 @@ function emitMushroom(
       ? [0.7, 0.74, 0.78, 0.78, 0.74, 0.66, 0.5, 0.42]
       : [0.5, 0.56, 0.66, 0.74, 0.76, 0.68, 0.52, 0.42];
   const shadeOf = (i: number): number => shades[i] ?? 0.6;
-  const capShade = (i: number, p: V3): number => shadeOf(i) + mottle(p);
   const normalOf = (i: number, a: number): V3 => {
     const [r0, e0] = profile[Math.max(0, i - 1)] as readonly [number, number];
     const [r1, e1] = profile[Math.min(profile.length - 1, i + 1)] as readonly [
@@ -418,88 +720,25 @@ function emitMushroom(
       ),
     );
   };
-  const apexAt = around(0, 1, 0);
-  const apex = caps.vertex(apexAt, axis, capShade(0, apexAt), {
-    ...capCh,
-    tint: hue(apexAt),
-  });
-  const rows: number[] = [];
-  /** Each cap vertex position by profile row and side, so spots can lie on the cap's facets. */
-  const at: V3[][] = [Array.from({ length: sides }, () => apexAt)];
-  for (let i = 1; i < profile.length; i++) {
-    const [rho, eta] = profile[i] as readonly [number, number];
-    rows.push(caps.vertexCount);
-    const row: V3[] = [];
-    for (let j = 0; j < sides; j++) {
-      const a = (j / sides) * Math.PI * 2;
-      const p = around(rho, eta, a);
-      row.push(p);
-      caps.vertex(p, normalOf(i, a), capShade(i, p), {
-        ...capCh,
-        tint: hue(p),
-      });
-    }
-    at.push(row);
-  }
-  for (let j = 0; j < sides; j++) {
-    caps.triangle(
-      apex,
-      (rows[0] as number) + j,
-      (rows[0] as number) + ((j + 1) % sides),
-    );
-  }
-  for (let k = 0; k + 1 < rows.length; k++) {
-    band(caps, rows[k] as number, rows[k + 1] as number, sides);
-  }
+  const ctx: CapContext = {
+    m,
+    shape,
+    axis,
+    sides,
+    seed,
+    tint,
+    profile,
+    capCh,
+    around,
+    radialAt,
+    mottle,
+    hue,
+    shadeOf,
+    normalOf,
+  };
+  const at = emitCapMesh(caps, ctx);
   // Spots in the palette's spot swatch, shaded like the cap beneath them. `SPOTS` in palettes.ts makes them white on silver-birch caps and the cap color elsewhere.
-  if (shape !== "pointed") {
-    const count = 8 + Math.floor(m.r.next() * 6);
-    for (let k = 0; k < count; k++) {
-      const a = m.r.next() * Math.PI * 2;
-      const rho = 0.1 + 0.62 * Math.sqrt(m.r.next());
-      const i = profile.findIndex(([pr]) => pr >= rho);
-      const [r0] = profile[i - 1] as readonly [number, number];
-      const [r1] = profile[i] as readonly [number, number];
-      const along = (rho - r0) / (r1 - r0);
-      // Each spot lies on a cap facet, placed from the four vertices round it, so no spot sticks out past the cap's outline.
-      const turn = (a / (Math.PI * 2)) * sides;
-      const j0 = Math.floor(turn) % sides;
-      const j1 = (j0 + 1) % sides;
-      const f = turn - Math.floor(turn);
-      const rowAt = (k: number): V3 => {
-        const row = at[k] as V3[];
-        return add(scale(row[j0] as V3, 1 - f), scale(row[j1] as V3, f));
-      };
-      const onCap = add(scale(rowAt(i - 1), 1 - along), scale(rowAt(i), along));
-      // The spot uses the cap's interpolated normal, so only the swatch color tells a spot from its cap.
-      const n = normalize(
-        add(scale(normalOf(i - 1, a), 1 - along), scale(normalOf(i, a), along)),
-      );
-      const center = addScaled(onCap, n, 0.004 * radius);
-      const [su, sv] = basis(n);
-      const size = radius * m.r.range(0.045, 0.085);
-      const shade =
-        shadeOf(i - 1) + (shadeOf(i) - shadeOf(i - 1)) * along + mottle(center);
-      const ch = { ...capCh, tint: hue(center) };
-      const hub = spots.vertex(center, n, shade, ch);
-      for (let j = 0; j < 6; j++) {
-        const b = (j / 6) * Math.PI * 2;
-        spots.vertex(
-          addScaled(
-            addScaled(center, su, Math.cos(b) * size * m.r.range(0.75, 1.2)),
-            sv,
-            Math.sin(b) * size * m.r.range(0.75, 1.2),
-          ),
-          n,
-          shade,
-          ch,
-        );
-      }
-      for (let j = 0; j < 6; j++) {
-        spots.triangle(hub, hub + 1 + j, hub + 1 + ((j + 1) % 6));
-      }
-    }
-  }
+  if (shape !== "pointed") emitSpots(spots, ctx, at);
   // Ridged gills under the cap, rising from the lip to the stalk, in the stalk's swatch.
   // The stalk's top radius is at least 0.028 of the mushroom's height, so a small cap's stalk looks thick enough to carry it.
   const stalkTop = Math.max(radius * form.stalk, 0.028 * m.height);
@@ -507,123 +746,8 @@ function emitMushroom(
     number,
     number,
   ];
-  const gillCh = { ...capCh, wither: 0.85, glow: 0.12, tint: tint * 0.5 };
-  const under: number[] = [];
-  for (const [rho, eta, shade] of [
-    [lastR, lastE, 0.5],
-    [0.62, lastE + 0.1, 0.4],
-    [(stalkTop / radius) * 1.15, lastE + 0.2, 0.34],
-  ] as const) {
-    under.push(flesh.vertexCount);
-    for (let j = 0; j < sides; j++) {
-      const a = (j / sides) * Math.PI * 2;
-      const ridge =
-        rho < lastR && rho > 0.3 ? (j % 2 === 0 ? 0.025 : -0.025) : 0;
-      flesh.vertex(
-        around(rho, eta + ridge, a),
-        normalize(addScaled(scale(axis, -1), radialAt(a), 0.25)),
-        shade,
-        gillCh,
-      );
-    }
-  }
-  for (let k = 0; k + 1 < under.length; k++) {
-    band(flesh, under[k] as number, under[k + 1] as number, sides);
-  }
-  // The stalk: swollen at its foot, darkened by the soil, bowed a little, and running up into the cap.
-  const stalkCh = {
-    loss: stubborn ? 0 : clamp(capLoss * 0.5, 0.02, 0.3),
-    droop: 0,
-    wither: 0.7,
-    glow: 0,
-    pivot: m.foot,
-    bough: m.foot,
-    tint: tint * 0.4,
-  };
-  const into = addScaled(rim, axis, (lastE + 0.36) * crown);
-  const side = normalize(cross([0, 1, 0], m.lean));
-  const bow = m.r.range(-0.04, 0.04) * m.height;
-  // The stalk leaves its foot leaning out and turns up under its cap. It moves out quickly low down and runs straight up near the top.
-  const rise: V3 = [0, into[1] - m.foot[1], 0];
-  const reach: V3 = [into[0] - m.foot[0], 0, into[2] - m.foot[2]];
-  const stalkRows: number[] = [];
-  STALK_RINGS.forEach((t, k) => {
-    const c = add(
-      add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))),
-      scale(side, Math.sin(2 * Math.PI * t) * bow),
-    );
-    const along = normalize(add(rise, scale(reach, 2 * (1 - t))));
-    const su = normalize(
-      addScaled(
-        side,
-        along,
-        -(side[0] * along[0] + side[1] * along[1] + side[2] * along[2]),
-      ),
-    );
-    const sv = normalize(cross(along, su));
-    stalkRows.push(flesh.vertexCount);
-    for (let j = 0; j < STALK_SIDES; j++) {
-      const a = (j / STALK_SIDES) * Math.PI * 2;
-      const n = add(scale(su, Math.cos(a)), scale(sv, Math.sin(a)));
-      const rough =
-        1 + 0.06 * noise3(Math.cos(a) * 2, t * 4, Math.sin(a) * 2, seed + 3);
-      flesh.vertex(
-        addScaled(c, n, stalkTop * (form.girth[k] ?? 1) * rough),
-        n,
-        0.34 + 0.4 * Math.sqrt(t) + 0.05 * noise3(j * 0.9, t * 6, 0, seed + 5),
-        stalkCh,
-      );
-    }
-  });
-  for (let k = 0; k + 1 < stalkRows.length; k++) {
-    band(
-      flesh,
-      stalkRows[k + 1] as number,
-      stalkRows[k] as number,
-      STALK_SIDES,
-    );
-  }
-  // 75% of grown domed and flat mushrooms get a skirt round the stalk under the cap, like fly agarics and parasols.
-  if (shape !== "pointed" && !m.young && m.r.next() < 0.75) {
-    const t = 0.8;
-    const c = add(
-      add(add(m.foot, scale(rise, t)), scale(reach, 1 - (1 - t) * (1 - t))),
-      scale(side, Math.sin(2 * Math.PI * t) * bow),
-    );
-    const along = normalize(add(rise, scale(reach, 2 * (1 - t))));
-    const su = normalize(
-      addScaled(
-        side,
-        along,
-        -(side[0] * along[0] + side[1] * along[1] + side[2] * along[2]),
-      ),
-    );
-    const sv = normalize(cross(along, su));
-    const skirt: number[] = [];
-    for (const [reachOut, drop, shade] of [
-      [1.05, 0, 0.62],
-      [2, 0.045, 0.5],
-    ] as const) {
-      skirt.push(flesh.vertexCount);
-      for (let j = 0; j < STALK_SIDES; j++) {
-        const a = (j / STALK_SIDES) * Math.PI * 2;
-        const n = add(scale(su, Math.cos(a)), scale(sv, Math.sin(a)));
-        const frill =
-          1 + 0.12 * noise3(Math.cos(a) * 2.5, Math.sin(a) * 2.5, 1, seed + 9);
-        flesh.vertex(
-          addScaled(
-            addScaled(c, n, stalkTop * 0.92 * reachOut * frill),
-            along,
-            -drop * m.height,
-          ),
-          normalize(addScaled(n, along, 0.6)),
-          shade,
-          stalkCh,
-        );
-      }
-    }
-    band(flesh, skirt[0] as number, skirt[1] as number, STALK_SIDES);
-  }
+  emitGills(flesh, ctx, stalkTop, lastR, lastE);
+  emitStalkAndSkirt(flesh, ctx, rim, stalkTop, lastE, stubborn);
 }
 
 /** Quads between two rings of `sides` vertices, front faces outward when `a` is the upper ring of a surface turned about its axis. */

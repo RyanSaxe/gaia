@@ -317,7 +317,7 @@ function spread(points: readonly Anchor[], n: number): number[] {
         )),
     );
   }
-  return taken.sort((a, b) => a - b);
+  return taken.toSorted((a, b) => a - b);
 }
 
 /**
@@ -477,6 +477,151 @@ interface Tube {
   readonly flared: boolean;
 }
 
+function tubeRadial(
+  whip: boolean,
+  flared: boolean,
+  first: Limb,
+  trunkRadius: number,
+): number {
+  if (whip) return first.depth === 0 ? 6 : 4;
+  if (flared) return 24;
+  if (first.depth === 0) return 10;
+  return first.startRadius > trunkRadius * 0.3 ? 7 : 5;
+}
+
+function mergeAlongs(
+  alongs: readonly number[],
+  extra: readonly number[],
+  minGap: number,
+): number[] {
+  return [...alongs, ...extra]
+    .toSorted((a, b) => a - b)
+    .filter((a, n, all) => n === 0 || a - (all[n - 1] as number) > minGap);
+}
+
+function segmentAlongs(
+  limb: Limb,
+  span: number,
+  swell: number,
+  swellAt: number,
+  whip: boolean,
+  flaredStart: boolean,
+  trunkRadius: number,
+  flareRings: readonly number[],
+  dirY: number,
+): number[] {
+  let maxSegs = 3;
+  if (whip) maxSegs = 2;
+  else if (limb.depth === 0) maxSegs = 6;
+  const count = clamp(
+    Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)),
+    1,
+    maxSegs,
+  );
+  let alongs = Array.from({ length: count + 1 }, (_, n) => (n / count) * span);
+  if (swell > 0 && limb.startRadius > trunkRadius * 0.2) {
+    // Rings across the swelling, so it curves.
+    const extra = [0.6, 1.5]
+      .map((w) => swellAt + w * limb.startRadius)
+      .filter((a) => a < span * 0.7);
+    alongs = mergeAlongs(alongs, extra, limb.startRadius * 0.15);
+  }
+  if (flaredStart) {
+    // Rings close together near the ground, so the flare curves.
+    const extra = flareRings
+      .map((y) => y / Math.max(dirY, 0.5))
+      .filter((a) => a < span * 0.8);
+    alongs = mergeAlongs(alongs, extra, trunkRadius * 0.03);
+  }
+  return alongs;
+}
+
+function swellFactor(
+  swell: number,
+  along: number,
+  swellAt: number,
+  startRadius: number,
+): number {
+  if (swell <= 0) return 0;
+  if (along <= swellAt) return 1;
+  return Math.exp(-(((along - swellAt) / (startRadius * FORK_REACH)) ** 2));
+}
+
+function chainRingsOf(
+  skel: Skeleton,
+  chain: readonly number[],
+  whip: boolean,
+  flared: boolean,
+  trunkRadius: number,
+  flareRings: readonly number[],
+): Ring[] {
+  const first = skel.limbs[chain[0] as number] as Limb;
+  const rings: Ring[] = [];
+  let u: V3 = basis(normalize(sub(first.end, first.start)))[0];
+  const push = (center: V3, dir: V3, radius: number, limb: number): void => {
+    u = normalize(addScaled(u, dir, -dot(u, dir)));
+    rings.push({ center, dir, u, v: cross(dir, u), radius, limb });
+  };
+  chain.forEach((i, k) => {
+    const limb = skel.limbs[i] as Limb;
+    const len = length(sub(limb.end, limb.start));
+    const dir = normalize(sub(limb.end, limb.start));
+    const after = chain[k + 1];
+    const nextDir =
+      after === undefined
+        ? dir
+        : normalize(
+            sub(
+              (skel.limbs[after] as Limb).end,
+              (skel.limbs[after] as Limb).start,
+            ),
+          );
+    // A bough sinks into its parent so its joint never shows a gap.
+    const sink =
+      k > 0 || limb.depth === 0
+        ? 0
+        : Math.min(limb.startRadius * 1.2, len * 0.3);
+    const span = len + sink;
+    const start = addScaled(limb.start, dir, -sink);
+    // A bough leaving the top of its parent starts as wide as the parent ends.
+    const parent =
+      k === 0 && limb.depth >= 1 ? skel.limbs[limb.parent] : undefined;
+    const atTop =
+      parent !== undefined &&
+      length(sub(limb.start, parent.end)) < parent.endRadius * 0.6;
+    const swell = atTop
+      ? Math.max(0, parent.endRadius / limb.startRadius - 1)
+      : 0;
+    const radiusAt = (along: number): number =>
+      (limb.startRadius +
+        (limb.endRadius - limb.startRadius) *
+          clamp((along - sink) / len, 0, 1)) *
+      (1 + swell * swellFactor(swell, along, sink, limb.startRadius));
+    const alongs = segmentAlongs(
+      limb,
+      span,
+      swell,
+      sink,
+      whip,
+      k === 0 && flared,
+      trunkRadius,
+      flareRings,
+      dir[1],
+    );
+    alongs.forEach((along, n) => {
+      if (k > 0 && n === 0) return;
+      const end = n === alongs.length - 1;
+      push(
+        addScaled(start, dir, along),
+        end ? normalize(add(dir, nextDir)) : dir,
+        radiusAt(along),
+        i,
+      );
+    });
+  });
+  return rings;
+}
+
 /**
  * The tubes a frame's bark is built from, one per chain of segments, so its
  * bark runs unbroken past the joins. The bark builds its surface on them, and
@@ -500,114 +645,15 @@ function tubesOf(skel: Skeleton): Tube[] {
     const head = chain[0] as number;
     const first = skel.limbs[head] as Limb;
     const flared = trunk && head === 0 && !whip;
-    const radial = whip
-      ? first.depth === 0
-        ? 6
-        : 4
-      : flared
-        ? 24
-        : first.depth === 0
-          ? 10
-          : first.startRadius > trunkRadius * 0.3
-            ? 7
-            : 5;
-
-    // The rings along the chain, in one frame carried from ring to ring, so
-    // the bark's ridges never jump where one segment meets the next.
-    const rings: Ring[] = [];
-    let u: V3 = basis(normalize(sub(first.end, first.start)))[0];
-    const push = (center: V3, dir: V3, radius: number, limb: number): void => {
-      u = normalize(addScaled(u, dir, -dot(u, dir)));
-      rings.push({ center, dir, u, v: cross(dir, u), radius, limb });
-    };
-    chain.forEach((i, k) => {
-      const limb = skel.limbs[i] as Limb;
-      const len = length(sub(limb.end, limb.start));
-      const dir = normalize(sub(limb.end, limb.start));
-      const after = chain[k + 1];
-      const nextDir =
-        after === undefined
-          ? dir
-          : normalize(
-              sub(
-                (skel.limbs[after] as Limb).end,
-                (skel.limbs[after] as Limb).start,
-              ),
-            );
-      // A bough sinks into its parent so its joint never shows a gap.
-      const sink =
-        k > 0 || limb.depth === 0
-          ? 0
-          : Math.min(limb.startRadius * 1.2, len * 0.3);
-      const span = len + sink;
-      const start = addScaled(limb.start, dir, -sink);
-      // A bough leaving the top of its parent starts as wide as the parent ends.
-      const parent =
-        k === 0 && limb.depth >= 1 ? skel.limbs[limb.parent] : undefined;
-      const atTop =
-        parent !== undefined &&
-        length(sub(limb.start, parent.end)) < parent.endRadius * 0.6;
-      const swell = atTop
-        ? Math.max(0, parent.endRadius / limb.startRadius - 1)
-        : 0;
-      const swellAt = sink;
-      const swellOf = (along: number): number =>
-        swell <= 0
-          ? 0
-          : along <= swellAt
-            ? 1
-            : Math.exp(
-                -(((along - swellAt) / (limb.startRadius * FORK_REACH)) ** 2),
-              );
-      const radiusAt = (along: number): number =>
-        (limb.startRadius +
-          (limb.endRadius - limb.startRadius) *
-            clamp((along - sink) / len, 0, 1)) *
-        (1 + swell * swellOf(along));
-      const count = clamp(
-        Math.ceil(span / ((limb.startRadius + limb.endRadius) * 2.2)),
-        1,
-        whip ? 2 : limb.depth === 0 ? 6 : 3,
-      );
-      let alongs = Array.from(
-        { length: count + 1 },
-        (_, n) => (n / count) * span,
-      );
-      if (swell > 0 && limb.startRadius > trunkRadius * 0.2) {
-        // Rings across the swelling, so it curves.
-        const extra = [0.6, 1.5]
-          .map((w) => swellAt + w * limb.startRadius)
-          .filter((a) => a < span * 0.7);
-        alongs = [...alongs, ...extra]
-          .sort((a, b) => a - b)
-          .filter(
-            (a, n, all) =>
-              n === 0 || a - (all[n - 1] as number) > limb.startRadius * 0.15,
-          );
-      }
-      if (k === 0 && flared) {
-        // Rings close together near the ground, so the flare curves.
-        const extra = flareRings
-          .map((y) => y / Math.max(dir[1], 0.5))
-          .filter((a) => a < span * 0.8);
-        alongs = [...alongs, ...extra]
-          .sort((a, b) => a - b)
-          .filter(
-            (a, n, all) =>
-              n === 0 || a - (all[n - 1] as number) > trunkRadius * 0.03,
-          );
-      }
-      alongs.forEach((along, n) => {
-        if (k > 0 && n === 0) return;
-        const end = n === alongs.length - 1;
-        push(
-          addScaled(start, dir, along),
-          end ? normalize(add(dir, nextDir)) : dir,
-          radiusAt(along),
-          i,
-        );
-      });
-    });
+    const radial = tubeRadial(whip, flared, first, trunkRadius);
+    const rings = chainRingsOf(
+      skel,
+      chain,
+      whip,
+      flared,
+      trunkRadius,
+      flareRings,
+    );
     tubes.push({ chain, radial, rings, flared });
   }
   return tubes;
@@ -619,6 +665,113 @@ export const barkTriangles = (skel: Skeleton): number =>
     (n, t) => n + t.radial * (2 * (t.rings.length - 1) + 1),
     0,
   );
+
+function emitBarkTube(
+  out: PartBuilder,
+  skel: Skeleton,
+  boughs: Boughs,
+  flare: Flare,
+  children: readonly number[],
+  tube: Tube,
+  roughness: number,
+  r: Rand,
+  seed: number,
+): void {
+  const { chain, radial, rings, flared } = tube;
+  const head = chain[0] as number;
+  const first = skel.limbs[head] as Limb;
+  const lr = r.fork(`limb${head}`);
+  // Limbs never go, so twigs and leaves always have a limb under them and a tree at low vitality stands bare.
+  const wither = 0.45 + 0.25 * lr.next();
+  const furrows = first.depth === 0 ? 7 : 4;
+
+  // The surface without its bark's ridges gives the normals, so the flare
+  // shades as one smooth form. The ridges go on top.
+  const smooth = (ring: Ring, theta: number): V3 => {
+    const m = flared ? flare.at(ring.center[1], theta) : 1;
+    return addScaled(
+      ring.center,
+      add(scale(ring.u, Math.cos(theta)), scale(ring.v, Math.sin(theta))),
+      ring.radius * m,
+    );
+  };
+  const step = (Math.PI * 2) / radial;
+  const ringStart = out.vertexCount;
+  rings.forEach((ring, k) => {
+    const lo = rings[Math.max(0, k - 1)] as Ring;
+    const hi = rings[Math.min(rings.length - 1, k + 1)] as Ring;
+    for (let j = 0; j <= radial; j++) {
+      const theta = j * step;
+      const outward = add(
+        scale(ring.u, Math.cos(theta)),
+        scale(ring.v, Math.sin(theta)),
+      );
+      let n = normalize(
+        cross(
+          sub(
+            smooth(ring, theta + step * 0.5),
+            smooth(ring, theta - step * 0.5),
+          ),
+          sub(smooth(hi, theta), smooth(lo, theta)),
+        ),
+      );
+      if (dot(n, outward) < 0) n = scale(n, -1);
+      const c = ring.center;
+      const { bump, shade } = barkAt(
+        roughness,
+        seed,
+        furrows,
+        c,
+        theta,
+        c[1],
+        c[1],
+      );
+      const q = addScaled(smooth(ring, theta), outward, ring.radius * bump);
+      const b = boughs.at(ring.limb, q);
+      out.vertex(q, n, shade, {
+        loss: 0,
+        droop: b.droop,
+        wither,
+        glow: 0,
+        pivot: b.bough,
+        bough: b.bough,
+      });
+    }
+  });
+  // Wound counter-clockwise seen from outside, so the bark's outer face is its front face.
+  for (let k = 0; k < rings.length - 1; k++) {
+    for (let j = 0; j < radial; j++) {
+      const a = ringStart + k * (radial + 1) + j;
+      const b = a + radial + 1;
+      out.triangle(a, a + 1, b);
+      out.triangle(a + 1, b + 1, b);
+    }
+  }
+  // Close the end with a short rounded tip. Where boughs leave the end, the
+  // tip barely rises and shades as bark, inside the boughs' swollen starts.
+  const end = chain[chain.length - 1] as number;
+  const lastLimb = skel.limbs[end] as Limb;
+  const lastDir = normalize(sub(lastLimb.end, lastLimb.start));
+  const last = ringStart + (rings.length - 1) * (radial + 1);
+  const forked = (children[end] ?? 0) > 0;
+  const tip = addScaled(
+    lastLimb.end,
+    lastDir,
+    lastLimb.endRadius * (forked ? 0.6 : 0.8),
+  );
+  const b = boughs.at(end, tip);
+  const tipIndex = out.vertex(tip, lastDir, forked ? 0.5 : 0.7, {
+    loss: 0,
+    droop: b.droop,
+    wither,
+    glow: 0,
+    pivot: b.bough,
+    bough: b.bough,
+  });
+  for (let j = 0; j < radial; j++) {
+    out.triangle(last + j, last + j + 1, tipIndex);
+  }
+}
 
 export function buildBark(
   p: Resolved<typeof barkParams>,
@@ -635,103 +788,19 @@ export function buildBark(
   for (const l of skel.limbs) {
     if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
   }
-
-  for (const { chain, radial, rings, flared } of tubesOf(skel)) {
-    const head = chain[0] as number;
-    const first = skel.limbs[head] as Limb;
-    const lr = r.fork(`limb${head}`);
-    // Limbs never go, so twigs and leaves always have a limb under them and a tree at low vitality stands bare.
-    const wither = 0.45 + 0.25 * lr.next();
-    const furrows = first.depth === 0 ? 7 : 4;
-
-    // The surface without its bark's ridges gives the normals, so the flare
-    // shades as one smooth form. The ridges go on top.
-    const smooth = (ring: Ring, theta: number): V3 => {
-      const m = flared ? flare.at(ring.center[1], theta) : 1;
-      return addScaled(
-        ring.center,
-        add(scale(ring.u, Math.cos(theta)), scale(ring.v, Math.sin(theta))),
-        ring.radius * m,
-      );
-    };
-    const step = (Math.PI * 2) / radial;
-    const ringStart = out.vertexCount;
-    rings.forEach((ring, k) => {
-      const lo = rings[Math.max(0, k - 1)] as Ring;
-      const hi = rings[Math.min(rings.length - 1, k + 1)] as Ring;
-      for (let j = 0; j <= radial; j++) {
-        const theta = j * step;
-        const outward = add(
-          scale(ring.u, Math.cos(theta)),
-          scale(ring.v, Math.sin(theta)),
-        );
-        let n = normalize(
-          cross(
-            sub(
-              smooth(ring, theta + step * 0.5),
-              smooth(ring, theta - step * 0.5),
-            ),
-            sub(smooth(hi, theta), smooth(lo, theta)),
-          ),
-        );
-        if (dot(n, outward) < 0) n = scale(n, -1);
-        const c = ring.center;
-        const { bump, shade } = barkAt(
-          p.roughness,
-          seed,
-          furrows,
-          c,
-          theta,
-          c[1],
-          c[1],
-        );
-        const q = addScaled(smooth(ring, theta), outward, ring.radius * bump);
-        const b = boughs.at(ring.limb, q);
-        out.vertex(q, n, shade, {
-          loss: 0,
-          droop: b.droop,
-          wither,
-          glow: 0,
-          pivot: b.bough,
-          bough: b.bough,
-        });
-      }
-    });
-    // Wound counter-clockwise seen from outside, so the bark's outer face is its front face.
-    for (let k = 0; k < rings.length - 1; k++) {
-      for (let j = 0; j < radial; j++) {
-        const a = ringStart + k * (radial + 1) + j;
-        const b = a + radial + 1;
-        out.triangle(a, a + 1, b);
-        out.triangle(a + 1, b + 1, b);
-      }
-    }
-    // Close the end with a short rounded tip. Where boughs leave the end, the
-    // tip barely rises and shades as bark, inside the boughs' swollen starts.
-    const end = chain[chain.length - 1] as number;
-    const lastLimb = skel.limbs[end] as Limb;
-    const lastDir = normalize(sub(lastLimb.end, lastLimb.start));
-    const last = ringStart + (rings.length - 1) * (radial + 1);
-    const forked = (children[end] ?? 0) > 0;
-    const tip = addScaled(
-      lastLimb.end,
-      lastDir,
-      lastLimb.endRadius * (forked ? 0.6 : 0.8),
+  for (const tube of tubesOf(skel)) {
+    emitBarkTube(
+      out,
+      skel,
+      boughs,
+      flare,
+      children,
+      tube,
+      p.roughness,
+      r,
+      seed,
     );
-    const b = boughs.at(end, tip);
-    const tipIndex = out.vertex(tip, lastDir, forked ? 0.5 : 0.7, {
-      loss: 0,
-      droop: b.droop,
-      wither,
-      glow: 0,
-      pivot: b.bough,
-      bough: b.bough,
-    });
-    for (let j = 0; j < radial; j++) {
-      out.triangle(last + j, last + j + 1, tipIndex);
-    }
   }
-
   return { parts: [out.part()], anchors: skel.tips };
 }
 
@@ -768,6 +837,94 @@ const SPRAY_CUTS = {
 /** A crown's share of the sparse sprays along each twig. Full sprays fill a clump with fewer, and every twig keeps the spray at its tip. */
 const CROWN_SHARE = 0.34;
 
+const SHAPE_SCALE: Record<ClumpShape, number> = {
+  round: 1,
+  plates: 1.2,
+  tufts: 0.62,
+};
+
+const mostClumpsFor = (look: ClumpLook, budget: number): number =>
+  Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
+
+function collectLeafClumps(
+  skel: Skeleton,
+  boughs: Boughs,
+  crown: Crown,
+  kept: readonly number[],
+  fill: number,
+  shape: ClumpShape,
+  base: number,
+  grow: number,
+  s: number,
+  r: Rand,
+): Clump[] {
+  const clumps: Clump[] = [];
+  // Keep foliage off the ground and clear of the lower trunk. The trunk forks
+  // where its first bough leaves it. A spire's trunk runs to its top, but its
+  // lowest whorl leaves far below. Roots leaving at the ground (a great
+  // tree's buttresses) are not boughs.
+  const trunkTop = skel.limbs.reduce(
+    (m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m),
+    0,
+  );
+  const fork = skel.limbs.reduce(
+    (m, l) =>
+      l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m,
+    trunkTop,
+  );
+  // A shrub has no trunk, so its clumps reach the soil, as a leaf mound's do.
+  const floor = oneTrunk(skel) ? Math.max(fork * 0.85, 1.2 * s) : 0;
+  for (const i of kept) {
+    const tip = skel.tips[i] as Anchor;
+    const cr = r.fork(`tip${i}`);
+    const radius = base * (0.75 + 0.3 * tip.size) * cr.range(0.85, 1.15) * grow;
+    const lift = shape === "plates" ? 0.25 : 0.15;
+    const center = add(addScaled(tip.position, tip.normal, radius * 0.35), [
+      0,
+      radius * lift,
+      0,
+    ]);
+    center[1] = Math.max(center[1], floor + radius * 0.5);
+    clumps.push({
+      center,
+      radius,
+      limb: liftedFrom(
+        boughs,
+        center,
+        tip.position,
+        radius,
+        boughs.limbNear(tip.position),
+      ),
+      r: cr,
+    });
+  }
+  // Fill the crown's interior so a full canopy looks like one mass.
+  const inner = skel.limbs
+    .map((l, i) => ({ l, i }))
+    .filter(
+      ({ l }) => l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l),
+    );
+  for (let i = 0; i < fill && inner.length > 0; i++) {
+    const fr = r.fork(`fill${i}`);
+    const pick = inner[Math.floor(fr.next() * inner.length)] as {
+      l: Limb;
+      i: number;
+    };
+    const at = lerp(pick.l.start, pick.l.end, fr.range(0.3, 1));
+    const { out: away } = crownPlace(crown, at);
+    const radius = base * fr.range(0.8, 1.1) * grow;
+    const center = addScaled(at, away, radius * 0.25);
+    center[1] = Math.max(center[1], floor + radius * 0.5);
+    clumps.push({
+      center,
+      radius,
+      limb: liftedFrom(boughs, center, at, radius, pick.i),
+      r: fr,
+    });
+  }
+  return clumps;
+}
+
 /**
  * Builds clumps of leaves where a canopy's mass is: one at every tip and, for
  * a full crown, more along the inner limbs, so the crown looks like one mass
@@ -799,8 +956,7 @@ export function buildLeafClumps(
     ground: 0,
     low: !oneTrunk(skel),
   });
-  const shapeScale =
-    p.shape === "plates" ? 1.2 : p.shape === "tufts" ? 0.62 : 1;
+  const shapeScale = SHAPE_SCALE[p.shape];
   // Tufts are smaller than round clumps, so a tufted crown grows enough more of them along its limbs to cover what
   // round clumps would. At a given fullness it hides as much of its frame, with more and smaller tufts.
   const fillOf = (n: number): number => {
@@ -811,8 +967,6 @@ export function buildLeafClumps(
     );
   };
   const roomFor = (most: number): number => guard ?? crownRoom(skel, most);
-  const mostClumps = (look: ClumpLook, budget: number): number =>
-    Math.floor(budget / (FEWEST_TWIGS * twigTriangles(look)));
   // A frame with more tips than the crown can give clumps (a fir's whorls) gets fewer, larger clumps, each holding
   // the leaves of the tips it covers on full twigs, so the crown keeps its leaves while the twigs hidden inside its
   // clumps thin. Such a crown fills its frame as a fir's needles would, and gets the same budget.
@@ -820,14 +974,14 @@ export function buildLeafClumps(
   const merged =
     crownTips(
       skel.tips,
-      mostClumps(sparse, roomFor(CLUMP_TRIANGLE_BUDGET)),
+      mostClumpsFor(sparse, roomFor(CLUMP_TRIANGLE_BUDGET)),
       fillOf,
     ).length < skel.tips.length;
   const look = merged ? lookOf(1) : sparse;
   const budget = roomFor(
     merged ? NEEDLE_TRIANGLE_BUDGET : CLUMP_TRIANGLE_BUDGET,
   );
-  const kept = crownTips(skel.tips, mostClumps(look, budget), fillOf);
+  const kept = crownTips(skel.tips, mostClumpsFor(look, budget), fillOf);
   const grow = Math.sqrt(skel.tips.length / Math.max(1, kept.length));
   const tipCount = Math.max(1, kept.length);
   // Clumps scale with how far apart the tips are, so neighbors just overlap at "medium".
@@ -838,71 +992,18 @@ export function buildLeafClumps(
     shapeScale *
     (0.72 + 0.38 * p.fullness);
 
-  const clumps: Clump[] = [];
-  // Keep foliage off the ground and clear of the lower trunk. The trunk forks
-  // where its first bough leaves it. A spire's trunk runs to its top, but its
-  // lowest whorl leaves far below. Roots leaving at the ground (a great
-  // tree's buttresses) are not boughs.
-  const trunkTop = skel.limbs.reduce(
-    (m, l) => (l.depth === 0 ? Math.max(m, l.end[1]) : m),
-    0,
+  const clumps = collectLeafClumps(
+    skel,
+    boughs,
+    crown,
+    kept,
+    fillOf(tipCount),
+    p.shape,
+    base,
+    grow,
+    s,
+    r,
   );
-  const fork = skel.limbs.reduce(
-    (m, l) =>
-      l.depth >= 1 && l.start[1] > trunkTop * 0.1 ? Math.min(m, l.start[1]) : m,
-    trunkTop,
-  );
-  // A shrub has no trunk, so its clumps reach the soil, as a leaf mound's do.
-  const floor = oneTrunk(skel) ? Math.max(fork * 0.85, 1.2 * s) : 0;
-  for (const i of kept) {
-    const tip = skel.tips[i] as Anchor;
-    const cr = r.fork(`tip${i}`);
-    const radius = base * (0.75 + 0.3 * tip.size) * cr.range(0.85, 1.15) * grow;
-    const lift = p.shape === "plates" ? 0.25 : 0.15;
-    const center = add(addScaled(tip.position, tip.normal, radius * 0.35), [
-      0,
-      radius * lift,
-      0,
-    ]);
-    center[1] = Math.max(center[1], floor + radius * 0.5);
-    clumps.push({
-      center,
-      radius,
-      limb: liftedFrom(
-        boughs,
-        center,
-        tip.position,
-        radius,
-        boughs.limbNear(tip.position),
-      ),
-      r: cr,
-    });
-  }
-  // Fill the crown's interior so a full canopy looks like one mass.
-  const fill = fillOf(tipCount);
-  const inner = skel.limbs
-    .map((l, i) => ({ l, i }))
-    .filter(
-      ({ l }) => l.depth >= Math.max(1, maxDepthOf(skel) - 1) && aboveSoil(l),
-    );
-  for (let i = 0; i < fill && inner.length > 0; i++) {
-    const fr = r.fork(`fill${i}`);
-    const pick = inner[Math.floor(fr.next() * inner.length)] as {
-      l: Limb;
-      i: number;
-    };
-    const at = lerp(pick.l.start, pick.l.end, fr.range(0.3, 1));
-    const { out: away } = crownPlace(crown, at);
-    const radius = base * fr.range(0.8, 1.1) * grow;
-    const center = addScaled(at, away, radius * 0.25);
-    center[1] = Math.max(center[1], floor + radius * 0.5);
-    clumps.push({
-      center,
-      radius,
-      limb: liftedFrom(boughs, center, at, radius, pick.i),
-      r: fr,
-    });
-  }
 
   // Every clump stays, so the crown keeps its shape. A crown over budget thins all its twigs evenly.
   let density = 1;
@@ -1031,6 +1132,31 @@ export const FEWEST_TWIGS = 4;
 const twigsOf = (look: ClumpLook, radius: number, density: number): number =>
   Math.max(FEWEST_TWIGS, Math.round(look.twigs * radius * radius * density));
 
+function fitSprayAboveGround(
+  look: ClumpLook,
+  at0: V3,
+  sdir: V3,
+): number | null {
+  // Near the soil a spray turns up rather than into it, and on a shrub grows smaller to fit above it.
+  const half =
+    look.low === true
+      ? Math.min(look.half, (at0[1] - look.ground) / 1.2)
+      : look.half;
+  // A shrub's spray closer to the soil than a card reaches along itself (2.65 half widths, plus its spread)
+  // always turns up.
+  if (
+    at0[1] + sdir[1] * 2.3 * half - half < look.ground ||
+    (look.low === true && at0[1] - look.ground < 3.1 * half)
+  ) {
+    sdir[1] = Math.abs(sdir[1]);
+  }
+  const tooLow =
+    look.low === true
+      ? half < LOWEST_SPRAY * look.half
+      : at0[1] - 1.2 * look.half < look.ground;
+  return tooLow ? null : half;
+}
+
 /**
  * One clump: twigs from its limb to points spread over its surface, a little
  * inside it, each with sprays along it and a fork with sprays of its own.
@@ -1150,26 +1276,8 @@ export function emitClump(
             scale(out, 0.15),
           ),
         );
-        // Near the soil a spray turns up rather than into it, and on a shrub grows smaller to fit above it.
-        const half =
-          look.low === true
-            ? Math.min(look.half, (at0[1] - look.ground) / 1.2)
-            : look.half;
-        // A shrub's spray closer to the soil than a card reaches along itself (2.65 half widths, plus its spread)
-        // always turns up.
-        if (
-          at0[1] + sdir[1] * 2.3 * half - half < look.ground ||
-          (look.low === true && at0[1] - look.ground < 3.1 * half)
-        ) {
-          sdir[1] = Math.abs(sdir[1]);
-        }
-        if (
-          look.low === true
-            ? half < LOWEST_SPRAY * look.half
-            : at0[1] - 1.2 * look.half < look.ground
-        ) {
-          continue;
-        }
+        const half = fitSprayAboveGround(look, at0, sdir);
+        if (half === null) continue;
         const b = carry(at0);
         const depth = clamp(
           length(sub(at0, clump.center)) / clump.radius,
@@ -2218,6 +2326,91 @@ function emitFrond(
 
 // ---------- blossoms ----------
 
+function anchorCarry(a: Anchor): {
+  readonly pivot: Vec3;
+  readonly bough: Vec3;
+  readonly twig: Vec3;
+  readonly droop: number;
+} {
+  return {
+    pivot: a.position,
+    bough: a.carry?.bough ?? a.position,
+    twig: a.carry?.twig ?? a.carry?.bough ?? a.position,
+    droop: a.carry?.droop ?? 0,
+  };
+}
+
+function emitBlossomAt(
+  out: PartBuilder,
+  form: Resolved<typeof blossomsParams>["form"],
+  a: Anchor,
+  size: number,
+  loss: number,
+  ar: Rand,
+): void {
+  const carry = anchorCarry(a);
+  if (form === "petals") {
+    // A truss of small five-petaled flowers on fine stalks, rooted on the twig and reaching out and a little up.
+    const dir = normalize(
+      add(a.normal, [ar.range(-0.3, 0.3), 0.5, ar.range(-0.3, 0.3)]),
+    );
+    const [side] = basis(dir);
+    const half = 0.16 * size;
+    const rows = [-1, 1].map((b) =>
+      [-1, 1].map((x): CardPoint => ({
+        p: add(
+          addScaled(a.position, dir, (b + 1) * half),
+          scale(side, x * half),
+        ),
+        across: x,
+        along: b,
+        n: normalize(add(a.normal, [0, 0.4, 0])),
+        shade: 0.7,
+      })),
+    );
+    emitCard(out, rows, cutOf(CUT.umbels, ar.next()), {
+      ...carry,
+      loss,
+      wither: 1,
+      glow: 0,
+    });
+    return;
+  }
+  if (form === "pods") {
+    const hang = 0.12 * size;
+    const center = add(a.position, [0, -hang - 0.12 * size, 0]);
+    emitBall(
+      out,
+      center,
+      [0.065 * size, 0.09 * size, 0.065 * size],
+      1,
+      { ...carry, loss, wither: 1, glow: 1 },
+      0.55,
+    );
+    emitStalk(out, a.position, add(center, [0, 0.08 * size, 0]), 0.012 * size, {
+      ...carry,
+      loss,
+      wither: 1,
+      glow: 0,
+    });
+    return;
+  }
+  // A cluster of two to four berries hanging on a short stalk from the twig.
+  const berries = 2 + Math.floor(ar.next() * 3);
+  const hang = add(a.position, [0, -0.045 * size, 0]);
+  const ch = { ...carry, loss, wither: 1, glow: 0 };
+  emitStalk(out, a.position, hang, 0.008 * size, ch);
+  for (let b = 0; b < berries; b++) {
+    const rad = 0.028 * size * ar.range(0.8, 1.2);
+    const c = add(hang, [
+      ar.range(-0.04, 0.04) * size,
+      -rad * ar.range(0.4, 1),
+      ar.range(-0.04, 0.04) * size,
+    ]);
+    emitBall(out, c, [rad, rad, rad], 0, ch, 0.45);
+  }
+}
+
 /**
  * Flowers, pods or berries on the anchors the foliage leaves on its twigs
  * and limbs. Each hangs from its anchor on a stalk, sags with the bough that
@@ -2249,78 +2442,14 @@ export function buildBlossoms(
       i,
       key: picker.next() + (p.form === "berries" && a.normal[1] > 0.35 ? 1 : 0),
     }))
-    .sort((x, y) => x.key - y.key)
+    .toSorted((x, y) => x.key - y.key)
     .slice(0, want)
-    .sort((x, y) => x.i - y.i);
+    .toSorted((x, y) => x.i - y.i);
   for (const { a, i } of chosen) {
     const ar = r.fork(`at${i}`);
     const loss = 0.3 + 0.45 * ar.next();
     const size = s * (0.75 + 0.35 * a.size);
-    const carry = {
-      pivot: a.position,
-      bough: a.carry?.bough ?? a.position,
-      twig: a.carry?.twig ?? a.carry?.bough ?? a.position,
-      droop: a.carry?.droop ?? 0,
-    };
-    if (p.form === "petals") {
-      // A truss of small five-petaled flowers on fine stalks, rooted on the twig and reaching out and a little up.
-      const dir = normalize(
-        add(a.normal, [ar.range(-0.3, 0.3), 0.5, ar.range(-0.3, 0.3)]),
-      );
-      const [side] = basis(dir);
-      const half = 0.16 * size;
-      const rows = [-1, 1].map((b) =>
-        [-1, 1].map((x): CardPoint => ({
-          p: add(
-            addScaled(a.position, dir, (b + 1) * half),
-            scale(side, x * half),
-          ),
-          across: x,
-          along: b,
-          n: normalize(add(a.normal, [0, 0.4, 0])),
-          shade: 0.7,
-        })),
-      );
-      emitCard(out, rows, cutOf(CUT.umbels, ar.next()), {
-        ...carry,
-        loss,
-        wither: 1,
-        glow: 0,
-      });
-    } else if (p.form === "pods") {
-      const hang = 0.12 * size;
-      const center = add(a.position, [0, -hang - 0.12 * size, 0]);
-      emitBall(
-        out,
-        center,
-        [0.065 * size, 0.09 * size, 0.065 * size],
-        1,
-        { ...carry, loss, wither: 1, glow: 1 },
-        0.55,
-      );
-      emitStalk(
-        out,
-        a.position,
-        add(center, [0, 0.08 * size, 0]),
-        0.012 * size,
-        { ...carry, loss, wither: 1, glow: 0 },
-      );
-    } else {
-      // A cluster of two to four berries hanging on a short stalk from the twig.
-      const berries = 2 + Math.floor(ar.next() * 3);
-      const hang = add(a.position, [0, -0.045 * size, 0]);
-      const ch = { ...carry, loss, wither: 1, glow: 0 };
-      emitStalk(out, a.position, hang, 0.008 * size, ch);
-      for (let b = 0; b < berries; b++) {
-        const rad = 0.028 * size * ar.range(0.8, 1.2);
-        const c = add(hang, [
-          ar.range(-0.04, 0.04) * size,
-          -rad * ar.range(0.4, 1),
-          ar.range(-0.04, 0.04) * size,
-        ]);
-        emitBall(out, c, [rad, rad, rad], 0, ch, 0.45);
-      }
-    }
+    emitBlossomAt(out, p.form, a, size, loss, ar);
   }
   return { parts: [out.part()], anchors: [] };
 }
@@ -2385,9 +2514,9 @@ export function buildFruit(
       ...x,
       key: picker.next() + inner(x.a) * 1.5 + (x.a.normal[1] > 0.35 ? 0.5 : 0),
     }))
-    .sort((x, y) => x.key - y.key)
+    .toSorted((x, y) => x.key - y.key)
     .slice(0, want)
-    .sort((x, y) => x.i - y.i);
+    .toSorted((x, y) => x.i - y.i);
   // A pear narrows above its widest point into a neck.
   const shape = (n: Vec3): V3 =>
     pear
@@ -2402,19 +2531,13 @@ export function buildFruit(
     const size = radius * fr.range(0.85, 1.15);
     const drops = 0.2 + 0.45 * fr.next();
     const tint = fr.range(-0.03, 0.03);
-    const carry = {
-      bough: a.carry?.bough ?? a.position,
-      twig: a.carry?.twig ?? a.carry?.bough ?? a.position,
-      droop: a.carry?.droop ?? 0,
-    };
     const center = add(a.position, [
       fr.range(-0.01, 0.01),
       -FRUIT.stalk - top * size,
       fr.range(-0.01, 0.01),
     ]);
     const ch: Channels = {
-      ...carry,
-      pivot: a.position,
+      ...anchorCarry(a),
       loss: drops,
       wither: 0.85,
       glow: 0,

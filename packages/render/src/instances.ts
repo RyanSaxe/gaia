@@ -235,6 +235,16 @@ interface Level {
   generation: number;
 }
 
+/** An instance buffer for `n` copies of `size` floats each, with room to grow, so a new bake rarely needs a new one. */
+const bufferFor = (n: number, size = 16): THREE.InstancedBufferAttribute => {
+  const attribute = new THREE.InstancedBufferAttribute(
+    new Float32Array(Math.max(1, Math.ceil(n * 1.25)) * size),
+    size,
+  );
+  attribute.setUsage(THREE.DynamicDrawUsage);
+  return attribute;
+};
+
 export function createPlantInstances(
   plant: Realized,
   light: SceneLight,
@@ -251,11 +261,7 @@ export function createPlantInstances(
     const p = part.positions;
     for (let i = 0; i < p.length; i += 3) {
       box.expandByPoint(
-        point.set(
-          p[i] as number,
-          Math.max(0, p[i + 1] as number),
-          p[i + 2] as number,
-        ),
+        point.set(p[i] as number, Math.max(0, p[i + 1] as number), p[i + 2]),
       );
     }
   }
@@ -395,15 +401,6 @@ export function createPlantInstances(
     return made;
   };
 
-  /** An instance buffer for `n` copies of `size` floats each, with room to grow, so a new bake rarely needs a new one. */
-  const bufferFor = (n: number, size = 16): THREE.InstancedBufferAttribute => {
-    const attribute = new THREE.InstancedBufferAttribute(
-      new Float32Array(Math.max(1, Math.ceil(n * 1.25)) * size),
-      size,
-    );
-    attribute.setUsage(THREE.DynamicDrawUsage);
-    return attribute;
-  };
   // Parts of one swatch draw as one mesh, so a tree's twigs join its bark limbs.
   const levels: Level[] = levelsOf(mergeParts(plant.parts)).map(
     ({ at, parts }) => {
@@ -494,29 +491,29 @@ export function createPlantInstances(
     object,
     height,
     radius,
-    get count() {
+    get count(): number {
       return count;
     },
     levels: levels.map((l) => l.at),
     built: sphere.clone(),
     reach,
-    get triangles() {
+    get triangles(): number {
       return perCopy * count;
     },
-    get vitality() {
+    get vitality(): number {
       return all;
     },
-    setVitality(v) {
+    setVitality(v): void {
       all = Math.min(1, Math.max(0, v));
       for (let i = 0; i < count; i++) write(i, shownVitality(all));
       generation++;
     },
-    setVitalityAt(index, v) {
+    setVitalityAt(index, v): void {
       write(index, shownVitality(v));
       generation++;
     },
     draw,
-    respot(next) {
+    respot(next): void {
       place(next);
       for (const level of levels) {
         if (level.attribute.count < Math.max(1, count)) {
@@ -531,7 +528,7 @@ export function createPlantInstances(
       }
       generation++;
     },
-    warm() {
+    warm(): void {
       for (const level of levels) {
         level.attribute.array.set(source.subarray(0, 16), 0);
         level.lags.array[0] = lagSource[0] as number;
@@ -545,14 +542,14 @@ export function createPlantInstances(
       }
     },
     drawn: () => lastDrawn,
-    nearLeaves(focal, from, to, gone) {
+    nearLeaves(focal, from, to, gone): void {
       shared.uNearLeaves.value.set(focal, from, to);
       shared.uNearGone.value.set(gone[0], gone[1]);
     },
-    useDepth(on) {
+    useDepth(on): void {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;
     },
-    dispose() {
+    dispose(): void {
       for (const m of meshes) {
         m.mesh.geometry.dispose();
         m.mesh.dispose();

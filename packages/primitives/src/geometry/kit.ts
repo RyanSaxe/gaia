@@ -201,6 +201,42 @@ export class PartBuilder {
     return this.#idx.length / 3;
   }
 
+  #pushJoints(c: Channels): void {
+    this.#tint.push(clamp(c.tint ?? 0, -0.1, 0.1));
+    this.#loss.push(clamp(c.loss, 0, 1));
+    this.#droop.push(clamp(c.droop, 0, 1));
+    this.#wither.push(clamp(c.wither, 0, 1));
+    this.#glow.push(clamp(c.glow, 0, 1));
+    this.#pivot.push(c.pivot[0], c.pivot[1], c.pivot[2]);
+    const bough = c.bough ?? c.pivot;
+    const twig = c.twig ?? bough;
+    this.#bough.push(bough[0], bough[1], bough[2]);
+    this.#twig.push(twig[0], twig[1], twig[2]);
+    this.#close.push(clamp(c.close ?? 0, 0, 1));
+  }
+
+  #pushMotion(c: Channels): void {
+    const fall = c.fall ?? NO_FALL;
+    this.#fall.push(fall[0], fall[1], fall[2], clamp(fall[3], 0, 1));
+    const grow = c.grow ?? 0;
+    this.#grow.push(clamp(grow, 0, 1));
+    const spin = c.spin ?? SOLID;
+    this.#spin.push(spin[0], spin[1], spin[2]);
+    if (c.fall !== undefined && fall[3] > 0) this.#uses.fall = true;
+    if (grow > 0) this.#uses.grow = true;
+    if (c.spin !== undefined) this.#uses.spin = true;
+  }
+
+  #pushSurface(p: Vec3, c: Channels): void {
+    const rot = c.rot ?? 0;
+    this.#rot.push(clamp(rot, 0, 1));
+    const grain =
+      typeof c.grain === "function" ? c.grain(p) : (c.grain ?? SOLID);
+    this.#grain.push(grain[0], grain[1], grain[2]);
+    if (rot > 0) this.#uses.rot = true;
+    if (c.grain !== undefined) this.#uses.grain = true;
+  }
+
   /** Adds a vertex. `cut` places it on a leaf card (see `CUT`). Solid surfaces omit it. */
   vertex(
     p: Vec3,
@@ -213,31 +249,9 @@ export class PartBuilder {
     this.#cut.push(cut[0], cut[1], cut[2]);
     this.#nrm.push(n[0], n[1], n[2]);
     this.#shade.push(clamp(shade, 0, 1));
-    this.#tint.push(clamp(c.tint ?? 0, -0.1, 0.1));
-    this.#loss.push(clamp(c.loss, 0, 1));
-    this.#droop.push(clamp(c.droop, 0, 1));
-    this.#wither.push(clamp(c.wither, 0, 1));
-    this.#glow.push(clamp(c.glow, 0, 1));
-    this.#pivot.push(c.pivot[0], c.pivot[1], c.pivot[2]);
-    const bough = c.bough ?? c.pivot;
-    const twig = c.twig ?? bough;
-    this.#bough.push(bough[0], bough[1], bough[2]);
-    this.#twig.push(twig[0], twig[1], twig[2]);
-    this.#close.push(clamp(c.close ?? 0, 0, 1));
-    const fall = c.fall ?? NO_FALL;
-    this.#fall.push(fall[0], fall[1], fall[2], clamp(fall[3], 0, 1));
-    this.#grow.push(clamp(c.grow ?? 0, 0, 1));
-    this.#rot.push(clamp(c.rot ?? 0, 0, 1));
-    const spin = c.spin ?? SOLID;
-    this.#spin.push(spin[0], spin[1], spin[2]);
-    const grain =
-      typeof c.grain === "function" ? c.grain(p) : (c.grain ?? SOLID);
-    this.#grain.push(grain[0], grain[1], grain[2]);
-    if (c.fall !== undefined && fall[3] > 0) this.#uses.fall = true;
-    if ((c.grow ?? 0) > 0) this.#uses.grow = true;
-    if ((c.rot ?? 0) > 0) this.#uses.rot = true;
-    if (c.spin !== undefined) this.#uses.spin = true;
-    if (c.grain !== undefined) this.#uses.grain = true;
+    this.#pushJoints(c);
+    this.#pushMotion(c);
+    this.#pushSurface(p, c);
     return this.#shade.length - 1;
   }
 

@@ -15,7 +15,13 @@ import {
   daylight,
 } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
-import { AIR, aerialAt, realizeWorld, skyColorAt } from "@gaia/realize";
+import {
+  type WorldLook,
+  AIR,
+  aerialAt,
+  realizeWorld,
+  skyColorAt,
+} from "@gaia/realize";
 import { randomSlots } from "@gaia/world/testing";
 
 const lib = new Library([
@@ -33,7 +39,7 @@ const KEY_HOURS = (daylight.build as unknown as (p: unknown) => DaySpec)({
 }).keys.map((k) => k.hour);
 
 /** Six worlds and lands drawn from everything Jev can compose, each at every key hour. */
-const looks = (() => {
+const looks = ((): { readonly name: string; readonly look: WorldLook }[] => {
   const r = rand(seedOf("horizons"));
   const random = (): number => r.next();
   return Array.from({ length: 6 }, (_, i) => ({

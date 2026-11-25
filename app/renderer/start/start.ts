@@ -24,6 +24,7 @@ export interface WaitWithStart extends Wait {
 
 /** Milliseconds after a place is chosen when the wait resumes painting even if no card has risen into it. A card takes under 3 s. */
 const UNCOVERED_BY_MS = 6000;
+const noop = (): void => undefined;
 
 /** Adds the start page to `wait`, laid over it in its veil. */
 export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
@@ -39,7 +40,7 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
   // While the table's card rises, the wait holds back new painting, so the sheet still matches the card when it takes
   // the card's place. The held painting then runs in arrival order.
   let covered: Promise<void> = Promise.resolve();
-  let uncover = (): void => undefined;
+  let uncover: () => void = noop;
   const cover = (): void => {
     covered = new Promise((resolve) => (uncover = resolve));
   };
@@ -56,7 +57,7 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
   };
   return {
     ...wait,
-    opening(o) {
+    opening(o): void {
       // A world opened without the start page, as on a reload, rises from the same table as a chosen one.
       if (page === null && o.stage === "reading") page = table();
       if (!left) {
@@ -66,16 +67,16 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
       left = true;
       held(() => wait.opening(o));
     },
-    baking(health) {
+    baking(health): void {
       held(() => wait.baking(health));
     },
-    marks(things) {
+    marks(things): void {
       held(() => wait.marks(things));
     },
-    baked(world) {
+    baked(world): void {
       held(() => wait.baked(world));
     },
-    choose(offer) {
+    choose(offer): Promise<StartChoice> {
       // An offer that comes after a place was chosen starts the page over.
       if (left) {
         page?.close();
@@ -85,13 +86,13 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
       page ??= table();
       return page.offer(offer);
     },
-    async lift() {
+    async lift(): Promise<void> {
       await covered;
       await wait.lift();
       page?.close();
       page = null;
     },
-    hour(h) {
+    hour(h): void {
       if (h === hour) return;
       hour = h;
       page?.hour(h);

@@ -12,17 +12,23 @@ export type LayoutReply =
   | { readonly failed: string };
 
 interface WorkerScope {
-  onmessage: ((e: MessageEvent<LayoutRequest>) => void) | null;
-  postMessage(message: LayoutReply): void;
+  addEventListener(
+    type: "message",
+    listener: (e: MessageEvent<LayoutRequest>) => void,
+  ): void;
+  postMessage(message: LayoutReply, transfer?: Transferable[]): void;
 }
 
 const scope = globalThis as unknown as WorkerScope;
-scope.onmessage = (e) => {
+scope.addEventListener("message", (e): void => {
   laySnapshot(e.data.why, e.data.of).then(
-    (laid) => scope.postMessage(laid),
+    (laid) => scope.postMessage(laid, []),
     (error: unknown) =>
-      scope.postMessage({
-        failed: error instanceof Error ? error.message : String(error),
-      }),
+      scope.postMessage(
+        {
+          failed: error instanceof Error ? error.message : String(error),
+        },
+        [],
+      ),
   );
-};
+});

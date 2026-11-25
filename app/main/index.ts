@@ -21,6 +21,27 @@ import { superviseEngine } from "./engine.ts";
 
 const here = import.meta.dirname;
 
+type FixtureWorld = "proving" | "showcase" | "showcase-fixed";
+
+function fixtureWorld(named: string | undefined): FixtureWorld | null {
+  if (
+    named === "proving" ||
+    named === "showcase" ||
+    named === "showcase-fixed"
+  ) {
+    return named;
+  }
+  return null;
+}
+
+function windowTitle(world: string | null, root: string | null): string {
+  if (world === "proving") return "Gaia · proving ground";
+  if (world === "showcase" || world === "showcase-fixed") {
+    return "Gaia · showcase";
+  }
+  return root === null ? "Gaia" : `Gaia · ${basename(root)}`;
+}
+
 app.setName("Gaia");
 
 void app.whenReady().then(() => {
@@ -31,10 +52,7 @@ void app.whenReady().then(() => {
   const named = process.env.GAIA_PROJECT;
   // `proving`, `showcase` and `showcase-fixed` name fixture worlds that the page lays out itself through `?world=`, so main
   // opens no folder for them.
-  let carried =
-    named === "proving" || named === "showcase" || named === "showcase-fixed"
-      ? named
-      : null;
+  let carried = fixtureWorld(named);
   let root: string | null =
     named === undefined || carried !== null ? null : resolve(named);
   // The engine stores each project's Jev answers and the app settings, such as the spend limit, in Electron's userData
@@ -95,15 +113,7 @@ void app.whenReady().then(() => {
     const world = new URL(window.webContents.getURL()).searchParams.get(
       "world",
     );
-    window.setTitle(
-      world === "proving"
-        ? "Gaia · proving ground"
-        : world === "showcase" || world === "showcase-fixed"
-          ? "Gaia · showcase"
-          : root === null
-            ? "Gaia"
-            : `Gaia · ${basename(root)}`,
-    );
+    window.setTitle(windowTitle(world, root));
   });
   window.on("page-title-updated", (event) => event.preventDefault());
 
@@ -138,7 +148,9 @@ void app.whenReady().then(() => {
           {
             label: "Open Folder…",
             accelerator: "CmdOrCtrl+O",
-            click: () => void openFolder(),
+            click: (): void => {
+              void openFolder();
+            },
           },
           {
             label: "Choose a World…",

@@ -110,7 +110,7 @@ const opened: Promise<World> = drawn.then(() => {
 // opening stage and any error, so a failing device shows where it stopped.
 reportStage("page");
 window.addEventListener("error", (e) =>
-  reportStage("error", { message: String(e.message).slice(0, 300) }),
+  reportStage("error", { message: e.message.slice(0, 300) }),
 );
 window.addEventListener("unhandledrejection", (e) =>
   reportStage("error", {
@@ -150,9 +150,9 @@ declare global {
     __lab: unknown;
   }
 }
-window.__lab = {
+Reflect.set(window, "__lab", {
   /** Resolves once the first world is ready and three frames have drawn. The only view is "immersive". */
-  open: async (view = "immersive") => {
+  open: async (view = "immersive"): Promise<void> => {
     if (view !== "immersive") {
       throw new Error(
         `No view named ${view}: the page shows only the world, "immersive".`,
@@ -163,21 +163,24 @@ window.__lab = {
     await frames(3);
   },
   /** Pins the hour every world shows, or `null` to follow the clock. */
-  hour: async (h: number | null) => {
+  hour: async (h: number | null): Promise<void> => {
     clock.pin(h);
     await frames(3);
   },
   /** The engine's state in words. */
-  status: () => status,
+  status: (): string => status,
   /** The latest frame time, draw calls and the last ten seconds' smoothness. Counting starts with the first call. */
-  stats: () => stats.read(),
+  stats: (): ReturnType<typeof stats.read> => stats.read(),
   /** The smoothness probe's last ten seconds. */
-  smoothness: () => stats.smoothness(),
+  smoothness: (): ReturnType<typeof stats.smoothness> => stats.smoothness(),
   frames,
   /** The world's hooks (`terrain/hooks.ts`). */
-  terrain: new Proxy({}, { get: (_, key: string) => hooks?.[key] }),
+  terrain: new Proxy({}, { get: (_, key: string): unknown => hooks?.[key] }),
   /** The immersive layer's hooks, such as the map, a jump, the corner slip and the state of each wayfinding aid. */
-  immersive: new Proxy({}, { get: (_, key: string) => immersive?.hook[key] }),
+  immersive: new Proxy(
+    {},
+    { get: (_, key: string): unknown => immersive?.hook[key] },
+  ),
   /** The world's sound hooks (`sound/index.ts`). With `?sound=record`, they record what the person hears and render it offline. */
-  sound: new Proxy({}, { get: (_, key: string) => sound?.hook[key] }),
-};
+  sound: new Proxy({}, { get: (_, key: string): unknown => sound?.hook[key] }),
+});

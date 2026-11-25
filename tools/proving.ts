@@ -96,14 +96,20 @@ interface PlannedDir {
   };
 }
 
-const B = (doc: string, form: EntityForm = "package") => ({
+const B = (
+  doc: string,
+  form: EntityForm = "package",
+): NonNullable<PlannedDir["entity"]> => ({
   form,
-  as: "building" as const,
+  as: "building",
   doc,
 });
-const L = (doc: string, form: EntityForm = "package") => ({
+const L = (
+  doc: string,
+  form: EntityForm = "package",
+): NonNullable<PlannedDir["entity"]> => ({
   form,
-  as: "landmark" as const,
+  as: "landmark",
   doc,
 });
 
@@ -826,6 +832,24 @@ const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 const camel = (s: string): string =>
   s.replace(/[-.](\w)/g, (_, c: string) => c.toUpperCase());
 
+function symbolKindFor(k: number): PlannedSymbol["kind"] {
+  if (k === 1) return "class";
+  if (k === 2) return "type";
+  if (k === 3) return "constant";
+  return "function";
+}
+
+function symbolNameFor(
+  kind: PlannedSymbol["kind"],
+  stem: string,
+  verb: string,
+): string {
+  if (kind === "class") return `${cap(stem)}${cap(AGENT[verb] ?? `${verb}er`)}`;
+  if (kind === "type") return `${cap(stem)}${cap(verb)}`;
+  if (kind === "constant") return `${stem.toUpperCase()}_${verb.toUpperCase()}`;
+  return `${verb}${cap(stem)}`;
+}
+
 /** A source file's symbols: functions, a class, documented types and constants, sized from its lines. */
 function symbolsFor(
   base: string,
@@ -839,16 +863,8 @@ function symbolsFor(
   for (let k = 0; k < count; k++) {
     const verb = VERBS[(index * 5 + k) % VERBS.length] as string;
     const span = Math.max(4, Math.round((lines * 0.7) / count));
-    const kind: PlannedSymbol["kind"] =
-      k === 1 ? "class" : k === 2 ? "type" : k === 3 ? "constant" : "function";
-    const name =
-      kind === "class"
-        ? `${cap(stem)}${cap(AGENT[verb] ?? `${verb}er`)}`
-        : kind === "type"
-          ? `${cap(stem)}${cap(verb)}`
-          : kind === "constant"
-            ? `${stem.toUpperCase()}_${verb.toUpperCase()}`
-            : `${verb}${cap(stem)}`;
+    const kind = symbolKindFor(k);
+    const name = symbolNameFor(kind, stem, verb);
     out.push({
       name,
       kind,
@@ -922,7 +938,7 @@ const entityDirs = PLAN.filter((d) => d.entity !== undefined).map(
 const ownerOf = (path: string): string | undefined =>
   entityDirs
     .filter((r) => r === "" || path === r || path.startsWith(`${r}/`))
-    .sort((a, b) => b.length - a.length)[0];
+    .toSorted((a, b) => b.length - a.length)[0];
 /** An entity's entry file, which defines its public API. */
 const entryOf = (root: string): Drafted => {
   const own = drafted.filter((f) => f.dir === root && f.kind === "source");
@@ -973,7 +989,7 @@ const coveringTests = (path: string): string[] => {
       else queue.push(by);
     }
   }
-  return [...tests].sort();
+  return [...tests].toSorted();
 };
 
 // The nearest test file in `dir` or up its tree, which covers a file its own entity tests.
@@ -989,31 +1005,52 @@ const testOf = (dir: string): string | undefined => {
   return undefined;
 };
 
-const files: PlannedFacts[] = drafted.map((f) => {
-  const s = SIGNALS[f.health];
-  const prose = f.kind !== "source" && f.kind !== "test";
+function syntheticTestPath(f: Drafted): string {
+  const stem =
+    f.path
+      .split("/")
+      .pop()
+      ?.replace(/\.\w+$/, "") ?? "";
+  return `${f.dir === "" ? "" : `${f.dir}/`}${stem}.test.ts`;
+}
+
+function testsForFile(
+  f: Drafted,
+  s: (typeof SIGNALS)[Health],
+): PlannedFacts["tests"] {
+  if (f.kind !== "source") return { coveredBy: [], own: [], failing: [] };
   const near = testOf(f.dir);
   const covering = new Set(coveringTests(f.path));
   // Its health decides whether tests cover it: its own entity's tests, or none.
-  if (f.kind === "source" && s.tested !== "none" && near !== undefined) {
+  if (s.tested !== "none" && near !== undefined) {
     covering.add(near);
   }
-  const coveredBy = f.kind === "source" ? [...covering].sort() : [];
-  const own =
-    s.tested === "own"
-      ? coveredBy.filter((t) => ownerOf(t) === ownerOf(f.path))
-      : [];
-  const ownTests =
-    s.tested === "own" && own.length === 0 && f.kind === "source"
-      ? [
-          `${f.dir === "" ? "" : `${f.dir}/`}${f.path
-            .split("/")
-            .pop()
-            ?.replace(/\.\w+$/, "")}.test.ts`,
-        ]
-      : own;
-  const reached =
-    s.tested === "own" ? [...new Set([...coveredBy, ...ownTests])].sort() : [];
+  const coveredBy = [...covering].toSorted();
+  if (s.tested !== "own") return { coveredBy: [], own: [], failing: [] };
+  const own = coveredBy.filter((t) => ownerOf(t) === ownerOf(f.path));
+  const ownTests = own.length === 0 ? [syntheticTestPath(f)] : own;
+  const reached = [...new Set([...coveredBy, ...ownTests])].toSorted();
+  return {
+    coveredBy: reached,
+    own: ownTests,
+    failing: s.failing ? reached : [],
+  };
+}
+
+function docForFile(f: Drafted): { doc?: string } {
+  if (f.kind !== "source") return {};
+  const stem = f.path
+    .split("/")
+    .pop()
+    ?.replace(/\.\w+$/, "");
+  return {
+    doc: `The ${stem} of ${f.dir === "" ? "the proving ground" : f.dir}, ${f.health}.`,
+  };
+}
+
+const files: PlannedFacts[] = drafted.map((f) => {
+  const s = SIGNALS[f.health];
+  const prose = f.kind !== "source" && f.kind !== "test";
   const symbols = f.symbols;
   return {
     path: f.path,
@@ -1021,24 +1058,10 @@ const files: PlannedFacts[] = drafted.map((f) => {
     kind: f.kind,
     lines: f.lines,
     symbols,
-    imports: [...f.imports].sort(),
-    importedBy: [...(importedBy.get(f.path) ?? [])].sort(),
-    ...(f.kind === "source"
-      ? {
-          doc: `The ${f.path
-            .split("/")
-            .pop()
-            ?.replace(
-              /\.\w+$/,
-              "",
-            )} of ${f.dir === "" ? "the proving ground" : f.dir}, ${f.health}.`,
-        }
-      : {}),
-    tests: {
-      coveredBy: f.kind === "source" ? reached : [],
-      own: f.kind === "source" ? ownTests : [],
-      failing: f.kind === "source" && s.failing ? reached : [],
-    },
+    imports: [...f.imports].toSorted(),
+    importedBy: [...(importedBy.get(f.path) ?? [])].toSorted(),
+    ...docForFile(f),
+    tests: testsForFile(f, s),
     complexity: prose
       ? { functions: 0, longestFunction: 0, maxNesting: 0 }
       : {
@@ -1088,20 +1111,28 @@ for (const f of files) {
     ) {
       continue;
     }
-    dependents.set(to, [...(dependents.get(to) ?? []), from].sort());
+    dependents.set(to, [...(dependents.get(to) ?? []), from].toSorted());
   }
 }
+
+function entityDependencies(
+  mine: readonly PlannedFacts[],
+  root: string,
+): string[] {
+  const depends = new Set<string>();
+  for (const f of mine) {
+    for (const i of f.imports) {
+      const o = ownerOf(i);
+      if (o !== undefined && o !== root) depends.add(o);
+    }
+  }
+  return [...depends].toSorted();
+}
+
 const entities: EntityFacts[] = PLAN.filter((d) => d.entity !== undefined).map(
   (d) => {
     const plan = d.entity as NonNullable<PlannedDir["entity"]>;
     const mine = files.filter((f) => ownerOf(f.path) === d.path);
-    const depends = new Set<string>();
-    for (const f of mine) {
-      for (const i of f.imports) {
-        const o = ownerOf(i);
-        if (o !== undefined && o !== d.path) depends.add(o);
-      }
-    }
     const entry = entryOf(d.path);
     const exported =
       files
@@ -1128,7 +1159,7 @@ const entities: EntityFacts[] = PLAN.filter((d) => d.entity !== undefined).map(
       files: mine.length,
       lines: sum((f) => f.lines),
       exports: exported,
-      dependsOn: [...depends].sort(),
+      dependsOn: entityDependencies(mine, d.path),
       dependents: dependents.get(d.path) ?? [],
     };
   },
@@ -1141,8 +1172,8 @@ const facts: CodeFacts = {
     files: files.length,
     lines: files.reduce((n, f) => n + f.lines, 0),
   },
-  files: [...files].sort((a, b) => (a.path < b.path ? -1 : 1)).map(factsOfPlan),
-  entities: [...entities].sort((a, b) => (a.path < b.path ? -1 : 1)),
+  files: files.toSorted((a, b) => (a.path < b.path ? -1 : 1)).map(factsOfPlan),
+  entities: entities.toSorted((a, b) => (a.path < b.path ? -1 : 1)),
 };
 
 // ---------- what Jev would choose ----------
@@ -1154,7 +1185,7 @@ const trees = Object.keys(FORMS).filter((k) => FORMS[k]?.composes === "tree");
 const others = Object.keys(FORMS).filter((k) => FORMS[k]?.composes !== "tree");
 let tree = 0;
 let other = 0;
-for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
+for (const f of files.toSorted((a, b) => (a.path < b.path ? -1 : 1))) {
   if (f.kind === "source") {
     f.symbols.forEach(
       (s, k) =>
@@ -1175,8 +1206,8 @@ const definitionForms = (): string[] =>
 // Every file also appears as one thing at its patch's center, cycling through every form. A few files and definitions
 // appear as a building or a landmark, so the proving ground shows a thing of every size at every level of the code.
 const small = Object.keys(FORMS);
-const sources = [...files]
-  .sort((a, b) => (a.path < b.path ? -1 : 1))
+const sources = files
+  .toSorted((a, b) => (a.path < b.path ? -1 : 1))
   .filter((f) => f.kind === "source" && f.symbols.length > 0);
 /** Every thing that appears as a building or a landmark, by id: the plan's entities, then the raised files and definitions. */
 const raised = new Map<string, "building" | "landmark">(
@@ -1190,8 +1221,8 @@ const raise = (id: string, as: "building" | "landmark"): void => {
   ) as string;
   raised.set(id, as);
 };
-[...files]
-  .sort((a, b) => (a.path < b.path ? -1 : 1))
+files
+  .toSorted((a, b) => (a.path < b.path ? -1 : 1))
   .forEach((f, k) => (forms[f.path] = small[k % small.length] as string));
 // Every seventh source file is raised, alternating building and landmark, and every eleventh raises its first
 // definition, alternating landmark and building.
@@ -1230,14 +1261,12 @@ const quality: Record<string, number> = Object.fromEntries([
  * The three health bands every part must appear in, as the proving ground's test reads them: `thriving` from 0.85,
  * `tired` from 0.35, and `ruin` below 0.12. A value from 0.12 up to 0.35 counts toward none.
  */
-const bandOf = (v: number): { label?: string } =>
-  v >= 0.85
-    ? { label: "thriving" }
-    : v >= 0.35
-      ? { label: "tired" }
-      : v < 0.12
-        ? { label: "ruin" }
-        : {};
+const bandOf = (v: number): { label?: string } => {
+  if (v >= 0.85) return { label: "thriving" };
+  if (v >= 0.35) return { label: "tired" };
+  if (v < 0.12) return { label: "ruin" };
+  return {};
+};
 
 // What Jev would compose from: the sweep of every part, each placed where its place allows and at every health.
 const { lib } = COMPOSING;
@@ -1312,12 +1341,9 @@ const lands = swept(
   regions.map((d) => {
     const settles = waterOf(d).settles ?? {};
     const stream = settles["relief.stream"];
-    const relief =
-      stream === "brook" || stream === "trickle"
-        ? "valley@1"
-        : settles["relief.pond"] === true
-          ? "basin@1"
-          : d.landform;
+    let relief = d.landform;
+    if (stream === "brook" || stream === "trickle") relief = "valley@1";
+    else if (settles["relief.pond"] === true) relief = "basin@1";
     return {
       fixed: settles,
       ...(relief === undefined ? {} : { uses: { relief } }),
@@ -1481,10 +1507,10 @@ if (args.code !== undefined) {
   }
   const vitality = new Map(world.patches.map((p) => [p.path, p.vitality]));
   const { code, manifest } = provingCode(
-    files.map((facts, i) => ({
-      facts,
+    files.map((fileFacts, i) => ({
+      facts: fileFacts,
       health: (drafted[i] as Drafted).health,
-      vitality: vitality.get(facts.path) ?? 1,
+      vitality: vitality.get(fileFacts.path) ?? 1,
     })),
   );
   for (const [path, text] of code) {
@@ -1507,16 +1533,13 @@ const fixtures = resolve(
 mkdirSync(fixtures, { recursive: true });
 writeFileSync(resolve(fixtures, "proving.json"), `${JSON.stringify(facts)}\n`);
 writeFileSync(resolve(fixtures, "proving-judged.json"), fixtureJson(judged));
-const band = (v: number): string =>
-  v >= 0.85
-    ? "0.85 to 1"
-    : v >= 0.6
-      ? "0.6 to 0.85"
-      : v >= 0.35
-        ? "0.35 to 0.6"
-        : v >= 0.12
-          ? "0.12 to 0.35"
-          : "below 0.12";
+const band = (v: number): string => {
+  if (v >= 0.85) return "0.85 to 1";
+  if (v >= 0.6) return "0.6 to 0.85";
+  if (v >= 0.35) return "0.35 to 0.6";
+  if (v >= 0.12) return "0.12 to 0.35";
+  return "below 0.12";
+};
 const count = (vs: readonly number[]): string =>
   Object.entries(
     vs.reduce<Record<string, number>>(

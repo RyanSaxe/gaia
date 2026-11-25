@@ -31,9 +31,15 @@ const KIND_OF_ROLE: Readonly<Record<string, SymbolFact["kind"]>> = {
   namespace: "module",
 };
 
-const byText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+const byText = (a: string, b: string): number => {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+};
 const pathIn = (path: string, root: string): boolean =>
   root === "" || path === root || path.startsWith(`${root}/`);
+const sorted = (set: ReadonlySet<string> | undefined): string[] =>
+  [...(set ?? [])].toSorted(byText);
 
 /** The innermost entity root that holds a path, if any. */
 function ownerOf(
@@ -48,6 +54,12 @@ function ownerOf(
   return best;
 }
 
+function isIncludedSymbol(d: DefNode, kind: SymbolFact["kind"]): boolean {
+  if (d.exported) return true;
+  const top = d.parent === undefined && d.owner === undefined;
+  return top && (kind === "function" || kind === "class");
+}
+
 /**
  * A file's symbols: every definition it exports, and the functions and
  * classes at its top level. A name defined twice is listed once, by its
@@ -57,11 +69,7 @@ function symbolsOf(defs: readonly DefNode[]): SymbolFact[] {
   const byName = new Map<string, SymbolFact>();
   for (const d of defs) {
     const kind = KIND_OF_ROLE[d.role];
-    if (kind === undefined) continue;
-    const top = d.parent === undefined && d.owner === undefined;
-    if (!d.exported && !(top && (kind === "function" || kind === "class"))) {
-      continue;
-    }
+    if (kind === undefined || !isIncludedSymbol(d, kind)) continue;
     const s: SymbolFact = {
       name: d.name,
       kind,
@@ -74,20 +82,18 @@ function symbolsOf(defs: readonly DefNode[]): SymbolFact[] {
       byName.set(d.name, s);
     }
   }
-  return [...byName.values()].sort(
+  return [...byName.values()].toSorted(
     (a, b) => (a.line ?? 0) - (b.line ?? 0) || byText(a.name, b.name),
   );
 }
 
-/** Derives the layout's facts from the engine's code graph. The same graph always gives the same facts. */
-export function factsOf(graph: CodeGraph): CodeFacts {
-  const files = graph.nodes
-    .filter((n): n is FileNode => n.kind === "file")
-    .sort((a, b) => byText(a.path, b.path));
-  const pathOf = new Map(files.map((f) => [f.id, f.path]));
+function indexDefs(
+  nodes: CodeGraph["nodes"],
+  pathOf: ReadonlyMap<string, string>,
+): { defsIn: Map<string, DefNode[]>; fileOfDef: Map<string, string> } {
   const defsIn = new Map<string, DefNode[]>();
   const fileOfDef = new Map<string, string>();
-  for (const n of graph.nodes) {
+  for (const n of nodes) {
     if (n.kind !== "def") continue;
     const path = pathOf.get(n.file);
     if (path === undefined) continue;
@@ -96,10 +102,18 @@ export function factsOf(graph: CodeGraph): CodeFacts {
     if (list === undefined) defsIn.set(path, [n]);
     else list.push(n);
   }
-  const symbols = new Map(
-    files.map((f) => [f.path, symbolsOf(defsIn.get(f.path) ?? [])]),
-  );
+  return { defsIn, fileOfDef };
+}
 
+function buildImportMaps(
+  files: readonly FileNode[],
+  edges: CodeGraph["edges"],
+  pathOf: ReadonlyMap<string, string>,
+  fileOfDef: ReadonlyMap<string, string>,
+): {
+  imports: Map<string, Set<string>>;
+  importedBy: Map<string, Set<string>>;
+} {
   // Imports in both directions, from a file or a definition in it to another file.
   const imports = new Map<string, Set<string>>(
     files.map((f) => [f.path, new Set<string>()]),
@@ -107,7 +121,7 @@ export function factsOf(graph: CodeGraph): CodeFacts {
   const importedBy = new Map<string, Set<string>>(
     files.map((f) => [f.path, new Set<string>()]),
   );
-  for (const e of graph.edges) {
+  for (const e of edges) {
     if (e.kind !== "imports") continue;
     const from = pathOf.get(e.from) ?? fileOfDef.get(e.from);
     const to = pathOf.get(e.to);
@@ -115,27 +129,17 @@ export function factsOf(graph: CodeGraph): CodeFacts {
     imports.get(from)?.add(to);
     importedBy.get(to)?.add(from);
   }
-  const sorted = (set: ReadonlySet<string> | undefined): string[] =>
-    [...(set ?? [])].sort(byText);
-  const fileFacts: FileFacts[] = files.map((f) => ({
-    path: f.path,
-    language: f.language ?? "other",
-    lines: f.measures.lines,
-    symbols: symbols.get(f.path) ?? [],
-    imports: sorted(imports.get(f.path)),
-    importedBy: sorted(importedBy.get(f.path)),
-  }));
+  return { imports, importedBy };
+}
 
-  // Each entity owns the files under its root that no deeper entity owns. It depends on the entities its files
-  // import from.
-  const entityDirs = graph.nodes
-    .filter(
-      (n): n is DirNode & { entity: NonNullable<DirNode["entity"]> } =>
-        n.kind === "dir" && n.entity !== undefined,
-    )
-    .sort((a, b) => byText(a.path, b.path));
-  const roots = entityDirs.map((d) => d.path);
-  const owner = new Map(files.map((f) => [f.path, ownerOf(roots, f.path)]));
+function buildEntityDeps(
+  roots: readonly string[],
+  imports: ReadonlyMap<string, ReadonlySet<string>>,
+  owner: ReadonlyMap<string, string | undefined>,
+): {
+  depends: Map<string, Set<string>>;
+  dependents: Map<string, Set<string>>;
+} {
   const depends = new Map<string, Set<string>>(
     roots.map((r) => [r, new Set<string>()]),
   );
@@ -152,6 +156,45 @@ export function factsOf(graph: CodeGraph): CodeFacts {
       dependents.get(b)?.add(a);
     }
   }
+  return { depends, dependents };
+}
+
+/** Derives the layout's facts from the engine's code graph. The same graph always gives the same facts. */
+export function factsOf(graph: CodeGraph): CodeFacts {
+  const files = graph.nodes
+    .filter((n): n is FileNode => n.kind === "file")
+    .toSorted((a, b) => byText(a.path, b.path));
+  const pathOf = new Map(files.map((f) => [f.id, f.path]));
+  const { defsIn, fileOfDef } = indexDefs(graph.nodes, pathOf);
+  const symbols = new Map(
+    files.map((f) => [f.path, symbolsOf(defsIn.get(f.path) ?? [])]),
+  );
+  const { imports, importedBy } = buildImportMaps(
+    files,
+    graph.edges,
+    pathOf,
+    fileOfDef,
+  );
+  const fileFacts: FileFacts[] = files.map((f) => ({
+    path: f.path,
+    language: f.language ?? "other",
+    lines: f.measures.lines,
+    symbols: symbols.get(f.path) ?? [],
+    imports: sorted(imports.get(f.path)),
+    importedBy: sorted(importedBy.get(f.path)),
+  }));
+
+  // Each entity owns the files under its root that no deeper entity owns. It depends on the entities its files
+  // import from.
+  const entityDirs = graph.nodes
+    .filter(
+      (n): n is DirNode & { entity: NonNullable<DirNode["entity"]> } =>
+        n.kind === "dir" && n.entity !== undefined,
+    )
+    .toSorted((a, b) => byText(a.path, b.path));
+  const roots = entityDirs.map((d) => d.path);
+  const owner = new Map(files.map((f) => [f.path, ownerOf(roots, f.path)]));
+  const { depends, dependents } = buildEntityDeps(roots, imports, owner);
   const exportedIn = (path: string): number =>
     (symbols.get(path) ?? []).filter((s) => s.exported).length;
   const entities: EntityFacts[] = entityDirs.map(({ path, entity: e }) => {

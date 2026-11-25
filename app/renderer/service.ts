@@ -35,18 +35,22 @@ export function worldService(): WorldService | null {
     const next = event.ports[0];
     if (next === undefined) return;
     port = next;
-    port.onmessage = (m: MessageEvent<ToRenderer>) =>
+    port.addEventListener("message", (m: MessageEvent<ToRenderer>): void => {
       listeners.forEach((l) => l(m.data));
+    });
+    port.start();
     for (const message of waiting.splice(0)) port.postMessage(message);
   });
   service = {
-    send(message) {
+    send(message): void {
       if (port === null) waiting.push(message);
       else port.postMessage(message);
     },
-    on(listener) {
+    on(listener): () => void {
       listeners.add(listener);
-      return () => listeners.delete(listener);
+      return (): void => {
+        listeners.delete(listener);
+      };
     },
   };
   return service;

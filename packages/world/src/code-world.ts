@@ -346,8 +346,11 @@ const parentOf = (path: string): string =>
 const baseName = (path: string): string => path.split("/").pop() ?? path;
 const weightOf = (f: FileFacts): number =>
   Math.min(LAYOUT.lines[1], Math.max(LAYOUT.lines[0], f.lines));
-const byPath = <T extends { readonly path: string }>(a: T, b: T): number =>
-  a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+const byPath = <T extends { readonly path: string }>(a: T, b: T): number => {
+  if (a.path < b.path) return -1;
+  if (a.path > b.path) return 1;
+  return 0;
+};
 
 function directoriesOf(facts: CodeFacts, name: string): Map<string, Dir> {
   const dirs = new Map<string, Dir>();
@@ -368,7 +371,7 @@ function directoriesOf(facts: CodeFacts, name: string): Map<string, Dir> {
     return dir;
   };
   ensure("");
-  for (const f of [...facts.files].sort(byPath)) {
+  for (const f of facts.files.toSorted(byPath)) {
     ensure(parentOf(f.path)).files.push(f);
   }
   for (const d of dirs.values()) d.children.sort();
@@ -409,7 +412,7 @@ function regionPaths(dirs: Map<string, Dir>): string[] {
       return kept;
     };
     weigh("");
-    if (regions.length <= LAYOUT.maxRegions) return regions.sort();
+    if (regions.length <= LAYOUT.maxRegions) return regions.toSorted();
     // threshold is a rung, so 1.1 times it rounds up to the next rung.
     threshold = rung(threshold * 1.1);
   }
@@ -434,7 +437,7 @@ function choice(
   label: string,
   target: string,
 ): JevQuestion {
-  const keys = shuffled(Object.keys(options).sort(), label, target);
+  const keys = shuffled(Object.keys(options).toSorted(), label, target);
   return {
     type: "choice",
     instructions,
@@ -454,7 +457,7 @@ function languagesOf(files: readonly FileFacts[]): string[] {
   }
   return [...lines]
     .filter(([l]) => SOURCE.has(l))
-    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+    .toSorted((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
     .map(([l]) => l);
 }
 
@@ -499,7 +502,7 @@ const howMany = (n: number): string =>
   bucket(n, [1, 2, 5, 13], ["none", "one", "a few", "several", "many"]);
 
 const outlineOrder = (f: FileFacts): SymbolFact[] =>
-  [...f.symbols].sort(
+  f.symbols.toSorted(
     (a, b) =>
       Number(b.exported) - Number(a.exported) ||
       (b.lines ?? 1) - (a.lines ?? 1) ||
@@ -516,7 +519,7 @@ function importersOf(
   const owner = (p: string): string | undefined =>
     roots
       .filter((r) => r === "" || p === r || p.startsWith(`${r}/`))
-      .sort((a, b) => b.length - a.length)[0];
+      .toSorted((a, b) => b.length - a.length)[0];
   return facts.files.filter(
     (f) =>
       owner(f.path) === from.path &&
@@ -537,7 +540,10 @@ const lookWords = (set: LookSet, key: string | undefined): string | undefined =>
 /** The average count per file, in words. */
 const perFile = (n: number, files: number): string => {
   const r = n / Math.max(1, files);
-  return r === 0 ? "none" : r < 0.5 ? "a little" : r < 1.5 ? "some" : "a lot";
+  if (r === 0) return "none";
+  if (r < 0.5) return "a little";
+  if (r < 1.5) return "some";
+  return "a lot";
 };
 /**
  * The file description sent to Jev: its declarations and links in words, and the definitions on its patch that
@@ -648,17 +654,13 @@ function standing(value: number, all: readonly number[]): string {
   if (all.length < 3) return "about the middle of this repository's areas";
   const p = rankAmong(
     value,
-    [...all].sort((a, b) => a - b),
+    all.toSorted((a, b) => a - b),
   );
-  return p >= 0.8
-    ? "among the most of this repository's areas"
-    : p >= 0.6
-      ? "more than most of this repository's areas"
-      : p > 0.4
-        ? "about the middle of this repository's areas"
-        : p > 0.2
-          ? "less than most of this repository's areas"
-          : "among the least of this repository's areas";
+  if (p >= 0.8) return "among the most of this repository's areas";
+  if (p >= 0.6) return "more than most of this repository's areas";
+  if (p > 0.4) return "about the middle of this repository's areas";
+  if (p > 0.2) return "less than most of this repository's areas";
+  return "among the least of this repository's areas";
 }
 
 /** The directory description sent to Jev, in words. Counts that grow with the directory are per file, and each is compared with `others`. */
@@ -727,8 +729,8 @@ export function areaWords(
             ),
           },
         }),
-    contents: [...own]
-      .sort((a, b) => b.lines - a.lines || byPath(a, b))
+    contents: own
+      .toSorted((a, b) => b.lines - a.lines || byPath(a, b))
       .slice(0, 12)
       .map((f) => ({ name: baseName(f.path), size: fileSize(f.lines) })),
   };
@@ -833,7 +835,7 @@ export function planWorldRequests(
     );
   }
   const entities = new Map(facts.entities.map((e) => [e.path, e]));
-  for (const e of [...facts.entities].sort(byPath)) {
+  for (const e of facts.entities.toSorted(byPath)) {
     const questions: Record<string, JevQuestion> = {};
     for (const dep of e.dependsOn) {
       const other = entities.get(dep);
@@ -886,11 +888,11 @@ export function placedThings(
     ...(value === undefined ? {} : { importance: value }),
   });
   return [
-    ...[...facts.entities]
-      .sort(byPath)
+    ...facts.entities
+      .toSorted(byPath)
       .map((e) => thing("entity", e.path, importance.get(`dir:${e.path}`))),
-    ...[...facts.files]
-      .sort(byPath)
+    ...facts.files
+      .toSorted(byPath)
       .map((f) => thing("file", f.path, importance.get(`file:${f.path}`))),
     ...[...definitionsOf(facts, graph).values()]
       .flat()
@@ -924,7 +926,7 @@ export function rankThings(
     things
       .filter(of)
       .map((t) => t.importance ?? 0)
-      .sort((a, b) => a - b);
+      .toSorted((a, b) => a - b);
   const entities = sortedOf((t) => t.of === "entity");
   const rest = sortedOf((t) => t.of !== "entity");
   return new Map(
@@ -941,7 +943,7 @@ export function rankThings(
 /** Keys of every form whose `needs` a thing of this rank meets, sorted. */
 export function formsFor(looks: Looks, rank: number): string[] {
   return Object.keys(looks.form)
-    .sort()
+    .toSorted()
     .filter((k) => meets(looks.form[k]?.needs, { has: [], rank }));
 }
 
@@ -1021,7 +1023,7 @@ export function planForms(
     }
   };
   const defs = definitionsOf(facts, graph);
-  for (const f of [...facts.files].sort(byPath)) {
+  for (const f of facts.files.toSorted(byPath)) {
     const mine = defs.get(f.path) ?? [];
     const own = question(
       f.path,
@@ -1052,7 +1054,7 @@ export function planForms(
       ]);
     }
   }
-  for (const e of [...facts.entities].sort(byPath)) {
+  for (const e of facts.entities.toSorted(byPath)) {
     const value = importance.get(e.path);
     const q = question(
       e.path,
@@ -1089,13 +1091,13 @@ const picked = (
   id: string,
   about: string,
 ): string => {
-  const choice = pickOf(a[id]);
-  if (choice === undefined) {
+  const pickedChoice = pickOf(a[id]);
+  if (pickedChoice === undefined) {
     throw new Error(
       `Jev gave no choice for ${id} about ${about || "the repository's root"}.`,
     );
   }
-  return choice;
+  return pickedChoice;
 };
 
 /** Runs `each` over every item, `concurrency` at a time, keeping the results in the items' order. */
@@ -1168,12 +1170,27 @@ function thingKind(facts: CodeFacts, id: string): PlacedThing["of"] {
 }
 
 /** The file whose patch holds a thing: a file's own path or a definition's file. Undefined for an entity. */
-const fileOfThing = (of: PlacedThing["of"], id: string): string | undefined =>
-  of === "entity"
-    ? undefined
-    : of === "file"
-      ? id
-      : id.slice(0, id.indexOf("#"));
+const fileOfThing = (of: PlacedThing["of"], id: string): string | undefined => {
+  if (of === "entity") return undefined;
+  if (of === "file") return id;
+  return id.slice(0, id.indexOf("#"));
+};
+
+const trailId = (t: CodeTrail): string => `trail:${t.from}->${t.to}`;
+const wildId = (i: number): string => `wild:${i}`;
+
+function stateForThing(
+  graph: CodeGraph | undefined,
+  of: PlacedThing["of"],
+  id: string,
+  entity: (
+    path: string,
+  ) => Pick<EntityFacts, "path" | "name"> & Partial<EntityFacts>,
+): Record<string, unknown> {
+  if (of === "entity") return composingState(graph, entity(id));
+  if (of === "file") return fileState(graph, id);
+  return definitionState(graph, id);
+}
 
 /** About how many requests composing a world's things takes after their forms are chosen, and one sample request for pricing. */
 export interface ComposingEstimate {
@@ -1199,15 +1216,10 @@ export function composingEstimate(
   );
   if (first === undefined || form === undefined) return null;
   const [name, look] = form;
-  const state =
-    first.of === "entity"
-      ? composingState(graph, {
-          path: first.id,
-          name: baseName(first.id) || facts.repository.name,
-        })
-      : first.of === "file"
-        ? fileState(graph, first.id)
-        : definitionState(graph, first.id);
+  const state = stateForThing(graph, first.of, first.id, (path) => ({
+    path,
+    name: baseName(path) || facts.repository.name,
+  }));
   const uses =
     look.first === undefined ? {} : { [look.first.slot]: look.first.use };
   const wave = planStructure(
@@ -1228,6 +1240,62 @@ export function composingEstimate(
 export interface ComposeOptions {
   readonly graph?: CodeGraph;
   readonly concurrency?: number;
+}
+
+function buildComposedThing(
+  id: string,
+  as: FormKind,
+  state: Record<string, unknown>,
+  place: Pick<Composed, "has" | "narrow">,
+  looks: Looks,
+  form?: string,
+): Composed {
+  // A tree, bush, stone or flowers is composed as the form Jev chose. The request names the form, and the form's
+  // `first` part is filled in.
+  const look = form === undefined ? undefined : looks.form[form];
+  const first = look?.first;
+  if (raisedAs(as) || look === undefined || first === undefined) {
+    return { path: id, as, state, ...place };
+  }
+  return {
+    path: id,
+    as,
+    state: { ...state, standsAs: { form, words: look.doc } },
+    ...place,
+    uses: { [first.slot]: first.use },
+    ...(first.fixed === undefined ? {} : { fixed: first.fixed }),
+  };
+}
+
+async function resolveWorldForms(
+  facts: CodeFacts,
+  looks: Looks,
+  jev: JevClient,
+  judged: Judgments,
+  graph: CodeGraph | undefined,
+  concurrency: number,
+  raise: (id: string, form: string) => void,
+): Promise<Readonly<Record<string, string>>> {
+  if (judged.forms !== undefined) {
+    for (const [id, form] of Object.entries(judged.forms)) raise(id, form);
+    return judged.forms;
+  }
+  const plan = planForms(facts, looks, graph === undefined ? {} : { graph });
+  const out: Record<string, string> = { ...plan.only };
+  for (const [id, form] of Object.entries(plan.only)) raise(id, form);
+  await inTurn(plan.requests, concurrency, async (p) => {
+    const a = (await jev.ask(p.request)).answers;
+    for (const [qid, id] of Object.entries(p.thingByQuestion ?? {})) {
+      out[id] = picked(a, qid, id);
+      raise(id, out[id]);
+    }
+  });
+  // Answers arrive in any order. Rebuilding in planning order makes the same answers give the same judgments.
+  return Object.fromEntries(
+    placedThings(facts, graph).flatMap((t) =>
+      out[t.id] === undefined ? [] : [[t.id, out[t.id] as string] as const],
+    ),
+  );
 }
 
 /**
@@ -1256,7 +1324,7 @@ export async function composeWorld(
       name: baseName(path) || facts.repository.name,
       path,
     };
-  const regions = Object.keys(judged.waters).sort();
+  const regions = Object.keys(judged.waters).toSorted();
   const regionSet = new Set(regions);
   // Lands go first because a thing's colors are narrowed to its land's native families.
   // The area's water fixes the land's stream or pond through `Look.settles`, so Jev is not asked again.
@@ -1298,29 +1366,9 @@ export async function composeWorld(
         [NATIVE_COLORS.thing]: nativesOf((await lands)[`land:${region}`]),
       },
     };
-    const state =
-      of === "entity"
-        ? composingState(graph, entity(id))
-        : of === "file"
-          ? fileState(graph, id)
-          : definitionState(graph, id);
-    // A tree, bush, stone or flowers is composed as the form Jev chose. The request names the form, and the form's
-    // `first` part is filled in.
-    const look = form === undefined ? undefined : looks.form[form];
-    const first = look?.first;
-    if (raisedAs(as) || look === undefined || first === undefined) {
-      return { path: id, as, state, ...place };
-    }
-    return {
-      path: id,
-      as,
-      state: { ...state, standsAs: { form, words: look.doc } },
-      ...place,
-      uses: { [first.slot]: first.use },
-      ...(first.fixed === undefined ? {} : { fixed: first.fixed }),
-    };
+    const state = stateForThing(graph, of, id, entity);
+    return buildComposedThing(id, as, state, place, looks, form);
   };
-  const trailId = (t: CodeTrail): string => `trail:${t.from}->${t.to}`;
   // The sky and trails depend on neither the lands nor the forms, so they compose in parallel with both.
   const sky = composeThing(looks.compose, jev, {
     path: "world:",
@@ -1338,10 +1386,9 @@ export async function composeWorld(
     concurrency,
   );
   // Wild bushes are composed from the sky and every land, so they start after both.
-  const wildId = (i: number): string => `wild:${i}`;
   const wild = Promise.all([sky, lands]).then(([s, l]) => {
     const around = regions.map((path) => l[`land:${path}`] as Blueprint);
-    const families = [...new Set(around.flatMap(nativesOf))].sort();
+    const families = [...new Set(around.flatMap(nativesOf))].toSorted();
     const place = { has: [], narrow: { [NATIVE_COLORS.thing]: families } };
     return composeThings(
       looks.compose,
@@ -1376,25 +1423,15 @@ export async function composeWorld(
     things[id] = { as };
     compose(id, as, form);
   };
-  let forms = judged.forms;
-  if (forms === undefined) {
-    const plan = planForms(facts, looks, graph === undefined ? {} : { graph });
-    const out: Record<string, string> = { ...plan.only };
-    for (const [id, form] of Object.entries(plan.only)) raise(id, form);
-    await inTurn(plan.requests, concurrency, async (p) => {
-      const a = (await jev.ask(p.request)).answers;
-      for (const [qid, id] of Object.entries(p.thingByQuestion ?? {})) {
-        out[id] = picked(a, qid, id);
-        raise(id, out[id]);
-      }
-    });
-    // Answers arrive in any order. Rebuilding in planning order makes the same answers give the same judgments.
-    forms = Object.fromEntries(
-      placedThings(facts, graph).flatMap((t) =>
-        out[t.id] === undefined ? [] : [[t.id, out[t.id] as string] as const],
-      ),
-    );
-  } else for (const [id, form] of Object.entries(forms ?? {})) raise(id, form);
+  const forms = await resolveWorldForms(
+    facts,
+    looks,
+    jev,
+    judged,
+    graph,
+    concurrency,
+    raise,
+  );
   const [composedLands, composedSky, composedTrails, composedWild] =
     await Promise.all([lands, sky, trails, wild, Promise.all(rising)]);
   const blueprints = { ...composedLands, ...composedTrails, ...composedWild };
@@ -1402,7 +1439,7 @@ export async function composeWorld(
     blueprints[id] ?? (things[id]?.blueprint as Blueprint);
   return {
     ...judged,
-    ...(forms === undefined ? {} : { forms }),
+    forms,
     sky: composedSky,
     lands: Object.fromEntries(
       regions.map((path) => [path, of(`land:${path}`)]),
@@ -1410,7 +1447,7 @@ export async function composeWorld(
     wild: looks.wild.map((_, i) => of(wildId(i))),
     things: Object.fromEntries(
       Object.keys(things)
-        .sort()
+        .toSorted()
         .map((id) => [
           id,
           { as: (things[id] as { as: FormKind }).as, blueprint: of(id) },
@@ -1474,6 +1511,9 @@ function landTree(
   return node("");
 }
 
+const ownLines = (lines: number, within: readonly PlacedDef[]): number =>
+  Math.max(1, lines - within.reduce((n, c) => n + c.lines, 0));
+
 /**
  * Places a file's definitions. The part of the patch nearest its center
  * (`LAYOUT.cluster`) is divided like the land, with the file's own plot at the
@@ -1504,13 +1544,11 @@ function plotDefinitions(
     if (list === undefined) inside.set(key, [d]);
     else list.push(d);
   }
-  const own = (lines: number, within: readonly PlacedDef[]): number =>
-    Math.max(1, lines - within.reduce((n, c) => n + c.lines, 0));
   const node = (d: PlacedDef): LandNode => {
     const kids = inside.get(d.id) ?? [];
     const self: LandNode = {
       id: `def:${d.id}`,
-      ground: own(d.lines, kids) * perLine + LAYOUT.defGround,
+      ground: ownLines(d.lines, kids) * perLine + LAYOUT.defGround,
       children: [],
       center: true,
     };
@@ -1525,7 +1563,7 @@ function plotDefinitions(
     children: [
       {
         id: `own:${f.path}`,
-        ground: own(f.lines, top) * perLine,
+        ground: ownLines(f.lines, top) * perLine,
         children: [],
         center: true,
       },
@@ -1534,8 +1572,8 @@ function plotDefinitions(
   };
   const near = (c: readonly [number, number]): number =>
     (c[0] - leaf.x) ** 2 + (c[1] - leaf.z) ** 2;
-  const core = [...leaf.inner]
-    .sort((a, b) => near(a) - near(b))
+  const core = leaf.inner
+    .toSorted((a, b) => near(a) - near(b))
     .slice(0, Math.ceil(leaf.inner.length * LAYOUT.cluster));
   const plots = dividePlots(
     root,
@@ -1572,7 +1610,7 @@ function chooseTrails(
         t.want > 0.5 && known.has(t.from) && known.has(t.to) && t.from !== t.to,
     )
     .map((t) => ({ ...t, weight: weights.get(`${t.from}\n${t.to}`) ?? 1 }))
-    .sort(
+    .toSorted(
       (a, b) =>
         b.want - a.want ||
         b.weight - a.weight ||
@@ -1591,10 +1629,12 @@ function chooseTrails(
   for (const t of order) {
     const a = root(t.from);
     const b = root(t.to);
-    if (a !== b) {
+    if (a === b) {
+      rest.push({ ...t, spans: false });
+    } else {
       group.set(a, b);
       spanning.push({ ...t, spans: true });
-    } else rest.push({ ...t, spans: false });
+    }
   }
   return [...spanning, ...rest];
 }
@@ -1718,38 +1758,18 @@ export function layoutWorld(
   return layOut(facts, judged, graph, aspect).world;
 }
 
-/** Lays out the world and returns every entity's lot, including lots with nothing composed on them. */
-function layOut(
-  facts: CodeFacts,
-  judged: Judgments,
-  graph: CodeGraph | undefined,
-  aspect: number,
-): { readonly world: CodeWorld; readonly lots: readonly LotPlace[] } {
-  const name = facts.repository.name;
-  const { dirs, size, land, defs } = divisionOf(facts, graph, aspect);
-  const entityAt = new Map(facts.entities.map((e) => [e.path, e]));
-  const files = new Map(facts.files.map((f) => [f.path, f]));
-  // Vitality is Jev's quality from the understanding pass. A thing with no judged quality takes its nearest judged
-  // folder's. A world with no graph uses `judged.quality`, as the proving ground does. A thing with no quality from
-  // any source, as in a world opened without Jev, gets vitality 1.
-  const quality = new Map(
-    (graph?.nodes ?? []).flatMap((n) =>
-      n.kind !== "block" && typeof n.judged?.value?.quality === "number"
-        ? [[n.id, n.judged.value.quality] as const]
-        : [],
-    ),
-  );
-  const importance = new Map(
-    (graph?.nodes ?? []).flatMap((n) =>
-      n.kind !== "block" && typeof n.judged?.value?.importance === "number"
-        ? [[n.id, n.judged.value.importance] as const]
-        : [],
-    ),
-  );
-  const forms = judged.forms ?? {};
+interface GraphIndex {
+  readonly quality: ReadonlyMap<string, number>;
+  readonly importance: ReadonlyMap<string, number>;
+  readonly dependentsOf: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+function collectDefDependents(
+  edges: CodeGraph["edges"],
+): Map<string, Set<string>> {
   // For each definition, the ids of the definitions and files that call or reference it.
   const dependentsOf = new Map<string, Set<string>>();
-  for (const e of graph?.edges ?? []) {
+  for (const e of edges) {
     if (
       (e.kind !== "calls" && e.kind !== "references") ||
       !e.to.startsWith("def:")
@@ -1760,176 +1780,274 @@ function layOut(
     set.add(e.from);
     dependentsOf.set(e.to, set);
   }
-  /** The building or landmark Jev composed for a thing, if it has one. */
-  const composed = (
-    id: string,
-  ): { as: "building" | "landmark"; blueprint: Blueprint } | undefined => {
-    const t = judged.things[id];
-    return t?.blueprint === undefined || !raisedAs(t.as)
-      ? undefined
-      : { as: t.as, blueprint: t.blueprint };
-  };
-  /** The tree, bush, stone or flowers composed for a thing, if it has one. */
-  const small = (
-    id: string,
-  ): { as: FormKind; blueprint: Blueprint } | Record<string, never> => {
-    const t = judged.things[id];
-    return t?.blueprint === undefined || raisedAs(t.as)
-      ? {}
-      : { as: t.as, blueprint: t.blueprint };
-  };
-  const folderQuality = (path: string): number | undefined => {
-    for (
-      let p: string | null = path;
-      p !== null;
-      p = p === "" ? null : parentOf(p)
-    ) {
-      const q = quality.get(`dir:${p}`);
-      if (q !== undefined) return q;
-    }
-    return undefined;
-  };
+  return dependentsOf;
+}
 
-  const regionsOf = regionPaths(dirs);
-  const regionIndex = new Map(regionsOf.map((p, i) => [p, i]));
-  const regionOfDir = (path: string): number => {
-    for (
-      let p: string | null = path;
-      p !== null;
-      p = p === "" ? null : parentOf(p)
-    ) {
-      const i = regionIndex.get(p);
-      if (i !== undefined) return i;
+function indexGraphForLayout(graph: CodeGraph | undefined): GraphIndex {
+  const quality = new Map<string, number>();
+  const importance = new Map<string, number>();
+  if (graph === undefined) {
+    return { quality, importance, dependentsOf: new Map() };
+  }
+  for (const n of graph.nodes) {
+    if (n.kind === "block") continue;
+    const value = n.judged?.value;
+    if (value === undefined) continue;
+    if (typeof value.quality === "number") quality.set(n.id, value.quality);
+    if (typeof value.importance === "number") {
+      importance.set(n.id, value.importance);
     }
-    return 0;
+  }
+  return {
+    quality,
+    importance,
+    dependentsOf: collectDefDependents(graph.edges),
   };
+}
 
-  const cells: CellPlace[] = [];
-  const patches: CodePatch[] = [];
-  const things: CodeThing[] = [];
-  const lots: LotPlace[] = [];
-  const symbols: CodeSymbol[] = [];
-  const naturalThings: NaturalThing[] = [];
-  /** Adds a `NaturalThing` for a file or entity that has a form and no building or landmark. */
-  const addNaturalThing = (
-    of: NaturalThing["of"],
-    path: string,
-    name: string,
-    lines: number,
-    at: { x: number; z: number },
-    vitality: number,
-    value: number | undefined,
-    file?: string,
-  ): void => {
-    const form = forms[path];
-    if (form === undefined || composed(path) !== undefined) return;
-    naturalThings.push({
-      of,
+interface DirHold {
+  ground: number;
+  x: number;
+  z: number;
+  leafCenters: { x: number; z: number }[];
+}
+
+interface LayoutContext {
+  readonly judged: Judgments;
+  readonly graphIndex: GraphIndex;
+  readonly entityAt: ReadonlyMap<string, EntityFacts>;
+  readonly files: ReadonlyMap<string, FileFacts>;
+  readonly defs: ReadonlyMap<string, readonly PlacedDef[]>;
+  readonly step: number;
+  readonly things: CodeThing[];
+  readonly lots: LotPlace[];
+  readonly patches: CodePatch[];
+  readonly symbols: CodeSymbol[];
+  readonly naturalThings: NaturalThing[];
+}
+
+function composedRaised(
+  judged: Judgments,
+  id: string,
+): { as: "building" | "landmark"; blueprint: Blueprint } | undefined {
+  const t = judged.things[id];
+  if (t?.blueprint === undefined || !raisedAs(t.as)) return undefined;
+  return { as: t.as, blueprint: t.blueprint };
+}
+
+function composedSmall(
+  judged: Judgments,
+  id: string,
+): { as: FormKind; blueprint: Blueprint } | Record<string, never> {
+  const t = judged.things[id];
+  if (t?.blueprint === undefined || raisedAs(t.as)) return {};
+  return { as: t.as, blueprint: t.blueprint };
+}
+
+function folderQualityOf(
+  quality: ReadonlyMap<string, number>,
+  path: string,
+): number | undefined {
+  for (
+    let p: string | null = path;
+    p !== null;
+    p = p === "" ? null : parentOf(p)
+  ) {
+    const q = quality.get(`dir:${p}`);
+    if (q !== undefined) return q;
+  }
+  return undefined;
+}
+
+function addNaturalThingTo(
+  ctx: LayoutContext,
+  of: NaturalThing["of"],
+  path: string,
+  thingName: string,
+  lines: number,
+  at: { x: number; z: number },
+  vitality: number,
+  value: number | undefined,
+  file?: string,
+): void {
+  const form = (ctx.judged.forms ?? {})[path];
+  if (form === undefined || composedRaised(ctx.judged, path) !== undefined) {
+    return;
+  }
+  ctx.naturalThings.push({
+    of,
+    path,
+    name: thingName,
+    form,
+    ...composedSmall(ctx.judged, path),
+    lines,
+    ...(value === undefined ? {} : { importance: value }),
+    x: at.x,
+    z: at.z,
+    ...(file === undefined ? {} : { file }),
+    vitality,
+  });
+}
+
+function recordLeafMass(
+  area: string,
+  leaf: { readonly ground: number; readonly x: number; readonly z: number },
+  held: Map<string, DirHold>,
+): void {
+  for (
+    let p: string | null = area;
+    p !== null;
+    p = p === "" ? null : parentOf(p)
+  ) {
+    const h = held.get(p) ?? { ground: 0, x: 0, z: 0, leafCenters: [] };
+    h.ground += leaf.ground;
+    h.x += leaf.x * leaf.ground;
+    h.z += leaf.z * leaf.ground;
+    h.leafCenters.push({ x: leaf.x, z: leaf.z });
+    held.set(p, h);
+  }
+}
+
+function placeLotLeaf(
+  ctx: LayoutContext,
+  path: string,
+  leaf: { readonly x: number; readonly z: number },
+): void {
+  const e = ctx.entityAt.get(path) as EntityFacts;
+  // The lot is recorded even when nothing was chosen or composed for the entity. It stays open ground, since only Jev's choices are placed.
+  ctx.lots.push({ x: leaf.x, z: leaf.z });
+  const vitality =
+    folderQualityOf(ctx.graphIndex.quality, path) ??
+    ctx.judged.quality?.[path] ??
+    1;
+  const t = composedRaised(ctx.judged, path);
+  if (t !== undefined) {
+    ctx.things.push({
       path,
-      name,
-      form,
-      ...small(path),
-      lines,
-      ...(value === undefined ? {} : { importance: value }),
-      x: at.x,
-      z: at.z,
-      ...(file === undefined ? {} : { file }),
-      vitality,
-    });
-  };
-  /** Per directory: total ground, the ground-weighted sum of its leaves' centers, and the centers themselves. */
-  const held = new Map<
-    string,
-    {
-      ground: number;
-      x: number;
-      z: number;
-      leafCenters: { x: number; z: number }[];
-    }
-  >();
-  const regionSites: LandSite[][] = regionsOf.map(() => []);
-  const regionMass = regionsOf.map(() => ({ ground: 0, x: 0, z: 0 }));
-  for (const leaf of land.leaves) {
-    const [kind, path] = leaf.id.split(/:(.*)/s) as [string, string];
-    const area = kind === "lot" ? path : parentOf(path);
-    const cell = cells.length;
-    for (const site of leaf.sites) {
-      cells.push({
-        area,
-        file: kind === "file" ? path : null,
-        x: site.x,
-        z: site.z,
-      });
-    }
-    const ri = regionOfDir(area);
-    (regionSites[ri] as LandSite[]).push(...leaf.sites);
-    const m = regionMass[ri] as { ground: number; x: number; z: number };
-    m.ground += leaf.ground;
-    m.x += leaf.x * leaf.ground;
-    m.z += leaf.z * leaf.ground;
-    for (
-      let p: string | null = area;
-      p !== null;
-      p = p === "" ? null : parentOf(p)
-    ) {
-      const h = held.get(p) ?? { ground: 0, x: 0, z: 0, leafCenters: [] };
-      h.ground += leaf.ground;
-      h.x += leaf.x * leaf.ground;
-      h.z += leaf.z * leaf.ground;
-      h.leafCenters.push({ x: leaf.x, z: leaf.z });
-      held.set(p, h);
-    }
-    if (kind === "lot") {
-      const e = entityAt.get(path) as EntityFacts;
-      // The lot is recorded even when nothing was chosen or composed for the entity. It stays open ground, since only Jev's choices are placed.
-      lots.push({ x: leaf.x, z: leaf.z });
-      const vitality = folderQuality(path) ?? judged.quality?.[path] ?? 1;
-      const t = composed(path);
-      if (t !== undefined) {
-        things.push({
-          path,
-          name: e.name,
-          as: t.as,
-          blueprint: t.blueprint,
-          area: path,
-          x: leaf.x,
-          z: leaf.z,
-          lot: LAYOUT.lotReach[t.as],
-          vitality,
-        });
-      }
-      addNaturalThing(
-        "entity",
-        path,
-        e.name,
-        e.lines,
-        leaf,
-        vitality,
-        importance.get(`dir:${path}`),
-      );
-      continue;
-    }
-    const f = files.get(path) as FileFacts;
-    const vitality =
-      quality.get(`file:${path}`) ??
-      folderQuality(parentOf(path)) ??
-      judged.quality?.[path] ??
-      1;
-    patches.push({
-      path,
-      name: baseName(path),
-      area,
+      name: e.name,
+      as: t.as,
+      blueprint: t.blueprint,
+      area: path,
       x: leaf.x,
       z: leaf.z,
-      radius: Math.sqrt(leaf.ground / Math.PI),
+      lot: LAYOUT.lotReach[t.as],
       vitality,
-      lines: f.lines,
-      ground: leaf.ground,
-      cell,
     });
-    const plotted = plotDefinitions(f, defs.get(path) ?? [], leaf, land.step);
-    // The file itself is placed on its own plot, as a building or landmark Jev composed or as the form Jev chose.
-    const own = composed(path);
+  }
+  addNaturalThingTo(
+    ctx,
+    "entity",
+    path,
+    e.name,
+    e.lines,
+    leaf,
+    vitality,
+    ctx.graphIndex.importance.get(`dir:${path}`),
+  );
+}
+
+function placeDefThing(
+  ctx: LayoutContext,
+  def: PlacedDef,
+  path: string,
+  area: string,
+  x: number,
+  z: number,
+  vitality: number,
+): void {
+  // A definition with a building or landmark is also added to `things`, on its own plot.
+  const t = composedRaised(ctx.judged, def.id);
+  if (t === undefined) return;
+  const defFacts: ThingFacts = {
+    path: def.id,
+    name: def.name,
+    lines: def.lines,
+    exports: def.exported ? 1 : 0,
+    dependents: [
+      ...(ctx.graphIndex.dependentsOf.get(`def:${def.id}`) ?? []),
+    ].toSorted(),
+  };
+  ctx.things.push({
+    path: def.id,
+    of: "definition",
+    name: def.name,
+    as: t.as,
+    blueprint: t.blueprint,
+    area,
+    x,
+    z,
+    lot: LAYOUT.lotReach[t.as],
+    file: path,
+    facts: defFacts,
+    vitality,
+  });
+}
+
+function placeFileDefinitions(
+  ctx: LayoutContext,
+  path: string,
+  area: string,
+  vitality: number,
+  plottedDefs: readonly { def: PlacedDef; x: number; z: number }[],
+): void {
+  const forms = ctx.judged.forms ?? {};
+  for (const { def, x, z } of plottedDefs) {
+    const mine = ctx.graphIndex.quality.get(`def:${def.id}`) ?? vitality;
+    placeDefThing(ctx, def, path, area, x, z, mine);
+    ctx.symbols.push({
+      id: def.id,
+      file: path,
+      ...(def.parent === undefined ? {} : { parent: def.parent }),
+      name: def.name,
+      kind: def.kind,
+      exported: def.exported,
+      line: def.line,
+      lines: def.lines,
+      ...(def.doc === undefined ? {} : { doc: def.doc }),
+      ...(def.importance === undefined ? {} : { importance: def.importance }),
+      form: forms[def.id] ?? "",
+      ...composedSmall(ctx.judged, def.id),
+      x,
+      z,
+      vitality: mine,
+    });
+  }
+}
+
+function placeFileLeaf(
+  ctx: LayoutContext,
+  path: string,
+  area: string,
+  cell: number,
+  leaf: {
+    readonly x: number;
+    readonly z: number;
+    readonly ground: number;
+    readonly inner: readonly (readonly [number, number])[];
+  },
+): void {
+  const f = ctx.files.get(path) as FileFacts;
+  const vitality =
+    ctx.graphIndex.quality.get(`file:${path}`) ??
+    folderQualityOf(ctx.graphIndex.quality, parentOf(path)) ??
+    ctx.judged.quality?.[path] ??
+    1;
+  ctx.patches.push({
+    path,
+    name: baseName(path),
+    area,
+    x: leaf.x,
+    z: leaf.z,
+    radius: Math.sqrt(leaf.ground / Math.PI),
+    vitality,
+    lines: f.lines,
+    ground: leaf.ground,
+    cell,
+  });
+  const plotted = plotDefinitions(f, ctx.defs.get(path) ?? [], leaf, ctx.step);
+  // The file itself is placed on its own plot, as a building or landmark Jev composed or as the form Jev chose.
+  const own = composedRaised(ctx.judged, path);
+  if (own !== undefined) {
     const fileFacts: ThingFacts = {
       path,
       name: baseName(path),
@@ -1937,90 +2055,46 @@ function layOut(
       exports: f.symbols.filter((x) => x.exported).length,
       dependents: f.importedBy,
     };
-    if (own !== undefined) {
-      things.push({
-        path,
-        of: "file",
-        name: baseName(path),
-        as: own.as,
-        blueprint: own.blueprint,
-        area,
-        x: plotted.own.x,
-        z: plotted.own.z,
-        lot: LAYOUT.lotReach[own.as],
-        file: path,
-        facts: fileFacts,
-        vitality,
-      });
-    }
-    addNaturalThing(
-      "file",
+    ctx.things.push({
       path,
-      baseName(path),
-      f.lines,
-      plotted.own,
+      of: "file",
+      name: baseName(path),
+      as: own.as,
+      blueprint: own.blueprint,
+      area,
+      x: plotted.own.x,
+      z: plotted.own.z,
+      lot: LAYOUT.lotReach[own.as],
+      file: path,
+      facts: fileFacts,
       vitality,
-      importance.get(`file:${path}`),
-      path,
-    );
-    for (const { def, x, z } of plotted.defs) {
-      const mine = quality.get(`def:${def.id}`) ?? vitality;
-      // A definition with a building or landmark is also added to `things`, on its own plot.
-      const t = composed(def.id);
-      const defFacts: ThingFacts = {
-        path: def.id,
-        name: def.name,
-        lines: def.lines,
-        exports: def.exported ? 1 : 0,
-        dependents: [...(dependentsOf.get(`def:${def.id}`) ?? [])].sort(),
-      };
-      if (t !== undefined) {
-        things.push({
-          path: def.id,
-          of: "definition",
-          name: def.name,
-          as: t.as,
-          blueprint: t.blueprint,
-          area,
-          x,
-          z,
-          lot: LAYOUT.lotReach[t.as],
-          file: path,
-          facts: defFacts,
-          vitality: mine,
-        });
-      }
-      symbols.push({
-        id: def.id,
-        file: path,
-        ...(def.parent === undefined ? {} : { parent: def.parent }),
-        name: def.name,
-        kind: def.kind,
-        exported: def.exported,
-        line: def.line,
-        lines: def.lines,
-        ...(def.doc === undefined ? {} : { doc: def.doc }),
-        ...(def.importance === undefined ? {} : { importance: def.importance }),
-        form: forms[def.id] ?? "",
-        ...small(def.id),
-        x,
-        z,
-        vitality: mine,
-      });
-    }
+    });
   }
+  addNaturalThingTo(
+    ctx,
+    "file",
+    path,
+    baseName(path),
+    f.lines,
+    plotted.own,
+    vitality,
+    ctx.graphIndex.importance.get(`file:${path}`),
+    path,
+  );
+  placeFileDefinitions(ctx, path, area, vitality, plotted.defs);
+}
 
+function buildAreas(
+  dirs: Map<string, Dir>,
+  held: ReadonlyMap<string, DirHold>,
+  regionOfDir: (path: string) => number,
+): CodeArea[] {
   // An area's point is the leaf center nearest the ground-weighted mean of its leaves' centers.
-  const areas: CodeArea[] = [...dirs.values()]
+  return [...dirs.values()]
     .filter((d) => held.has(d.path))
-    .sort(byPath)
+    .toSorted(byPath)
     .map((d) => {
-      const h = held.get(d.path) as {
-        ground: number;
-        x: number;
-        z: number;
-        leafCenters: { x: number; z: number }[];
-      };
+      const h = held.get(d.path) as DirHold;
       const mx = h.x / h.ground;
       const mz = h.z / h.ground;
       const center = h.leafCenters.reduce(
@@ -2041,28 +2115,15 @@ function layOut(
         ground: h.ground,
       };
     });
+}
 
-  const regions: CodeRegion[] = regionsOf.map((path, i) => {
-    const m = regionMass[i] as { ground: number; x: number; z: number };
-    return {
-      area: path,
-      x: m.ground > 0 ? m.x / m.ground : 0,
-      z: m.ground > 0 ? m.z / m.ground : 0,
-      reach: Math.sqrt(m.ground / Math.PI),
-      ...(judged.lands[path] === undefined
-        ? {}
-        : { biome: judged.lands[path] }),
-      water: judged.waters[path] ?? "",
-      sites: regionSites[i] as LandSite[],
-    };
-  });
-
+function entityImportWeights(facts: CodeFacts): Map<string, number> {
   // A dependency's weight is the number of the importing entity's files that import from the other entity.
   const roots = facts.entities.map((e) => e.path);
   const owner = (p: string): string | undefined =>
     roots
       .filter((r) => r === "" || p === r || p.startsWith(`${r}/`))
-      .sort((a, b) => b.length - a.length)[0];
+      .toSorted((a, b) => b.length - a.length)[0];
   const weights = new Map<string, number>();
   const counted = new Set<string>();
   for (const f of facts.files) {
@@ -2078,6 +2139,93 @@ function layOut(
       weights.set(key, (weights.get(key) ?? 0) + 1);
     }
   }
+  return weights;
+}
+
+/** Lays out the world and returns every entity's lot, including lots with nothing composed on them. */
+function layOut(
+  facts: CodeFacts,
+  judged: Judgments,
+  graph: CodeGraph | undefined,
+  aspect: number,
+): { readonly world: CodeWorld; readonly lots: readonly LotPlace[] } {
+  const name = facts.repository.name;
+  const { dirs, size, land, defs } = divisionOf(facts, graph, aspect);
+  // Vitality is Jev's quality from the understanding pass. A thing with no judged quality takes its nearest judged
+  // folder's. A world with no graph uses `judged.quality`, as the proving ground does. A thing with no quality from
+  // any source, as in a world opened without Jev, gets vitality 1.
+  const regionsOf = regionPaths(dirs);
+  const regionIndex = new Map(regionsOf.map((p, i) => [p, i]));
+  const regionOfDir = (path: string): number => {
+    for (
+      let p: string | null = path;
+      p !== null;
+      p = p === "" ? null : parentOf(p)
+    ) {
+      const i = regionIndex.get(p);
+      if (i !== undefined) return i;
+    }
+    return 0;
+  };
+
+  const cells: CellPlace[] = [];
+  const ctx: LayoutContext = {
+    judged,
+    graphIndex: indexGraphForLayout(graph),
+    entityAt: new Map(facts.entities.map((e) => [e.path, e])),
+    files: new Map(facts.files.map((f) => [f.path, f])),
+    defs,
+    step: land.step,
+    things: [],
+    lots: [],
+    patches: [],
+    symbols: [],
+    naturalThings: [],
+  };
+  /** Per directory: total ground, the ground-weighted sum of its leaves' centers, and the centers themselves. */
+  const held = new Map<string, DirHold>();
+  const regionSites: LandSite[][] = regionsOf.map(() => []);
+  const regionMass = regionsOf.map(() => ({ ground: 0, x: 0, z: 0 }));
+  for (const leaf of land.leaves) {
+    const [kind, path] = leaf.id.split(/:(.*)/s) as [string, string];
+    const area = kind === "lot" ? path : parentOf(path);
+    const cell = cells.length;
+    for (const site of leaf.sites) {
+      cells.push({
+        area,
+        file: kind === "file" ? path : null,
+        x: site.x,
+        z: site.z,
+      });
+    }
+    const ri = regionOfDir(area);
+    (regionSites[ri] as LandSite[]).push(...leaf.sites);
+    const m = regionMass[ri] as { ground: number; x: number; z: number };
+    m.ground += leaf.ground;
+    m.x += leaf.x * leaf.ground;
+    m.z += leaf.z * leaf.ground;
+    recordLeafMass(area, leaf, held);
+    if (kind === "lot") placeLotLeaf(ctx, path, leaf);
+    else placeFileLeaf(ctx, path, area, cell, leaf);
+  }
+
+  const areas = buildAreas(dirs, held, regionOfDir);
+  const regions: CodeRegion[] = regionsOf.map((path, i) => {
+    const m = regionMass[i] as { ground: number; x: number; z: number };
+    return {
+      area: path,
+      x: m.ground > 0 ? m.x / m.ground : 0,
+      z: m.ground > 0 ? m.z / m.ground : 0,
+      reach: Math.sqrt(m.ground / Math.PI),
+      ...(judged.lands[path] === undefined
+        ? {}
+        : { biome: judged.lands[path] }),
+      water: judged.waters[path] ?? "",
+      sites: regionSites[i] as LandSite[],
+    };
+  });
+
+  const weights = entityImportWeights(facts);
   return {
     world: {
       name,
@@ -2087,24 +2235,26 @@ function layOut(
       ...(judged.sky === undefined ? {} : { sky: judged.sky }),
       ...(judged.wild === undefined ? {} : { wild: judged.wild }),
       areas,
-      patches,
+      patches: ctx.patches,
       cells,
-      things,
-      symbols,
-      naturalThings,
+      things: ctx.things,
+      symbols: ctx.symbols,
+      naturalThings: ctx.naturalThings,
       // Trails join entities, whatever form each has.
       trails: chooseTrails(
         judged.trails,
         [
-          ...things
+          ...ctx.things
             .filter((t) => (t.of ?? "entity") === "entity")
             .map((t) => t.path),
-          ...naturalThings.filter((s) => s.of === "entity").map((s) => s.path),
+          ...ctx.naturalThings
+            .filter((s) => s.of === "entity")
+            .map((s) => s.path),
         ],
         weights,
       ),
       regions,
     },
-    lots,
+    lots: ctx.lots,
   };
 }

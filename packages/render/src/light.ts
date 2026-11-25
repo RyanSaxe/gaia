@@ -133,7 +133,7 @@ export function createLantern(light: SceneLight): Lantern {
   let swing = 0;
   const flat = new THREE.Vector3();
   return {
-    follow(eye, forward, ground, walked, dt) {
+    follow(eye, forward, ground, walked, dt): void {
       phase += (walked / LANTERN.stride) * Math.PI;
       const moving = dt > 0 ? Math.min(1, walked / dt / 4) : 0;
       swing += (moving - swing) * (1 - Math.exp(-dt * 3));
@@ -191,7 +191,7 @@ export function createSceneLight(): SceneLight {
     uWind: { value: 1 },
     uWindDir: {
       // A getter computes it from `uTime`, so no lab or world has to set it.
-      get value() {
+      get value(): THREE.Vector2 {
         const [x, z] = windDirAt(uTime.value);
         return windDir.set(x, z);
       },

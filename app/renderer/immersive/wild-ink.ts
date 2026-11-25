@@ -331,87 +331,49 @@ function curve(path: Path2D, line: readonly number[]): void {
   path.lineTo(xn, zn);
 }
 
-/**
- * Inks the tile at level `k` and grid position `i`, `j`, yielding between
- * steps: heights, contours, hachures and grass, then thickets. Every mark is
- * placed on a world-anchored grid, so a mark that crosses a tile's edge is
- * drawn the same in both tiles.
- */
-function* inkTile(
-  sheet: Sheet,
-  k: number,
-  i: number,
-  j: number,
-): Generator<void, HTMLCanvasElement> {
-  const { terrain: t, style, reach, dpr } = sheet;
-  const res = INK.scale * 2 ** -k;
-  const side = tileMeters(k);
-  const x0 = i * side;
-  const z0 = j * side;
-  const px = Math.round(INK.tile * dpr);
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = px;
-  const g = canvas.getContext("2d") as CanvasRenderingContext2D;
-  // Draws in meters. A CSS pixel is `1 / res` meters.
-  const unit = 1 / res;
-  g.setTransform(
-    px / side,
-    0,
-    0,
-    px / side,
-    -x0 * (px / side),
-    -z0 * (px / side),
-  );
-  g.lineCap = g.lineJoin = "round";
-  /** Whether the paper may be bare within `pad` of a point: past the land's square or in its unpainted edge. */
-  const inked = (x: number, z: number, pad: number): boolean =>
-    Math.max(Math.abs(x), Math.abs(z)) > reach - sheet.bare - pad;
+interface TileFrame {
+  readonly g: CanvasRenderingContext2D;
+  readonly sheet: Sheet;
+  readonly k: number;
+  readonly x0: number;
+  readonly z0: number;
+  readonly side: number;
+  readonly scale: number;
+  readonly step: number;
+  readonly unit: number;
+  readonly inkRgb: string;
+  readonly inked: (x: number, z: number, pad: number) => boolean;
+}
 
-  // Samples heights on a world-anchored grid that extends four samples past the tile on each side, far enough to read
-  // the slope at any hachure that reaches into the tile.
-  const step = INK.sample * 2 ** k;
-  const gi = Math.floor(x0 / step) - 4;
-  const gj = Math.floor(z0 / step) - 4;
-  const n = Math.ceil(side / step) + 9;
+function* sampleTileHeights(
+  f: TileFrame,
+  gi: number,
+  gj: number,
+  n: number,
+): Generator<void, Float32Array> {
   const heights = new Float32Array(n * n);
   for (let b = 0; b < n; b++) {
     for (let a = 0; a < n; a++) {
-      const x = (gi + a) * step;
-      const z = (gj + b) * step;
-      heights[b * n + a] = inked(x, z, step * 2)
-        ? reliefAt(t, x, z)
+      const x = (gi + a) * f.step;
+      const z = (gj + b) * f.step;
+      heights[b * n + a] = f.inked(x, z, f.step * 2)
+        ? reliefAt(f.sheet.terrain, x, z)
         : Number.NaN;
     }
     if (b === n >> 1) yield;
   }
-  yield;
-  /** The bilinear height at a point from the samples around it. */
-  const at = (a: number, b: number): number =>
-    heights[
-      Math.max(0, Math.min(n - 1, b)) * n + Math.max(0, Math.min(n - 1, a))
-    ] as number;
-  const heightOf = (x: number, z: number): number => {
-    const u = x / step - gi;
-    const v = z / step - gj;
-    const a = Math.floor(u);
-    const b = Math.floor(v);
-    const fu = u - a;
-    const fv = v - b;
-    return (
-      (at(a, b) * (1 - fu) + at(a + 1, b) * fu) * (1 - fv) +
-      (at(a, b + 1) * (1 - fu) + at(a + 1, b + 1) * fu) * fv
-    );
-  };
-  const ink = style.ink;
-  const inkRgb = [
-    parseInt(ink.slice(1, 3), 16),
-    parseInt(ink.slice(3, 5), 16),
-    parseInt(ink.slice(5, 7), 16),
-  ].join(",");
+  return heights;
+}
 
-  // Contours in the land's sepia, a little lighter (`WILD_LINE`), and wider apart on coarse levels. Segments are
-  // joined into lines and drawn as curves (`curve`).
-  const c = style.contour;
+function inkTileContours(
+  f: TileFrame,
+  heights: Float32Array,
+  n: number,
+  gi: number,
+  gj: number,
+): void {
+  const { g, step, k, unit } = f;
+  const c = f.sheet.style.contour;
   const interval = c.interval * 2 ** Math.max(0, k - 1);
   let lo = Infinity;
   let hi = -Infinity;
@@ -440,13 +402,19 @@ function* inkTile(
   g.lineWidth = 1.4 * unit;
   g.stroke(lines[1] as Path2D);
   g.globalAlpha = 1;
-  yield;
+}
 
-  // Hachures along the fall line, heavier and denser on slopes facing away from the northwest light.
-  const scale = 2 ** k;
+function inkTileHachures(
+  f: TileFrame,
+  heightOf: (x: number, z: number) => number,
+): void {
+  const { g, x0, z0, side, scale, step, unit, inkRgb, inked } = f;
   const hachures = [new Path2D(), new Path2D(), new Path2D()];
   const hs = INK.hachure * scale;
   const long = 3 * scale;
+  const cx = x0 + side / 2;
+  const cz = z0 + side / 2;
+  const half = side / 2 + long;
   for (
     let b = Math.floor((z0 - long) / hs);
     b <= Math.floor((z0 + side + long) / hs);
@@ -459,12 +427,9 @@ function* inkTile(
     ) {
       const x = (a + wildHash(a, b, SEEDS.hachure)) * hs;
       const z = (b + wildHash(a, b, SEEDS.hachure + 1)) * hs;
-      // Skips a hachure that cannot reach into the tile or lies on painted land.
       if (
-        x < x0 - long ||
-        x > x0 + side + long ||
-        z < z0 - long ||
-        z > z0 + side + long ||
+        Math.abs(x - cx) > half ||
+        Math.abs(z - cz) > half ||
         !inked(x, z, hs)
       ) {
         continue;
@@ -489,11 +454,57 @@ function* inkTile(
     g.lineWidth = (0.5 + q * 0.2) * unit;
     g.stroke(path);
   });
+}
 
-  // Tufts, many on golden steppe and a few on green grass, and stipple on scrub. Near the land the marks thin out
-  // with the wild's share (`wildShare`).
+function addTuftBlades(
+  path: Path2D,
+  cell: readonly [number, number, number, number],
+  patch: number,
+  scale: number,
+): void {
+  const [a, b, x, z] = cell;
+  const h = (1.7 + patch * 0.9) * scale;
+  const blades = 3 + Math.floor(wildHash(a, b, SEEDS.tuft + 3) * 2);
+  path.moveTo(x - h * 0.62, z);
+  path.lineTo(x + h * 0.62, z);
+  for (let q = 0; q < blades; q++) {
+    const u = q / (blades - 1) - 0.5;
+    const tall =
+      h *
+      (0.7 + wildHash(a + q, b, SEEDS.tuft + 4) * 0.5) *
+      (1 - Math.abs(u) * 0.5);
+    path.moveTo(x + u * h * 0.9, z);
+    path.lineTo(x + u * h * 1.25, z - tall);
+  }
+}
+
+function addScrubStipple(
+  stipple: Path2D,
+  cell: readonly [number, number, number, number],
+  ts: number,
+  scale: number,
+  share: number,
+): void {
+  const [a, b, x, z] = cell;
+  const dots = Math.round((wildScrub(x, z) - 0.35) * 9 * share);
+  for (let d = 0; d < dots; d++) {
+    const dx = x + (wildHash(a, b, SEEDS.stipple + d) - 0.5) * ts;
+    const dz = z + (wildHash(a, b, SEEDS.stipple + 20 + d) - 0.5) * ts;
+    const r =
+      0.55 * scale * (0.7 + wildHash(a, b, SEEDS.stipple + 40 + d) * 0.6);
+    stipple.moveTo(dx + r, dz);
+    stipple.arc(dx, dz, r, 0, Math.PI * 2);
+  }
+}
+
+function buildGrassPaths(f: TileFrame): {
+  tufts: [Path2D, Path2D];
+  stipple: Path2D;
+} {
+  const { x0, z0, side, scale, inked } = f;
+  const t = f.sheet.terrain;
   const ts = INK.tuft * scale;
-  const tufts = [new Path2D(), new Path2D()];
+  const tufts: [Path2D, Path2D] = [new Path2D(), new Path2D()];
   const stipple = new Path2D();
   for (let b = Math.floor(z0 / ts) - 1; b <= Math.ceil((z0 + side) / ts); b++) {
     for (
@@ -507,34 +518,19 @@ function* inkTile(
       const share = wildShare(t, x, z);
       if (share <= 0) continue;
       const patch = wildPatch(x, z);
+      const cell = [a, b, x, z] as const;
       if (wildHash(a, b, SEEDS.tuft + 2) < (0.18 + patch * 0.62) * share) {
-        const h = (1.7 + patch * 0.9) * scale;
-        const blades = 3 + Math.floor(wildHash(a, b, SEEDS.tuft + 3) * 2);
-        const path = tufts[patch > 0.5 ? 1 : 0] as Path2D;
-        path.moveTo(x - h * 0.62, z);
-        path.lineTo(x + h * 0.62, z);
-        for (let q = 0; q < blades; q++) {
-          const u = q / (blades - 1) - 0.5;
-          const tall =
-            h *
-            (0.7 + wildHash(a + q, b, SEEDS.tuft + 4) * 0.5) *
-            (1 - Math.abs(u) * 0.5);
-          path.moveTo(x + u * h * 0.9, z);
-          path.lineTo(x + u * h * 1.25, z - tall);
-        }
+        addTuftBlades(tufts[patch > 0.5 ? 1 : 0], cell, patch, scale);
       }
-      const scrub = wildScrub(x, z);
-      const dots = Math.round((scrub - 0.35) * 9 * share);
-      for (let d = 0; d < dots; d++) {
-        const dx = x + (wildHash(a, b, SEEDS.stipple + d) - 0.5) * ts;
-        const dz = z + (wildHash(a, b, SEEDS.stipple + 20 + d) - 0.5) * ts;
-        const r =
-          0.55 * scale * (0.7 + wildHash(a, b, SEEDS.stipple + 40 + d) * 0.6);
-        stipple.moveTo(dx + r, dz);
-        stipple.arc(dx, dz, r, 0, Math.PI * 2);
-      }
+      addScrubStipple(stipple, cell, ts, scale, share);
     }
   }
+  return { tufts, stipple };
+}
+
+function inkTileGrass(f: TileFrame): void {
+  const { g, unit, inkRgb } = f;
+  const { tufts, stipple } = buildGrassPaths(f);
   tufts.forEach((path, q) => {
     g.strokeStyle = `rgba(${inkRgb},${q === 0 ? 0.3 : 0.44})`;
     g.lineWidth = 0.5 * unit;
@@ -542,91 +538,191 @@ function* inkTile(
   });
   g.fillStyle = `rgba(${inkRgb},0.4)`;
   g.fill(stipple);
-  yield;
+}
 
-  // Thickets: each bush where the world places it, as a scalloped crown with its shaded side and its shadow to the
-  // southeast hatched. A crown's radius is at least 3 CSS pixels so it stays legible. At `INK.thickets`, only some
-  // thickets' first bush is drawn.
-  if (k <= INK.thickets) {
-    const cell = WILD_THICKETS.cell;
-    const pad = WILD_THICKETS.spread + 6 * scale;
-    const shadows = new Path2D();
-    const crowns: { crown: Path2D; x: number; y: number; r: number }[] = [];
-    for (
-      let cj = Math.floor((z0 - pad) / cell);
-      cj <= Math.floor((z0 + side + pad) / cell);
-      cj++
-    ) {
-      for (
-        let ci = Math.floor((x0 - pad) / cell);
-        ci <= Math.floor((x0 + side + pad) / cell);
-        ci++
-      ) {
-        if (k === INK.thickets && wildHash(ci, cj, SEEDS.thicket) > 0.35) {
-          continue;
-        }
-        const thicket = wildThicket(t, ci, cj);
-        if (thicket === null) continue;
-        const bushes =
-          k === INK.thickets ? thicket.bushes.slice(0, 1) : thicket.bushes;
-        for (const bush of bushes) {
-          if (!inked(bush.x, bush.z, pad)) continue;
-          const r = Math.max(2.4 * unit, 2.3 * bush.scale) * 1.25;
-          const x = bush.x;
-          const y = bush.z - r * 0.25;
-          for (let h = 0; h < 4; h++) {
-            const o = (h - 1.5) * r * 0.36;
-            shadows.moveTo(x + r * 0.25 + o, y + r * 1.45);
-            shadows.lineTo(x + r * 1.2 + o * 0.3, y + r * 0.7 + o * 0.15);
-          }
-          shadows.moveTo(x, y + r * 0.85);
-          shadows.lineTo(x + r * 0.05, y + r * 1.4);
-          const crown = new Path2D();
-          const lobes = 6;
-          const turn = bush.yaw;
-          for (let l = 0; l <= lobes; l++) {
-            const a = (l / lobes) * Math.PI * 2 + turn;
-            const rr = r * (0.86 + hash(bush.seed * 97, l) * 0.24);
-            const mid = a - Math.PI / lobes;
-            if (l === 0) {
-              crown.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-            } else {
-              crown.quadraticCurveTo(
-                x + Math.cos(mid) * rr * 1.22,
-                y + Math.sin(mid) * rr * 1.22,
-                x + Math.cos(a) * rr,
-                y + Math.sin(a) * rr,
-              );
-            }
-          }
-          crown.closePath();
-          crowns.push({ crown, x, y, r });
-        }
-      }
-    }
-    g.strokeStyle = `rgba(${inkRgb},0.42)`;
-    g.lineWidth = 0.55 * unit;
-    g.stroke(shadows);
-    for (const { crown, x, y, r } of crowns) {
-      g.fillStyle = style.paper;
-      g.fill(crown);
-      g.save();
-      g.clip(crown);
-      g.beginPath();
-      for (let h = -3; h <= 3; h++) {
-        const o = h * r * 0.32;
-        g.moveTo(x + o + r * 0.1, y - r * 1.25);
-        g.lineTo(x + o + r * 0.9, y + r * 0.85);
-      }
-      g.strokeStyle = `rgba(${inkRgb},0.4)`;
-      g.lineWidth = 0.48 * unit;
-      g.stroke();
-      g.restore();
-      g.strokeStyle = `rgba(${inkRgb},0.82)`;
-      g.lineWidth = 0.75 * unit;
-      g.stroke(crown);
+function buildBushCrown(
+  shadows: Path2D,
+  bush: NonNullable<ReturnType<typeof wildThicket>>["bushes"][number],
+  unit: number,
+): { crown: Path2D; x: number; y: number; r: number } {
+  const r = Math.max(2.4 * unit, 2.3 * bush.scale) * 1.25;
+  const x = bush.x;
+  const y = bush.z - r * 0.25;
+  for (let h = 0; h < 4; h++) {
+    const o = (h - 1.5) * r * 0.36;
+    shadows.moveTo(x + r * 0.25 + o, y + r * 1.45);
+    shadows.lineTo(x + r * 1.2 + o * 0.3, y + r * 0.7 + o * 0.15);
+  }
+  shadows.moveTo(x, y + r * 0.85);
+  shadows.lineTo(x + r * 0.05, y + r * 1.4);
+  const crown = new Path2D();
+  const lobes = 6;
+  const turn = bush.yaw;
+  for (let l = 0; l <= lobes; l++) {
+    const a = (l / lobes) * Math.PI * 2 + turn;
+    const rr = r * (0.86 + hash(bush.seed * 97, l) * 0.24);
+    const mid = a - Math.PI / lobes;
+    if (l === 0) {
+      crown.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    } else {
+      crown.quadraticCurveTo(
+        x + Math.cos(mid) * rr * 1.22,
+        y + Math.sin(mid) * rr * 1.22,
+        x + Math.cos(a) * rr,
+        y + Math.sin(a) * rr,
+      );
     }
   }
+  crown.closePath();
+  return { crown, x, y, r };
+}
+
+function drawBushCrowns(
+  f: TileFrame,
+  crowns: readonly { crown: Path2D; x: number; y: number; r: number }[],
+): void {
+  const { g, unit, inkRgb } = f;
+  const paperColor = f.sheet.style.paper;
+  for (const { crown, x, y, r } of crowns) {
+    g.fillStyle = paperColor;
+    g.fill(crown);
+    g.save();
+    g.clip(crown);
+    g.beginPath();
+    for (let h = -3; h <= 3; h++) {
+      const o = h * r * 0.32;
+      g.moveTo(x + o + r * 0.1, y - r * 1.25);
+      g.lineTo(x + o + r * 0.9, y + r * 0.85);
+    }
+    g.strokeStyle = `rgba(${inkRgb},0.4)`;
+    g.lineWidth = 0.48 * unit;
+    g.stroke();
+    g.restore();
+    g.strokeStyle = `rgba(${inkRgb},0.82)`;
+    g.lineWidth = 0.75 * unit;
+    g.stroke(crown);
+  }
+}
+
+function inkTileThickets(f: TileFrame): void {
+  const { g, x0, z0, side, k, scale, unit, inkRgb, inked } = f;
+  const t = f.sheet.terrain;
+  const cell = WILD_THICKETS.cell;
+  const pad = WILD_THICKETS.spread + 6 * scale;
+  const shadows = new Path2D();
+  const crowns: { crown: Path2D; x: number; y: number; r: number }[] = [];
+  for (
+    let cj = Math.floor((z0 - pad) / cell);
+    cj <= Math.floor((z0 + side + pad) / cell);
+    cj++
+  ) {
+    for (
+      let ci = Math.floor((x0 - pad) / cell);
+      ci <= Math.floor((x0 + side + pad) / cell);
+      ci++
+    ) {
+      if (k === INK.thickets && wildHash(ci, cj, SEEDS.thicket) > 0.35) {
+        continue;
+      }
+      const thicket = wildThicket(t, ci, cj);
+      if (thicket === null) continue;
+      const bushes =
+        k === INK.thickets ? thicket.bushes.slice(0, 1) : thicket.bushes;
+      for (const bush of bushes) {
+        if (!inked(bush.x, bush.z, pad)) continue;
+        crowns.push(buildBushCrown(shadows, bush, unit));
+      }
+    }
+  }
+  g.strokeStyle = `rgba(${inkRgb},0.42)`;
+  g.lineWidth = 0.55 * unit;
+  g.stroke(shadows);
+  drawBushCrowns(f, crowns);
+}
+
+/**
+ * Inks the tile at level `k` and grid position `i`, `j`, yielding between
+ * steps: heights, contours, hachures and grass, then thickets. Every mark is
+ * placed on a world-anchored grid, so a mark that crosses a tile's edge is
+ * drawn the same in both tiles.
+ */
+function* inkTile(
+  sheet: Sheet,
+  k: number,
+  i: number,
+  j: number,
+): Generator<void, HTMLCanvasElement> {
+  const { style, reach, dpr } = sheet;
+  const res = INK.scale * 2 ** -k;
+  const side = tileMeters(k);
+  const x0 = i * side;
+  const z0 = j * side;
+  const px = Math.round(INK.tile * dpr);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = px;
+  const g = canvas.getContext("2d") as CanvasRenderingContext2D;
+  // Draws in meters. A CSS pixel is `1 / res` meters.
+  const unit = 1 / res;
+  g.setTransform(
+    px / side,
+    0,
+    0,
+    px / side,
+    -x0 * (px / side),
+    -z0 * (px / side),
+  );
+  g.lineCap = g.lineJoin = "round";
+  /** Whether the paper may be bare within `pad` of a point: past the land's square or in its unpainted edge. */
+  const inked = (x: number, z: number, pad: number): boolean =>
+    Math.max(Math.abs(x), Math.abs(z)) > reach - sheet.bare - pad;
+
+  const ink = style.ink;
+  const inkRgb = [
+    parseInt(ink.slice(1, 3), 16),
+    parseInt(ink.slice(3, 5), 16),
+    parseInt(ink.slice(5, 7), 16),
+  ].join(",");
+  const step = INK.sample * 2 ** k;
+  const frame: TileFrame = {
+    g,
+    sheet,
+    k,
+    x0,
+    z0,
+    side,
+    scale: 2 ** k,
+    step,
+    unit,
+    inkRgb,
+    inked,
+  };
+  const gi = Math.floor(x0 / step) - 4;
+  const gj = Math.floor(z0 / step) - 4;
+  const n = Math.ceil(side / step) + 9;
+  const heights = yield* sampleTileHeights(frame, gi, gj, n);
+  yield;
+  /** The bilinear height at a point from the samples around it. */
+  const at = (a: number, b: number): number =>
+    heights[
+      Math.max(0, Math.min(n - 1, b)) * n + Math.max(0, Math.min(n - 1, a))
+    ] as number;
+  const heightOf = (x: number, z: number): number => {
+    const u = x / step - gi;
+    const v = z / step - gj;
+    const [a, b] = [Math.floor(u), Math.floor(v)];
+    const [fu, fv] = [u - a, v - b];
+    return (
+      (at(a, b) * (1 - fu) + at(a + 1, b) * fu) * (1 - fv) +
+      (at(a, b + 1) * (1 - fu) + at(a + 1, b + 1) * fu) * fv
+    );
+  };
+
+  inkTileContours(frame, heights, n, gi, gj);
+  yield;
+  inkTileHachures(frame, heightOf);
+  inkTileGrass(frame);
+  yield;
+  if (k <= INK.thickets) inkTileThickets(frame);
 
   // Erases the ink under the land's paint, so it shows only on bare paper.
   if (x0 < reach && x0 + side > -reach && z0 < reach && z0 + side > -reach) {
@@ -714,7 +810,6 @@ export function createWildInk(
   const landed: (() => void)[] = [];
   let clock = 0;
   const timing = { inked: 0, longestStepMs: 0, atOnce: 0, atOnceMs: 0 };
-  const keyOf = (k: number, i: number, j: number): string => `${k}:${i}:${j}`;
   /** Whether a tile may have bare paper to ink. Tiles deep inside the land's paint are never inked. */
   const bare = (k: number, i: number, j: number): boolean => {
     const side = tileMeters(k);
@@ -743,7 +838,7 @@ export function createWildInk(
         i <= Math.floor(box[2] / side);
         i++
       ) {
-        if (bare(k, i, j)) out.push({ k, i, j, key: keyOf(k, i, j) });
+        if (bare(k, i, j)) out.push({ k, i, j, key: `${k}:${i}:${j}` });
       }
     }
     return out;
@@ -754,7 +849,7 @@ export function createWildInk(
     if (kept.size <= INK.keep) return;
     const oldest = [...kept.entries()]
       .filter(([, t]) => t.used < laid)
-      .sort((a, b) => a[1].used - b[1].used)
+      .toSorted((a, b) => a[1].used - b[1].used)
       .slice(0, kept.size - INK.keep);
     for (const [key] of oldest) kept.delete(key);
   };
@@ -777,7 +872,7 @@ export function createWildInk(
   };
 
   return {
-    ground(ctx, w, h, view) {
+    ground(ctx, w, h, view): void {
       layGround(
         ctx,
         style,
@@ -788,7 +883,7 @@ export function createWildInk(
         h,
       );
     },
-    draw(ctx, w, h, view, now) {
+    draw(ctx, w, h, view, now): void {
       laid = ++clock;
       const device = ctx.getTransform().a;
       const box: [number, number, number, number] = [
@@ -835,7 +930,7 @@ export function createWildInk(
       }
       ctx.restore();
     },
-    want(views) {
+    want(views): void {
       const asked: typeof queue = [];
       const seen = new Set<string>();
       for (const v of views) {
@@ -843,7 +938,7 @@ export function createWildInk(
         const cz = (v.box[1] + v.box[3]) / 2;
         for (const { k } of levelsFor(v.zoom)) {
           const side = tileMeters(k);
-          const tiles = tilesOf(k, v.box).sort(
+          const tiles = tilesOf(k, v.box).toSorted(
             (a, b) =>
               Math.hypot((a.i + 0.5) * side - cx, (a.j + 0.5) * side - cz) -
               Math.hypot((b.i + 0.5) * side - cx, (b.j + 0.5) * side - cz),
@@ -852,8 +947,8 @@ export function createWildInk(
             if (seen.has(tile.key)) continue;
             seen.add(tile.key);
             const found = kept.get(tile.key);
-            if (found !== undefined) found.used = ++clock;
-            else asked.push(tile);
+            if (found === undefined) asked.push(tile);
+            else found.used = ++clock;
           }
         }
       }
@@ -863,7 +958,7 @@ export function createWildInk(
         ...asked,
       ];
     },
-    step() {
+    step(): boolean {
       if (inking === null) {
         const next = queue.shift();
         if (next === undefined) return false;
@@ -889,7 +984,7 @@ export function createWildInk(
       }
       return true;
     },
-    get waiting() {
+    get waiting(): boolean {
       return inking !== null || queue.length > 0;
     },
     onLanded: (listener) => landed.push(listener),

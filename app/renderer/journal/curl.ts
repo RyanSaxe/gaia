@@ -62,6 +62,16 @@ function stripOf(
   return copy;
 }
 
+function applyShade(
+  el: HTMLElement,
+  from: number,
+  to: number,
+  dark: number,
+): void {
+  el.style.opacity = dark <= 0.001 ? "0" : "1";
+  el.style.background = `linear-gradient(90deg, rgba(30,16,6,0) ${from}px, rgba(30,16,6,${dark.toFixed(3)}) ${(from + 0.15 * (to - from)).toFixed(1)}px, rgba(30,16,6,0) ${to}px)`;
+}
+
 /**
  * Cuts the leaf showing `front` and `back` into strips in `host`, which is
  * positioned like the leaf. `shades` are the layers over the right and left
@@ -115,17 +125,8 @@ export function createCurl(
     strips.push(strip);
     holder = strip;
   }
-  const shade = (
-    el: HTMLElement,
-    from: number,
-    to: number,
-    dark: number,
-  ): void => {
-    el.style.opacity = dark <= 0.001 ? "0" : "1";
-    el.style.background = `linear-gradient(90deg, rgba(30,16,6,0) ${from}px, rgba(30,16,6,${dark.toFixed(3)}) ${(from + 0.15 * (to - from)).toFixed(1)}px, rgba(30,16,6,0) ${to}px)`;
-  };
   return {
-    at(deg, forward) {
+    at(deg, forward): number {
       const p = Math.min(1, Math.max(0, -deg / 180));
       const lift = Math.sin(Math.PI * p);
       // The bend at this angle. The spine strip leads the leaf's angle by half of it, and the free edge trails.
@@ -154,7 +155,7 @@ export function createCurl(
       const dark = SHADOW.dark * lift;
       const reach = 30 + SHADOW.reach * lift;
       if (edge >= 0) {
-        shade(shades.right, edge, Math.min(pw, edge + reach), dark);
+        applyShade(shades.right, edge, Math.min(pw, edge + reach), dark);
         shades.left.style.opacity = "0";
       } else {
         // The left page's layer runs from the fore-edge (0) to the spine (pw).
@@ -165,7 +166,7 @@ export function createCurl(
       }
       return spine;
     },
-    remove() {
+    remove(): void {
       strips[0]?.remove();
       shades.right.style.opacity = "0";
       shades.left.style.opacity = "0";

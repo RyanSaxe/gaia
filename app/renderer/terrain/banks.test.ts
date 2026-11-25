@@ -92,15 +92,99 @@ function placeAsThePage(
   return { land, placed };
 }
 
+function must<T>(value: T | undefined, what = "value"): T {
+  if (value === undefined) throw new Error(`Missing ${what}.`);
+  return value;
+}
+
+interface PlacedWorldEntry {
+  root: string;
+  code: OpenedWorld;
+  t: Terrain;
+  buildings: BuildingToPlace[];
+  land: Terrain;
+  placed: Placed;
+}
+
+function checkPlacedSymbols(
+  root: string,
+  code: OpenedWorld,
+  placed: Placed,
+  astray: string[],
+): void {
+  const { world } = code;
+  const allSymbols = [...world.symbols, ...world.naturalThings];
+  expect(placed.symbols.length, root).toBe(allSymbols.length);
+  const trees = new Map(placed.trees.map((t) => [t.symbol, t]));
+  expect(trees.size, root).toBeGreaterThan(0);
+  for (const [k, i] of placed.symbols.entries()) {
+    const s = must(allSymbols[k], "symbol");
+    const path = "id" in s ? s.id : s.path;
+    const raised = COMPOSED_FORMS[s.form] !== undefined;
+    const tree = s.as === "tree";
+    // Each appears once: as its tree, as its placement, or as one of the world's buildings and landmarks.
+    expect(trees.has(k), `${root}: ${path}`).toBe(tree);
+    expect(i >= 0, `${root}: ${path}`).toBe(!tree && !raised);
+    if (raised) {
+      expect(
+        world.things.some((t) => t.path === path),
+        `${root}: ${path}`,
+      ).toBe(true);
+      continue;
+    }
+    const p = tree
+      ? must(trees.get(k), "placed tree")
+      : must(placed.placements[i], "placement");
+    const on = placeAt(world, p.x, p.z).file?.path;
+    if (s.file !== undefined && on !== s.file) {
+      astray.push(`${path} (${s.as}) on ${on ?? "no file"}`);
+    }
+  }
+}
+
+function checkPlacedThings(
+  root: string,
+  code: OpenedWorld,
+  buildings: BuildingToPlace[],
+  placed: Placed,
+  astray: string[],
+): void {
+  const { world } = code;
+  const sited = [
+    ...code.buildings.map((b, i) => ({
+      path: b.facts.path,
+      at: must(placed.sites[i], "building site"),
+    })),
+    ...placed.landmarks.map((l) => ({ path: l.id, at: l.site })),
+  ];
+  const banked = new Set(
+    buildings.flatMap((b, i) =>
+      b.wheel === undefined
+        ? []
+        : [must(code.buildings[i], "building").facts.path],
+    ),
+  );
+  const off = new Set(placed.offGround);
+  expect(
+    code.buildings
+      .filter((b) => off.has(b.facts.path))
+      .map((b) => b.facts.path),
+    root,
+  ).toEqual([]);
+  for (const t of world.things.filter(
+    (x) => x.file !== undefined && !banked.has(x.path) && !off.has(x.path),
+  )) {
+    const at = sited.find((x) => x.path === t.path)?.at;
+    const on =
+      at === undefined ? undefined : placeAt(world, at.x, at.z).file?.path;
+    if (on !== t.file) {
+      astray.push(`${t.path} (${t.as}) on ${on ?? "no file"}`);
+    }
+  }
+}
+
 describe("the showcase, as it is and fixed, and the proving ground, placed as the page places them", () => {
-  let worlds: {
-    root: string;
-    code: OpenedWorld;
-    t: Terrain;
-    buildings: BuildingToPlace[];
-    land: Terrain;
-    placed: Placed;
-  }[] = [];
+  let worlds: PlacedWorldEntry[] = [];
   // Bakes and places all three worlds whole, about two minutes while other work shares the machine, most of it for the proving ground.
   beforeAll(async () => {
     const snapshots = await Promise.all(
@@ -112,7 +196,7 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
       })),
     );
     worlds = [...snapshots, provingWorld()].map((doc) => {
-      const code = openedWorld(doc as never);
+      const code = openedWorld(doc);
       const t = bakeTerrain(
         code.spec,
         new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]),
@@ -132,10 +216,12 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
     let ponds = 0;
     for (const { root, code, t } of worlds) {
       const rising = new Set(
-        t.streams.map((s) =>
-          regionAt(t.spec, s.stations[0]!.x, s.stations[0]!.z),
-        ),
+        t.streams.map((s) => {
+          const head = must(s.stations[0], "stream head");
+          return regionAt(t.spec, head.x, head.z);
+        }),
       );
+      const regionIndex = new Map(code.spec.regions.map((s, i) => [s.id, i]));
       const watered = code.world.regions.filter(
         (r) => r.water === "A brook" || r.water === "A trickle",
       );
@@ -144,9 +230,7 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
           .filter(
             (r) =>
               !rising.has(
-                code.spec.regions.findIndex(
-                  (s) => s.id === (r.area === "" ? code.world.name : r.area),
-                ),
+                regionIndex.get(r.area === "" ? code.world.name : r.area) ?? -1,
               ),
           )
           .map((r) => r.area),
@@ -155,10 +239,9 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
       const still = code.world.regions.filter(
         (r) => WATERS[r.water]?.settles?.["relief.pond"] === true,
       );
+      const pondKeys = new Set(t.ponds.map((p) => `${p.x},${p.z}`));
       expect(
-        still
-          .filter((r) => !t.ponds.some((p) => p.x === r.x && p.z === r.z))
-          .map((r) => r.area),
+        still.filter((r) => !pondKeys.has(`${r.x},${r.z}`)).map((r) => r.area),
         root,
       ).toEqual([]);
       ponds += still.length;
@@ -176,7 +259,7 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
       const offWater = buildings.flatMap((b, i) => {
         if (b.wheel === undefined || b.wheel === null) return [];
         const [x, z] = siteToWorld(
-          placed.sites[i]!,
+          must(placed.sites[i], "building site"),
           (b.wheel.x0 + b.wheel.x1) / 2,
           (b.wheel.z0 + b.wheel.z1) / 2,
         );
@@ -186,7 +269,7 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
       // No water reaches the floor's height anywhere under the house.
       buildings.forEach((b, i) => {
         if (b.wheel === undefined || b.wheel === null) return;
-        const site = placed.sites[i]!;
+        const site = must(placed.sites[i], "building site");
         for (let lz = -b.plan.depth / 2; lz <= b.plan.depth / 2; lz += 0.5) {
           for (let lx = -b.plan.width / 2; lx <= b.plan.width / 2; lx += 0.5) {
             const surface = heightAt(
@@ -211,17 +294,18 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
           ? {}
           : { aspect: code.world.aspect }),
       };
-      const past = t.streams.flatMap((s, i) =>
-        s.stations.some((p) => pastTheEdge(land, p.x, p.z) > 0)
-          ? [`stream ${i}`]
-          : [],
-      );
-      const mills = buildings.flatMap((b, i) =>
-        b.wheel !== undefined &&
-        pastTheEdge(land, placed.sites[i]!.x, placed.sites[i]!.z) > 0
+      const past: string[] = [];
+      for (const [i, s] of t.streams.entries()) {
+        if (s.stations.some((p) => pastTheEdge(land, p.x, p.z) > 0)) {
+          past.push(`stream ${i}`);
+        }
+      }
+      const mills = buildings.flatMap((b, i) => {
+        const site = must(placed.sites[i], "building site");
+        return b.wheel !== undefined && pastTheEdge(land, site.x, site.z) > 0
           ? [b.name]
-          : [],
-      );
+          : [];
+      });
       expect([...past, ...mills], root).toEqual([]);
     }
   });
@@ -234,14 +318,14 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
         w: { readonly way: number; readonly reversed: boolean },
         first: boolean,
       ): number => {
-        const p = ways[w.way]!.points;
-        const k = first !== w.reversed ? 0 : p.length - 2;
-        return waterDepthAt(land, p[k]!, p[k + 1]!);
+        const p = must(ways[w.way], "way").points;
+        const k = first === w.reversed ? p.length - 2 : 0;
+        return waterDepthAt(land, must(p[k], "way x"), must(p[k + 1], "way z"));
       };
       const wet = trails.flatMap((tr) =>
         tr.ways.length > 0 &&
-        (depthAt(tr.ways[0]!, true) > 0 ||
-          depthAt(tr.ways[tr.ways.length - 1]!, false) > 0)
+        (depthAt(must(tr.ways[0], "first way"), true) > 0 ||
+          depthAt(must(tr.ways[tr.ways.length - 1], "last way"), false) > 0)
           ? [tr.id]
           : [],
       );
@@ -252,9 +336,9 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
   it("place every house on dry ground, never in a pond or a stream", () => {
     for (const { root, buildings, land, placed } of worlds) {
       // A house with a wheel sits on a stream's bank with its wheel in the water. Every other house is wholly on dry ground.
-      buildings.forEach((b, i) => {
-        if (b.wheel !== undefined) return;
-        const site = placed.sites[i]!;
+      for (const [i, b] of buildings.entries()) {
+        if (b.wheel !== undefined) continue;
+        const site = must(placed.sites[i], "building site");
         const { width, depth } = b.plan;
         const under = Array.from({ length: 25 }, (_, k) =>
           waterDepthAt(
@@ -267,41 +351,14 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
           ),
         );
         expect(Math.max(...under), `${root}: ${b.name}`).toBe(0);
-      });
+      }
     }
   });
 
   it("place every definition, file and entity the layout lays out, as a tree, a stone, a bush, flowers or one of the world's things, each on its own file's patch, however crowded its ground, and nothing else", () => {
     for (const { root, code, buildings, placed } of worlds) {
-      const { world } = code;
-      expect(placed.symbols.length, root).toBe(
-        world.symbols.length + world.naturalThings.length,
-      );
-      const trees = new Map(placed.trees.map((t) => [t.symbol, t]));
-      expect(trees.size, root).toBeGreaterThan(0);
       const astray: string[] = [];
-      placed.symbols.forEach((i, k) => {
-        const s =
-          world.symbols[k] ?? world.naturalThings[k - world.symbols.length]!;
-        const path = "id" in s ? s.id : s.path;
-        const raised = COMPOSED_FORMS[s.form] !== undefined;
-        const tree = s.as === "tree";
-        // Each appears once: as its tree, as its placement, or as one of the world's buildings and landmarks.
-        expect(trees.has(k), `${root}: ${path}`).toBe(tree);
-        expect(i >= 0, `${root}: ${path}`).toBe(!tree && !raised);
-        if (raised) {
-          expect(
-            world.things.some((t) => t.path === path),
-            `${root}: ${path}`,
-          ).toBe(true);
-          return;
-        }
-        const p = tree ? trees.get(k)! : placed.placements[i]!;
-        const on = placeAt(world, p.x, p.z).file?.path;
-        if (s.file !== undefined && on !== s.file) {
-          astray.push(`${path} (${s.as}) on ${on ?? "no file"}`);
-        }
-      });
+      checkPlacedSymbols(root, code, placed, astray);
       // Every stone, bush or flowers represents code.
       expect(placed.placements.length, root).toBe(
         placed.symbols.filter((i) => i >= 0).length,
@@ -309,35 +366,7 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
       // A file's or definition's building or landmark is on that file's patch, except a building whose wheel needs
       // running water, which is on its area's stream bank, and a landmark whose patch has no spot the placement rules
       // accept (`Placed.offGround`). Every building fits its own patch.
-      const sited = [
-        ...code.buildings.map((b, i) => ({
-          path: b.facts.path,
-          at: placed.sites[i]!,
-        })),
-        ...placed.landmarks.map((l) => ({ path: l.id, at: l.site })),
-      ];
-      const banked = new Set(
-        buildings.flatMap((b, i) =>
-          b.wheel !== undefined ? [code.buildings[i]!.facts.path] : [],
-        ),
-      );
-      const off = new Set(placed.offGround);
-      expect(
-        code.buildings
-          .filter((b) => off.has(b.facts.path))
-          .map((b) => b.facts.path),
-        root,
-      ).toEqual([]);
-      for (const t of world.things.filter(
-        (x) => x.file !== undefined && !banked.has(x.path) && !off.has(x.path),
-      )) {
-        const at = sited.find((x) => x.path === t.path)?.at;
-        const on =
-          at === undefined ? undefined : placeAt(world, at.x, at.z).file?.path;
-        if (on !== t.file) {
-          astray.push(`${t.path} (${t.as}) on ${on ?? "no file"}`);
-        }
-      }
+      checkPlacedThings(root, code, buildings, placed, astray);
       expect(astray, root).toEqual([]);
     }
   });
@@ -373,13 +402,13 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
     for (const { root, code, placed } of worlds) {
       const shown = understoryVitality(
         placed,
-        (k) => code.layout.symbols[k]!.vitality,
+        (k) => must(code.layout.symbols[k], "symbol").vitality,
       );
       expect(shown.length, root).toBe(placed.placements.length);
       placed.symbols.forEach((i, k) => {
         if (i >= 0) {
           expect(shown[i], root).toBeCloseTo(
-            code.layout.symbols[k]!.vitality,
+            must(code.layout.symbols[k], "symbol").vitality,
             5,
           );
         }

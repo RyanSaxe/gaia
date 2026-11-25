@@ -246,6 +246,9 @@ export const healthPrior = (
 ): number =>
   (files.reduce((a, f) => a + f.size, 0) / Math.max(1, files.length)) * 0.01;
 
+const bucketKey = (i: number, j: number): number =>
+  (i + 4096) * 8192 + (j + 4096);
+
 /**
  * Returns vitality over the land from each file's own vitality. At a point, it averages the nearby files weighted by
  * `healthWeight`, across area borders too. Far from every file it approaches `fallback`, the vitality of the point's
@@ -262,10 +265,8 @@ export function healthField(
   const size = far + files.reduce((m, f) => Math.max(m, f.reach), 0);
   const cell = (v: number): number => Math.floor(v / size);
   const buckets = new Map<number, FileHealth[]>();
-  const keyOf = (i: number, j: number): number =>
-    (i + 4096) * 8192 + (j + 4096);
   for (const f of files) {
-    const key = keyOf(cell(f.x), cell(f.z));
+    const key = bucketKey(cell(f.x), cell(f.z));
     const bucket = buckets.get(key);
     if (bucket === undefined) buckets.set(key, [f]);
     else bucket.push(f);
@@ -277,7 +278,7 @@ export function healthField(
     const cj = cell(z);
     for (let i = ci - 1; i <= ci + 1; i++) {
       for (let j = cj - 1; j <= cj + 1; j++) {
-        const bucket = buckets.get(keyOf(i, j));
+        const bucket = buckets.get(bucketKey(i, j));
         if (bucket === undefined) continue;
         for (const f of bucket) {
           const w = healthWeight(f, x, z, spread);
@@ -295,6 +296,15 @@ const hash = (x: number, z: number): number => {
   return s - Math.floor(s);
 };
 
+function deckleSide(k: number, t: number): [number, number] {
+  const inset = 3 + hash(k, 5) * 4 + (hash(k, 9) > 0.93 ? 4 : 0);
+  const along = t * 1000;
+  if (k < 1000) return [along, inset];
+  if (k < 2000) return [1000 - inset, along];
+  if (k < 3000) return [1000 - along, 1000 - inset];
+  return [inset, 1000 - along];
+}
+
 /**
  * The sheet's torn edge as a CSS mask: a ragged polygon 3 to 11 thousandths of
  * the sheet in from each side, with occasional deeper tears. It stretches to
@@ -302,19 +312,8 @@ const hash = (x: number, z: number): number => {
  */
 export const DECKLE_MASK = ((): string => {
   const points: string[] = [];
-  const side = (k: number, t: number): [number, number] => {
-    const inset = 3 + hash(k, 5) * 4 + (hash(k, 9) > 0.93 ? 4 : 0);
-    const along = t * 1000;
-    return k < 1000
-      ? [along, inset]
-      : k < 2000
-        ? [1000 - inset, along]
-        : k < 3000
-          ? [1000 - along, 1000 - inset]
-          : [inset, 1000 - along];
-  };
   for (let k = 0; k < 4000; k += 6) {
-    const [x, y] = side(k, (k % 1000) / 1000);
+    const [x, y] = deckleSide(k, (k % 1000) / 1000);
     points.push(`${x.toFixed(1)},${y.toFixed(1)}`);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" preserveAspectRatio="none"><polygon points="${points.join(" ")}" fill="#000"/></svg>`;

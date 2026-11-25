@@ -37,7 +37,10 @@ describe("a crown's form by its size on screen", () => {
 describe("a copy turning far", () => {
   const treeLib = new Library(TREE_PRIMITIVES);
   // The first tree blueprint from a sweep over a tree's parts.
-  const firstTree = sweep(tree, treeLib).blueprints[0]!;
+  const firstTree = sweep(tree, treeLib).blueprints[0];
+  if (firstTree === undefined) {
+    throw new Error("sweep returned no tree blueprint.");
+  }
   const plant = realize(firstTree, tree, treeLib, {
     seed: seedOf("woods-test/tree"),
     facts: { scale: 1, age: 120 },
@@ -141,33 +144,34 @@ describe("a copy turning far", () => {
     expect(at(GONE.end * 0.9)).toBe(false);
   });
 
+  const shownOnCard = (
+    setter: "setVitality" | "setVitalityAt",
+    before: boolean,
+  ): number => {
+    const later = createFarForms(light, 1);
+    const own = later.add(plant, again);
+    const one = createCopies(
+      plant,
+      light,
+      [{ x: 0, y: 0, z: 0, yaw: 0, scale: 1 }],
+      own,
+    );
+    const set = (): void =>
+      setter === "setVitality"
+        ? one.setVitality(0.5)
+        : one.setVitalityAt(0, 0.5);
+    if (before) set();
+    later.set(own.form, 0, FAR.swapPx);
+    one.warm();
+    if (!before) set();
+    // Let the vitality change ease in fully.
+    settleVitality();
+    const mesh = later.cards.object
+      .children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
+    return mesh.geometry.getAttribute("aMore").array[1] as number;
+  };
+
   it("shows a vitality on its card as its full form shows it, whether the vitality came before its far form took a slot or after", () => {
-    const shownOnCard = (
-      setter: "setVitality" | "setVitalityAt",
-      before: boolean,
-    ): number => {
-      const later = createFarForms(light, 1);
-      const own = later.add(plant, again);
-      const one = createCopies(
-        plant,
-        light,
-        [{ x: 0, y: 0, z: 0, yaw: 0, scale: 1 }],
-        own,
-      );
-      const set = (): void =>
-        setter === "setVitality"
-          ? one.setVitality(0.5)
-          : one.setVitalityAt(0, 0.5);
-      if (before) set();
-      later.set(own.form, 0, FAR.swapPx);
-      one.warm();
-      if (!before) set();
-      // Let the vitality change ease in fully.
-      settleVitality();
-      const mesh = later.cards.object
-        .children[0] as THREE.Mesh<THREE.InstancedBufferGeometry>;
-      return mesh.geometry.getAttribute("aMore").array[1] as number;
-    };
     for (const setter of ["setVitality", "setVitalityAt"] as const) {
       for (const before of [true, false]) {
         expect(

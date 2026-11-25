@@ -83,13 +83,13 @@ const smoothstep = (lo: number, hi: number, x: number): number => {
   return t * t * (3 - 2 * t);
 };
 /** A direction's height above the horizon: 0 below it, eased in over the lowest `AIR.horizonEase` so it starts level at the horizon, and exact above that. */
-const heightAbove = (y: number): number =>
-  y <= 0
-    ? 0
-    : y >= AIR.horizonEase
-      ? y
-      : (y * y * (2 * AIR.horizonEase - y)) /
-        (AIR.horizonEase * AIR.horizonEase);
+const heightAbove = (y: number): number => {
+  if (y <= 0) return 0;
+  if (y >= AIR.horizonEase) return y;
+  return (
+    (y * y * (2 * AIR.horizonEase - y)) / (AIR.horizonEase * AIR.horizonEase)
+  );
+};
 const mix = (a: Rgb, b: Rgb, t: number): Rgb => [
   a[0] + (b[0] - a[0]) * t,
   a[1] + (b[1] - a[1]) * t,

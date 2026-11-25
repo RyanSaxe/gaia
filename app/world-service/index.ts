@@ -26,7 +26,9 @@ import {
 } from "./recent.ts";
 
 const parent = process.parentPort;
-const toMain = (message: ToMain): void => parent.postMessage(message);
+const toMain = (message: ToMain): void =>
+  // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Electron ParentPort.postMessage takes a single message argument (not Window.postMessage)
+  parent.postMessage(message);
 
 const engine = createEngineClient((line) =>
   toMain({ type: "engine.send", line }),
@@ -35,6 +37,8 @@ let status: EngineStatus = { state: "starting" };
 let renderer: MessagePortMain | null = null;
 let root: string | null = null;
 
+const noop = (): void => {};
+
 /** Resolves once an engine answers a ping. The `engine.down` handler replaces it with an unresolved one. */
 let connected = settleable();
 function settleable(): {
@@ -42,9 +46,9 @@ function settleable(): {
   resolve: () => void;
   settled: boolean;
 } {
-  const s = { promise: Promise.resolve(), resolve: () => {}, settled: false };
+  const s = { promise: Promise.resolve(), resolve: noop, settled: false };
   s.promise = new Promise<void>((resolve) => {
-    s.resolve = () => {
+    s.resolve = (): void => {
       s.settled = true;
       resolve();
     };
@@ -307,6 +311,56 @@ async function choose(
   }
 }
 
+function keepForPort(
+  port: MessagePortMain,
+  write: (folder: string) => Promise<void>,
+): void {
+  const opened = openedOn.get(port);
+  if (opened !== undefined) void keep(() => write(opened.folder));
+}
+
+function handleRendererMessage(port: MessagePortMain, m: FromRenderer): void {
+  switch (m.type) {
+    case "world.open":
+      void (root === null ? offerStart(port) : open(port, root));
+      break;
+    case "world.choose":
+      void choose(port, m.place);
+      break;
+    case "world.source":
+      void sendSource(port, m.path);
+      break;
+    case "world.painting":
+      keepForPort(port, (folder) => keepPainting(engine, folder, m.painting));
+      break;
+    case "world.stood":
+      keepForPort(port, (folder) => keepLastSpot(engine, folder, m.stood));
+      break;
+    case "world.consent":
+      consenting?.resolve(m.approve);
+      consenting = null;
+      break;
+  }
+}
+
+function attachRendererPort(
+  nextRoot: string | null,
+  port: MessagePortMain | null,
+): void {
+  renderer?.close();
+  stopWatching();
+  // The old page can no longer answer the consent question. The next page's opening asks again.
+  consenting?.reject(new Error("The page that was asked went away."));
+  consenting = null;
+  root = nextRoot;
+  renderer = port;
+  port?.on("message", (e) =>
+    handleRendererMessage(port, e.data as FromRenderer),
+  );
+  port?.start();
+  report(status);
+}
+
 parent.on("message", (event) => {
   const message = event.data as FromMain;
   switch (message.type) {
@@ -321,39 +375,8 @@ parent.on("message", (event) => {
     case "engine.line":
       engine.receive(message.line);
       break;
-    case "renderer.port": {
-      renderer?.close();
-      stopWatching();
-      // The old page can no longer answer the consent question. The next page's opening asks again.
-      consenting?.reject(new Error("The page that was asked went away."));
-      consenting = null;
-      root = message.root;
-      const port = event.ports[0] ?? null;
-      renderer = port;
-      port?.on("message", (e) => {
-        const m = e.data as FromRenderer;
-        if (m.type === "world.open") {
-          void (root === null ? offerStart(port) : open(port, root));
-        } else if (m.type === "world.choose") void choose(port, m.place);
-        else if (m.type === "world.source") void sendSource(port, m.path);
-        else if (m.type === "world.painting") {
-          const opened = openedOn.get(port);
-          if (opened !== undefined) {
-            void keep(() => keepPainting(engine, opened.folder, m.painting));
-          }
-        } else if (m.type === "world.stood") {
-          const opened = openedOn.get(port);
-          if (opened !== undefined) {
-            void keep(() => keepLastSpot(engine, opened.folder, m.stood));
-          }
-        } else if (m.type === "world.consent") {
-          consenting?.resolve(m.approve);
-          consenting = null;
-        }
-      });
-      port?.start();
-      report(status);
+    case "renderer.port":
+      attachRendererPort(message.root, event.ports[0] ?? null);
       break;
-    }
   }
 });

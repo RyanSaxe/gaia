@@ -17,9 +17,15 @@ export function browserPaintings(): PaintingStore {
     (opened ??= new Promise((resolve) => {
       try {
         const request = indexedDB.open(DB, 1);
-        request.onupgradeneeded = () => request.result.createObjectStore(SHELF);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => resolve(null);
+        request.addEventListener("upgradeneeded", (): void => {
+          request.result.createObjectStore(SHELF);
+        });
+        request.addEventListener("success", (): void => {
+          resolve(request.result);
+        });
+        request.addEventListener("error", (): void => {
+          resolve(null);
+        });
       } catch {
         resolve(null);
       }
@@ -34,19 +40,23 @@ export function browserPaintings(): PaintingStore {
           if (d === null) return resolve(null);
           try {
             const request = act(d.transaction(SHELF, mode).objectStore(SHELF));
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => resolve(null);
+            request.addEventListener("success", (): void => {
+              resolve(request.result);
+            });
+            request.addEventListener("error", (): void => {
+              resolve(null);
+            });
           } catch {
             resolve(null);
           }
         }),
     );
   return {
-    get: async (key) => {
+    get: async (key): Promise<Blob | null> => {
       const found = await run<unknown>("readonly", (s) => s.get(key));
       return found instanceof Blob ? found : null;
     },
-    put: async (key, painting) => {
+    put: async (key, painting): Promise<void> => {
       await run("readwrite", (s) => s.put(painting, key));
     },
   };

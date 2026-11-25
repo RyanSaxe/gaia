@@ -269,5 +269,7 @@ export function statusText(status: EngineStatus | "standalone"): string {
       return `Engine ${status.version} connected`;
     case "restarting":
       return "Engine restarting";
+    default:
+      return status satisfies never;
   }
 }

@@ -134,7 +134,7 @@ export function createWait(veil: HTMLElement, aspect: number): Wait {
   const slip = slipIn(veil);
   return {
     ...view,
-    ask(plan) {
+    ask(plan): Promise<boolean> {
       const words = document.createElement("p");
       words.append("Judging ");
       const name = document.createElement("i");
@@ -154,7 +154,7 @@ export function createWait(veil: HTMLElement, aspect: number): Wait {
         ),
       );
     },
-    failed(message) {
+    failed(message): void {
       const words = document.createElement("p");
       words.textContent = message;
       // Reloading opens the same world again, because main gives the new page the same folder.

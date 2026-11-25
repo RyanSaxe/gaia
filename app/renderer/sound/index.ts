@@ -152,7 +152,7 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
 
   if (recording) {
     return {
-      frame() {
+      frame(): void {
         if (keeping) {
           moments.push({
             t: performance.now() / 1000,
@@ -163,13 +163,13 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
       },
       hook: {
         /** Starts logging what the person hears each frame, clearing the log first, or stops. */
-        record: (on: boolean) => {
+        record: (on: boolean): number => {
           if (on) moments.length = 0;
           keeping = on;
           return moments.length;
         },
         /** The log's size so far, in frames and seconds. */
-        kept: () => ({
+        kept: (): { frames: number; seconds: number } => ({
           frames: moments.length,
           seconds:
             moments.length < 2
@@ -177,12 +177,12 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
               : (moments.at(-1) as Moment).t - (moments[0] as Moment).t,
         }),
         /** Renders the logged walk as the page would have played it, as base64 WAV. */
-        render: async (how: Rendering = {}) =>
+        render: async (how: Rendering = {}): Promise<string> =>
           wavBase64(await renderWalk(moments, how)),
         /** The log itself, for checking what was heard. */
-        moments: () => moments,
+        moments: (): Moment[] => moments,
         /** Loads a log that `moments` returned, so a walk can be rendered again without walking it. */
-        replay: (kept: readonly Moment[]) => {
+        replay: (kept: readonly Moment[]): number => {
           keeping = false;
           moments.splice(0, moments.length, ...kept);
           return moments.length;
@@ -211,7 +211,7 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
         ...Object.values(bank.paper),
         ...Object.values(bank.steps).map((s) => s.buffer),
       ].reduce((sum, b) => sum + sizeOf(b), 0);
-      held = () =>
+      held = (): number =>
         bank.beds.held() + short + score.chunks.held() + score.phrases.held();
       const start = ctx.currentTime + 0.1;
       const scape = createSoundscape(ctx, bank, meter, start, Math.random);
@@ -244,7 +244,7 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
   );
   const samples = new Float32Array(meter.fftSize);
   return {
-    frame() {
+    frame(): void {
       if (listener !== null && ctx.state === "running") {
         listener.hear({
           t: ctx.currentTime,
@@ -255,13 +255,13 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
     },
     hook: {
       /** The audio context's state: running, suspended until a touch, or closed. */
-      state: () => ctx.state,
+      state: (): AudioContextState => ctx.state,
       /** Decoded audio held now, in MB. */
-      decoded: () => Math.round(held() / 1e5) / 10,
+      decoded: (): number => Math.round(held() / 1e5) / 10,
       /** What the person hears where they are now. */
-      earshot: () => world.earshot(),
+      earshot: (): ReturnType<WorldHandle["earshot"]> => world.earshot(),
       /** The output level in dBFS over the last tenth of a second, or -Infinity in silence. */
-      level: () => {
+      level: (): number => {
         meter.getFloatTimeDomainData(samples);
         let sum = 0;
         for (const v of samples) sum += v * v;

@@ -33,6 +33,35 @@ const startsWord = (text: string, k: number): boolean => {
   );
 };
 
+function nextLetterIndex(
+  text: string,
+  lower: string,
+  ch: string,
+  from: number,
+  runOn: boolean,
+  hasLast: boolean,
+): number {
+  if (runOn && hasLast && lower[from] === ch) return from;
+  for (let q = from; q < lower.length; q++) {
+    if (lower[q] === ch && startsWord(text, q)) return q;
+  }
+  return lower.indexOf(ch, from);
+}
+
+function letterScore(
+  text: string,
+  k: number,
+  last: number | undefined,
+): number {
+  const gap = last === undefined ? 0 : k - last - 1;
+  return (
+    1 +
+    (startsWord(text, k) ? 3 : 0) +
+    (last !== undefined && gap === 0 ? 2 : 0) -
+    (gap > 0 ? 1 + gap * 0.2 : 0)
+  );
+}
+
 /**
  * Scores how well `term` matches `text` with its letters in order, and returns
  * the matched positions. Each letter scores, more at a word start and more when
@@ -72,24 +101,24 @@ function matchOf(
     for (const ch of term) {
       const last = letters[letters.length - 1];
       const from = last === undefined ? 0 : last + 1;
-      let k = runOn && last !== undefined && lower[from] === ch ? from : -1;
-      for (let q = from; k === -1 && q < lower.length; q++) {
-        if (lower[q] === ch && startsWord(text, q)) k = q;
-      }
-      if (k === -1) k = lower.indexOf(ch, from);
+      const k = nextLetterIndex(
+        text,
+        lower,
+        ch,
+        from,
+        runOn,
+        last !== undefined,
+      );
       if (k === -1) return null;
-      const gap = last === undefined ? 0 : k - last - 1;
-      score +=
-        1 +
-        (startsWord(text, k) ? 3 : 0) +
-        (last !== undefined && gap === 0 ? 2 : 0) -
-        (gap > 0 ? 1 + gap * 0.2 : 0);
+      score += letterScore(text, k, last);
       letters.push(k);
     }
     return { score, letters };
   };
   const [a, b] = [spelled(true), spelled(false)];
-  return a === null || b === null ? (a ?? b) : b.score > a.score ? b : a;
+  if (a === null) return b;
+  if (b === null) return a;
+  return b.score > a.score ? b : a;
 }
 
 /**
@@ -121,10 +150,12 @@ export function find(
         ok = false;
         break;
       }
-      if (named !== null) {
+      if (named === null) {
+        score += (placed as { score: number }).score;
+      } else {
         score += named.score * 2;
         letters.push(...named.letters);
-      } else score += (placed as { score: number }).score;
+      }
     }
     if (ok) {
       found.push({
@@ -135,7 +166,7 @@ export function find(
     }
   }
   return found
-    .sort((a, b) => b.score - a.score || a.item.page - b.item.page)
+    .toSorted((a, b) => b.score - a.score || a.item.page - b.item.page)
     .slice(0, limit);
 }
 
@@ -243,7 +274,7 @@ export function createFinder(
     ask.blur();
   }
   return {
-    open() {
+    open(): void {
       all = items();
       veil.hidden = false;
       ask.value = "";
@@ -251,16 +282,17 @@ export function createFinder(
       ask.focus();
     },
     close,
-    get isOpen() {
+    get isOpen(): boolean {
       return !veil.hidden;
     },
   };
 }
 
+const parentOf = (path: string): string =>
+  path.split("/").slice(0, -1).join("/");
+
 /** Everything the finder can open: every folder, building or landmark, file and definition in the journal. */
 export function findablesOf(journal: Pick<Journal, "entries">): Findable[] {
-  const parent = (path: string): string =>
-    path.split("/").slice(0, -1).join("/");
   return journal.entries.flatMap((e): Findable[] => {
     // Skips a file's own page, since the file's entry is found by the same name.
     if (e.kind === "own") return [];
@@ -284,6 +316,6 @@ export function findablesOf(journal: Pick<Journal, "entries">): Findable[] {
         },
       ];
     }
-    return [{ at: e.of, name: e.name, where: parent(e.of), page: e.page }];
+    return [{ at: e.of, name: e.name, where: parentOf(e.of), page: e.page }];
   });
 }

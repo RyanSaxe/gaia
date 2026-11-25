@@ -101,6 +101,11 @@ function sameAsWhole(
   }
 }
 
+function siteOwner(x: number, z: number): number {
+  if (Math.hypot(x + 72, z) < 20) return 2;
+  return x < 0 ? 0 : 1;
+}
+
 describe("land baked in tiles", () => {
   it("bakes each tile alone, and the world and its ground's owners in bands on any number of threads, sample for sample as a bake of the whole world holds them", () => {
     let water = 0;
@@ -111,7 +116,7 @@ describe("land baked in tiles", () => {
     // The worlds checked have water, so the tiles must cut it too.
     expect(water).toBeGreaterThan(2);
     // Bands composed apart, in any order, finish into the same world.
-    const { whole } = worlds[0]!;
+    const { whole } = worlds[0] as (typeof worlds)[number];
     const w = whole.spec;
     const landforms = landformsOf(w, lib);
     const { n } = latticeOf(w);
@@ -121,8 +126,8 @@ describe("land baked in tiles", () => {
       landforms,
       cuts
         .slice(1)
-        .map((z1, i) => composeRows(w, landforms, cuts[i]!, z1))
-        .reverse(),
+        .map((z1, i) => composeRows(w, landforms, cuts[i] as number, z1))
+        .toReversed(),
     );
     for (const key of [
       "waterLevel",
@@ -145,7 +150,7 @@ describe("land baked in tiles", () => {
         sites.push({
           x,
           z,
-          owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1,
+          owner: siteOwner(x, z),
         });
       }
     }

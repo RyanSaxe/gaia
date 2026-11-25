@@ -140,14 +140,16 @@ const baseName = (path: string): string => {
   return path;
 };
 /** A world's location, shown in italic with its name: its GitHub owner, or its parent folder. */
-export const whereOf = (r: StartOffer["recent"][number]): string =>
-  r.github !== undefined
-    ? (r.github.split("/")[0] ?? "")
-    : r.root.includes("/")
+export const whereOf = (r: StartOffer["recent"][number]): string => {
+  if (r.github === undefined) {
+    return r.root.includes("/")
       ? baseName(r.root.slice(0, r.root.lastIndexOf("/")))
       : "";
+  }
+  return r.github.split("/")[0] ?? "";
+};
 export const nameOf = (r: StartOffer["recent"][number]): string =>
-  r.github !== undefined ? (r.github.split("/")[1] ?? r.name) : r.name;
+  r.github === undefined ? r.name : (r.github.split("/")[1] ?? r.name);
 
 /**
  * Paints the sheet's ink at `pxPerM` pixels per metre: Gaia's logo at the top,
@@ -208,7 +210,7 @@ export function paintSheetInk(
         g,
         text,
         P(card.x),
-        P(below + l.name * (where !== "" ? 2.55 : 1.75)) + k * size * 1.1,
+        P(below + l.name * (where === "" ? 1.75 : 2.55)) + k * size * 1.1,
         `600 ${size}px ${SERIF}`,
         INK,
         "center",

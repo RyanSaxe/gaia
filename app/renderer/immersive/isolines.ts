@@ -7,6 +7,62 @@ const SLOPE_REACH = 2;
 /** The shortest open piece of a thinned line kept, in cells. A shorter piece is a stub left by thinning. */
 const STUB = 6;
 
+type EdgeIndex = 0 | 1 | 2 | 3;
+
+/** Marching-squares edge pairs (0 = top, 1 = right, 2 = bottom, 3 = left) for each 4-corner bitmask. */
+const MARCHING_EDGES: readonly (readonly (readonly [
+  EdgeIndex,
+  EdgeIndex,
+])[])[] = [
+  [],
+  [[3, 0]],
+  [[0, 1]],
+  [[3, 1]],
+  [[1, 2]],
+  [
+    [3, 0],
+    [1, 2],
+  ],
+  [[0, 2]],
+  [[3, 2]],
+  [[3, 2]],
+  [[0, 2]],
+  [
+    [0, 1],
+    [3, 2],
+  ],
+  [[1, 2]],
+  [[3, 1]],
+  [[0, 1]],
+  [[3, 0]],
+  [],
+];
+
+function cellMask(a: boolean, b: boolean, c: boolean, d: boolean): number {
+  return (a ? 1 : 0) | (b ? 2 : 0) | (c ? 4 : 0) | (d ? 8 : 0);
+}
+
+function isolineEdge(
+  edge: EdgeIndex,
+  i: number,
+  j: number,
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  level: number,
+): [number, number] {
+  const cross = (u: number, v: number): number => (level - u) / (v - u || 1e-6);
+  if (edge === 0) return [i + cross(a, b), j];
+  if (edge === 1) return [i + 1, j + cross(b, c)];
+  if (edge === 2) return [i + cross(d, c), j + 1];
+  return [i, j + cross(a, d)];
+}
+
+// Two segments that share a cell edge end at exactly the same point. Rounding to a millimeter gives them one key.
+const pointKey = (x: number, y: number): number =>
+  (Math.round(x * 1000) + 2 ** 24) * 2 ** 26 + (Math.round(y * 1000) + 2 ** 24);
+
 /**
  * Runs marching squares over columns i0..i1 and rows j0..j1, emitting segments
  * in grid coordinates around the cells where `inside` is true.
@@ -21,32 +77,27 @@ export function contour(
 ): void {
   for (let j = j0; j < j1; j++) {
     for (let i = i0; i < i1; i++) {
-      const k =
-        (inside(i, j) ? 1 : 0) |
-        (inside(i + 1, j) ? 2 : 0) |
-        (inside(i + 1, j + 1) ? 4 : 0) |
-        (inside(i, j + 1) ? 8 : 0);
-      if (k === 0 || k === 15) continue;
-      const top = [i + 0.5, j] as const;
-      const right = [i + 1, j + 0.5] as const;
-      const bottom = [i + 0.5, j + 1] as const;
-      const left = [i, j + 0.5] as const;
-      const seg = (
-        p: readonly [number, number],
-        q: readonly [number, number],
-      ): void => emit(p[0], p[1], q[0], q[1]);
-      if (k === 1 || k === 14) seg(left, top);
-      else if (k === 2 || k === 13) seg(top, right);
-      else if (k === 3 || k === 12) seg(left, right);
-      else if (k === 4 || k === 11) seg(right, bottom);
-      else if (k === 6 || k === 9) seg(top, bottom);
-      else if (k === 7 || k === 8) seg(left, bottom);
-      else if (k === 5) {
-        seg(left, top);
-        seg(right, bottom);
-      } else if (k === 10) {
-        seg(top, right);
-        seg(left, bottom);
+      const k = cellMask(
+        inside(i, j),
+        inside(i + 1, j),
+        inside(i + 1, j + 1),
+        inside(i, j + 1),
+      );
+      const pairs = MARCHING_EDGES[k] as readonly (readonly [
+        EdgeIndex,
+        EdgeIndex,
+      ])[];
+      if (pairs.length === 0) continue;
+      const edges: readonly (readonly [number, number])[] = [
+        [i + 0.5, j],
+        [i + 1, j + 0.5],
+        [i + 0.5, j + 1],
+        [i, j + 0.5],
+      ];
+      for (const [e0, e1] of pairs) {
+        const p = edges[e0] as readonly [number, number];
+        const q = edges[e1] as readonly [number, number];
+        emit(p[0], p[1], q[0], q[1]);
       }
     }
   }
@@ -69,7 +120,6 @@ export function isoline(
   j1 = n - 1,
 ): void {
   const at = (i: number, j: number): number => h[j * n + i] as number;
-  const cross = (a: number, b: number): number => (level - a) / (b - a || 1e-6);
   for (let j = j0; j < j1; j++) {
     for (let i = i0; i < i1; i++) {
       const a = at(i, j);
@@ -77,30 +127,15 @@ export function isoline(
       const c = at(i + 1, j + 1);
       const d = at(i, j + 1);
       if (Number.isNaN(a + b + c + d)) continue;
-      const k =
-        (a > level ? 1 : 0) |
-        (b > level ? 2 : 0) |
-        (c > level ? 4 : 0) |
-        (d > level ? 8 : 0);
-      if (k === 0 || k === 15) continue;
-      const top = (): [number, number] => [i + cross(a, b), j];
-      const right = (): [number, number] => [i + 1, j + cross(b, c)];
-      const bottom = (): [number, number] => [i + cross(d, c), j + 1];
-      const left = (): [number, number] => [i, j + cross(a, d)];
-      const seg = (p: [number, number], q: [number, number]): void =>
+      const k = cellMask(a > level, b > level, c > level, d > level);
+      const pairs = MARCHING_EDGES[k] as readonly (readonly [
+        EdgeIndex,
+        EdgeIndex,
+      ])[];
+      for (const [e0, e1] of pairs) {
+        const p = isolineEdge(e0, i, j, a, b, c, d, level);
+        const q = isolineEdge(e1, i, j, a, b, c, d, level);
         emit(p[0], p[1], q[0], q[1]);
-      if (k === 1 || k === 14) seg(left(), top());
-      else if (k === 2 || k === 13) seg(top(), right());
-      else if (k === 3 || k === 12) seg(left(), right());
-      else if (k === 4 || k === 11) seg(right(), bottom());
-      else if (k === 6 || k === 9) seg(top(), bottom());
-      else if (k === 7 || k === 8) seg(left(), bottom());
-      else if (k === 5) {
-        seg(left(), top());
-        seg(right(), bottom());
-      } else if (k === 10) {
-        seg(top(), right());
-        seg(left(), bottom());
       }
     }
   }
@@ -108,15 +143,11 @@ export function isoline(
 
 /** Joins line segments (x0, y0, x1, y1 each) that share ends into polylines, x and y pairs. */
 export function chained(segments: readonly number[]): number[][] {
-  // Two segments that share a cell edge end at exactly the same point. Rounding to a millimeter gives them one key.
-  const key = (x: number, y: number): number =>
-    (Math.round(x * 1000) + 2 ** 24) * 2 ** 26 +
-    (Math.round(y * 1000) + 2 ** 24);
   const at = new Map<number, number[]>();
   const count = segments.length / 4;
   for (let k = 0; k < count; k++) {
     for (const end of [0, 2]) {
-      const id = key(
+      const id = pointKey(
         segments[k * 4 + end] as number,
         segments[k * 4 + end + 1] as number,
       );
@@ -134,12 +165,14 @@ export function chained(segments: readonly number[]): number[][] {
     for (;;) {
       const x = segments[seg * 4 + end] as number;
       const y = segments[seg * 4 + end + 1] as number;
-      const next = (at.get(key(x, y)) ?? []).find((o) => used[o] === 0);
+      const next = (at.get(pointKey(x, y)) ?? []).find((o) => used[o] === 0);
       if (next === undefined) return;
       used[next] = 1;
       const near =
-        key(segments[next * 4] as number, segments[next * 4 + 1] as number) ===
-        key(x, y)
+        pointKey(
+          segments[next * 4] as number,
+          segments[next * 4 + 1] as number,
+        ) === pointKey(x, y)
           ? 0
           : 2;
       const far = 2 - near;
@@ -221,6 +254,33 @@ export function simplified(
   return out;
 }
 
+function averageGrade(
+  grade: Float32Array,
+  n: number,
+  i: number,
+  j: number,
+): number {
+  let sum = 0;
+  let count = 0;
+  for (
+    let b = Math.max(0, j - SLOPE_REACH);
+    b <= Math.min(n - 1, j + SLOPE_REACH);
+    b++
+  ) {
+    for (
+      let a = Math.max(0, i - SLOPE_REACH);
+      a <= Math.min(n - 1, i + SLOPE_REACH);
+      a++
+    ) {
+      const g = grade[b * n + a] as number;
+      if (Number.isNaN(g)) continue;
+      sum += g;
+      count++;
+    }
+  }
+  return count === 0 ? Number.NaN : sum / count;
+}
+
 /** Each sample's grade (rise over run) in a grid of heights `n` on a side and `cell` apart, averaged over the samples within `SLOPE_REACH` of it. */
 export function slopes(h: Float32Array, n: number, cell: number): Float32Array {
   const at = (i: number, j: number): number =>
@@ -238,25 +298,7 @@ export function slopes(h: Float32Array, n: number, cell: number): Float32Array {
   const broad = new Float32Array(n * n);
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
-      let sum = 0;
-      let count = 0;
-      for (
-        let b = Math.max(0, j - SLOPE_REACH);
-        b <= Math.min(n - 1, j + SLOPE_REACH);
-        b++
-      ) {
-        for (
-          let a = Math.max(0, i - SLOPE_REACH);
-          a <= Math.min(n - 1, i + SLOPE_REACH);
-          a++
-        ) {
-          const g = grade[b * n + a] as number;
-          if (Number.isNaN(g)) continue;
-          sum += g;
-          count++;
-        }
-      }
-      broad[j * n + i] = count === 0 ? Number.NaN : sum / count;
+      broad[j * n + i] = averageGrade(grade, n, i, j);
     }
   }
   return broad;

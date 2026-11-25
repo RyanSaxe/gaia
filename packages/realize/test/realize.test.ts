@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AnyPrimitive,
   type Blueprint,
+  type Field,
   type Part,
   Library,
   blueprintOf,
@@ -30,6 +31,7 @@ import {
 import { sweep, validate } from "@gaia/world";
 import { randomSlots } from "@gaia/world/testing";
 import {
+  type Realized,
   mergeParts,
   realize,
   realizeWorld,
@@ -74,6 +76,29 @@ function buffersOf(part: Part): Buffer[] {
   ].map(bytes);
 }
 
+const onePerPair = (bps: readonly Blueprint[]): Blueprint[] => [
+  ...new Map(
+    bps.map((b) => [`${b.slots.form?.use} ${b.slots.crown?.use}`, b]),
+  ).values(),
+];
+
+function fieldAtEnd(f: Field, high: boolean): string | boolean | string[] {
+  const pick = <T>(xs: readonly T[]): T => xs[high ? xs.length - 1 : 0] as T;
+  if (f.type === "scale") return pick(f.levels).words;
+  if (f.type === "choice") return pick(Object.keys(f.options));
+  if (f.type === "flag") return high;
+  return high ? Object.keys(f.members) : [];
+}
+
+/** A part at one end of every setting: each scale's lowest level and each choice's first key, or the highest and the last. */
+const atEnd = (
+  p: AnyPrimitive,
+  high: boolean,
+): Record<string, string | boolean | string[]> =>
+  Object.fromEntries(
+    Object.entries(p.params).map(([name, f]) => [name, fieldAtEnd(f, high)]),
+  );
+
 describe("realize", () => {
   // Builds 34 plants, some near the tree budget: about a second alone, several when the suite runs in parallel.
   it(
@@ -82,32 +107,36 @@ describe("realize", () => {
     () => {
       // One plant for each frame and crown uses every part a tree or bush can have. The second pass builds them in
       // the other order, so anything one build leaves behind for the next shows as a difference.
-      const onePerPair = (bps: readonly Blueprint[]): Blueprint[] => [
-        ...new Map(
-          bps.map((b) => [`${b.slots.form?.use} ${b.slots.crown?.use}`, b]),
-        ).values(),
-      ];
       const plants = [
         ...onePerPair(trees).map((b) => [b, tree] as const),
         ...onePerPair(bushes).map((b) => [b, bush] as const),
       ];
-      const build = ([blueprint, k]: (typeof plants)[number]) =>
+      const build = ([blueprint, k]: (typeof plants)[number]): Realized =>
         realize(blueprint, k, lib, { seed: seedOf("src/app.ts"), facts });
       const first = plants.map(build);
-      const again = [...plants].reverse().map(build).reverse();
-      first.forEach((a, n) => {
-        const b = again[n]!;
-        const name = named(plants[n]![0]);
+      const again = plants.toReversed().map(build).toReversed();
+      for (let n = 0; n < first.length; n++) {
+        const a = first[n];
+        const b = again[n];
+        const entry = plants[n];
+        if (a === undefined || b === undefined || entry === undefined) {
+          throw new Error(`Missing realized plant at index ${n}.`);
+        }
+        const name = named(entry[0]);
         expect(b.parts.length, name).toBe(a.parts.length);
-        a.parts.forEach((part, i) => {
+        for (let i = 0; i < a.parts.length; i++) {
+          const part = a.parts[i] as Part;
           const other = buffersOf(b.parts[i] as Part);
-          buffersOf(part).forEach((buf, k) =>
-            expect(buf.equals(other[k] as Buffer), name).toBe(true),
-          );
-        });
+          const bufs = buffersOf(part);
+          for (let k = 0; k < bufs.length; k++) {
+            expect((bufs[k] as Buffer).equals(other[k] as Buffer), name).toBe(
+              true,
+            );
+          }
+        }
         expect(b.motion, name).toEqual(a.motion);
         expect(b.palette, name).toEqual(a.palette);
-      });
+      }
       const lands = new Library([
         ...WORLD_PRIMITIVES,
         ...BIOME_PRIMITIVES,
@@ -153,7 +182,7 @@ describe("structures", () => {
     ...STRUCTURE_PRIMITIVES,
     ...FLORA_PRIMITIVES,
   ]);
-  const facts = { size: 1.25, floors: 2, reach: 1 };
+  const structureFacts = { size: 1.25, floors: 2, reach: 1 };
 
   // Builds 80 whole buildings at their largest: about 3 s alone, longer when the suite runs in parallel.
   it("keeps any building in the type space within 32k triangles and 12 draw calls, at its largest", () => {
@@ -163,7 +192,10 @@ describe("structures", () => {
         structure.id,
         randomSlots(structure, structureLib, () => r.next()),
       );
-      const built = realize(bp, structure, structureLib, { seed: i, facts });
+      const built = realize(bp, structure, structureLib, {
+        seed: i,
+        facts: structureFacts,
+      });
       expect(triangleCount(built.parts), JSON.stringify(bp.slots)).toBeLessThan(
         32_000,
       );
@@ -179,46 +211,29 @@ describe("structures", () => {
 describe("the understory", () => {
   const all = new Library(PRIMITIVES);
   const bushLib = new Library(BUSH_PRIMITIVES);
-  /** A part at one end of every setting: each scale's lowest level and each choice's first key, or the highest and the last. */
-  const atEnd = (
-    p: AnyPrimitive,
-    high: boolean,
-  ): Record<string, string | boolean | string[]> =>
-    Object.fromEntries(
-      Object.entries(p.params).map(([name, f]) => {
-        const pick = <T>(xs: readonly T[]): T =>
-          xs[high ? xs.length - 1 : 0] as T;
-        return [
-          name,
-          f.type === "scale"
-            ? pick(f.levels).words
-            : f.type === "choice"
-              ? pick(Object.keys(f.options))
-              : f.type === "flag"
-                ? high
-                : high
-                  ? Object.keys(f.members)
-                  : [],
-        ];
-      }),
-    );
   /** Every bush frame with every crown, its settings all at their lowest and then all at their highest. */
-  const extremes = bushLib.forRole("Skeleton").flatMap((frame) =>
-    bushLib.forRole("Foliage").flatMap((crown) =>
-      [false, true].map((high) =>
-        blueprintOf(bush.id, {
-          form: { use: frame.id, params: atEnd(frame, high) },
-          bark: { use: "bark@1", params: atEnd(bushLib.get("bark@1"), high) },
-          crown: { use: crown.id, params: atEnd(crown, high) },
-          motion: { use: "sway@1", params: atEnd(bushLib.get("sway@1"), high) },
-          palette: {
-            use: "palette@1",
-            params: atEnd(bushLib.get("palette@1"), high),
-          },
-        }),
-      ),
-    ),
-  );
+  const extremes: Blueprint[] = [];
+  for (const frame of bushLib.forRole("Skeleton")) {
+    for (const crown of bushLib.forRole("Foliage")) {
+      for (const high of [false, true]) {
+        extremes.push(
+          blueprintOf(bush.id, {
+            form: { use: frame.id, params: atEnd(frame, high) },
+            bark: { use: "bark@1", params: atEnd(bushLib.get("bark@1"), high) },
+            crown: { use: crown.id, params: atEnd(crown, high) },
+            motion: {
+              use: "sway@1",
+              params: atEnd(bushLib.get("sway@1"), high),
+            },
+            palette: {
+              use: "palette@1",
+              params: atEnd(bushLib.get("palette@1"), high),
+            },
+          }),
+        );
+      }
+    }
+  }
   const groups = [
     { blueprints: [...bushes, ...extremes], kind: bush },
     { blueprints: sweep(rock, all).blueprints, kind: rock },

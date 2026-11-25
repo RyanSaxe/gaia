@@ -46,11 +46,13 @@ export function contentHash(...values: unknown[]): string {
       for (const item of v) visit(item);
     } else if (v instanceof Map) {
       visit(
-        [...v.entries()].sort(([a], [b]) => String(a).localeCompare(String(b))),
+        [...v.entries()].toSorted(([a], [b]) =>
+          String(a).localeCompare(String(b)),
+        ),
       );
     } else if (v !== null && typeof v === "object") {
       mix(0x0b1e);
-      for (const key of Object.keys(v).sort()) {
+      for (const key of Object.keys(v).toSorted()) {
         text(key);
         visit((v as Record<string, unknown>)[key]);
       }
@@ -59,7 +61,7 @@ export function contentHash(...values: unknown[]): string {
     }
   };
   for (const v of values) visit(v);
-  return h.map((x) => (x as number).toString(16).padStart(8, "0")).join("");
+  return h.map((x) => x.toString(16).padStart(8, "0")).join("");
 }
 
 export interface FarStore {
@@ -91,12 +93,15 @@ export async function openFarStore(version: number): Promise<FarStore | null> {
   ): Promise<T> =>
     new Promise((resolve, reject) => {
       const r = run(store.transaction(name, mode).objectStore(name));
-      r.onsuccess = () => resolve(r.result);
-      r.onerror = () =>
+      r.addEventListener("success", () => {
+        resolve(r.result);
+      });
+      r.addEventListener("error", () => {
         reject(r.error ?? new Error("The far-form store failed."));
+      });
     });
   return {
-    get: async (key) => {
+    get: async (key): Promise<unknown> => {
       const form = await request("forms", "readonly", (forms) =>
         forms.get(key),
       );
@@ -112,9 +117,12 @@ export async function openFarStore(version: number): Promise<FarStore | null> {
         const t = store.transaction(["forms", "used"], "readwrite");
         t.objectStore("forms").put(data, key);
         t.objectStore("used").put(visit, key);
-        t.oncomplete = () => resolve();
-        t.onabort = () =>
+        t.addEventListener("complete", () => {
+          resolve();
+        });
+        t.addEventListener("abort", () => {
           reject(t.error ?? new Error("The far-form store failed."));
+        });
       }),
   };
 }
@@ -125,7 +133,7 @@ function openDatabase(version: number): Promise<IDBDatabase | null> {
   return new Promise((resolve) => {
     try {
       const open = indexedDB.open(NAME, version);
-      open.onupgradeneeded = () => {
+      open.addEventListener("upgradeneeded", () => {
         const db = open.result;
         for (const name of ["forms", "used"]) {
           if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
@@ -133,14 +141,20 @@ function openDatabase(version: number): Promise<IDBDatabase | null> {
         db.createObjectStore("forms");
         // Maps each form's key to the time of the last visit that read or stored it.
         db.createObjectStore("used");
-      };
-      open.onsuccess = () => {
+      });
+      open.addEventListener("success", () => {
         // A page with a later bake waits until every page holding the database closes it.
-        open.result.onversionchange = () => open.result.close();
+        open.result.addEventListener("versionchange", () => {
+          open.result.close();
+        });
         resolve(open.result);
-      };
-      open.onerror = () => resolve(null);
-      open.onblocked = () => resolve(null);
+      });
+      open.addEventListener("error", () => {
+        resolve(null);
+      });
+      open.addEventListener("blocked", () => {
+        resolve(null);
+      });
     } catch {
       resolve(null);
     }
@@ -152,9 +166,15 @@ function deleteDatabase(): Promise<boolean> {
   return new Promise((resolve) => {
     try {
       const r = indexedDB.deleteDatabase(NAME);
-      r.onsuccess = () => resolve(true);
-      r.onerror = () => resolve(false);
-      r.onblocked = () => resolve(false);
+      r.addEventListener("success", () => {
+        resolve(true);
+      });
+      r.addEventListener("error", () => {
+        resolve(false);
+      });
+      r.addEventListener("blocked", () => {
+        resolve(false);
+      });
     } catch {
       resolve(false);
     }
@@ -175,7 +195,7 @@ function prune(db: IDBDatabase): Promise<number> {
     const usedKeys = used.getAllKeys();
     const usedAt = used.getAll();
     let visit = Date.now();
-    usedAt.onsuccess = () => {
+    usedAt.addEventListener("success", () => {
       const lastUse = new Map(
         usedKeys.result.map((key, i) => [key, usedAt.result[i] as number]),
       );
@@ -188,9 +208,12 @@ function prune(db: IDBDatabase): Promise<number> {
           used.delete(key);
         }
       }
-    };
-    t.oncomplete = () => resolve(visit);
-    t.onabort = () =>
+    });
+    t.addEventListener("complete", () => {
+      resolve(visit);
+    });
+    t.addEventListener("abort", () => {
       reject(t.error ?? new Error("The far-form store failed."));
+    });
   });
 }

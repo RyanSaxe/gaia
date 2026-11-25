@@ -7,7 +7,7 @@ import {
 } from "@gaia/primitives";
 import { biome, world } from "@gaia/kinds";
 import { validate } from "@gaia/world";
-import { realizeWorld } from "@gaia/realize";
+import { type WorldLook, realizeWorld } from "@gaia/realize";
 import { blueprintOf as identify } from "@gaia/schema";
 import { randomSlots } from "@gaia/world/testing";
 
@@ -32,20 +32,20 @@ const finite = (value: unknown): boolean => {
   return true;
 };
 
-describe("world and biome kinds", () => {
-  const look = (
-    w: Parameters<typeof identify>[1],
-    b: Parameters<typeof identify>[1],
-    hour = 12.5,
-  ) =>
-    realizeWorld(
-      { blueprint: identify("world", w), kind: world },
-      { blueprint: identify("biome", b), kind: biome },
-      lib,
-      SEED,
-      hour,
-    );
+const look = (
+  w: Parameters<typeof identify>[1],
+  b: Parameters<typeof identify>[1],
+  hour = 12.5,
+): WorldLook =>
+  realizeWorld(
+    { blueprint: identify("world", w), kind: world },
+    { blueprint: identify("biome", b), kind: biome },
+    lib,
+    SEED,
+    hour,
+  );
 
+describe("world and biome kinds", () => {
   it("validates and realizes every uniformly sampled world and region", () => {
     const random = seeded(7);
     for (let i = 0; i < 1000; i++) {

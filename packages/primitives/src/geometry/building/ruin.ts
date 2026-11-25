@@ -44,7 +44,7 @@ function breaks(
   const n = Math.max(1, Math.round((b - a) / cell));
   const out = Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
   for (const x of extra) if (x > a + 0.02 && x < b - 0.02) out.push(x);
-  return [...new Set(out)].sort((p, q) => p - q);
+  return [...new Set(out)].toSorted((p, q) => p - q);
 }
 
 /**
@@ -158,6 +158,75 @@ export type Hold = (
   p: Vec3,
 ) => { readonly rot: number; readonly grain: (p: Vec3) => Vec3 };
 
+function ivyStrand(
+  b: PartBuilder,
+  plan: BuildingPlan,
+  w: Wall,
+  holes: readonly { s0: number; s1: number; y0: number; y1: number }[],
+  s0: number,
+  zone: number,
+  r: Rand,
+  coarse: number,
+  hold?: Hold,
+): void {
+  const reach = Math.min(8, topAt(plan, w, s0) * (0.65 + 0.5 * zone) + 0.3);
+  let s = s0;
+  for (let y = 0.15; y < reach; y += 0.22 * coarse) {
+    s = clamp(s + (r.next() - 0.5) * 0.35, 0.1, w.length - 0.1);
+    // Ivy stays at least 0.3 m below the wall's top, and off openings and hidden wall.
+    if (
+      holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) ||
+      hidden(plan, w, s, y) ||
+      y > topAt(plan, w, s) - 0.3
+    ) {
+      continue;
+    }
+    for (let k = 0; k < 2; k++) {
+      const ss = clamp(s + (r.next() - 0.5) * 0.5, 0.05, w.length - 0.05);
+      const c = on(
+        w,
+        ss,
+        Math.min(y + (r.next() - 0.5) * 0.15, topAt(plan, w, ss) - 0.3),
+        0.06 + 0.05 * r.next(),
+      );
+      const height = y / reach;
+      const held = hold?.(w, c);
+      const ch: Channels = {
+        loss: 0,
+        droop: 0,
+        wither: 0.2,
+        glow: 0,
+        pivot: c,
+        tint: (r.next() - 0.5) * 0.06,
+        grow: clamp(
+          0.62 - 0.5 * height + 0.1 * zone + (r.next() - 0.5) * 0.08,
+          0.06,
+          0.7,
+        ),
+        // A leaf's rot is 0.06 above the wall piece behind it, so the leaf goes a little before that piece.
+        ...(held && {
+          rot: Math.min(1, held.rot + 0.06),
+          grain: held.grain,
+        }),
+      };
+      const n = normalize(
+        addScaled(w.n, [r.next() - 0.5, r.next() * 0.4, r.next() - 0.5], 0.5),
+      );
+      card(
+        b,
+        c,
+        n,
+        [0, 1, 0],
+        0.32 + 0.16 * r.next(),
+        (r.next() - 0.5) * 1.4,
+        CUT.cluster + r.next() * 0.98,
+        ch,
+        0.42 + 0.2 * r.next(),
+      );
+    }
+  }
+}
+
 /**
  * Ivy on the walls: strands from the ground at the corners and over the
  * collapse. As vitality falls the lowest leaves appear first, and the strands
@@ -182,66 +251,7 @@ export function ivy(
     if (ruinAt(ruin, on(w, mid, 0)) > 0.2 || w.length > 6) starts.push(mid);
     for (const s0 of starts.filter((s) => !hidden(plan, w, s, 0.4))) {
       const zone = Math.max(ruinAt(ruin, on(w, s0, 0)), 0.15);
-      const reach = Math.min(8, topAt(plan, w, s0) * (0.65 + 0.5 * zone) + 0.3);
-      let s = s0;
-      for (let y = 0.15; y < reach; y += 0.22 * coarse) {
-        s = clamp(s + (r.next() - 0.5) * 0.35, 0.1, w.length - 0.1);
-        // Ivy stays at least 0.3 m below the wall's top, and off openings and hidden wall.
-        if (
-          holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) ||
-          hidden(plan, w, s, y) ||
-          y > topAt(plan, w, s) - 0.3
-        ) {
-          continue;
-        }
-        for (let k = 0; k < 2; k++) {
-          const ss = clamp(s + (r.next() - 0.5) * 0.5, 0.05, w.length - 0.05);
-          const c = on(
-            w,
-            ss,
-            Math.min(y + (r.next() - 0.5) * 0.15, topAt(plan, w, ss) - 0.3),
-            0.06 + 0.05 * r.next(),
-          );
-          const height = y / reach;
-          const held = hold?.(w, c);
-          const ch: Channels = {
-            loss: 0,
-            droop: 0,
-            wither: 0.2,
-            glow: 0,
-            pivot: c,
-            tint: (r.next() - 0.5) * 0.06,
-            grow: clamp(
-              0.62 - 0.5 * height + 0.1 * zone + (r.next() - 0.5) * 0.08,
-              0.06,
-              0.7,
-            ),
-            // A leaf's rot is 0.06 above the wall piece behind it, so the leaf goes a little before that piece.
-            ...(held && {
-              rot: Math.min(1, held.rot + 0.06),
-              grain: held.grain,
-            }),
-          };
-          const n = normalize(
-            addScaled(
-              w.n,
-              [r.next() - 0.5, r.next() * 0.4, r.next() - 0.5],
-              0.5,
-            ),
-          );
-          card(
-            b,
-            c,
-            n,
-            [0, 1, 0],
-            0.32 + 0.16 * r.next(),
-            (r.next() - 0.5) * 1.4,
-            CUT.cluster + r.next() * 0.98,
-            ch,
-            0.42 + 0.2 * r.next(),
-          );
-        }
-      }
+      ivyStrand(b, plan, w, holes, s0, zone, r, coarse, hold);
     }
   }
 }

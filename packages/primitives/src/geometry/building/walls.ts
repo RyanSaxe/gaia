@@ -200,6 +200,512 @@ export function buildFieldstone(
   return withinBudget(plan, (coarse) => fieldstone(p, ctx, plan, coarse));
 }
 
+interface Hole {
+  readonly s0: number;
+  readonly s1: number;
+  readonly y0: number;
+  readonly y1: number;
+}
+
+interface TimberMember {
+  readonly s0: number;
+  readonly s1: number;
+  readonly y0: number;
+  readonly y1: number;
+  readonly gives: number;
+}
+
+interface TimberWallCtx {
+  readonly timber: PartBuilder;
+  readonly plan: BuildingPlan;
+  readonly ruin: Ruin;
+  readonly w: Wall;
+  readonly seed: number;
+  readonly r: Rand;
+  readonly beamW: number;
+  readonly out: number;
+  readonly top: number;
+  readonly sill: number;
+  readonly plate: number;
+  readonly holes: readonly Hole[];
+  readonly floors: readonly number[];
+  readonly members: TimberMember[];
+  readonly lean: (s: number, y: number) => V3;
+  readonly zoneAt: (s: number, y?: number) => number;
+  readonly ch: (s: number, sag?: number, y?: number) => Channels;
+  readonly member: (
+    c: Channels,
+    s0: number,
+    s1: number,
+    y0: number,
+    y1: number,
+  ) => Channels;
+  readonly blocked: (s: number, y0: number, y1: number) => boolean;
+}
+
+function wallPostPositions(
+  w: Wall,
+  holes: readonly Hole[],
+  framing: Resolved<typeof timberFrameParams>["framing"],
+  beamW: number,
+  coarse: number,
+): number[] {
+  const posts = new Set<number>([beamW / 2, w.length - beamW / 2]);
+  for (const h of holes) {
+    posts.add(h.s0 - beamW / 2);
+    posts.add(h.s1 + beamW / 2);
+  }
+  const gap = (framing === "close studding" ? 0.5 : 1.45) * coarse;
+  const sorted = [...posts]
+    .filter((s) => s >= beamW / 2 - 1e-6 && s <= w.length - beamW / 2 + 1e-6)
+    .toSorted((a, b) => a - b);
+  const filled: number[] = [];
+  sorted.forEach((s, i) => {
+    filled.push(s);
+    const next = sorted[i + 1];
+    if (next === undefined) return;
+    const n = Math.floor((next - s) / gap);
+    for (let k = 1; k <= n; k++) {
+      filled.push(s + ((next - s) * k) / (n + 1));
+    }
+  });
+  return filled;
+}
+
+function postStoreySpans(
+  s: number,
+  sill: number,
+  plate: number,
+  beamW: number,
+  holes: readonly Hole[],
+  floors: readonly number[],
+): [number, number][] {
+  const spans: [number, number][] = [];
+  let y = sill;
+  const matching = holes
+    .filter((hole) => s > hole.s0 - beamW * 0.4 && s < hole.s1 + beamW * 0.4)
+    .toSorted((a, b) => a.y0 - b.y0);
+  for (const h of matching) {
+    if (h.y0 > y) spans.push([y, h.y0]);
+    y = Math.max(y, h.y1);
+  }
+  if (plate > y) spans.push([y, plate]);
+  // Each storey's post stands on the floor beam below it, so a fallen one is a storey long.
+  return spans.flatMap(([a, b2]): [number, number][] => {
+    const cuts = [a, ...floors.filter((f) => f > a + 0.2 && f < b2 - 0.2), b2];
+    return cuts.slice(1).map((c, k) => [cuts[k] as number, c]);
+  });
+}
+
+function addWallPosts(ctx: TimberWallCtx, filled: readonly number[]): void {
+  const {
+    timber,
+    w,
+    r,
+    beamW,
+    sill,
+    plate,
+    holes,
+    floors,
+    lean,
+    zoneAt,
+    ch,
+    member,
+  } = ctx;
+  for (const s of filled) {
+    const storeyed = postStoreySpans(s, sill, plate, beamW, holes, floors);
+    for (const [a, b2] of storeyed) {
+      if (b2 - a <= 0.12) continue;
+      const zone = zoneAt(s);
+      if (a === sill && zone > 0.3) {
+        // A post in the collapse topples outward off its sill and comes to
+        // rest with its head on the ground. It turns past level by the angle
+        // that the sill's height makes over the post's length.
+        const base = lean(s, a);
+        const length = b2 - a;
+        const tip =
+          Math.PI / 2 + Math.asin(clamp((base[1] - 0.04) / length, 0, 0.9));
+        const c: Channels = {
+          loss: 0,
+          droop: 0,
+          wither: 0.6,
+          glow: 0,
+          pivot: base,
+          tint: (r.next() - 0.5) * 0.03,
+          fall: [
+            w.u[0] * tip,
+            w.u[1] * tip,
+            w.u[2] * tip,
+            clamp(0.16 + 0.3 * zone * r.next(), 0.12, 0.42),
+          ],
+        };
+        beam(
+          timber,
+          base,
+          lean(s, b2),
+          beamW * 0.9,
+          0.09,
+          w.n,
+          0.44 + 0.08 * r.next(),
+          member(c, s, s, a, b2),
+        );
+      } else {
+        beam(
+          timber,
+          lean(s, a),
+          lean(s, b2),
+          beamW * 0.9,
+          0.09,
+          w.n,
+          0.44 + 0.08 * r.next(),
+          member(ch(s, 0, (a + b2) / 2), s, s, a, b2),
+        );
+      }
+    }
+  }
+}
+
+function addWallFloorBeams(ctx: TimberWallCtx, all: readonly number[]): void {
+  const { timber, w, beamW, floors, lean, ch, member, blocked } = ctx;
+  for (const y of floors) {
+    for (let i = 0; i + 1 < all.length; i++) {
+      const a = all[i] as number;
+      const b2 = all[i + 1] as number;
+      const mid = (a + b2) / 2;
+      if (!blocked(mid, y - 0.08, y + 0.08)) {
+        beam(
+          timber,
+          lean(a, y),
+          lean(b2, y),
+          beamW,
+          0.1,
+          w.n,
+          0.44,
+          member(ch(mid, 0, y), a, b2, y, y),
+        );
+      }
+    }
+  }
+}
+
+function addWallRailRow(
+  ctx: TimberWallCtx,
+  all: readonly number[],
+  rail: number,
+  head: number,
+  crossed: boolean,
+): void {
+  const { timber, w, beamW, lean, ch, member, blocked } = ctx;
+  for (let i = 0; i + 1 < all.length; i++) {
+    const a = all[i] as number;
+    const b2 = all[i + 1] as number;
+    const mid = (a + b2) / 2;
+    if (!blocked(mid, rail - 0.08, rail + 0.08)) {
+      beam(
+        timber,
+        lean(a, rail),
+        lean(b2, rail),
+        beamW * 0.8,
+        0.08,
+        w.n,
+        0.42,
+        member(ch(mid, 0, rail), a, b2, rail, rail),
+      );
+    }
+    if (
+      crossed &&
+      (i === 0 || i === all.length - 2) &&
+      !blocked(mid, rail, head)
+    ) {
+      const [s0, s1] = i === 0 ? [a, b2] : [b2, a];
+      beam(
+        timber,
+        lean(s0, head - 0.05),
+        lean(s1, rail + 0.05),
+        beamW * 0.75,
+        0.08,
+        w.n,
+        0.4,
+        member(ch(mid, 0, (rail + head) / 2), a, b2, rail, head),
+      );
+    }
+  }
+}
+
+function addGableTimber(
+  ctx: TimberWallCtx,
+  peak: { s: number; y: number },
+): void {
+  const { timber, plan, w, beamW, top, lean, ch, member } = ctx;
+  const rise = peak.y - top;
+  if (rise <= 0.5 || peak.s <= 0.25 * w.length || peak.s >= 0.75 * w.length) {
+    return;
+  }
+  const collar = top + rise * 0.45;
+  let s0 = peak.s;
+  let s1 = peak.s;
+  while (s0 > 0.1 && topAt(plan, w, s0 - 0.05) > collar + 0.12) s0 -= 0.05;
+  while (s1 < w.length - 0.1 && topAt(plan, w, s1 + 0.05) > collar + 0.12) {
+    s1 += 0.05;
+  }
+  beam(
+    timber,
+    lean(peak.s, top),
+    lean(peak.s, peak.y - 0.12),
+    beamW,
+    0.09,
+    w.n,
+    0.44,
+    member(ch(peak.s, 0, peak.y), peak.s, peak.s, top, peak.y),
+  );
+  if (s1 - s0 > 0.4) {
+    beam(
+      timber,
+      lean(s0, collar),
+      lean(s1, collar),
+      beamW * 0.9,
+      0.09,
+      w.n,
+      0.42,
+      member(ch(peak.s, 0, collar), s0, s1, collar, collar),
+    );
+  }
+}
+
+function bayVerticalSpans(
+  holes: readonly Hole[],
+  s0: number,
+  s1: number,
+  y0: number,
+  y1: number,
+): [number, number][] {
+  let spans: [number, number][] = [[y0, y1]];
+  const overlapping = holes.filter(
+    (hole) => s0 < hole.s1 - 0.02 && s1 > hole.s0 + 0.02,
+  );
+  for (const h of overlapping) {
+    spans = spans.flatMap(([a, b2]): [number, number][] =>
+      h.y1 <= a || h.y0 >= b2
+        ? [[a, b2]]
+        : (
+            [
+              [a, h.y0],
+              [h.y1, b2],
+            ] as [number, number][]
+          ).filter(([x, y]) => y - x > 0.06),
+    );
+  }
+  return spans;
+}
+
+function addWallPlasterPanels(
+  plaster: PartBuilder,
+  ctx: TimberWallCtx,
+  filled: readonly number[],
+  rails: readonly number[],
+  p: Resolved<typeof timberFrameParams>,
+): void {
+  const { plan, ruin, w, seed, r, top, holes, floors, members } = ctx;
+  const verticals = [0, ...filled, w.length].toSorted((a, b) => a - b);
+  const levels = [
+    plan.floor,
+    ...(p.framing === "close studding" ? floors : [...rails, ...floors]),
+    top,
+  ].toSorted((a, b) => a - b);
+  for (let i = 0; i + 1 < verticals.length; i++) {
+    const s0 = verticals[i] as number;
+    const s1 = verticals[i + 1] as number;
+    if (s1 - s0 < 0.05) continue;
+    for (let j = 0; j + 1 < levels.length; j++) {
+      // A panel stops at a door or window in its bay, above and below it.
+      const spans = bayVerticalSpans(
+        holes,
+        s0,
+        s1,
+        levels[j] as number,
+        levels[j + 1] as number,
+      );
+      for (const [a, b2] of spans) {
+        const framing = Math.max(
+          0,
+          ...members
+            .filter(
+              (mem) =>
+                mem.s1 > s0 - 0.12 &&
+                mem.s0 < s1 + 0.12 &&
+                mem.y1 > a - 0.12 &&
+                mem.y0 < b2 + 0.12,
+            )
+            .map((mem) => mem.gives),
+        );
+        panel(
+          plaster,
+          plan,
+          ruin,
+          w,
+          s0,
+          s1,
+          a,
+          b2,
+          p.plaster,
+          r,
+          seed,
+          framing,
+        );
+      }
+    }
+  }
+}
+
+function buildTimberWall(
+  plaster: PartBuilder,
+  timber: PartBuilder,
+  p: Resolved<typeof timberFrameParams>,
+  plan: BuildingPlan,
+  ruin: Ruin,
+  w: Wall,
+  coarse: number,
+  seed: number,
+  r: Rand,
+): void {
+  const beamW = 0.17;
+  const out = 0.03;
+  const m = massOf(plan, w);
+  const top = wallTop(plan, m);
+  const peak = peakOf(plan, w);
+  const holes = clearings(plan, w, 0.02);
+  // Upright timbers: the corners, both sides of every opening, then fill.
+  const filled = wallPostPositions(w, holes, p.framing, beamW, coarse);
+  const sill = plan.floor + beamW / 2;
+  const plate = top - beamW / 2;
+  // A rail at window-sill height in every storey, and a floor beam where each upper storey begins.
+  const rails = Array.from(
+    { length: m.storeys },
+    (_, k) => plan.floor + k * STOREY + 0.78,
+  ).filter((y) => y < plate - 0.4);
+  const floors = Array.from(
+    { length: m.storeys - 1 },
+    (_, k) => plan.floor + (k + 1) * STOREY - 0.05,
+  ).filter((y) => y < plate - 0.3);
+  const lean = (s: number, y: number): V3 =>
+    on(w, s + wobble(plan, seed, on(w, s, y), 0.09), y, out);
+  const pivotOf = (s: number): V3 =>
+    on(w, s < w.length / 2 ? 0 : w.length, top);
+  const zoneAt = (s: number, y = top): number => ruinAt(ruin, on(w, s, y));
+  // In the collapse, timbers go below a loss threshold that rises toward the weak corner.
+  const gone = (s: number, y = top): number =>
+    zoneAt(s, y) > 0.3
+      ? lossThreshold(r.next(), 0.14 + 0.3 * zoneAt(s, y), 0.05)
+      : 0;
+  const ch = (s: number, sag = 0, y = top): Channels =>
+    still(pivotOf(s), 0.5, {
+      droop: sag * Math.sin(Math.PI * clamp(s / w.length, 0, 1)),
+      tint: (r.next() - 0.5) * 0.03,
+      loss: gone(s, y),
+    });
+  // Every timber's extent and the vitality below which it falls or goes,
+  // so the plaster it frames can go first.
+  const members: TimberMember[] = [];
+  const member = (
+    c: Channels,
+    s0: number,
+    s1: number,
+    y0: number,
+    y1: number,
+  ): Channels => {
+    members.push({
+      s0: Math.min(s0, s1),
+      s1: Math.max(s0, s1),
+      y0: Math.min(y0, y1),
+      y1: Math.max(y0, y1),
+      gives: Math.max(c.loss, c.fall?.[3] ?? 0),
+    });
+    // A timber that goes shrinks back onto the post or sill it is pegged to at its first end.
+    return c.loss > 0 ? { ...c, pivot: lean(s0, Math.min(y0, y1)) } : c;
+  };
+  const blocked = (s: number, y0: number, y1: number): boolean =>
+    holes.some(
+      (h) =>
+        s > h.s0 - beamW * 0.4 &&
+        s < h.s1 + beamW * 0.4 &&
+        y1 > h.y0 &&
+        y0 < h.y1,
+    );
+  const ctx: TimberWallCtx = {
+    timber,
+    plan,
+    ruin,
+    w,
+    seed,
+    r,
+    beamW,
+    out,
+    top,
+    sill,
+    plate,
+    holes,
+    floors,
+    members,
+    lean,
+    zoneAt,
+    ch,
+    member,
+    blocked,
+  };
+
+  // The sill and wall plate run the whole length. The plate sags a little as vitality falls.
+  beam(
+    timber,
+    lean(-0.05, sill),
+    lean(w.length + 0.05, sill),
+    beamW,
+    0.09,
+    w.n,
+    0.42,
+    member(ch(w.length / 2), 0, w.length, sill, sill),
+  );
+  const plates = clamp(Math.round(w.length / (1.4 * coarse)), 1, 6);
+  for (let k = 0; k < plates; k++) {
+    const s0 = (w.length * k) / plates;
+    const s1 = (w.length * (k + 1)) / plates;
+    beam(
+      timber,
+      lean(s0 - (k === 0 ? 0.05 : 0), plate),
+      lean(s1 + (k === plates - 1 ? 0.05 : 0), plate),
+      beamW,
+      0.1,
+      w.n,
+      0.46,
+      member(ch((s0 + s1) / 2, 0.05), s0, s1, plate, plate),
+    );
+  }
+  // Posts, broken where an opening passes.
+  addWallPosts(ctx, filled);
+  // Floor beams at every storey, rails at window-sill height between posts, and braces in the end bays.
+  const all = filled.toSorted((a, b) => a - b);
+  addWallFloorBeams(ctx, all);
+  if (p.framing !== "close studding") {
+    const crossed = p.framing === "crossed braces";
+    for (const [k, rail] of rails.entries()) {
+      addWallRailRow(ctx, all, rail, floors[k] ?? plate, crossed);
+    }
+  }
+  // A gable's king post and collar, under the peak of whatever roofline the wall rises to.
+  addGableTimber(ctx, peak);
+  // Plaster panels between the timbers. Some are loose and fall away as vitality falls.
+  addWallPlasterPanels(plaster, ctx, filled, rails, p);
+  const rise = peak.y - top;
+  if (rise > 0.05) {
+    // The gable's plaster, in cells so it can rot through from the peak.
+    const pivot = on(w, peak.s, top + rise / 2);
+    const grain = wallGrain(w, GRAIN.plaster, PLASTER);
+    wallSheet(plaster, plan, w, top, 0.008, 0.6 * coarse, (q) => ({
+      shade: 0.58,
+      c: still(pivot, 0.55, { rot: wallRot(plan, m, ruin, q), grain }),
+    }));
+  }
+}
+
 function timberFrame(
   p: Resolved<typeof timberFrameParams>,
   ctx: BuildContext,
@@ -217,352 +723,9 @@ function timberFrame(
   const hold = coreOf(plan, ruin, 0.92);
   core(masonry, plan, hold, 0.03, plan.floor, coarse);
   floor(timber, plan, ruin);
-  const beamW = 0.17;
-  const out = 0.03;
 
   for (const w of shownWalls(plan)) {
-    const m = massOf(plan, w);
-    const top = wallTop(plan, m);
-    const peak = peakOf(plan, w);
-    const holes = clearings(plan, w, 0.02);
-    // Upright timbers: the corners, both sides of every opening, then fill.
-    const posts = new Set<number>([beamW / 2, w.length - beamW / 2]);
-    for (const h of holes) {
-      posts.add(h.s0 - beamW / 2);
-      posts.add(h.s1 + beamW / 2);
-    }
-    const gap = (p.framing === "close studding" ? 0.5 : 1.45) * coarse;
-    const sorted = [...posts]
-      .filter((s) => s >= beamW / 2 - 1e-6 && s <= w.length - beamW / 2 + 1e-6)
-      .sort((a, b) => a - b);
-    const filled: number[] = [];
-    sorted.forEach((s, i) => {
-      filled.push(s);
-      const next = sorted[i + 1];
-      if (next === undefined) return;
-      const n = Math.floor((next - s) / gap);
-      for (let k = 1; k < n + 1 && n > 0; k++) {
-        filled.push(s + ((next - s) * k) / (n + 1));
-      }
-    });
-    const blocked = (s: number, y0: number, y1: number): boolean =>
-      holes.some(
-        (h) =>
-          s > h.s0 - beamW * 0.4 &&
-          s < h.s1 + beamW * 0.4 &&
-          y1 > h.y0 &&
-          y0 < h.y1,
-      );
-    const sill = plan.floor + beamW / 2;
-    const plate = top - beamW / 2;
-    // A rail at window-sill height in every storey, and a floor beam where each upper storey begins.
-    const rails = Array.from(
-      { length: m.storeys },
-      (_, k) => plan.floor + k * STOREY + 0.78,
-    ).filter((y) => y < plate - 0.4);
-    const floors = Array.from(
-      { length: m.storeys - 1 },
-      (_, k) => plan.floor + (k + 1) * STOREY - 0.05,
-    ).filter((y) => y < plate - 0.3);
-    const lean = (s: number, y: number): V3 =>
-      on(w, s + wobble(plan, seed, on(w, s, y), 0.09), y, out);
-    const pivotOf = (s: number): V3 =>
-      on(w, s < w.length / 2 ? 0 : w.length, top);
-    const zoneAt = (s: number, y = top): number => ruinAt(ruin, on(w, s, y));
-    // In the collapse, timbers go below a loss threshold that rises toward the weak corner.
-    const gone = (s: number, y = top): number =>
-      zoneAt(s, y) > 0.3
-        ? lossThreshold(r.next(), 0.14 + 0.3 * zoneAt(s, y), 0.05)
-        : 0;
-    const ch = (s: number, sag = 0, y = top): Channels =>
-      still(pivotOf(s), 0.5, {
-        droop: sag * Math.sin(Math.PI * clamp(s / w.length, 0, 1)),
-        tint: (r.next() - 0.5) * 0.03,
-        loss: gone(s, y),
-      });
-    // Every timber's extent and the vitality below which it falls or goes,
-    // so the plaster it frames can go first.
-    const members: {
-      s0: number;
-      s1: number;
-      y0: number;
-      y1: number;
-      gives: number;
-    }[] = [];
-    const member = (
-      c: Channels,
-      s0: number,
-      s1: number,
-      y0: number,
-      y1: number,
-    ): Channels => {
-      members.push({
-        s0: Math.min(s0, s1),
-        s1: Math.max(s0, s1),
-        y0: Math.min(y0, y1),
-        y1: Math.max(y0, y1),
-        gives: Math.max(c.loss, c.fall?.[3] ?? 0),
-      });
-      // A timber that goes shrinks back onto the post or sill it is pegged to at its first end.
-      return c.loss > 0 ? { ...c, pivot: lean(s0, Math.min(y0, y1)) } : c;
-    };
-
-    // The sill and wall plate run the whole length. The plate sags a little as vitality falls.
-    beam(
-      timber,
-      lean(-0.05, sill),
-      lean(w.length + 0.05, sill),
-      beamW,
-      0.09,
-      w.n,
-      0.42,
-      member(ch(w.length / 2), 0, w.length, sill, sill),
-    );
-    const plates = clamp(Math.round(w.length / (1.4 * coarse)), 1, 6);
-    for (let k = 0; k < plates; k++) {
-      const s0 = (w.length * k) / plates;
-      const s1 = (w.length * (k + 1)) / plates;
-      beam(
-        timber,
-        lean(s0 - (k === 0 ? 0.05 : 0), plate),
-        lean(s1 + (k === plates - 1 ? 0.05 : 0), plate),
-        beamW,
-        0.1,
-        w.n,
-        0.46,
-        member(ch((s0 + s1) / 2, 0.05), s0, s1, plate, plate),
-      );
-    }
-    // Posts, broken where an opening passes.
-    for (const s of filled) {
-      const spans: [number, number][] = [];
-      let y = sill;
-      for (const h of holes
-        .filter((h) => s > h.s0 - beamW * 0.4 && s < h.s1 + beamW * 0.4)
-        .sort((a, b) => a.y0 - b.y0)) {
-        if (h.y0 > y) spans.push([y, h.y0]);
-        y = Math.max(y, h.y1);
-      }
-      if (plate > y) spans.push([y, plate]);
-      // Each storey's post stands on the floor beam below it, so a fallen one is a storey long.
-      const storeyed = spans.flatMap(([a, b2]): [number, number][] => {
-        const cuts = [
-          a,
-          ...floors.filter((f) => f > a + 0.2 && f < b2 - 0.2),
-          b2,
-        ];
-        return cuts.slice(1).map((c, k) => [cuts[k] as number, c]);
-      });
-      for (const [a, b2] of storeyed) {
-        if (b2 - a <= 0.12) continue;
-        const zone = zoneAt(s);
-        if (a === sill && zone > 0.3) {
-          // A post in the collapse topples outward off its sill and comes to
-          // rest with its head on the ground. It turns past level by the angle
-          // that the sill's height makes over the post's length.
-          const base = lean(s, a);
-          const length = b2 - a;
-          const tip =
-            Math.PI / 2 + Math.asin(clamp((base[1] - 0.04) / length, 0, 0.9));
-          const c: Channels = {
-            loss: 0,
-            droop: 0,
-            wither: 0.6,
-            glow: 0,
-            pivot: base,
-            tint: (r.next() - 0.5) * 0.03,
-            fall: [
-              w.u[0] * tip,
-              w.u[1] * tip,
-              w.u[2] * tip,
-              clamp(0.16 + 0.3 * zone * r.next(), 0.12, 0.42),
-            ],
-          };
-          beam(
-            timber,
-            base,
-            lean(s, b2),
-            beamW * 0.9,
-            0.09,
-            w.n,
-            0.44 + 0.08 * r.next(),
-            member(c, s, s, a, b2),
-          );
-        } else {
-          beam(
-            timber,
-            lean(s, a),
-            lean(s, b2),
-            beamW * 0.9,
-            0.09,
-            w.n,
-            0.44 + 0.08 * r.next(),
-            member(ch(s, 0, (a + b2) / 2), s, s, a, b2),
-          );
-        }
-      }
-    }
-    // Floor beams at every storey, rails at window-sill height between posts, and braces in the end bays.
-    const all = [...filled].sort((a, b) => a - b);
-    for (const y of floors) {
-      for (let i = 0; i + 1 < all.length; i++) {
-        const mid = ((all[i] as number) + (all[i + 1] as number)) / 2;
-        if (!blocked(mid, y - 0.08, y + 0.08)) {
-          beam(
-            timber,
-            lean(all[i] as number, y),
-            lean(all[i + 1] as number, y),
-            beamW,
-            0.1,
-            w.n,
-            0.44,
-            member(ch(mid, 0, y), all[i] as number, all[i + 1] as number, y, y),
-          );
-        }
-      }
-    }
-    if (p.framing !== "close studding") {
-      for (const [k, rail] of rails.entries()) {
-        const head = floors[k] ?? plate;
-        for (let i = 0; i + 1 < all.length; i++) {
-          const a = all[i] as number;
-          const b2 = all[i + 1] as number;
-          const mid = (a + b2) / 2;
-          if (!blocked(mid, rail - 0.08, rail + 0.08)) {
-            beam(
-              timber,
-              lean(a, rail),
-              lean(b2, rail),
-              beamW * 0.8,
-              0.08,
-              w.n,
-              0.42,
-              member(ch(mid, 0, rail), a, b2, rail, rail),
-            );
-          }
-          if (
-            p.framing === "crossed braces" &&
-            (i === 0 || i === all.length - 2) &&
-            !blocked(mid, rail, head)
-          ) {
-            const [s0, s1] = i === 0 ? [a, b2] : [b2, a];
-            beam(
-              timber,
-              lean(s0, head - 0.05),
-              lean(s1, rail + 0.05),
-              beamW * 0.75,
-              0.08,
-              w.n,
-              0.4,
-              member(ch(mid, 0, (rail + head) / 2), a, b2, rail, head),
-            );
-          }
-        }
-      }
-    }
-    // A gable's king post and collar, under the peak of whatever roofline the wall rises to.
-    const rise = peak.y - top;
-    if (rise > 0.5 && peak.s > 0.25 * w.length && peak.s < 0.75 * w.length) {
-      const collar = top + rise * 0.45;
-      let s0 = peak.s;
-      let s1 = peak.s;
-      while (s0 > 0.1 && topAt(plan, w, s0 - 0.05) > collar + 0.12) s0 -= 0.05;
-      while (s1 < w.length - 0.1 && topAt(plan, w, s1 + 0.05) > collar + 0.12) {
-        s1 += 0.05;
-      }
-      beam(
-        timber,
-        lean(peak.s, top),
-        lean(peak.s, peak.y - 0.12),
-        beamW,
-        0.09,
-        w.n,
-        0.44,
-        member(ch(peak.s, 0, peak.y), peak.s, peak.s, top, peak.y),
-      );
-      if (s1 - s0 > 0.4) {
-        beam(
-          timber,
-          lean(s0, collar),
-          lean(s1, collar),
-          beamW * 0.9,
-          0.09,
-          w.n,
-          0.42,
-          member(ch(peak.s, 0, collar), s0, s1, collar, collar),
-        );
-      }
-    }
-
-    // Plaster panels between the timbers. Some are loose and fall away as vitality falls.
-    const verticals = [0, ...filled, w.length].sort((a, b) => a - b);
-    const levels = [
-      plan.floor,
-      ...(p.framing === "close studding" ? floors : [...rails, ...floors]),
-      top,
-    ].sort((a, b) => a - b);
-    for (let i = 0; i + 1 < verticals.length; i++) {
-      const s0 = verticals[i] as number;
-      const s1 = verticals[i + 1] as number;
-      if (s1 - s0 < 0.05) continue;
-      for (let j = 0; j + 1 < levels.length; j++) {
-        // A panel stops at a door or window in its bay, above and below it.
-        let spans: [number, number][] = [
-          [levels[j] as number, levels[j + 1] as number],
-        ];
-        for (const h of holes.filter(
-          (h) => s0 < h.s1 - 0.02 && s1 > h.s0 + 0.02,
-        )) {
-          spans = spans.flatMap(([a, b2]): [number, number][] =>
-            h.y1 <= a || h.y0 >= b2
-              ? [[a, b2]]
-              : (
-                  [
-                    [a, h.y0],
-                    [h.y1, b2],
-                  ] as [number, number][]
-                ).filter(([x, y]) => y - x > 0.06),
-          );
-        }
-        for (const [a, b2] of spans) {
-          const framing = Math.max(
-            0,
-            ...members
-              .filter(
-                (m) =>
-                  m.s1 > s0 - 0.12 &&
-                  m.s0 < s1 + 0.12 &&
-                  m.y1 > a - 0.12 &&
-                  m.y0 < b2 + 0.12,
-              )
-              .map((m) => m.gives),
-          );
-          panel(
-            plaster,
-            plan,
-            ruin,
-            w,
-            s0,
-            s1,
-            a,
-            b2,
-            p.plaster,
-            r,
-            seed,
-            framing,
-          );
-        }
-      }
-    }
-    if (rise > 0.05) {
-      // The gable's plaster, in cells so it can rot through from the peak.
-      const pivot = on(w, peak.s, top + rise / 2);
-      const grain = wallGrain(w, GRAIN.plaster, PLASTER);
-      wallSheet(plaster, plan, w, top, 0.008, 0.6 * coarse, (q) => ({
-        shade: 0.58,
-        c: still(pivot, 0.55, { rot: wallRot(plan, m, ruin, q), grain }),
-      }));
-    }
+    buildTimberWall(plaster, timber, p, plan, ruin, w, coarse, seed, r);
   }
   // Chunks of plaster and stone at the collapsed corner.
   const { moss, weed } = overgrowth(
@@ -585,6 +748,12 @@ function timberFrame(
     ],
     anchors: [],
   };
+}
+
+function panelInnerWeight(i: number, j: number): number {
+  if (i === 1 && j === 1) return 1;
+  if (i === 1 || j === 1) return 0.45;
+  return 0;
 }
 
 /**
@@ -626,7 +795,7 @@ function panel(
     for (let i = 0; i <= 2; i++) {
       const s = s0 + ((s1 - s0) * i) / 2;
       const y = y0 + ((y1 - y0) * j) / 2;
-      const inner = i === 1 && j === 1 ? 1 : i === 1 || j === 1 ? 0.45 : 0;
+      const inner = panelInnerWeight(i, j);
       const n = fbm3(s * 1.3 + w.n[0] * 7, y * 1.3, w.n[2] * 7, seed, 2);
       const d = 0.008 + inner * 0.014 * rough + n * 0.006 * rough;
       const q = on(w, s + wobble(plan, seed, on(w, s, y), 0.09), y, d);
@@ -654,6 +823,148 @@ function panel(
 }
 
 // ---------- fieldstone ----------
+
+function stoneFits(
+  holes: readonly Hole[],
+  w: Wall,
+  mid: number,
+  cy: number,
+  len: number,
+  h: number,
+  gableTop: number,
+): boolean {
+  if (mid <= -0.02 || mid >= w.length + 0.02) return false;
+  if (cy + h * 0.3 >= gableTop) return false;
+  return !holes.some(
+    (o) =>
+      mid + len * 0.4 > o.s0 &&
+      mid - len * 0.4 < o.s1 &&
+      cy + h * 0.4 > o.y0 &&
+      cy - h * 0.4 < o.y1,
+  );
+}
+
+function layFieldstoneWall(
+  stones: PartBuilder,
+  plan: BuildingPlan,
+  ruin: Ruin,
+  w: Wall,
+  top: number,
+  peak: { s: number; y: number },
+  size: number,
+  stoneGables: boolean,
+  r: Rand,
+  seed: number,
+): void {
+  const m = massOf(plan, w);
+  const holes = clearings(plan, w, 0.06);
+  const gableTop = (s: number): number =>
+    stoneGables ? topAt(plan, w, s) : top;
+  const maxY = (stoneGables ? peak.y : top) - 0.05;
+  let y = -0.12;
+  let row = 0;
+  while (y < maxY) {
+    const h = size * (0.62 + 0.22 * r.next());
+    let s = -0.08 - (row % 2) * size * 0.45;
+    while (s < w.length + 0.05) {
+      // Corner stones are long and alternate, binding the walls together.
+      const corner = s < 0.2 || s > w.length - 0.9;
+      const len = size * (corner ? 1.5 : 0.85 + 0.6 * r.next());
+      const mid = s + len / 2;
+      const cy = y + h / 2;
+      if (
+        stoneFits(holes, w, mid, cy, len, h, gableTop(clamp(mid, 0, w.length)))
+      ) {
+        const c = on(
+          w,
+          clamp(mid, 0.05, w.length - 0.05) +
+            wobble(plan, seed, on(w, mid, cy), 0.07),
+          cy,
+          0,
+        );
+        const ground = clamp(cy / 1.8, 0, 1);
+        // Stones fall from the top of the walls, and most at the weak corner.
+        const fallen = wallRot(plan, m, ruin, c);
+        // A tall house's upper courses fall too, so the walls break down from above as well as at the weak corner.
+        const missing = r.next() < 0.05 + 0.95 * Math.max(0, fallen - 0.3);
+        // The stone rots with the wall behind it, using the rot at its block's center, and goes from its top down.
+        const [u, v] = wallGrain(w, GRAIN.stones, STONE)(c);
+        const grainRow = Math.floor(v);
+        pillow(
+          stones,
+          c,
+          w.u,
+          w.n,
+          len * 0.94,
+          h * 0.9,
+          0.05 + 0.05 * r.next(),
+          0.4 + 0.25 * r.next(),
+          {
+            loss: missing
+              ? lossThreshold(r.next(), 0.22 + 0.3 * fallen, 0.05)
+              : 0,
+            droop: 0,
+            wither: 0.3 + 0.55 * (1 - ground) + 0.15 * r.next(),
+            glow: 0,
+            pivot: c,
+            tint: (r.next() - 0.5) * 0.06,
+            rot: fallen,
+            grain: (q) => [
+              u,
+              grainRow + clamp((c[1] + h / 2 - q[1]) / h, 0, 0.999),
+              GRAIN.stones,
+            ],
+          },
+          r,
+        );
+      }
+      s += len;
+    }
+    y += h;
+    row++;
+  }
+}
+
+function addGableBoards(
+  boards: PartBuilder,
+  plan: BuildingPlan,
+  ruin: Ruin,
+  w: Wall,
+  top: number,
+  r: Rand,
+): void {
+  const bw = 0.24;
+  for (let s = bw / 2; s < w.length; s += bw) {
+    const h = topAt(plan, w, s) - top - 0.05;
+    if (h < 0.1) continue;
+    const c = on(w, s, top - 0.15 + (h + 0.15) / 2, 0.04);
+    const zone = ruinAt(ruin, c);
+    box(
+      boards,
+      c,
+      [w.u, UP, w.n],
+      [bw / 2 - 0.012, (h + 0.15) / 2, 0.03],
+      0.42 + 0.14 * r.next(),
+      still(c, 0.55, {
+        tint: (r.next() - 0.5) * 0.03,
+        loss:
+          r.next() < 0.25 + zone
+            ? lossThreshold(r.next(), 0.2 + 0.25 * zone, 0.05)
+            : 0,
+      }),
+    );
+  }
+  beam(
+    boards,
+    on(w, -0.05, top - 0.12, 0.06),
+    on(w, w.length + 0.05, top - 0.12, 0.06),
+    0.18,
+    0.1,
+    w.n,
+    0.38,
+    still(on(w, w.length / 2, top), 0.5),
+  );
+}
 
 function fieldstone(
   p: Resolved<typeof fieldstoneParams>,
@@ -687,111 +998,21 @@ function fieldstone(
     const m = massOf(plan, w);
     const top = wallTop(plan, m);
     const peak = peakOf(plan, w);
-    const holes = clearings(plan, w, 0.06);
-    const gableTop = (s: number): number =>
-      p.gables === "stone" ? topAt(plan, w, s) : top;
-    let y = -0.12;
-    let row = 0;
-    while (y < (p.gables === "stone" ? peak.y : top) - 0.05) {
-      const h = size * (0.62 + 0.22 * r.next());
-      let s = -0.08 - (row % 2) * size * 0.45;
-      while (s < w.length + 0.05) {
-        // Corner stones are long and alternate, binding the walls together.
-        const corner = s < 0.2 || s > w.length - 0.9;
-        const len = size * (corner ? 1.5 : 0.85 + 0.6 * r.next());
-        const mid = s + len / 2;
-        const cy = y + h / 2;
-        const clear =
-          cy + h * 0.3 < gableTop(clamp(mid, 0, w.length)) &&
-          !holes.some(
-            (o) =>
-              mid + len * 0.4 > o.s0 &&
-              mid - len * 0.4 < o.s1 &&
-              cy + h * 0.4 > o.y0 &&
-              cy - h * 0.4 < o.y1,
-          );
-        if (clear && mid > -0.02 && mid < w.length + 0.02) {
-          const c = on(
-            w,
-            clamp(mid, 0.05, w.length - 0.05) +
-              wobble(plan, seed, on(w, mid, cy), 0.07),
-            cy,
-            0,
-          );
-          const ground = clamp(cy / 1.8, 0, 1);
-          // Stones fall from the top of the walls, and most at the weak corner.
-          const fallen = wallRot(plan, m, ruin, c);
-          // A tall house's upper courses fall too, so the walls break down from above as well as at the weak corner.
-          const missing = r.next() < 0.05 + 0.95 * Math.max(0, fallen - 0.3);
-          // The stone rots with the wall behind it, using the rot at its block's center, and goes from its top down.
-          const [u, v] = wallGrain(w, GRAIN.stones, STONE)(c);
-          const row = Math.floor(v);
-          pillow(
-            stones,
-            c,
-            w.u,
-            w.n,
-            len * 0.94,
-            h * 0.9,
-            0.05 + 0.05 * r.next(),
-            0.4 + 0.25 * r.next(),
-            {
-              loss: missing
-                ? lossThreshold(r.next(), 0.22 + 0.3 * fallen, 0.05)
-                : 0,
-              droop: 0,
-              wither: 0.3 + 0.55 * (1 - ground) + 0.15 * r.next(),
-              glow: 0,
-              pivot: c,
-              tint: (r.next() - 0.5) * 0.06,
-              rot: fallen,
-              grain: (q) => [
-                u,
-                row + clamp((c[1] + h / 2 - q[1]) / h, 0, 0.999),
-                GRAIN.stones,
-              ],
-            },
-            r,
-          );
-        }
-        s += len;
-      }
-      y += h;
-      row++;
-    }
+    layFieldstoneWall(
+      stones,
+      plan,
+      ruin,
+      w,
+      top,
+      peak,
+      size,
+      p.gables === "stone",
+      r,
+      seed,
+    );
     // Upright boards under the peak.
     if (peak.y - top > 0.1 && p.gables === "boards") {
-      const bw = 0.24;
-      for (let s = bw / 2; s < w.length; s += bw) {
-        const h = topAt(plan, w, s) - top - 0.05;
-        if (h < 0.1) continue;
-        const c = on(w, s, top - 0.15 + (h + 0.15) / 2, 0.04);
-        const zone = ruinAt(ruin, c);
-        box(
-          boards,
-          c,
-          [w.u, UP, w.n],
-          [bw / 2 - 0.012, (h + 0.15) / 2, 0.03],
-          0.42 + 0.14 * r.next(),
-          still(c, 0.55, {
-            tint: (r.next() - 0.5) * 0.03,
-            loss:
-              r.next() < 0.25 + zone
-                ? lossThreshold(r.next(), 0.2 + 0.25 * zone, 0.05)
-                : 0,
-          }),
-        );
-      }
-      beam(
-        boards,
-        on(w, -0.05, top - 0.12, 0.06),
-        on(w, w.length + 0.05, top - 0.12, 0.06),
-        0.18,
-        0.1,
-        w.n,
-        0.38,
-        still(on(w, w.length / 2, top), 0.5),
-      );
+      addGableBoards(boards, plan, ruin, w, top, r);
     }
   }
   const { moss, weed } = overgrowth(

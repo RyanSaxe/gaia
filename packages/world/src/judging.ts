@@ -20,14 +20,15 @@ export const requestKey = (request: JevRequest): string => contentHash(request);
 /** The directory path whose land a planned request's thing is on: a file's directory, the area or entity itself, or "" for the world. */
 export const areaOfRequest = (
   r: Pick<WorldRequest, "about" | "target">,
-): string =>
-  r.about === "file"
-    ? r.target.includes("/")
+): string => {
+  if (r.about === "file") {
+    return r.target.includes("/")
       ? r.target.slice(0, r.target.lastIndexOf("/"))
-      : ""
-    : r.about === "world"
-      ? ""
-      : r.target;
+      : "";
+  }
+  if (r.about === "world") return "";
+  return r.target;
+};
 
 export interface Keeping {
   /** Jev's earlier answers, by request key. */
@@ -40,33 +41,44 @@ export interface Keeping {
   readonly unasked?: string;
 }
 
-/** Describes in words what a request is about, from its state, for failure messages. */
-export function requestSubject(request: JevRequest): string {
-  const s = (request.state ?? {}) as Record<
-    string,
-    | {
-        path?: string;
-        name?: string;
-        file?: string;
-        from?: { path?: string };
-        to?: { path?: string };
-      }
-    | undefined
-  >;
-  const at = (path: string | undefined): string =>
-    path === undefined || path === "" ? "(the repository's root)" : path;
-  const composing =
-    Object.keys(request.questions).some((id) =>
-      /^[a-z]+\.(use|present)$/.test(id),
-    ) || (s as Record<string, unknown>).decided !== undefined;
-  const verb = composing ? "composing" : "judging";
+type SubjectState = Record<
+  string,
+  | {
+      path?: string;
+      name?: string;
+      file?: string;
+      from?: { path?: string };
+      to?: { path?: string };
+    }
+  | undefined
+>;
+
+const at = (path: string | undefined): string =>
+  path === undefined || path === "" ? "(the repository's root)" : path;
+
+function describeSubject(
+  s: SubjectState,
+  verb: string,
+  composing: boolean,
+): string | undefined {
   if (s.file !== undefined) return `${verb} the file ${at(s.file.path)}`;
   if (s.definition !== undefined) {
-    return `${verb} ${s.definition.file ?? ""}#${s.definition.name ?? ""}'s building or landmark`;
+    const file = s.definition.file ?? "";
+    const name = s.definition.name ?? "";
+    return `${verb} ${file}#${name}'s building or landmark`;
   }
   if (s.entity !== undefined) {
-    return `${verb} ${at(s.entity.path)}'s ${composing ? "building or landmark" : "entity"}`;
+    const kind = composing ? "building or landmark" : "entity";
+    return `${verb} ${at(s.entity.path)}'s ${kind}`;
   }
+  return describeAreaOrWorldSubject(s, verb, composing);
+}
+
+function describeAreaOrWorldSubject(
+  s: SubjectState,
+  verb: string,
+  composing: boolean,
+): string | undefined {
   if (s.directory !== undefined) {
     return `${verb} the area ${at(s.directory.path)}${composing ? "'s land" : ""}`;
   }
@@ -74,7 +86,21 @@ export function requestSubject(request: JevRequest): string {
     return `${verb} the trail from ${at(s.trail.from?.path)} to ${at(s.trail.to?.path)}`;
   }
   if (s.repository !== undefined) return `${verb} the world's sky`;
-  return `a request (${requestKey(request).slice(0, 12)})`;
+  return undefined;
+}
+
+/** Describes in words what a request is about, from its state, for failure messages. */
+export function requestSubject(request: JevRequest): string {
+  const s = (request.state ?? {}) as SubjectState;
+  const composing =
+    Object.keys(request.questions).some((id) =>
+      /^[a-z]+\.(use|present)$/.test(id),
+    ) || (s as Record<string, unknown>).decided !== undefined;
+  const verb = composing ? "composing" : "judging";
+  return (
+    describeSubject(s, verb, composing) ??
+    `a request (${requestKey(request).slice(0, 12)})`
+  );
 }
 
 /** A request Jev could not answer, with its subject and the reason. Any one fails the world. */
@@ -88,27 +114,33 @@ export class RequestFailed extends Error {
   }
 }
 
+function inRange(v: number, min: number, max: number): boolean {
+  return Number.isFinite(v) && v >= min && v <= max;
+}
+
+function answerFitsQuestion(
+  q: JevRequest["questions"][string],
+  a: JevAnswer | undefined,
+): boolean {
+  if (a === undefined || a.type !== q.type) return false;
+  if (a.type === "choice" && q.type === "choice") {
+    return Object.hasOwn(q.criteria, a.choice);
+  }
+  if (a.type === "noul") return inRange(a.noul, 0, 1);
+  if (a.type === "score" && q.type === "score") {
+    return inRange(a.score, 0, q.criteria.length - 1);
+  }
+  return false;
+}
+
 /** Whether a response answers every question within the options the request offered. */
 export function answersFit(
   request: JevRequest,
   response: JevResponse,
 ): boolean {
-  return Object.entries(request.questions).every(([id, q]) => {
-    const a: JevAnswer | undefined = response.answers?.[id];
-    if (a === undefined || a.type !== q.type) return false;
-    if (a.type === "choice") {
-      return q.type === "choice" && Object.hasOwn(q.criteria, a.choice);
-    }
-    if (a.type === "noul") {
-      return Number.isFinite(a.noul) && a.noul >= 0 && a.noul <= 1;
-    }
-    return (
-      q.type === "score" &&
-      Number.isFinite(a.score) &&
-      a.score >= 0 &&
-      a.score <= q.criteria.length - 1
-    );
-  });
+  return Object.entries(request.questions).every(([id, q]) =>
+    answerFitsQuestion(q, response.answers?.[id]),
+  );
 }
 
 /**
@@ -121,7 +153,7 @@ export function answersFit(
  */
 export function keptJev(jev: JevClient | null, keeping: Keeping): JevClient {
   return {
-    async ask(request) {
+    async ask(request): Promise<JevResponse> {
       const key = requestKey(request);
       const stored = keeping.stored.get(key);
       if (stored !== undefined && answersFit(request, stored)) {

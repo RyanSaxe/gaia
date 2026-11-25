@@ -61,6 +61,113 @@ interface Grid {
 
 const grids = new WeakMap<readonly LandSite[], Grid>();
 
+interface SiteBuckets {
+  readonly sites: readonly LandSite[];
+  readonly bucket: readonly (readonly number[])[];
+  readonly nx: number;
+  readonly nz: number;
+  readonly x0: number;
+  readonly z0: number;
+  readonly cell: number;
+  readonly maxReach: number;
+}
+
+function cellLo(ax: number, az: number, cell: number, s: LandSite): number {
+  return (
+    Math.hypot(
+      Math.max(ax - s.x, 0, s.x - ax - cell),
+      Math.max(az - s.z, 0, s.z - az - cell),
+    ) - (s.reach ?? 0)
+  );
+}
+
+function cellHi(ax: number, az: number, cell: number, s: LandSite): number {
+  return (
+    Math.hypot(
+      Math.max(Math.abs(s.x - ax), Math.abs(s.x - ax - cell)),
+      Math.max(Math.abs(s.z - az), Math.abs(s.z - az - cell)),
+    ) - (s.reach ?? 0)
+  );
+}
+
+function ringBestHi(
+  b: SiteBuckets,
+  ax: number,
+  az: number,
+  i: number,
+  j: number,
+  ring: number,
+): number {
+  let bestHi = Infinity;
+  for (let dj = -ring; dj <= ring; dj++) {
+    const bj = j + dj;
+    if (bj < 0 || bj >= b.nz) continue;
+    for (let di = -ring; di <= ring; di++) {
+      const bi = i + di;
+      if (
+        Math.max(Math.abs(di), Math.abs(dj)) !== ring ||
+        bi < 0 ||
+        bi >= b.nx
+      ) {
+        continue;
+      }
+      for (const k of b.bucket[bj * b.nx + bi] as readonly number[]) {
+        bestHi = Math.min(
+          bestHi,
+          cellHi(ax, az, b.cell, b.sites[k] as LandSite),
+        );
+      }
+    }
+  }
+  return bestHi;
+}
+
+function gatherBucketRange(
+  b: SiteBuckets,
+  i: number,
+  j: number,
+  reachOut: number,
+  near: number[],
+): void {
+  near.length = 0;
+  const j0 = Math.max(0, j - reachOut);
+  const j1 = Math.min(b.nz - 1, j + reachOut);
+  const i0 = Math.max(0, i - reachOut);
+  const i1 = Math.min(b.nx - 1, i + reachOut);
+  for (let bj = j0; bj <= j1; bj++) {
+    for (let bi = i0; bi <= i1; bi++) {
+      for (const k of b.bucket[bj * b.nx + bi] as readonly number[]) {
+        near.push(k);
+      }
+    }
+  }
+}
+
+function fillCellCandidates(
+  b: SiteBuckets,
+  i: number,
+  j: number,
+  near: number[],
+  ids: number[],
+): void {
+  const ax = b.x0 + i * b.cell;
+  const az = b.z0 + j * b.cell;
+  // Grow a ring of buckets until it holds a site, then read every bucket that could hold a nearer one.
+  let bestHi = Infinity;
+  const span = Math.max(b.nx, b.nz);
+  for (let ring = 0; ring <= span && bestHi === Infinity; ring++) {
+    bestHi = ringBestHi(b, ax, az, i, j, ring);
+  }
+  const reachOut = Math.ceil((bestHi + 2 * b.maxReach) / b.cell) + 1;
+  gatherBucketRange(b, i, j, reachOut, near);
+  for (const k of near) {
+    bestHi = Math.min(bestHi, cellHi(ax, az, b.cell, b.sites[k] as LandSite));
+  }
+  for (const k of near.toSorted((a, c) => a - c)) {
+    if (cellLo(ax, az, b.cell, b.sites[k] as LandSite) <= bestHi) ids.push(k);
+  }
+}
+
 /** Builds and caches a grid that lists, per lookup cell, the sites that can be nearest somewhere in it. */
 function gridOf(sites: readonly LandSite[]): Grid {
   const had = grids.get(sites);
@@ -99,54 +206,14 @@ function gridOf(sites: readonly LandSite[]): Grid {
       ] as number[]
     ).push(k),
   );
+  const ctx: SiteBuckets = { sites, bucket, nx, nz, x0, z0, cell, maxReach };
   const starts = new Int32Array(nx * nz + 1);
   const ids: number[] = [];
   const near: number[] = [];
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
-      const ax = x0 + i * cell;
-      const az = z0 + j * cell;
-      const lo = (s: LandSite): number =>
-        Math.hypot(
-          Math.max(ax - s.x, 0, s.x - ax - cell),
-          Math.max(az - s.z, 0, s.z - az - cell),
-        ) - (s.reach ?? 0);
-      const hi = (s: LandSite): number =>
-        Math.hypot(
-          Math.max(Math.abs(s.x - ax), Math.abs(s.x - ax - cell)),
-          Math.max(Math.abs(s.z - az), Math.abs(s.z - az - cell)),
-        ) - (s.reach ?? 0);
-      // Grow a ring of buckets until it holds a site, then read every bucket that could hold a nearer one.
-      let bestHi = Infinity;
-      let ring = 0;
-      const span = Math.max(nx, nz);
-      for (; ring <= span && bestHi === Infinity; ring++) {
-        for (let dj = -ring; dj <= ring; dj++) {
-          for (let di = -ring; di <= ring; di++) {
-            if (Math.max(Math.abs(di), Math.abs(dj)) !== ring) continue;
-            for (const k of bucket[(j + dj) * nx + (i + di)] ?? []) {
-              if (i + di >= 0 && i + di < nx) {
-                bestHi = Math.min(bestHi, hi(sites[k] as LandSite));
-              }
-            }
-          }
-        }
-      }
-      const reachOut = Math.ceil((bestHi + 2 * maxReach) / cell) + 1;
-      near.length = 0;
-      for (let dj = -reachOut; dj <= reachOut; dj++) {
-        if (j + dj < 0 || j + dj >= nz) continue;
-        for (let di = -reachOut; di <= reachOut; di++) {
-          if (i + di < 0 || i + di >= nx) continue;
-          for (const k of bucket[(j + dj) * nx + (i + di)] as number[]) {
-            near.push(k);
-          }
-        }
-      }
-      for (const k of near) bestHi = Math.min(bestHi, hi(sites[k] as LandSite));
       starts[j * nx + i] = ids.length;
-      near.sort((a, b) => a - b);
-      for (const k of near) if (lo(sites[k] as LandSite) <= bestHi) ids.push(k);
+      fillCellCandidates(ctx, i, j, near, ids);
     }
   }
   starts[nx * nz] = ids.length;

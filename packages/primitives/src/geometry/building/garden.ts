@@ -7,6 +7,8 @@ import type {
   BuildContext,
   BuildingPlan,
   Built,
+  Opening,
+  Rand,
   Vec3,
   Resolved,
 } from "@gaia/schema";
@@ -34,6 +36,443 @@ import {
   still,
 } from "./frame.ts";
 
+type Blob = ReturnType<typeof icosphere>;
+
+function gardenSphere(
+  b: PartBuilder,
+  blob: Blob,
+  c: Vec3,
+  radii: Vec3,
+  shade: number,
+  ch: Channels,
+): void {
+  const base = b.vertexCount;
+  for (const q of blob.points) {
+    b.vertex(
+      [c[0] + q[0] * radii[0], c[1] + q[1] * radii[1], c[2] + q[2] * radii[2]],
+      q,
+      shade + 0.18 * q[1],
+      ch,
+    );
+  }
+  for (const [a, bb, cc] of blob.triangles) {
+    b.triangle(base + a, base + bb, base + cc);
+  }
+}
+
+function buildWalk(
+  walk: PartBuilder,
+  p: Resolved<typeof cottageGardenParams>,
+  plan: BuildingPlan,
+  door: Opening,
+  steps: number,
+  r: Rand,
+): void {
+  const { wall: w, s } = placeOf(plan, door);
+  const start = 0.36 * steps + 0.42;
+  const flags = p.walk === "flagstones";
+  const count = flags ? 10 : 6;
+  const gapLen = flags ? 0.4 : 0.66;
+  for (let i = 0; i < count; i++) {
+    const d = start + i * gapLen;
+    const sway = Math.sin(i * 0.55 + r.next() * 0.3) * 0.22;
+    const cols = flags ? [-0.21, 0.21] : [0];
+    for (const col of cols) {
+      const q = on(w, s + sway + col + (r.next() - 0.5) * 0.08, 0, d);
+      const radius = flags ? 0.2 + 0.03 * r.next() : 0.27 + 0.07 * r.next();
+      flatStone(
+        walk,
+        q[0],
+        q[2],
+        radius,
+        0.045,
+        0.52 + 0.14 * r.next(),
+        still(q, 0.45 + 0.35 * r.next(), { tint: (r.next() - 0.5) * 0.04 }),
+        r,
+      );
+    }
+  }
+}
+
+function buildFlowerBoxes(
+  paint: PartBuilder,
+  leaf: PartBuilder,
+  bloom: PartBuilder,
+  blob: Blob,
+  plan: BuildingPlan,
+  r: Rand,
+): void {
+  // Only ground-floor windows facing the walk get boxes, at most 6, so a big house stays within its triangle budget.
+  const boxed = plan.openings
+    .filter(
+      (o) =>
+        o.kind === "window" &&
+        o.position[1] < plan.floor + 1.5 &&
+        o.normal[2] > 0.3,
+    )
+    .slice(0, 6);
+  for (const o of boxed) {
+    const { wall: w, s } = placeOf(plan, o);
+    const y = o.position[1] - 0.12;
+    const hw = o.width / 2 + 0.06;
+    // The box hangs on the wall under the sill. As vitality falls, its
+    // plants die back into it, then it tips forward about its bottom edge
+    // on the wall. Its loss removes it before the tip would leave it in the air.
+    const boxC = on(w, s, y - 0.1, 0.13);
+    const pivot = on(w, s, y - 0.2, -0.04);
+    const tip = 0.85 + 0.3 * r.next();
+    const from = 0.26 + 0.1 * r.next();
+    const fall = [w.u[0] * tip, w.u[1] * tip, w.u[2] * tip, from] as const;
+    box(
+      paint,
+      boxC,
+      [w.u, UP, w.n],
+      [hw, 0.1, 0.11],
+      0.5,
+      still(pivot, 0.5, { fall, loss: from - 0.14 + 0.03 }),
+    );
+    const soil = on(w, s, y - 0.12, 0.13);
+    const dies = (u: number, top: number): number =>
+      Math.max(lossThreshold(u, top, 0.04), fall[3] + 0.01);
+    for (let i = 0; i < 6; i++) {
+      const x = -hw + 0.1 + ((2 * hw - 0.2) * i) / 5;
+      const c = on(
+        w,
+        s + x,
+        y + 0.03 + 0.03 * r.next(),
+        0.13 + (r.next() - 0.5) * 0.08,
+      );
+      gardenSphere(leaf, blob, c, [0.12, 0.09, 0.1], 0.45 + 0.15 * r.next(), {
+        loss: dies(r.next(), 0.42),
+        droop: 0.5,
+        wither: 0.85,
+        glow: 0,
+        pivot: soil,
+        tint: (r.next() - 0.5) * 0.04,
+      });
+    }
+    for (let i = 0; i < 3; i++) {
+      const c = on(
+        w,
+        s - hw + 0.15 + (2 * hw - 0.3) * r.next(),
+        y - 0.12,
+        0.25,
+      );
+      gardenSphere(leaf, blob, c, [0.07, 0.14, 0.05], 0.4, {
+        loss: dies(r.next(), 0.45),
+        droop: 0.6,
+        wither: 0.85,
+        glow: 0,
+        pivot: soil,
+        tint: 0,
+      });
+    }
+    for (let i = 0; i < 9; i++) {
+      const c = on(
+        w,
+        s - hw + 0.08 + (2 * hw - 0.16) * r.next(),
+        y + 0.09 + 0.05 * r.next(),
+        0.09 + 0.12 * r.next(),
+      );
+      gardenSphere(bloom, blob, c, [0.055, 0.045, 0.055], 0.62, {
+        loss: Math.max(lossThreshold(r.next(), 0.72, 0.25), fall[3] + 0.01),
+        droop: 0.3,
+        wither: 0.9,
+        glow: 0,
+        pivot: soil,
+        tint: (r.next() - 0.5) * 0.12,
+      });
+    }
+  }
+}
+
+function buildLantern(
+  wood: PartBuilder,
+  lamp: PartBuilder,
+  plan: BuildingPlan,
+  door: Opening,
+  r: Rand,
+): void {
+  const { wall: w, s } = placeOf(plan, door);
+  const ly = plan.floor + door.height * 0.92;
+  const spots = [0.38, 0.26].flatMap((gap) =>
+    [1, -1].map((side) => s + side * (door.width / 2 + gap)),
+  );
+  const shows = (at: number): boolean =>
+    at > 0.15 &&
+    at < w.length - 0.15 &&
+    !hidden(plan, w, at - 0.15, ly) &&
+    !hidden(plan, w, at + 0.15, ly);
+  const free = (at: number): boolean =>
+    shows(at) &&
+    !plan.openings.some(
+      (o) =>
+        o !== door &&
+        sameWall(placeOf(plan, o).wall, w) &&
+        Math.abs(placeOf(plan, o).s - at) < o.width / 2 + 0.55,
+    );
+  const ls = spots.find(free) ?? spots.find(shows);
+  if (ls === undefined) return;
+  // As vitality falls, the bracket comes loose and the lantern hangs askew.
+  const mount = on(w, ls, ly + 0.25, 0);
+  const sag = 0.55;
+  // The lantern starts to fall at vitality 0.36 and goes below 0.24.
+  const hang = {
+    fall: [w.u[0] * sag, w.u[1] * sag, w.u[2] * sag, 0.36] as const,
+    loss: 0.24,
+  };
+  beam(
+    wood,
+    mount,
+    on(w, ls, ly + 0.25, 0.42),
+    0.05,
+    0.05,
+    w.u,
+    0.35,
+    still(mount, 0.5, hang),
+  );
+  const c = on(w, ls, ly, 0.4);
+  box(
+    wood,
+    addScaled(c, UP, 0.16),
+    [w.u, UP, w.n],
+    [0.11, 0.025, 0.11],
+    0.35,
+    still(mount, 0.5, hang),
+  );
+  box(
+    wood,
+    addScaled(c, UP, -0.15),
+    [w.u, UP, w.n],
+    [0.09, 0.02, 0.09],
+    0.35,
+    still(mount, 0.5, hang),
+  );
+  box(lamp, c, [w.u, UP, w.n], [0.075, 0.13, 0.075], 0.8, {
+    droop: 0,
+    wither: 0.4,
+    glow: 1,
+    pivot: mount,
+    ...hang,
+    loss: Math.max(0.37, lossThreshold(r.next(), 0.5, 0.37)),
+  });
+}
+
+function bestWoodpileSpan(
+  plan: BuildingPlan,
+): { w: Wall; s0: number; s1: number } | null {
+  const walls = shownWalls(plan).filter(
+    (w) => w.mass === 0 && Math.abs(w.n[2]) < 1e-6,
+  );
+  let best: { w: Wall; s0: number; s1: number } | null = null;
+  for (const w of walls) {
+    const holes = clearings(plan, w, 0.1)
+      .filter((h) => h.y0 < 1.3 + plan.floor)
+      .map((h) => [h.s0, h.s1] as const);
+    // A stretch of wall that another mass or a lean-to hides is also a hole.
+    for (let s = 0.25; s < w.length; s += 0.5) {
+      if (hidden(plan, w, s, 0.5) || hidden(plan, w, s, 1.2)) {
+        holes.push([s - 0.3, s + 0.3] as const);
+      }
+    }
+    const sortedHoles = holes.toSorted((a, b) => a[0] - b[0]);
+    let from = 0.25;
+    for (const [h0, h1] of [
+      ...sortedHoles,
+      [w.length - 0.25, w.length] as const,
+    ]) {
+      if (h0 - from > (best === null ? 0 : best.s1 - best.s0)) {
+        best = { w, s0: from, s1: h0 };
+      }
+      from = Math.max(from, h1);
+    }
+  }
+  return best;
+}
+
+function buildWoodpile(wood: PartBuilder, plan: BuildingPlan, r: Rand): void {
+  const best = bestWoodpileSpan(plan);
+  if (best === null) return;
+  const { w } = best;
+  const len = Math.min(2.2, best.s1 - best.s0);
+  const s0 = best.s0 + (best.s1 - best.s0 - len) / 2;
+  const rad = 0.085;
+  const rows = 5;
+  // As vitality falls, the top rows go first. A log never outlasts the row
+  // under it, and it sinks into the pile as it goes.
+  let under = 0;
+  for (let row = 0; row < rows; row++) {
+    const n = Math.floor((len - row * rad) / (rad * 2.05));
+    let most = under;
+    for (let i = 0; i < n; i++) {
+      const s = s0 + rad + row * rad + i * rad * 2.05;
+      const yy = rad * 0.8 + row * rad * 1.75;
+      const from = on(w, s, yy, 0.12);
+      const to = on(w, s, yy, 0.62 + 0.05 * r.next());
+      const pivot = on(w, s, 0, 0.35);
+      const loss =
+        row >= 2 ? Math.max(lossThreshold(r.next(), 0.35, 0.05), under) : 0;
+      most = Math.max(most, loss);
+      log(
+        wood,
+        from,
+        to,
+        rad * (0.9 + 0.2 * r.next()),
+        0.45 + 0.12 * r.next(),
+        {
+          loss,
+          droop: 0,
+          wither: 0.5,
+          glow: 0,
+          pivot,
+          tint: (r.next() - 0.5) * 0.03,
+        },
+      );
+    }
+    under = most;
+  }
+}
+
+function buildFenceRails(
+  fence: PartBuilder,
+  a: V3,
+  b2: V3,
+  u: V3,
+  n: V3,
+  len: number,
+  front: number,
+  gateX: number,
+  pickets: readonly { t: number; gives: number }[],
+): void {
+  // A rail goes before any picket it is nailed to leans or goes, shrinking back toward the first picket.
+  const rail = (t0: number, _t1: number, ry: number): Channels => {
+    const first = pickets.find((pk) => pk.t >= t0 - 0.11) ?? {
+      t: t0,
+      gives: 0,
+    };
+    return {
+      loss: Math.max(...pickets.map((pk) => pk.gives)) + 0.01,
+      droop: 0,
+      wither: 0.6,
+      glow: 0,
+      pivot: addScaled([a[0], ry, a[2]], u, first.t),
+      tint: 0,
+    };
+  };
+  // The rails run the length of the run in lengths of about 2 m, either side of the gate on the front run.
+  const gate =
+    Math.abs(a[2] - front) < 0.01 && Math.abs(b2[2] - front) < 0.01
+      ? (gateX - a[0]) * u[0]
+      : null;
+  const spans = (
+    gate === null
+      ? [[0, len]]
+      : [
+          [0, gate - 0.62],
+          [gate + 0.62, len],
+        ]
+  ).filter(([t0, t1]) => (t1 as number) - (t0 as number) > 0.1) as [
+    number,
+    number,
+  ][];
+  for (const ry of [0.22, 0.58]) {
+    for (const [s0, s1] of spans) {
+      const segs = Math.max(1, Math.round((s1 - s0) / 2));
+      for (let k = 0; k < segs; k++) {
+        const t0 = s0 + ((s1 - s0) * k) / segs;
+        const t1 = s0 + ((s1 - s0) * (k + 1)) / segs;
+        beam(
+          fence,
+          addScaled(addScaled([a[0], ry, a[2]], u, t0), n, -0.03),
+          addScaled(addScaled([a[0], ry, a[2]], u, t1), n, -0.03),
+          0.07,
+          0.025,
+          n,
+          0.5,
+          rail(t0, t1, ry),
+        );
+      }
+    }
+  }
+}
+
+function buildFenceRun(
+  fence: PartBuilder,
+  a: V3,
+  b2: V3,
+  front: number,
+  gateX: number,
+  r: Rand,
+): void {
+  const len = Math.hypot(b2[0] - a[0], b2[2] - a[2]);
+  const u = normalize(sub(b2, a));
+  const n: V3 = [u[2], 0, -u[0]];
+  const count = Math.floor(len / 0.2);
+  /** Each picket's distance along the run, and the vitality below which it starts to lean or go. */
+  const pickets: { t: number; gives: number }[] = [];
+  for (let i = 0; i <= count; i++) {
+    const q = addScaled(a, u, (len * i) / count);
+    if (Math.abs(q[2] - front) < 0.01 && Math.abs(q[0] - gateX) < 0.62) {
+      continue;
+    }
+    const h = 0.78 + 0.06 * Math.sin(i * 0.9);
+    const base: V3 = [q[0], -0.25, q[2]];
+    // As vitality falls, pickets lean in random directions, then some fall.
+    const leanBy = (r.next() < 0.5 ? -1 : 1) * (0.2 + 0.55 * r.next());
+    const ch: Channels = {
+      loss: r.next() < 0.22 ? lossThreshold(r.next(), 0.32, 0.04) : 0,
+      droop: 0.04,
+      wither: 0.6,
+      glow: 0,
+      pivot: base,
+      tint: 0,
+      fall: [u[0] * leanBy, 0, u[2] * leanBy, 0.3 + 0.32 * r.next()],
+    };
+    box(
+      fence,
+      [q[0], (h - 0.25) / 2, q[2]],
+      [u, UP, n],
+      [0.035, (h + 0.25) / 2, 0.014],
+      0.55 + 0.08 * r.next(),
+      ch,
+    );
+    pickets.push({
+      t: (len * i) / count,
+      gives: Math.max(ch.fall?.[3] ?? 0, ch.loss > 0 ? ch.loss + LOSS_BAND : 0),
+    });
+  }
+  buildFenceRails(fence, a, b2, u, n, len, front, gateX, pickets);
+}
+
+function buildFence(
+  fence: PartBuilder,
+  plan: BuildingPlan,
+  door: Opening | undefined,
+  r: Rand,
+): void {
+  const hw = plan.width / 2 + 0.35;
+  const front = plan.depth / 2 + 3.4;
+  const back = plan.depth / 2 - 0.25;
+  const gateX = door?.position[0] ?? 0;
+  const runs: [V3, V3][] = [
+    [
+      [-hw, 0, back],
+      [-hw, 0, front],
+    ],
+    [
+      [-hw, 0, front],
+      [hw, 0, front],
+    ],
+    [
+      [hw, 0, front],
+      [hw, 0, back],
+    ],
+  ];
+  for (const [a, b2] of runs) {
+    buildFenceRun(fence, a, b2, front, gateX, r);
+  }
+}
+
 export function buildGarden(
   p: Resolved<typeof cottageGardenParams>,
   ctx: BuildContext,
@@ -52,394 +491,31 @@ export function buildGarden(
   const steps = Math.max(1, Math.round(plan.floor / 0.2));
   const blob = icosphere(0);
 
-  const sphere = (
-    b: PartBuilder,
-    c: Vec3,
-    radii: Vec3,
-    shade: number,
-    ch: Channels,
-  ): void => {
-    const base = b.vertexCount;
-    for (const q of blob.points) {
-      b.vertex(
-        [
-          c[0] + q[0] * radii[0],
-          c[1] + q[1] * radii[1],
-          c[2] + q[2] * radii[2],
-        ],
-        q,
-        shade + 0.18 * q[1],
-        ch,
-      );
-    }
-    for (const [a, bb, cc] of blob.triangles) {
-      b.triangle(base + a, base + bb, base + cc);
-    }
-  };
-
   // The walk is a line of stones leading out from the doorstep.
   if (door !== undefined) {
-    const { wall: w, s } = placeOf(plan, door);
-    const start = 0.36 * steps + 0.42;
-    const flags = p.walk === "flagstones";
-    const count = flags ? 10 : 6;
-    const gapLen = flags ? 0.4 : 0.66;
-    for (let i = 0; i < count; i++) {
-      const d = start + i * gapLen;
-      const sway = Math.sin(i * 0.55 + r.next() * 0.3) * 0.22;
-      const cols = flags ? [-0.21, 0.21] : [0];
-      for (const col of cols) {
-        const q = on(w, s + sway + col + (r.next() - 0.5) * 0.08, 0, d);
-        const radius = flags ? 0.2 + 0.03 * r.next() : 0.27 + 0.07 * r.next();
-        flatStone(
-          walk,
-          q[0],
-          q[2],
-          radius,
-          0.045,
-          0.52 + 0.14 * r.next(),
-          still(q, 0.45 + 0.35 * r.next(), { tint: (r.next() - 0.5) * 0.04 }),
-          r,
-        );
-      }
-    }
+    buildWalk(walk, p, plan, door, steps, r);
   }
 
   // Flower boxes under the ground-floor windows. As vitality falls, the flowers go first, then the leaves wilt.
   if (extras.has("flower boxes")) {
-    // Only ground-floor windows facing the walk get boxes, at most 6, so a big house stays within its triangle budget.
-    const boxed = plan.openings
-      .filter(
-        (o) =>
-          o.kind === "window" &&
-          o.position[1] < plan.floor + 1.5 &&
-          o.normal[2] > 0.3,
-      )
-      .slice(0, 6);
-    for (const o of boxed) {
-      const { wall: w, s } = placeOf(plan, o);
-      const y = o.position[1] - 0.12;
-      const hw = o.width / 2 + 0.06;
-      // The box hangs on the wall under the sill. As vitality falls, its
-      // plants die back into it, then it tips forward about its bottom edge
-      // on the wall. Its loss removes it before the tip would leave it in the air.
-      const boxC = on(w, s, y - 0.1, 0.13);
-      const pivot = on(w, s, y - 0.2, -0.04);
-      const tip = 0.85 + 0.3 * r.next();
-      const from = 0.26 + 0.1 * r.next();
-      const fall = [w.u[0] * tip, w.u[1] * tip, w.u[2] * tip, from] as const;
-      box(
-        paint,
-        boxC,
-        [w.u, UP, w.n],
-        [hw, 0.1, 0.11],
-        0.5,
-        still(pivot, 0.5, { fall, loss: from - 0.14 + 0.03 }),
-      );
-      const soil = on(w, s, y - 0.12, 0.13);
-      const dies = (u: number, top: number): number =>
-        Math.max(lossThreshold(u, top, 0.04), fall[3] + 0.01);
-      for (let i = 0; i < 6; i++) {
-        const x = -hw + 0.1 + ((2 * hw - 0.2) * i) / 5;
-        const c = on(
-          w,
-          s + x,
-          y + 0.03 + 0.03 * r.next(),
-          0.13 + (r.next() - 0.5) * 0.08,
-        );
-        sphere(leaf, c, [0.12, 0.09, 0.1], 0.45 + 0.15 * r.next(), {
-          loss: dies(r.next(), 0.42),
-          droop: 0.5,
-          wither: 0.85,
-          glow: 0,
-          pivot: soil,
-          tint: (r.next() - 0.5) * 0.04,
-        });
-      }
-      for (let i = 0; i < 3; i++) {
-        const c = on(
-          w,
-          s - hw + 0.15 + (2 * hw - 0.3) * r.next(),
-          y - 0.12,
-          0.25,
-        );
-        sphere(leaf, c, [0.07, 0.14, 0.05], 0.4, {
-          loss: dies(r.next(), 0.45),
-          droop: 0.6,
-          wither: 0.85,
-          glow: 0,
-          pivot: soil,
-          tint: 0,
-        });
-      }
-      for (let i = 0; i < 9; i++) {
-        const c = on(
-          w,
-          s - hw + 0.08 + (2 * hw - 0.16) * r.next(),
-          y + 0.09 + 0.05 * r.next(),
-          0.09 + 0.12 * r.next(),
-        );
-        sphere(bloom, c, [0.055, 0.045, 0.055], 0.62, {
-          loss: Math.max(lossThreshold(r.next(), 0.72, 0.25), fall[3] + 0.01),
-          droop: 0.3,
-          wither: 0.9,
-          glow: 0,
-          pivot: soil,
-          tint: (r.next() - 0.5) * 0.12,
-        });
-      }
-    }
+    buildFlowerBoxes(paint, leaf, bloom, blob, plan, r);
   }
 
   // A lantern on a bracket beside the door, lit at night at high vitality. It goes where the wall is visible, nearer
   // the door when a wall's end or another mass leaves no room, and clear of the windows when possible. With no wall
   // beside the door, there is no lantern.
   if (extras.has("lantern") && door !== undefined) {
-    const { wall: w, s } = placeOf(plan, door);
-    const ly = plan.floor + door.height * 0.92;
-    const spots = [0.38, 0.26].flatMap((gap) =>
-      [1, -1].map((side) => s + side * (door.width / 2 + gap)),
-    );
-    const shows = (at: number): boolean =>
-      at > 0.15 &&
-      at < w.length - 0.15 &&
-      !hidden(plan, w, at - 0.15, ly) &&
-      !hidden(plan, w, at + 0.15, ly);
-    const free = (at: number): boolean =>
-      shows(at) &&
-      !plan.openings.some(
-        (o) =>
-          o !== door &&
-          sameWall(placeOf(plan, o).wall, w) &&
-          Math.abs(placeOf(plan, o).s - at) < o.width / 2 + 0.55,
-      );
-    const ls = spots.find(free) ?? spots.find(shows);
-    if (ls !== undefined) {
-      // As vitality falls, the bracket comes loose and the lantern hangs askew.
-      const mount = on(w, ls, ly + 0.25, 0);
-      const sag = 0.55;
-      // The lantern starts to fall at vitality 0.36 and goes below 0.24.
-      const hang = {
-        fall: [w.u[0] * sag, w.u[1] * sag, w.u[2] * sag, 0.36] as const,
-        loss: 0.24,
-      };
-      beam(
-        wood,
-        mount,
-        on(w, ls, ly + 0.25, 0.42),
-        0.05,
-        0.05,
-        w.u,
-        0.35,
-        still(mount, 0.5, hang),
-      );
-      const c = on(w, ls, ly, 0.4);
-      box(
-        wood,
-        addScaled(c, UP, 0.16),
-        [w.u, UP, w.n],
-        [0.11, 0.025, 0.11],
-        0.35,
-        still(mount, 0.5, hang),
-      );
-      box(
-        wood,
-        addScaled(c, UP, -0.15),
-        [w.u, UP, w.n],
-        [0.09, 0.02, 0.09],
-        0.35,
-        still(mount, 0.5, hang),
-      );
-      box(lamp, c, [w.u, UP, w.n], [0.075, 0.13, 0.075], 0.8, {
-        droop: 0,
-        wither: 0.4,
-        glow: 1,
-        pivot: mount,
-        ...hang,
-        loss: Math.max(0.37, lossThreshold(r.next(), 0.5, 0.37)),
-      });
-    }
+    buildLantern(wood, lamp, plan, door, r);
   }
 
   // Split logs stacked against the longest bare stretch of a side wall, end grain out.
   if (extras.has("woodpile")) {
-    const walls = shownWalls(plan).filter(
-      (w) => w.mass === 0 && Math.abs(w.n[2]) < 1e-6,
-    );
-    let best: { w: Wall; s0: number; s1: number } | null = null;
-    for (const w of walls) {
-      const holes = clearings(plan, w, 0.1)
-        .filter((h) => h.y0 < 1.3 + plan.floor)
-        .map((h) => [h.s0, h.s1] as const);
-      // A stretch of wall that another mass or a lean-to hides is also a hole.
-      for (let s = 0.25; s < w.length; s += 0.5) {
-        if (hidden(plan, w, s, 0.5) || hidden(plan, w, s, 1.2)) {
-          holes.push([s - 0.3, s + 0.3] as const);
-        }
-      }
-      holes.sort((a, b) => a[0] - b[0]);
-      let from = 0.25;
-      for (const [h0, h1] of [...holes, [w.length - 0.25, w.length] as const]) {
-        if (h0 - from > (best === null ? 0 : best.s1 - best.s0)) {
-          best = { w, s0: from, s1: h0 };
-        }
-        from = Math.max(from, h1);
-      }
-    }
-    if (best !== null) {
-      const { w } = best;
-      const len = Math.min(2.2, best.s1 - best.s0);
-      const s0 = best.s0 + (best.s1 - best.s0 - len) / 2;
-      const rad = 0.085;
-      const rows = 5;
-      // As vitality falls, the top rows go first. A log never outlasts the row
-      // under it, and it sinks into the pile as it goes.
-      let under = 0;
-      for (let row = 0; row < rows; row++) {
-        const n = Math.floor((len - row * rad) / (rad * 2.05));
-        let most = under;
-        for (let i = 0; i < n; i++) {
-          const s = s0 + rad + row * rad + i * rad * 2.05;
-          const yy = rad * 0.8 + row * rad * 1.75;
-          const from = on(w, s, yy, 0.12);
-          const to = on(w, s, yy, 0.62 + 0.05 * r.next());
-          const pivot = on(w, s, 0, 0.35);
-          const loss =
-            row >= 2 ? Math.max(lossThreshold(r.next(), 0.35, 0.05), under) : 0;
-          most = Math.max(most, loss);
-          log(
-            wood,
-            from,
-            to,
-            rad * (0.9 + 0.2 * r.next()),
-            0.45 + 0.12 * r.next(),
-            {
-              loss,
-              droop: 0,
-              wither: 0.5,
-              glow: 0,
-              pivot,
-              tint: (r.next() - 0.5) * 0.03,
-            },
-          );
-        }
-        under = most;
-      }
-    }
+    buildWoodpile(wood, plan, r);
   }
 
   // A low picket fence around the front garden, with a gap where the walk passes.
   if (extras.has("fence")) {
-    const hw = plan.width / 2 + 0.35;
-    const front = plan.depth / 2 + 3.4;
-    const back = plan.depth / 2 - 0.25;
-    const gateX = door?.position[0] ?? 0;
-    const runs: [V3, V3][] = [
-      [
-        [-hw, 0, back],
-        [-hw, 0, front],
-      ],
-      [
-        [-hw, 0, front],
-        [hw, 0, front],
-      ],
-      [
-        [hw, 0, front],
-        [hw, 0, back],
-      ],
-    ];
-    for (const [a, b2] of runs) {
-      const len = Math.hypot(b2[0] - a[0], b2[2] - a[2]);
-      const u = normalize(sub(b2, a));
-      const n: V3 = [u[2], 0, -u[0]];
-      const count = Math.floor(len / 0.2);
-      /** Each picket's distance along the run, and the vitality below which it starts to lean or go. */
-      const pickets: { t: number; gives: number }[] = [];
-      for (let i = 0; i <= count; i++) {
-        const q = addScaled(a, u, (len * i) / count);
-        if (Math.abs(q[2] - front) < 0.01 && Math.abs(q[0] - gateX) < 0.62) {
-          continue;
-        }
-        const h = 0.78 + 0.06 * Math.sin(i * 0.9);
-        const base: V3 = [q[0], -0.25, q[2]];
-        // As vitality falls, pickets lean in random directions, then some fall.
-        const leanBy = (r.next() < 0.5 ? -1 : 1) * (0.2 + 0.55 * r.next());
-        const ch: Channels = {
-          loss: r.next() < 0.22 ? lossThreshold(r.next(), 0.32, 0.04) : 0,
-          droop: 0.04,
-          wither: 0.6,
-          glow: 0,
-          pivot: base,
-          tint: 0,
-          fall: [u[0] * leanBy, 0, u[2] * leanBy, 0.3 + 0.32 * r.next()],
-        };
-        box(
-          fence,
-          [q[0], (h - 0.25) / 2, q[2]],
-          [u, UP, n],
-          [0.035, (h + 0.25) / 2, 0.014],
-          0.55 + 0.08 * r.next(),
-          ch,
-        );
-        pickets.push({
-          t: (len * i) / count,
-          gives: Math.max(
-            ch.fall?.[3] ?? 0,
-            ch.loss > 0 ? ch.loss + LOSS_BAND : 0,
-          ),
-        });
-      }
-      // A rail goes before any picket it is nailed to leans or goes, shrinking back toward the first picket.
-      const rail = (t0: number, t1: number, ry: number): Channels => {
-        const first = pickets.find((pk) => pk.t >= t0 - 0.11) ?? {
-          t: t0,
-          gives: 0,
-        };
-        return {
-          loss: Math.max(...pickets.map((pk) => pk.gives)) + 0.01,
-          droop: 0,
-          wither: 0.6,
-          glow: 0,
-          pivot: addScaled([a[0], ry, a[2]], u, first.t),
-          tint: 0,
-        };
-      };
-      // The rails run the length of the run in lengths of about 2 m, either side of the gate on the front run.
-      const gate =
-        Math.abs(a[2] - front) < 0.01 && Math.abs(b2[2] - front) < 0.01
-          ? (gateX - a[0]) * u[0]
-          : null;
-      const spans = (
-        gate === null
-          ? [[0, len]]
-          : [
-              [0, gate - 0.62],
-              [gate + 0.62, len],
-            ]
-      ).filter(([t0, t1]) => (t1 as number) - (t0 as number) > 0.1) as [
-        number,
-        number,
-      ][];
-      for (const ry of [0.22, 0.58]) {
-        for (const [s0, s1] of spans) {
-          const segs = Math.max(1, Math.round((s1 - s0) / 2));
-          for (let k = 0; k < segs; k++) {
-            const t0 = s0 + ((s1 - s0) * k) / segs;
-            const t1 = s0 + ((s1 - s0) * (k + 1)) / segs;
-            beam(
-              fence,
-              addScaled(addScaled([a[0], ry, a[2]], u, t0), n, -0.03),
-              addScaled(addScaled([a[0], ry, a[2]], u, t1), n, -0.03),
-              0.07,
-              0.025,
-              n,
-              0.5,
-              rail(t0, t1, ry),
-            );
-          }
-        }
-      }
-    }
+    buildFence(fence, plan, door, r);
   }
 
   const parts = [walk, wood, paint, leaf, bloom, lamp, fence]

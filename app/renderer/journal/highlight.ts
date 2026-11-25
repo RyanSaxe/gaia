@@ -32,88 +32,84 @@ function commentsOf(path: string): {
   return { line: "//", block: true };
 }
 
-/** Splits `lines` of the file at `path` into highlighted pieces, one array per line. */
-export function highlight(lines: readonly string[], path: string): Piece[][] {
-  const comments = commentsOf(path);
-  const text = lines.join("\n");
-  const pieces: Piece[] = [];
-  const push = (t: string, ink?: Ink): void => {
-    if (t === "") return;
-    const last = pieces[pieces.length - 1];
-    // Merges adjacent plain text into one piece.
-    if (ink === undefined && last !== undefined && last.ink === undefined) {
-      pieces[pieces.length - 1] = { text: last.text + t };
-    } else pieces.push(ink === undefined ? { text: t } : { text: t, ink });
-  };
-  // Sticky regexes match at the current position, so a long definition is scanned in one pass.
-  const at = (re: RegExp, k: number): string | null => {
-    re.lastIndex = k;
-    return re.exec(text)?.[0] ?? null;
-  };
-  const NUMBER = /\d[\d_]*(?:\.\d+)?/y;
-  const WORD = /[A-Za-z_$][\w$]*/y;
-  const CALLED = /\s*(?:\(|<[^>\n]*>\(|!\()/y;
-  /** The last non-space character before `k`. */
-  const before = (k: number): string => {
-    let b = k - 1;
-    while (b >= 0 && /\s/.test(text[b] as string)) b--;
-    return text[b] ?? "";
-  };
-  let i = 0;
-  while (i < text.length) {
-    if (comments.line !== "" && text.startsWith(comments.line, i)) {
-      const end = text.indexOf("\n", i);
-      const t = text.slice(i, end < 0 ? text.length : end);
-      push(t, "com");
-      i += t.length;
-      continue;
-    }
-    if (comments.block && text.startsWith("/*", i)) {
-      const end = text.indexOf("*/", i + 2);
-      const t = text.slice(i, end < 0 ? text.length : end + 2);
-      push(t, "com");
-      i += t.length;
-      continue;
-    }
-    const c = text[i] as string;
-    if (c === '"' || c === "'" || c === "`") {
-      let j = i + 1;
-      while (
-        j < text.length &&
-        text[j] !== c &&
-        (c === "`" || text[j] !== "\n")
-      ) {
-        j += text[j] === "\\" ? 2 : 1;
-      }
-      const t = text.slice(i, Math.min(text.length, j + 1));
-      push(t, "str");
-      i += t.length;
-      continue;
-    }
-    const number = /[\w$]/.test(text[i - 1] ?? "") ? null : at(NUMBER, i);
-    if (number !== null) {
-      push(number, "num");
-      i += number.length;
-      continue;
-    }
-    const w = at(WORD, i);
-    if (w !== null) {
-      const ink: Ink | undefined = KEYWORDS.has(w)
-        ? "kw"
-        : at(CALLED, i + w.length) !== null
-          ? "fn"
-          : /^[A-Z]/.test(w)
-            ? "type"
-            : before(i) === "."
-              ? "prop"
-              : undefined;
-      push(w, ink);
-      i += w.length;
-      continue;
-    }
-    push(c);
-    i += 1;
+// Sticky regexes match at the current position, so a long definition is scanned in one pass.
+const NUMBER = /\d[\d_]*(?:\.\d+)?/y;
+const WORD = /[A-Za-z_$][\w$]*/y;
+const CALLED = /\s*(?:\(|<[^>\n]*>\(|!\()/y;
+
+function matchAt(text: string, re: RegExp, k: number): string | null {
+  re.lastIndex = k;
+  return re.exec(text)?.[0] ?? null;
+}
+
+function charBefore(text: string, k: number): string {
+  let b = k - 1;
+  while (b >= 0 && /\s/.test(text[b] as string)) b--;
+  return text[b] ?? "";
+}
+
+function scanComment(
+  text: string,
+  i: number,
+  comments: { readonly line: string; readonly block: boolean },
+): string | null {
+  if (comments.line !== "" && text.startsWith(comments.line, i)) {
+    const end = text.indexOf("\n", i);
+    return text.slice(i, end < 0 ? text.length : end);
   }
+  if (comments.block && text.startsWith("/*", i)) {
+    const end = text.indexOf("*/", i + 2);
+    return text.slice(i, end < 0 ? text.length : end + 2);
+  }
+  return null;
+}
+
+function scanString(text: string, start: number, quote: string): string {
+  const allowNewline = quote === "`";
+  let j = start + 1;
+  while (j < text.length) {
+    const ch = text[j] as string;
+    if (ch === quote || (!allowNewline && ch === "\n")) break;
+    j += ch === "\\" ? 2 : 1;
+  }
+  return text.slice(start, Math.min(text.length, j + 1));
+}
+
+function wordInk(text: string, i: number, w: string): Ink | undefined {
+  if (KEYWORDS.has(w)) return "kw";
+  if (matchAt(text, CALLED, i + w.length) !== null) return "fn";
+  if (/^[A-Z]/.test(w)) return "type";
+  if (charBefore(text, i) === ".") return "prop";
+  return undefined;
+}
+
+function scanNext(
+  text: string,
+  i: number,
+  comments: { readonly line: string; readonly block: boolean },
+): Piece {
+  const comment = scanComment(text, i, comments);
+  if (comment !== null) return { text: comment, ink: "com" };
+  const c = text[i] as string;
+  if (c === '"' || c === "'" || c === "`") {
+    return { text: scanString(text, i, c), ink: "str" };
+  }
+  const number = /[\w$]/.test(text[i - 1] ?? "")
+    ? null
+    : matchAt(text, NUMBER, i);
+  if (number !== null) return { text: number, ink: "num" };
+  const w = matchAt(text, WORD, i);
+  if (w !== null) {
+    const ink = wordInk(text, i, w);
+    return ink === undefined ? { text: w } : { text: w, ink };
+  }
+  return { text: c };
+}
+
+function splitIntoLines(
+  pieces: readonly Piece[],
+  lineCount: number,
+): Piece[][] {
   // Splits the pieces back into lines. A piece that spans a line break is split there, and each part keeps its ink.
   const out: Piece[][] = [[]];
   for (const p of pieces) {
@@ -126,6 +122,32 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
       }
     });
   }
-  while (out.length < lines.length) out.push([]);
+  while (out.length < lineCount) out.push([]);
   return out;
+}
+
+/** Splits `lines` of the file at `path` into highlighted pieces, one array per line. */
+export function highlight(lines: readonly string[], path: string): Piece[][] {
+  const comments = commentsOf(path);
+  const text = lines.join("\n");
+  const pieces: Piece[] = [];
+  const push = (piece: Piece): void => {
+    if (piece.text === "") return;
+    const last = pieces[pieces.length - 1];
+    // Merges adjacent plain text into one piece.
+    if (
+      piece.ink === undefined &&
+      last !== undefined &&
+      last.ink === undefined
+    ) {
+      pieces[pieces.length - 1] = { text: last.text + piece.text };
+    } else pieces.push(piece);
+  };
+  let i = 0;
+  while (i < text.length) {
+    const piece = scanNext(text, i, comments);
+    push(piece);
+    i += piece.text.length;
+  }
+  return splitIntoLines(pieces, lines.length);
 }

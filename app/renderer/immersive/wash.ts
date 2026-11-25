@@ -85,7 +85,6 @@ export function borderPath(
   rings: readonly (readonly number[])[],
   land: LandOutline,
 ): string {
-  const f = (v: number): string => v.toFixed(1);
   let d = "";
   for (const raw of rings) {
     const count = raw.length / 2;
@@ -95,10 +94,14 @@ export function borderPath(
       ring[k * 2] as number,
       ring[k * 2 + 1] as number,
     ];
+    const pointStr = (k: number): string => {
+      const [x, z] = at(k);
+      return `${x.toFixed(1)} ${z.toFixed(1)}`;
+    };
     const mid = (a: number, b: number): string => {
       const [ax, az] = at(a);
       const [bx, bz] = at(b);
-      return `${f((ax + bx) / 2)} ${f((az + bz) / 2)}`;
+      return `${((ax + bx) / 2).toFixed(1)} ${((az + bz) / 2).toFixed(1)}`;
     };
     // Tests the raw traced point, not the smoothed one, because smoothing pulls a stretch along a rounded corner inward.
     const inner = (k: number): boolean =>
@@ -113,11 +116,7 @@ export function borderPath(
       const n = kept.length;
       d += `M${mid(kept[0] as number, kept[1 % n] as number)}`;
       for (let q = 1; q <= n; q++) {
-        d += `Q${at(kept[q % n] as number)
-          .map(f)
-          .join(
-            " ",
-          )} ${mid(kept[q % n] as number, kept[(q + 1) % n] as number)}`;
+        d += `Q${pointStr(kept[q % n] as number)} ${mid(kept[q % n] as number, kept[(q + 1) % n] as number)}`;
       }
       d += "Z";
       continue;
@@ -127,17 +126,11 @@ export function borderPath(
     let run: number[] = [];
     const flush = (): void => {
       if (run.length >= 3) {
-        d += `M${at(run[0] as number)
-          .map(f)
-          .join(" ")}`;
+        d += `M${pointStr(run[0] as number)}`;
         for (let q = 1; q < run.length - 1; q++) {
-          d += `Q${at(run[q] as number)
-            .map(f)
-            .join(" ")} ${mid(run[q] as number, run[q + 1] as number)}`;
+          d += `Q${pointStr(run[q] as number)} ${mid(run[q] as number, run[q + 1] as number)}`;
         }
-        d += `L${at(run[run.length - 1] as number)
-          .map(f)
-          .join(" ")}`;
+        d += `L${pointStr(run[run.length - 1] as number)}`;
       }
       run = [];
     };
@@ -373,6 +366,146 @@ function dryBrush(
 const overlaps = (a: Box, b: Box): boolean =>
   a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
+function areaExtents(
+  nearest: Int16Array,
+  n: number,
+  cell: number,
+  scale: number,
+): Map<number, Box> {
+  const spans = new Map<number, [number, number, number, number]>();
+  for (let c = 0; c < n * n; c++) {
+    const k = nearest[c] as number;
+    const i = c % n;
+    const j = Math.floor(c / n);
+    const b = spans.get(k);
+    spans.set(
+      k,
+      b === undefined
+        ? [i, j, i, j]
+        : [
+            Math.min(b[0], i),
+            Math.min(b[1], j),
+            Math.max(b[2], i),
+            Math.max(b[3], j),
+          ],
+    );
+  }
+  const extents = new Map<number, Box>();
+  for (const [k, b] of spans) {
+    extents.set(k, [
+      b[0] * cell * scale,
+      b[1] * cell * scale,
+      (b[2] + 1) * cell * scale,
+      (b[3] + 1) * cell * scale,
+    ]);
+  }
+  return extents;
+}
+
+function* poolRims(
+  g: CanvasRenderingContext2D,
+  sheet: WashSheet,
+  style: MapStyle,
+  box: Box,
+  extents: Map<number, Box>,
+  px: (v: number) => number,
+): Generator<void> {
+  // Clips pooling to 8 m inside the land's edge, so no rim is drawn along the edge.
+  g.save();
+  g.globalCompositeOperation = "source-atop";
+  g.clip(
+    rimPath(
+      {
+        size: sheet.half * 2,
+        ...(sheet.aspect === undefined ? {} : { aspect: sheet.aspect }),
+      },
+      8,
+      px,
+    ),
+  );
+  const pooled = [...sheet.areas.entries()].toSorted(
+    ([, a], [, b]) => a.depth - b.depth,
+  );
+  for (const [step, [k, a]] of pooled.entries()) {
+    const at = extents.get(k);
+    if (a.pool === null || (at !== undefined && !overlaps(at, box))) continue;
+    poolRim(g, a.path, a.pool, style.pool);
+    if (step % 6 === 5) yield;
+  }
+  g.restore();
+}
+
+function paintDryStreaks(
+  g: CanvasRenderingContext2D,
+  sheet: WashSheet,
+  style: MapStyle,
+  box: Box,
+  extents: Map<number, Box>,
+  scale: number,
+): void {
+  // Dry-brush streaks follow each cell's nearest area, so cells past the land's edge take their neighbor's streaks and
+  // nothing marks the edge.
+  const { n, cell, nearest } = sheet;
+  const cellAt = (x: number, y: number): number =>
+    Math.floor(y / scale / cell) * n + Math.floor(x / scale / cell);
+  for (const [k, a] of sheet.areas.entries()) {
+    const at = extents.get(k);
+    if (a.dry <= 0.05 || at === undefined || !overlaps(at, box)) continue;
+    dryBrush(g, at, a.dry, style, k, (x, y) => nearest[cellAt(x, y)] === k);
+  }
+}
+
+function strokeTone(tone: number): string {
+  if (tone < 0.3) return "rgba(255,236,170,0.09)";
+  if (tone < 0.55) return "rgba(70,110,120,0.07)";
+  if (tone < 0.8) return "rgba(255,255,240,0.08)";
+  return "rgba(70,56,30,0.07)";
+}
+
+function strokeOutsideBox(
+  x: number,
+  y: number,
+  reachOf: number,
+  box: Box,
+): boolean {
+  return (
+    x + reachOf < box[0] ||
+    x - reachOf > box[2] ||
+    y + reachOf < box[1] ||
+    y - reachOf > box[3]
+  );
+}
+
+function* paintBrushStrokes(
+  g: CanvasRenderingContext2D,
+  style: MapStyle,
+  box: Box,
+): Generator<void> {
+  // Brush strokes: broad and overlapping, each a little warmer or cooler, lighter or darker.
+  g.globalCompositeOperation = "source-atop";
+  g.lineCap = "round";
+  const reachOf = 200;
+  for (let k = 0; k < style.strokes; k++) {
+    const x = hash(k, 71) * PAPER;
+    const y = hash(71, k) * PAPER;
+    if (strokeOutsideBox(x, y, reachOf, box)) continue;
+    const a = -0.5 + (hash(k, 72) - 0.5) * 0.9;
+    const len = 50 + hash(k, 73) * 120;
+    g.strokeStyle = strokeTone(hash(k, 74));
+    g.lineWidth = 12 + hash(k, 75) * 22;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.quadraticCurveTo(
+      x + Math.cos(a) * len * 0.5 + (hash(k, 76) - 0.5) * 30,
+      y + Math.sin(a) * len * 0.5 + (hash(k, 77) - 0.5) * 30,
+      x + Math.cos(a) * len,
+      y + Math.sin(a) * len,
+    );
+    g.stroke();
+    if (k % 900 === 899) yield;
+  }
+}
+
 /**
  * Paints the wash on `g`, whose transform maps sheet pixels to its own.
  * `under` holds the sheet's cells (`sheet.n` a side), each in its color and
@@ -397,106 +530,11 @@ export function* layWash(
   g.drawImage(under, 0, 0, n * cell * scale, n * cell * scale);
   yield;
   // Each area's cell extent on the sheet, which bounds its rim pooling and dry streaks.
-  const spans = new Map<number, [number, number, number, number]>();
-  for (let c = 0; c < n * n; c++) {
-    const k = nearest[c] as number;
-    const i = c % n;
-    const j = Math.floor(c / n);
-    const b = spans.get(k);
-    spans.set(
-      k,
-      b === undefined
-        ? [i, j, i, j]
-        : [
-            Math.min(b[0], i),
-            Math.min(b[1], j),
-            Math.max(b[2], i),
-            Math.max(b[3], j),
-          ],
-    );
-  }
-  const extent = (k: number): Box | null => {
-    const b = spans.get(k);
-    return b === undefined
-      ? null
-      : [
-          b[0] * cell * scale,
-          b[1] * cell * scale,
-          (b[2] + 1) * cell * scale,
-          (b[3] + 1) * cell * scale,
-        ];
-  };
-  // Clips pooling to 8 m inside the land's edge, so no rim is drawn along the edge.
-  g.save();
-  g.globalCompositeOperation = "source-atop";
-  g.clip(
-    rimPath(
-      {
-        size: sheet.half * 2,
-        ...(sheet.aspect === undefined ? {} : { aspect: sheet.aspect }),
-      },
-      8,
-      px,
-    ),
-  );
-  const pooled = [...sheet.areas.entries()].sort(
-    ([, a], [, b]) => a.depth - b.depth,
-  );
-  for (const [step, [k, a]] of pooled.entries()) {
-    const at = extent(k);
-    if (a.pool === null || (at !== null && !overlaps(at, box))) continue;
-    poolRim(g, a.path, a.pool, style.pool);
-    if (step % 6 === 5) yield;
-  }
-  g.restore();
-  // Dry-brush streaks follow each cell's nearest area, so cells past the land's edge take their neighbor's streaks and
-  // nothing marks the edge.
-  const cellAt = (x: number, y: number): number =>
-    Math.floor(y / scale / cell) * n + Math.floor(x / scale / cell);
-  for (const [k, a] of sheet.areas.entries()) {
-    const at = extent(k);
-    if (a.dry <= 0.05 || at === null || !overlaps(at, box)) continue;
-    dryBrush(g, at, a.dry, style, k, (x, y) => nearest[cellAt(x, y)] === k);
-  }
+  const extents = areaExtents(nearest, n, cell, scale);
+  yield* poolRims(g, sheet, style, box, extents, px);
+  paintDryStreaks(g, sheet, style, box, extents, scale);
   yield;
-  // Brush strokes: broad and overlapping, each a little warmer or cooler, lighter or darker.
-  g.globalCompositeOperation = "source-atop";
-  g.lineCap = "round";
-  const reachOf = 200;
-  for (let k = 0; k < style.strokes; k++) {
-    const x = hash(k, 71) * PAPER;
-    const y = hash(71, k) * PAPER;
-    if (
-      x + reachOf < box[0] ||
-      x - reachOf > box[2] ||
-      y + reachOf < box[1] ||
-      y - reachOf > box[3]
-    ) {
-      continue;
-    }
-    const a = -0.5 + (hash(k, 72) - 0.5) * 0.9;
-    const len = 50 + hash(k, 73) * 120;
-    const tone = hash(k, 74);
-    g.strokeStyle =
-      tone < 0.3
-        ? "rgba(255,236,170,0.09)"
-        : tone < 0.55
-          ? "rgba(70,110,120,0.07)"
-          : tone < 0.8
-            ? "rgba(255,255,240,0.08)"
-            : "rgba(70,56,30,0.07)";
-    g.lineWidth = 12 + hash(k, 75) * 22;
-    g.beginPath();
-    g.moveTo(x, y);
-    g.quadraticCurveTo(
-      x + Math.cos(a) * len * 0.5 + (hash(k, 76) - 0.5) * 30,
-      y + Math.sin(a) * len * 0.5 + (hash(k, 77) - 0.5) * 30,
-      x + Math.cos(a) * len,
-      y + Math.sin(a) * len,
-    );
-    g.stroke();
-    if (k % 900 === 899) yield;
-  }
+  yield* paintBrushStrokes(g, style, box);
   // Granulation: two noise layers, fine specks and broad blooms, like pigment settling into the paper's texture.
   g.imageSmoothingEnabled = true;
   for (const [cells, strength, seed] of [

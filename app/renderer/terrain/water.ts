@@ -413,6 +413,7 @@ interface Ribbon {
 const RUN_ON = 4;
 
 function ribbon(stream: Terrain["streams"][number]): Ribbon {
+  type Station = Terrain["streams"][number]["stations"][number];
   const st = stream.stations;
   const velocity = streamFlow(stream);
   const n = st.length;
@@ -427,8 +428,8 @@ function ribbon(stream: Terrain["streams"][number]): Ribbon {
     Math.hypot(velocity[i * 2] as number, velocity[i * 2 + 1] as number) ||
     FLOW.slowest;
   for (let i = 1; i < n; i++) {
-    const a = st[i - 1]!;
-    const b = st[i]!;
+    const a = st[i - 1] as Station;
+    const b = st[i] as Station;
     arrival[i] =
       (arrival[i - 1] as number) +
       Math.hypot(b.x - a.x, b.z - a.z) / ((speed(i - 1) + speed(i)) / 2);
@@ -442,8 +443,8 @@ function ribbon(stream: Terrain["streams"][number]): Ribbon {
     i: number,
     time: number,
   ): void => {
-    const a = st[Math.max(0, i - 1)]!;
-    const b = st[Math.min(n - 1, i + 1)]!;
+    const a = st[Math.max(0, i - 1)] as Station;
+    const b = st[Math.min(n - 1, i + 1)] as Station;
     const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
     const nx = -(b.z - a.z) / len;
     const nz = (b.x - a.x) / len;
@@ -477,10 +478,10 @@ function ribbon(stream: Terrain["streams"][number]): Ribbon {
       return d > h.reach + RUN_ON ? widest : Math.max(widest, h.reach + d);
     }, half);
   // The run-on past the spring, every station, and the run-on past the mouth, each the way its head lies.
-  const first = st[0]!;
-  const second = st[Math.min(3, n - 1)]!;
-  const last = st[n - 1]!;
-  const before = st[Math.max(0, n - 4)]!;
+  const first = st[0] as Station;
+  const second = st[Math.min(3, n - 1)] as Station;
+  const last = st[n - 1] as Station;
+  const before = st[Math.max(0, n - 4)] as Station;
   const lead = Math.hypot(second.x - first.x, second.z - first.z) || 1;
   const tail = Math.hypot(last.x - before.x, last.z - before.z) || 1;
   const startX = first.x - ((second.x - first.x) / lead) * RUN_ON;
@@ -570,8 +571,20 @@ function nearestLevel(t: Terrain, x: number, z: number): number | null {
   return level;
 }
 
+interface WaterMirror {
+  readonly texture: THREE.Texture;
+  readonly matrix: THREE.Matrix4;
+  readonly texel: THREE.Vector2;
+  render(
+    renderer: THREE.WebGLRenderer,
+    scene: THREE.Scene,
+    view: THREE.PerspectiveCamera,
+    level: number,
+  ): void;
+}
+
 /** The planar mirror: the scene drawn from a camera reflected through the water's plane, clipped at it. */
-function createMirror() {
+function createMirror(): WaterMirror {
   const target = new THREE.WebGLRenderTarget(1, 1, {
     depthBuffer: true,
     generateMipmaps: false,
@@ -650,10 +663,10 @@ function createMirror() {
       clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
       const e = camera.projectionMatrix.elements;
       q.set(
-        (Math.sign(clip.x) + (e[8] as number)) / (e[0] as number),
-        (Math.sign(clip.y) + (e[9] as number)) / (e[5] as number),
+        (Math.sign(clip.x) + e[8]) / e[0],
+        (Math.sign(clip.y) + e[9]) / e[5],
         -1,
-        (1 + (e[10] as number)) / (e[14] as number),
+        (1 + e[10]) / e[14],
       );
       clip.multiplyScalar(2 / clip.dot(q));
       e[2] = clip.x;
@@ -667,6 +680,28 @@ function createMirror() {
       renderer.setRenderTarget(previous);
     },
   };
+}
+
+function saveVisibility(
+  objects: readonly THREE.Object3D[],
+  visible: boolean,
+  saved: boolean[],
+): void {
+  for (let i = 0; i < objects.length; i++) {
+    const o = objects[i] as THREE.Object3D;
+    saved[i] = o.visible;
+    o.visible = visible;
+  }
+}
+
+function restoreVisibility(
+  objects: readonly THREE.Object3D[],
+  saved: readonly boolean[],
+  fallback: boolean,
+): void {
+  for (let i = 0; i < objects.length; i++) {
+    (objects[i] as THREE.Object3D).visible = saved[i] ?? fallback;
+  }
 }
 
 export function createWater(
@@ -713,7 +748,9 @@ export function createWater(
   const update = (next: Terrain): void => {
     terrain = next;
     for (const child of group.children.slice()) {
-      (child as THREE.Mesh).geometry.dispose();
+      if (child instanceof THREE.Mesh) {
+        (child.geometry as THREE.BufferGeometry).dispose();
+      }
       group.remove(child);
     }
     for (const s of next.streams) {
@@ -756,7 +793,7 @@ export function createWater(
   return {
     group,
     update,
-    mirror(renderer, scene, view, hide, show, dt) {
+    mirror(renderer, scene, view, hide, show, dt): number {
       view.updateMatrixWorld();
       mirrored = group.children.length > 0 && inView(view);
       uniforms.uMirrorOn.value = mirrored ? 1 : 0;
@@ -769,30 +806,18 @@ export function createWater(
           ? target
           : level + (target - level) * (1 - Math.exp(-dt / MIRROR_SETTLE));
       uniforms.uMirrorLevel.value = level;
-      for (let i = 0; i < hide.length; i++) {
-        const o = hide[i] as THREE.Object3D;
-        hidden[i] = o.visible;
-        o.visible = false;
-      }
-      for (let i = 0; i < show.length; i++) {
-        const o = show[i] as THREE.Object3D;
-        shown[i] = o.visible;
-        o.visible = true;
-      }
+      saveVisibility(hide, false, hidden);
+      saveVisibility(show, true, shown);
       const water = group.visible;
       group.visible = false;
       mirror.render(renderer, scene, view, level);
       mirrorCalls = renderer.info.render.calls;
       group.visible = water;
-      for (let i = 0; i < hide.length; i++) {
-        (hide[i] as THREE.Object3D).visible = hidden[i] ?? true;
-      }
-      for (let i = 0; i < show.length; i++) {
-        (show[i] as THREE.Object3D).visible = shown[i] ?? false;
-      }
+      restoreVisibility(hide, hidden, true);
+      restoreVisibility(show, shown, false);
       return mirrorCalls;
     },
-    wade(x, z, yaw, walked, dt) {
+    wade(x, z, yaw, walked, dt): void {
       sinceRing += dt;
       walkedSince += walked;
       const depth = waterDepthAt(terrain, x, z);

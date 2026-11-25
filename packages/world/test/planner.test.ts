@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Library, kind, slot } from "@gaia/schema";
+import { type Blueprint, Library, kind, slot } from "@gaia/schema";
 import { TREE_PRIMITIVES } from "@gaia/primitives";
 import { tree } from "@gaia/kinds";
 import {
@@ -22,7 +22,7 @@ const subject = {
 
 describe("a tree's blueprint in two requests", () => {
   it("assembles a valid blueprint, and equal answers name the same blueprint", () => {
-    const run = () => {
+    const run = (): Blueprint => {
       const s = planStructure(tree, lib, subject);
       const structure = readStructure(
         tree,

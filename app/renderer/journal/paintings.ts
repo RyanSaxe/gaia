@@ -81,7 +81,13 @@ export async function paintKept(
       seed: seedOf(seed),
     };
     const reply = await new Promise<PainterReply>((resolve) => {
-      worker.onmessage = (e: MessageEvent<PainterReply>) => resolve(e.data);
+      worker.addEventListener(
+        "message",
+        (e: MessageEvent<PainterReply>): void => {
+          resolve(e.data);
+        },
+        { once: true },
+      );
       worker.postMessage(job, [job.color.data.buffer, job.mask.data.buffer]);
     });
     if (!("painting" in reply)) return null;
@@ -122,6 +128,8 @@ const PAINTERS = Math.max(
   Math.min(3, Math.floor((navigator.hardwareConcurrency ?? 4) / 3)),
 );
 
+const noop = (): void => {};
+
 export function createPaintings(options: PaintingsOptions): Paintings {
   let paintings = new Map<string, Painting>();
   const painters = Array.from({ length: PAINTERS }, () => ({
@@ -137,7 +145,7 @@ export function createPaintings(options: PaintingsOptions): Paintings {
   const entry = (id: string): Painting => {
     let p = paintings.get(id);
     if (p === undefined) {
-      let settle = (): void => {};
+      let settle: () => void = noop;
       const settled = new Promise<void>((resolve) => (settle = resolve));
       p = {
         state: "waiting",
@@ -180,8 +188,7 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     p.settle();
   };
 
-  /** The waiting painting with the best rank, in request order. A near thing waits while the person walks and until `NEAR_EVERY` has passed. */
-  function take(): string | undefined {
+  function bestWaiting(): [string, Painting] | undefined {
     let best: [string, Painting] | undefined;
     for (const [id, p] of paintings) {
       if (
@@ -191,6 +198,12 @@ export function createPaintings(options: PaintingsOptions): Paintings {
         best = [id, p];
       }
     }
+    return best;
+  }
+
+  /** The waiting painting with the best rank, in request order. A near thing waits while the person walks and until `NEAR_EVERY` has passed. */
+  function take(): string | undefined {
+    const best = bestWaiting();
     if (best === undefined) return undefined;
     if (best[1].rank === 2) {
       const wait =
@@ -217,6 +230,66 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     }
   }
 
+  async function keptFor(key: string | null): Promise<Blob | null> {
+    if (key === null) return null;
+    return (await options.store?.get(key)) ?? null;
+  }
+
+  function captureView(
+    thing: string,
+    wide: boolean,
+  ): Promise<{ readonly color: Pixels; readonly mask: Pixels } | null> {
+    const look = viewing.then(() => options.view(thing, VIEW.w, VIEW.h, wide));
+    viewing = look.catch(() => null);
+    return look;
+  }
+
+  function runWorkerJob(
+    painter: (typeof painters)[number],
+    id: string,
+    seen: { readonly color: Pixels; readonly mask: Pixels },
+  ): Promise<PainterReply> {
+    painter.worker ??= new PainterWorker();
+    const worker = painter.worker;
+    const job: PainterJob = {
+      id: ++jobs,
+      color: seen.color,
+      mask: seen.mask,
+      w: PAINTED.w,
+      h: PAINTED.h,
+      seed: seedOf(id),
+    };
+    return new Promise<PainterReply>((resolve) => {
+      const onMessage = (e: MessageEvent<PainterReply>): void => {
+        if (e.data.id !== job.id) return;
+        worker.removeEventListener("message", onMessage);
+        resolve(e.data);
+      };
+      worker.addEventListener("message", onMessage);
+      worker.postMessage(job, [job.color.data.buffer, job.mask.data.buffer]);
+    });
+  }
+
+  function applyReply(
+    p: Painting,
+    mine: Map<string, Painting>,
+    key: string | null,
+    reply: PainterReply,
+  ): void {
+    if (!("painting" in reply)) {
+      finish(p, "none", null);
+      return;
+    }
+    if (mine !== paintings) {
+      reply.painting.close();
+      return;
+    }
+    finish(p, "done", reply.painting);
+    if (key !== null && reply.kept !== null) {
+      void options.store?.put(key, reply.kept);
+    }
+  }
+
   async function paintOne(
     id: string,
     painter: (typeof painters)[number],
@@ -229,39 +302,14 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     const thing = wide ? id.slice(WIDE.length) : id;
     try {
       const key = options.keyOf?.(thing, wide) ?? null;
-      const kept =
-        key === null ? null : ((await options.store?.get(key)) ?? null);
+      const kept = await keptFor(key);
       if (kept !== null) {
         return finish(p, "done", await createImageBitmap(kept));
       }
-      const look = viewing.then(() =>
-        options.view(thing, VIEW.w, VIEW.h, wide),
-      );
-      viewing = look.catch(() => null);
-      const seen = await look;
+      const seen = await captureView(thing, wide);
       if (seen === null || mine !== paintings) return finish(p, "none", null);
-      painter.worker ??= new PainterWorker();
-      const worker = painter.worker;
-      const job: PainterJob = {
-        id: ++jobs,
-        color: seen.color,
-        mask: seen.mask,
-        w: PAINTED.w,
-        h: PAINTED.h,
-        seed: seedOf(id),
-      };
-      const reply = await new Promise<PainterReply>((resolve) => {
-        worker.onmessage = (e: MessageEvent<PainterReply>) => {
-          if (e.data.id === job.id) resolve(e.data);
-        };
-        worker.postMessage(job, [job.color.data.buffer, job.mask.data.buffer]);
-      });
-      if (!("painting" in reply)) return finish(p, "none", null);
-      if (mine !== paintings) return reply.painting.close();
-      finish(p, "done", reply.painting);
-      if (key !== null && reply.kept !== null) {
-        void options.store?.put(key, reply.kept);
-      }
+      const reply = await runWorkerJob(painter, id, seen);
+      applyReply(p, mine, key, reply);
     } catch {
       finish(p, "none", null);
     } finally {
@@ -271,7 +319,7 @@ export function createPaintings(options: PaintingsOptions): Paintings {
   }
 
   return {
-    picture(thing, wide = false) {
+    picture(thing, wide = false): HTMLCanvasElement {
       const id = named(thing, wide);
       const canvas = document.createElement("canvas");
       canvas.width = PAINTED.w;
@@ -289,20 +337,20 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       pump();
       return canvas;
     },
-    painted(thing, wide = false) {
+    painted(thing, wide = false): Promise<void> {
       const p = want(named(thing, wide), 0);
       pump();
       return p.settled;
     },
-    ahead(things, wide = false) {
+    ahead(things, wide = false): void {
       for (const t of things) want(named(t, wide), 1);
       pump();
     },
-    near(things) {
+    near(things): void {
       for (const t of things) want(t, 2);
       pump();
     },
-    repaint(things) {
+    repaint(things): void {
       for (const id of things.flatMap((t) => [
         named(t, false),
         named(t, true),
@@ -316,7 +364,7 @@ export function createPaintings(options: PaintingsOptions): Paintings {
     },
     state: (thing, wide = false) =>
       paintings.get(named(thing, wide))?.state ?? "waiting",
-    clear() {
+    clear(): void {
       // Resolves every cleared painting at once, so nothing waits on them.
       for (const p of paintings.values()) {
         p.done?.close();

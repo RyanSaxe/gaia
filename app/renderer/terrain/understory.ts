@@ -180,6 +180,19 @@ export interface Understory {
   }[];
 }
 
+interface BuiltGroup {
+  readonly group: Group;
+  readonly blueprints: readonly Blueprint[];
+  readonly plants: (Realized | null)[];
+  readonly plant: (variant: number) => Realized;
+  readonly far: (ReturnType<FarForms["add"]> | undefined)[];
+  readonly reach: ReturnType<typeof outlineOf>[];
+  readonly tops: number[];
+  readonly marks: ReturnType<typeof markOf>[];
+  readonly outlines: Float32Array[];
+  readonly turfs: Float32Array[] | undefined;
+}
+
 /** `farForms` receives every build's far form. Without it, no build has one. */
 export function createUnderstory(
   scene: THREE.Scene,
@@ -188,7 +201,10 @@ export function createUnderstory(
   clearings: Clearings,
   farForms?: FarForms,
 ): Understory {
-  const buildGroup = (g: Group, blueprints: readonly Blueprint[]) => {
+  const buildGroup = (
+    g: Group,
+    blueprints: readonly Blueprint[],
+  ): BuiltGroup => {
     const asks = blueprints.map(plantAsk);
     const fresh = asks.map((ask) => made(ask, lib));
     const reach = fresh.map(outlineOf);
@@ -233,7 +249,7 @@ export function createUnderstory(
   /** Each placement's blueprint and its copy among that blueprint's instances. */
   let copies: readonly { readonly key: string; readonly copy: number }[] = [];
   return {
-    build(plants) {
+    build(plants): void {
       if (built.length > 0) {
         throw new Error(
           "The understory builds a world's blueprints once, when it opens.",
@@ -250,7 +266,7 @@ export function createUnderstory(
             : [{ blueprint, plant: () => plant(i), far: f }];
         }),
       ),
-    place(given) {
+    place(given): void {
       placed = given;
       clearings.update(
         placed.flatMap((p) => {
@@ -308,7 +324,7 @@ export function createUnderstory(
         return { key, copy };
       });
     },
-    async prepare(given, wait) {
+    async prepare(given, wait): Promise<void> {
       for (const { group, plants, plant, far } of built) {
         for (const variant of plants.keys()) {
           const key = `${group.id}/${variant}`;
@@ -328,7 +344,7 @@ export function createUnderstory(
         }
       }
     },
-    setVitality(vitality) {
+    setVitality(vitality): void {
       copies.forEach((c, i) =>
         kept.get(c.key)?.view.setVitalityAt(c.copy, vitality[i] ?? 1),
       );
@@ -340,17 +356,20 @@ export function createUnderstory(
     placements: () => placed,
     mark: (rule, variant) =>
       built.find((x) => x.group.id === rule)?.marks[variant],
-    footprint: (rule, variant) => {
+    footprint: (
+      rule,
+      variant,
+    ): { readonly outline: Float32Array; readonly top: number } | undefined => {
       const b = built.find((x) => x.group.id === rule);
       const outline = b?.reach[variant];
       return b === undefined || outline === undefined
         ? undefined
         : { outline, top: b.tops[variant] ?? 0 };
     },
-    show(on) {
+    show(on): void {
       for (const v of views) v.view.object.visible = on;
     },
-    drawnByKind: () => {
+    drawnByKind: (): Record<string, { copies: number; triangles: number }> => {
       const by: Record<string, { copies: number; triangles: number }> = {};
       for (const { group, view } of views) {
         const d = view.drawn();

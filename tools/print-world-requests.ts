@@ -38,9 +38,7 @@ const planned = [
   ...planForms(facts, LOOKS, { graph }).requests,
 ];
 const out = positionals[0];
-if (out !== undefined) {
-  writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
-} else {
+if (out === undefined) {
   console.log(
     JSON.stringify(
       planned.map((p) => p.request),
@@ -48,6 +46,8 @@ if (out !== undefined) {
       2,
     ),
   );
+} else {
+  writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
 }
 
 const env = cargoEnv();

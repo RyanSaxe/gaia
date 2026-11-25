@@ -138,7 +138,14 @@ export function createCapture(renderer: THREE.WebGLRenderer): Capture {
   };
 
   return {
-    async shoot(scene, camera, ground, bounds, w, h) {
+    async shoot(
+      scene,
+      camera,
+      ground,
+      bounds,
+      w,
+      h,
+    ): Promise<{ color: Pixels; mask: Pixels }> {
       targets(w, h);
       const [a, b, m] = [all, things, mask] as [
         THREE.WebGLRenderTarget,
@@ -186,7 +193,7 @@ export function createCapture(renderer: THREE.WebGLRenderer): Capture {
       const [color, masked] = await Promise.all([read(a, w, h), read(m, w, h)]);
       return { color, mask: masked };
     },
-    dispose() {
+    dispose(): void {
       for (const t of [all, things, mask]) t?.dispose();
       material.dispose();
       quadGeometry.dispose();

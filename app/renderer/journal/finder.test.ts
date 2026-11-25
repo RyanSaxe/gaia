@@ -63,7 +63,7 @@ describe("the finder", () => {
   const items = findablesOf(journalOf(world));
 
   it("finds every folder, building or landmark, file and definition once, a file's own page by the file", () => {
-    expect(items.map((f) => f.at).sort()).toEqual(
+    expect(items.map((f) => f.at).toSorted()).toEqual(
       [
         "app",
         "app/world-service",
@@ -77,7 +77,7 @@ describe("the finder", () => {
         `${FILE}#OpenWorldOptions`,
         `${FILE}#OpenWorldOptions.root`,
         "packages/world/journal.ts#journalOf",
-      ].sort(),
+      ].toSorted(),
     );
   });
 });

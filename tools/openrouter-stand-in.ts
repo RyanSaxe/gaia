@@ -57,15 +57,16 @@ const words = (text: string): Set<string> =>
       .filter((w) => w.length >= 4),
   );
 
+const softmax = (scores: number[]): number[] => {
+  const e = scores.map((s) => Math.exp(3 * s));
+  const total = e.reduce((a, b) => a + b, 0);
+  return e.map((x) => +(x / total).toFixed(4));
+};
+
 /** One question's answer, from the facts' words and a seed. */
 function answer(id: string, q: JevQuestion, state: unknown): JevAnswer {
   const facts = words(JSON.stringify(state));
   const r = rand(seedOf(`${contentHash(state)}:${id}`));
-  const softmax = (scores: number[]): number[] => {
-    const e = scores.map((s) => Math.exp(3 * s));
-    const total = e.reduce((a, b) => a + b, 0);
-    return e.map((x) => +(x / total).toFixed(4));
-  };
   if (q.type === "choice") {
     const keys = Object.keys(q.criteria);
     const p = softmax(
@@ -102,13 +103,47 @@ function answer(id: string, q: JevQuestion, state: unknown): JevAnswer {
 }
 
 const read = (req: IncomingMessage): Promise<string> =>
-  new Promise((resolve, reject) => {
+  new Promise((done, reject) => {
     let text = "";
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => (text += chunk));
-    req.on("end", () => resolve(text));
+    req.on("end", () => done(text));
     req.on("error", reject);
   });
+
+type ParsedDecision =
+  | {
+      readonly ok: true;
+      readonly state: unknown;
+      readonly questions: Record<string, JevQuestion>;
+    }
+  | { readonly ok: false; readonly status: number; readonly message: string };
+
+function parseDecisionRequest(
+  req: IncomingMessage,
+  text: string,
+  received: Received[],
+): ParsedDecision {
+  if (req.method !== "POST" || req.url !== DECISIONS_PATH) {
+    return { ok: false, status: 404, message: "Resource not found" };
+  }
+  const authorization = req.headers.authorization;
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { ok: false, status: 400, message: "Invalid request parameters" };
+  }
+  received.push({ authorization, body });
+  if (authorization?.startsWith("Bearer ") !== true) {
+    return { ok: false, status: 401, message: "Missing Authentication header" };
+  }
+  const questions = body.questions as Record<string, JevQuestion> | undefined;
+  if (typeof body.model !== "string" || questions === undefined) {
+    return { ok: false, status: 400, message: "Invalid request parameters" };
+  }
+  return { ok: true, state: body.state, questions };
+}
 
 export function startOpenRouterStandIn(
   options: StandInOptions = {},
@@ -121,38 +156,21 @@ export function startOpenRouterStandIn(
       res.end(JSON.stringify(body));
     };
     void read(req).then(async (text) => {
-      if (req.method !== "POST" || req.url !== DECISIONS_PATH) {
-        return reply(404, {
-          error: { code: 404, message: "Resource not found" },
-        });
-      }
-      const authorization = req.headers.authorization;
-      let body: Record<string, unknown>;
-      try {
-        body = JSON.parse(text) as Record<string, unknown>;
-      } catch {
-        return reply(400, {
-          error: { code: 400, message: "Invalid request parameters" },
-        });
-      }
-      received.push({ authorization, body });
-      if (authorization?.startsWith("Bearer ") !== true) {
-        return reply(401, {
-          error: { code: 401, message: "Missing Authentication header" },
-        });
-      }
-      const questions = body.questions as
-        | Record<string, JevQuestion>
-        | undefined;
-      if (typeof body.model !== "string" || questions === undefined) {
-        return reply(400, {
-          error: { code: 400, message: "Invalid request parameters" },
+      const parsed = parseDecisionRequest(req, text, received);
+      if (!parsed.ok) {
+        return reply(parsed.status, {
+          error: { code: parsed.status, message: parsed.message },
         });
       }
       if (options.delayMs !== undefined) {
         await new Promise((r) => setTimeout(r, options.delayMs));
       }
-      if (options.refuse?.({ state: body.state, questions }) === true) {
+      if (
+        options.refuse?.({
+          state: parsed.state,
+          questions: parsed.questions,
+        }) === true
+      ) {
         return reply(400, {
           error: {
             code: 400,
@@ -163,9 +181,9 @@ export function startOpenRouterStandIn(
       const inputTokens = Math.ceil(text.length / 1.8);
       reply(200, {
         answers: Object.fromEntries(
-          Object.entries(questions).map(([id, q]) => [
+          Object.entries(parsed.questions).map(([id, q]) => [
             id,
-            answer(id, q, body.state),
+            answer(id, q, parsed.state),
           ]),
         ),
         id: `gen-dec-local-${++served}`,
@@ -174,7 +192,7 @@ export function startOpenRouterStandIn(
         usage: {
           cost: +(inputTokens * 0.042e-6).toFixed(9),
           input_tokens: inputTokens,
-          output_tokens: 12 * Object.keys(questions).length,
+          output_tokens: 12 * Object.keys(parsed.questions).length,
         },
       });
     });
@@ -192,14 +210,15 @@ export function startOpenRouterStandIn(
   });
 }
 
+const flag = (name: string, fallback: number): number => {
+  const i = process.argv.indexOf(`--${name}`);
+  return i < 0 ? fallback : Number(process.argv[i + 1]);
+};
+
 if (
   process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(resolve(process.argv[1])).href
 ) {
-  const flag = (name: string, fallback: number): number => {
-    const i = process.argv.indexOf(`--${name}`);
-    return i < 0 ? fallback : Number(process.argv[i + 1]);
-  };
   const failEvery = flag("fail-every", 0);
   let n = 0;
   const standIn = await startOpenRouterStandIn({

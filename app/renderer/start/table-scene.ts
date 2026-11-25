@@ -137,6 +137,161 @@ const ease = (x: number): number => {
   return t * t * (3 - 2 * t);
 };
 
+function cardDepth(
+  picture: HTMLImageElement | HTMLCanvasElement | null,
+  side: number,
+): number {
+  const [pw, ph] =
+    picture instanceof HTMLImageElement
+      ? [picture.naturalWidth, picture.naturalHeight]
+      : [picture?.width ?? 1, picture?.height ?? 1];
+  return side * Math.min(1, ph / Math.max(1, pw));
+}
+
+function boxCorners(
+  x: number,
+  z: number,
+  box: { readonly r: number; readonly h: number },
+): THREE.Vector3[] {
+  const out: THREE.Vector3[] = [];
+  for (const dx of [-box.r, box.r]) {
+    for (const dz of [-box.r, box.r]) {
+      for (const dy of [0, box.h]) {
+        out.push(new THREE.Vector3(x + dx, TOP + dy, z + dz));
+      }
+    }
+  }
+  return out;
+}
+
+function addTableFrame(
+  table: THREE.Group,
+  tableSize: TableLayout["table"],
+  legWood: THREE.Material,
+): void {
+  const under = TOP - TABLE_THICK;
+  for (const [x, z] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ] as const) {
+    const leg = new THREE.Mesh(
+      new THREE.BoxGeometry(0.065, under, 0.065),
+      legWood,
+    );
+    leg.position.set(
+      x * (tableSize.w / 2 - 0.09),
+      under / 2,
+      z * (tableSize.d / 2 - 0.09),
+    );
+    table.add(leg);
+  }
+  for (const [w, d, x, z] of [
+    [tableSize.w - 0.2, 0.025, 0, -1],
+    [tableSize.w - 0.2, 0.025, 0, 1],
+    [0.025, tableSize.d - 0.2, -1, 0],
+    [0.025, tableSize.d - 0.2, 1, 0],
+  ] as const) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, d), legWood);
+    rail.position.set(
+      x * (tableSize.w / 2 - 0.09),
+      under - 0.045,
+      z * (tableSize.d / 2 - 0.09),
+    );
+    table.add(rail);
+  }
+}
+
+function makeDeckleTexture(deckle: HTMLImageElement): THREE.CanvasTexture {
+  const deckleCanvas = document.createElement("canvas");
+  deckleCanvas.width = deckleCanvas.height = 2048;
+  (deckleCanvas.getContext("2d") as CanvasRenderingContext2D).drawImage(
+    deckle,
+    0,
+    0,
+    2048,
+    2048,
+  );
+  const deckleTexture = new THREE.CanvasTexture(deckleCanvas);
+  deckleTexture.colorSpace = THREE.NoColorSpace;
+  deckleTexture.anisotropy = 8;
+  return deckleTexture;
+}
+
+function buildLantern(
+  brass: THREE.Material,
+  candleMat: THREE.Material,
+  light: ReturnType<typeof createSceneLight>,
+): {
+  readonly lantern: THREE.Group;
+  readonly glass: THREE.Mesh;
+  readonly flame: THREE.Mesh;
+  readonly glow: {
+    readonly glass: { value: number };
+    readonly flame: { value: number };
+  };
+} {
+  const lantern = new THREE.Group();
+  const lanternPart = (
+    geometry: THREE.BufferGeometry,
+    y: number,
+    m: THREE.Material = brass,
+  ): THREE.Mesh => {
+    const mesh = new THREE.Mesh(geometry, m);
+    mesh.position.y = y;
+    lantern.add(mesh);
+    return mesh;
+  };
+  lanternPart(new THREE.CylinderGeometry(0.052, 0.058, 0.016, 28), 0.008);
+  lanternPart(new THREE.ConeGeometry(0.058, 0.045, 28, 1, true), 0.1685);
+  lanternPart(
+    new THREE.CylinderGeometry(0.056, 0.056, 0.008, 28, 1, true),
+    0.146,
+  );
+  lanternPart(new THREE.TorusGeometry(0.024, 0.0028, 8, 30), 0.206);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    lanternPart(
+      new THREE.CylinderGeometry(0.0032, 0.0032, 0.13, 8),
+      0.081,
+    ).position.set(Math.cos(a) * 0.05, 0.081, Math.sin(a) * 0.05);
+  }
+  lanternPart(
+    new THREE.CylinderGeometry(0.014, 0.015, 0.05, 20),
+    0.041,
+    candleMat,
+  );
+  const glow = { glass: { value: 0 }, flame: { value: 0 } };
+  const glass = lanternPart(
+    new THREE.CylinderGeometry(0.046, 0.046, 0.13, 32, 1, true),
+    0.081,
+    new THREE.ShaderMaterial({
+      vertexShader: VERTEX,
+      fragmentShader: GLASS_FRAGMENT,
+      uniforms: { ...light, uGlow: glow.glass },
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  glass.renderOrder = 2;
+  const flame = lanternPart(
+    new THREE.PlaneGeometry(0.03, 0.05),
+    0.086,
+    new THREE.ShaderMaterial({
+      vertexShader: VERTEX,
+      fragmentShader: FLAME_FRAGMENT,
+      uniforms: { uGlow: glow.flame },
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  );
+  flame.renderOrder = 3;
+  return { lantern, glass, flame, glow };
+}
+
 /**
  * The start page's light, sky and wind: a fair spring morning. No world is chosen yet, so this light represents none. A
  * world's wait takes its first darkness from it, because every light Jev can compose is equally dark at a given hour.
@@ -294,38 +449,7 @@ export function createTableScene(
     uLeg: { value: 1 },
     uPlank: plank,
   });
-  const under = TOP - TABLE_THICK;
-  for (const [x, z] of [
-    [-1, -1],
-    [1, -1],
-    [-1, 1],
-    [1, 1],
-  ] as const) {
-    const leg = new THREE.Mesh(
-      new THREE.BoxGeometry(0.065, under, 0.065),
-      legWood,
-    );
-    leg.position.set(
-      x * (l.table.w / 2 - 0.09),
-      under / 2,
-      z * (l.table.d / 2 - 0.09),
-    );
-    table.add(leg);
-  }
-  for (const [w, d, x, z] of [
-    [l.table.w - 0.2, 0.025, 0, -1],
-    [l.table.w - 0.2, 0.025, 0, 1],
-    [0.025, l.table.d - 0.2, -1, 0],
-    [0.025, l.table.d - 0.2, 1, 0],
-  ] as const) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(w, 0.09, d), legWood);
-    rail.position.set(
-      x * (l.table.w / 2 - 0.09),
-      under - 0.045,
-      z * (l.table.d / 2 - 0.09),
-    );
-    table.add(rail);
-  }
+  addTableFrame(table, l.table, legWood);
   scene.add(table);
 
   // ---------- the sheet, folded in four ----------
@@ -370,7 +494,7 @@ export function createTableScene(
   let restFar = 1.6;
   place();
   // Paints the ink at about screen resolution: the sheet's on-screen width in device pixels, with some to spare.
-  const across = (() => {
+  const across = ((): number => {
     const a = onSheet(0, sh / 2).project(camera);
     const b = onSheet(sw, sh / 2).project(camera);
     return (Math.abs(b.x - a.x) / 2) * size.w * size.dpr;
@@ -386,24 +510,13 @@ export function createTableScene(
   );
   const writingPaint = writingCanvas(l, pxPerM);
   const writing = new THREE.CanvasTexture(writingPaint);
-  for (const t of [ink, writing]) {
-    t.colorSpace = THREE.NoColorSpace;
-    t.anisotropy = 8;
-  }
+  ink.colorSpace = THREE.NoColorSpace;
+  ink.anisotropy = 8;
+  writing.colorSpace = THREE.NoColorSpace;
+  writing.anisotropy = 8;
   const [wx0, wy0, wx1, wy1] = writingBox(l);
   // The wait's sheet's deckle, stretched to the card as the page stretches it to the sheet (mask-size 100% 100%).
-  const deckleCanvas = document.createElement("canvas");
-  deckleCanvas.width = deckleCanvas.height = 2048;
-  (deckleCanvas.getContext("2d") as CanvasRenderingContext2D).drawImage(
-    deckle,
-    0,
-    0,
-    2048,
-    2048,
-  );
-  const deckleTexture = new THREE.CanvasTexture(deckleCanvas);
-  deckleTexture.colorSpace = THREE.NoColorSpace;
-  deckleTexture.anisotropy = 8;
+  const deckleTexture = makeDeckleTexture(deckle);
   let folder: SheetBox = [0, 0, 0, 0];
   const paper = (o: {
     size: [number, number];
@@ -506,7 +619,7 @@ export function createTableScene(
         const lx = (u - 0.5) * c.side;
         const lz = (v - 0.5) * deep;
         // At rest it follows the sheet's folds beneath it, with its own bow and its curled corner.
-        const under =
+        const underLift =
           sheetLift(
             c.x + Math.cos(turn) * lx - Math.sin(turn) * lz,
             c.y + Math.sin(turn) * lx + Math.cos(turn) * lz,
@@ -514,7 +627,7 @@ export function createTableScene(
         const own =
           0.0022 * (2 * u - 1) ** 2 +
           0.009 * Math.max(0, 1 - Math.hypot(u - cu, v - cv) / 0.32) ** 2.2;
-        rest.set([lx, under + own, lz], k * 3);
+        rest.set([lx, underLift + own, lz], k * 3);
         flat.set([lx, 0, lz], k * 3);
         uvs.set([u, 1 - v], k * 2);
       }
@@ -588,13 +701,7 @@ export function createTableScene(
     if (c === undefined) break;
     // The card takes its picture's aspect, which is its land's or the wait's sheet's, at the width of its place on the
     // sheet. A picture taller than wide gives a square card.
-    const [pw, ph] =
-      w.picture instanceof HTMLImageElement
-        ? [w.picture.naturalWidth, w.picture.naturalHeight]
-        : [w.picture?.width ?? 1, w.picture?.height ?? 1];
-    cards.push(
-      makeCard(i, c, w.picture, c.side * Math.min(1, ph / Math.max(1, pw))),
-    );
+    cards.push(makeCard(i, c, w.picture, cardDepth(w.picture, c.side)));
   }
   /**
    * A fresh card's place. On an empty sheet, it is centered between the heading and the line. Among offered cards, it
@@ -678,63 +785,11 @@ export function createTableScene(
   addCaster(ix, iz, 0.032, 0.032, 0, 0.7, 0.014, -2);
 
   // A brass lantern with glass and a candle, lit once the night comes.
-  const lantern = new THREE.Group();
-  const lanternPart = (
-    geometry: THREE.BufferGeometry,
-    y: number,
-    m: THREE.Material = brass,
-  ): THREE.Mesh => {
-    const mesh = new THREE.Mesh(geometry, m);
-    mesh.position.y = y;
-    lantern.add(mesh);
-    return mesh;
-  };
-  lanternPart(new THREE.CylinderGeometry(0.052, 0.058, 0.016, 28), 0.008);
-  lanternPart(new THREE.ConeGeometry(0.058, 0.045, 28, 1, true), 0.1685);
-  lanternPart(
-    new THREE.CylinderGeometry(0.056, 0.056, 0.008, 28, 1, true),
-    0.146,
-  );
-  lanternPart(new THREE.TorusGeometry(0.024, 0.0028, 8, 30), 0.206);
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    lanternPart(
-      new THREE.CylinderGeometry(0.0032, 0.0032, 0.13, 8),
-      0.081,
-    ).position.set(Math.cos(a) * 0.05, 0.081, Math.sin(a) * 0.05);
-  }
-  lanternPart(
-    new THREE.CylinderGeometry(0.014, 0.015, 0.05, 20),
-    0.041,
+  const { lantern, glass, flame, glow } = buildLantern(
+    brass,
     solid(0xeee2c4, { wrap: 0.6, spec: 0.1 }),
+    light,
   );
-  const glow = { glass: { value: 0 }, flame: { value: 0 } };
-  const glass = lanternPart(
-    new THREE.CylinderGeometry(0.046, 0.046, 0.13, 32, 1, true),
-    0.081,
-    new THREE.ShaderMaterial({
-      vertexShader: VERTEX,
-      fragmentShader: GLASS_FRAGMENT,
-      uniforms: { ...light, uGlow: glow.glass },
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  glass.renderOrder = 2;
-  const flame = lanternPart(
-    new THREE.PlaneGeometry(0.03, 0.05),
-    0.086,
-    new THREE.ShaderMaterial({
-      vertexShader: VERTEX,
-      fragmentShader: FLAME_FRAGMENT,
-      uniforms: { uGlow: glow.flame },
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
-  );
-  flame.renderOrder = 3;
   lantern.position.set(l.lantern[0], TOP, l.lantern[1]);
   scene.add(lantern);
   addCaster(l.lantern[0], l.lantern[1], 0.05, 0.05, 0, 0.65, 0.018, -3);
@@ -817,18 +872,10 @@ export function createTableScene(
     ];
     // The lantern and the inkwell must also fit in the view, though nearer its edge than the sheet may be. These are the
     // corners of each one's box.
-    const things = (
-      [
-        [l.lantern, LANTERN_BOX],
-        [l.inkwell, INKWELL_BOX],
-      ] as const
-    ).flatMap(([[x, z], { r, h }]) =>
-      [-r, r].flatMap((dx) =>
-        [-r, r].flatMap((dz) =>
-          [0, h].map((dy) => new THREE.Vector3(x + dx, TOP + dy, z + dz)),
-        ),
-      ),
-    );
+    const things = [
+      ...boxCorners(l.lantern[0], l.lantern[1], LANTERN_BOX),
+      ...boxCorners(l.inkwell[0], l.inkwell[1], INKWELL_BOX),
+    ];
     const inView = (c: THREE.Vector3, edge: number): boolean => {
       const p = c.clone().project(camera);
       return Math.abs(p.x) < edge && Math.abs(p.y) < edge;
@@ -1057,9 +1104,7 @@ export function createTableScene(
 
   // ---------- drawing ----------
   const depthOnly = new THREE.MeshDepthMaterial({ side: THREE.DoubleSide });
-  function render(): void {
-    const w = Math.round(size.w * size.dpr);
-    const h = Math.round(size.h * size.dpr);
+  function ensureMainTarget(w: number, h: number): THREE.WebGLRenderTarget {
     if (target === null || target.width !== w || target.height !== h) {
       target?.dispose();
       target = new THREE.WebGLRenderTarget(w, h, {
@@ -1070,48 +1115,60 @@ export function createTableScene(
       (pu.tDepth as THREE.IUniform).value = target.depthTexture;
       (pu.uRes as THREE.IUniform<THREE.Vector2>).value.set(w, h);
     }
+    return target;
+  }
+  function ensureLiftTarget(w: number, h: number): THREE.WebGLRenderTarget {
+    if (
+      liftTarget === null ||
+      liftTarget.width !== w ||
+      liftTarget.height !== h
+    ) {
+      liftTarget?.dispose();
+      liftTarget = new THREE.WebGLRenderTarget(w, h, { samples: 4 });
+      (pu.tLift as THREE.IUniform).value = liftTarget.texture;
+    }
+    return liftTarget;
+  }
+  function renderShadowPass(): void {
+    if (!shadowDirty && lifted === null) return;
+    // Once the lantern is lit, it is left out of the shadow pass, because its own light would wash out the long shadow
+    // the moon gives it.
+    scene.overrideMaterial = depthOnly;
+    // A chosen card shades the table with its own soft box instead (`choose`).
+    shadow.render(
+      renderer,
+      scene,
+      [],
+      [
+        ground.mesh,
+        glass,
+        flame,
+        ...(light.uLanternIntensity.value > 0.3 ? [lantern] : []),
+        ...(lifted === null ? [] : [lifted.group]),
+      ],
+    );
+    scene.overrideMaterial = null;
+    shadowDirty = false;
+  }
+  function render(): void {
+    const w = Math.round(size.w * size.dpr);
+    const h = Math.round(size.h * size.dpr);
+    const mainTarget = ensureMainTarget(w, h);
     light.uEye.value.copy(camera.position);
     const rising =
       lifted !== null &&
       (lifted.mesh.material.uniforms.uLifted as THREE.IUniform).value > 0;
     // The risen card is no longer drawn once the wait's sheet has replaced it.
     const showing = rising && liftShown > 0;
-    if (shadowDirty || lifted !== null) {
-      // Once the lantern is lit, it is left out of the shadow pass, because its own light would wash out the long shadow
-      // the moon gives it.
-      scene.overrideMaterial = depthOnly;
-      // A chosen card shades the table with its own soft box instead (`choose`).
-      shadow.render(
-        renderer,
-        scene,
-        [],
-        [
-          ground.mesh,
-          glass,
-          flame,
-          ...(light.uLanternIntensity.value > 0.3 ? [lantern] : []),
-          ...(lifted === null ? [] : [lifted.group]),
-        ],
-      );
-      scene.overrideMaterial = null;
-      shadowDirty = false;
-    }
+    renderShadowPass();
     if (lifted !== null) lifted.group.visible = !rising && !unlaid;
-    renderer.setRenderTarget(target);
+    renderer.setRenderTarget(mainTarget);
     renderer.clear();
     renderer.render(scene, camera);
     if (lifted !== null && showing) {
-      if (
-        liftTarget === null ||
-        liftTarget.width !== w ||
-        liftTarget.height !== h
-      ) {
-        liftTarget?.dispose();
-        liftTarget = new THREE.WebGLRenderTarget(w, h, { samples: 4 });
-        (pu.tLift as THREE.IUniform).value = liftTarget.texture;
-      }
+      const cardTarget = ensureLiftTarget(w, h);
       lifted.group.visible = true;
-      renderer.setRenderTarget(liftTarget);
+      renderer.setRenderTarget(cardTarget);
       renderer.clear();
       renderer.render(lifted.group, camera);
     }

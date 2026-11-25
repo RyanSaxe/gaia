@@ -43,44 +43,52 @@ export function createListener(
   let foot = 0;
   let turnFrom: number | null = null;
   let riffle: { stop(t: number): void } | null = null;
+  const stepStride = (m: Moment, dt: number): void => {
+    const rate = cadence(m.ear);
+    if (rate === 0) {
+      stride = 0.6;
+      return;
+    }
+    stride += rate * dt;
+    if (stride >= 1) {
+      stride -= Math.floor(stride);
+      scape.step(m.t, footing(m.ear), foot++ % 2 === 0 ? -1 : 1);
+    }
+  };
+  const syncTurning = (
+    t: number,
+    turning: boolean,
+    wasTurning: boolean,
+  ): void => {
+    if (!turning) {
+      riffle?.stop(t);
+      riffle = null;
+      turnFrom = null;
+      return;
+    }
+    if (!wasTurning) {
+      turnFrom = t;
+      scape.paper(t, "turn");
+    }
+    if (turnFrom !== null && riffle === null && t - turnFrom >= RIFFLE_AFTER) {
+      riffle = scape.paper(t, "riffle");
+    }
+  };
+  const syncBook = (m: Moment, before: BookState): void => {
+    if (m.book.open && !before.open) scape.paper(m.t, "open");
+    if (!m.book.open && before.open) scape.paper(m.t, "shut");
+    syncTurning(m.t, m.book.turning, before.turning);
+  };
   return {
-    hear(m) {
+    hear(m): void {
       if (m.t - mixed >= MIX_EVERY) {
         scape.at(m.t, hear(m.ear));
         music?.at(m.t, m.ear);
         mixed = m.t;
       }
       const dt = was === null ? 0 : Math.max(0, m.t - was.t);
-      const rate = cadence(m.ear);
-      if (rate === 0) stride = 0.6;
-      else {
-        stride += rate * dt;
-        if (stride >= 1) {
-          stride -= Math.floor(stride);
-          scape.step(m.t, footing(m.ear), foot++ % 2 === 0 ? -1 : 1);
-        }
-      }
-      const book = m.book;
-      const before = was?.book ?? { open: false, turning: false };
-      if (book.open && !before.open) scape.paper(m.t, "open");
-      if (!book.open && before.open) scape.paper(m.t, "shut");
-      if (book.turning && !before.turning) {
-        turnFrom = m.t;
-        scape.paper(m.t, "turn");
-      }
-      if (
-        book.turning &&
-        turnFrom !== null &&
-        riffle === null &&
-        m.t - turnFrom >= RIFFLE_AFTER
-      ) {
-        riffle = scape.paper(m.t, "riffle");
-      }
-      if (!book.turning) {
-        riffle?.stop(m.t);
-        riffle = null;
-        turnFrom = null;
-      }
+      stepStride(m, dt);
+      syncBook(m, was?.book ?? { open: false, turning: false });
       was = m;
     },
   };
