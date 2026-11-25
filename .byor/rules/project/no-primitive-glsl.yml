@@ -1,0 +1,13 @@
+id: no-primitive-glsl
+language: TypeScript
+severity: error
+message: Primitives never ship GLSL. Pick a swatch and write vitality channels.
+note: Every component shares one material family. Primitives write channels, never shaders.
+files:
+  - packages/primitives/src/**/*.ts
+rule:
+  any:
+    - kind: string_fragment
+      regex: 'gl_FragColor|gl_Position|void main\s*\('
+    - kind: template_string
+      regex: 'gl_FragColor|gl_Position|void main\s*\('

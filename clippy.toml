@@ -1,0 +1,7 @@
+# Clippy's quadratic nesting penalty makes 15 equivalent to Python C901 <= 8
+# and JS/TS complexity <= 10.
+cognitive-complexity-threshold = 15
+# Production code denies unwrap_used and warns on expect_used; unit tests may
+# unwrap setup/assertions directly.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

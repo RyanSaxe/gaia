@@ -8,3 +8,19 @@ target/
 .lab/
 # The proving ground, generated from tools/proving.ts's plan whenever the lab, the app or the tests build (tools/proving-ground.ts).
 app/renderer/terrain/fixtures/proving*
+
+# >>> Managed by BYOR. Manual edits may be overwritten. >>>
+.byor/local.yml
+.byor/rules/personal/local/**/*.yml
+.byor/rules/personal/local/**/*.yaml
+.byor/rules/personal/global/**/*.yml
+.byor/rules/personal/global/**/*.yaml
+.byor/rules/personal/packages/**/*.yml
+.byor/rules/personal/packages/**/*.yaml
+.byor/commands/personal/local/**/*.yml
+.byor/commands/personal/local/**/*.yaml
+.byor/commands/personal/global/**/*.yml
+.byor/commands/personal/global/**/*.yaml
+.byor/commands/personal/packages/**/*.yml
+.byor/commands/personal/packages/**/*.yaml
+# <<< Managed by BYOR <<<

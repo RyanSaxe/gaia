@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "ignorePatterns": [
+    // rumdl formats Markdown.
+    "*.md",
+    // Tree-sitter language test fixtures are checked verbatim.
+    "engine/tests/fixtures/**",
+    // Generated showcase fixture bundles (marked linguist-generated=true).
+    "app/renderer/terrain/fixtures/*.json"
+  ]
+}

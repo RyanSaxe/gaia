@@ -1,0 +1,277 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/out/**",
+    "engine/target/**",
+    // engine/tests/fixtures holds samples in every language the engine parses,
+    // written to exercise its queries, not to run.
+    "engine/tests/fixtures/**",
+    "tools/**/*.html"
+  ],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest"],
+  "categories": {
+    "correctness": "error",
+    "perf": "error"
+  },
+  "rules": {
+    // Vite `?worker` and `?raw` virtual imports provide default exports via
+    // app/renderer/env.d.ts, which static import/default cannot resolve.
+    // TypeScript / oxlint-tsgolint still type-check all default imports.
+    "import/default": "off",
+    // CLI tools, tests, and sequential Electron/IPC/worker flows intentionally
+    // await step-by-step inside loops.
+    "no-await-in-loop": "off",
+    "no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+    "typescript/no-explicit-any": "error",
+    "no-var": "error",
+    "prefer-const": "error",
+    "eqeqeq": ["error", "always"],
+    "curly": ["error", "multi-line"],
+    "no-param-reassign": "error",
+    "no-else-return": "error",
+    "no-lonely-if": "error"
+  },
+  "overrides": [
+    {
+      // Determinism: the same inputs must give the same world on every machine.
+      "files": [
+        "packages/schema/src/**",
+        "packages/primitives/src/**",
+        "packages/kinds/src/**",
+        "packages/world/src/**",
+        "packages/realize/src/**",
+        "packages/terrain/src/**"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "Math",
+            "property": "random",
+            "message": "Use ctx.rand or rand(seed): unseeded randomness reshuffles the world on every run."
+          },
+          {
+            "object": "Date",
+            "property": "now",
+            "message": "Time is not an input to the world. Pass it in explicitly if a feature needs it."
+          },
+          {
+            "object": "performance",
+            "property": "now",
+            "message": "Time is not an input to the world."
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          "window",
+          "document",
+          "localStorage",
+          "fetch"
+        ]
+      }
+    },
+    {
+      // Package boundaries.
+      "files": ["packages/schema/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [],
+            "patterns": [
+              {
+                "group": ["@gaia/*"],
+                "message": "schema is the bottom layer and imports no other package."
+              },
+              {
+                "group": ["three", "three/*"],
+                "message": "Only @gaia/render and the app draw. Everything else stays plain data so workers and tests run without a GPU."
+              },
+              {
+                "group": ["node:*", "fs", "path", "os", "child_process"],
+                "message": "This code runs in workers and the renderer. Files and processes belong to the Rust engine."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/primitives/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [],
+            "patterns": [
+              {
+                "group": ["three", "three/*"],
+                "message": "Only @gaia/render and the app draw. Everything else stays plain data so workers and tests run without a GPU."
+              },
+              {
+                "group": ["node:*", "fs", "path", "os", "child_process"],
+                "message": "This code runs in workers and the renderer. Files and processes belong to the Rust engine."
+              },
+              {
+                "group": ["@gaia/world", "@gaia/world/*"],
+                "message": "Primitives build geometry; they never ask Jev or touch the world document."
+              },
+              {
+                "group": ["@gaia/realize", "@gaia/realize/*"],
+                "message": "The realizer calls primitives, not the other way round."
+              },
+              {
+                "group": ["@gaia/kinds", "@gaia/kinds/*"],
+                "message": "Primitives do not know which kinds use them."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/kinds/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [],
+            "patterns": [
+              {
+                "group": ["three", "three/*"],
+                "message": "Only @gaia/render and the app draw. Everything else stays plain data so workers and tests run without a GPU."
+              },
+              {
+                "group": ["node:*", "fs", "path", "os", "child_process"],
+                "message": "This code runs in workers and the renderer. Files and processes belong to the Rust engine."
+              },
+              {
+                "group": ["@gaia/primitives", "@gaia/primitives/*"],
+                "message": "Kinds name roles, never primitives, so Jev stays free to choose any primitive that fits a slot."
+              },
+              {
+                "group": ["@gaia/world", "@gaia/world/*"],
+                "message": "Kinds are declarations; the world service uses them."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/world/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [],
+            "patterns": [
+              {
+                "group": ["three", "three/*"],
+                "message": "Only @gaia/render and the app draw. Everything else stays plain data so workers and tests run without a GPU."
+              },
+              {
+                "group": ["node:*", "fs", "path", "os", "child_process"],
+                "message": "This code runs in workers and the renderer. Files and processes belong to the Rust engine."
+              },
+              {
+                "group": ["@gaia/render", "@gaia/render/*"],
+                "message": "The world service never draws."
+              },
+              {
+                "group": ["@gaia/realize", "@gaia/realize/*"],
+                "message": "The world service sends documents; the renderer realizes them."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/terrain/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [],
+            "patterns": [
+              {
+                "group": ["three", "three/*"],
+                "message": "Only @gaia/render and the app draw. Everything else stays plain data so workers and tests run without a GPU."
+              },
+              {
+                "group": ["node:*", "fs", "path", "os", "child_process"],
+                "message": "This code runs in workers and the renderer. Files and processes belong to the Rust engine."
+              },
+              {
+                "group": ["@gaia/world", "@gaia/world/*"],
+                "message": "Terrain is baked from a document; it never asks Jev."
+              },
+              {
+                "group": ["@gaia/render", "@gaia/render/*"],
+                "message": "Terrain is plain data; the renderer draws it."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/realize/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [],
+            "patterns": [
+              {
+                "group": ["three", "three/*"],
+                "message": "Only @gaia/render and the app draw. Everything else stays plain data so workers and tests run without a GPU."
+              },
+              {
+                "group": ["node:*", "fs", "path", "os", "child_process"],
+                "message": "This code runs in workers and the renderer. Files and processes belong to the Rust engine."
+              },
+              {
+                "group": ["@gaia/world", "@gaia/world/*"],
+                "message": "Realizing is a pure function of a blueprint; it never asks Jev."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // Tests check behavior through public entry points, so changing an
+      // internal never breaks a test that does not depend on it.
+      "files": ["packages/*/test/**", "app/**/*.test.ts", "tools/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/src", "**/src/**"],
+                "message": "Test through the package's entry point (@gaia/<name>), never its internals."
+              }
+            ]
+          }
+        ],
+        "vitest/no-restricted-matchers": [
+          "error",
+          {
+            "toMatchSnapshot": "No snapshots: they freeze whatever the code printed. Assert the behavior that matters.",
+            "toMatchInlineSnapshot": "No snapshots: they freeze whatever the code printed. Assert the behavior that matters.",
+            "toThrowErrorMatchingSnapshot": "No snapshots: they freeze whatever the code printed. Assert the behavior that matters.",
+            "toThrowErrorMatchingInlineSnapshot": "No snapshots: they freeze whatever the code printed. Assert the behavior that matters."
+          }
+        ]
+      }
+    }
+  ]
+}
