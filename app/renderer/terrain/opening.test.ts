@@ -98,7 +98,10 @@ function randomFacts(seed: number): CodeFacts {
     dependsOn: p > 0 ? ["packages/p0"] : [],
     dependents:
       p === 0
-        ? Array.from({ length: packages - 1 }, (_, q) => `packages/p${q + 1}`)
+        ? Array.from(
+            { length: packages - 1 },
+            (_dep, q) => `packages/p${q + 1}`,
+          )
         : [],
   }));
   return {
@@ -174,12 +177,6 @@ describe("where a person comes back to in a world they were in before", () => {
   // Beside the first building, 6 m east and 2 m north of it, facing west.
   const house = world.things[0] as (typeof world.things)[number];
   const stood = lastSpotAt(world, house.x + 6, house.z - 2, Math.PI / 2);
-  /** The world after an edit: `edit` changes its things, and so its layout. */
-  const edited = (
-    edit: (
-      things: (typeof world.things)[number][],
-    ) => (typeof world.things)[number][],
-  ): typeof world => ({ ...world, things: edit([...world.things]) });
 
   it("is exactly where they stood while the code is laid out as it was, beside the thing they stood by once an edit has moved it, and the opening view once it is gone", () => {
     expect(returnTo(structuredClone(world), stood)).toEqual({
@@ -188,22 +185,22 @@ describe("where a person comes back to in a world they were in before", () => {
       yaw: Math.PI / 2,
       exact: true,
     });
-    const moved = edited((things) =>
-      things.map((t) =>
+    const moved = {
+      ...world,
+      things: world.things.map((t) =>
         t.path === house.path ? { ...t, x: t.x + 40, z: t.z - 25 } : t,
       ),
-    );
+    };
     expect(returnTo(moved, stood)).toEqual({
       x: house.x + 46,
       z: house.z - 27,
       yaw: Math.PI / 2,
       exact: false,
     });
-    expect(
-      returnTo(
-        edited((things) => things.filter((t) => t.path !== house.path)),
-        stood,
-      ),
-    ).toBeNull();
+    const removed = {
+      ...world,
+      things: world.things.filter((t) => t.path !== house.path),
+    };
+    expect(returnTo(removed, stood)).toBeNull();
   });
 });

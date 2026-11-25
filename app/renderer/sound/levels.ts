@@ -43,8 +43,8 @@ export function soundLevels(): LevelStore {
   let levels = stored();
   const listeners: ((levels: Levels) => void)[] = [];
   store = {
-    get: () => levels,
-    set(part, value) {
+    get: (): Levels => levels,
+    set(part, value): void {
       levels = { ...levels, [part]: clamp01(value) };
       try {
         localStorage.setItem(KEY, JSON.stringify(levels));
@@ -53,7 +53,7 @@ export function soundLevels(): LevelStore {
       }
       for (const l of listeners) l(levels);
     },
-    watch(listener) {
+    watch(listener): void {
       listeners.push(listener);
       listener(levels);
     },

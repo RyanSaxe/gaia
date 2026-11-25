@@ -107,7 +107,7 @@ function startEngine(env: Record<string, string>): EngineClient {
 let client: EngineClient;
 if (judge === "local") {
   const standIn = await startOpenRouterStandIn({ delayMs: 0 });
-  closeStandIn = () => standIn.close();
+  closeStandIn = (): Promise<void> => standIn.close();
   client = startEngine({
     GAIA_JEV: "live",
     GAIA_JEV_ENDPOINT: standIn.endpoint,

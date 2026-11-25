@@ -7,19 +7,49 @@ const CODE_WORDS =
   /\b(functions?|class(es)?|modules?|files?|imports?|tests?)\b/i;
 
 /** Every option a field offers, in the words Jev reads. */
-const optionsOf = (f: Field): string[] =>
-  f.type === "choice"
-    ? Object.values(f.options)
-    : f.type === "set"
-      ? Object.values(f.members)
-      : f.type === "flag"
-        ? [f.yes, f.no]
-        : f.levels.map((l) => l.words);
+const optionsOf = (f: Field): string[] => {
+  if (f.type === "choice") return Object.values(f.options);
+  if (f.type === "set") return Object.values(f.members);
+  if (f.type === "flag") return [f.yes, f.no];
+  return f.levels.map((l) => l.words);
+};
+
+const SIZES = ["tree", "bush", "stone", "flowers", "wildBush"] as const;
+
+function sizeWords(
+  as: (typeof SIZES)[number],
+): readonly (readonly [string, string])[] {
+  return [
+    [`${as} kind`, COMPOSING[as].doc] as const,
+    ...Object.entries(COMPOSING[as].slots).map(
+      ([name, s]) => [`${as}'s ${name}`, s.ask ?? ""] as const,
+    ),
+  ];
+}
+
+function fieldWords(
+  id: string,
+  name: string,
+  f: Field,
+): readonly (readonly [string, string])[] {
+  return [
+    [`${id} ${name}`, f.ask] as const,
+    ...optionsOf(f).map((o) => [`${id} ${name}`, o] as const),
+  ];
+}
+
+function partWords(p: AnyPrimitive): readonly (readonly [string, string])[] {
+  return [
+    [p.id, p.doc] as const,
+    ...Object.entries(p.params).flatMap(([name, f]) =>
+      fieldWords(p.id, name, f),
+    ),
+  ];
+}
 
 describe("the words Jev composes small things from", () => {
-  const sizes = ["tree", "bush", "stone", "flowers", "wildBush"] as const;
   const parts = new Map<string, AnyPrimitive>();
-  for (const as of sizes) {
+  for (const as of SIZES) {
     const lib = COMPOSING.offered?.[as] ?? COMPOSING.lib;
     for (const s of Object.values(COMPOSING[as].slots)) {
       for (const p of lib.forRole(s.role)) parts.set(p.id, p);
@@ -31,19 +61,8 @@ describe("the words Jev composes small things from", () => {
       ...Object.entries(FORMS).map(
         ([name, look]) => [`form ${name}`, look.doc] as const,
       ),
-      ...sizes.flatMap((as) => [
-        [`${as} kind`, COMPOSING[as].doc] as const,
-        ...Object.entries(COMPOSING[as].slots).map(
-          ([name, s]) => [`${as}'s ${name}`, s.ask ?? ""] as const,
-        ),
-      ]),
-      ...[...parts.values()].flatMap((p) => [
-        [p.id, p.doc] as const,
-        ...Object.entries(p.params).flatMap(([name, f]) => [
-          [`${p.id} ${name}`, f.ask] as const,
-          ...optionsOf(f).map((o) => [`${p.id} ${name}`, o] as const),
-        ]),
-      ]),
+      ...SIZES.flatMap(sizeWords),
+      ...[...parts.values()].flatMap(partWords),
     ];
     expect(words.filter(([, w]) => CODE_WORDS.test(w))).toEqual([]);
     // Every slot of a small thing has an `ask`, which says what it shows of the code.

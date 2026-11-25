@@ -170,7 +170,7 @@ export function createThingTiles(focal: () => number): ThingTiles {
   };
   const placeLayer = <T>(h: Held<T>): void => {
     h.dirty = false;
-    const keys = [...h.tiles.keys()].sort();
+    const keys = [...h.tiles.keys()].toSorted();
     if (!Number.isNaN(person.x)) {
       for (const key of keys) {
         if (h.placed.has(key)) continue;
@@ -192,17 +192,28 @@ export function createThingTiles(focal: () => number): ThingTiles {
     }
     h.layer.place(things);
   };
+  const pruneFar = (x: number, z: number): void => {
+    at = { x, z };
+    for (const h of all) {
+      for (const key of h.tiles.keys()) {
+        const [ti, tj] = key.split(",").map(Number) as [number, number];
+        if (distance(ti, tj, x, z) <= sight(h) + AHEAD + LET_GO) continue;
+        h.tiles.delete(key);
+        h.dirty = true;
+      }
+    }
+  };
   return {
-    add(layer) {
+    add(layer): void {
       all.push({
         layer: layer,
         tiles: new Map(),
         pending: new Map(),
         placed: new Set(),
         dirty: false,
-      } as Held<unknown>);
+      });
     },
-    open(next, given) {
+    open(next, given): void {
       spec = next;
       generation++;
       at = { x: Number.NaN, z: Number.NaN };
@@ -218,20 +229,10 @@ export function createThingTiles(focal: () => number): ThingTiles {
         h.dirty = true;
       }
     },
-    follow(x, z, requesting = true) {
+    follow(x, z, requesting = true): void {
       if (spec === null) return;
       person = { x, z };
-      if (!(Math.hypot(x - at.x, z - at.z) < STEP)) {
-        at = { x, z };
-        for (const h of all) {
-          for (const key of h.tiles.keys()) {
-            const [ti, tj] = key.split(",").map(Number) as [number, number];
-            if (distance(ti, tj, x, z) <= sight(h) + AHEAD + LET_GO) continue;
-            h.tiles.delete(key);
-            h.dirty = true;
-          }
-        }
-      }
+      if (!(Math.hypot(x - at.x, z - at.z) < STEP)) pruneFar(x, z);
       // Clear the last request spot while not requesting, so requests resume at once when requesting does, as when a trip ends.
       if (!requesting) requestedAt = { x: Number.NaN, z: Number.NaN };
       else if (!(Math.hypot(x - requestedAt.x, z - requestedAt.z) < STEP)) {
@@ -242,16 +243,16 @@ export function createThingTiles(focal: () => number): ThingTiles {
       const next = all.find((h) => h.dirty);
       if (next !== undefined) placeLayer(next);
     },
-    async ready(x, z) {
+    async ready(x, z): Promise<void> {
       if (spec === null) return;
       await Promise.all(all.flatMap((h) => request(h, x, z)));
       for (const h of all) if (h.dirty) placeLayer(h);
     },
-    async fetch(x, z) {
+    async fetch(x, z): Promise<void> {
       if (spec === null) return;
       await Promise.all(all.flatMap((h) => request(h, x, z, 0)));
     },
-    late() {
+    late(): typeof lates {
       const out = lates;
       lates = [];
       return out;

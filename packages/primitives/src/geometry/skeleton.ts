@@ -85,6 +85,42 @@ interface Grown {
 const UP: V3 = [0, 1, 0];
 const DEG = Math.PI / 180;
 
+// Points below 0.6 m ease upward, so arching limbs level out above 0.25 m and never reach the ground.
+const above = (y: number): number =>
+  y >= 0.6 ? y : 0.6 - 0.35 * (1 - Math.exp((y - 0.6) / 0.35));
+
+function recordChainTip(
+  chain: number,
+  chainParent: readonly number[],
+  chainTips: number[],
+): void {
+  for (let c = chain; c >= 0; c = chainParent[c] ?? -1) {
+    chainTips[c] = (chainTips[c] ?? 0) + 1;
+  }
+}
+
+function childDirection(
+  heading: V3,
+  axis: V3,
+  angle: number,
+  habit: HabitShape,
+  depth: number,
+): V3 {
+  let childDir = rotate(heading, axis, angle);
+  const weeping = habit.arch > 0 && depth >= 1;
+  const pull = weeping ? 0 : habit.tropism;
+  childDir = normalize(addScaled(childDir, UP, pull * 0.6));
+  // Weeping limbs never turn back upward once they arch over.
+  if (weeping) {
+    childDir = normalize([
+      childDir[0],
+      Math.min(childDir[1], heading[1] * 0.6 + 0.1),
+      childDir[2],
+    ]);
+  }
+  return childDir;
+}
+
 /** Grows a frame by recursive splitting, then scales it so height over width matches `stature`. */
 export function growBranching(
   p: Resolved<typeof branchingParams>,
@@ -167,9 +203,7 @@ export function growBranching(
       here = end;
     }
     if (!willSplit) {
-      for (let c = chain; c >= 0; c = chainParent[c] ?? -1) {
-        chainTips[c] = (chainTips[c] ?? 0) + 1;
-      }
+      recordChainTip(chain, chainParent, chainTips);
       return;
     }
     split(r, here, heading, len, depth, prev, chain);
@@ -177,7 +211,7 @@ export function growBranching(
 
   const split = (
     r: Rand,
-    at: V3,
+    origin: V3,
     heading: V3,
     len: number,
     depth: number,
@@ -199,20 +233,10 @@ export function growBranching(
       const angle = isLeader
         ? spread * 0.2
         : spread * cr.range(0.8, 1.2) * (depth === 0 ? 1.15 : 1);
-      let childDir = rotate(heading, axis, angle);
-      const pull = habit.arch > 0 && depth >= 1 ? 0 : habit.tropism;
-      childDir = normalize(addScaled(childDir, UP, pull * 0.6));
-      // Weeping limbs never turn back upward once they arch over.
-      if (habit.arch > 0 && depth >= 1) {
-        childDir = normalize([
-          childDir[0],
-          Math.min(childDir[1], heading[1] * 0.6 + 0.1),
-          childDir[2],
-        ]);
-      }
+      const childDir = childDirection(heading, axis, angle, habit, depth);
       const childLen =
         len * habit.ratio * (isLeader ? 1.05 : cr.range(0.82, 1.08));
-      grow(cr, at, childDir, childLen, depth + 1, prev, chain);
+      grow(cr, origin, childDir, childLen, depth + 1, prev, chain);
     }
   };
 
@@ -246,9 +270,6 @@ export function growBranching(
   const grownWidth = Math.max(0.01, (maxX - minX + maxZ - minZ) / 2);
   const fx = Math.min(1.6, Math.max(0.6, width / grownWidth));
   const fy = height / Math.max(0.01, top);
-  // Points below 0.6 m ease upward, so arching limbs level out above 0.25 m and never reach the ground.
-  const above = (y: number): number =>
-    y >= 0.6 ? y : 0.6 - 0.35 * (1 - Math.exp((y - 0.6) / 0.35));
   const fit = (q: V3, trunk: boolean): V3 =>
     trunk
       ? [q[0], q[1] * fy, q[2]]
@@ -478,6 +499,77 @@ export function growSapling(
  */
 const WHORLS_PER_RING = 1.4;
 
+function emitSpireLimb(
+  limbs: Limb[],
+  tips: Anchor[],
+  lr: Rand,
+  y: number,
+  az: number,
+  cone: number,
+  width: number,
+  baseRadius: number,
+  droop: number,
+  s: number,
+  onTrunk: number,
+): void {
+  const len = Math.max(0.25 * s, cone * lr.range(0.85, 1.1));
+  const h: V3 = [Math.cos(az), 0, Math.sin(az)];
+  const d1 = normalize([h[0], 0.1 - droop * 0.7, h[2]]);
+  const d2 = normalize([h[0], 0.1 - droop * 1.6, h[2]]);
+  const r0 = Math.max(
+    0.025 * s,
+    baseRadius * 0.32 * Math.pow(len / (width / 2), 0.6),
+  );
+  const start: V3 = [0, y, 0];
+  const mid = addScaled(start, d1, len * 0.6);
+  const end = addScaled(mid, d2, len * 0.4);
+  limbs.push({
+    start,
+    end: mid,
+    startRadius: r0,
+    endRadius: r0 * 0.6,
+    depth: 1,
+    parent: onTrunk,
+  });
+  const first = limbs.length - 1;
+  limbs.push({
+    start: mid,
+    end,
+    startRadius: r0 * 0.6,
+    endRadius: r0 * 0.25,
+    depth: 1,
+    parent: first,
+  });
+  tips.push({
+    position: end,
+    normal: d2,
+    size: 0.5 + 0.5 * Math.min(1, len / (width / 2)),
+  });
+  for (const [k, side] of [
+    [0, 1],
+    [1, -1],
+  ] as const) {
+    const along = k === 0 ? 0.45 : 0.75;
+    const base =
+      along < 0.6
+        ? addScaled(start, d1, len * along)
+        : addScaled(mid, d2, len * (along - 0.6));
+    const twigDir = normalize(
+      rotate([h[0], d1[1] - 0.1, h[2]], UP, side * lr.range(0.6, 0.95)),
+    );
+    const twigEnd = addScaled(base, twigDir, len * 0.35);
+    limbs.push({
+      start: base,
+      end: twigEnd,
+      startRadius: r0 * 0.35,
+      endRadius: r0 * 0.12,
+      depth: 2,
+      parent: along < 0.6 ? first : first + 1,
+    });
+    tips.push({ position: twigEnd, normal: twigDir, size: 0.35 });
+  }
+}
+
 /** Grows a straight leader with whorls of limbs in a cone of the declared proportions. */
 export function growSpire(
   p: Resolved<typeof spireParams>,
@@ -540,62 +632,19 @@ export function growSpire(
     for (let j = 0; j < count; j++) {
       const lr = wr.fork(`limb${j}`);
       const az = phase + (j / count) * Math.PI * 2 + lr.range(-0.25, 0.25);
-      const len = Math.max(0.25 * s, cone * lr.range(0.85, 1.1));
-      const h: V3 = [Math.cos(az), 0, Math.sin(az)];
-      const d1 = normalize([h[0], 0.1 - p.droop * 0.7, h[2]]);
-      const d2 = normalize([h[0], 0.1 - p.droop * 1.6, h[2]]);
-      const r0 = Math.max(
-        0.025 * s,
-        baseRadius * 0.32 * Math.pow(len / (width / 2), 0.6),
+      emitSpireLimb(
+        limbs,
+        tips,
+        lr,
+        y,
+        az,
+        cone,
+        width,
+        baseRadius,
+        p.droop,
+        s,
+        onTrunk,
       );
-      const start: V3 = [0, y, 0];
-      const mid = addScaled(start, d1, len * 0.6);
-      const end = addScaled(mid, d2, len * 0.4);
-      limbs.push({
-        start,
-        end: mid,
-        startRadius: r0,
-        endRadius: r0 * 0.6,
-        depth: 1,
-        parent: onTrunk,
-      });
-      const first = limbs.length - 1;
-      limbs.push({
-        start: mid,
-        end,
-        startRadius: r0 * 0.6,
-        endRadius: r0 * 0.25,
-        depth: 1,
-        parent: first,
-      });
-      tips.push({
-        position: end,
-        normal: d2,
-        size: 0.5 + 0.5 * Math.min(1, len / (width / 2)),
-      });
-      for (const [k, side] of [
-        [0, 1],
-        [1, -1],
-      ] as const) {
-        const along = k === 0 ? 0.45 : 0.75;
-        const base =
-          along < 0.6
-            ? addScaled(start, d1, len * along)
-            : addScaled(mid, d2, len * (along - 0.6));
-        const twigDir = normalize(
-          rotate([h[0], d1[1] - 0.1, h[2]], UP, side * lr.range(0.6, 0.95)),
-        );
-        const twigEnd = addScaled(base, twigDir, len * 0.35);
-        limbs.push({
-          start: base,
-          end: twigEnd,
-          startRadius: r0 * 0.35,
-          endRadius: r0 * 0.12,
-          depth: 2,
-          parent: along < 0.6 ? first : first + 1,
-        });
-        tips.push({ position: twigEnd, normal: twigDir, size: 0.35 });
-      }
     }
   }
   return { limbs, tips };

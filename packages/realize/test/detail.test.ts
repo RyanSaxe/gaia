@@ -13,18 +13,20 @@ import {
 import { PRIMITIVES } from "@gaia/primitives";
 import { detailAt, resolveParams } from "@gaia/realize";
 
+function middleValue(f: Field): string | boolean | string[] {
+  if (f.type === "scale") {
+    return f.levels[Math.floor(f.levels.length / 2)]?.words ?? "";
+  }
+  if (f.type === "choice") return Object.keys(f.options)[0] ?? "";
+  if (f.type === "flag") return false;
+  return [];
+}
+
 /** Each field's middle words: a scale's middle level, a choice's first option, no flag and no set members. */
 function middle(p: AnyPrimitive): Record<string, string | boolean | string[]> {
   const out: Record<string, string | boolean | string[]> = {};
-  for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
-    out[name] =
-      f.type === "scale"
-        ? (f.levels[Math.floor(f.levels.length / 2)]?.words ?? "")
-        : f.type === "choice"
-          ? (Object.keys(f.options)[0] ?? "")
-          : f.type === "flag"
-            ? false
-            : [];
+  for (const [name, f] of Object.entries<Field>(p.params)) {
+    out[name] = middleValue(f);
   }
   return out;
 }
@@ -38,7 +40,7 @@ const parts: Part[] = PRIMITIVES.filter(
     params,
     { rand: rand(5).fork(p.id), facts: { scale: 1, age: 120 } },
     null,
-  ).parts as Part[];
+  ).parts;
 });
 
 describe("detailAt", () => {

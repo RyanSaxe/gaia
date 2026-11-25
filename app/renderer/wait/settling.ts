@@ -56,6 +56,49 @@ const smooth = (a: number, b: number, v: number): number => {
   return t * t * (3 - 2 * t);
 };
 
+function growBox(box: CellBox | null, more: CellBox | null): CellBox | null {
+  if (box === null) return more;
+  if (more === null) return box;
+  return [
+    Math.min(box[0], more[0]),
+    Math.min(box[1], more[1]),
+    Math.max(box[2], more[2]),
+    Math.max(box[3], more[3]),
+  ];
+}
+
+function buildAreaPools(
+  areas: readonly string[],
+  files: readonly SettlingFile[],
+): Map<string, SettlingFile[]> {
+  const pools = new Map<string, SettlingFile[]>();
+  for (const path of areas) {
+    const own = files.filter((f) => f.area === path);
+    pools.set(
+      path,
+      own.length > 0
+        ? own
+        : files.filter((f) => path === "" || f.area.startsWith(`${path}/`)),
+    );
+  }
+  return pools;
+}
+
+function groupCellsByArea(
+  nearest: Int16Array,
+  count: number,
+): Map<number, number[]> {
+  const cellsOf = new Map<number, number[]>();
+  for (let c = 0; c < count; c++) {
+    const k = nearest[c] as number;
+    if (k < 0) continue;
+    const list = cellsOf.get(k);
+    if (list === undefined) cellsOf.set(k, [c]);
+    else list.push(c);
+  }
+  return cellsOf;
+}
+
 /**
  * Builds the settling vitality of `land` from its files, yielding between steps so a caller can spread the work over
  * idle time. It sums every cell's total weight first, which gives the share each settled file contributes.
@@ -98,42 +141,15 @@ export function* settlingHealth(
 
   // Each area's own ground pools its own files, or its subdirectories' files when it has none (`groundVitality`).
   const byPath = new Map(files.map((f) => [f.path, f]));
-  const pools = new Map<string, SettlingFile[]>();
-  for (const path of areas) {
-    const own = files.filter((f) => f.area === path);
-    pools.set(
-      path,
-      own.length > 0
-        ? own
-        : files.filter((f) => path === "" || f.area.startsWith(`${path}/`)),
-    );
-  }
+  const pools = buildAreaPools(areas, files);
   const waiting = new Map(
     [...pools].map(([path, pool]) => [path, new Set(pool.map((f) => f.path))]),
   );
   const health = new Map<string, number>();
   const grounds = new Map<string, number>();
-  const cellsOf = new Map<number, number[]>();
-  for (let c = 0; c < n * n; c++) {
-    const k = nearest[c] as number;
-    if (k < 0) continue;
-    const list = cellsOf.get(k);
-    if (list === undefined) cellsOf.set(k, [c]);
-    else list.push(c);
-  }
+  const cellsOf = groupCellsByArea(nearest, n * n);
   yield;
 
-  const grow = (box: CellBox | null, more: CellBox | null): CellBox | null =>
-    box === null
-      ? more
-      : more === null
-        ? box
-        : [
-            Math.min(box[0], more[0]),
-            Math.min(box[1], more[1]),
-            Math.max(box[2], more[2]),
-            Math.max(box[3], more[3]),
-          ];
   /** Settles an area's ground vitality and adds it, at the prior weight, to every cell nearest the area. */
   const settleGround = (k: number, path: string): CellBox | null => {
     const pool = pools.get(path) ?? [];
@@ -154,7 +170,7 @@ export function* settlingHealth(
       sum[c] = (sum[c] as number) + prior * v;
       const i = c % n;
       const j = Math.floor(c / n);
-      box = grow(box, [i, j, i, j]);
+      box = growBox(box, [i, j, i, j]);
     }
     return box;
   };
@@ -162,20 +178,23 @@ export function* settlingHealth(
   let first: CellBox | null = null;
   for (const [k, path] of areas.entries()) {
     if ((waiting.get(path)?.size ?? 0) === 0) {
-      first = grow(first, settleGround(k, path));
+      first = growBox(first, settleGround(k, path));
     }
   }
   void first;
 
   return {
-    settle(vitality) {
+    settle(vitality): {
+      readonly cells: CellBox | null;
+      readonly grounds: readonly string[];
+    } {
       let cells: CellBox | null = null;
       const done: string[] = [];
       for (const [path, v] of Object.entries(vitality)) {
         const f = byPath.get(path);
         if (f === undefined || health.has(path)) continue;
         health.set(path, v);
-        cells = grow(
+        cells = growBox(
           cells,
           reachOf(f, (c, w) => {
             weight[c] = (weight[c] as number) + w;
@@ -189,7 +208,7 @@ export function* settlingHealth(
         }
       }
       for (const area of done) {
-        cells = grow(cells, settleGround(areas.indexOf(area), area));
+        cells = growBox(cells, settleGround(areas.indexOf(area), area));
       }
       return { cells, grounds: done };
     },

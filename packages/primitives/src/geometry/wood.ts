@@ -93,6 +93,13 @@ function barkPoint(
   };
 }
 
+const samePoint = (a: V3 | undefined, b: V3 | undefined): boolean =>
+  a !== undefined &&
+  b !== undefined &&
+  a[0] === b[0] &&
+  a[1] === b[1] &&
+  a[2] === b[2];
+
 /** Smooth vertex normals from a grid's own faces. */
 function faceNormals(rows: readonly (readonly V3[])[]): V3[][] {
   const acc = rows.map((row) => row.map((): V3 => [0, 0, 0]));
@@ -102,16 +109,17 @@ function faceNormals(rows: readonly (readonly V3[])[]): V3[][] {
     a[1] += f[1];
     a[2] += f[2];
   };
+  const cols = rows[0]?.length ?? 0;
   for (let i = 0; i + 1 < rows.length; i++) {
-    for (let j = 0; j + 1 < (rows[0]?.length ?? 0); j++) {
-      const [a, a1, b, b1] = [
-        rows[i]?.[j],
-        rows[i]?.[j + 1],
-        rows[i + 1]?.[j],
-        rows[i + 1]?.[j + 1],
-      ] as V3[];
-      const f1 = cross(sub(a1 as V3, a as V3), sub(b as V3, a as V3));
-      const f2 = cross(sub(b1 as V3, a1 as V3), sub(b as V3, a1 as V3));
+    const r0 = rows[i] as readonly V3[];
+    const r1 = rows[i + 1] as readonly V3[];
+    for (let j = 0; j + 1 < cols; j++) {
+      const a = r0[j] as V3;
+      const a1 = r0[j + 1] as V3;
+      const b = r1[j] as V3;
+      const b1 = r1[j + 1] as V3;
+      const f1 = cross(sub(a1, a), sub(b, a));
+      const f2 = cross(sub(b1, a1), sub(b, a1));
       for (const [ii, jj] of [
         [i, j],
         [i, j + 1],
@@ -159,19 +167,15 @@ function emitGrid(
     }),
   );
   // A row that closes to one point, a face's center or a hollow's floor, takes one triangle per segment, not two.
-  const same = (a: V3 | undefined, b: V3 | undefined): boolean =>
-    a !== undefined &&
-    b !== undefined &&
-    a[0] === b[0] &&
-    a[1] === b[1] &&
-    a[2] === b[2];
   for (let i = 0; i + 1 < rows.length; i++) {
+    const r0 = rows[i] as readonly V3[];
+    const r1 = rows[i + 1] as readonly V3[];
     for (let j = 0; j + 1 < cols; j++) {
       const a = first + i * cols + j;
-      if (!same(rows[i]?.[j], rows[i]?.[j + 1])) {
+      if (!samePoint(r0[j], r0[j + 1])) {
         out.triangle(a, a + 1, a + cols);
       }
-      if (!same(rows[i + 1]?.[j], rows[i + 1]?.[j + 1])) {
+      if (!samePoint(r1[j], r1[j + 1])) {
         out.triangle(a + 1, a + cols + 1, a + cols);
       }
     }
@@ -236,7 +240,7 @@ function emitPlates(
       if (backing !== undefined) {
         emitGrid(
           backing.out,
-          pick(backing.rows).map((row) => row.reverse()),
+          pick(backing.rows).map((row) => row.toReversed()),
           () => ({ shade: 0.08, tint: 0.02 }),
           (i, j) => held(i, cols - j),
         );
@@ -251,20 +255,30 @@ const cutsOf = (last: number, step: number): number[] => [
   last,
 ];
 
+const heartWeight = (s: number): number => 1 - clamp((s - 0.4) / 0.2, 0, 1);
+const heartBase = (s: number): number => 0.56 + 0.18 * heartWeight(s);
+const zeroEnd = (): number => 0;
+
 /** A cut face's rings, from its rim in to the pith: a dark line of late wood at each ring's outer edge, a lighter heartwood inside. */
 function sawnRings(
   radius: number,
   wood: number,
 ): { s: number; shade: number; tint: number }[] {
   const count = clamp(Math.round(radius / 0.04), 4, 9);
-  const heart = (s: number): number => 1 - clamp((s - 0.4) / 0.2, 0, 1);
-  const base = (s: number): number => 0.56 + 0.18 * heart(s);
-  const out = [{ s: wood, shade: base(wood) - 0.16, tint: -0.01 }];
+  const out = [{ s: wood, shade: heartBase(wood) - 0.16, tint: -0.01 }];
   for (let k = count - 1; k >= 1; k--) {
     const b = 0.06 + (wood - 0.06) * Math.pow(k / count, 0.85);
     out.push(
-      { s: b + 0.012, shade: base(b) + 0.04, tint: 0.015 * heart(b) - 0.008 },
-      { s: b - 0.012, shade: base(b) - 0.2, tint: 0.015 * heart(b) - 0.008 },
+      {
+        s: b + 0.012,
+        shade: heartBase(b) + 0.04,
+        tint: 0.015 * heartWeight(b) - 0.008,
+      },
+      {
+        s: b - 0.012,
+        shade: heartBase(b) - 0.2,
+        tint: 0.015 * heartWeight(b) - 0.008,
+      },
     );
   }
   out.push(
@@ -319,7 +333,7 @@ const halfAngles = (stem: Stem, h: number, reversed = false): number[] => {
     { length: stem.half + 1 },
     (_, j) => stem.split + h * Math.PI + (j * Math.PI) / stem.half,
   );
-  return reversed ? out.reverse() : out;
+  return reversed ? out.toReversed() : out;
 };
 
 /** A capped station: which way its face looks along the stem, sawn or broken, and for a crumbling face, when each plate goes, by band from the rim (0) to the center (2). */
@@ -517,10 +531,10 @@ function emitHalf(
       const crumble = e.crumble;
       const rowsOf = (col: number): number[] => [
         0,
-        ...bandOf.map((at, k) =>
+        ...bandOf.map((bandIdx, k) =>
           Math.round(
             clamp(
-              at + stagger * Math.sin(col * 0.8 + k * 2.1 + stem.seed),
+              bandIdx + stagger * Math.sin(col * 0.8 + k * 2.1 + stem.seed),
               1,
               rings.length - 2,
             ),
@@ -556,7 +570,7 @@ function emitHalf(
   const shareOf = [
     ...edge,
     ...columns,
-    ...columns.slice().reverse().slice(1),
+    ...columns.toReversed().slice(1),
     ...edge,
   ];
   const [near, far] = [
@@ -567,18 +581,19 @@ function emitHalf(
     const station = st[i] as Station;
     const cap = capOf(i);
     const sink = cap?.hollow;
-    const point =
-      cap === undefined
-        ? ringPoint
-        : sink === undefined
+    let point: (at: Station, theta: number, s: number) => V3 = ringPoint;
+    if (cap !== undefined) {
+      point =
+        sink === undefined
           ? capPoint
           : (at: Station, theta: number, s: number): V3 =>
               s < at.wood ? sink(theta, s) : capPoint(at, theta, s);
+    }
     const side = (theta: number): V3[] => [
       ...(shed === null ? [barkPoint(stem, i, theta).q] : []),
       ...columns.map((s) => point(station, theta, s)),
     ];
-    return [...side(near), ...side(far).reverse().slice(1)];
+    return [...side(near), ...side(far).toReversed().slice(1)];
   };
   emitGrid(
     wood,
@@ -592,8 +607,11 @@ function emitHalf(
         stem.seed + 9,
         2,
       );
+      let shade = 0.58 + 0.12 * streak;
+      if (s >= 1) shade = 0.2;
+      else if (hollow(i, s)) shade = 0.12;
       return {
-        shade: s >= 1 ? 0.2 : hollow(i, s) ? 0.12 : 0.58 + 0.12 * streak,
+        shade,
         tint: -0.005,
       };
     },
@@ -717,16 +735,18 @@ export function buildFallenLog(
             2,
           ) +
         0.12 * knotAt(along, theta));
-    const look = i === 0 ? butt : i === count - 1 ? crown : undefined;
+    let look: End | undefined;
+    if (i === 0) look = butt;
+    else if (i === count - 1) look = crown;
     const facing = i === 0 ? -1 : 1;
     const broken = brokenEnd(rad, seed + i, r.next() * Math.PI * 2, 0.8);
-    const end =
-      look === undefined
-        ? () => 0
-        : look === "sawn"
-          ? (theta: number, s: number) =>
-              facing * radius(theta) * s * tilt * Math.cos(theta - tiltAt)
-          : (theta: number, s: number) => facing * broken(theta, s);
+    let end: (theta: number, s: number) => number = zeroEnd;
+    if (look === "sawn") {
+      end = (theta: number, s: number): number =>
+        facing * radius(theta) * s * tilt * Math.cos(theta - tiltAt);
+    } else if (look === "broken") {
+      end = (theta: number, s: number): number => facing * broken(theta, s);
+    }
     const pith =
       look === "sawn"
         ? addScaled(
@@ -815,7 +835,10 @@ export function buildFallenLog(
       return checks.reduce((most, c) => {
         const at = c.col + Math.round(1.3 * Math.sin(i * 0.45 + c.phase));
         const off = Math.abs(j - at);
-        return Math.max(most, fade * (off === 0 ? 1 : off === 1 ? 0.35 : 0));
+        let weight = 0;
+        if (off === 0) weight = 1;
+        else if (off === 1) weight = 0.35;
+        return Math.max(most, fade * weight);
       }, 0);
     };
     emitHalf(
@@ -956,12 +979,14 @@ export function buildStump(
     const isTop = y === height;
     const radius = (theta: number): number =>
       girth * (1 - 0.06 * (y / height)) * flare.at(y, theta);
-    const end = !isTop
-      ? () => 0
-      : p.top === "sawn"
-        ? (theta: number, s: number) =>
-            radius(theta) * s * tilt * Math.cos(theta - tiltAt)
-        : broken;
+    let end: (theta: number, s: number) => number = zeroEnd;
+    if (isTop) {
+      end =
+        p.top === "sawn"
+          ? (theta: number, s: number): number =>
+              radius(theta) * s * tilt * Math.cos(theta - tiltAt)
+          : broken;
+    }
     const pith =
       isTop && p.top === "sawn"
         ? addScaled(
@@ -1013,14 +1038,14 @@ export function buildStump(
     const wave = (col: number, band: number): number =>
       0.1 * Math.sin(col * 0.7 + band * 1.9 + h * 3 + seed) +
       0.03 * (crumbs.next() - 0.5);
-    const crumble = (band: number, col: number): number =>
-      band === 0
-        ? Math.sin(col * 0.9 + h * 2 + seed) < -0.2
+    const crumble = (band: number, col: number): number => {
+      if (band === 0) {
+        return Math.sin(col * 0.9 + h * 2 + seed) < -0.2
           ? 0
-          : 0.15 + wave(col, band)
-        : band === 1
-          ? 0.4 + wave(col, band)
-          : 0.62 + wave(col, band);
+          : 0.15 + wave(col, band);
+      }
+      return (band === 1 ? 0.4 : 0.62) + wave(col, band);
+    };
     emitHalf(
       bark,
       wood,

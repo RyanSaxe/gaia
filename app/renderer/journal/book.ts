@@ -138,6 +138,138 @@ const el = (cls: string, parent?: HTMLElement): HTMLDivElement => {
   return e;
 };
 
+const after = (ms: number): Promise<void> =>
+  new Promise<void>((r) => window.setTimeout(r, ms));
+
+const settledSoon = (p: Promise<void>): Promise<boolean> =>
+  Promise.race([p.then(() => true), after(40).then(() => false)]);
+
+function finishPage(page: HTMLElement): void {
+  const body = page.querySelector<HTMLElement>(".jp-body");
+  if (body === null) return;
+  const bottom = body.clientHeight;
+  /** A row's offset from the top of the page body, summed through the code or list that holds it. */
+  const down = (e: HTMLElement): number => {
+    let y = 0;
+    for (
+      let n: HTMLElement | null = e;
+      n !== null && n !== body;
+      n = n.offsetParent as HTMLElement | null
+    ) {
+      y += n.offsetTop;
+    }
+    return y;
+  };
+  const rows = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")];
+  for (const row of rows) {
+    row.classList.toggle("jp-past", down(row) + row.offsetHeight > bottom);
+  }
+  // A definition too long for its page gets a fold note where the page ends. The last row that fits is hidden to make room for it.
+  const fold = body.querySelector<HTMLElement>(".jp-fold.after");
+  if (fold !== null && rows.some((r) => r.classList.contains("jp-past"))) {
+    let last: HTMLElement | undefined;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i];
+      if (row !== undefined && !row.classList.contains("jp-past")) {
+        last = row;
+        break;
+      }
+    }
+    if (last !== undefined) {
+      last.classList.add("jp-past");
+      const more = rows.filter(
+        (r) =>
+          r.classList.contains("jp-past") && r.classList.contains("jp-line"),
+      ).length;
+      fold.style.top = `${down(last)}px`;
+      // A document's lines are paragraphs, so its fold says "read on" instead of a line count.
+      fold.textContent =
+        body.querySelector(".jp-code.prose") === null
+          ? linesOf(more)
+          : "read on";
+      fold.classList.add("shown");
+    }
+  }
+  paintMarks(body);
+}
+
+// `put` finishes a page as soon as it is placed, before it can be seen. It ends on a whole line and Jev's marks are
+// painted beside their rows, so no page visibly changes.
+const put = (into: HTMLElement, page: HTMLElement | null): void => {
+  into.replaceChildren(...(page === null ? [] : [page]));
+  if (page !== null) finishPage(page);
+};
+
+function joinsMarkRun(last: HTMLElement | undefined, e: HTMLElement): boolean {
+  return (
+    last !== undefined &&
+    e.classList.contains("jp-line") &&
+    last.nextElementSibling === e &&
+    last.style.getPropertyValue("--mark") === e.style.getPropertyValue("--mark")
+  );
+}
+
+/** Paints one gutter stroke for each run of lines a mark covers, and one beside each marked row. */
+function paintMarks(body: HTMLElement): void {
+  for (const old of body.querySelectorAll(".jp-stroke")) old.remove();
+  const shown = [
+    ...body.querySelectorAll<HTMLElement>(".jp-marked:not(.jp-past)"),
+  ];
+  const runs: HTMLElement[][] = [];
+  for (const e of shown) {
+    const last = runs[runs.length - 1]?.at(-1);
+    if (joinsMarkRun(last, e)) runs[runs.length - 1]?.push(e);
+    else runs.push([e]);
+  }
+  for (const run of runs) {
+    const first = run[0] as HTMLElement;
+    const end = run[run.length - 1] as HTMLElement;
+    const holder = first.parentElement as HTMLElement;
+    const stroke = document.createElement("i");
+    stroke.className = `jp-stroke ${first.classList.contains("jp-row") || first.classList.contains("jp-snippet") ? "row" : "line"}`;
+    stroke.style.top = `${first.offsetTop + 3}px`;
+    stroke.style.height = `${end.offsetTop + end.offsetHeight - first.offsetTop - 6}px`;
+    stroke.style.background = first.style.getPropertyValue("--mark");
+    holder.append(stroke);
+  }
+}
+
+function offsetWithin(
+  node: HTMLElement,
+  ancestor: HTMLElement,
+): readonly [number, number] {
+  let [x, y] = [0, 0];
+  for (
+    let n: HTMLElement | null = node;
+    n !== null && n !== ancestor;
+    n = n.offsetParent as HTMLElement | null
+  ) {
+    x += n.offsetLeft;
+    y += n.offsetTop;
+  }
+  return [x, y];
+}
+
+function addMarginHole(
+  holes: { x0: number; x1: number; y0: number; y1: number }[],
+  x0: number,
+  x1: number,
+  y: number,
+  height: number,
+): void {
+  // Merges stacked rows into one hole, since a seam between two would lift the page as the pointer crossed it.
+  const last = holes.at(-1);
+  if (
+    last !== undefined &&
+    last.x0 === x0 &&
+    last.x1 === x1 &&
+    y <= last.y1 + 1 &&
+    y >= last.y0
+  ) {
+    last.y1 = Math.max(last.y1, y + height);
+  } else holes.push({ x0, x1, y0: y, y1: y + height });
+}
+
 export function createJournalBook(
   layer: HTMLElement,
   pages: BookPages,
@@ -210,97 +342,11 @@ export function createJournalBook(
   let turning = false;
   let queued: string | null = null;
 
-  // `put` finishes a page as soon as it is placed, before it can be seen. It ends on a whole line and Jev's marks are
-  // painted beside their rows, so no page visibly changes.
-  const put = (into: HTMLElement, page: HTMLElement | null): void => {
-    into.replaceChildren(...(page === null ? [] : [page]));
-    if (page !== null) finish(page);
-  };
-  function finish(page: HTMLElement): void {
-    const body = page.querySelector<HTMLElement>(".jp-body");
-    if (body === null) return;
-    const bottom = body.clientHeight;
-    /** A row's offset from the top of the page body, summed through the code or list that holds it. */
-    const down = (e: HTMLElement): number => {
-      let y = 0;
-      for (
-        let n: HTMLElement | null = e;
-        n !== null && n !== body;
-        n = n.offsetParent as HTMLElement | null
-      ) {
-        y += n.offsetTop;
-      }
-      return y;
-    };
-    const rows = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")];
-    for (const row of rows) {
-      row.classList.toggle("jp-past", down(row) + row.offsetHeight > bottom);
-    }
-    // A definition too long for its page gets a fold note where the page ends. The last row that fits is hidden to make room for it.
-    const fold = body.querySelector<HTMLElement>(".jp-fold.after");
-    if (fold !== null && rows.some((r) => r.classList.contains("jp-past"))) {
-      let last: HTMLElement | undefined;
-      for (let i = rows.length - 1; i >= 0; i--) {
-        const row = rows[i];
-        if (row !== undefined && !row.classList.contains("jp-past")) {
-          last = row;
-          break;
-        }
-      }
-      if (last !== undefined) {
-        last.classList.add("jp-past");
-        const more = rows.filter(
-          (r) =>
-            r.classList.contains("jp-past") && r.classList.contains("jp-line"),
-        ).length;
-        fold.style.top = `${down(last)}px`;
-        // A document's lines are paragraphs, so its fold says "read on" instead of a line count.
-        fold.textContent =
-          body.querySelector(".jp-code.prose") !== null
-            ? "read on"
-            : linesOf(more);
-        fold.classList.add("shown");
-      }
-    }
-    paintMarks(body);
-  }
-  /** Paints one gutter stroke for each run of lines a mark covers, and one beside each marked row. */
-  function paintMarks(body: HTMLElement): void {
-    for (const old of body.querySelectorAll(".jp-stroke")) old.remove();
-    const shown = [
-      ...body.querySelectorAll<HTMLElement>(".jp-marked:not(.jp-past)"),
-    ];
-    const runs: HTMLElement[][] = [];
-    for (const e of shown) {
-      const last = runs[runs.length - 1]?.at(-1);
-      const joins =
-        last !== undefined &&
-        e.classList.contains("jp-line") &&
-        last.nextElementSibling === e &&
-        last.style.getPropertyValue("--mark") ===
-          e.style.getPropertyValue("--mark");
-      if (joins) runs[runs.length - 1]?.push(e);
-      else runs.push([e]);
-    }
-    for (const run of runs) {
-      const first = run[0] as HTMLElement;
-      const end = run[run.length - 1] as HTMLElement;
-      const holder = first.parentElement as HTMLElement;
-      const stroke = document.createElement("i");
-      stroke.className = `jp-stroke ${first.classList.contains("jp-row") || first.classList.contains("jp-snippet") ? "row" : "line"}`;
-      stroke.style.top = `${first.offsetTop + 3}px`;
-      stroke.style.height = `${end.offsetTop + end.offsetHeight - first.offsetTop - 6}px`;
-      stroke.style.background = first.style.getPropertyValue("--mark");
-      holder.append(stroke);
-    }
-  }
   /** Where the ribbon lies from the spread open at `place`: on it, or among the leaves before or after it. */
-  const sideOf = (place: string | null): RibbonSide =>
-    place === null || pages.order(place, marked) === 0
-      ? "here"
-      : pages.order(marked, place) < 0
-        ? "before"
-        : "after";
+  const sideOf = (place: string | null): RibbonSide => {
+    if (place === null || pages.order(place, marked) === 0) return "here";
+    return pages.order(marked, place) < 0 ? "before" : "after";
+  };
   /** Rests the ribbon on its page's side, in journal.css's pose for that side. */
   function layRibbon(): void {
     const side = sideOf(at);
@@ -401,8 +447,6 @@ export function createJournalBook(
     markTabs(place);
     layEdges();
   }
-  const after = (ms: number): Promise<void> =>
-    new Promise<void>((r) => window.setTimeout(r, ms));
   /** Resolves once a place's painting is done. */
   const painted = (place: string): Promise<void> =>
     pages.painted?.(place) ?? Promise.resolve();
@@ -412,9 +456,6 @@ export function createJournalBook(
       Promise.race([pages.ready?.(place), after(TEXT_AT_MOST)]),
       painted(place),
     ]).then(() => undefined);
-  /** Whether a promise settles within 40 ms. */
-  const settledSoon = (p: Promise<void>): Promise<boolean> =>
-    Promise.race([p.then(() => true), after(40).then(() => false)]);
   /** Whether `place` lies in the part of the book from the tab at `chapter` to the next tab. */
   function within(place: string, chapter: string): boolean {
     const list = pages.tabs();
@@ -457,7 +498,7 @@ export function createJournalBook(
   const closedShift = `translateX(${-(PAGE.w / 2 + PAGE.overhang / 2)}px)`;
   /** The outer margins that turn the pages, created with the click handling below. */
   const margins: HTMLElement[] = [];
-  function place(isOpen: boolean): void {
+  function placeBook(isOpen: boolean): void {
     const p = poses();
     book.style.transform = isOpen ? p.held : p.corner;
     inner.style.transform = isOpen ? "translateX(0)" : closedShift;
@@ -477,11 +518,11 @@ export function createJournalBook(
       m.style.transform = `translateZ(${MARGIN_LIFT}px) scale(${k})`;
     }
   }
-  place(false);
+  placeBook(false);
   // A window resize moves the book without a transition. It animates between its corner and the middle only to open and shut.
   window.addEventListener("resize", () => {
     book.style.transition = "none";
-    place(open);
+    placeBook(open);
   });
 
   // ---------- turning ----------
@@ -575,7 +616,7 @@ export function createJournalBook(
       RIBBON_POSES["before-open"].z,
       RIBBON_POSES["before-shut"].z,
     ];
-    const poses = each.map(([e, z, off]) => {
+    const falls = each.map(([e, z, off]) => {
       const deg = angleOf(e);
       const above = opened - (z - off);
       return deg < -170
@@ -590,15 +631,38 @@ export function createJournalBook(
             to: `translateZ(${z}px) rotateY(0deg) translateZ(${off}px)`,
           };
     });
-    for (const p of poses) {
+    for (const p of falls) {
       p.e.style.transition = "none";
       p.e.style.transform = p.from;
     }
     void inner.offsetWidth;
-    for (const p of poses) {
+    for (const p of falls) {
       p.e.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1)`;
       p.e.style.transform = p.to;
     }
+  }
+  function riffleLeafCount(
+    from: string,
+    target: string,
+    forward: boolean,
+    wholeNow: boolean,
+  ): number {
+    let distance = 0;
+    for (
+      let p: string | null = from;
+      p !== null && p !== target && distance < 400;
+      distance++
+    ) {
+      p = pages.next(p, forward ? 1 : -1);
+    }
+    return Math.max(
+      2,
+      Math.min(wholeNow ? RIFFLE.whole : RIFFLE.most, distance - 1),
+    );
+  }
+  function riffleStepDelay(waiting: boolean, k: number, toGo: number): number {
+    if (waiting) return RIFFLE.waiting;
+    return k < 3 || toGo < 3 ? RIFFLE.ends : RIFFLE.gap;
   }
   /**
    * Riffles toward a far page: many leaves turn in quick succession, several in the air at once, and the last carries
@@ -620,18 +684,7 @@ export function createJournalBook(
     if (lifts) liftAcross(forward);
     let whole = wholeNow;
     void ready.then(() => (whole = true));
-    let distance = 0;
-    for (
-      let p: string | null = from;
-      p !== null && p !== target && distance < 400;
-      distance++
-    ) {
-      p = pages.next(p, forward ? 1 : -1);
-    }
-    const leaves = Math.max(
-      2,
-      Math.min(wholeNow ? RIFFLE.whole : RIFFLE.most, distance - 1),
-    );
+    const leaves = riffleLeafCount(from, target, forward, wholeNow);
     // Each face shows a page of code the riffle passes if that code has arrived, or faint lines of writing otherwise.
     const passing = pages.passing?.(from, target);
     const faces = 2 * leaves + 2;
@@ -733,25 +786,7 @@ export function createJournalBook(
         turning = false;
       }, COVER_MS + 40);
     };
-    const step = (): void => {
-      const toGo = leaves - k;
-      if (toGo > 0 || !whole) {
-        const waiting = toGo <= 0;
-        launch(
-          face(k * 2),
-          face(k * 2 + 1),
-          waiting ? RIFFLE.waitingMs : RIFFLE.ms,
-        );
-        later(
-          step,
-          waiting
-            ? RIFFLE.waiting
-            : k < 3 || toGo < 3
-              ? RIFFLE.ends
-              : RIFFLE.gap,
-        );
-        return;
-      }
+    const landTarget = (): void => {
       // The last leaf carries the target page, with the target's other page beneath.
       const to = pages.spread(target);
       put(forward ? right : left, forward ? to.right : to.left);
@@ -765,6 +800,20 @@ export function createJournalBook(
         home && !forward,
       );
       later(() => land(last), RIFFLE.ms + 300);
+    };
+    const step = (): void => {
+      const toGo = leaves - k;
+      if (toGo > 0 || !whole) {
+        const waiting = toGo <= 0;
+        launch(
+          face(k * 2),
+          face(k * 2 + 1),
+          waiting ? RIFFLE.waitingMs : RIFFLE.ms,
+        );
+        later(step, riffleStepDelay(waiting, k, toGo));
+        return;
+      }
+      landTarget();
     };
     if (lifts) later(first, LIFT.leaves);
     else first();
@@ -857,18 +906,16 @@ export function createJournalBook(
     /** The leaf's angle at `progress`, limited by `HOLD` while the far side's painting is not done. */
     const angleAt = (progress: number): number => {
       const deg = forward ? -179.6 * progress : -179.6 * (1 - progress);
-      return ready
-        ? deg
-        : forward
-          ? Math.max(deg, HOLD.forward)
-          : Math.min(deg, HOLD.back);
+      if (ready) return deg;
+      return forward ? Math.max(deg, HOLD.forward) : Math.min(deg, HOLD.back);
     };
     const lay = (
       deg: number,
-      ms: number,
+      duration: number,
       ease = "cubic-bezier(.3,.1,.3,1)",
     ): void => {
-      leaf.style.transition = ms > 0 ? `transform ${ms}ms ${ease}` : "none";
+      leaf.style.transition =
+        duration > 0 ? `transform ${duration}ms ${ease}` : "none";
       leaf.style.transform = `translateZ(1.4px) rotateY(${deg.toFixed(2)}deg)`;
     };
     /** Whether the book was shut part way through the turn. */
@@ -938,15 +985,15 @@ export function createJournalBook(
     };
     return {
       forward,
-      hold: (progress) => {
+      hold: (progress): void => {
         if (!shut) lay(angleAt(progress), 0);
       },
-      finish(progress) {
-        const over = (from: number): void => {
+      finish(progress): void {
+        const over = (start: number): void => {
           if (shut) return;
-          const rest = Math.max(160, ms * (1 - from));
-          lay(forward ? -179.6 : 0, rest);
-          timer = window.setTimeout(done, rest + 40);
+          const remaining = Math.max(160, ms * (1 - start));
+          lay(forward ? -179.6 : 0, remaining);
+          timer = window.setTimeout(done, remaining + 40);
         };
         if (shut) return;
         void settledSoon(whole).then((now) => {
@@ -961,7 +1008,7 @@ export function createJournalBook(
           void whole.then(() => over(Math.max(progress, 0.5)));
         });
       },
-      cancel(progress) {
+      cancel(progress): void {
         if (shut) return;
         const back = Math.max(160, TURN_MS * progress);
         lay(forward ? 0 : -179.6, back);
@@ -1085,7 +1132,7 @@ export function createJournalBook(
       book.style.transition = `transform ${TRAVEL_MS}ms cubic-bezier(.45,.05,.3,1)`;
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1) ${TRAVEL_MS * 0.45}ms`;
       swingAfter(TRAVEL_MS * 0.45);
-      place(true);
+      placeBook(true);
       // Once open, clears the swing delay so the cover's edge and the ribbon respond to the pointer at once.
       const opened = (e: TransitionEvent): void => {
         if (e.target !== cover) return;
@@ -1121,7 +1168,7 @@ export function createJournalBook(
       inner.style.transition = `transform ${COVER_MS}ms cubic-bezier(.45,.05,.3,1)`;
       swingAfter(0);
       book.style.transition = `transform ${TRAVEL_MS}ms cubic-bezier(.45,.05,.3,1) ${COVER_MS * 0.6}ms`;
-      place(false);
+      placeBook(false);
     }
   }
 
@@ -1158,31 +1205,13 @@ export function createJournalBook(
     for (const b of page.querySelectorAll<HTMLElement>("button")) {
       // Skips a hidden fold or a row past the page's end, which take no click.
       if (b.offsetParent === null || b.closest(".jp-past") !== null) continue;
-      let [x, y] = [0, 0];
-      for (
-        let n: HTMLElement | null = b;
-        n !== null && n !== page;
-        n = n.offsetParent as HTMLElement | null
-      ) {
-        x += n.offsetLeft;
-        y += n.offsetTop;
-      }
+      const [x, y] = offsetWithin(b, page);
       const [x0, x1] = [
         Math.max(0, x - from),
         Math.min(EDGE, x + b.offsetWidth - from),
       ];
       if (x1 <= x0) continue;
-      // Merges stacked rows into one hole, since a seam between two would lift the page as the pointer crossed it.
-      const last = holes.at(-1);
-      if (
-        last !== undefined &&
-        last.x0 === x0 &&
-        last.x1 === x1 &&
-        y <= last.y1 + 1 &&
-        y >= last.y0
-      ) {
-        last.y1 = Math.max(last.y1, y + b.offsetHeight);
-      } else holes.push({ x0, x1, y0: y, y1: y + b.offsetHeight });
+      addMarginHole(holes, x0, x1, y, b.offsetHeight);
     }
     if (holes.length === 0) return "";
     return `path(evenodd, "M0 0H${EDGE}V${PAGE.h}H0Z${holes.map((h) => `M${h.x0} ${h.y0}H${h.x1}V${h.y1}H${h.x0}Z`).join("")}")`;
@@ -1311,7 +1340,8 @@ export function createJournalBook(
       const ready = wholeAt(target);
       void settledSoon(ready).then((now) => {
         if (now || target === "map") {
-          return void ready.then(() => setOpen(true, target));
+          void ready.then(() => setOpen(true, target));
+          return;
         }
         setOpen(true, "map", () => turnTo(target));
       });

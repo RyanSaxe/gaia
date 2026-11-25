@@ -6,7 +6,11 @@
 // which appends each to .lab/telemetry.jsonl at the repository's root.
 // Usage: pnpm lab:serve   (LAB_PORT=5181 pnpm lab:serve for a second server)
 
-import { createServer } from "node:http";
+import {
+  type IncomingMessage,
+  type ServerResponse,
+  createServer,
+} from "node:http";
 import { networkInterfaces } from "node:os";
 import { resolve } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -40,7 +44,7 @@ const ctx = await context({
     ...LAB_BUILD.plugins,
     {
       name: "lab-serve",
-      setup(build) {
+      setup(build): void {
         build.onEnd((result) => {
           const at = new Date().toLocaleTimeString();
           if (result.errors.length > 0) {
@@ -59,6 +63,27 @@ const ctx = await context({
   ],
 });
 await ctx.watch();
+
+function serveLabPage(
+  req: IncomingMessage,
+  res: ServerResponse,
+  current: LabBundle,
+): void {
+  // The meta tag makes the page post its smoothness reports here.
+  const html = labPage(current).replace(
+    "</head>",
+    () => '<meta name="gaia-telemetry" content="/telemetry">\n</head>',
+  );
+  const gzip = /\bgzip\b/.test(req.headers["accept-encoding"] ?? "");
+  const body = gzip ? gzipSync(html) : Buffer.from(html);
+  res.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "content-length": body.length,
+    "cache-control": "no-store",
+    ...(gzip ? { "content-encoding": "gzip" } : {}),
+  });
+  res.end(req.method === "HEAD" ? undefined : body);
+}
 
 const server = createServer((req, res) => {
   const path = (req.url ?? "/").split("?")[0];
@@ -82,20 +107,7 @@ const server = createServer((req, res) => {
       );
     return;
   }
-  // The meta tag makes the page post its smoothness reports here.
-  const html = labPage(bundle).replace(
-    "</head>",
-    () => '<meta name="gaia-telemetry" content="/telemetry">\n</head>',
-  );
-  const gzip = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
-  const body = gzip ? gzipSync(html) : Buffer.from(html);
-  res.writeHead(200, {
-    "content-type": "text/html; charset=utf-8",
-    "content-length": body.length,
-    "cache-control": "no-store",
-    ...(gzip ? { "content-encoding": "gzip" } : {}),
-  });
-  res.end(req.method === "HEAD" ? undefined : body);
+  serveLabPage(req, res, bundle);
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {

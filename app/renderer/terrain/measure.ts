@@ -59,22 +59,19 @@ export function tallyFrame(
     const after = o.onAfterRender;
     let calls = 0;
     let triangles = 0;
-    o.onBeforeRender = function (...args) {
+    o.onBeforeRender = function (...args): void {
       before.apply(this, args);
       calls = info.calls;
       triangles = info.triangles;
     };
-    o.onAfterRender = function (...args) {
+    o.onAfterRender = function (...args): void {
       after.apply(this, args);
       const camera = args[2] as THREE.Camera & {
         isOrthographicCamera?: boolean;
       };
-      const pass: Pass =
-        camera === view
-          ? "view"
-          : camera.isOrthographicCamera === true
-            ? "shadow"
-            : "mirror";
+      let pass: Pass = "mirror";
+      if (camera === view) pass = "view";
+      else if (camera.isOrthographicCamera === true) pass = "shadow";
       const sum = (tally[pass][kind] ??= { calls: 0, triangles: 0 });
       sum.calls += info.calls - calls;
       sum.triangles += info.triangles - triangles;

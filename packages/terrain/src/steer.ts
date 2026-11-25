@@ -82,14 +82,11 @@ export function steerStep(
     y += sign(key) * STEER.rate * Math.max(0, t + dt - from);
   }
   const forward = s.down.has("ahead");
+  const back = s.down.has("back");
   // ↓ walks backward and keeps the facing. ↑ and ↓ together stop. Shift hurries only forward walking.
-  const ahead = s.down.has("back")
-    ? forward
-      ? 0
-      : -STEER.back
-    : forward
-      ? 1
-      : 0;
+  let ahead = 0;
+  if (forward && !back) ahead = 1;
+  else if (back && !forward) ahead = -STEER.back;
   return {
     steering: { ...s, owed },
     yaw: y,

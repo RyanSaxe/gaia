@@ -68,6 +68,14 @@ if (fixedV1) {
   for (const [path, text] of fixed) files.set(path, text);
 }
 
+const places = (graph: CodeGraph): string => {
+  const land = landOf(factsOf(graph), graph);
+  return JSON.stringify({
+    ...land,
+    patches: land.patches.map(({ vitality: _, ...place }) => place),
+  });
+};
+
 /** Writes the showcase's source to a folder outside Gaia's repository. */
 function writeCode(dir: string): void {
   const inside = relative(repo, dir);
@@ -267,13 +275,6 @@ try {
   );
   if (existsSync(other)) {
     const theirs = JSON.parse(readFileSync(other, "utf8")) as CodeGraph;
-    const places = (graph: CodeGraph): string => {
-      const land = landOf(factsOf(graph), graph);
-      return JSON.stringify({
-        ...land,
-        patches: land.patches.map(({ vitality: _, ...place }) => place),
-      });
-    };
     const same = places(theirs) === places(snapshot);
     console.error(
       `showcase: the land ${same ? "is identical to" : "DIFFERS from"} the other v1's`,
@@ -284,7 +285,7 @@ try {
     keptFile,
     fixtureJson({
       answers: Object.fromEntries(
-        Object.entries(used).sort(([a], [b]) => (a < b ? -1 : 1)),
+        Object.entries(used).toSorted(([a], [b]) => (a < b ? -1 : 1)),
       ),
     }),
   );

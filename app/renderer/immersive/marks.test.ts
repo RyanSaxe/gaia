@@ -54,47 +54,76 @@ describe("the marks' table", () => {
   });
 });
 
+interface PathRecorder {
+  moveTo: (x: number, y: number) => void;
+  lineTo: (x: number, y: number) => void;
+  arcTo: (x1: number, y1: number, x2: number, y2: number) => void;
+  quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => void;
+  bezierCurveTo: (
+    ax: number,
+    ay: number,
+    bx: number,
+    by: number,
+    x: number,
+    y: number,
+  ) => void;
+  arc: (x: number, y: number, r: number) => void;
+  ellipse: (
+    x: number,
+    y: number,
+    rx: number,
+    ry: number,
+    turn?: number,
+  ) => void;
+  closePath: () => void;
+}
+
+function pathInto(into: [number, number][]): PathRecorder {
+  const near = (x: number, y: number, r = 0): void => {
+    into.push([x - r, y - r], [x + r, y + r]);
+  };
+  return {
+    moveTo: (x: number, y: number): void => near(x, y),
+    lineTo: (x: number, y: number): void => near(x, y),
+    arcTo: (x1: number, y1: number, x2: number, y2: number): void => {
+      near(x1, y1);
+      near(x2, y2);
+    },
+    quadraticCurveTo: (cx: number, cy: number, x: number, y: number): void => {
+      near(cx, cy);
+      near(x, y);
+    },
+    bezierCurveTo: (
+      ax: number,
+      ay: number,
+      bx: number,
+      by: number,
+      x: number,
+      y: number,
+    ): void => {
+      near(ax, ay);
+      near(bx, by);
+      near(x, y);
+    },
+    arc: (x: number, y: number, r: number): void => near(x, y, r),
+    // An ellipse's bounding box, accounting for its rotation.
+    ellipse: (x: number, y: number, rx: number, ry: number, turn = 0): void => {
+      const [hx, hy] = [
+        Math.hypot(rx * Math.cos(turn), ry * Math.sin(turn)),
+        Math.hypot(rx * Math.sin(turn), ry * Math.cos(turn)),
+      ];
+      into.push([x - hx, y - hy], [x + hx, y + hy]);
+    },
+    closePath: (): void => {},
+  };
+}
+
 /** A canvas that only records the points a drawing places. A path's points count once it is filled or stroked. */
 function recorder(): {
   ctx: CanvasRenderingContext2D;
   points: [number, number][];
 } {
   const points: [number, number][] = [];
-  const pathInto = (into: [number, number][]) => {
-    const near = (x: number, y: number, r = 0): void => {
-      into.push([x - r, y - r], [x + r, y + r]);
-    };
-    return {
-      moveTo: (x: number, y: number) => near(x, y),
-      lineTo: (x: number, y: number) => near(x, y),
-      arcTo: (x1: number, y1: number, x2: number, y2: number) => (
-        near(x1, y1),
-        near(x2, y2)
-      ),
-      quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => (
-        near(cx, cy),
-        near(x, y)
-      ),
-      bezierCurveTo: (
-        ax: number,
-        ay: number,
-        bx: number,
-        by: number,
-        x: number,
-        y: number,
-      ) => (near(ax, ay), near(bx, by), near(x, y)),
-      arc: (x: number, y: number, r: number) => near(x, y, r),
-      // An ellipse's bounding box, accounting for its rotation.
-      ellipse: (x: number, y: number, rx: number, ry: number, turn = 0) => {
-        const [hx, hy] = [
-          Math.hypot(rx * Math.cos(turn), ry * Math.sin(turn)),
-          Math.hypot(rx * Math.sin(turn), ry * Math.cos(turn)),
-        ];
-        into.push([x - hx, y - hy], [x + hx, y + hy]);
-      },
-      closePath: () => {},
-    };
-  };
   const path = pathInto(points);
   class Path2DRecorder {
     readonly placed: [number, number][] = [];
@@ -107,20 +136,25 @@ function recorder(): {
     if (p instanceof Path2DRecorder) points.push(...p.placed);
   };
   const ctx = new Proxy(path, {
-    get: (target, key) => {
+    get: (target, key): unknown => {
       if (key in target) return target[key as keyof typeof path];
       if (key === "fill" || key === "stroke") return drawn;
-      if (key === "getTransform") return () => ({ a: 1, b: 0 });
+      if (key === "getTransform") {
+        return (): { a: number; b: number } => ({ a: 1, b: 0 });
+      }
       if (key === "createLinearGradient") {
-        return () => ({ addColorStop: () => {} });
+        return (): { addColorStop: () => void } => ({
+          addColorStop: (): void => {},
+        });
       }
       if (key === "fillRect") {
-        return (x: number, y: number, w: number, h: number) =>
+        return (x: number, y: number, w: number, h: number): void => {
           points.push([x, y], [x + w, y + h]);
+        };
       }
-      return () => {};
+      return (): void => {};
     },
-    set: () => true,
+    set: (): boolean => true,
   }) as unknown as CanvasRenderingContext2D;
   return { ctx, points };
 }

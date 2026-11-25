@@ -123,6 +123,6 @@ export class Library {
         (p) =>
           p.role === role && (place === undefined || meets(p.needs, place)),
       )
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .toSorted((a, b) => a.id.localeCompare(b.id));
   }
 }

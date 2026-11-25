@@ -2,14 +2,20 @@
 // which sorts object keys and drops undefined values, so equal content always
 // gives the same hash.
 
-import type { Blueprint, BlueprintId, FilledSlot } from "./document.ts";
+import type { Blueprint, FilledSlot } from "./document.ts";
+
+function compareCodeUnits(a: string, b: string): number {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
 
 export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(([, v]) => v !== undefined)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    .toSorted(([a], [b]) => compareCodeUnits(a, b));
   return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
 }
 
@@ -41,7 +47,7 @@ export function blueprintOf(
 ): Blueprint {
   const content = { kind, slots };
   return {
-    id: `bp-${contentHash(content).slice(0, 8)}` as BlueprintId,
+    id: `bp-${contentHash(content).slice(0, 8)}`,
     ...content,
   };
 }

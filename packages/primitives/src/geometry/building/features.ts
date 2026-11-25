@@ -10,6 +10,7 @@ import {
   GRAIN,
   type Mass,
   type Opening,
+  type Rand,
   type Resolved,
   type Vec3,
 } from "@gaia/schema";
@@ -29,6 +30,8 @@ import {
 import { UP, beam, box, log, quad, tri } from "../blocks.ts";
 import {
   PLASTER,
+  type Ruin,
+  type Wall,
   chimneyEnd,
   on,
   ruinAt,
@@ -69,46 +72,29 @@ class Moved extends PartBuilder {
 }
 
 /** The side wall (+1 or -1 along x) a feature takes: away from a gable chimney. */
-export const featureSide = (plan: BuildingPlan): 1 | -1 =>
-  plan.masses[0]?.ridge === "x" ? (chimneyEnd(plan) === 1 ? -1 : 1) : 1;
+export function featureSide(plan: BuildingPlan): 1 | -1 {
+  if (plan.masses[0]?.ridge !== "x") return 1;
+  return chimneyEnd(plan) === 1 ? -1 : 1;
+}
 
 // ---------- waterwheel ----------
 
-export function buildWaterwheel(
-  p: Resolved<typeof waterwheelParams>,
-  ctx: BuildContext,
-  plan: BuildingPlan,
-): Built {
-  const r = ctx.rand.fork("waterwheel");
-  const wood = new PartBuilder("timber", "solid");
-  const stone = new PartBuilder("masonry", "solid");
-  const side = featureSide(plan);
-  const R = p.wheel;
-  const W = 0.62 + 0.12 * R;
-  const sink = 0.42;
-  const cx = side * (plan.width / 2 + 0.38 + W / 2);
-  const cz = plan.masses[0]?.ridge === "x" ? -0.15 : -plan.depth * 0.12;
-  const cy = R - sink;
-  const center: V3 = [cx, cy, cz];
-  const rate = p.drive === "overshot" ? 0.11 : -0.09;
-  const spin: Vec3 = [rate, 0, 0];
+function buildWheelDrum(
+  wood: PartBuilder,
+  cx: number,
+  cy: number,
+  cz: number,
+  R: number,
+  W: number,
+  drive: Resolved<typeof waterwheelParams>["drive"],
+  r: Rand,
+  turning: (wither: number, lost: number, top?: number) => Channels,
+): void {
   const on3 = (x: number, angle: number, radius: number): V3 => [
     cx + x,
     cy + Math.sin(angle) * radius,
     cz + Math.cos(angle) * radius,
   ];
-  /** Channels for a wheel piece. Every piece turns about the axle and some rot through as vitality falls. None comes loose, so nothing hangs in the air. */
-  const turning = (wither: number, lost: number, top = 0.4): Channels => ({
-    loss: 0,
-    droop: 0,
-    wither,
-    glow: 0,
-    pivot: center,
-    tint: (r.next() - 0.5) * 0.04,
-    spin,
-    ...(r.next() < lost ? { rot: clamp(0.5 + top, 0, 1) } : {}),
-  });
-
   // Two rims of short beams, spokes from the hub, and paddles between the rims.
   const segments = 22;
   for (const x of [-W / 2, W / 2]) {
@@ -141,10 +127,10 @@ export function buildWaterwheel(
     }
   }
   const paddles = Math.round(14 + 4 * R);
+  const lean = drive === "overshot" ? 0.45 : 0;
   for (let k = 0; k < paddles; k++) {
     const a = (k / paddles) * Math.PI * 2;
     // Buckets lean back against the turn on an overshot wheel. Paddles stick straight out on an undershot one.
-    const lean = p.drive === "overshot" ? 0.45 : 0;
     const inner = on3(0, a, R - 0.36);
     const outer = on3(0, a + lean * 0.35, R + 0.02);
     const radial = normalize([0, outer[1] - inner[1], outer[2] - inner[2]]);
@@ -169,7 +155,21 @@ export function buildWaterwheel(
     turning(0.5, 0),
     8,
   );
-  // The axle runs into the wall on one side and onto a stone pier on the other.
+}
+
+function buildWheelPierAndPit(
+  wood: PartBuilder,
+  stone: PartBuilder,
+  plan: BuildingPlan,
+  side: 1 | -1,
+  cx: number,
+  cy: number,
+  cz: number,
+  R: number,
+  W: number,
+  r: Rand,
+): void {
+  const center: V3 = [cx, cy, cz];
   const still0 = (c: Vec3, wither: number): Channels =>
     still(c, wither, { tint: (r.next() - 0.5) * 0.04 });
   log(
@@ -226,92 +226,139 @@ export function buildWaterwheel(
       s += len;
     }
   }
+}
 
-  // An overshot wheel is fed by a wooden flume on trestles, from behind the house to just past the wheel's top.
-  if (p.drive === "overshot") {
-    const y = cy + R + 0.22;
-    const z0 = -plan.depth / 2 - 2.4;
-    const z1 = cz + 0.25;
-    // Trestles behind the wheel carry the flume. As vitality falls their legs
-    // spread and lean, but only after the trough and the crossbeams on them
-    // have gone, each shrinking back onto what holds it.
-    const spread = 0.34;
-    const crossbeams: number[] = [];
-    for (let z = z0 + 0.3; z < cz - R - 0.2; z += 1.4) crossbeams.push(z);
-    const rest = (z: number): number =>
-      crossbeams.reduce(
-        (best, c) => (Math.abs(c - z) < Math.abs(best - z) ? c : best),
-        crossbeams[0] ?? z0,
-      );
-    const steps = Math.max(2, Math.round((z1 - z0) / 1.3));
-    for (let k = 0; k < steps; k++) {
-      const a = z0 + ((z1 - z0) * k) / steps;
-      const b = z0 + ((z1 - z0) * (k + 1)) / steps;
-      const mid: V3 = [cx, y, (a + b) / 2];
-      const ch: Channels = {
-        loss: spread + 2 * LOSS_BAND + 0.03 * r.next(),
-        droop: 0,
-        wither: 0.65,
-        glow: 0,
-        pivot: [cx, y - 0.02, rest((a + b) / 2)],
-        tint: (r.next() - 0.5) * 0.03,
-        rot: 0.55,
-      };
+function buildOvershotFlume(
+  wood: PartBuilder,
+  plan: BuildingPlan,
+  cx: number,
+  cy: number,
+  cz: number,
+  R: number,
+  W: number,
+  r: Rand,
+): void {
+  const y = cy + R + 0.22;
+  const z0 = -plan.depth / 2 - 2.4;
+  const z1 = cz + 0.25;
+  // Trestles behind the wheel carry the flume. As vitality falls their legs
+  // spread and lean, but only after the trough and the crossbeams on them
+  // have gone, each shrinking back onto what holds it.
+  const spread = 0.34;
+  const crossbeams: number[] = [];
+  for (let z = z0 + 0.3; z < cz - R - 0.2; z += 1.4) crossbeams.push(z);
+  const rest = (z: number): number =>
+    crossbeams.reduce(
+      (best, c) => (Math.abs(c - z) < Math.abs(best - z) ? c : best),
+      crossbeams[0] ?? z0,
+    );
+  const steps = Math.max(2, Math.round((z1 - z0) / 1.3));
+  for (let k = 0; k < steps; k++) {
+    const a = z0 + ((z1 - z0) * k) / steps;
+    const b = z0 + ((z1 - z0) * (k + 1)) / steps;
+    const mid: V3 = [cx, y, (a + b) / 2];
+    const ch: Channels = {
+      loss: spread + 2 * LOSS_BAND + 0.03 * r.next(),
+      droop: 0,
+      wither: 0.65,
+      glow: 0,
+      pivot: [cx, y - 0.02, rest((a + b) / 2)],
+      tint: (r.next() - 0.5) * 0.03,
+      rot: 0.55,
+    };
+    box(
+      wood,
+      mid,
+      [[1, 0, 0], UP, [0, 0, 1]],
+      [W * 0.42, 0.03, (b - a) / 2 + 0.01],
+      0.48,
+      ch,
+    );
+    for (const sx of [-1, 1]) {
       box(
         wood,
-        mid,
+        [cx + sx * W * 0.42, y + 0.14, (a + b) / 2],
         [[1, 0, 0], UP, [0, 0, 1]],
-        [W * 0.42, 0.03, (b - a) / 2 + 0.01],
-        0.48,
+        [0.03, 0.15, (b - a) / 2 + 0.01],
+        0.44,
         ch,
       );
-      for (const sx of [-1, 1]) {
-        box(
-          wood,
-          [cx + sx * W * 0.42, y + 0.14, (a + b) / 2],
-          [[1, 0, 0], UP, [0, 0, 1]],
-          [0.03, 0.15, (b - a) / 2 + 0.01],
-          0.44,
-          ch,
-        );
-      }
     }
-    for (const z of crossbeams) {
-      for (const sx of [-1, 1]) {
-        const base: V3 = [cx + sx * W * 0.45, -0.3, z];
-        const tip = sx * (0.12 + 0.2 * r.next());
-        beam(
-          wood,
-          base,
-          [cx + sx * W * 0.4, y - 0.04, z],
-          0.1,
-          0.1,
-          [0, 0, 1],
-          0.42,
-          {
-            loss: 0,
-            droop: 0,
-            wither: 0.6,
-            glow: 0,
-            pivot: base,
-            fall: [0, 0, tip, spread],
-          },
-        );
-      }
+  }
+  for (const z of crossbeams) {
+    for (const sx of [-1, 1]) {
+      const base: V3 = [cx + sx * W * 0.45, -0.3, z];
+      const tip = sx * (0.12 + 0.2 * r.next());
       beam(
         wood,
-        [cx - W * 0.5, y - 0.06, z],
-        [cx + W * 0.5, y - 0.06, z],
+        base,
+        [cx + sx * W * 0.4, y - 0.04, z],
         0.1,
         0.1,
         [0, 0, 1],
-        0.44,
-        still([cx - W * 0.4, y - 0.06, z], 0.55, {
-          loss: spread + LOSS_BAND + 0.005,
-          tint: (r.next() - 0.5) * 0.04,
-        }),
+        0.42,
+        {
+          loss: 0,
+          droop: 0,
+          wither: 0.6,
+          glow: 0,
+          pivot: base,
+          fall: [0, 0, tip, spread],
+        },
       );
     }
+    beam(
+      wood,
+      [cx - W * 0.5, y - 0.06, z],
+      [cx + W * 0.5, y - 0.06, z],
+      0.1,
+      0.1,
+      [0, 0, 1],
+      0.44,
+      still([cx - W * 0.4, y - 0.06, z], 0.55, {
+        loss: spread + LOSS_BAND + 0.005,
+        tint: (r.next() - 0.5) * 0.04,
+      }),
+    );
+  }
+}
+
+export function buildWaterwheel(
+  p: Resolved<typeof waterwheelParams>,
+  ctx: BuildContext,
+  plan: BuildingPlan,
+): Built {
+  const r = ctx.rand.fork("waterwheel");
+  const wood = new PartBuilder("timber", "solid");
+  const stone = new PartBuilder("masonry", "solid");
+  const side = featureSide(plan);
+  const R = p.wheel;
+  const W = 0.62 + 0.12 * R;
+  const sink = 0.42;
+  const cx = side * (plan.width / 2 + 0.38 + W / 2);
+  const cz = plan.masses[0]?.ridge === "x" ? -0.15 : -plan.depth * 0.12;
+  const cy = R - sink;
+  const center: V3 = [cx, cy, cz];
+  const rate = p.drive === "overshot" ? 0.11 : -0.09;
+  const spin: Vec3 = [rate, 0, 0];
+  /** Channels for a wheel piece. Every piece turns about the axle and some rot through as vitality falls. None comes loose, so nothing hangs in the air. */
+  const turning = (wither: number, lost: number, top = 0.4): Channels => ({
+    loss: 0,
+    droop: 0,
+    wither,
+    glow: 0,
+    pivot: center,
+    tint: (r.next() - 0.5) * 0.04,
+    spin,
+    ...(r.next() < lost ? { rot: clamp(0.5 + top, 0, 1) } : {}),
+  });
+
+  buildWheelDrum(wood, cx, cy, cz, R, W, p.drive, r, turning);
+  // The axle runs into the wall on one side and onto a stone pier on the other.
+  buildWheelPierAndPit(wood, stone, plan, side, cx, cy, cz, R, W, r);
+  // An overshot wheel is fed by a wooden flume on trestles, from behind the house to just past the wheel's top.
+  if (p.drive === "overshot") {
+    buildOvershotFlume(wood, plan, cx, cy, cz, R, W, r);
   }
 
   const parts = [wood.part(), stone.part()];
@@ -392,56 +439,15 @@ const lerp3 = (a: Vec3, b: Vec3, t: number): V3 => [
   a[2] + (b[2] - a[2]) * t,
 ];
 
-export function buildTower(
-  p: Resolved<typeof towerParams>,
-  ctx: BuildContext,
+function towerWindowOpenings(
+  faces: readonly Wall[],
   plan: BuildingPlan,
-): Built {
-  const r = ctx.rand.fork("tower");
-  const side = featureSide(plan);
-  const T = clamp(Math.min(plan.width, plan.depth) * 0.62, 3, 3.8);
-  const houseTop = Math.max(
-    ...plan.masses.map((m) => wallTop(plan, m) + m.rise),
-  );
-  const H = clamp(houseTop + p.height + 2.5 * (ctx.facts.reach ?? 0.5), 8, 19);
-  // At the back corner on the free side, overlapping the house a little and clear of its windows.
-  const off: V3 = [
-    side * (plan.width / 2 + T / 2 - 0.35),
-    0,
-    -plan.depth / 2 - T / 2 + 1.05,
-  ];
-  const render = new Moved("render", "solid", off);
-  const stone = new Moved("masonry", "solid", off);
-  const glass = new Moved("glass", "none", off);
-  const roof = new Moved("roof", "solid", off);
-  const wood = new Moved("timber", "solid", off);
-  const moss = new Moved("moss", "none", off);
-  const storey = 2.7;
+  side: 1 | -1,
+  houseTop: number,
+  H: number,
+  storey: number,
+): Opening[] {
   const windows: Opening[] = [];
-  const body: Mass = {
-    x: 0,
-    z: 0,
-    width: T,
-    depth: T,
-    round: false,
-    wallHeight: H - plan.floor,
-    storeys: 1,
-    rise: 0,
-    ridge: "x",
-    roof: "hip",
-    fall: 1,
-    ends: [true, true],
-  };
-  const tower0: BuildingPlan = {
-    width: T,
-    depth: T,
-    floor: plan.floor,
-    footing: 1.4,
-    masses: [body],
-    settle: plan.settle,
-    openings: [],
-  };
-  const faces = wallsOf(tower0);
   for (let y = plan.floor + 1.0; y + 1.3 < H - 0.5; y += storey) {
     for (const w of faces) {
       // Windows face away from the house, and face every way once above its roof.
@@ -459,86 +465,96 @@ export function buildTower(
       }
     }
   }
-  const tower: BuildingPlan = { ...tower0, openings: windows };
-  const ruin = ruinOf(tower);
-  const seed = Math.floor(r.next() * 1e6);
+  return windows;
+}
 
-  // Rendered walls in hand-laid cells. As vitality falls they rot through from the top, a patch of render at a time.
-  const rendered: Hold = (w, q) => ({
-    rot: clamp(
-      wallRot(tower, body, ruin, q) * 0.7 + 0.35 * clamp(q[1] / H, 0, 1) ** 2,
-      0,
-      1,
-    ),
-    grain: wallGrain(w, GRAIN.plaster, PLASTER),
-  });
-  for (const w of faces) {
-    const pivot = on(w, w.length / 2, H / 2);
-    wallSheet(render, tower, w, -tower.footing, 0.01, 0.7, (q) => {
-      const n = fbm3(q[0] * 1.4, q[1] * 1.4, q[2] * 1.4, seed, 2);
-      const up = clamp(q[1] / H, 0, 1);
-      return {
-        shade: 0.56 + 0.1 * n,
-        c: still(pivot, 0.55 + 0.2 * up, { ...rendered(w, q), tint: 0.02 * n }),
-      };
-    });
+function buildTowerFaceQuoins(
+  stone: PartBuilder,
+  w: Wall,
+  H: number,
+  r: Rand,
+): { y: number; loss: number }[] {
+  let under = 0;
+  const column: { y: number; loss: number }[] = [];
+  for (let y = -0.3, k = 0; y < H - 0.05; k++) {
+    const h = Math.min(0.36, H - y);
+    const long = k % 2 === 0;
+    const c = on(w, (long ? 0.36 : 0.24) - 0.02, y + h / 2, 0.04);
+    const up = y / H;
+    const own =
+      up > 0.6 && r.next() < 0.7
+        ? lossThreshold(r.next(), 0.1 + 0.35 * (up - 0.6) * 2.5, 0.04)
+        : 0;
+    under = own > 0 || under > 0 ? Math.max(own, under) : 0;
+    column.push({ y: y + h, loss: under });
+    box(
+      stone,
+      c,
+      [w.u, UP, w.n],
+      [long ? 0.38 : 0.26, h / 2 - 0.012, 0.06],
+      0.52 + 0.14 * r.next(),
+      still(on(w, 0.3, 0, 0.04), 0.45, {
+        loss: under,
+        tint: (r.next() - 0.5) * 0.04,
+      }),
+    );
+    y += h;
   }
+  return column;
+}
+
+function buildTowerFaceMasonry(
+  stone: PartBuilder,
+  w: Wall,
+  floor: number,
+  H: number,
+  storey: number,
+  r: Rand,
+): number {
+  const column = buildTowerFaceQuoins(stone, w, H, r);
+  const quoinAt = (y: number): number =>
+    Math.max(
+      0,
+      ...column
+        .filter((q) => q.y >= y - 0.4 && q.y <= y + 0.4)
+        .map((q) => q.loss),
+    );
+  for (let y = floor + storey - 0.35; y < H - 0.6; y += storey) {
+    const c = on(w, w.length / 2, y, 0.05);
+    const own = y / H > 0.65 ? lossThreshold(r.next(), 0.22, 0.05) : 0;
+    const held = quoinAt(y);
+    box(
+      stone,
+      c,
+      [w.u, UP, w.n],
+      [w.length / 2 + 0.06, 0.07, 0.07],
+      0.6,
+      still(on(w, w.length / 2, y, -0.1), 0.45, {
+        loss: own > 0 || held > 0 ? Math.max(own, held + LOSS_BAND + 0.01) : 0,
+      }),
+    );
+  }
+  return quoinAt(H - 0.2);
+}
+
+function buildTowerMasonry(
+  stone: PartBuilder,
+  faces: readonly Wall[],
+  floor: number,
+  H: number,
+  storey: number,
+  r: Rand,
+): void {
   // Quoins up every corner and a string course at every storey, with the top
   // courses falling first. Each quoin rests on the one below and goes no later
   // than it, sinking down the corner as it goes. A string course goes before
   // the quoins it runs between, and the cornice goes before them all.
   let highest = 0;
   for (const w of faces) {
-    let under = 0;
-    const column: { y: number; loss: number }[] = [];
-    for (let y = -0.3, k = 0; y < H - 0.05; k++) {
-      const h = Math.min(0.36, H - y);
-      const long = k % 2 === 0;
-      const c = on(w, (long ? 0.36 : 0.24) - 0.02, y + h / 2, 0.04);
-      const up = y / H;
-      const own =
-        up > 0.6 && r.next() < 0.7
-          ? lossThreshold(r.next(), 0.1 + 0.35 * (up - 0.6) * 2.5, 0.04)
-          : 0;
-      under = own > 0 || under > 0 ? Math.max(own, under) : 0;
-      column.push({ y: y + h, loss: under });
-      box(
-        stone,
-        c,
-        [w.u, UP, w.n],
-        [long ? 0.38 : 0.26, h / 2 - 0.012, 0.06],
-        0.52 + 0.14 * r.next(),
-        still(on(w, 0.3, 0, 0.04), 0.45, {
-          loss: under,
-          tint: (r.next() - 0.5) * 0.04,
-        }),
-      );
-      y += h;
-    }
-    const quoinAt = (y: number): number =>
-      Math.max(
-        0,
-        ...column
-          .filter((q) => q.y >= y - 0.4 && q.y <= y + 0.4)
-          .map((q) => q.loss),
-      );
-    for (let y = plan.floor + storey - 0.35; y < H - 0.6; y += storey) {
-      const c = on(w, w.length / 2, y, 0.05);
-      const own = y / H > 0.65 ? lossThreshold(r.next(), 0.22, 0.05) : 0;
-      const held = quoinAt(y);
-      box(
-        stone,
-        c,
-        [w.u, UP, w.n],
-        [w.length / 2 + 0.06, 0.07, 0.07],
-        0.6,
-        still(on(w, w.length / 2, y, -0.1), 0.45, {
-          loss:
-            own > 0 || held > 0 ? Math.max(own, held + LOSS_BAND + 0.01) : 0,
-        }),
-      );
-    }
-    highest = Math.max(highest, quoinAt(H - 0.2));
+    highest = Math.max(
+      highest,
+      buildTowerFaceMasonry(stone, w, floor, H, storey, r),
+    );
   }
   for (const w of faces) {
     const top = on(w, w.length / 2, H - 0.1, 0.07);
@@ -556,6 +572,15 @@ export function buildTower(
       }),
     );
   }
+}
+
+function buildTowerWindows(
+  glass: PartBuilder,
+  stone: PartBuilder,
+  faces: readonly Wall[],
+  windows: readonly Opening[],
+  r: Rand,
+): void {
   // Tall, narrow windows, lit at night. As vitality falls they go dark one at a time.
   for (const o of windows) {
     const w = faces.find(
@@ -647,6 +672,131 @@ export function buildTower(
       );
     }
   }
+}
+
+function buildTowerLanternCap(
+  roof: PartBuilder,
+  wood: PartBuilder,
+  glass: PartBuilder,
+  T: number,
+  H: number,
+  eave: number,
+  capPivot: V3,
+  capRot: (q: V3) => number,
+  r: Rand,
+): V3 {
+  // An open lantern room: four posts round a lamp lit at night, under a
+  // small steep cap. The posts never go, and they carry the cap. The rails
+  // between them go one by one, each shrinking back onto a post.
+  const lh = 1.7;
+  const post = T / 2 - 0.2;
+  for (const [x, z] of [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ] as const) {
+    const base: V3 = [x * post, H, z * post];
+    beam(
+      wood,
+      base,
+      [x * post, H + lh, z * post],
+      0.16,
+      0.16,
+      [1, 0, 0],
+      0.42,
+      still(base, 0.55),
+    );
+  }
+  for (const y of [H + 0.55, H + lh - 0.05]) {
+    for (const [a, b2] of [
+      [
+        [-post, -post],
+        [post, -post],
+      ],
+      [
+        [post, -post],
+        [post, post],
+      ],
+      [
+        [post, post],
+        [-post, post],
+      ],
+      [
+        [-post, post],
+        [-post, -post],
+      ],
+    ] as const) {
+      beam(
+        wood,
+        [a[0], y, a[1]],
+        [b2[0], y, b2[1]],
+        0.08,
+        0.08,
+        UP,
+        0.45,
+        still([a[0], y, a[1]], 0.55, {
+          loss: lossThreshold(r.next(), 0.2, 0.05),
+        }),
+      );
+    }
+  }
+  // The lamp sits on a low table on the room's floor, and collapses into it when it goes.
+  const lampC: V3 = [0, H + 0.1 + 0.45, 0];
+  box(glass, lampC, [[1, 0, 0], UP, [0, 0, 1]], [0.32, 0.45, 0.32], 0.85, {
+    loss: lossThreshold(r.next(), 0.5, 0.3),
+    droop: 0,
+    wither: 0.4,
+    glow: 1,
+    pivot: [0, H + 0.1, 0],
+  });
+  box(
+    wood,
+    [0, H + 0.05, 0],
+    [[1, 0, 0], UP, [0, 0, 1]],
+    [0.42, 0.05, 0.42],
+    0.4,
+    still([0, H, 0], 0.5),
+  );
+  const top = H + lh;
+  const cap: V3[] = [
+    [-eave + 0.15, top, eave - 0.15],
+    [eave - 0.15, top, eave - 0.15],
+    [eave - 0.15, top, -eave + 0.15],
+    [-eave + 0.15, top, -eave + 0.15],
+  ];
+  const apex: V3 = [0, top + T * 0.75, 0];
+  quad(
+    roof,
+    [cap[0] as V3, cap[3] as V3, cap[2] as V3, cap[1] as V3],
+    [0, -1, 0],
+    0.25,
+    still(capPivot, 0.6),
+  );
+  for (let k = 0; k < 4; k++) {
+    capFace(
+      roof,
+      wood,
+      [cap[k] as V3, cap[(k + 1) % 4] as V3],
+      apex,
+      4,
+      capRot,
+      capPivot,
+    );
+  }
+  return apex;
+}
+
+function buildTowerRoof(
+  roof: PartBuilder,
+  wood: PartBuilder,
+  glass: PartBuilder,
+  capKind: Resolved<typeof towerParams>["cap"],
+  T: number,
+  H: number,
+  ruin: Ruin,
+  r: Rand,
+): void {
   // The roof of the tower: a ceiling over its top, then the chosen cap.
   const eave = T / 2 + 0.32;
   const ring: V3[] = [
@@ -670,106 +820,18 @@ export function buildTower(
       1,
     );
   let apex: V3;
-  if (p.cap === "lantern") {
-    // An open lantern room: four posts round a lamp lit at night, under a
-    // small steep cap. The posts never go, and they carry the cap. The rails
-    // between them go one by one, each shrinking back onto a post.
-    const lh = 1.7;
-    const post = T / 2 - 0.2;
-    for (const [x, z] of [
-      [-1, -1],
-      [1, -1],
-      [1, 1],
-      [-1, 1],
-    ] as const) {
-      const base: V3 = [x * post, H, z * post];
-      beam(
-        wood,
-        base,
-        [x * post, H + lh, z * post],
-        0.16,
-        0.16,
-        [1, 0, 0],
-        0.42,
-        still(base, 0.55),
-      );
-    }
-    for (const y of [H + 0.55, H + lh - 0.05]) {
-      for (const [a, b2] of [
-        [
-          [-post, -post],
-          [post, -post],
-        ],
-        [
-          [post, -post],
-          [post, post],
-        ],
-        [
-          [post, post],
-          [-post, post],
-        ],
-        [
-          [-post, post],
-          [-post, -post],
-        ],
-      ] as const) {
-        beam(
-          wood,
-          [a[0], y, a[1]],
-          [b2[0], y, b2[1]],
-          0.08,
-          0.08,
-          UP,
-          0.45,
-          still([a[0], y, a[1]], 0.55, {
-            loss: lossThreshold(r.next(), 0.2, 0.05),
-          }),
-        );
-      }
-    }
-    // The lamp sits on a low table on the room's floor, and collapses into it when it goes.
-    const lampC: V3 = [0, H + 0.1 + 0.45, 0];
-    box(glass, lampC, [[1, 0, 0], UP, [0, 0, 1]], [0.32, 0.45, 0.32], 0.85, {
-      loss: lossThreshold(r.next(), 0.5, 0.3),
-      droop: 0,
-      wither: 0.4,
-      glow: 1,
-      pivot: [0, H + 0.1, 0],
-    });
-    box(
-      wood,
-      [0, H + 0.05, 0],
-      [[1, 0, 0], UP, [0, 0, 1]],
-      [0.42, 0.05, 0.42],
-      0.4,
-      still([0, H, 0], 0.5),
-    );
-    const top = H + lh;
-    const cap: V3[] = [
-      [-eave + 0.15, top, eave - 0.15],
-      [eave - 0.15, top, eave - 0.15],
-      [eave - 0.15, top, -eave + 0.15],
-      [-eave + 0.15, top, -eave + 0.15],
-    ];
-    apex = [0, top + T * 0.75, 0];
-    quad(
+  if (capKind === "lantern") {
+    apex = buildTowerLanternCap(
       roof,
-      [cap[0] as V3, cap[3] as V3, cap[2] as V3, cap[1] as V3],
-      [0, -1, 0],
-      0.25,
-      still(capPivot, 0.6),
+      wood,
+      glass,
+      T,
+      H,
+      eave,
+      capPivot,
+      capRot,
+      r,
     );
-    for (let k = 0; k < 4; k++) {
-      capFace(
-        roof,
-        wood,
-        [cap[k] as V3, cap[(k + 1) % 4] as V3],
-        apex,
-        4,
-        capRot,
-        capPivot,
-      );
-    }
   } else {
     apex = [0, H + T * 0.95, 0];
     for (let k = 0; k < 4; k++) {
@@ -786,8 +848,8 @@ export function buildTower(
   }
   // A finial that leans and falls as vitality falls, coming to rest along the
   // cap's hip with its foot at the apex.
-  const corner = p.cap === "lantern" ? eave - 0.15 : eave;
-  const eaveY = p.cap === "lantern" ? H + 1.7 : H;
+  const corner = capKind === "lantern" ? eave - 0.15 : eave;
+  const eaveY = capKind === "lantern" ? H + 1.7 : H;
   const tip =
     Math.PI / 2 + Math.atan2(apex[1] - eaveY, corner * Math.SQRT2) - 0.03;
   const finial: Channels = {
@@ -815,6 +877,85 @@ export function buildTower(
     0.5,
     finial,
   );
+}
+
+export function buildTower(
+  p: Resolved<typeof towerParams>,
+  ctx: BuildContext,
+  plan: BuildingPlan,
+): Built {
+  const r = ctx.rand.fork("tower");
+  const side = featureSide(plan);
+  const T = clamp(Math.min(plan.width, plan.depth) * 0.62, 3, 3.8);
+  const houseTop = Math.max(
+    ...plan.masses.map((m) => wallTop(plan, m) + m.rise),
+  );
+  const H = clamp(houseTop + p.height + 2.5 * (ctx.facts.reach ?? 0.5), 8, 19);
+  // At the back corner on the free side, overlapping the house a little and clear of its windows.
+  const off: V3 = [
+    side * (plan.width / 2 + T / 2 - 0.35),
+    0,
+    -plan.depth / 2 - T / 2 + 1.05,
+  ];
+  const render = new Moved("render", "solid", off);
+  const stone = new Moved("masonry", "solid", off);
+  const glass = new Moved("glass", "none", off);
+  const roof = new Moved("roof", "solid", off);
+  const wood = new Moved("timber", "solid", off);
+  const moss = new Moved("moss", "none", off);
+  const storey = 2.7;
+  const body: Mass = {
+    x: 0,
+    z: 0,
+    width: T,
+    depth: T,
+    round: false,
+    wallHeight: H - plan.floor,
+    storeys: 1,
+    rise: 0,
+    ridge: "x",
+    roof: "hip",
+    fall: 1,
+    ends: [true, true],
+  };
+  const tower0: BuildingPlan = {
+    width: T,
+    depth: T,
+    floor: plan.floor,
+    footing: 1.4,
+    masses: [body],
+    settle: plan.settle,
+    openings: [],
+  };
+  const faces = wallsOf(tower0);
+  const windows = towerWindowOpenings(faces, plan, side, houseTop, H, storey);
+  const tower: BuildingPlan = { ...tower0, openings: windows };
+  const ruin = ruinOf(tower);
+  const seed = Math.floor(r.next() * 1e6);
+
+  // Rendered walls in hand-laid cells. As vitality falls they rot through from the top, a patch of render at a time.
+  const rendered: Hold = (w, q) => ({
+    rot: clamp(
+      wallRot(tower, body, ruin, q) * 0.7 + 0.35 * clamp(q[1] / H, 0, 1) ** 2,
+      0,
+      1,
+    ),
+    grain: wallGrain(w, GRAIN.plaster, PLASTER),
+  });
+  for (const w of faces) {
+    const pivot = on(w, w.length / 2, H / 2);
+    wallSheet(render, tower, w, -tower.footing, 0.01, 0.7, (q) => {
+      const n = fbm3(q[0] * 1.4, q[1] * 1.4, q[2] * 1.4, seed, 2);
+      const up = clamp(q[1] / H, 0, 1);
+      return {
+        shade: 0.56 + 0.1 * n,
+        c: still(pivot, 0.55 + 0.2 * up, { ...rendered(w, q), tint: 0.02 * n }),
+      };
+    });
+  }
+  buildTowerMasonry(stone, faces, plan.floor, H, storey, r);
+  buildTowerWindows(glass, stone, faces, windows, r);
+  buildTowerRoof(roof, wood, glass, p.cap, T, H, ruin, r);
 
   ivy(moss, tower, ruin, r.fork("ivy"), 1, rendered);
   rubble(stone, tower, ruin, r.fork("rubble"), 0.24, 22);

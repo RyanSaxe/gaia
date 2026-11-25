@@ -178,14 +178,6 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     const pond = t.ponds[0] as (typeof t.ponds)[number];
     const from = { x: pond.x - pond.reach * 2.5, z: pond.z };
     const to = { x: pond.x + pond.reach * 2.5, z: pond.z };
-    /** Points a meter or less apart from a to b. */
-    const along = (a: Walker, b: Walker): Walker[] => {
-      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z)));
-      return Array.from({ length: n + 1 }, (_, i) => ({
-        x: a.x + ((b.x - a.x) * i) / n,
-        z: a.z + ((b.z - a.z) * i) / n,
-      }));
-    };
     // Straight over, it would swim the pond.
     expect(
       Math.max(...along(from, to).map((p) => waterDepthAt(t, p.x, p.z))),
@@ -196,19 +188,19 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
       { x: pond.x, z: pond.z + pond.reach * 1.3, radius: 3 },
     ]);
     for (const s of [NO_SOLIDS, solids]) {
-      const way = acrossWay(t, s, from, to) as Walker[];
-      expect(way).not.toBeNull();
-      expect(way[0]).toEqual(from);
+      const route = acrossWay(t, s, from, to) as Walker[];
+      expect(route).not.toBeNull();
+      expect(route[0]).toEqual(from);
       expect(
         Math.hypot(
-          (way[way.length - 1] as Walker).x - to.x,
-          (way[way.length - 1] as Walker).z - to.z,
+          (route[route.length - 1] as Walker).x - to.x,
+          (route[route.length - 1] as Walker).z - to.z,
         ),
       ).toBeLessThan(0.5);
       let length = 0;
-      for (let i = 1; i < way.length; i++) {
-        const a = way[i - 1] as Walker;
-        const b = way[i] as Walker;
+      for (let i = 1; i < route.length; i++) {
+        const a = route[i - 1] as Walker;
+        const b = route[i] as Walker;
         length += Math.hypot(b.x - a.x, b.z - a.z);
         for (const p of along(a, b)) {
           expect(waterDepthAt(t, p.x, p.z)).toBeLessThan(0.6);
@@ -223,6 +215,15 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     }
   });
 });
+
+/** Points a meter or less apart from a to b. */
+function along(a: Walker, b: Walker): Walker[] {
+  const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z)));
+  return Array.from({ length: n + 1 }, (_, i) => ({
+    x: a.x + ((b.x - a.x) * i) / n,
+    z: a.z + ((b.z - a.z) * i) / n,
+  }));
+}
 
 /** The trip's way ahead at `s`, read from its samples. */
 function headingNear(trip: Trip, s: number): number {

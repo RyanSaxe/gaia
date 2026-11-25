@@ -93,15 +93,18 @@ function aged(
   // The trunk stretches and the crown moves with the fork as a whole. When age
   // lowers the crown, points of drooping limbs below the fork scale with the
   // trunk instead of dropping with the fork, so they stay above the ground.
-  const lower = (q: readonly [number, number, number], trunk = false): V3 => {
+  const lower = (q: readonly [number, number, number], isTrunk = false): V3 => {
     const moved =
-      trunk || (stretch < 1 && q[1] <= fork)
+      isTrunk || (stretch < 1 && q[1] <= fork)
         ? q[1] * stretch
         : q[1] + fork * (stretch - 1);
     return [q[0], moved, q[2]];
   };
-  const girth = (l: Limb): number =>
-    l.depth === 0 ? 0.85 + 0.75 * age : l.depth === 1 ? 0.9 + 0.4 * age : 1;
+  const girth = (l: Limb): number => {
+    if (l.depth === 0) return 0.85 + 0.75 * age;
+    if (l.depth === 1) return 0.9 + 0.4 * age;
+    return 1;
+  };
   // Great limbs broken off: the first segment stays as a blunt stub and everything it carried is gone.
   const stubs = new Set<number>();
   const gone = new Set<number>();
@@ -191,6 +194,87 @@ interface Buttress {
  */
 const BUTTRESS = { height: 1.6, thick: 0.2, sweep: 1.6 } as const;
 
+function buttressGrid(
+  b: Buttress,
+  n: number,
+  trunkRadius: number,
+  along: number,
+  around: number,
+): { grid: V3[][]; centers: V3[] } {
+  const grid: V3[][] = [];
+  const centers: V3[] = [];
+  for (let i = 0; i <= along; i++) {
+    const t = i / along;
+    const a = b.angle + 0.16 * Math.sin(t * Math.PI * 1.3 + n * 1.9);
+    const dir: V3 = [Math.cos(a), 0, Math.sin(a)];
+    const side: V3 = [-dir[2], 0, dir[0]];
+    const dist =
+      trunkRadius * 0.3 + t * Math.max(0, b.reach - trunkRadius * 0.3);
+    const top = b.height * Math.pow(1 - t, BUTTRESS.sweep) + 0.06;
+    const bottom = -0.4;
+    const half = (top - bottom) / 2;
+    const mid = (top + bottom) / 2;
+    // Thicker where it leaves the trunk, thinning as it runs out.
+    const w = b.thick * (1 - 0.55 * t) * (1 + 1.2 * Math.exp(-t * 7));
+    centers.push([dir[0] * dist, mid, dir[2] * dist]);
+    const row: V3[] = [];
+    for (let j = 0; j <= around; j++) {
+      const th = (j / around) * Math.PI * 2;
+      const c = Math.cos(th);
+      const s = Math.sin(th);
+      // Flat-sided, its top edge rounded, a little wider toward the ground.
+      const across =
+        w * Math.sign(c) * Math.pow(Math.abs(c), 0.55) * (1.25 - 0.25 * s);
+      const up = mid + half * Math.sign(s) * Math.pow(Math.abs(s), 0.3);
+      row.push([
+        dir[0] * dist + side[0] * across,
+        up,
+        dir[2] * dist + side[2] * across,
+      ]);
+    }
+    grid.push(row);
+  }
+  return { grid, centers };
+}
+
+function emitButtressFaces(
+  out: PartBuilder,
+  grid: readonly V3[][],
+  normals: readonly V3[][],
+  first: number,
+  along: number,
+  around: number,
+): void {
+  // Wound counter-clockwise seen from outside, so each quad's face agrees with its corners' normals.
+  for (let i = 0; i < along; i++) {
+    for (let j = 0; j < around; j++) {
+      const a = first + i * (around + 1) + j;
+      const c = a + around + 1;
+      const p0 = (grid[i] as V3[])[j] as V3;
+      const face = cross(
+        sub((grid[i] as V3[])[j + 1] as V3, p0),
+        sub((grid[i + 1] as V3[])[j] as V3, p0),
+      );
+      const nRow0 = normals[i] as V3[];
+      const nRow1 = normals[i + 1] as V3[];
+      const corners: V3[] = [
+        nRow0[j] as V3,
+        nRow0[j + 1] as V3,
+        nRow1[j] as V3,
+        nRow1[j + 1] as V3,
+      ];
+      const facing = corners.reduce((sum, m) => sum + dot(face, m), 0);
+      if (facing >= 0) {
+        out.triangle(a, a + 1, c);
+        out.triangle(a + 1, c + 1, c);
+      } else {
+        out.triangle(a, c, a + 1);
+        out.triangle(a + 1, c, c + 1);
+      }
+    }
+  }
+}
+
 /**
  * Builds an old trunk's buttress roots. Each is a thin blade, tall where it
  * leaves the trunk and curving a little as it runs out, with its top edge
@@ -208,39 +292,7 @@ function buildButtresses(
   const around = 12;
   const root: V3 = [0, 0, 0];
   buttresses.forEach((b, n) => {
-    const grid: V3[][] = [];
-    const centers: V3[] = [];
-    for (let i = 0; i <= along; i++) {
-      const t = i / along;
-      const a = b.angle + 0.16 * Math.sin(t * Math.PI * 1.3 + n * 1.9);
-      const dir: V3 = [Math.cos(a), 0, Math.sin(a)];
-      const side: V3 = [-dir[2], 0, dir[0]];
-      const dist =
-        trunkRadius * 0.3 + t * Math.max(0, b.reach - trunkRadius * 0.3);
-      const top = b.height * Math.pow(1 - t, BUTTRESS.sweep) + 0.06;
-      const bottom = -0.4;
-      const half = (top - bottom) / 2;
-      const mid = (top + bottom) / 2;
-      // Thicker where it leaves the trunk, thinning as it runs out.
-      const w = b.thick * (1 - 0.55 * t) * (1 + 1.2 * Math.exp(-t * 7));
-      centers.push([dir[0] * dist, mid, dir[2] * dist]);
-      const row: V3[] = [];
-      for (let j = 0; j <= around; j++) {
-        const th = (j / around) * Math.PI * 2;
-        const c = Math.cos(th);
-        const s = Math.sin(th);
-        // Flat-sided, its top edge rounded, a little wider toward the ground.
-        const across =
-          w * Math.sign(c) * Math.pow(Math.abs(c), 0.55) * (1.25 - 0.25 * s);
-        const up = mid + half * Math.sign(s) * Math.pow(Math.abs(s), 0.3);
-        row.push([
-          dir[0] * dist + side[0] * across,
-          up,
-          dir[2] * dist + side[2] * across,
-        ]);
-      }
-      grid.push(row);
-    }
+    const { grid, centers } = buttressGrid(b, n, trunkRadius, along, around);
     const first = out.vertexCount;
     const wither = 0.5 + 0.2 * Math.abs(Math.sin(n * 2.1));
     const normals: V3[][] = [];
@@ -281,32 +333,7 @@ function buildButtresses(
         });
       }
     }
-    // Wound counter-clockwise seen from outside, so each quad's face agrees with its corners' normals.
-    for (let i = 0; i < along; i++) {
-      for (let j = 0; j < around; j++) {
-        const a = first + i * (around + 1) + j;
-        const c = a + around + 1;
-        const p0 = (grid[i] as V3[])[j] as V3;
-        const face = cross(
-          sub((grid[i] as V3[])[j + 1] as V3, p0),
-          sub((grid[i + 1] as V3[])[j] as V3, p0),
-        );
-        const corners = [
-          normals[i]?.[j],
-          normals[i]?.[j + 1],
-          normals[i + 1]?.[j],
-          normals[i + 1]?.[j + 1],
-        ] as V3[];
-        const facing = corners.reduce((sum, m) => sum + dot(face, m), 0);
-        if (facing >= 0) {
-          out.triangle(a, a + 1, c);
-          out.triangle(a + 1, c + 1, c);
-        } else {
-          out.triangle(a, c, a + 1);
-          out.triangle(a + 1, c, c + 1);
-        }
-      }
-    }
+    emitButtressFaces(out, grid, normals, first, along, around);
   });
   return { parts: out.vertexCount > 0 ? [out.part()] : [], anchors: [] };
 }

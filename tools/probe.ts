@@ -126,12 +126,13 @@ interface Call {
   readonly shown?: boolean;
 }
 
-const go = (spot: string): string =>
-  spot === "valley"
-    ? "T.valley()"
-    : spot === "turned"
-      ? "(T.valley(), T.walk(T.walker().x, T.walker().z, T.walker().yawDeg + 120, -3))"
-      : `(T.tour(${JSON.stringify(spot)}) ?? (() => { throw new Error(${JSON.stringify(`No tour stop named ${spot}.`)}); })())`;
+const go = (spot: string): string => {
+  if (spot === "valley") return "T.valley()";
+  if (spot === "turned") {
+    return "(T.valley(), T.walk(T.walker().x, T.walker().z, T.walker().yawDeg + 120, -3))";
+  }
+  return `(T.tour(${JSON.stringify(spot)}) ?? (() => { throw new Error(${JSON.stringify(`No tour stop named ${spot}.`)}); })())`;
+};
 /** Opens the world at 15:30, waits for the bushes' far forms, which bake once it is open, and reports its trees. */
 const OPEN = `(await __lab.open("immersive"), await T.farReady(), await __lab.hour(15.5), await __lab.frames(30), T.scale())`;
 const settle = "await __lab.frames(40)";
@@ -359,68 +360,71 @@ const drewAt = ratios.length === 0 ? `${dpr}` : ratios.join(" and ");
 line(
   `Probe at ${WIDTH}x${HEIGHT} CSS pixels, device pixel ratio ${drewAt}${ratios.some((r) => r !== dpr) ? ` (asked for ${dpr}; Electron draws at the screen's own ratio, so compare runs only on the same screen)` : ""}; drawn by ${probed.gpu}; load average ${f(load)} before, ${f(loadavg()[0] ?? 0)} after.`,
 );
+function reportDrawn(key: string, value: unknown): void {
+  const { ms, drawn, trees, woods, understory } = value as {
+    ms: number;
+    drawn: Tally;
+    trees?: number;
+    woods?: {
+      treesDrawn: number;
+      treesInBand: number;
+      treesFar: number;
+      swapPx: number;
+      treeCards?: FarCardsReport;
+      bushCards?: FarCardsReport;
+    };
+    understory?: Record<string, { copies: number; triangles: number }>;
+  };
+  const kinds = [
+    ...new Set(Object.values(drawn).flatMap((p) => Object.keys(p))),
+  ].toSorted(
+    (a, b) => (drawn.view[b]?.triangles ?? 0) - (drawn.view[a]?.triangles ?? 0),
+  );
+  const sum = (pass: keyof Tally, k: "calls" | "triangles"): number =>
+    Object.values(drawn[pass]).reduce((n, d) => n + d[k], 0);
+  line(
+    `  ${key}${trees === undefined ? "" : ` (${trees} trees)`}: ${f(ms, 2)} ms a frame; triangles (millions) and draw calls, view / mirror / shadow:`,
+  );
+  line(
+    `    all          ${m(sum("view", "triangles"))} / ${m(sum("mirror", "triangles"))} / ${m(sum("shadow", "triangles"))}   calls ${sum("view", "calls")} / ${sum("mirror", "calls")} / ${sum("shadow", "calls")}`,
+  );
+  for (const k of kinds) {
+    const at = (pass: keyof Tally): { calls: number; triangles: number } =>
+      drawn[pass][k] ?? { calls: 0, triangles: 0 };
+    line(
+      `    ${k.padEnd(12)} ${m(at("view").triangles)} / ${m(at("mirror").triangles)} / ${m(at("shadow").triangles)}   calls ${at("view").calls} / ${at("mirror").calls} / ${at("shadow").calls}`,
+    );
+  }
+  if (woods !== undefined) {
+    line(
+      `    trees in view: ${woods.treesDrawn - woods.treesInBand} full, ${woods.treesInBand} in the band, ${woods.treesFar} far; turning far at ${woods.swapPx} px`,
+    );
+  }
+  for (const [set, c] of [
+    ["trees", woods?.treeCards],
+    ["understory", woods?.bushCards],
+  ] as const) {
+    if (c !== undefined) {
+      line(
+        `    far ${set}: ${c.held} of ${c.forms} forms in ${c.slots} slots (${c.mb} MB); ${c.carded} of ${c.farCopies} far copies as cards; ${c.read} read, ${c.baked} baked`,
+      );
+    }
+  }
+  if (understory !== undefined) {
+    const understoryKinds = Object.entries(understory).toSorted(
+      ([, a], [, b]) => b.triangles - a.triangles,
+    );
+    line(
+      `    understory in view, by kind: ${understoryKinds.map(([k, d]) => `${k} ${m(d.triangles)}M (${d.copies})`).join(", ")}`,
+    );
+  }
+}
+
 for (const [world, calls] of Object.entries(results)) {
   line(`\n${world}`);
   for (const [key, value] of Object.entries(calls)) {
     if (key.startsWith("drawn ") || key.startsWith("stress ")) {
-      const { ms, drawn, trees, woods, understory } = value as {
-        ms: number;
-        drawn: Tally;
-        trees?: number;
-        woods?: {
-          treesDrawn: number;
-          treesInBand: number;
-          treesFar: number;
-          swapPx: number;
-          treeCards?: FarCardsReport;
-          bushCards?: FarCardsReport;
-        };
-        understory?: Record<string, { copies: number; triangles: number }>;
-      };
-      const kinds = [
-        ...new Set(Object.values(drawn).flatMap((p) => Object.keys(p))),
-      ].sort(
-        (a, b) =>
-          (drawn.view[b]?.triangles ?? 0) - (drawn.view[a]?.triangles ?? 0),
-      );
-      const sum = (pass: keyof Tally, k: "calls" | "triangles"): number =>
-        Object.values(drawn[pass]).reduce((n, d) => n + d[k], 0);
-      line(
-        `  ${key}${trees === undefined ? "" : ` (${trees} trees)`}: ${f(ms, 2)} ms a frame; triangles (millions) and draw calls, view / mirror / shadow:`,
-      );
-      line(
-        `    all          ${m(sum("view", "triangles"))} / ${m(sum("mirror", "triangles"))} / ${m(sum("shadow", "triangles"))}   calls ${sum("view", "calls")} / ${sum("mirror", "calls")} / ${sum("shadow", "calls")}`,
-      );
-      for (const k of kinds) {
-        const at = (pass: keyof Tally) =>
-          drawn[pass][k] ?? { calls: 0, triangles: 0 };
-        line(
-          `    ${k.padEnd(12)} ${m(at("view").triangles)} / ${m(at("mirror").triangles)} / ${m(at("shadow").triangles)}   calls ${at("view").calls} / ${at("mirror").calls} / ${at("shadow").calls}`,
-        );
-      }
-      if (woods !== undefined) {
-        line(
-          `    trees in view: ${woods.treesDrawn - woods.treesInBand} full, ${woods.treesInBand} in the band, ${woods.treesFar} far; turning far at ${woods.swapPx} px`,
-        );
-      }
-      for (const [set, c] of [
-        ["trees", woods?.treeCards],
-        ["understory", woods?.bushCards],
-      ] as const) {
-        if (c !== undefined) {
-          line(
-            `    far ${set}: ${c.held} of ${c.forms} forms in ${c.slots} slots (${c.mb} MB); ${c.carded} of ${c.farCopies} far copies as cards; ${c.read} read, ${c.baked} baked`,
-          );
-        }
-      }
-      if (understory !== undefined) {
-        const kinds = Object.entries(understory).sort(
-          ([, a], [, b]) => b.triangles - a.triangles,
-        );
-        line(
-          `    understory in view, by kind: ${kinds.map(([k, d]) => `${k} ${m(d.triangles)}M (${d.copies})`).join(", ")}`,
-        );
-      }
+      reportDrawn(key, value);
     } else if (key.startsWith("steps ")) {
       // Each step: [meters walked, mean change, worst block's change]. A step above the walk's typical wind, and visible, is a pop.
       const { steps, wind } = value as {
@@ -428,7 +432,7 @@ for (const [world, calls] of Object.entries(results)) {
         wind: number[];
       };
       const typical =
-        [...wind].sort((a, b) => a - b)[Math.floor(wind.length / 2)] ?? 0;
+        wind.toSorted((a, b) => a - b)[Math.floor(wind.length / 2)] ?? 0;
       const bar = Math.max(typical, POP_FLOOR);
       const worst = steps.reduce((a, b) => (b[2] > a[2] ? b : a));
       const pops = steps.filter((s) => s[2] > bar);
@@ -449,7 +453,7 @@ for (const [world, calls] of Object.entries(results)) {
         painted: string[];
         intervals: number[];
       };
-      const sorted = [...intervals].sort((a, b) => a - b);
+      const sorted = intervals.toSorted((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
       const late = intervals.filter((t) => t > median * 1.5 + 4);
       line(
@@ -467,7 +471,7 @@ for (const [world, calls] of Object.entries(results)) {
         idle: { worst: number; looks: [number, number, string][] };
       };
       const worst = Math.max(painter.worst, idle.worst);
-      const sorted = [...painter.intervals].sort((a, b) => a - b);
+      const sorted = painter.intervals.toSorted((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
       const late = painter.intervals.filter((t) => t > median * 1.5 + 4);
       line(

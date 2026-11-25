@@ -58,6 +58,74 @@ export const LANDMARK_SITE = {
   blend: 8,
 } as const;
 
+function isSpotGentle(
+  l: Lattice,
+  x: number,
+  z: number,
+  radius: number,
+): boolean {
+  if (slopeAt(l, x, z) > LANDMARK_SITE.maxSlope) return false;
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    if (
+      slopeAt(l, x + Math.cos(a) * radius, z + Math.sin(a) * radius) >
+      LANDMARK_SITE.maxSlope
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function prominenceScore(
+  l: Lattice,
+  x: number,
+  z: number,
+  center: { readonly x: number; readonly z: number },
+): number {
+  const h = heightAt(l, x, z);
+  let around = 0;
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    around += heightAt(
+      l,
+      x + Math.cos(a) * LANDMARK_SITE.surround,
+      z + Math.sin(a) * LANDMARK_SITE.surround,
+    );
+  }
+  return (
+    h -
+    around / 12 -
+    LANDMARK_SITE.centrality * Math.hypot(x - center.x, z - center.z)
+  );
+}
+
+function isValidLandmarkSpot(
+  t: Terrain,
+  region: number,
+  radius: number,
+  avoid: readonly Occupied[],
+  within: Circle | null,
+  own: OwnGround | null,
+  x: number,
+  z: number,
+): boolean {
+  const l = t.lattice;
+  const ix = Math.round((x - l.origin) / l.spacing);
+  const iz = Math.round((z - l.origin) / l.spacing);
+  // On a lot, any region's land counts.
+  const outside =
+    within === null
+      ? t.region[iz * l.n + ix] !== region
+      : Math.hypot(x - within.x, z - within.z) > within.radius;
+  if (outside || (own !== null && !own(x, z))) return false;
+  if (!withinLand(t.spec, x, z, LANDMARK_SITE.margin + radius)) return false;
+  if (avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius)) {
+    return false;
+  }
+  return isSpotGentle(l, x, z, radius) && !isWet(t, x, z, radius + 6);
+}
+
 /** The most prominent gentle, dry spot for a landmark of footprint `radius` clear of `avoid`: in `region`, or on a lot (`within`), on ground `own` holds when it is given. */
 function prominentSpot(
   t: Terrain,
@@ -67,7 +135,6 @@ function prominentSpot(
   within: Circle | null,
   own: OwnGround | null,
 ): { x: number; z: number; score: number } | null {
-  const l = t.lattice;
   const half = t.spec.size / 2 - LANDMARK_SITE.margin - radius;
   const center = within ?? t.spec.regions[region];
   if (center === undefined) return null;
@@ -84,49 +151,87 @@ function prominentSpot(
         ];
   for (let z = z0; z <= z1; z += step) {
     for (let x = x0; x <= x1; x += step) {
-      const ix = Math.round((x - l.origin) / l.spacing);
-      const iz = Math.round((z - l.origin) / l.spacing);
-      // On a lot, any region's land counts.
-      if (
-        within !== null
-          ? Math.hypot(x - within.x, z - within.z) > within.radius
-          : t.region[iz * l.n + ix] !== region
-      ) {
+      if (!isValidLandmarkSpot(t, region, radius, avoid, within, own, x, z)) {
         continue;
       }
-      if (own !== null && !own(x, z)) continue;
-      if (!withinLand(t.spec, x, z, LANDMARK_SITE.margin + radius)) continue;
-      if (avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius)) {
-        continue;
-      }
-      let steep = slopeAt(l, x, z);
-      for (let k = 0; k < 8 && steep <= LANDMARK_SITE.maxSlope; k++) {
-        const a = (k / 8) * Math.PI * 2;
-        steep = Math.max(
-          steep,
-          slopeAt(l, x + Math.cos(a) * radius, z + Math.sin(a) * radius),
-        );
-      }
-      if (steep > LANDMARK_SITE.maxSlope) continue;
-      if (isWet(t, x, z, radius + 6)) continue;
-      const h = heightAt(l, x, z);
-      let around = 0;
-      for (let k = 0; k < 12; k++) {
-        const a = (k / 12) * Math.PI * 2;
-        around += heightAt(
-          l,
-          x + Math.cos(a) * LANDMARK_SITE.surround,
-          z + Math.sin(a) * LANDMARK_SITE.surround,
-        );
-      }
-      const score =
-        h -
-        around / 12 -
-        LANDMARK_SITE.centrality * Math.hypot(x - center.x, z - center.z);
+      const score = prominenceScore(t.lattice, x, z, center);
       if (best === null || score > best.score) best = { x, z, score };
     }
   }
   return best;
+}
+
+function makeLandmarkSite(
+  t: Terrain,
+  x: number,
+  z: number,
+  radius: number,
+  region: number,
+): LandmarkSite {
+  return { x, z, y: levelDisc(t, x, z, radius), radius, region };
+}
+
+function nearestFreeInLot(
+  t: Terrain,
+  within: Circle,
+  radius: number,
+  taken: (x: number, z: number) => boolean,
+): { x: number; z: number } {
+  let at = { x: within.x, z: within.z };
+  let near = Infinity;
+  for (let z = within.z - within.radius; z <= within.z + within.radius; z++) {
+    for (let x = within.x - within.radius; x <= within.x + within.radius; x++) {
+      const d = Math.hypot(x - within.x, z - within.z);
+      if (
+        d >= near ||
+        d > within.radius ||
+        !withinLand(t.spec, x, z, radius) ||
+        taken(x, z)
+      ) {
+        continue;
+      }
+      near = d;
+      at = { x, z };
+    }
+  }
+  return at;
+}
+
+function ownGroundSpot(
+  t: Terrain,
+  region: number,
+  radius: number,
+  avoid: readonly Occupied[],
+  within: Circle,
+  own: OwnGround,
+): { x: number; z: number } | null {
+  for (let r = within.radius; r <= within.radius + 60; r += 6) {
+    const mine = prominentSpot(
+      t,
+      region,
+      radius,
+      avoid,
+      { ...within, radius: r },
+      own,
+    );
+    if (mine !== null) return mine;
+  }
+  return null;
+}
+
+function preferredLandmarkSpot(
+  t: Terrain,
+  region: number,
+  radius: number,
+  avoid: readonly Occupied[],
+  within: Circle | null,
+  own: OwnGround | null,
+): { x: number; z: number } | null {
+  if (within !== null && own !== null) {
+    const mine = ownGroundSpot(t, region, radius, avoid, within, own);
+    if (mine !== null) return mine;
+  }
+  return prominentSpot(t, region, radius, avoid, within, null);
 }
 
 /**
@@ -145,78 +250,24 @@ export function findLandmarkSite(
   within: Circle | null = null,
   own: OwnGround | null = null,
 ): LandmarkSite | null {
-  if (within !== null && own !== null) {
-    for (let r = within.radius; r <= within.radius + 60; r += 6) {
-      const mine = prominentSpot(
-        t,
-        region,
-        radius,
-        avoid,
-        { ...within, radius: r },
-        own,
-      );
-      if (mine !== null) {
-        return {
-          x: mine.x,
-          z: mine.z,
-          y: levelDisc(t, mine.x, mine.z, radius),
-          radius,
-          region,
-        };
-      }
-    }
-  }
-  const best = prominentSpot(t, region, radius, avoid, within, null);
-  if (best !== null) {
-    return {
-      x: best.x,
-      z: best.z,
-      y: levelDisc(t, best.x, best.z, radius),
-      radius,
-      region,
-    };
-  }
+  const best = preferredLandmarkSpot(t, region, radius, avoid, within, own);
+  if (best !== null) return makeLandmarkSite(t, best.x, best.z, radius, region);
   if (within === null) return null;
   // With no such spot on the lot, use the lot's center unless something already occupies it. Then retry on the lot
   // widened 6 m at a time, and at last take the free ground nearest the center, however steep or near the rim.
   const taken = (x: number, z: number): boolean =>
     avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius);
-  if (taken(within.x, within.z) && within.radius < 60) {
+  const centerTaken = taken(within.x, within.z);
+  if (centerTaken && within.radius < 60) {
     return findLandmarkSite(t, region, radius, avoid, {
       ...within,
       radius: within.radius + 6,
     });
   }
-  let at = { x: within.x, z: within.z };
-  if (taken(at.x, at.z)) {
-    let near = Infinity;
-    for (let z = within.z - within.radius; z <= within.z + within.radius; z++) {
-      for (
-        let x = within.x - within.radius;
-        x <= within.x + within.radius;
-        x++
-      ) {
-        const d = Math.hypot(x - within.x, z - within.z);
-        if (
-          d >= near ||
-          d > within.radius ||
-          !withinLand(t.spec, x, z, radius) ||
-          taken(x, z)
-        ) {
-          continue;
-        }
-        near = d;
-        at = { x, z };
-      }
-    }
-  }
-  return {
-    x: at.x,
-    z: at.z,
-    y: levelDisc(t, at.x, at.z, radius),
-    radius,
-    region,
-  };
+  const at = centerTaken
+    ? nearestFreeInLot(t, within, radius, taken)
+    : { x: within.x, z: within.z };
+  return makeLandmarkSite(t, at.x, at.z, radius, region);
 }
 
 /** Levels a disc of ground to its mean height, blending back to the land, and returns that height. */

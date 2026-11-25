@@ -77,9 +77,9 @@ export function makeAhead(
         const id = next++;
         const ask = left[id];
         if (ask === undefined) finish();
-        else worker.postMessage({ id, ask });
+        else worker.postMessage({ id, ask }, []);
       };
-      worker.onmessage = (e: MessageEvent<MakeReply>) => {
+      worker.addEventListener("message", (e: MessageEvent<MakeReply>): void => {
         const ask = left[e.data.id];
         if (
           ask !== undefined &&
@@ -89,8 +89,8 @@ export function makeAhead(
           ready.set(keyOf(ask), e.data.built);
         }
         give();
-      };
-      worker.onerror = finish;
+      });
+      worker.addEventListener("error", finish);
       give();
     });
   return Promise.all(

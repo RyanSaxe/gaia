@@ -625,6 +625,47 @@ export function composeRows(
 /** The composed ground of columns [x0, x1) of rows [z0, z1), row-major, before fitting and water. */
 type ComposedRect = Omit<ComposedRows, "z0" | "z1">;
 
+function writeCoverTaps(
+  weights: Float64Array,
+  count: number,
+  top: Int32Array,
+  coverRegions: Uint8Array,
+  coverShares: Uint8Array,
+  region: Uint8Array,
+  k: number,
+): void {
+  // Keep the `COVER_TAPS` largest shares in `top`, largest first. Ties keep the lower index.
+  top.fill(-1);
+  for (let i = 0; i < count; i++) {
+    const w = weights[i] as number;
+    if (w <= 0) continue;
+    for (let t = 0; t < COVER_TAPS; t++) {
+      const at = top[t] as number;
+      if (at < 0 || w > (weights[at] as number)) {
+        top.copyWithin(t + 1, t, COVER_TAPS - 1);
+        top[t] = i;
+        break;
+      }
+    }
+  }
+  let kept = 0;
+  for (let t = 0; t < COVER_TAPS; t++) {
+    if ((top[t] as number) >= 0) kept += weights[top[t] as number] as number;
+  }
+  let given = 0;
+  for (let t = 0; t < COVER_TAPS; t++) {
+    const i = top[t] as number;
+    const share = i < 0 ? 0 : Math.round(((weights[i] as number) / kept) * 255);
+    coverRegions[k * COVER_TAPS + t] = Math.max(0, i);
+    coverShares[k * COVER_TAPS + t] = share;
+    given += share;
+  }
+  // Rounding leftovers go to the largest share, so every sample's shares sum to 255.
+  coverShares[k * COVER_TAPS] =
+    (coverShares[k * COVER_TAPS] as number) + 255 - given;
+  region[k] = Math.max(0, top[0] as number);
+}
+
 /**
  * Composes columns [x0, x1) of rows [z0, z1) of lattice `l`, which may be the
  * world's lattice, a coarser survey of it, or a tile. Each sample depends
@@ -666,39 +707,7 @@ function composeRect(
         blended(spec, landforms, weights, x, z) + rimAt(spec, x, z),
       );
       coverFromBlend(spec, x, z, weights);
-      // Keep the `COVER_TAPS` largest shares in `top`, largest first. Ties keep the lower index.
-      top.fill(-1);
-      for (let i = 0; i < count; i++) {
-        const w = weights[i] as number;
-        if (w <= 0) continue;
-        for (let t = 0; t < COVER_TAPS; t++) {
-          const at = top[t] as number;
-          if (at < 0 || w > (weights[at] as number)) {
-            top.copyWithin(t + 1, t, COVER_TAPS - 1);
-            top[t] = i;
-            break;
-          }
-        }
-      }
-      let kept = 0;
-      for (let t = 0; t < COVER_TAPS; t++) {
-        if ((top[t] as number) >= 0) {
-          kept += weights[top[t] as number] as number;
-        }
-      }
-      let given = 0;
-      for (let t = 0; t < COVER_TAPS; t++) {
-        const i = top[t] as number;
-        const share =
-          i < 0 ? 0 : Math.round(((weights[i] as number) / kept) * 255);
-        coverRegions[k * COVER_TAPS + t] = Math.max(0, i);
-        coverShares[k * COVER_TAPS + t] = share;
-        given += share;
-      }
-      // Rounding leftovers go to the largest share, so every sample's shares sum to 255.
-      coverShares[k * COVER_TAPS] =
-        (coverShares[k * COVER_TAPS] as number) + 255 - given;
-      region[k] = Math.max(0, top[0] as number);
+      writeCoverTaps(weights, count, top, coverRegions, coverShares, region, k);
     }
   }
   return { raw, region, coverRegions, coverShares };
@@ -717,7 +726,7 @@ export function finishTerrain(
   const coverRegions = new Uint8Array(n * n * COVER_TAPS);
   const coverShares = new Uint8Array(n * n * COVER_TAPS);
   let filled = 0;
-  for (const p of [...parts].sort((a, b) => a.z0 - b.z0)) {
+  for (const p of [...parts].toSorted((a, b) => a.z0 - b.z0)) {
     if (p.z0 !== filled) {
       throw new Error(
         `Composed rows ${p.z0} to ${p.z1} leave a gap or overlap at row ${filled}.`,
@@ -776,7 +785,7 @@ export function finishTerrain(
     },
   );
   const waterLevel = new Float32Array(n * n).fill(DRY);
-  for (const s of streams) carveStream(final, heights, waterLevel, s);
+  for (const stream of streams) carveStream(final, heights, waterLevel, stream);
   for (const p of ponds) carvePond(final, heights, waterLevel, p.pond, p.depth);
 
   const shore = shoreField(final, heights, waterLevel);
@@ -913,9 +922,12 @@ function waterBeds(
       if (bed.kind !== "stream") continue;
       // A river, which has `widths`, keeps its whole course. A valley's own stream keeps only its run inside its region (`keptRun`).
       const path =
-        bed.widths !== undefined
-          ? Float32Array.from(bed.path, (v, k) => v + (k % 2 === 0 ? r.x : r.z))
-          : keptRun(spec, ri, bed.path);
+        bed.widths === undefined
+          ? keptRun(spec, ri, bed.path)
+          : Float32Array.from(
+              bed.path,
+              (v, k) => v + (k % 2 === 0 ? r.x : r.z),
+            );
       if (path === null) continue;
       let minX = Infinity;
       let maxX = -Infinity;
@@ -1177,6 +1189,21 @@ export function bakeTerrain(spec: WorldSpec, lib: Library): Terrain {
   ]);
 }
 
+function inRegionRun(
+  spec: WorldSpec,
+  ri: number,
+  x: number,
+  z: number,
+  weights: Float64Array,
+): boolean {
+  regionWeights(spec, x, z, weights);
+  let others = 0;
+  weights.forEach((w, i) => {
+    if (i !== ri) others = Math.max(others, w);
+  });
+  return withinLand(spec, x, z, 30) && others < 0.75;
+}
+
 /**
  * The longest unbroken run of a region's stream bed, in world coordinates,
  * where each point is at least 30 m inside the land (`withinLand`) and no
@@ -1193,17 +1220,15 @@ function keptRun(
   let start = -1;
   const count = local.length / 2;
   for (let k = 0; k <= count; k++) {
-    let ok = false;
-    if (k < count) {
-      const x = r.x + (local[k * 2] as number);
-      const z = r.z + (local[k * 2 + 1] as number);
-      regionWeights(spec, x, z, weights);
-      let others = 0;
-      weights.forEach((w, i) => {
-        if (i !== ri) others = Math.max(others, w);
-      });
-      ok = withinLand(spec, x, z, 30) && others < 0.75;
-    }
+    const ok =
+      k < count &&
+      inRegionRun(
+        spec,
+        ri,
+        r.x + (local[k * 2] as number),
+        r.z + (local[k * 2 + 1] as number),
+        weights,
+      );
     if (ok && start < 0) start = k;
     if (!ok && start >= 0) {
       if (k - start > best[1] - best[0]) best = [start, k];

@@ -163,7 +163,7 @@ const sizeOf = (file: string): string => {
     ? ""
     : `${head.readUInt16LE(at + 3) & 0x3fff}x${head.readUInt16LE(at + 5) & 0x3fff}`;
 };
-for (const j of jobs.filter((j) => !j.out.startsWith(iconset))) {
+for (const j of jobs.filter((job) => !job.out.startsWith(iconset))) {
   console.log(
     `${j.out} ${sizeOf(j.out)} ${(statSync(j.out).size / 1024).toFixed(0)} KiB`,
   );

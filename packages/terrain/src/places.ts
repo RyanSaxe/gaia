@@ -156,6 +156,20 @@ export interface Outlines {
   readonly patches: readonly Outline[];
 }
 
+function walkRing(next: Map<number, number[]>, start: number): number[] {
+  const ring: number[] = [start];
+  let at = start;
+  for (;;) {
+    const list = next.get(at);
+    if (list === undefined || list.length === 0) break;
+    const to = list.pop() as number;
+    if (to === start) break;
+    ring.push(to);
+    at = to;
+  }
+  return ring;
+}
+
 /** Chains raster edges (pairs of corner indices, inside on one side) into closed rings. */
 function ringsOf(edges: readonly number[]): number[][] {
   const next = new Map<number, number[]>();
@@ -166,18 +180,9 @@ function ringsOf(edges: readonly number[]): number[][] {
     else list.push(edges[k + 1] as number);
   }
   const rings: number[][] = [];
-  for (const start of [...next.keys()].sort((a, b) => a - b)) {
+  for (const start of [...next.keys()].toSorted((a, b) => a - b)) {
     while ((next.get(start)?.length ?? 0) > 0) {
-      const ring: number[] = [start];
-      let at = start;
-      for (;;) {
-        const list = next.get(at);
-        if (list === undefined || list.length === 0) break;
-        const to = list.pop() as number;
-        if (to === start) break;
-        ring.push(to);
-        at = to;
-      }
+      const ring = walkRing(next, start);
       if (ring.length >= 3) rings.push(ring);
     }
   }
@@ -225,6 +230,14 @@ export function outlinesOf(world: WorldPlaces, step = 4): Outlines {
   return made;
 }
 
+function growBox(box: number[] | undefined, i: number, j: number): void {
+  if (box === undefined) return;
+  box[0] = Math.min(box[0] as number, i);
+  box[1] = Math.min(box[1] as number, j);
+  box[2] = Math.max(box[2] as number, i);
+  box[3] = Math.max(box[3] as number, j);
+}
+
 function traceOutlines(world: WorldPlaces, step: number): Outlines {
   const half = world.size / 2;
   const n = Math.ceil(world.size / step);
@@ -236,13 +249,6 @@ function traceOutlines(world: WorldPlaces, step: number): Outlines {
   // Each area's and patch's bounding box on the raster, so tracing reads only its own samples.
   const areaBox = world.areas.map(() => [n, n, -1, -1]);
   const patchBox = world.patches.map(() => [n, n, -1, -1]);
-  const grow = (box: number[] | undefined, i: number, j: number): void => {
-    if (box === undefined) return;
-    box[0] = Math.min(box[0] as number, i);
-    box[1] = Math.min(box[1] as number, j);
-    box[2] = Math.max(box[2] as number, i);
-    box[3] = Math.max(box[3] as number, j);
-  };
   const parentOf = world.areas.map(
     (a) => areaIndex.get(a.parent ?? "\u0000") ?? -1,
   );
@@ -256,11 +262,13 @@ function traceOutlines(world: WorldPlaces, step: number): Outlines {
       if (place.area.depth < 0) continue;
       const a = areaIndex.get(place.area.path) ?? -1;
       areaAt[j * n + i] = a;
-      for (let k = a; k >= 0; k = parentOf[k] as number) grow(areaBox[k], i, j);
+      for (let k = a; k >= 0; k = parentOf[k] as number) {
+        growBox(areaBox[k], i, j);
+      }
       const p =
         place.file === null ? -1 : (patchIndex.get(place.file.path) ?? -1);
       patchAt[j * n + i] = p;
-      grow(patchBox[p], i, j);
+      growBox(patchBox[p], i, j);
     }
   }
   const corner = (i: number, j: number): number => j * (n + 1) + i;

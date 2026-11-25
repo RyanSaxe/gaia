@@ -532,23 +532,23 @@ const WRONG_DOCS = [
 
 /** Unrelated helpers a poorly kept file collects: what a file of misc things is made of. */
 const UNRELATED: readonly ((n: string) => string[])[] = [
-  (n) => [
+  (n): string[] => [
     `export function ${n}(s: string): string {`,
     `  return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");`,
     `}`,
   ],
-  (n) => [
+  (n): string[] => [
     `export function ${n}(d: Date): string {`,
     `  return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();`,
     `}`,
   ],
-  (n) => [
+  (n): string[] => [
     `export function ${n}(hex: string): number[] {`,
     `  const h = hex.replace("#", "");`,
     `  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));`,
     `}`,
   ],
-  (n) => [
+  (n): string[] => [
     `export function ${n}(ms: number): Promise<void> {`,
     `  return new Promise((r) => setTimeout(r, ms));`,
     `}`,
@@ -579,15 +579,73 @@ const TODOS = [
   "TODO: make this configurable",
 ];
 const HACKS = [
-  (_w: Words) => [
+  (_w: Words): string[] => [
     `// HACK: the east gauge reports twice; skip its second reading until it is fixed upstream`,
     `if (r.id === "east-7" && r.at % 2 === 1) continue;`,
   ],
-  (w: Words) => [
+  (w: Words): string[] => [
     `// HACK: old ${w.noun} records stored levels in tenths; scale them until the data is migrated`,
     `if (r.at < 1500000000) lvl = lvl / 10;`,
   ],
 ];
+
+function pad(k: number): string {
+  return "  ".repeat(k);
+}
+
+function level(bad: boolean, fair: boolean): Level {
+  if (bad) return "poor";
+  if (fair) return "fair";
+  return "good";
+}
+
+function pickName(spoil: Spoil, r: ReturnType<typeof streamOf>): string {
+  if (spoil.names >= 0.8) return r.pick(LETTERS);
+  if (spoil.names > 0 && r.next() < spoil.names) return r.pick(ABBREVIATIONS);
+  return r.pick(["total", "count", "level", "best", "seen", "result"]);
+}
+
+function appendTangleTail(
+  out: string[],
+  acc: readonly string[],
+  length: number,
+  spoil: Spoil,
+  todo: () => string | null,
+  swallow: () => boolean,
+): void {
+  let copy = 0;
+  let step = 0;
+  while (out.length < length - 3) {
+    const t = todo();
+    if (t !== null) out.push(`  // ${t}`);
+    if (swallow()) {
+      out.push(
+        `  try {`,
+        `    ${acc[2]} = ${acc[2]}.sort((p: any, q: any) => q.rate - p.rate);`,
+        `  } catch (e) {}`,
+      );
+      continue;
+    }
+    const block = [
+      `  if (${acc[1]} > ${step + 2}) {`,
+      `    ${acc[0]} = ${acc[0]} / ${acc[1]};`,
+      `    if (${acc[0]} > ${90 - step}) ${acc[0]} = ${90 - step};`,
+      `  }`,
+    ];
+    out.push(...block);
+    if (copy < spoil.copies && step % 3 === 1) {
+      out.push(
+        `  // copied from above`,
+        ...block.map((l) => l.replace(`> ${step + 2}`, `>= ${step + 2}`)),
+      );
+      copy++;
+    }
+    out.push(
+      `  // ${acc[2]} = ${acc[2]}.filter((z: any) => z.level > ${step});`,
+    );
+    step++;
+  }
+}
 
 /**
  * A function written as one tangle: `length` lines nested `depth` deep,
@@ -597,7 +655,7 @@ const HACKS = [
  */
 function tangle(
   name: string,
-  w: Words,
+  _w: Words,
   length: number,
   depth: number,
   spoil: Spoil,
@@ -607,15 +665,10 @@ function tangle(
   swallow: () => boolean,
   hidden: boolean,
 ): string[] {
-  const letter = (): string =>
-    spoil.names >= 0.8
-      ? r.pick(LETTERS)
-      : spoil.names > 0 && r.next() < spoil.names
-        ? r.pick(ABBREVIATIONS)
-        : r.pick(["total", "count", "level", "best", "seen", "result"]);
-  const acc = [letter(), letter(), letter()].map((v, i) => `${v}${i + 1}`);
+  const acc = [pickName(spoil, r), pickName(spoil, r), pickName(spoil, r)].map(
+    (v, i) => `${v}${i + 1}`,
+  );
   const out: string[] = [];
-  const pad = (k: number): string => "  ".repeat(k);
   const param = spoil.names >= 0.8 ? "l" : "items";
   out.push(`export function ${name}(${param}: any, o?: any): any {`);
   out.push(
@@ -666,38 +719,7 @@ function tangle(
   }
   out.push(`  }`);
   // The rest of the length: steps one after another, some copied, one handler emptied.
-  let copy = 0;
-  let step = 0;
-  while (out.length < length - 3) {
-    const t = todo();
-    if (t !== null) out.push(`  // ${t}`);
-    if (swallow()) {
-      out.push(
-        `  try {`,
-        `    ${acc[2]} = ${acc[2]}.sort((p: any, q: any) => q.rate - p.rate);`,
-        `  } catch (e) {}`,
-      );
-      continue;
-    }
-    const block = [
-      `  if (${acc[1]} > ${step + 2}) {`,
-      `    ${acc[0]} = ${acc[0]} / ${acc[1]};`,
-      `    if (${acc[0]} > ${90 - step}) ${acc[0]} = ${90 - step};`,
-      `  }`,
-    ];
-    out.push(...block);
-    if (copy < spoil.copies && step % 3 === 1) {
-      out.push(
-        `  // copied from above`,
-        ...block.map((l) => l.replace(`> ${step + 2}`, `>= ${step + 2}`)),
-      );
-      copy++;
-    }
-    out.push(
-      `  // ${acc[2]} = ${acc[2]}.filter((z: any) => z.level > ${step});`,
-    );
-    step++;
-  }
+  appendTangleTail(out, acc, length, spoil, todo, swallow);
   out.push(`  return { t: ${acc[0]}, n: ${acc[1]}, all: ${acc[2]} };`, `}`);
   return out;
 }
@@ -719,46 +741,22 @@ function documented(
   return text === "" ? [] : [`/** ${text} */`];
 }
 
-function writeTypeScript(
-  file: PlannedFile,
+function tsFileHeader(w: Words, docs: Spoil["docs"]): string {
+  if (docs === "fit") {
+    return `/**\n * The ${w.noun}: its readings, what they add up to and how they settle.\n */`;
+  }
+  if (docs === "some") return `// ${w.noun}`;
+  return `// old ${w.noun} stuff, see the wiki`;
+}
+
+function writeTsPreamble(
+  out: string[],
+  f: PlannedFacts,
+  w: Words,
+  spoil: Spoil,
   importable: ReadonlyMap<string, PlannedFacts>,
-): {
-  text: string;
-  entry: Omit<
-    ManifestEntry,
-    "path" | "vitality" | "health" | "planned" | "lines"
-  >;
-} {
-  const f = file.facts;
-  const spoil = SPOIL[file.health];
-  const r = streamOf(f.path);
-  const w = wordsOf(f);
-  const longest = Math.max(12, f.complexity.longestFunction);
-  const depth = Math.max(2, f.complexity.maxNesting);
-  let todos = f.debtMarkers;
-  const todo = (): string | null =>
-    todos > 0 && r.next() < 0.35 ? (todos--, r.pick(TODOS)) : null;
-  let hacks = spoil.hacks;
-  const hack = (): string[] | null =>
-    hacks > 0
-      ? (hacks--, (HACKS[hacks % HACKS.length] as (w: Words) => string[])(w))
-      : null;
-  let swallows = spoil.swallowed;
-  // The first chance always takes a planned swallow, so even a short tangle empties one handler.
-  const swallow = (): boolean =>
-    swallows > 0 &&
-    (swallows === spoil.swallowed || r.next() < 0.3) &&
-    (swallows--, true);
-  const out: string[] = [];
-  const good = spoil.docs === "fit";
-  out.push(
-    good
-      ? `/**\n * The ${w.noun}: its readings, what they add up to and how they settle.\n */`
-      : spoil.docs === "some"
-        ? `// ${w.noun}`
-        : `// old ${w.noun} stuff, see the wiki`,
-  );
-  out.push("");
+): void {
+  out.push(tsFileHeader(w, spoil.docs), "");
   for (const target of f.imports) {
     const other = importable.get(target);
     const name = other?.symbols.find(
@@ -782,14 +780,14 @@ function writeTypeScript(
       "",
     );
   }
-  // The record and the bounds.
-  out.push(
-    ...(good
-      ? [
-          `/** One reading of the ${w.noun}: what it is, its level and rate, when it was taken and how it is marked. */`,
-        ]
-      : []),
-  );
+}
+
+function writeTsTypes(out: string[], w: Words, good: boolean): void {
+  if (good) {
+    out.push(
+      `/** One reading of the ${w.noun}: what it is, its level and rate, when it was taken and how it is marked. */`,
+    );
+  }
   out.push(
     `${w.recordExported ? "export " : ""}interface ${w.record} {`,
     `  readonly id: string;`,
@@ -800,30 +798,37 @@ function writeTypeScript(
     `}`,
     "",
   );
-  out.push(
-    ...(good
-      ? [
-          `/** The lowest and highest level a reading may have, and how far one settling step moves it. */`,
-        ]
-      : []),
-  );
-  out.push(`const BOUNDS = { least: 0, most: 100, step: 5 } as const;`, "");
-  if (w.limit !== undefined) {
+  if (good) {
     out.push(
-      ...(good
-        ? [
-            `/** The most readings of the ${w.noun} one call takes when it isn't told how many. */`,
-          ]
-        : []),
-      `export const ${w.limit} = 64;`,
-      "",
+      `/** The lowest and highest level a reading may have, and how far one settling step moves it. */`,
     );
   }
-  // Each function and class symbol: a recipe written well, or a tangle.
+  out.push(`const BOUNDS = { least: 0, most: 100, step: 5 } as const;`, "");
+  if (w.limit !== undefined) {
+    if (good) {
+      out.push(
+        `/** The most readings of the ${w.noun} one call takes when it isn't told how many. */`,
+      );
+    }
+    out.push(`export const ${w.limit} = 64;`, "");
+  }
+}
+
+function writeTsFunctions(
+  bodies: string[],
+  f: PlannedFacts,
+  w: Words,
+  spoil: Spoil,
+  r: ReturnType<typeof streamOf>,
+  helpers: Set<string>,
+  todo: () => string | null,
+  hack: () => string[] | null,
+  swallow: () => boolean,
+  longest: number,
+  depth: number,
+): void {
   const functions = f.symbols.filter((s) => s.kind === "function");
   const tangledCount = Math.round(functions.length * spoil.tangled);
-  const helpers = new Set<string>();
-  const bodies: string[] = [];
   functions.forEach((s, i) => {
     const recipe = recipeOf(s.name);
     bodies.push(...documented(s, recipe, w, spoil, r, i));
@@ -854,6 +859,16 @@ function writeTypeScript(
     }
     bodies.push("");
   });
+}
+
+function writeTsClasses(
+  bodies: string[],
+  f: PlannedFacts,
+  w: Words,
+  spoil: Spoil,
+  r: ReturnType<typeof streamOf>,
+  helpers: Set<string>,
+): void {
   for (const s of f.symbols.filter((sym) => sym.kind === "class")) {
     helpers.add("newer");
     const agent = s.name.slice(w.stem.length);
@@ -902,20 +917,21 @@ function writeTypeScript(
     }
     bodies.push("");
   }
-  // Unrelated helpers in a poorly kept file.
-  for (let k = 0; k < spoil.unrelated; k++) {
-    bodies.push(
-      ...(UNRELATED[k % UNRELATED.length] as (n: string) => string[])(
-        UNRELATED_NAMES[k % UNRELATED_NAMES.length] as string,
-      ),
-      "",
-    );
-  }
-  // Shared helpers come first, then the functions.
-  for (const h of helpers) {
-    out.push(...(HELPERS[h] as (w: Words) => string[])(w), "");
-  }
-  out.push(...bodies);
+}
+
+function fillTsLines(
+  out: string[],
+  f: PlannedFacts,
+  w: Words,
+  spoil: Spoil,
+  r: ReturnType<typeof streamOf>,
+  helpers: Set<string>,
+  todo: () => string | null,
+  hack: () => string[] | null,
+  swallow: () => boolean,
+  longest: number,
+  depth: number,
+): void {
   // A well-kept file fills out toward its planned length with the steps it doesn't have yet, each under its own name.
   const taken = new Set(f.symbols.map((sym) => sym.name));
   for (const [verb, recipe] of Object.entries(RECIPES)) {
@@ -947,8 +963,85 @@ function writeTypeScript(
       "",
     );
   }
-  const level = (bad: boolean, fair: boolean): Level =>
-    bad ? "poor" : fair ? "fair" : "good";
+}
+
+function writeTypeScript(
+  file: PlannedFile,
+  importable: ReadonlyMap<string, PlannedFacts>,
+): {
+  text: string;
+  entry: Omit<
+    ManifestEntry,
+    "path" | "vitality" | "health" | "planned" | "lines"
+  >;
+} {
+  const f = file.facts;
+  const spoil = SPOIL[file.health];
+  const r = streamOf(f.path);
+  const w = wordsOf(f);
+  const longest = Math.max(12, f.complexity.longestFunction);
+  const depth = Math.max(2, f.complexity.maxNesting);
+  let todos = f.debtMarkers;
+  const todo = (): string | null =>
+    todos > 0 && r.next() < 0.35 ? (todos--, r.pick(TODOS)) : null;
+  let hacks = spoil.hacks;
+  const hack = (): string[] | null =>
+    hacks > 0
+      ? (hacks--, (HACKS[hacks % HACKS.length] as (w: Words) => string[])(w))
+      : null;
+  let swallows = spoil.swallowed;
+  // The first chance always takes a planned swallow, so even a short tangle empties one handler.
+  const swallow = (): boolean =>
+    swallows > 0 &&
+    (swallows === spoil.swallowed || r.next() < 0.3) &&
+    (swallows--, true);
+  const out: string[] = [];
+  writeTsPreamble(out, f, w, spoil, importable);
+  writeTsTypes(out, w, spoil.docs === "fit");
+  // Each function and class symbol: a recipe written well, or a tangle.
+  const helpers = new Set<string>();
+  const bodies: string[] = [];
+  writeTsFunctions(
+    bodies,
+    f,
+    w,
+    spoil,
+    r,
+    helpers,
+    todo,
+    hack,
+    swallow,
+    longest,
+    depth,
+  );
+  writeTsClasses(bodies, f, w, spoil, r, helpers);
+  // Unrelated helpers in a poorly kept file.
+  for (let k = 0; k < spoil.unrelated; k++) {
+    bodies.push(
+      ...(UNRELATED[k % UNRELATED.length] as (n: string) => string[])(
+        UNRELATED_NAMES[k % UNRELATED_NAMES.length] as string,
+      ),
+      "",
+    );
+  }
+  // Shared helpers come first, then the functions.
+  for (const h of helpers) {
+    out.push(...(HELPERS[h] as (w: Words) => string[])(w), "");
+  }
+  out.push(...bodies);
+  fillTsLines(
+    out,
+    f,
+    w,
+    spoil,
+    r,
+    helpers,
+    todo,
+    hack,
+    swallow,
+    longest,
+    depth,
+  );
   const ruin = spoil.tangled >= 1;
   const tired = spoil.tangled >= 0.5 && !ruin;
   const text = `${out
@@ -1214,6 +1307,99 @@ const RUST: Readonly<
   },
 };
 
+function writeRustHeader(
+  out: string[],
+  file: PlannedFile,
+  crateFiles: readonly PlannedFile[],
+  w: Words,
+  spoil: Spoil,
+): void {
+  const f = file.facts;
+  if (baseOf(f.path) === "lib") {
+    out.push(
+      spoil.docs === "fit"
+        ? `//! The ${w.noun} crate: readings, their bounds, and how they add up.`
+        : `// ${w.noun}`,
+    );
+    for (const other of crateFiles) {
+      if (other !== file && other.facts.path.endsWith(".rs")) {
+        out.push(`pub mod ${baseOf(other.facts.path)};`);
+      }
+    }
+    out.push("");
+  } else {
+    out.push(spoil.docs === "fit" ? `//! Part of the ${w.noun} crate.` : "");
+  }
+  if (spoil.tangled > 0) out.push(`use std::collections::HashMap;`);
+  out.push("");
+}
+
+function writeRustTangledFn(
+  out: string[],
+  name: string,
+  record: string,
+  f: PlannedFacts,
+  spoil: Spoil,
+  r: ReturnType<typeof streamOf>,
+  nextTodo: () => string | null,
+): void {
+  out.push(
+    `pub fn ${name}(v: &Vec<${record}>, a: f64) -> f64 {`,
+    `    let mut t = 0.0;`,
+    `    let mut m: HashMap<String, f64> = HashMap::new();`,
+  );
+  if (spoil.hidden) out.push(`    unsafe { if !READY { READY = true; } }`);
+  out.push(`    for x in v.iter() {`);
+  let k = 2;
+  for (let d = 0; d < Math.max(0, f.complexity.maxNesting - 2); d++) {
+    const todo = nextTodo();
+    if (todo !== null) out.push(`${"    ".repeat(k)}// ${todo}`);
+    out.push(
+      `${"    ".repeat(k)}if x.level > ${d * 7}.0 && x.rate != ${d}.0 {`,
+    );
+    k++;
+    out.push(`${"    ".repeat(k)}t = t + x.level * ${(1 + d / 2).toFixed(1)};`);
+  }
+  out.push(`${"    ".repeat(k)}m.insert(x.id.clone(), t);`);
+  while (k > 2) {
+    k--;
+    out.push(`${"    ".repeat(k)}}`);
+  }
+  out.push(`    }`);
+  let step = 0;
+  while (out.length < f.lines - 6 && step < f.complexity.longestFunction / 4) {
+    out.push(
+      `    if t > ${100 - step}.0 { t = t / a; }`,
+      `    let _ = m.get("${r.pick(["x", "tmp", "old"])}").unwrap_or(&0.0); // ${step % 3 === 0 ? "TODO: remove" : "unused"}`,
+    );
+    step++;
+  }
+  out.push(`    t`, `}`, "");
+}
+
+function fillRustVerbs(
+  out: string[],
+  f: PlannedFacts,
+  w: Words,
+  record: string,
+  ruin: boolean,
+): void {
+  // A well-kept crate fills out toward its planned length with the verbs it doesn't have yet.
+  const stem = w.stem
+    .replace(/([A-Z])/g, "_$1")
+    .toLowerCase()
+    .replace(/^_/, "");
+  const taken = new Set(
+    f.symbols.map((sym) => sym.name.replace(/([A-Z])/g, "_$1").toLowerCase()),
+  );
+  for (const [verb, recipe] of Object.entries(RUST)) {
+    if (out.length >= f.lines - 6 || ruin) break;
+    const name = `${verb}_${stem}`;
+    if (taken.has(name)) continue;
+    out.push(`/// ${recipe.doc}`, ...recipe.lines(name, record), "");
+  }
+}
+
 function writeRust(
   file: PlannedFile,
   crateFiles: readonly PlannedFile[],
@@ -1231,25 +1417,8 @@ function writeRust(
   const ruin = spoil.tangled >= 1;
   const tired = spoil.tangled >= 0.5 && !ruin;
   const out: string[] = [];
-  const isLib = baseOf(f.path) === "lib";
   const record = w.record.replace(/[^A-Za-z0-9]/g, "");
-  if (isLib) {
-    out.push(
-      spoil.docs === "fit"
-        ? `//! The ${w.noun} crate: readings, their bounds, and how they add up.`
-        : `// ${w.noun}`,
-    );
-    for (const other of crateFiles) {
-      if (other !== file && other.facts.path.endsWith(".rs")) {
-        out.push(`pub mod ${baseOf(other.facts.path)};`);
-      }
-    }
-    out.push("");
-  } else {
-    out.push(spoil.docs === "fit" ? `//! Part of the ${w.noun} crate.` : "");
-  }
-  if (spoil.tangled > 0) out.push(`use std::collections::HashMap;`);
-  out.push("");
+  writeRustHeader(out, file, crateFiles, w, spoil);
   if (spoil.docs === "fit") {
     out.push(`/// One reading: what it is, its level and its rate.`);
   }
@@ -1264,6 +1433,8 @@ function writeRust(
   );
   if (spoil.hidden) out.push(`static mut READY: bool = false;`, "");
   let todos = f.debtMarkers;
+  const nextTodo = (): string | null =>
+    todos > 0 && r.next() < 0.4 ? (todos--, r.pick(TODOS)) : null;
   let n = 0;
   for (const s of f.symbols.filter((sym) => sym.kind === "function")) {
     const name = s.name.replace(/([A-Z])/g, "_$1").toLowerCase();
@@ -1273,67 +1444,14 @@ function writeRust(
     ] as (typeof RUST)[string];
     if (spoil.docs === "fit") out.push(`/// ${recipe.doc}`);
     else if (spoil.docs === "wrong") out.push(`/// ${r.pick(WRONG_DOCS)}`);
-    if (!tangled) {
-      out.push(...recipe.lines(name, record), "");
+    if (tangled) {
+      writeRustTangledFn(out, name, record, f, spoil, r, nextTodo);
     } else {
-      out.push(
-        `pub fn ${name}(v: &Vec<${record}>, a: f64) -> f64 {`,
-        `    let mut t = 0.0;`,
-        `    let mut m: HashMap<String, f64> = HashMap::new();`,
-      );
-      if (spoil.hidden) out.push(`    unsafe { if !READY { READY = true; } }`);
-      out.push(`    for x in v.iter() {`);
-      let k = 2;
-      for (let d = 0; d < Math.max(0, f.complexity.maxNesting - 2); d++) {
-        if (todos > 0 && r.next() < 0.4) {
-          out.push(`${"    ".repeat(k)}// ${r.pick(TODOS)}`);
-          todos--;
-        }
-        out.push(
-          `${"    ".repeat(k)}if x.level > ${d * 7}.0 && x.rate != ${d}.0 {`,
-        );
-        k++;
-        out.push(
-          `${"    ".repeat(k)}t = t + x.level * ${(1 + d / 2).toFixed(1)};`,
-        );
-      }
-      out.push(`${"    ".repeat(k)}m.insert(x.id.clone(), t);`);
-      while (k > 2) {
-        k--;
-        out.push(`${"    ".repeat(k)}}`);
-      }
-      out.push(`    }`);
-      let step = 0;
-      while (
-        out.length < f.lines - 6 &&
-        step < f.complexity.longestFunction / 4
-      ) {
-        out.push(
-          `    if t > ${100 - step}.0 { t = t / a; }`,
-          `    let _ = m.get("${r.pick(["x", "tmp", "old"])}").unwrap_or(&0.0); // ${step % 3 === 0 ? "TODO: remove" : "unused"}`,
-        );
-        step++;
-      }
-      out.push(`    t`, `}`, "");
+      out.push(...recipe.lines(name, record), "");
     }
     n++;
   }
-  // A well-kept crate fills out toward its planned length with the verbs it doesn't have yet.
-  const stem = w.stem
-    .replace(/([A-Z])/g, "_$1")
-    .toLowerCase()
-    .replace(/^_/, "");
-  const taken = new Set(
-    f.symbols.map((sym) => sym.name.replace(/([A-Z])/g, "_$1").toLowerCase()),
-  );
-  for (const [verb, recipe] of Object.entries(RUST)) {
-    if (out.length >= f.lines - 6 || ruin) break;
-    const name = `${verb}_${stem}`;
-    if (taken.has(name)) continue;
-    out.push(`/// ${recipe.doc}`, ...recipe.lines(name, record), "");
-  }
-  const level = (bad: boolean, fair: boolean): Level =>
-    bad ? "poor" : fair ? "fair" : "good";
+  fillRustVerbs(out, f, w, record, ruin);
   return {
     text: `${out
       .join("\n")
@@ -1352,89 +1470,106 @@ function writeRust(
 
 // ---------- everything else ----------
 
+function writeMarkdown(f: PlannedFacts, w: Words, poor: boolean): string[] {
+  const out = [
+    `# ${cap(w.noun)}`,
+    "",
+    poor
+      ? `TODO: write this. Most of what follows is out of date.`
+      : `How the ${w.noun} works, what it depends on and how to change it.`,
+    "",
+  ];
+  let k = 0;
+  while (out.length < f.lines) {
+    out.push(
+      `## ${["Overview", "Readings", "Bounds", "Settling", "Testing", "Changes"][k % 6]} ${k >= 6 ? Math.floor(k / 6) + 1 : ""}`.trimEnd(),
+      "",
+      poor
+        ? `See the old notes. ${k % 2 === 0 ? "This changed in v2 but nobody updated it." : ""}`
+        : `Each reading has an id, a level between the bounds, a rate and a time. This part explains how the ${w.noun} handles them, step by step, and what a change here affects.`,
+      "",
+    );
+    k++;
+  }
+  return out;
+}
+
+function writeJson(f: PlannedFacts, w: Words): string[] {
+  const name = f.path.replace(/\//g, "-").replace(/\.json$/, "");
+  const out = [
+    `{`,
+    `  "name": "${name}",`,
+    `  "version": "1.${f.path.length % 9}.0",`,
+    `  "private": true,`,
+  ];
+  for (let k = 0; out.length < f.lines - 2; k++) {
+    let value = "true";
+    if (k % 3 === 0) value = `"${w.noun}-${k}"`;
+    else if (k % 3 === 1) value = String(k * 7);
+    out.push(`  "setting${k}": ${value},`);
+  }
+  out.push(`  "end": true`, `}`);
+  return out;
+}
+
+function writeToml(f: PlannedFacts, w: Words): string[] {
+  const out = [
+    `[package]`,
+    `name = "${w.noun.replace(/ /g, "-")}"`,
+    `version = "0.1.0"`,
+    `edition = "2021"`,
+    "",
+  ];
+  for (let k = 0; out.length < f.lines; k++) {
+    out.push(
+      `# setting ${k}`,
+      `option_${k} = ${k % 2 === 0 ? "true" : String(k)}`,
+    );
+  }
+  return out;
+}
+
+function writeShell(f: PlannedFacts, w: Words, poor: boolean): string[] {
+  const out = [
+    `#!/usr/bin/env bash`,
+    poor
+      ? `# builds stuff`
+      : `# Builds and checks the ${w.noun}; stops at the first failure.`,
+    poor ? "" : `set -euo pipefail`,
+    "",
+  ];
+  for (let k = 0; out.length < f.lines; k++) {
+    out.push(
+      poor
+        ? `cd dir${k} && make || true`
+        : `echo "step ${k}: checking ${w.noun}"`,
+      poor ? "" : `test -d "./part-${k}" || mkdir -p "./part-${k}"`,
+    );
+  }
+  return out;
+}
+
+function writeCsv(f: PlannedFacts, w: Words): string[] {
+  const out = [`id,level,rate,at`];
+  for (let k = 1; out.length < f.lines; k++) {
+    out.push(
+      `${w.noun.replace(/ /g, "-")}-${k},${(k * 37) % 100},${(k * 13) % 50},${1700000000 + k * 60}`,
+    );
+  }
+  return out;
+}
+
 function writeOther(file: PlannedFile): string {
   const f = file.facts;
   const ext = f.path.split(".").pop() ?? "";
   const w = wordsOf(f);
   const poor = SPOIL[file.health].docs !== "fit";
-  const out: string[] = [];
-  if (ext === "md") {
-    out.push(
-      `# ${cap(w.noun)}`,
-      "",
-      poor
-        ? `TODO: write this. Most of what follows is out of date.`
-        : `How the ${w.noun} works, what it depends on and how to change it.`,
-      "",
-    );
-    let k = 0;
-    while (out.length < f.lines) {
-      out.push(
-        `## ${["Overview", "Readings", "Bounds", "Settling", "Testing", "Changes"][k % 6]} ${k >= 6 ? Math.floor(k / 6) + 1 : ""}`.trimEnd(),
-        "",
-        poor
-          ? `See the old notes. ${k % 2 === 0 ? "This changed in v2 but nobody updated it." : ""}`
-          : `Each reading has an id, a level between the bounds, a rate and a time. This part explains how the ${w.noun} handles them, step by step, and what a change here affects.`,
-        "",
-      );
-      k++;
-    }
-  } else if (ext === "json") {
-    const name = f.path.replace(/\//g, "-").replace(/\.json$/, "");
-    out.push(
-      `{`,
-      `  "name": "${name}",`,
-      `  "version": "1.${f.path.length % 9}.0",`,
-      `  "private": true,`,
-    );
-    let k = 0;
-    for (; out.length < f.lines - 2; k++) {
-      out.push(
-        `  "setting${k}": ${k % 3 === 0 ? `"${w.noun}-${k}"` : k % 3 === 1 ? String(k * 7) : "true"},`,
-      );
-    }
-    out.push(`  "end": true`, `}`);
-  } else if (ext === "toml") {
-    out.push(
-      `[package]`,
-      `name = "${w.noun.replace(/ /g, "-")}"`,
-      `version = "0.1.0"`,
-      `edition = "2021"`,
-      "",
-    );
-    let k = 0;
-    for (; out.length < f.lines; k++) {
-      out.push(
-        `# setting ${k}`,
-        `option_${k} = ${k % 2 === 0 ? "true" : String(k)}`,
-      );
-    }
-  } else if (ext === "sh") {
-    out.push(
-      `#!/usr/bin/env bash`,
-      poor
-        ? `# builds stuff`
-        : `# Builds and checks the ${w.noun}; stops at the first failure.`,
-      poor ? "" : `set -euo pipefail`,
-      "",
-    );
-    let k = 0;
-    for (; out.length < f.lines; k++) {
-      out.push(
-        poor
-          ? `cd dir${k} && make || true`
-          : `echo "step ${k}: checking ${w.noun}"`,
-        poor ? "" : `test -d "./part-${k}" || mkdir -p "./part-${k}"`,
-      );
-    }
-  } else {
-    out.push(`id,level,rate,at`);
-    for (let k = 1; out.length < f.lines; k++) {
-      out.push(
-        `${w.noun.replace(/ /g, "-")}-${k},${(k * 37) % 100},${(k * 13) % 50},${1700000000 + k * 60}`,
-      );
-    }
-  }
+  let out: string[];
+  if (ext === "md") out = writeMarkdown(f, w, poor);
+  else if (ext === "json") out = writeJson(f, w);
+  else if (ext === "toml") out = writeToml(f, w);
+  else if (ext === "sh") out = writeShell(f, w, poor);
+  else out = writeCsv(f, w);
   return `${out.join("\n").trimEnd()}\n`;
 }
 

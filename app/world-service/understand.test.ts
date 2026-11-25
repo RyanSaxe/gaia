@@ -22,7 +22,7 @@ import {
   startOpenRouterStandIn,
 } from "../../tools/openrouter-stand-in.ts";
 import { cargoEnv } from "../../tools/cargo-env.ts";
-import { createEngineClient } from "./engine-client.ts";
+import { createEngineClient, type LineClient } from "./engine-client.ts";
 
 const REPO = resolve(import.meta.dirname, "../..");
 const ENGINE = join(
@@ -54,7 +54,7 @@ afterAll(async () => {
 });
 
 /** Starts a new engine process, live against the stand-in, with its store in `data`. */
-function engineAt(data: string) {
+function engineAt(data: string): LineClient {
   const child = spawn(ENGINE, ["rpc"], {
     env: {
       ...process.env,
@@ -110,7 +110,7 @@ const fn = (name: string, body: string): string =>
 /** Understanding requests about files, whose state has `file-axes`. */
 const aboutFiles = (sent: Sent): Sent =>
   sent.filter((r) => r.state["file-axes"] !== undefined);
-const calleeQuestions = (sent: Sent) =>
+const calleeQuestions = (sent: Sent): [string, { criteria: unknown }][] =>
   sent.flatMap((r) =>
     Object.entries(r.questions).filter(([id]) => id.startsWith("callee:")),
   );

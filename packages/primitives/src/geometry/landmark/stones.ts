@@ -197,7 +197,7 @@ function placer(s: Stone, toe: V3): { at: (q: V3) => V3; dir: (n: V3) => V3 } {
     -q[0] * sn + q[2] * c,
   ];
   return {
-    at: (q) => {
+    at: (q): V3 => {
       const p = turn(q);
       const o = rotate(
         [p[0] + s.x - toe[0], p[1], p[2] + s.z - toe[2]],
@@ -206,7 +206,7 @@ function placer(s: Stone, toe: V3): { at: (q: V3) => V3; dir: (n: V3) => V3 } {
       );
       return [o[0] + toe[0], o[1], o[2] + toe[2]];
     },
-    dir: (n) => rotate(turn(n), axis, s.lean),
+    dir: (n): V3 => rotate(turn(n), axis, s.lean),
   };
 }
 
@@ -229,6 +229,27 @@ function shadeOf(
   return { shade, mottle };
 }
 
+function stoneFall(
+  s: Stone,
+  points: readonly V3[],
+  toe: V3,
+): readonly [number, number, number, number] | undefined {
+  const d = s.decline;
+  if (d.kind !== "tilt") return undefined;
+  const tilt = tipAxis(s);
+  // A stone that falls flat turns until its upper part lies on the ground, bedded a little in the grass.
+  const most =
+    d.flat === true
+      ? restAngle(
+          points.filter((p) => p[1] > s.height * 0.3),
+          toe,
+          tilt,
+          -0.05,
+        )
+      : d.most;
+  return [tilt[0] * most, tilt[1] * most, tilt[2] * most, d.from] as const;
+}
+
 /**
  * A standing stone. It leans or falls whole about its toe without bending,
  * or it snaps and its top lies broken at its foot.
@@ -246,23 +267,7 @@ function emitStone(
   const points = shape.points.map(place.at);
   const normals = smoothNormals(points, shape.triangles);
   const d = s.decline;
-  const tilt = d.kind === "tilt" ? tipAxis(s) : null;
-  // A stone that falls flat turns until its upper part lies on the ground, bedded a little in the grass.
-  const most =
-    d.kind === "tilt" && d.flat === true && tilt !== null
-      ? restAngle(
-          points.filter((p) => p[1] > s.height * 0.3),
-          toe,
-          tilt,
-          -0.05,
-        )
-      : d.kind === "tilt"
-        ? d.most
-        : 0;
-  const fall =
-    tilt !== null && d.kind === "tilt"
-      ? ([tilt[0] * most, tilt[1] * most, tilt[2] * most, d.from] as const)
-      : undefined;
+  const fall = stoneFall(s, points, toe);
   const breakY = d.kind === "snap" ? d.at * s.height : Infinity;
   const breakPivot = place.at([0, breakY === Infinity ? 0 : breakY, 0]);
   const tint = r.range(-0.03, 0.03);
@@ -374,6 +379,12 @@ export function emitFallen(
   }
 }
 
+function stoneGives(st: Stone): number {
+  if (st.decline.kind === "tilt") return st.decline.from;
+  if (st.decline.kind === "snap") return st.decline.loss;
+  return 0;
+}
+
 /** A slab lying across two stones' tops. It falls away first, and then lies broken in the grass below. */
 function emitLintel(
   b: PartBuilder,
@@ -395,17 +406,15 @@ function emitLintel(
   const cy = Math.cos(yaw);
   const sy = Math.sin(yaw);
   // It goes before either stone under it starts to give way.
-  const gives = (st: Stone): number =>
-    st.decline.kind === "tilt"
-      ? st.decline.from
-      : st.decline.kind === "snap"
-        ? st.decline.loss
-        : 0;
-  const loss = Math.max(r.range(0.6, 0.7), gives(a) + 0.02, gives(c) + 0.02);
+  const loss = Math.max(
+    r.range(0.6, 0.7),
+    stoneGives(a) + 0.02,
+    stoneGives(c) + 0.02,
+  );
+  const flat = (v: number): number =>
+    Math.sign(v) * Math.pow(Math.abs(v), 0.55 - 0.25 * facets);
   const points: V3[] = sphere.points.map((n) => {
     const bump = 1 + 0.1 * fbm3(n[0] * 1.5, n[1] * 1.5, n[2] * 1.5, seed, 2);
-    const flat = (v: number): number =>
-      Math.sign(v) * Math.pow(Math.abs(v), 0.55 - 0.25 * facets);
     const lx = flat(n[0]) * bump * span * 0.5;
     const ly = flat(n[1]) * bump * thick * 0.5;
     const lz = flat(n[2]) * bump * depth * 0.5;
@@ -500,6 +509,252 @@ function stoneAt(
   };
 }
 
+interface StoneSize {
+  readonly width: number;
+  readonly depth: number;
+  readonly height: number;
+}
+
+interface ArrangementContext {
+  readonly p: StonesParams;
+  readonly out: PartBuilder;
+  readonly h: number;
+  readonly size: StoneSize;
+  readonly count: number;
+  readonly spacing: number;
+  readonly breadth: number;
+  readonly downwind: number;
+  readonly stones: Stone[];
+  readonly lintels: [number, number][];
+  readonly r: Rand;
+}
+
+function arrangeRing(a: ArrangementContext): [number, number] {
+  const { p, h, size, count, spacing, downwind, stones, lintels, r } = a;
+  // The radius keeps at least three quarters of a stone's width between neighbors.
+  const ringR = Math.max(
+    h * 1.1 * spacing,
+    (count * size.width * 1.75) / (Math.PI * 2),
+  );
+  const turn = r.next() * Math.PI * 2;
+  for (let k = 0; k < count; k++) {
+    const sr = r.fork(`stone${k}`);
+    const ang = turn + (k / count) * Math.PI * 2 + sr.range(-0.06, 0.06);
+    // Faces turn toward the center, as in a real stone ring.
+    stones.push(
+      stoneAt(
+        sr,
+        Math.cos(ang) * ringR,
+        Math.sin(ang) * ringR,
+        -ang + Math.PI / 2,
+        size,
+        downwind,
+      ),
+    );
+  }
+  if (p.lintels) {
+    for (let k = 0; k + 1 < count; k += 2) lintels.push([k, k + 1]);
+  }
+  return [0, 0];
+}
+
+function arrangeAvenue(a: ArrangementContext): [number, number] {
+  const { p, h, size, count, spacing, downwind, stones, lintels, r } = a;
+  // Two facing rows, rising toward the head, which stands at +x.
+  const pairs = Math.max(2, Math.round(count / 2));
+  const gap = size.width * 2.1 * spacing;
+  const across = clamp(h * 0.9, 3, 5) * spacing;
+  const length = (pairs - 1) * gap;
+  for (let k = 0; k < pairs; k++) {
+    const t = pairs === 1 ? 1 : k / (pairs - 1);
+    const grade = { ...size, height: h * (0.72 + 0.38 * t) };
+    for (const side of [-1, 1]) {
+      const sr = r.fork(`stone${k}-${side}`);
+      stones.push(
+        stoneAt(
+          sr,
+          -length / 2 + k * gap + sr.range(-0.2, 0.2),
+          side * (across / 2 + sr.range(-0.15, 0.15)),
+          0,
+          grade,
+          downwind,
+        ),
+      );
+    }
+    if (p.lintels && k % 2 === 1) {
+      lintels.push([stones.length - 2, stones.length - 1]);
+    }
+  }
+  return [length / 2 + gap * 1.1, 0];
+}
+
+function arrangeDolmen(a: ArrangementContext): [number, number] {
+  const { p, out, h, count, breadth, downwind, stones, r } = a;
+  // A chamber of uprights under one great capstone, in a ring of low kerb stones.
+  const legH = Math.max(1.6, h * 0.6);
+  // The chamber keeps its own proportions, which hold the capstone up as its uprights give way.
+  const capL = Math.max(3.4, h * 1.2);
+  const capW = capL * 0.66;
+  const uprights = clamp(Math.round(count / 3), 3, 5);
+  const legs: [number, number, number][] =
+    uprights === 3
+      ? [
+          [-0.28, 0.3, Math.PI / 2],
+          [0.28, 0.3, Math.PI / 2],
+          [0, -0.36, 0],
+        ]
+      : [
+          [-0.3, 0.3, Math.PI / 2],
+          [0.3, 0.3, Math.PI / 2],
+          [-0.3, -0.3, Math.PI / 2],
+          [0.3, -0.3, Math.PI / 2],
+          ...(uprights === 5
+            ? [[0, -0.42, 0] as [number, number, number]]
+            : []),
+        ];
+  const legSize = { width: capW * 0.45, depth: legH * 0.28, height: legH };
+  const firstLeg = stones.length;
+  legs.forEach(([fx, fz, yaw], k) => {
+    const sr = r.fork(`leg${k}`);
+    const s = stoneAt(sr, fx * capL, fz * capW, yaw, legSize, null);
+    // The uprights on one side give way outward, and the capstone tips off after them.
+    const gives = fx >= 0;
+    stones.push({
+      ...s,
+      height: legH * sr.range(0.96, 1.04),
+      toward: gives ? sr.range(-0.3, 0.3) : s.toward,
+      decline: gives
+        ? {
+            kind: "tilt",
+            most: sr.range(0.9, 1.25),
+            from: sr.range(0.3, 0.38),
+          }
+        : {
+            kind: "tilt",
+            most: sr.range(0.08, 0.2),
+            from: sr.range(0.36, 0.5),
+          },
+    });
+  });
+  emitCapstone(
+    out,
+    stones.slice(firstLeg),
+    capL,
+    capW,
+    h * 0.2,
+    p.facets,
+    r.fork("capstone"),
+  );
+  const kerb = Math.round(count * 1.5);
+  const kerbR = capL * 0.95;
+  for (let k = 0; k < kerb; k++) {
+    const sr = r.fork(`kerb${k}`);
+    const ang = (k / kerb) * Math.PI * 2 + sr.range(-0.05, 0.05);
+    const s = stoneAt(
+      sr,
+      Math.cos(ang) * kerbR,
+      Math.sin(ang) * kerbR * 0.85,
+      -ang + Math.PI / 2,
+      {
+        width: h * 0.24 * breadth,
+        depth: h * 0.14 * breadth,
+        height: h * 0.2,
+      },
+      downwind,
+    );
+    stones.push({
+      ...s,
+      toward: ang,
+      decline:
+        s.decline.kind === "snap"
+          ? {
+              kind: "tilt",
+              most: sr.range(0.3, 0.7),
+              from: sr.range(0.2, 0.5),
+            }
+          : s.decline,
+    });
+  }
+  return [0, kerbR + 1.8];
+}
+
+function arrangeCairnField(a: ArrangementContext): [number, number] {
+  const { p, out, h, count, spacing, r } = a;
+  const cairns = clamp(Math.round(count * 0.6), 3, 9);
+  const spread = Math.max(5, h * 1.6) * spacing;
+  const placed: [number, number, number][] = [];
+  for (let k = 0, tries = 0; k < cairns && tries < 200; tries++) {
+    const cr = r.fork(`cairn${tries}`);
+    const ang = cr.next() * Math.PI * 2;
+    const d = k === 0 ? 0 : spread * Math.sqrt(cr.range(0.15, 1));
+    const tall = h * (k === 0 ? 1 : cr.range(0.45, 0.8));
+    const x = Math.cos(ang) * d;
+    const z = Math.sin(ang) * d;
+    if (
+      placed.some(
+        ([px, pz, pr]) => Math.hypot(px - x, pz - z) < pr + tall * 0.6 + 0.8,
+      )
+    ) {
+      continue;
+    }
+    placed.push([x, z, tall * 0.6]);
+    emitCairn(out, x, z, tall, p.facets, cr);
+    k++;
+  }
+  return [spread * 0.9, 0];
+}
+
+function arrangeMenhirs(a: ArrangementContext): [number, number] {
+  const { h, size, count, spacing, downwind, stones, r } = a;
+  // Lone menhirs scattered loosely, taller than a ring's, some already leaning.
+  const spread = Math.max(h * 1.3, Math.sqrt(count) * h * 0.75) * spacing;
+  const tall = {
+    width: size.width * 0.85,
+    depth: size.depth * 1.1,
+    height: h * 1.25,
+  };
+  for (let tries = 0; stones.length < count && tries < 300; tries++) {
+    const sr = r.fork(`menhir${tries}`);
+    const ang = sr.next() * Math.PI * 2;
+    const d = spread * Math.sqrt(sr.next());
+    const x = Math.cos(ang) * d;
+    const z = Math.sin(ang) * d;
+    if (stones.some((s) => Math.hypot(s.x - x, s.z - z) < h * 0.9)) continue;
+    const lean = sr.next() < 0.45 ? sr.range(0.12, 0.38) : sr.range(0, 0.05);
+    stones.push(stoneAt(sr, x, z, sr.next() * Math.PI, tall, downwind, lean));
+  }
+  if (stones.some((s) => Math.hypot(s.x, s.z) < h)) {
+    return [spread + h * 0.6, 0];
+  }
+  return [0, 0];
+}
+
+function emitCentreStone(
+  out: PartBuilder,
+  p: StonesParams,
+  center: readonly [number, number],
+  h: number,
+  size: StoneSize,
+  downwind: number,
+  cr: Rand,
+): void {
+  const king = p.centre === "a tall king stone";
+  const centre: Stone = {
+    x: center[0],
+    z: center[1],
+    yaw: cr.next() * Math.PI,
+    width: king ? size.width * 1.25 : size.width * 1.9,
+    depth: king ? size.depth * 1.3 : size.width * 1.1,
+    height: king ? h * 1.55 : h * 0.3,
+    toward: downwind + (cr.next() * 2 - 1) * DOWNWIND,
+    lean: king ? cr.range(0, 0.06) : 0,
+    decline: king
+      ? { kind: "tilt", most: cr.range(0.25, 0.4), from: cr.range(0.28, 0.4) }
+      : { kind: "firm" },
+  };
+  emitStone(out, centre, p.facets, cr, 3);
+}
+
 /**
  * Builds great stones in one of five arrangements. As vitality falls the
  * lintels and capstone fall first, then stones lean, snap and fall flat,
@@ -514,7 +769,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   // Fallen pieces grow in only once they have fallen, and a person walks over them.
   const out = new PartBuilder("stone", "solid");
   const h = p.height * scale;
-  const size = {
+  const size: StoneSize = {
     width: h * 0.42 * shape.breadth,
     depth: h * 0.22 * shape.breadth,
     height: h,
@@ -522,194 +777,30 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   const count = Math.max(4, Math.round(p.count));
   const stones: Stone[] = [];
   const lintels: [number, number][] = [];
-  /** The arrangement's center, for its center stone. */
-  let center: [number, number] = [0, 0];
-
+  const arrCtx: ArrangementContext = {
+    p,
+    out,
+    h,
+    size,
+    count,
+    spacing: shape.spacing,
+    breadth: shape.breadth,
+    downwind,
+    stones,
+    lintels,
+    r,
+  };
+  let center: [number, number];
   if (p.arrangement === "ring") {
-    // The radius keeps at least three quarters of a stone's width between neighbors.
-    const ringR = Math.max(
-      h * 1.1 * shape.spacing,
-      (count * size.width * 1.75) / (Math.PI * 2),
-    );
-    const turn = r.next() * Math.PI * 2;
-    for (let k = 0; k < count; k++) {
-      const sr = r.fork(`stone${k}`);
-      const a = turn + (k / count) * Math.PI * 2 + sr.range(-0.06, 0.06);
-      // Faces turn toward the center, as in a real stone ring.
-      stones.push(
-        stoneAt(
-          sr,
-          Math.cos(a) * ringR,
-          Math.sin(a) * ringR,
-          -a + Math.PI / 2,
-          size,
-          downwind,
-        ),
-      );
-    }
-    if (p.lintels) {
-      for (let k = 0; k + 1 < count; k += 2) lintels.push([k, k + 1]);
-    }
+    center = arrangeRing(arrCtx);
   } else if (p.arrangement === "avenue") {
-    // Two facing rows, rising toward the head, which stands at +x.
-    const pairs = Math.max(2, Math.round(count / 2));
-    const spacing = size.width * 2.1 * shape.spacing;
-    const across = clamp(h * 0.9, 3, 5) * shape.spacing;
-    const length = (pairs - 1) * spacing;
-    for (let k = 0; k < pairs; k++) {
-      const t = pairs === 1 ? 1 : k / (pairs - 1);
-      const grade = { ...size, height: h * (0.72 + 0.38 * t) };
-      for (const side of [-1, 1]) {
-        const sr = r.fork(`stone${k}-${side}`);
-        stones.push(
-          stoneAt(
-            sr,
-            -length / 2 + k * spacing + sr.range(-0.2, 0.2),
-            side * (across / 2 + sr.range(-0.15, 0.15)),
-            0,
-            grade,
-            downwind,
-          ),
-        );
-      }
-      if (p.lintels && k % 2 === 1) {
-        lintels.push([stones.length - 2, stones.length - 1]);
-      }
-    }
-    center = [length / 2 + spacing * 1.1, 0];
+    center = arrangeAvenue(arrCtx);
   } else if (p.arrangement === "dolmen") {
-    // A chamber of uprights under one great capstone, in a ring of low kerb stones.
-    const legH = Math.max(1.6, h * 0.6);
-    // The chamber keeps its own proportions, which hold the capstone up as its uprights give way.
-    const capL = Math.max(3.4, h * 1.2);
-    const capW = capL * 0.66;
-    const uprights = clamp(Math.round(count / 3), 3, 5);
-    const legs: [number, number, number][] =
-      uprights === 3
-        ? [
-            [-0.28, 0.3, Math.PI / 2],
-            [0.28, 0.3, Math.PI / 2],
-            [0, -0.36, 0],
-          ]
-        : [
-            [-0.3, 0.3, Math.PI / 2],
-            [0.3, 0.3, Math.PI / 2],
-            [-0.3, -0.3, Math.PI / 2],
-            [0.3, -0.3, Math.PI / 2],
-            ...(uprights === 5
-              ? [[0, -0.42, 0] as [number, number, number]]
-              : []),
-          ];
-    const legSize = { width: capW * 0.45, depth: legH * 0.28, height: legH };
-    const firstLeg = stones.length;
-    legs.forEach(([fx, fz, yaw], k) => {
-      const sr = r.fork(`leg${k}`);
-      const s = stoneAt(sr, fx * capL, fz * capW, yaw, legSize, null);
-      // The uprights on one side give way outward, and the capstone tips off after them.
-      const gives = fx >= 0;
-      stones.push({
-        ...s,
-        height: legH * sr.range(0.96, 1.04),
-        toward: gives ? sr.range(-0.3, 0.3) : s.toward,
-        decline: gives
-          ? {
-              kind: "tilt",
-              most: sr.range(0.9, 1.25),
-              from: sr.range(0.3, 0.38),
-            }
-          : {
-              kind: "tilt",
-              most: sr.range(0.08, 0.2),
-              from: sr.range(0.36, 0.5),
-            },
-      });
-    });
-    emitCapstone(
-      out,
-      stones.slice(firstLeg),
-      capL,
-      capW,
-      h * 0.2,
-      p.facets,
-      r.fork("capstone"),
-    );
-    const kerb = Math.round(count * 1.5);
-    const kerbR = capL * 0.95;
-    for (let k = 0; k < kerb; k++) {
-      const sr = r.fork(`kerb${k}`);
-      const a = (k / kerb) * Math.PI * 2 + sr.range(-0.05, 0.05);
-      const s = stoneAt(
-        sr,
-        Math.cos(a) * kerbR,
-        Math.sin(a) * kerbR * 0.85,
-        -a + Math.PI / 2,
-        {
-          width: h * 0.24 * shape.breadth,
-          depth: h * 0.14 * shape.breadth,
-          height: h * 0.2,
-        },
-        downwind,
-      );
-      stones.push({
-        ...s,
-        toward: a,
-        decline:
-          s.decline.kind === "snap"
-            ? {
-                kind: "tilt",
-                most: sr.range(0.3, 0.7),
-                from: sr.range(0.2, 0.5),
-              }
-            : s.decline,
-      });
-    }
-    center = [0, kerbR + 1.8];
+    center = arrangeDolmen(arrCtx);
   } else if (p.arrangement === "cairn field") {
-    const cairns = clamp(Math.round(count * 0.6), 3, 9);
-    const spread = Math.max(5, h * 1.6) * shape.spacing;
-    const placed: [number, number, number][] = [];
-    for (let k = 0, tries = 0; k < cairns && tries < 200; tries++) {
-      const cr = r.fork(`cairn${tries}`);
-      const a = cr.next() * Math.PI * 2;
-      const d = k === 0 ? 0 : spread * Math.sqrt(cr.range(0.15, 1));
-      const tall = h * (k === 0 ? 1 : cr.range(0.45, 0.8));
-      const x = Math.cos(a) * d;
-      const z = Math.sin(a) * d;
-      if (
-        placed.some(
-          ([px, pz, pr]) => Math.hypot(px - x, pz - z) < pr + tall * 0.6 + 0.8,
-        )
-      ) {
-        continue;
-      }
-      placed.push([x, z, tall * 0.6]);
-      emitCairn(out, x, z, tall, p.facets, cr);
-      k++;
-    }
-    center = [spread * 0.9, 0];
+    center = arrangeCairnField(arrCtx);
   } else {
-    // Lone menhirs scattered loosely, taller than a ring's, some already leaning.
-    const spread =
-      Math.max(h * 1.3, Math.sqrt(count) * h * 0.75) * shape.spacing;
-    const tall = {
-      width: size.width * 0.85,
-      depth: size.depth * 1.1,
-      height: h * 1.25,
-    };
-    for (let tries = 0; stones.length < count && tries < 300; tries++) {
-      const sr = r.fork(`menhir${tries}`);
-      const a = sr.next() * Math.PI * 2;
-      const d = spread * Math.sqrt(sr.next());
-      const x = Math.cos(a) * d;
-      const z = Math.sin(a) * d;
-      if (stones.some((s) => Math.hypot(s.x - x, s.z - z) < h * 0.9)) continue;
-      const lean = sr.next() < 0.45 ? sr.range(0.12, 0.38) : sr.range(0, 0.05);
-      stones.push(stoneAt(sr, x, z, sr.next() * Math.PI, tall, downwind, lean));
-    }
-    center = [0, 0];
-    if (stones.some((s) => Math.hypot(s.x, s.z) < h)) {
-      center = [spread + h * 0.6, 0];
-    }
+    center = arrangeMenhirs(arrCtx);
   }
 
   stones.forEach((s, k) =>
@@ -728,22 +819,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
   }
 
   if (p.centre !== "nothing" && p.arrangement !== "dolmen") {
-    const cr = r.fork("centre");
-    const king = p.centre === "a tall king stone";
-    const centre: Stone = {
-      x: center[0],
-      z: center[1],
-      yaw: cr.next() * Math.PI,
-      width: king ? size.width * 1.25 : size.width * 1.9,
-      depth: king ? size.depth * 1.3 : size.width * 1.1,
-      height: king ? h * 1.55 : h * 0.3,
-      toward: downwind + (cr.next() * 2 - 1) * DOWNWIND,
-      lean: king ? cr.range(0, 0.06) : 0,
-      decline: king
-        ? { kind: "tilt", most: cr.range(0.25, 0.4), from: cr.range(0.28, 0.4) }
-        : { kind: "firm" },
-    };
-    emitStone(out, centre, p.facets, cr, 3);
+    emitCentreStone(out, p, center, h, size, downwind, r.fork("centre"));
   }
   return { parts: [out.part()], anchors: [] };
 }

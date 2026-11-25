@@ -88,37 +88,84 @@ function questionFor(
   target: Target,
 ): JevQuestion {
   const instructions = `${context} ${field.ask}`;
-  switch (field.type) {
-    case "choice": {
-      const keys = shuffled(Object.keys(field.options), label, target);
-      return {
-        type: "choice",
-        instructions,
-        criteria: Object.fromEntries(
-          keys.map((k) => [
-            k,
-            (field.options as Record<string, string>)[k] ?? k,
-          ]),
-        ),
-      };
-    }
-    case "scale":
-      return {
-        type: "score",
-        instructions,
-        criteria: field.levels.map((l) => l.words),
-      };
-    case "flag":
-      return {
-        type: "noul",
-        instructions,
-        criteria: { true: field.yes, false: field.no },
-      };
-    case "set":
-      throw new Error(
-        "A set becomes one noul per member; use memberQuestions.",
-      );
+  if (field.type === "choice") {
+    const keys = shuffled(Object.keys(field.options), label, target);
+    return {
+      type: "choice",
+      instructions,
+      criteria: Object.fromEntries(
+        keys.map((k) => [k, (field.options as Record<string, string>)[k] ?? k]),
+      ),
+    };
   }
+  if (field.type === "scale") {
+    return {
+      type: "score",
+      instructions,
+      criteria: field.levels.map((l) => l.words),
+    };
+  }
+  if (field.type === "flag") {
+    return {
+      type: "noul",
+      instructions,
+      criteria: { true: field.yes, false: field.no },
+    };
+  }
+  throw new Error("A set becomes one noul per member; use memberQuestions.");
+}
+
+function fittingPrimitives(
+  lib: Library,
+  role: AnyKind["slots"][string]["role"],
+  target: Target,
+  settled: string | undefined,
+): AnyPrimitive[] {
+  if (settled === undefined) {
+    return lib.forRole(role, {
+      has: target.has ?? [],
+      ...(target.rank === undefined ? {} : { rank: target.rank }),
+    });
+  }
+  return [lib.get(settled)];
+}
+
+function addSlotStructureQuestions(
+  k: AnyKind,
+  name: string,
+  s: AnyKind["slots"][string],
+  fitting: readonly AnyPrimitive[],
+  target: Target,
+  questions: Record<string, JevQuestion>,
+  refs: Record<string, Ref>,
+): void {
+  // A slot's own `ask` text, which says what the part means about the code, goes into its questions.
+  const context =
+    s.ask === undefined
+      ? `${k.doc} This is about its ${name}.`
+      : `${k.doc} Its ${name}: ${s.ask}`;
+  if (s.optional) {
+    questions[`${name}.present`] = {
+      type: "noul",
+      instructions:
+        s.ask === undefined
+          ? `${context} Should it have a ${name} (${s.role.toLowerCase()})?`
+          : `${context} Should it have one?`,
+      criteria: { true: `It has a ${name}.`, false: `It has no ${name}.` },
+    };
+    refs[`${name}.present`] = { is: "present", slot: name };
+  }
+  const candidates = shuffled(fitting, `${name}.use`, target);
+  if (candidates.length === 1) return;
+  questions[`${name}.use`] = {
+    type: "choice",
+    instructions:
+      s.ask === undefined
+        ? `${context} Which form fits it best?`
+        : `${context} Which suits it?`,
+    criteria: Object.fromEntries(candidates.map((p) => [p.id, p.doc])),
+  };
+  refs[`${name}.use`] = { is: "use", slot: name };
 }
 
 export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
@@ -127,14 +174,7 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   const offered: Record<string, readonly string[]> = {};
   for (const [name, s] of Object.entries(k.slots)) {
     // Offer only primitives whose needs the place meets, or the part already chosen. An optional slot nothing fits is skipped.
-    const settled = target.uses?.[name];
-    const fitting =
-      settled !== undefined
-        ? [lib.get(settled)]
-        : lib.forRole(s.role, {
-            has: target.has ?? [],
-            ...(target.rank === undefined ? {} : { rank: target.rank }),
-          });
+    const fitting = fittingPrimitives(lib, s.role, target, target.uses?.[name]);
     if (fitting.length === 0) {
       if (s.optional) continue;
       throw new Error(
@@ -142,33 +182,7 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
       );
     }
     offered[name] = fitting.map((p) => p.id);
-    // A slot's own `ask` text, which says what the part means about the code, goes into its questions.
-    const context =
-      s.ask === undefined
-        ? `${k.doc} This is about its ${name}.`
-        : `${k.doc} Its ${name}: ${s.ask}`;
-    if (s.optional) {
-      questions[`${name}.present`] = {
-        type: "noul",
-        instructions:
-          s.ask === undefined
-            ? `${context} Should it have a ${name} (${s.role.toLowerCase()})?`
-            : `${context} Should it have one?`,
-        criteria: { true: `It has a ${name}.`, false: `It has no ${name}.` },
-      };
-      refs[`${name}.present`] = { is: "present", slot: name };
-    }
-    const candidates = shuffled(fitting, `${name}.use`, target);
-    if (candidates.length === 1) continue;
-    questions[`${name}.use`] = {
-      type: "choice",
-      instructions:
-        s.ask === undefined
-          ? `${context} Which form fits it best?`
-          : `${context} Which suits it?`,
-      criteria: Object.fromEntries(candidates.map((p) => [p.id, p.doc])),
-    };
-    refs[`${name}.use`] = { is: "use", slot: name };
+    addSlotStructureQuestions(k, name, s, fitting, target, questions, refs);
   }
   return {
     request: { model: MODEL, state: target.state, questions },
@@ -177,9 +191,25 @@ export function planStructure(k: AnyKind, lib: Library, target: Target): Wave {
   };
 }
 
+function chooseSlotPrimitive(
+  name: string,
+  role: string,
+  candidates: readonly string[],
+  answers: Readonly<Record<string, JevAnswer>>,
+): string {
+  const chosen =
+    candidates.length === 1 ? candidates[0] : pick(answers[`${name}.use`]);
+  if (chosen === undefined || !candidates.includes(chosen)) {
+    throw new Error(
+      `Jev's answer for ${name}.use is not a ${role} primitive it was offered.`,
+    );
+  }
+  return chosen;
+}
+
 export function readStructure(
   k: AnyKind,
-  lib: Library,
+  _lib: Library,
   wave: Wave,
   answers: Readonly<Record<string, JevAnswer>>,
 ): Structure {
@@ -195,14 +225,7 @@ export function readStructure(
     if (s.optional && !yes(answers[`${name}.present`])) continue;
     // Skip a slot whose `on` slot is absent, whatever Jev answered.
     if (s.on !== undefined && !(s.on in out)) continue;
-    const chosen =
-      candidates.length === 1 ? candidates[0] : pick(answers[`${name}.use`]);
-    if (chosen === undefined || !candidates.includes(chosen)) {
-      throw new Error(
-        `Jev's answer for ${name}.use is not a ${s.role} primitive it was offered.`,
-      );
-    }
-    out[name] = chosen;
+    out[name] = chooseSlotPrimitive(name, s.role, candidates, answers);
   }
   return out;
 }
@@ -219,6 +242,72 @@ export interface DetailOptions {
   readonly fixed?: Readonly<Record<string, string | boolean>>;
   /** Values settled in earlier stages. They go into this stage's request state. */
   readonly earlier?: Readonly<Record<string, unknown>>;
+}
+
+function addSetMemberQuestions(
+  id: string,
+  slotName: string,
+  param: string,
+  field: Extract<Field, { type: "set" }>,
+  context: string,
+  questions: Record<string, JevQuestion>,
+  refs: Record<string, Ref>,
+): void {
+  for (const [member, desc] of Object.entries(
+    field.members as Record<string, string>,
+  )) {
+    questions[`${id}:${member}`] = {
+      type: "noul",
+      instructions: `${context} ${field.ask} Include this? ${desc}`,
+      criteria: {
+        true: `Include ${member}.`,
+        false: `Leave out ${member}.`,
+      },
+    };
+    refs[`${id}:${member}`] = {
+      is: "member",
+      slot: slotName,
+      param,
+      member,
+    };
+  }
+}
+
+function addSlotDetailQuestions(
+  k: AnyKind,
+  slotName: string,
+  p: AnyPrimitive,
+  target: Target,
+  narrow: Readonly<Record<string, readonly string[]>>,
+  fixed: Readonly<Record<string, string | boolean>>,
+  questions: Record<string, JevQuestion>,
+  refs: Record<string, Ref>,
+): void {
+  const ask = k.slots[slotName]?.ask;
+  const context = `${k.doc} Its ${slotName} is ${p.doc.replace(/\.$/, "").toLowerCase()}.${ask === undefined ? "" : ` ${ask}`}`;
+  for (const [param, raw] of Object.entries(p.params)) {
+    const id = `${slotName}.${param}`;
+    const value = fixed[id] ?? onlyKey(raw, narrow[id]);
+    if (value !== undefined) {
+      refs[id] = { is: "fixed", slot: slotName, param, value };
+      continue;
+    }
+    const field = narrowed(raw, narrow[id]);
+    if (field.type === "set") {
+      addSetMemberQuestions(
+        id,
+        slotName,
+        param,
+        field,
+        context,
+        questions,
+        refs,
+      );
+      continue;
+    }
+    questions[id] = questionFor(field, context, id, target);
+    refs[id] = { is: "param", slot: slotName, param, field };
+  }
 }
 
 export function planDetails(
@@ -242,40 +331,16 @@ export function planDetails(
   };
   for (const [slotName, p] of Object.entries(chosen)) {
     if (!inStage.has(slotName)) continue;
-    const ask = k.slots[slotName]?.ask;
-    const context = `${k.doc} Its ${slotName} is ${p.doc.replace(/\.$/, "").toLowerCase()}.${ask === undefined ? "" : ` ${ask}`}`;
-    for (const [param, raw] of Object.entries(p.params)) {
-      const id = `${slotName}.${param}`;
-      const value = fixed[id] ?? onlyKey(raw, narrow[id]);
-      if (value !== undefined) {
-        refs[id] = { is: "fixed", slot: slotName, param, value };
-        continue;
-      }
-      const field = narrowed(raw, narrow[id]);
-      if (field.type === "set") {
-        for (const [member, desc] of Object.entries(
-          field.members as Record<string, string>,
-        )) {
-          questions[`${id}:${member}`] = {
-            type: "noul",
-            instructions: `${context} ${field.ask} Include this? ${desc}`,
-            criteria: {
-              true: `Include ${member}.`,
-              false: `Leave out ${member}.`,
-            },
-          };
-          refs[`${id}:${member}`] = {
-            is: "member",
-            slot: slotName,
-            param,
-            member,
-          };
-        }
-        continue;
-      }
-      questions[id] = questionFor(field, context, id, target);
-      refs[id] = { is: "param", slot: slotName, param, field };
-    }
+    addSlotDetailQuestions(
+      k,
+      slotName,
+      p,
+      target,
+      narrow,
+      fixed,
+      questions,
+      refs,
+    );
   }
   return { request: { model: MODEL, state, questions }, refs };
 }
@@ -307,6 +372,22 @@ function narrowed(field: Field, allowed: readonly string[] | undefined): Field {
   return field;
 }
 
+function recordRefAnswer(
+  bucket: Record<string, string | boolean | string[]>,
+  qid: string,
+  ref: Ref,
+  answer: JevAnswer | undefined,
+): void {
+  if (ref.is === "member") {
+    const list = (bucket[ref.param] ??= []) as string[];
+    if (yes(answer)) list.push(ref.member);
+  } else if (ref.is === "param") {
+    bucket[ref.param] = valueOf(ref.field, answer, qid);
+  } else if (ref.is === "fixed") {
+    bucket[ref.param] = ref.value;
+  }
+}
+
 export function assemble(
   k: AnyKind,
   lib: Library,
@@ -323,15 +404,7 @@ export function assemble(
     : [details as Wave];
   for (const [qid, ref] of waves.flatMap((w) => Object.entries(w.refs))) {
     const bucket = (params[ref.slot] ??= {});
-    const answer = answers[qid];
-    if (ref.is === "member") {
-      const list = (bucket[ref.param] ??= []) as string[];
-      if (yes(answer)) list.push(ref.member);
-    } else if (ref.is === "param") {
-      bucket[ref.param] = valueOf(ref.field, answer, qid);
-    } else if (ref.is === "fixed") {
-      bucket[ref.param] = ref.value;
-    }
+    recordRefAnswer(bucket, qid, ref, answers[qid]);
   }
   const slots: Record<string, FilledSlot> = {};
   for (const [name, id] of Object.entries(structure)) {
@@ -341,33 +414,43 @@ export function assemble(
   return blueprintOf(k.id, slots);
 }
 
+function validateSlot(
+  name: string,
+  s: AnyKind["slots"][string],
+  bp: Blueprint,
+  lib: Library,
+  problems: string[],
+): void {
+  const filled = bp.slots[name];
+  if (filled === undefined) {
+    if (!s.optional) problems.push(`${name} is required.`);
+    return;
+  }
+  let p: AnyPrimitive;
+  try {
+    p = lib.get(filled.use);
+  } catch {
+    problems.push(`${name} uses unknown primitive ${filled.use}.`);
+    return;
+  }
+  if (p.role !== s.role) {
+    problems.push(`${name} needs a ${s.role}, not ${p.id}.`);
+  }
+  if (s.on !== undefined && bp.slots[s.on] === undefined) {
+    problems.push(`${name} is on ${s.on}, which is absent.`);
+  }
+  for (const [param, field] of Object.entries(p.params)) {
+    if (!isStoredValue(field, filled.params[param])) {
+      problems.push(`${name}.${param} is not a valid value.`);
+    }
+  }
+}
+
 /** Lists every problem with a blueprint, so a bad answer never reaches the world document. */
 export function validate(bp: Blueprint, k: AnyKind, lib: Library): string[] {
   const problems: string[] = [];
   for (const [name, s] of Object.entries(k.slots)) {
-    const filled = bp.slots[name];
-    if (filled === undefined) {
-      if (!s.optional) problems.push(`${name} is required.`);
-      continue;
-    }
-    let p: AnyPrimitive;
-    try {
-      p = lib.get(filled.use);
-    } catch {
-      problems.push(`${name} uses unknown primitive ${filled.use}.`);
-      continue;
-    }
-    if (p.role !== s.role) {
-      problems.push(`${name} needs a ${s.role}, not ${p.id}.`);
-    }
-    if (s.on !== undefined && bp.slots[s.on] === undefined) {
-      problems.push(`${name} is on ${s.on}, which is absent.`);
-    }
-    for (const [param, field] of Object.entries(p.params)) {
-      if (!isStoredValue(field, filled.params[param])) {
-        problems.push(`${name}.${param} is not a valid value.`);
-      }
-    }
+    validateSlot(name, s, bp, lib, problems);
   }
   for (const name of Object.keys(bp.slots)) {
     if (!(name in k.slots)) problems.push(`${name} is not a slot of ${k.id}.`);

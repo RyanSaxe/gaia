@@ -71,6 +71,12 @@ export function footbridgeHolds(span: number, seed: number): number {
   return holds + LOSS_BAND;
 }
 
+const still = (
+  pivot: Vec3,
+  wither: number,
+  extra: Partial<Channels> = {},
+): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
+
 /**
  * A plank footbridge along local +x, `span` long from bank to bank and
  * `width` wide, with a slightly arched deck. The deck is walkable. The origin
@@ -89,11 +95,6 @@ export function buildFootbridge(
   const w = top.halfWidth * 2;
   const lift = 0.12;
   const yAt = (x: number): number => top.topAt(x) - PLANK_HALF;
-  const still = (
-    pivot: Vec3,
-    wither: number,
-    extra: Partial<Channels> = {},
-  ): Channels => ({ loss: 0, droop: 0, wither, glow: 0, pivot, ...extra });
 
   // Planks across the span. They go missing as vitality falls (`plankLoss`), about one in ten by 0.5 and most by 0.13.
   // The walkable deck keeps its line until a gap wider than a stride opens (`footbridgeHolds`).
@@ -150,17 +151,17 @@ export function buildFootbridge(
     for (let k = 0; k < posts; k++) {
       const x = -span / 2 + 0.15 + (k / (posts - 1)) * (span - 0.3);
       const base = yAt(x) - 0.2;
-      const top = yAt(x) + 0.95;
+      const postTop = yAt(x) + 0.95;
       log(
         frame,
         [x, base, z],
-        [x, top, z],
+        [x, postTop, z],
         0.065,
         0.4,
         still([x, base, z], 0.75),
         6,
       );
-      tops.push([x, top - 0.06, z]);
+      tops.push([x, postTop - 0.06, z]);
     }
     for (let k = 0; k + 1 < tops.length; k++) {
       const a = tops[k] as V3;

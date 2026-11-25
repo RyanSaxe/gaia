@@ -50,7 +50,7 @@ export function pacer<T>(pace: Pace): Pacer<T> {
       Math.max(0, by - (at ?? 0)) / Math.max(1, queue.length),
     );
   return {
-    add(items, now) {
+    add(items, now): void {
       if (items.length === 0) return;
       if (last !== null) {
         const since = now - last;
@@ -67,7 +67,7 @@ export function pacer<T>(pace: Pace): Pacer<T> {
       queue.push(...items);
       by = Math.max(by, now + (flushing ? FLUSH_MS : gap));
     },
-    due(now) {
+    due(now): T[] {
       const out: T[] = [];
       while (queue.length > 0 && at !== null && at <= now) {
         out.push(queue.shift() as T);
@@ -77,12 +77,12 @@ export function pacer<T>(pace: Pace): Pacer<T> {
       return out;
     },
     next: () => (queue.length === 0 ? null : at),
-    flush(now) {
+    flush(now): void {
       flushing = true;
       by = Math.min(by, now + FLUSH_MS);
       if (queue.length > 0) at = Math.min(at ?? now, now);
     },
-    get size() {
+    get size(): number {
       return queue.length;
     },
   };

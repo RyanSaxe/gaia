@@ -67,23 +67,302 @@ const baked: Terrain[] = [sampleWorld(), ...draws].map((w) =>
   bakeTerrain(w, lib),
 );
 
+type Point = readonly [number, number, number];
+
+function pickEnd<T>(items: readonly T[], end: "first" | "last"): T | undefined {
+  return end === "first" ? items[0] : items[items.length - 1];
+}
+
+function extremeParams(
+  p: (typeof RELIEF_PRIMITIVES)[number],
+  end: "first" | "last",
+): Record<string, string | boolean> {
+  const params: Record<string, string | boolean> = {};
+  for (const [name, f] of Object.entries(p.params)) {
+    if (f.type === "scale") {
+      const levels: readonly { readonly words: string }[] = f.levels;
+      params[name] = pickEnd(levels, end)?.words ?? "";
+    } else if (f.type === "choice") {
+      params[name] = pickEnd(Object.keys(f.options), end) ?? "";
+    } else if (f.type === "flag") {
+      params[name] = end === "last";
+    }
+  }
+  return params;
+}
+
+function land(relief: FilledSlot): Blueprint {
+  return blueprintOf("biome", {
+    relief,
+    cover: {
+      use: "ground-cover@1",
+      params: {
+        cover: "lush grass",
+        length: "natural",
+        wildflowers: "none",
+      },
+    },
+    natives: { use: "native-families@1", params: { families: [] } },
+  });
+}
+
+function mouthLevelAt(
+  t: Terrain,
+  s: Terrain["streams"][number],
+  x: number,
+  z: number,
+): number | null {
+  for (const o of t.streams) {
+    if (o === s) continue;
+    const hits = o.stations.filter(
+      (q) => Math.hypot(q.x - x, q.z - z) < q.halfWidth,
+    );
+    if (hits.length > 0) {
+      return Math.max(...hits.map((q) => q.level));
+    }
+  }
+  return null;
+}
+
+function checkStreamStationBanks(
+  t: Terrain,
+  s: Terrain["streams"][number],
+  a: Station,
+  b: Station,
+  i: number,
+): void {
+  const len = Math.hypot(b.x - a.x, b.z - a.z);
+  const nx = -(b.z - a.z) / len;
+  const nz = (b.x - a.x) / len;
+  const edge = surfaceHalfWidth(a);
+  for (const side of [-1, 1]) {
+    const x = a.x + nx * edge * side;
+    const z = a.z + nz * edge * side;
+    // Where another stream runs in, its mouth is the bank, and its water meets this one's at the surface.
+    const mouthLevel = mouthLevelAt(t, s, x, z);
+    if (mouthLevel !== null) {
+      expect(mouthLevel, `mouth at station ${i}`).toBeGreaterThanOrEqual(
+        a.level - 0.05,
+      );
+      continue;
+    }
+    // The bank climbs straight from the waterline, so on the inside of the tightest bend, where the surface's
+    // edge comes within 9 cm of the channel's, the ground is still 3 cm above the water.
+    expect(
+      heightAt(t.lattice, x, z),
+      `bank at station ${i}`,
+    ).toBeGreaterThanOrEqual(a.level + 0.02);
+  }
+}
+
+function spotsOf(t: Terrain): { x: number; z: number }[] {
+  const spots: { x: number; z: number }[] = [];
+  const half = t.spec.size / 2 - 20;
+  for (let z = -half; z <= half && spots.length < 16; z += 23) {
+    for (let x = -half; x <= half && spots.length < 16; x += 23) {
+      if (slopeAt(t.lattice, x, z) <= PLANT_SLOPE / 2 && !isWet(t, x, z)) {
+        spots.push({ x, z });
+      }
+    }
+  }
+  return spots;
+}
+
+function stood(
+  t: Terrain,
+  s: { x: number; z: number },
+  y: number,
+  turn: number,
+  [vx, vy, vz]: Point,
+): { at: number; ground: number } {
+  const dx = vx * Math.cos(turn) + vz * Math.sin(turn);
+  const dz = -vx * Math.sin(turn) + vz * Math.cos(turn);
+  const [gx, gz] = groundSlope(t.lattice, s.x, s.z);
+  return {
+    at: y + vy + gx * dx + gz * dz,
+    ground: heightAt(t.lattice, s.x + dx, s.z + dz),
+  };
+}
+
+function barkOf(
+  floraLib: Library,
+  kind: typeof tree,
+  blueprint: Blueprint,
+): { points: Point[]; skel: Skeleton } {
+  const built = realize(blueprint, kind, floraLib, {
+    seed: seedOf("p"),
+    facts: { scale: 1, age: 1 },
+  });
+  const bark = built.parts.find((p) => p.swatch === "bark");
+  if (bark === undefined) throw new Error("missing bark part");
+  const points: Point[] = [];
+  for (let i = 0; i < bark.positions.length; i += 3) {
+    points.push([
+      bark.positions[i] as number,
+      bark.positions[i + 1] as number,
+      bark.positions[i + 2] as number,
+    ]);
+  }
+  return { points, skel: built.slots.get("form")?.output as Skeleton };
+}
+
+function rootRing(points: readonly Point[], skel: Skeleton): Point[] {
+  return points.filter(
+    (v) =>
+      v[1] < 0.05 &&
+      skel.limbs.some(
+        (l) =>
+          l.parent === -1 &&
+          Math.hypot(v[0] - l.start[0], v[2] - l.start[2]) <
+            3.5 * l.startRadius,
+      ),
+  );
+}
+
+function maxHorizontalRadius(ring: readonly Point[]): number {
+  let max = 0;
+  for (const v of ring) {
+    max = Math.max(max, Math.hypot(v[0], v[2]));
+  }
+  return max;
+}
+
+function plantBlueprints(): { k: typeof tree; blueprint: Blueprint }[] {
+  const out: { k: typeof tree; blueprint: Blueprint }[] = [];
+  for (const k of [tree, bush]) {
+    const swept = sweep(
+      k,
+      new Library(k === tree ? TREE_PRIMITIVES : BUSH_PRIMITIVES),
+      { pairs: [["form", "crown"]] },
+    );
+    for (const blueprint of swept.blueprints) out.push({ k, blueprint });
+  }
+  return out;
+}
+
+function expectPadLevelAndDry(
+  name: string,
+  terrain: Terrain,
+  plan: BuildingPlan,
+  site: BuildingSite,
+  ground: (lx: number, lz: number) => number,
+  beside: ReturnType<typeof extentOf>,
+): void {
+  // The pad is level and dry under the whole house and its walk, which starts at the door, out past any porch.
+  const front = Math.max(
+    plan.depth / 2,
+    ...plan.openings.filter((o) => o.kind === "door").map((o) => o.position[2]),
+  );
+  for (let lx = -plan.width / 2 - 1; lx <= plan.width / 2 + 1; lx += 0.5) {
+    for (let lz = -plan.depth / 2 - 1; lz <= front + 5.5; lz += 0.5) {
+      expect(Math.abs(ground(lx, lz) - site.level), name).toBeLessThan(0.02);
+      if (Math.abs(lx) <= plan.width / 2 && lz >= -plan.depth / 2) {
+        expect(
+          waterDepthAt(terrain, ...siteToWorld(site, lx, lz)),
+          `${name} dry`,
+        ).toBe(0);
+      }
+    }
+  }
+  // The ground under a feature, such as a mill wheel's pit or a tower, is the building's level ground.
+  if (beside !== null) {
+    for (const [lx, lz] of [
+      [beside.x0, beside.z0],
+      [beside.x1, beside.z0],
+      [beside.x0, beside.z1],
+      [beside.x1, beside.z1],
+    ] as const) {
+      expect(
+        Math.abs(ground(lx, lz) - site.level),
+        `${name} feature`,
+      ).toBeLessThan(0.02);
+    }
+  }
+}
+
+function expectPartsGrounded(
+  name: string,
+  built: Realized,
+  plan: BuildingPlan,
+  site: BuildingSite,
+  ground: (lx: number, lz: number) => number,
+): void {
+  for (const part of built.parts) {
+    let lowest = Infinity;
+    for (let i = 0; i < part.positions.length; i += 3) {
+      const above =
+        site.level +
+        (part.positions[i + 1] as number) -
+        ground(part.positions[i] as number, part.positions[i + 2] as number);
+      lowest = Math.min(lowest, above);
+    }
+    // Each part either reaches into the ground or rests on the stone base at floor level, so nothing hangs between.
+    expect(
+      lowest <= 0 || lowest >= plan.floor - 0.12,
+      `${name} ${part.swatch} lowest ${lowest.toFixed(3)}`,
+    ).toBe(true);
+  }
+  // The garden walk's stones show above the ground and lie on it.
+  const ornaments = built.slots.get("ornaments")?.output as Built | undefined;
+  const walkable =
+    ornaments === undefined
+      ? []
+      : ornaments.parts.filter((p) => p.collision === "walkable");
+  for (const part of walkable) {
+    for (let i = 0; i < part.positions.length; i += 3) {
+      if ((part.positions[i + 1] as number) <= 0) continue;
+      expect(
+        site.level +
+          (part.positions[i + 1] as number) -
+          ground(part.positions[i] as number, part.positions[i + 2] as number),
+        `${name} ${part.swatch} stone`,
+      ).toBeLessThan(0.08);
+    }
+  }
+  // The walls' foundation reaches well below the ground, so a slope never shows a gap.
+  const solid = built.parts.filter((p) => p.collision === "solid");
+  const footing = Math.min(
+    ...solid.flatMap((p) =>
+      Array.from(p.positions.filter((_, i) => i % 3 === 1)),
+    ),
+  );
+  expect(footing, name).toBeLessThan(-1);
+}
+
+function expectGrounded(
+  name: string,
+  built: Realized,
+  terrain: Terrain,
+  taken: readonly BuildingSite[],
+): BuildingSite {
+  const plan = built.slots.get("footprint")?.output as BuildingPlan;
+  const beside = extentOf(
+    built.slots.get("feature")?.output as Built | undefined,
+  );
+  const site = findSite(terrain, plan, taken, 30, beside);
+  levelPad(terrain, plan, site, beside);
+  const ground = (lx: number, lz: number): number =>
+    heightAt(terrain.lattice, ...siteToWorld(site, lx, lz));
+  for (const other of taken) {
+    expect(
+      Math.hypot(site.x - other.x, site.z - other.z),
+      `${name} apart`,
+    ).toBeGreaterThanOrEqual(30);
+  }
+  expect(
+    Math.max(Math.abs(site.x), Math.abs(site.z)),
+    `${name} inside the world`,
+  ).toBeLessThan(terrain.spec.size / 2);
+  expectPadLevelAndDry(name, terrain, plan, site, ground, beside);
+  expectPartsGrounded(name, built, plan, site, ground);
+  return site;
+}
+
 describe("landforms", () => {
   it("every relief primitive builds a finite, serializable field at its lowest and highest levels", () => {
     for (const p of RELIEF_PRIMITIVES) {
       for (const end of ["first", "last"] as const) {
-        const params: Record<string, string | boolean> = {};
-        for (const [name, f] of Object.entries(p.params)) {
-          if (f.type === "scale") {
-            params[name] =
-              (end === "first" ? f.levels[0] : f.levels[f.levels.length - 1])
-                ?.words ?? "";
-          } else if (f.type === "choice") {
-            params[name] =
-              Object.keys(f.options)[
-                end === "first" ? 0 : Object.keys(f.options).length - 1
-              ] ?? "";
-          } else if (f.type === "flag") params[name] = end === "last";
-        }
+        const params = extremeParams(p, end);
         const region = blueprintOf("biome", {
           relief: { use: p.id, params },
           cover: {
@@ -103,11 +382,12 @@ describe("landforms", () => {
         expect(validate(region, biome, lib), p.id).toEqual([]);
         const [lf] = landformsOf(world, lib);
         expect(lf).toBeDefined();
+        if (lf === undefined) continue;
         for (let k = 0; k < 200; k++) {
           expect(
             Number.isFinite(
               fieldAt(
-                lf!.height,
+                lf.height,
                 (k % 20) * 9 - 90,
                 Math.floor(k / 20) * 18 - 90,
               ),
@@ -116,9 +396,9 @@ describe("landforms", () => {
           ).toBe(true);
         }
         // It is plain data, so a structured clone evaluates identically.
-        const clone = structuredClone(lf!);
+        const clone = structuredClone(lf);
         expect(fieldAt(clone.height, 13.7, -41.2)).toBe(
-          fieldAt(lf!.height, 13.7, -41.2),
+          fieldAt(lf.height, 13.7, -41.2),
         );
       }
     }
@@ -159,10 +439,10 @@ describe("terrain", { timeout: 20_000 }, () => {
         if (Math.abs(origin + iz * spacing) > half) continue;
         for (let ix = 0; ix < n - 1; ix++) {
           if (Math.abs(origin + ix * spacing) > half) continue;
-          const h0 = heights[iz * n + ix]!;
+          const h0 = heights[iz * n + ix] as number;
           const step = Math.max(
-            Math.abs(heights[iz * n + ix + 1]! - h0),
-            Math.abs(heights[(iz + 1) * n + ix]! - h0),
+            Math.abs((heights[iz * n + ix + 1] as number) - h0),
+            Math.abs((heights[(iz + 1) * n + ix] as number) - h0),
           );
           if (step > steepest.step) {
             steepest = {
@@ -229,19 +509,6 @@ describe("terrain", { timeout: 20_000 }, () => {
   });
 
   it("fills every pond its lands hold, even where another area's river runs close by", () => {
-    const land = (relief: FilledSlot) =>
-      blueprintOf("biome", {
-        relief,
-        cover: {
-          use: "ground-cover@1",
-          params: {
-            cover: "lush grass",
-            length: "natural",
-            wildflowers: "none",
-          },
-        },
-        natives: { use: "native-families@1", params: { families: [] } },
-      });
     // A narrow valley's trickle runs down past a basin's pond. Its valley, cut deeper than the basin, would drain the pond through its rim.
     const pond = { x: -10, z: 40 };
     const passed = bakeTerrain(
@@ -297,20 +564,26 @@ describe("terrain", { timeout: 20_000 }, () => {
       },
       lib,
     );
-    expect(
-      Math.min(
-        ...passed.streams.flatMap((s) =>
-          s.stations.map((st) => Math.hypot(st.x - pond.x, st.z - pond.z)),
-        ),
-      ),
-    ).toBeLessThan(60);
+    let nearestStream = Infinity;
+    for (const s of passed.streams) {
+      for (const st of s.stations) {
+        nearestStream = Math.min(
+          nearestStream,
+          Math.hypot(st.x - pond.x, st.z - pond.z),
+        );
+      }
+    }
+    expect(nearestStream).toBeLessThan(60);
     for (const t of [...baked, passed]) {
       const landforms = landformsOf(t.spec, lib);
-      const held = t.spec.regions.flatMap((r, i) =>
-        landforms[i]!.water.flatMap((b) =>
-          b.kind === "pond" ? [[r.x + b.x, r.z + b.z]] : [],
-        ),
-      );
+      const held: number[][] = [];
+      for (const [i, r] of t.spec.regions.entries()) {
+        const lf = landforms[i];
+        if (lf === undefined) continue;
+        for (const b of lf.water) {
+          if (b.kind === "pond") held.push([r.x + b.x, r.z + b.z]);
+        }
+      }
       expect(t.ponds.map((p) => [p.x, p.z])).toEqual(held);
     }
   });
@@ -329,39 +602,7 @@ describe("terrain", { timeout: 20_000 }, () => {
           // Where it narrows at its spring or seep below what the lattice draws without gaps, its bed need not dip below the water.
           if (a.halfWidth < 1.1) continue;
           expect(heightAt(t.lattice, a.x, a.z)).toBeLessThan(a.level);
-          const len = Math.hypot(b.x - a.x, b.z - a.z);
-          const nx = -(b.z - a.z) / len;
-          const nz = (b.x - a.x) / len;
-          const edge = surfaceHalfWidth(a);
-          for (const side of [-1, 1]) {
-            const x = a.x + nx * edge * side;
-            const z = a.z + nz * edge * side;
-            // Where another stream runs in, its mouth is the bank, and its water meets this one's at the surface.
-            const mouth = t.streams.find(
-              (o) =>
-                o !== s &&
-                o.stations.some(
-                  (q) => Math.hypot(q.x - x, q.z - z) < q.halfWidth,
-                ),
-            );
-            if (mouth !== undefined) {
-              expect(
-                Math.max(
-                  ...mouth.stations
-                    .filter((q) => Math.hypot(q.x - x, q.z - z) < q.halfWidth)
-                    .map((q) => q.level),
-                ),
-                `mouth at station ${i}`,
-              ).toBeGreaterThanOrEqual(a.level - 0.05);
-              continue;
-            }
-            // The bank climbs straight from the waterline, so on the inside of the tightest bend, where the surface's
-            // edge comes within 9 cm of the channel's, the ground is still 3 cm above the water.
-            expect(
-              heightAt(t.lattice, x, z),
-              `bank at station ${i}`,
-            ).toBeGreaterThanOrEqual(a.level + 0.02);
-          }
+          checkStreamStationBanks(t, s, a, b, i);
         }
       }
       for (const p of t.ponds) {
@@ -384,109 +625,38 @@ describe("terrain", { timeout: 20_000 }, () => {
   describe("grounds plants, each copy leaned on its ground's slope", () => {
     const floraLib = new Library(FLORA_PRIMITIVES);
     // Every tree's and every bush's frame, each with every crown.
-    const plants = [tree, bush].flatMap((k) =>
-      sweep(k, new Library(k === tree ? TREE_PRIMITIVES : BUSH_PRIMITIVES), {
-        pairs: [["form", "crown"]],
-      }).blueprints.map((blueprint) => ({ k, blueprint })),
-    );
-    type Point = readonly [number, number, number];
-    /** Spots for a plant in world `t`: dry, gentle ground across the land, every 23 m. */
-    const spotsOf = (t: Terrain): { x: number; z: number }[] => {
-      const spots: { x: number; z: number }[] = [];
-      const half = t.spec.size / 2 - 20;
-      for (let z = -half; z <= half && spots.length < 16; z += 23) {
-        for (let x = -half; x <= half && spots.length < 16; x += 23) {
-          if (slopeAt(t.lattice, x, z) <= PLANT_SLOPE / 2 && !isWet(t, x, z)) {
-            spots.push({ x, z });
-          }
-        }
-      }
-      return spots;
-    };
-    /**
-     * A plant's point placed at `s` on origin height `y`, turned by `turn` (Three's Y rotation, x' = x cos + z sin,
-     * z' = -x sin + z cos) and tilted on the ground's slope there as its instance is, with its base following the ground
-     * and its stems upright. Also returns the ground's height under the point.
-     */
-    const stood = (
-      t: Terrain,
-      s: { x: number; z: number },
-      y: number,
-      turn: number,
-      [vx, vy, vz]: Point,
-    ): { at: number; ground: number } => {
-      const dx = vx * Math.cos(turn) + vz * Math.sin(turn);
-      const dz = -vx * Math.sin(turn) + vz * Math.cos(turn);
-      const [gx, gz] = groundSlope(t.lattice, s.x, s.z);
-      return {
-        at: y + vy + gx * dx + gz * dz,
-        ground: heightAt(t.lattice, s.x + dx, s.z + dz),
-      };
-    };
-    const barkOf = (
-      k: typeof tree,
-      blueprint: Blueprint,
-    ): { points: Point[]; skel: Skeleton } => {
-      const built = realize(blueprint, k, floraLib, {
-        seed: seedOf("p"),
-        facts: { scale: 1, age: 1 },
-      });
-      const bark = built.parts.find((p) => p.swatch === "bark")!;
-      const points: Point[] = [];
-      for (let k = 0; k < bark.positions.length; k += 3) {
-        points.push([
-          bark.positions[k]!,
-          bark.positions[k + 1]!,
-          bark.positions[k + 2]!,
-        ]);
-      }
-      return { points, skel: built.slots.get("form")?.output as Skeleton };
-    };
-    /**
-     * Every bark vertex at ground level near where a trunk, stem or cane leaves the soil, however many sides or lobes
-     * it has. A trunk's root flare reaches out to three of its radii.
-     */
-    const rootRing = (points: readonly Point[], skel: Skeleton): Point[] =>
-      points.filter(
-        (v) =>
-          v[1] < 0.05 &&
-          skel.limbs.some(
-            (l) =>
-              l.parent === -1 &&
-              Math.hypot(v[0] - l.start[0], v[2] - l.start[2]) <
-                3.5 * l.startRadius,
-          ),
-      );
+    const plants = plantBlueprints();
 
     it("stands every trunk's and every stem's bottom ring at or under the ground", () => {
-      const bases = plants.map(({ k, blueprint }) => {
-        const { points, skel } = barkOf(k, blueprint);
-        return rootRing(points, skel);
-      });
+      const bases: Point[][] = [];
+      for (const { k, blueprint } of plants) {
+        const { points, skel } = barkOf(floraLib, k, blueprint);
+        bases.push(rootRing(points, skel));
+      }
       for (const ring of bases) {
         expect(
           ring.length,
           "the origin is the trunk base",
         ).toBeGreaterThanOrEqual(3);
       }
-      baked.slice(0, 8).forEach((t, w) => {
+      for (const [w, t] of baked.slice(0, 8).entries()) {
         const spots = spotsOf(t);
         expect(spots.length).toBe(16);
-        spots.forEach((s, i) => {
-          const ring = bases[(w * spots.length + i) % bases.length]!;
+        for (const [i, s] of spots.entries()) {
+          const ring = bases[(w * spots.length + i) % bases.length] as Point[];
           const y = groundedBase(
             t.lattice,
             s.x,
             s.z,
-            Math.max(...ring.map((v) => Math.hypot(v[0], v[2]))),
+            maxHorizontalRadius(ring),
           );
           for (const v of ring) {
             const { at, ground } = stood(t, s, y, i * 1.7, v);
             expect(at, "no gap under the trunk").toBeLessThanOrEqual(ground);
             expect(ground - at, "not sunk deep").toBeLessThan(0.8);
           }
-        });
-      });
+        }
+      }
     });
   });
 });
@@ -516,8 +686,8 @@ describe("wild land past the rim", () => {
       // The coarse ring drawn from above is the same ground.
       const { positions } = wildsRing(t);
       for (let v = 0; v < positions.length; v += 3 * 37) {
-        expect(positions[v + 1]!).toBeCloseTo(
-          groundHeightAt(t, positions[v]!, positions[v + 2]!),
+        expect(positions[v + 1] as number).toBeCloseTo(
+          groundHeightAt(t, positions[v] as number, positions[v + 2] as number),
           5,
         );
       }
@@ -582,116 +752,13 @@ describe("a cottage on the land", () => {
   ]);
   const t = baked[0] as Terrain;
 
-  /**
-   * Sites a building and its feature on `terrain` apart from the `taken` sites, as the world does, levels its pad, and
-   * checks that it stands on dry, level ground inside the world and rests on that ground. Returns its site.
-   */
-  const expectGrounded = (
-    name: string,
-    built: Realized,
-    terrain: Terrain,
-    taken: readonly BuildingSite[],
-  ): BuildingSite => {
-    const plan = built.slots.get("footprint")?.output as BuildingPlan;
-    const beside = extentOf(
-      built.slots.get("feature")?.output as Built | undefined,
-    );
-    const site = findSite(terrain, plan, taken, 30, beside);
-    levelPad(terrain, plan, site, beside);
-    const ground = (lx: number, lz: number): number =>
-      heightAt(terrain.lattice, ...siteToWorld(site, lx, lz));
-    for (const other of taken) {
-      expect(
-        Math.hypot(site.x - other.x, site.z - other.z),
-        `${name} apart`,
-      ).toBeGreaterThanOrEqual(30);
-    }
-    expect(
-      Math.max(Math.abs(site.x), Math.abs(site.z)),
-      `${name} inside the world`,
-    ).toBeLessThan(terrain.spec.size / 2);
-    // The pad is level and dry under the whole house and its walk, which starts at the door, out past any porch.
-    const front = Math.max(
-      plan.depth / 2,
-      ...plan.openings
-        .filter((o) => o.kind === "door")
-        .map((o) => o.position[2]),
-    );
-    for (let lx = -plan.width / 2 - 1; lx <= plan.width / 2 + 1; lx += 0.5) {
-      for (let lz = -plan.depth / 2 - 1; lz <= front + 5.5; lz += 0.5) {
-        expect(Math.abs(ground(lx, lz) - site.level), name).toBeLessThan(0.02);
-        if (Math.abs(lx) <= plan.width / 2 && lz >= -plan.depth / 2) {
-          expect(
-            waterDepthAt(terrain, ...siteToWorld(site, lx, lz)),
-            `${name} dry`,
-          ).toBe(0);
-        }
-      }
-    }
-    // The ground under a feature, such as a mill wheel's pit or a tower, is the building's level ground.
-    if (beside !== null) {
-      for (const [lx, lz] of [
-        [beside.x0, beside.z0],
-        [beside.x1, beside.z0],
-        [beside.x0, beside.z1],
-        [beside.x1, beside.z1],
-      ] as const) {
-        expect(
-          Math.abs(ground(lx, lz) - site.level),
-          `${name} feature`,
-        ).toBeLessThan(0.02);
-      }
-    }
-    for (const part of built.parts) {
-      let lowest = Infinity;
-      for (let i = 0; i < part.positions.length; i += 3) {
-        const above =
-          site.level +
-          (part.positions[i + 1] as number) -
-          ground(part.positions[i] as number, part.positions[i + 2] as number);
-        lowest = Math.min(lowest, above);
-      }
-      // Each part either reaches into the ground or rests on the stone base at floor level, so nothing hangs between.
-      expect(
-        lowest <= 0 || lowest >= plan.floor - 0.12,
-        `${name} ${part.swatch} lowest ${lowest.toFixed(3)}`,
-      ).toBe(true);
-    }
-    // The garden walk's stones show above the ground and lie on it.
-    for (const part of (
-      (built.slots.get("ornaments")?.output as Built | undefined)?.parts ?? []
-    ).filter((p) => p.collision === "walkable")) {
-      for (let i = 0; i < part.positions.length; i += 3) {
-        if ((part.positions[i + 1] as number) <= 0) continue;
-        expect(
-          site.level +
-            (part.positions[i + 1] as number) -
-            ground(
-              part.positions[i] as number,
-              part.positions[i + 2] as number,
-            ),
-          `${name} ${part.swatch} stone`,
-        ).toBeLessThan(0.08);
-      }
-    }
-    // The walls' foundation reaches well below the ground, so a slope never shows a gap.
-    const solid = built.parts.filter((p) => p.collision === "solid");
-    const footing = Math.min(
-      ...solid.flatMap((p) =>
-        Array.from(p.positions.filter((_, i) => i % 3 === 1)),
-      ),
-    );
-    expect(footing, name).toBeLessThan(-1);
-    return site;
-  };
-
   // Sites 60 buildings drawn from everything Jev can compose, in villages of three on their own copy of the land. It
   // takes about 2.5 s alone, longer when the suite runs in parallel.
   it(
     "stands any building Jev can compose on dry, level ground inside the world, apart from its neighbors, never floating",
     { timeout: 120_000 },
     () => {
-      const draws = rand(seedOf("grounded draws"));
+      const rng = rand(seedOf("grounded draws"));
       for (let v = 0; v < 20; v++) {
         const terrain: Terrain = {
           ...t,
@@ -701,7 +768,7 @@ describe("a cottage on the land", () => {
         for (let i = v * 3; i < v * 3 + 3; i++) {
           const blueprint = blueprintOf(
             structure.id,
-            randomSlots(structure, structureLib, () => draws.next()),
+            randomSlots(structure, structureLib, () => rng.next()),
           );
           taken.push(
             expectGrounded(

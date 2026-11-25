@@ -67,6 +67,30 @@ interface Stone {
 /** The body is flattened below this depth. That part is always underground, so it needs no detail. */
 const HIDDEN_DEPTH = 0.2;
 
+function shaveByPlanes(
+  point: V3,
+  planes: readonly { n: V3; d: number; hue: number }[],
+  cut: number,
+): { q: V3; deepest: number; hue: number } {
+  let q = point;
+  let deepest = 0;
+  let hue = 0;
+  for (const p of planes) {
+    const over = q[0] * p.n[0] + q[1] * p.n[1] + q[2] * p.n[2] - p.d;
+    if (over <= 0) continue;
+    q = [
+      q[0] - p.n[0] * over * cut,
+      q[1] - p.n[1] * over * cut,
+      q[2] - p.n[2] * over * cut,
+    ];
+    if (over > deepest) {
+      deepest = over;
+      hue = p.hue;
+    }
+  }
+  return { q, deepest, hue };
+}
+
 function emitStone(
   out: PartBuilder,
   s: Stone,
@@ -118,27 +142,15 @@ function emitStone(
       ? null
       : [Math.cos(s.split.angle), 0, Math.sin(s.split.angle)];
   const positions: V3[] = sphere.points.map((n, vi) => {
-    let q: V3 = [n[0], n[1], n[2]];
     const lump =
       1 +
       0.16 * fbm3(n[0] * 1.3 + seed * 0.001, n[1] * 1.3, n[2] * 1.3, seed, 3) +
       0.05 * fbm3(n[0] * 3.7, n[1] * 3.7, n[2] * 3.7, seed + 5, 2);
-    q = [q[0] * lump, q[1] * lump, q[2] * lump];
-    let deepest = 0;
-    for (const p of planes) {
-      const over = q[0] * p.n[0] + q[1] * p.n[1] + q[2] * p.n[2] - p.d;
-      if (over <= 0) continue;
-      q = [
-        q[0] - p.n[0] * over * cut,
-        q[1] - p.n[1] * over * cut,
-        q[2] - p.n[2] * over * cut,
-      ];
-      if (over > deepest) {
-        deepest = over;
-        faceHue[vi] = p.hue;
-      }
-    }
-    fracture[vi] = clamp(deepest / 0.08, 0, 1) * cut;
+    let q: V3 = [n[0] * lump, n[1] * lump, n[2] * lump];
+    const shaved = shaveByPlanes(q, planes, cut);
+    q = shaved.q;
+    if (shaved.deepest > 0) faceHue[vi] = shaved.hue;
+    fracture[vi] = clamp(shaved.deepest / 0.08, 0, 1) * cut;
     if (s.top > 0) {
       const over =
         q[0] * topNormal[0] + q[1] * topNormal[1] + q[2] * topNormal[2] - s.top;
@@ -348,6 +360,28 @@ export function buildFlatStone(
 
 // ---------- stone cluster ----------
 
+function placeClusterStone(
+  placed: readonly { x: number; z: number; rad: number }[],
+  rad: number,
+  sr: Rand,
+): { x: number; z: number } {
+  let x = 0;
+  let z = 0;
+  for (let tries = 0; tries < 12; tries++) {
+    const a = sr.next() * Math.PI * 2;
+    const host = placed[Math.floor(sr.next() * placed.length)] ?? placed[0];
+    const d = (host?.rad ?? 0) + rad * sr.range(0.6, 1.1);
+    x = (host?.x ?? 0) + Math.cos(a) * d;
+    z = (host?.z ?? 0) + Math.sin(a) * d;
+    if (
+      placed.every((q) => Math.hypot(q.x - x, q.z - z) > (q.rad + rad) * 0.7)
+    ) {
+      break;
+    }
+  }
+  return { x, z };
+}
+
 export function buildStoneCluster(
   p: Resolved<typeof stoneClusterParams>,
   ctx: BuildContext,
@@ -368,24 +402,8 @@ export function buildStoneCluster(
       h * scale * sr.range(0.9, 1.4),
     ];
     const rad = Math.max(size[0], size[2]) * 0.45;
-    let x = 0;
-    let z = 0;
-    if (k > 0) {
-      for (let tries = 0; tries < 12; tries++) {
-        const a = sr.next() * Math.PI * 2;
-        const host = placed[Math.floor(sr.next() * placed.length)] ?? placed[0];
-        const d = (host?.rad ?? 0) + rad * sr.range(0.6, 1.1);
-        x = (host?.x ?? 0) + Math.cos(a) * d;
-        z = (host?.z ?? 0) + Math.sin(a) * d;
-        if (
-          placed.every(
-            (q) => Math.hypot(q.x - x, q.z - z) > (q.rad + rad) * 0.7,
-          )
-        ) {
-          break;
-        }
-      }
-    }
+    const { x, z } =
+      k > 0 ? placeClusterStone(placed, rad, sr) : { x: 0, z: 0 };
     placed.push({ x, z, rad });
     emitStone(
       out,

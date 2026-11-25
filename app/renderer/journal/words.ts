@@ -18,12 +18,11 @@ import type { JudgedThing } from "../../world-service/protocol.ts";
  * Maps a page id to the id of its thing in the world. `entity:<path>` maps to the entity's path, `own:<file>` to the
  * file, and any other id to itself.
  */
-export const thingIdOf = (of: string): string =>
-  of.startsWith("entity:")
-    ? of.slice("entity:".length)
-    : of.startsWith("own:")
-      ? of.slice("own:".length)
-      : of;
+export const thingIdOf = (of: string): string => {
+  if (of.startsWith("entity:")) return of.slice("entity:".length);
+  if (of.startsWith("own:")) return of.slice("own:".length);
+  return of;
+};
 
 /**
  * The vitality each page shows: a file's, a definition's or an entity's own, and a folder's pooled from every file
@@ -211,6 +210,31 @@ const partsOf = (src: WordsSource, e: JournalEntry): string[] =>
     ? definitionsOf(src, e.of)
     : e.lists.filter((of) => src.journal.entry(of)?.kind === "file");
 
+function leadTarget(
+  src: WordsSource,
+  e: JournalEntry,
+):
+  | {
+      readonly part: string;
+      readonly shown: JournalEntry;
+      readonly of: string;
+      readonly symbol: WordsSource["world"]["symbols"][number];
+    }
+  | undefined {
+  const part = mostImportant(src, partsOf(src, e));
+  if (part === undefined) return undefined;
+  const shown = src.journal.entry(part);
+  if (shown === undefined) return undefined;
+  const of =
+    shown.kind === "file"
+      ? mostImportant(src, definitionsOf(src, shown.of))
+      : part;
+  if (of === undefined) return undefined;
+  const symbol = src.world.symbols.find((s) => s.id === of);
+  if (symbol === undefined) return undefined;
+  return { part, shown, of, symbol };
+}
+
 /**
  * A page's lead snippet: a file's most important definition, or for a folder,
  * the most important definition of its most important file. It shows the
@@ -219,21 +243,9 @@ const partsOf = (src: WordsSource, e: JournalEntry): string[] =>
  */
 function leadOf(src: WordsSource, e: JournalEntry): Snippet | undefined {
   if (e.lead === undefined) return undefined;
-  const part = mostImportant(src, partsOf(src, e));
-  const shown = part === undefined ? undefined : src.journal.entry(part);
-  const of =
-    shown?.kind === "file"
-      ? mostImportant(src, definitionsOf(src, shown.of))
-      : part;
-  const symbol = src.world.symbols.find((s) => s.id === of);
-  if (
-    part === undefined ||
-    shown === undefined ||
-    of === undefined ||
-    symbol === undefined
-  ) {
-    return undefined;
-  }
+  const target = leadTarget(src, e);
+  if (target === undefined) return undefined;
+  const { part, shown, of, symbol } = target;
   const text = src.lines(symbol.id.slice(0, symbol.id.indexOf("#")));
   if (text === undefined) return undefined;
   const end = symbol.line + symbol.lines - 1;
@@ -308,119 +320,131 @@ function rowOf(src: WordsSource, e: JournalEntry, depth: number): Row {
 const rowsOf = (src: WordsSource, ofs: readonly string[]): Row[] =>
   ofs.map((of) => rowOf(src, src.journal.entry(of) as JournalEntry, 0));
 
-/**
- * Builds one entry's page words. With `marked`, a definition's code carries
- * Jev's marks, for the appendix. Its journal page shows the code without marks.
- */
-export function wordsOf(
+function entityRowsWords(src: WordsSource, e: JournalEntry): PageWords {
+  // An entity with no README lists its folder's contents, with its trails at the foot.
+  const path = e.of.slice("entity:".length);
+  return {
+    path: path === "" ? [] : path.split("/"),
+    name: e.name,
+    vitality: src.vitality(e.of),
+    body: { kind: "rows", rows: rowsOf(src, e.lists) },
+    trails: {
+      uses: rowsOf(src, e.uses ?? []),
+      usedBy: rowsOf(src, e.usedBy ?? []),
+    },
+  };
+}
+
+function chapterWords(src: WordsSource, e: JournalEntry): PageWords {
+  const lead = leadOf(src, e);
+  return {
+    path: folders(e.of),
+    name: e.name,
+    vitality: src.vitality(e.of),
+    ...importanceOf(src, e.of),
+    body: {
+      kind: "rows",
+      rows: rowsOf(src, e.lists),
+      ...(lead === undefined ? {} : { lead }),
+    },
+  };
+}
+
+function fileRowsWords(src: WordsSource, e: JournalEntry): PageWords {
+  // A file with definitions lists its own page first, then every definition in it, with nested ones indented under
+  // their parent.
+  const lead = leadOf(src, e);
+  const rows: Row[] = [];
+  const walk = (of: string, depth: number): void => {
+    const d = src.journal.entry(of) as JournalEntry;
+    rows.push(rowOf(src, d, depth));
+    for (const inner of d.lists) walk(inner, depth + 1);
+  };
+  for (const of of e.lists) walk(of, 0);
+  return {
+    path: folders(e.of),
+    name: e.name,
+    vitality: src.vitality(e.of),
+    ...importanceOf(src, e.of),
+    body: { kind: "rows", rows, ...(lead === undefined ? {} : { lead }) },
+  };
+}
+
+function foldedForFile(src: WordsSource, file: string): Folded[] {
+  const held = src.journal.entry(file)?.lists ?? [];
+  return held.flatMap((of): Folded[] => {
+    const s = src.world.symbols.find((d) => d.id === of);
+    const d = src.journal.entry(of);
+    return s === undefined || d === undefined || s.lines < 2
+      ? []
+      : [{ from: s.line + 1, to: s.line + s.lines - 1, of, page: d.page }];
+  });
+}
+
+function entryPath(e: JournalEntry, file: string): string[] {
+  if (e.kind !== "entity") return folders(file);
+  const thing = e.of.slice("entity:".length);
+  return thing === "" ? [] : thing.split("/");
+}
+
+function textEntryWords(src: WordsSource, e: JournalEntry): PageWords {
+  // The page's own text. A file's own page shows the file with each definition folded after its first line, a file
+  // without definitions shows its whole text, and an entity shows its README.
+  const file = fileOfEntry(e) as string;
+  const folded = e.kind === "own" ? foldedForFile(src, file) : [];
+  const set = setOf(src.lines(file));
+  const prose = PROSE.test(file) ? proseOf(set.lines) : null;
+  const text = prose === null ? set : { ...set, lines: prose.lines };
+  return {
+    path: entryPath(e, file),
+    name: e.name,
+    vitality: src.vitality(e.of),
+    ...importanceOf(src, e.of),
+    body: {
+      kind: "code",
+      first: 1,
+      lines: text.lines,
+      opensAt: 1,
+      marks: [],
+      ...(folded.length > 0 ? { folded } : {}),
+      ...(prose === null ? {} : { prose: true, pre: prose.pre }),
+      ...(text.rest > 0 ? { rest: text.rest } : {}),
+    },
+  };
+}
+
+function marksForDefinition(
+  src: WordsSource,
+  of: string,
+  marked: boolean,
+): readonly (Mark & { readonly from: number; readonly to: number })[] {
+  if (!marked) return [];
+  const { key, weak } = src.thing?.(of)?.picks ?? {};
+  // Where the two overlap, the gutter shows the weak mark, which comes first.
+  const out: (Mark & { readonly from: number; readonly to: number })[] = [];
+  if (weak !== undefined) {
+    out.push({ kind: "improve", from: weak.start, to: weak.end });
+  }
+  if (key !== undefined) {
+    out.push({ kind: "understand", from: key.start, to: key.end });
+  }
+  return out;
+}
+
+function definitionWords(
   src: WordsSource,
   e: JournalEntry,
-  marked = false,
+  marked: boolean,
 ): PageWords {
-  if (e.kind === "entity" && e.text === undefined) {
-    // An entity with no README lists its folder's contents, with its trails at the foot.
-    const path = e.of.slice("entity:".length);
-    return {
-      path: path === "" ? [] : path.split("/"),
-      name: e.name,
-      vitality: src.vitality(e.of),
-      body: { kind: "rows", rows: rowsOf(src, e.lists) },
-      trails: {
-        uses: rowsOf(src, e.uses ?? []),
-        usedBy: rowsOf(src, e.usedBy ?? []),
-      },
-    };
-  }
-  if (e.kind === "chapter") {
-    const lead = leadOf(src, e);
-    return {
-      path: folders(e.of),
-      name: e.name,
-      vitality: src.vitality(e.of),
-      ...importanceOf(src, e.of),
-      body: {
-        kind: "rows",
-        rows: rowsOf(src, e.lists),
-        ...(lead === undefined ? {} : { lead }),
-      },
-    };
-  }
-  if (e.kind === "file" && e.lists.length > 0) {
-    // A file with definitions lists its own page first, then every definition in it, with nested ones indented under
-    // their parent.
-    const lead = leadOf(src, e);
-    const rows: Row[] = [];
-    const walk = (of: string, depth: number): void => {
-      const d = src.journal.entry(of) as JournalEntry;
-      rows.push(rowOf(src, d, depth));
-      for (const inner of d.lists) walk(inner, depth + 1);
-    };
-    for (const of of e.lists) walk(of, 0);
-    return {
-      path: folders(e.of),
-      name: e.name,
-      vitality: src.vitality(e.of),
-      ...importanceOf(src, e.of),
-      body: { kind: "rows", rows, ...(lead === undefined ? {} : { lead }) },
-    };
-  }
-  if (e.kind === "own" || e.kind === "file" || e.kind === "entity") {
-    // The page's own text. A file's own page shows the file with each definition folded after its first line, a file
-    // without definitions shows its whole text, and an entity shows its README.
-    const file = fileOfEntry(e) as string;
-    const held = e.kind === "own" ? (src.journal.entry(file)?.lists ?? []) : [];
-    const folded = held.flatMap((of): Folded[] => {
-      const s = src.world.symbols.find((d) => d.id === of);
-      const d = src.journal.entry(of);
-      return s === undefined || d === undefined || s.lines < 2
-        ? []
-        : [{ from: s.line + 1, to: s.line + s.lines - 1, of, page: d.page }];
-    });
-    const set = setOf(src.lines(file));
-    const prose = PROSE.test(file) ? proseOf(set.lines) : null;
-    const text = prose === null ? set : { ...set, lines: prose.lines };
-    const thing = e.of.slice("entity:".length);
-    return {
-      path:
-        e.kind !== "entity"
-          ? folders(file)
-          : thing === ""
-            ? []
-            : thing.split("/"),
-      name: e.name,
-      vitality: src.vitality(e.of),
-      ...importanceOf(src, e.of),
-      body: {
-        kind: "code",
-        first: 1,
-        lines: text.lines,
-        opensAt: 1,
-        marks: [],
-        ...(folded.length > 0 ? { folded } : {}),
-        ...(prose === null ? {} : { prose: true, pre: prose.pre }),
-        ...(text.rest > 0 ? { rest: text.rest } : {}),
-      },
-    };
-  }
   const symbol = src.world.symbols.find((s) => s.id === e.of);
   const file = e.of.slice(0, e.of.indexOf("#"));
   const text = setOf(src.lines(file)).lines;
-  const line = symbol?.line ?? 1;
-  const count = symbol?.lines ?? 1;
-  const signature = text?.[line - 1]?.trim();
+  const [line, count] =
+    symbol === undefined ? [1, 1] : [symbol.line, symbol.lines];
+  const signature = text[line - 1]?.trim();
   // The blocks Jev picked: the key block and the weakest block. A definition longer than `FITS` lines opens at its key block.
-  const { key, weak } = src.thing?.(e.of)?.picks ?? {};
-  // Where the two overlap, the gutter shows the weak mark, which comes first.
-  const marks = !marked
-    ? []
-    : [
-        ...(weak === undefined
-          ? []
-          : [{ kind: "improve" as const, from: weak.start, to: weak.end }]),
-        ...(key === undefined
-          ? []
-          : [{ kind: "understand" as const, from: key.start, to: key.end }]),
-      ];
+  const key = src.thing?.(e.of)?.picks.key;
+  const marks = marksForDefinition(src, e.of, marked);
   const opensAt = count - 1 > FITS && key !== undefined ? key.start : line + 1;
   return {
     path: file.split("/"),
@@ -436,6 +460,26 @@ export function wordsOf(
       marks,
     },
   };
+}
+
+/**
+ * Builds one entry's page words. With `marked`, a definition's code carries
+ * Jev's marks, for the appendix. Its journal page shows the code without marks.
+ */
+export function wordsOf(
+  src: WordsSource,
+  e: JournalEntry,
+  marked = false,
+): PageWords {
+  if (e.kind === "entity" && e.text === undefined) {
+    return entityRowsWords(src, e);
+  }
+  if (e.kind === "chapter") return chapterWords(src, e);
+  if (e.kind === "file" && e.lists.length > 0) return fileRowsWords(src, e);
+  if (e.kind === "own" || e.kind === "file" || e.kind === "entity") {
+    return textEntryWords(src, e);
+  }
+  return definitionWords(src, e, marked);
 }
 
 /** The file whose text an entry's page shows: a definition's file, a file's own page, a file without definitions, or an entity's README. */
@@ -456,6 +500,13 @@ const PROSE = /\.(md|mdx|markdown|txt|rst)$/i;
  * lines are kept as code without the fences. Links and images keep their
  * text, and bold and inline code marks are dropped.
  */
+const stripInline = (line: string): string =>
+  line
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/(\*\*|__)(.+?)\1/g, "$2")
+    .replace(/`([^`]+)`/g, "$1");
+
 export function proseOf(lines: readonly string[]): {
   readonly lines: readonly string[];
   readonly pre: readonly boolean[];
@@ -469,12 +520,6 @@ export function proseOf(lines: readonly string[]): {
     pre.push(false);
     paragraph = [];
   };
-  const inline = (line: string): string =>
-    line
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-      .replace(/(\*\*|__)(.+?)\1/g, "$2")
-      .replace(/`([^`]+)`/g, "$1");
   let fenced = false;
   for (const raw of lines) {
     if (/^\s*(```|~~~)/.test(raw)) {
@@ -487,7 +532,7 @@ export function proseOf(lines: readonly string[]): {
       pre.push(true);
       continue;
     }
-    const line = inline(raw).trim();
+    const line = stripInline(raw).trim();
     if (line === "") {
       flush();
       // Keeps one blank line between paragraphs, however many the source has.

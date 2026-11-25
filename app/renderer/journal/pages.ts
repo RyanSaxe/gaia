@@ -165,6 +165,12 @@ const PASSING = { files: 12, lines: 44 } as const;
 /** How many readable tabs fit on the fore-edge. */
 export const TABS = 7;
 
+const thumbKey = (name: string): string =>
+  name.replace(/^[^a-z0-9]+/i, "").toLowerCase();
+
+const thumbLetters = (name: string, n: number): string =>
+  thumbKey(name).slice(0, n);
+
 /**
  * Tabs for these top folders in contents order: one per folder while they
  * fit, and otherwise a dictionary-style thumb index. Each tab then covers an
@@ -182,32 +188,31 @@ export function thumbIndex(
     from: Math.round((k * names.length) / room),
     to: Math.round(((k + 1) * names.length) / room),
   }));
-  const key = (name: string): string =>
-    name.replace(/^[^a-z0-9]+/i, "").toLowerCase();
-  const letters = (name: string, n: number): string => key(name).slice(0, n);
   const first = runs.map((r) => names[r.from] as string);
   const last = runs.map((r) => names[r.to - 1] as string);
   return runs.map((r, k) => {
     const prev = last[k - 1];
     const next = first[k + 1];
     const before =
-      prev !== undefined && letters(prev, 1) === letters(first[k] as string, 1)
+      prev !== undefined &&
+      thumbLetters(prev, 1) === thumbLetters(first[k] as string, 1)
         ? 2
         : 1;
     const after =
-      next !== undefined && letters(next, 1) === letters(last[k] as string, 1)
+      next !== undefined &&
+      thumbLetters(next, 1) === thumbLetters(last[k] as string, 1)
         ? 2
         : 1;
     // A run of one folder gets one label, with as many letters as either neighbor needs.
     if (r.to - r.from === 1) {
       return {
         ...r,
-        label: letters(first[k] as string, Math.max(before, after)),
+        label: thumbLetters(first[k] as string, Math.max(before, after)),
       };
     }
     const [a, b] = [
-      letters(first[k] as string, before),
-      letters(last[k] as string, after),
+      thumbLetters(first[k] as string, before),
+      thumbLetters(last[k] as string, after),
     ];
     return { ...r, label: a === b ? a : `${a}–${b}` };
   });
@@ -215,6 +220,18 @@ export function thumbIndex(
 
 /** A run of a definition's items in full, one page's worth. */
 type Slice = { readonly from: number; readonly to: number };
+
+function sliceEnd(
+  rows: readonly { readonly top: number; readonly bottom: number }[],
+  from: number,
+  total: number,
+  room: number,
+): number {
+  let to = from;
+  const start = rows[from]?.top ?? 0;
+  while (to < total && (rows[to]?.bottom ?? 0) - start <= room) to++;
+  return to === from && from < total ? from + 1 : to;
+}
 
 /**
  * Splits a definition's full text into pages. It measures each item once in a
@@ -256,14 +273,45 @@ function layOut(words: PageWords, body: Full, host: HTMLElement): Slice[] {
     from < total || pages.length === 0;
     room = nextRoom
   ) {
-    let to = from;
-    const start = rows[from]?.top ?? 0;
-    while (to < total && (rows[to]?.bottom ?? 0) - start <= room) to++;
-    if (to === from && from < total) to++;
+    const to = sliceEnd(rows, from, total, room);
     pages.push({ from, to });
     from = to;
   }
   return pages;
+}
+
+const folio = (n: number): string => (n > 0 ? n.toLocaleString("en-US") : "");
+const roman = (n: number): string =>
+  ["", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"][n] ??
+  String(n);
+const blank = (f = ""): HTMLElement => renderPicture(null, f);
+/** A deterministic draw in 0..1 for a name. */
+const draw = (name: string): number =>
+  (Array.from(name).reduce(
+    (h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619),
+    2166136261,
+  ) >>>
+    0) /
+  4294967296;
+
+const mapHoverCleanup = new WeakMap<HTMLElement, () => void>();
+
+function routeCodeFiles(
+  all: readonly JournalEntry[],
+  lo: number,
+  hi: number,
+): string[] {
+  // Up to about `PASSING.files` code files spread evenly along the route, fetched now so they arrive while the leaves turn.
+  const along: string[] = [];
+  const step = Math.max(1, Math.floor((hi - lo) / PASSING.files));
+  for (let i = lo; i <= hi; i += step) {
+    const e = all[i];
+    const file = e === undefined ? undefined : fileOfEntry(e);
+    if (file !== undefined && !NOT_CODE.test(file) && !along.includes(file)) {
+      along.push(file);
+    }
+  }
+  return along;
 }
 
 export function journalPages(src: JournalPagesSource): JournalPages {
@@ -381,16 +429,11 @@ export function journalPages(src: JournalPagesSource): JournalPages {
     return { left: page(2 * kk), right: page(2 * kk + 1) };
   }
 
-  const folio = (n: number): string => (n > 0 ? n.toLocaleString("en-US") : "");
   /** Where an entry appears in full: a turn to its first appendix spread, whose first page is its journal page number plus "a". */
   const fullOf = (of: string): InFull => ({
     turn: () => src.turnTo(inFull(of, 0)),
     folio: `${(src.words()?.journal.entry(of)?.page ?? 0).toLocaleString("en-US")}${lettered(0)}`,
   });
-  const roman = (n: number): string =>
-    ["", "i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"][n] ??
-    String(n);
-  const blank = (f = ""): HTMLElement => renderPicture(null, f);
   /** Each drawn map page and its `follow`. A page off the open spread for `AWAY` frames is dropped. */
   const live = new Set<{
     readonly page: HTMLElement;
@@ -444,7 +487,7 @@ export function journalPages(src: JournalPagesSource): JournalPages {
     if (map !== null) {
       map.classList.add("jp-map");
       let line: HTMLElement | null = null;
-      map.onpointermove = (e) => {
+      const onPointerMove = (e: PointerEvent): void => {
         if (e.pointerType !== "mouse") return;
         const { px, py } = pagePx(map, e);
         const box = tapsOf(map)?.nameBox(px, py) ?? null;
@@ -454,16 +497,27 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         map.style.cursor =
           box !== null || onCross(px, py) ? "pointer" : "crosshair";
       };
-      map.onpointerleave = () => {
+      const onPointerLeave = (): void => {
         line?.remove();
         line = null;
       };
+      mapHoverCleanup.get(map)?.();
+      map.addEventListener("pointermove", onPointerMove);
+      map.addEventListener("pointerleave", onPointerLeave);
+      mapHoverCleanup.set(map, () => {
+        map.removeEventListener("pointermove", onPointerMove);
+        map.removeEventListener("pointerleave", onPointerLeave);
+      });
     }
     const taps = tapsOf(map);
     if (taps !== null) {
-      const me = src.person();
-      const at = taps.page(me.x, me.z);
-      const traveller = renderTraveller(at.px, at.py, me.yaw);
+      const initialMe = src.person();
+      const initialAt = taps.page(initialMe.x, initialMe.z);
+      const traveller = renderTraveller(
+        initialAt.px,
+        initialAt.py,
+        initialMe.yaw,
+      );
       const { way, cross: end } = renderWay();
       const line = way.firstElementChild as SVGPathElement;
       end.hidden = true;
@@ -562,19 +616,11 @@ export function journalPages(src: JournalPagesSource): JournalPages {
     return { left: page(2 * k - 1), right: page(2 * k) };
   }
 
-  function nextPlace(at: string, by: 1 | -1): string | null {
-    const { order, places } = index();
-    const full = fullAt(at);
-    if (full === null) {
-      const k = (order.get(at) ?? 0) + by;
-      // The appendix follows the journal's last page.
-      if (k === places.length && by === 1) {
-        return inOrder().ids[0] === undefined
-          ? null
-          : inFull(inOrder().ids[0] as string, 0);
-      }
-      return places[k] ?? null;
-    }
+  function nextFullPlace(
+    full: { readonly id: string; readonly k: number | "end" },
+    by: 1 | -1,
+    lastMain: string | null,
+  ): string | null {
     const { ids, at: where } = inOrder();
     const n = where.get(full.id) ?? 0;
     const k = spreadIn(full.id, full.k);
@@ -585,9 +631,23 @@ export function journalPages(src: JournalPagesSource): JournalPages {
       return ids[n + 1] === undefined ? null : inFull(ids[n + 1] as string, 0);
     }
     if (k > 0) return inFull(full.id, k - 1);
-    return n > 0
-      ? inFull(ids[n - 1] as string, "end")
-      : (places[places.length - 1] ?? null);
+    return n > 0 ? inFull(ids[n - 1] as string, "end") : lastMain;
+  }
+
+  function nextPlace(at: string, by: 1 | -1): string | null {
+    const { order, places } = index();
+    const full = fullAt(at);
+    if (full !== null) {
+      return nextFullPlace(full, by, places[places.length - 1] ?? null);
+    }
+    const k = (order.get(at) ?? 0) + by;
+    // The appendix follows the journal's last page.
+    if (k === places.length && by === 1) {
+      return inOrder().ids[0] === undefined
+        ? null
+        : inFull(inOrder().ids[0] as string, 0);
+    }
+    return places[k] ?? null;
   }
   /** Every file whose text has arrived, in arrival order, for a riffle's leaves to show. */
   const arrived: string[] = [];
@@ -601,17 +661,9 @@ export function journalPages(src: JournalPagesSource): JournalPages {
       }
     });
   };
-  /** A deterministic draw in 0..1 for a name. */
-  const draw = (name: string): number =>
-    (Array.from(name).reduce(
-      (h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619),
-      2166136261,
-    ) >>>
-      0) /
-    4294967296;
 
   return {
-    follow() {
+    follow(): void {
       for (const map of live) {
         if (!map.page.isConnected) {
           if (++map.away > AWAY) live.delete(map);
@@ -621,7 +673,7 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         map.follow();
       }
     },
-    passing(from, toward) {
+    passing(from, toward): (k: number, of: number) => HTMLElement | null {
       const words = src.words();
       if (words === null) return () => null;
       const entryOf = (at: string): JournalEntry | undefined =>
@@ -632,22 +684,7 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         a === undefined ? 0 : all.indexOf(a),
         b === undefined ? all.length - 1 : all.indexOf(b),
       ];
-      const lo = Math.min(i0, i1);
-      const hi = Math.max(i0, i1);
-      // Up to about `PASSING.files` code files spread evenly along the route, fetched now so they arrive while the leaves turn.
-      const along: string[] = [];
-      const step = Math.max(1, Math.floor((hi - lo) / PASSING.files));
-      for (let i = lo; i <= hi; i += step) {
-        const e = all[i];
-        const file = e === undefined ? undefined : fileOfEntry(e);
-        if (
-          file !== undefined &&
-          !NOT_CODE.test(file) &&
-          !along.includes(file)
-        ) {
-          along.push(file);
-        }
-      }
+      const along = routeCodeFiles(all, Math.min(i0, i1), Math.max(i0, i1));
       for (const f of along) fetchText(f);
       const [p0, p1] = [a?.page ?? 0, b?.page ?? 0];
       return (k, of) => {
@@ -680,7 +717,7 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         );
       };
     },
-    fraction(at) {
+    fraction(at): number {
       // The journal takes the first nine tenths of the book and the appendix the rest.
       const full = fullAt(at);
       if (full !== null) {
@@ -739,7 +776,7 @@ export function journalPages(src: JournalPagesSource): JournalPages {
       return entrySpread(words, e, k);
     },
     next: nextPlace,
-    order(a, b) {
+    order(a, b): number {
       const { order } = index();
       const { at: where } = inOrder();
       const rank = (p: string): readonly [number, number, number] => {
@@ -749,44 +786,42 @@ export function journalPages(src: JournalPagesSource): JournalPages {
           : [1, where.get(full.id) ?? 0, full.k === "end" ? Infinity : full.k];
       };
       const [ra, rb] = [rank(a), rank(b)];
-      return (
-        ra[0] - rb[0] ||
-        ra[1] - rb[1] ||
-        (ra[2] === rb[2] ? 0 : ra[2] < rb[2] ? -1 : 1)
-      );
+      if (ra[0] !== rb[0]) return ra[0] - rb[0];
+      if (ra[1] !== rb[1]) return ra[1] - rb[1];
+      if (ra[2] === rb[2]) return 0;
+      return ra[2] < rb[2] ? -1 : 1;
     },
-    async ready(at) {
+    async ready(at): Promise<void> {
       const full = fullAt(at);
       const words = src.words();
       const e = words?.journal.entry(full?.id ?? (at.split(SEP)[0] as string));
+      if (e === undefined) return;
       const files =
-        e === undefined
-          ? []
-          : full === null
-            ? textsOf(words ?? null, e)
-            : [fileOfEntry(e)].filter((f): f is string => f !== undefined);
+        full === null
+          ? textsOf(words ?? null, e)
+          : [fileOfEntry(e)].filter((f): f is string => f !== undefined);
       if (files.length === 0) return;
       await Promise.all(files.map((f) => src.text(f)));
       // Lays out the entry's appendix before the leaf that shows it starts moving.
       if (full !== null) pagesInFull(full.id);
     },
-    painted(at) {
+    painted(at): Promise<void> {
       if (fullAt(at) !== null) return Promise.resolve();
       const [of, k = "0"] = at.split(SEP);
       // The endpapers and a container's first spread are maps.
-      const e = src.words()?.journal.entry(of as string);
-      if (of === "map" || (k === "0" && e !== undefined && mapped(e))) {
-        return src.mapped();
-      }
+      if (of === "map") return src.mapped();
+      if (k !== "0") return Promise.resolve();
       // The title page faces the contents, and a thing's first spread faces its painting.
-      if (of === "contents") {
-        return k === "0" ? src.painted("") : Promise.resolve();
-      }
-      return e !== undefined && k === "0"
-        ? src.painted(e.of)
-        : Promise.resolve();
+      if (of === "contents") return src.painted("");
+      const e = src.words()?.journal.entry(of as string);
+      if (e === undefined) return Promise.resolve();
+      return mapped(e) ? src.mapped() : src.painted(e.of);
     },
-    tabs() {
+    tabs(): readonly {
+      readonly name: string;
+      readonly at: string;
+      readonly from: string;
+    }[] {
       const words = index().words;
       const journal: Journal | undefined = words?.journal;
       const chapters = (journal?.contents ?? []).flatMap((of) => {

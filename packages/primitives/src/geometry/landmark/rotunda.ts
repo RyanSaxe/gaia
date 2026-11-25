@@ -496,32 +496,21 @@ function fallenDrums(
   });
 }
 
-/**
- * Builds a rotunda on a stepped base. See `rotundaParams`.
- */
-export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
-  const r = ctx.rand.fork("rotunda");
-  const s = ctx.facts.scale ?? 1;
-  const shape = landmarkShape(ROTUNDA_SHAPE, p, ctx);
-  const stone = new PartBuilder("masonry", "solid");
-  // The steps and the floor are walkable, so a person can climb up among the columns.
-  const steps = new PartBuilder("masonry", "walkable");
-  const roof = new PartBuilder("roof", "solid");
-  const n = COLUMNS[p.columns];
-  const ring = shape.ring * s;
-  const height = shape.column * s;
-  // The column radius that leaves the chosen gap between columns, measured in column widths.
-  const radius = ((Math.PI * shape.ring) / (n * (1 + shape.gap))) * s;
-  // `p.steps` is a value within its level's band. The step count is the nearest level's count.
-  const count = Object.values(ROTUNDA_STEPS).reduce((best, n) =>
-    Math.abs(n - p.steps) < Math.abs(best - p.steps) ? n : best,
-  );
-  const floor = count * STEP.rise;
-  const top = ring + shape.margin;
-  const edge = top + (count - 1) * shape.tread;
+interface EntablatureSpan {
+  readonly a0: number;
+  readonly a1: number;
+  readonly loss: number;
+  readonly centre: V3;
+}
 
-  // The stepped base: each step a ring of dressed blocks standing on the ground, set with joints between them, and
-  // the top one a floor of paving in rings round a center stone. Every block has its own shade and hue.
+function buildSteppedBase(
+  steps: PartBuilder,
+  count: number,
+  top: number,
+  floor: number,
+  tread: number,
+  r: Rand,
+): void {
   const lay = (
     inner: number,
     outer: number,
@@ -554,8 +543,8 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
   };
   for (let k = 0; k < count - 1; k++) {
     lay(
-      top + (count - 2 - k) * shape.tread - 0.05,
-      top + (count - 1 - k) * shape.tread,
+      top + (count - 2 - k) * tread - 0.05,
+      top + (count - 1 - k) * tread,
       (k + 1) * STEP.rise,
       1.7,
     );
@@ -569,28 +558,21 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
       1.4,
     );
   }
+}
 
-  // The columns, with a gap between two of them facing +z, toppling outward one by one in a seeded order, those
-  // facing the weather mostly first.
-  const angles = Array.from(
-    { length: n },
-    (_, k) => Math.PI / 2 + ((k + 0.5) / n) * Math.PI * 2,
-  );
-  const order = angles
-    .map((a, k) => ({
-      k,
-      u: 0.5 * r.next() + 0.5 * (1 - facing(a, shape.weather)),
-    }))
-    .sort((a, b) => a.u - b.u)
-    .map((o) => o.k);
-  const falls = Array.from({ length: n }, () => 0);
-  // Each column starts to topple at its own vitality. Halfway down it breaks, and the shaft goes as its drums appear
-  // in the grass, so every column lies broken before vitality reaches 0.
-  order.forEach(
-    (k, m) =>
-      (falls[k] =
-        0.29 - (0.12 * m) / Math.max(1, n - 1) + r.range(-0.006, 0.006)),
-  );
+function buildRotundaColumns(
+  stone: PartBuilder,
+  angles: readonly number[],
+  falls: readonly number[],
+  ring: number,
+  floor: number,
+  height: number,
+  radius: number,
+  edge: number,
+  weather: number,
+  n: number,
+  r: Rand,
+): void {
   // Each falls to its own side of straight out, within a spread that leaves room for its neighbours. A few keep a drum
   // or two standing on their foot.
   const spread = Math.min(0.9, 5.4 / n);
@@ -600,7 +582,10 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     const away = a + r.range(-1, 1) * spread;
     const radial: V3 = [Math.cos(away), 0, Math.sin(away)];
     const centre = around(a, ring, 0);
-    const stay = r.next() < 0.35 ? (r.next() < 0.5 ? 1 : 2) : 0;
+    let stay = 0;
+    if (r.next() < 0.35) {
+      stay = r.next() < 0.5 ? 1 : 2;
+    }
     const drumLen = (shaft.neck - shaft.foot) / shaft.drums;
     const stub = shaft.foot + stay * drumLen;
     const toe: V3 = [
@@ -621,7 +606,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     );
     const most = restAngle(tops, toe, axis, 0);
     const fall = falls[k] as number;
-    const wither = 0.4 + 0.25 * r.next() + 0.2 * facing(a, shape.weather);
+    const wither = 0.4 + 0.25 * r.next() + 0.2 * facing(a, weather);
     const tint = (r.next() - 0.5) * 0.05;
     const standing = still([centre[0], floor, centre[2]], wither, { tint });
     columnFoot(stone, a, ring, floor, radius, standing);
@@ -661,11 +646,22 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
       r.fork(`drums${k}`),
     );
   });
+}
 
-  // The ring over the columns, in one span from each column to the next. Each span goes before either column under
-  // it falls, sinking into the capital of the column that falls later.
-  const beam = floor + height;
-  const spans = angles.map((a, k) => {
+function buildEntablature(
+  stone: PartBuilder,
+  angles: readonly number[],
+  falls: readonly number[],
+  ring: number,
+  beam: number,
+  radius: number,
+  n: number,
+  s: number,
+  entablature: number,
+  isOpenRing: boolean,
+  r: Rand,
+): EntablatureSpan[] {
+  return angles.map((a, k) => {
     const b = angles[(k + 1) % n] as number;
     const a1 = k === n - 1 ? b + Math.PI * 2 : b;
     const later = (falls[k] as number) < (falls[(k + 1) % n] as number) ? a : b;
@@ -677,7 +673,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     });
     const shade = 0.56 + 0.08 * r.next();
     // Architrave, frieze and a projecting cornice, as deep as the columns carrying them.
-    const e = shape.entablature * s;
+    const e = entablature * s;
     sector(
       stone,
       a,
@@ -713,7 +709,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
       ch,
       true,
     );
-    if (p.roof === "an open ring") {
+    if (isOpenRing) {
       sector(
         stone,
         a,
@@ -729,172 +725,222 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     // What rests on a span sinks onto the middle of its top.
     return { a0: a, a1, loss, centre: around((a + a1) / 2, ring, beam + e) };
   });
-  const lastSpan = Math.max(...spans.map((sp) => sp.loss));
+}
 
+function buildDomeDrum(
+  stone: PartBuilder,
+  spans: readonly EntablatureSpan[],
+  ring: number,
+  radius: number,
+  spring: number,
+  drumH: number,
+  drumGoes: number,
+  s: number,
+  seats: V3[],
+  r: Rand,
+): void {
+  spans.forEach((sp, k) => {
+    const ch = still(sp.centre, 0.55, {
+      loss: drumGoes + r.range(0, 0.01),
+      tint: (r.next() - 0.5) * 0.03,
+    });
+    sector(
+      stone,
+      sp.a0,
+      sp.a1,
+      ring - radius * 1.05,
+      ring + radius * 1.05,
+      spring,
+      spring + drumH,
+      0.55 + 0.06 * r.next(),
+      ch,
+    );
+    sector(
+      stone,
+      sp.a0,
+      sp.a1,
+      ring - radius * 1.05,
+      ring + radius * 1.45,
+      spring + drumH,
+      spring + drumH + 0.3 * s,
+      0.6,
+      ch,
+      true,
+    );
+    seats[k] = around((sp.a0 + sp.a1) / 2, ring, spring + drumH + 0.3 * s);
+  });
+}
+
+function buildDomeCrown(
+  stone: PartBuilder,
+  roof: PartBuilder,
+  dome: Dome,
+  high: boolean,
+  open: number,
+  s: number,
+  crown: Channels,
+): void {
+  const peak = dome.at(0, open, 0)[1];
+  if (high) {
+    const rad = dome.at(0, open, 0.5)[0] * 0.92;
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      box(
+        stone,
+        around(a, rad, peak + 0.7 * s),
+        [[Math.cos(a), 0, Math.sin(a)], UP, [-Math.sin(a), 0, Math.cos(a)]],
+        [0.13 * s, 0.75 * s, 0.13 * s],
+        0.6,
+        crown,
+      );
+    }
+    sector(
+      stone,
+      0,
+      Math.PI * 2,
+      0,
+      rad + 0.15,
+      peak + 1.45 * s,
+      peak + 1.65 * s,
+      0.6,
+      crown,
+      true,
+    );
+    const cap = domeOf(true, rad + 0.1, peak + 1.65 * s, LANTERN_RISE);
+    for (let k = 0; k < 8; k++) {
+      domeBlock(
+        stone,
+        roof,
+        cap,
+        (k / 8) * Math.PI * 2,
+        ((k + 1) / 8) * Math.PI * 2,
+        0,
+        1,
+        0.5,
+        crown,
+        0.12,
+      );
+    }
+    drum(
+      stone,
+      0,
+      0,
+      cap.at(0, 1, 0)[1] - 0.1,
+      cap.at(0, 1, 0)[1] + 0.9 * s,
+      0.09 * s,
+      0.03 * s,
+      0.6,
+      crown,
+    );
+  } else {
+    drum(
+      stone,
+      0,
+      0,
+      peak - 0.1,
+      peak + 0.5 * s,
+      0.32 * s,
+      0.22 * s,
+      0.6,
+      crown,
+      true,
+    );
+    drum(
+      stone,
+      0,
+      0,
+      peak + 0.5 * s,
+      peak + 1.3 * s,
+      0.12 * s,
+      0.03 * s,
+      0.6,
+      crown,
+    );
+  }
+}
+
+function buildRotundaDome(
+  stone: PartBuilder,
+  roof: PartBuilder,
+  spans: readonly EntablatureSpan[],
+  lastSpan: number,
+  ring: number,
+  beam: number,
+  radius: number,
+  n: number,
+  s: number,
+  entablature: number,
+  drumScale: number,
+  rise: number,
+  weather: number,
+  high: boolean,
+  r: Rand,
+): { loss: number }[] {
   const fallenInside: { loss: number }[] = [];
-  if (p.roof !== "an open ring") {
-    const high = p.roof === "a high dome";
-    let spring = beam + shape.entablature * s;
-    // A high dome stands on a drum, which goes after the dome and before the ring it stands on.
-    const drumGoes = lastSpan + ONTO;
-    const seats = spans.map((sp) => sp.centre);
-    if (high) {
-      const drumH = shape.drum * s;
-      spans.forEach((sp, k) => {
-        const ch = still(sp.centre, 0.55, {
-          loss: drumGoes + r.range(0, 0.01),
-          tint: (r.next() - 0.5) * 0.03,
-        });
-        sector(
-          stone,
-          sp.a0,
-          sp.a1,
-          ring - radius * 1.05,
-          ring + radius * 1.05,
-          spring,
-          spring + drumH,
-          0.55 + 0.06 * r.next(),
-          ch,
-        );
-        sector(
-          stone,
-          sp.a0,
-          sp.a1,
-          ring - radius * 1.05,
-          ring + radius * 1.45,
-          spring + drumH,
-          spring + drumH + 0.3 * s,
-          0.6,
-          ch,
-          true,
-        );
-        seats[k] = around((sp.a0 + sp.a1) / 2, ring, spring + drumH + 0.3 * s);
-      });
-      spring += drumH + 0.3 * s;
-    }
-    const dome = domeOf(high, ring + EAVE * s, spring, shape.rise);
-    const courses = high ? 5 : 4;
-    const gores = n * 2;
-    const open = high ? 0.86 : 1;
-    const base = (high ? drumGoes : lastSpan) + ONTO;
-    let topmost = 0;
-    let crownSeat: V3 = [0, spring, 0];
-    for (let g = 0; g < gores; g++) {
-      const span = spans[Math.floor(g / 2)] as (typeof spans)[number];
-      const a0 = g % 2 === 0 ? span.a0 : (span.a0 + span.a1) / 2;
-      const a1 = g % 2 === 0 ? (span.a0 + span.a1) / 2 : span.a1;
-      let seat = seats[Math.floor(g / 2)] as V3;
-      // The dome falls in first on the side its weather comes from.
-      let loss =
-        base +
-        0.05 * (0.4 * r.next() + 0.6 * facing((a0 + a1) / 2, shape.weather));
-      for (let k = 0; k < courses; k++) {
-        const t0 = (open * k) / courses;
-        const t1 = (open * (k + 1)) / courses;
-        const ch = still(seat, 0.6, { loss, tint: (r.next() - 0.5) * 0.04 });
-        domeBlock(
-          stone,
-          roof,
-          dome,
-          a0,
-          a1,
-          t0,
-          t1,
-          0.48 + 0.08 * r.next(),
-          ch,
-        );
-        fallenInside.push({ loss });
-        seat = dome.at((a0 + a1) / 2, (t0 + t1) / 2, 0.5);
-        if (k === courses - 1 && loss > topmost) {
-          topmost = loss;
-          crownSeat = seat;
-        }
-        loss += COURSE_STEP + r.range(0, 0.012);
+  let spring = beam + entablature * s;
+  // A high dome stands on a drum, which goes after the dome and before the ring it stands on.
+  const drumGoes = lastSpan + ONTO;
+  const seats = spans.map((sp) => sp.centre);
+  if (high) {
+    const drumH = drumScale * s;
+    buildDomeDrum(
+      stone,
+      spans,
+      ring,
+      radius,
+      spring,
+      drumH,
+      drumGoes,
+      s,
+      seats,
+      r,
+    );
+    spring += drumH + 0.3 * s;
+  }
+  const dome = domeOf(high, ring + EAVE * s, spring, rise);
+  const { courses, open, base } = high
+    ? { courses: 5, open: 0.86, base: drumGoes + ONTO }
+    : { courses: 4, open: 1, base: lastSpan + ONTO };
+  const gores = n * 2;
+  let topmost = 0;
+  let crownSeat: V3 = [0, spring, 0];
+  for (let g = 0; g < gores; g++) {
+    const span = spans[Math.floor(g / 2)] as EntablatureSpan;
+    const mid = (span.a0 + span.a1) / 2;
+    const [a0, a1] = g % 2 === 0 ? [span.a0, mid] : [mid, span.a1];
+    let seat = seats[Math.floor(g / 2)] as V3;
+    // The dome falls in first on the side its weather comes from.
+    let loss =
+      base + 0.05 * (0.4 * r.next() + 0.6 * facing((a0 + a1) / 2, weather));
+    for (let k = 0; k < courses; k++) {
+      const t0 = (open * k) / courses;
+      const t1 = (open * (k + 1)) / courses;
+      const ch = still(seat, 0.6, { loss, tint: (r.next() - 0.5) * 0.04 });
+      domeBlock(stone, roof, dome, a0, a1, t0, t1, 0.48 + 0.08 * r.next(), ch);
+      fallenInside.push({ loss });
+      seat = dome.at((a0 + a1) / 2, (t0 + t1) / 2, 0.5);
+      if (k === courses - 1 && loss > topmost) {
+        topmost = loss;
+        crownSeat = seat;
       }
-    }
-    // A high dome's lantern, or a shallow dome's finial: the first thing to go.
-    const crown = still(crownSeat, 0.6, { loss: topmost + COURSE_STEP });
-    const peak = dome.at(0, open, 0)[1];
-    if (high) {
-      const rad = dome.at(0, open, 0.5)[0] * 0.92;
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2;
-        box(
-          stone,
-          around(a, rad, peak + 0.7 * s),
-          [[Math.cos(a), 0, Math.sin(a)], UP, [-Math.sin(a), 0, Math.cos(a)]],
-          [0.13 * s, 0.75 * s, 0.13 * s],
-          0.6,
-          crown,
-        );
-      }
-      sector(
-        stone,
-        0,
-        Math.PI * 2,
-        0,
-        rad + 0.15,
-        peak + 1.45 * s,
-        peak + 1.65 * s,
-        0.6,
-        crown,
-        true,
-      );
-      const cap = domeOf(true, rad + 0.1, peak + 1.65 * s, LANTERN_RISE);
-      for (let k = 0; k < 8; k++) {
-        domeBlock(
-          stone,
-          roof,
-          cap,
-          (k / 8) * Math.PI * 2,
-          ((k + 1) / 8) * Math.PI * 2,
-          0,
-          1,
-          0.5,
-          crown,
-          0.12,
-        );
-      }
-      drum(
-        stone,
-        0,
-        0,
-        cap.at(0, 1, 0)[1] - 0.1,
-        cap.at(0, 1, 0)[1] + 0.9 * s,
-        0.09 * s,
-        0.03 * s,
-        0.6,
-        crown,
-      );
-    } else {
-      drum(
-        stone,
-        0,
-        0,
-        peak - 0.1,
-        peak + 0.5 * s,
-        0.32 * s,
-        0.22 * s,
-        0.6,
-        crown,
-        true,
-      );
-      drum(
-        stone,
-        0,
-        0,
-        peak + 0.5 * s,
-        peak + 1.3 * s,
-        0.12 * s,
-        0.03 * s,
-        0.6,
-        crown,
-      );
+      loss += COURSE_STEP + r.range(0, 0.012);
     }
   }
+  // A high dome's lantern, or a shallow dome's finial: the first thing to go.
+  const crown = still(crownSeat, 0.6, { loss: topmost + COURSE_STEP });
+  buildDomeCrown(stone, roof, dome, high, open, s, crown);
+  return fallenInside;
+}
 
+function emitFallenHeap(
+  stone: PartBuilder,
+  fallenInside: readonly { loss: number }[],
+  ring: number,
+  floor: number,
+  s: number,
+  heap: Rand,
+): void {
   // The fallen dome lies heaped on the floor inside, growing in as the dome goes. A person walks over it.
-  const heap = r.fork("heap");
   const lumps = Math.min(28, fallenInside.length);
   for (let k = 0; k < lumps; k++) {
     const grow = (
@@ -917,6 +963,111 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
       heap,
     );
   }
+}
+
+/**
+ * Builds a rotunda on a stepped base. See `rotundaParams`.
+ */
+export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
+  const r = ctx.rand.fork("rotunda");
+  const s = ctx.facts.scale ?? 1;
+  const shape = landmarkShape(ROTUNDA_SHAPE, p, ctx);
+  const stone = new PartBuilder("masonry", "solid");
+  // The steps and the floor are walkable, so a person can climb up among the columns.
+  const steps = new PartBuilder("masonry", "walkable");
+  const roof = new PartBuilder("roof", "solid");
+  const n = COLUMNS[p.columns];
+  const ring = shape.ring * s;
+  const height = shape.column * s;
+  // The column radius that leaves the chosen gap between columns, measured in column widths.
+  const radius = ((Math.PI * shape.ring) / (n * (1 + shape.gap))) * s;
+  // `p.steps` is a value within its level's band. The step count is the nearest level's count.
+  const count = Object.values(ROTUNDA_STEPS).reduce((best, stepCount) =>
+    Math.abs(stepCount - p.steps) < Math.abs(best - p.steps) ? stepCount : best,
+  );
+  const floor = count * STEP.rise;
+  const top = ring + shape.margin;
+  const edge = top + (count - 1) * shape.tread;
+
+  // The stepped base: each step a ring of dressed blocks standing on the ground, set with joints between them, and
+  // the top one a floor of paving in rings round a center stone. Every block has its own shade and hue.
+  buildSteppedBase(steps, count, top, floor, shape.tread, r);
+
+  // The columns, with a gap between two of them facing +z, toppling outward one by one in a seeded order, those
+  // facing the weather mostly first.
+  const angles = Array.from(
+    { length: n },
+    (_, k) => Math.PI / 2 + ((k + 0.5) / n) * Math.PI * 2,
+  );
+  const order = angles
+    .map((a, k) => ({
+      k,
+      u: 0.5 * r.next() + 0.5 * (1 - facing(a, shape.weather)),
+    }))
+    .toSorted((a, b) => a.u - b.u)
+    .map((o) => o.k);
+  const falls = Array.from({ length: n }, () => 0);
+  // Each column starts to topple at its own vitality. Halfway down it breaks, and the shaft goes as its drums appear
+  // in the grass, so every column lies broken before vitality reaches 0.
+  order.forEach(
+    (k, m) =>
+      (falls[k] =
+        0.29 - (0.12 * m) / Math.max(1, n - 1) + r.range(-0.006, 0.006)),
+  );
+  buildRotundaColumns(
+    stone,
+    angles,
+    falls,
+    ring,
+    floor,
+    height,
+    radius,
+    edge,
+    shape.weather,
+    n,
+    r,
+  );
+
+  // The ring over the columns, in one span from each column to the next. Each span goes before either column under
+  // it falls, sinking into the capital of the column that falls later.
+  const beam = floor + height;
+  const spans = buildEntablature(
+    stone,
+    angles,
+    falls,
+    ring,
+    beam,
+    radius,
+    n,
+    s,
+    shape.entablature,
+    p.roof === "an open ring",
+    r,
+  );
+  const lastSpan = Math.max(...spans.map((sp) => sp.loss));
+
+  const fallenInside =
+    p.roof === "an open ring"
+      ? []
+      : buildRotundaDome(
+          stone,
+          roof,
+          spans,
+          lastSpan,
+          ring,
+          beam,
+          radius,
+          n,
+          s,
+          shape.entablature,
+          shape.drum,
+          shape.rise,
+          shape.weather,
+          p.roof === "a high dome",
+          r,
+        );
+
+  emitFallenHeap(stone, fallenInside, ring, floor, s, r.fork("heap"));
   return {
     parts: nonEmpty([steps.part(), stone.part(), roof.part()]),
     anchors: [{ position: [0, floor + height, 0], normal: [0, 1, 0], size: 1 }],
@@ -964,7 +1115,7 @@ function domeOf(
     };
   };
   return {
-    at: (a, t, depth) => {
+    at: (a, t, depth): V3 => {
       const m = meridian(t);
       return around(
         a,
@@ -972,7 +1123,7 @@ function domeOf(
         spring + m.y - m.ny * SHELL * depth,
       );
     },
-    normal: (a, t) => {
+    normal: (a, t): V3 => {
       const m = meridian(t);
       return [Math.cos(a) * m.nr, m.ny, Math.sin(a) * m.nr];
     },

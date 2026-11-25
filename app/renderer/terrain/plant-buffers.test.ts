@@ -9,7 +9,10 @@ import { createPlant, createSceneLight, geometryOf } from "@gaia/render";
 
 const treeLib = new Library(TREE_PRIMITIVES);
 /** The first tree blueprint from a sweep over a tree's parts. */
-const firstTree = sweep(tree, treeLib).blueprints[0]!;
+const firstTree = sweep(tree, treeLib).blueprints[0];
+if (firstTree === undefined) {
+  throw new Error("sweep returned no tree blueprint.");
+}
 const plant = realize(firstTree, tree, treeLib, {
   seed: seedOf("plant-buffers"),
   facts: { scale: 1, age: 120 },
@@ -19,7 +22,8 @@ const plant = realize(firstTree, tree, treeLib, {
 function uploaded(object: THREE.Object3D): THREE.BufferAttribute[] {
   const all: THREE.BufferAttribute[] = [];
   object.traverse((o) => {
-    const g = (o as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+    if (!(o instanceof THREE.Mesh)) return;
+    const g = o.geometry as THREE.BufferGeometry | undefined;
     if (g === undefined) return;
     for (const a of [
       ...Object.values(g.attributes),

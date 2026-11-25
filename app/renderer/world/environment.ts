@@ -275,7 +275,7 @@ export function createSky(light: SceneLight): Sky {
   mesh.renderOrder = -1;
   return {
     mesh,
-    apply(look) {
+    apply(look): void {
       applySky(light, look);
       const s = look.sky;
       const c = s.clouds;
@@ -386,7 +386,7 @@ export function createGround(
   const mesh = new THREE.Mesh(geometry, material);
   return {
     mesh,
-    apply(look) {
+    apply(look): void {
       const g = look.ground;
       u.uSoil.value.copy(v3(g.soil));
       u.uLow.value.copy(v3(g.low));

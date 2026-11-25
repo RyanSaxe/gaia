@@ -19,12 +19,21 @@ interface Press {
   readonly hold?: number;
 }
 
+interface Frame {
+  readonly t: number;
+  readonly yaw: number;
+  readonly ahead: number;
+  readonly hurry: boolean;
+}
+
 /** Plays presses on a person facing 0, frame by frame, until `until`: each frame's facing (degrees), walk and hurry. */
-function play(presses: readonly Press[], until: number) {
+function play(
+  presses: readonly Press[],
+  until: number,
+): { yaw: number; frames: Frame[]; last: Frame } {
   let s = steering();
   let yaw = 0;
-  const frames: { t: number; yaw: number; ahead: number; hurry: boolean }[] =
-    [];
+  const frames: Frame[] = [];
   for (let t = 0; t < until; t += DT) {
     for (const p of presses) {
       if (p.at >= t && p.at < t + DT) s = steerPress(s, p.key, p.at);
@@ -38,15 +47,15 @@ function play(presses: readonly Press[], until: number) {
     yaw = step.yaw;
     frames.push({ t, yaw: deg(yaw), ahead: step.ahead, hurry: step.hurry });
   }
-  return { yaw: deg(yaw), frames, last: frames[frames.length - 1]! };
+  return { yaw: deg(yaw), frames, last: frames[frames.length - 1] as Frame };
 }
 const at = <F extends { t: number }>(frames: readonly F[], t: number): F =>
-  frames.find((f) => f.t >= t) ?? frames[frames.length - 1]!;
+  frames.find((f) => f.t >= t) ?? (frames[frames.length - 1] as F);
 /** Every change of facing from frame to frame, degrees. */
-const turns = (frames: readonly { yaw: number }[]) =>
+const turns = (frames: readonly { yaw: number }[]): number[] =>
   frames
     .slice(1)
-    .map((f, i) => f.yaw - frames[i]!.yaw)
+    .map((f, i) => f.yaw - (frames[i] as { yaw: number }).yaw)
     .filter((d) => Math.abs(d) > 1e-9);
 
 describe("walking comfortably", () => {

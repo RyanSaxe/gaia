@@ -391,6 +391,106 @@ export function createCopies(
     return pick;
   };
 
+  const configureSwap = (
+    size: PassSize,
+  ): {
+    readonly sized: boolean;
+    readonly swapPx: number;
+    readonly swapping: boolean;
+    readonly leaves: boolean;
+    readonly leavePx: number;
+  } => {
+    const sized = size.focal > 0;
+    // The card shader chooses each card on the GPU by the same rule as the full form below, at the form's current
+    // `swapPx`. No card draws while the form has no slot or while detail is forced.
+    const swapPx = far === undefined ? 0 : far.forms.swapPx(far.form);
+    if (cards !== null && far !== undefined) {
+      cards.slot = detail === "auto" ? far.forms.slotOf(far.form) : -1;
+    }
+    const swapping = swapPx > 0 && detail === "auto" && sized;
+    // Below `swapPx`, a perspective pass dissolves the full form under its whole card until the crown spans
+    // `leavePx`. The sun's shadow is orthographic, so it keeps the full form down to `swapPx` and the card casts the
+    // shadow below that.
+    const leaves = swapping && !size.ortho;
+    const leavePx = leaves ? swapPx / FAR.leave : swapPx;
+    return { sized, swapPx, swapping, leaves, leavePx };
+  };
+  const cellVisible = (
+    cell: Cell,
+    d: number,
+    size: PassSize,
+    sized: boolean,
+    span: (radius: number, dist: number) => number,
+  ): boolean => {
+    // Skip a cell past `AIR.dissolveEnd`, outside the frustum, or whose largest crown is too small to see.
+    if (
+      d - cell.built.radius >= AIR.dissolveEnd ||
+      !frustum.intersectsSphere(cell.bounds)
+    ) {
+      return false;
+    }
+    return !(
+      sized &&
+      !size.ortho &&
+      span(cell.crowns[1], d - cell.built.radius) <= GONE.end
+    );
+  };
+  const cullCopies = (
+    cell: Cell,
+    eye: THREE.Vector3,
+    ortho: boolean,
+    swapPx: number,
+    span: (radius: number, dist: number) => number,
+  ): number[] => {
+    const kept: number[] = [];
+    for (const k of cell.copies) {
+      const px = span(
+        crowns[k * 4 + 3] as number,
+        Math.hypot(
+          (crowns[k * 4] as number) - eye.x,
+          (crowns[k * 4 + 1] as number) - eye.y,
+          (crowns[k * 4 + 2] as number) - eye.z,
+        ),
+      );
+      const { full, card: fade } = farChoice(px, swapPx, TURN, ortho);
+      if (full) kept.push(k);
+      else if (fade > 0) farAway++;
+      if (full && fade > 0) inBand++;
+    }
+    return kept;
+  };
+  const cullCell = (
+    cell: Cell,
+    i: number,
+    eye: THREE.Vector3,
+    size: PassSize,
+    cfg: ReturnType<typeof configureSwap>,
+    span: (radius: number, dist: number) => number,
+  ): void => {
+    const d = cell.built.center.distanceTo(eye);
+    if (!cellVisible(cell, d, size, cfg.sized, span)) return;
+    const level = parts[levelFor(cell, size.smaller)] as (
+      | number
+      | readonly number[]
+    )[];
+    // A cell wholly above the band draws whole, and one wholly below `leavePx` draws only cards. Only a cell that
+    // straddles the band checks each copy.
+    if (
+      !cfg.swapping ||
+      span(cell.crowns[0], d + cell.built.radius) >= cfg.swapPx * FAR.band
+    ) {
+      level.push(i);
+      return;
+    }
+    if (span(cell.crowns[1], d - cell.built.radius) < cfg.leavePx) {
+      farAway += cell.copies.length;
+      return;
+    }
+    const kept = cullCopies(cell, eye, size.ortho, cfg.swapPx, span);
+    if (kept.length === cell.copies.length) level.push(i);
+    else if (kept.length > 0) level.push(kept);
+  };
+
   return {
     object: view.object,
     height: view.height,
@@ -398,35 +498,35 @@ export function createCopies(
     levels,
     crown: view.built.clone(),
     far,
-    get count() {
+    get count(): number {
       return view.count;
     },
-    get triangles() {
+    get triangles(): number {
       return view.triangles;
     },
-    get vitality() {
+    get vitality(): number {
       return view.vitality;
     },
-    get detail() {
+    get detail(): DetailMode {
       return detail;
     },
     set detail(mode: DetailMode) {
       detail = mode;
     },
     // The cards rebuild from `places` whenever they repack their copies, so it stores each copy's shown vitality as `placesOf` writes it, not the raw vitality.
-    setVitality(v) {
+    setVitality(v): void {
       view.setVitality(v);
       for (let k = 0; k < view.count; k++) {
         places[k * PLACE_STRIDE + 5] = shownVitality(view.vitality);
         cards?.setVitalityAt(k, view.vitality);
       }
     },
-    setVitalityAt(index, v) {
+    setVitalityAt(index, v): void {
       view.setVitalityAt(index, v);
       places[index * PLACE_STRIDE + 5] = shownVitality(v);
       cards?.setVitalityAt(index, v);
     },
-    cull(camera, size = VIEW_SIZE) {
+    cull(camera, size = VIEW_SIZE): void {
       frustum.setFromProjectionMatrix(
         viewProjection.multiplyMatrices(
           camera.projectionMatrix,
@@ -438,78 +538,16 @@ export function createCopies(
       // A crown's span on this pass's screen, in device pixels, at distance d.
       const span = (radius: number, d: number): number =>
         (2 * radius * size.focal) / (size.ortho ? 1 : Math.max(d, 1));
-      const sized = size.focal > 0;
-      // The card shader chooses each card on the GPU by the same rule as the full form below, at the form's current
-      // `swapPx`. No card draws while the form has no slot or while detail is forced.
-      const swapPx = far === undefined ? 0 : far.forms.swapPx(far.form);
-      if (cards !== null && far !== undefined) {
-        cards.slot = detail === "auto" ? far.forms.slotOf(far.form) : -1;
-      }
-      const swapping = swapPx > 0 && detail === "auto" && sized;
-      // Below `swapPx`, a perspective pass dissolves the full form under its whole card until the crown spans
-      // `leavePx`. The sun's shadow is orthographic, so it keeps the full form down to `swapPx` and the card casts the
-      // shadow below that.
-      const leaves = swapping && !size.ortho;
-      const leavePx = leaves ? swapPx / FAR.leave : swapPx;
+      const cfg = configureSwap(size);
       view.nearLeaves(
-        sized && !size.ortho ? size.focal : 0,
-        leaves ? swapPx : 0,
-        leaves ? leavePx : 0,
+        cfg.sized && !size.ortho ? size.focal : 0,
+        cfg.leaves ? cfg.swapPx : 0,
+        cfg.leaves ? cfg.leavePx : 0,
         [GONE.start, GONE.end],
       );
       inBand = 0;
       farAway = 0;
-      cells.forEach((cell, i) => {
-        const d = cell.built.center.distanceTo(eye);
-        // Skip a cell past `AIR.dissolveEnd`, outside the frustum, or whose largest crown is too small to see.
-        if (
-          d - cell.built.radius >= AIR.dissolveEnd ||
-          !frustum.intersectsSphere(cell.bounds)
-        ) {
-          return;
-        }
-        if (
-          sized &&
-          !size.ortho &&
-          span(cell.crowns[1], d - cell.built.radius) <= GONE.end
-        ) {
-          return;
-        }
-        const level = parts[levelFor(cell, size.smaller)] as (
-          | number
-          | readonly number[]
-        )[];
-        // A cell wholly above the band draws whole, and one wholly below `leavePx` draws only cards. Only a cell that
-        // straddles the band checks each copy.
-        if (
-          !swapping ||
-          span(cell.crowns[0], d + cell.built.radius) >= swapPx * FAR.band
-        ) {
-          level.push(i);
-          return;
-        }
-        if (span(cell.crowns[1], d - cell.built.radius) < leavePx) {
-          farAway += cell.copies.length;
-          return;
-        }
-        const kept: number[] = [];
-        for (const k of cell.copies) {
-          const px = span(
-            crowns[k * 4 + 3] as number,
-            Math.hypot(
-              (crowns[k * 4] as number) - eye.x,
-              (crowns[k * 4 + 1] as number) - eye.y,
-              (crowns[k * 4 + 2] as number) - eye.z,
-            ),
-          );
-          const { full, card: fade } = farChoice(px, swapPx, TURN, size.ortho);
-          if (full) kept.push(k);
-          else if (fade > 0) farAway++;
-          if (full && fade > 0) inBand++;
-        }
-        if (kept.length === cell.copies.length) level.push(i);
-        else if (kept.length > 0) level.push(kept);
-      });
+      cells.forEach((cell, i) => cullCell(cell, i, eye, size, cfg, span));
       packed = parts.map((list, k) => {
         const key = list
           .map((p) => (typeof p === "number" ? p : `[${p.join(".")}]`))
@@ -526,10 +564,10 @@ export function createCopies(
       });
       view.draw(packed);
     },
-    warm() {
+    warm(): void {
       view.warm();
     },
-    respot(next) {
+    respot(next): void {
       view.respot(next);
       cells = cellsOf(next, view.built, view.reach);
       crowns = crownsOf(next, view.built);
@@ -539,11 +577,11 @@ export function createCopies(
     },
     drawn: () => ({ ...view.drawn(), band: inBand, far: farAway }),
     farCount,
-    useDepth(on) {
+    useDepth(on): void {
       view.useDepth(on);
       cards?.useDepth(on);
     },
-    dispose() {
+    dispose(): void {
       cards?.dispose();
       view.dispose();
     },

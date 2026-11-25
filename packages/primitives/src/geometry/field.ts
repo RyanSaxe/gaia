@@ -15,8 +15,8 @@ function hash(seed: number, x: number, z: number): number {
   return (h ^ (h >>> 16)) >>> 0;
 }
 
-const GX = [1, -1, 1, -1, 1.4142, -1.4142, 0, 0];
-const GZ = [1, 1, -1, -1, 0, 0, 1.4142, -1.4142];
+const GX = [1, -1, 1, -1, Math.SQRT2, -Math.SQRT2, 0, 0];
+const GZ = [1, 1, -1, -1, 0, 0, Math.SQRT2, -Math.SQRT2];
 
 /** Gradient noise, about -1..1. */
 export function gradientNoise(seed: number, x: number, z: number): number {
@@ -172,57 +172,94 @@ export function bedOffset(
   return troughOffset(f, u) + bedBend(f, u, width);
 }
 
-export function fieldAt(f: HeightField, x: number, z: number): number {
+function noiseAt(
+  f: Extract<HeightField, { op: "noise" }>,
+  x: number,
+  z: number,
+): number {
+  const c = Math.cos(f.angle);
+  const s = Math.sin(f.angle);
+  const u = (x * c + z * s) / (f.wavelength * f.stretch);
+  const v = (-x * s + z * c) / f.wavelength;
+  return f.style === "ridged"
+    ? ridged(f.seed, u, v, f.octaves, f.gain)
+    : fbm(f.seed, u, v, f.octaves, f.gain);
+}
+
+function dunesAt(
+  f: Extract<HeightField, { op: "dunes" }>,
+  x: number,
+  z: number,
+): number {
+  const c = Math.cos(f.angle);
+  const s = Math.sin(f.angle);
+  const u = x * c + z * s;
+  const big = f.wavelength * 2.5;
+  const p =
+    u / f.wavelength + f.wander * 0.8 * fbm(f.seed, x / big, z / big, 2, 0.5);
+  const t = p - Math.floor(p);
+  // A long windward climb, then a shorter, steeper lee face, flat at both ends.
+  const rise = 0.62;
+  const shape = t < rise ? smooth(0, rise, t) : 1 - smooth(rise, 1, t);
+  const crest =
+    0.68 + 0.32 * fbm(f.seed + 7, x / (big * 1.3), z / (big * 1.3), 2, 0.5);
+  return shape * crest;
+}
+
+function troughAt(
+  f: Extract<HeightField, { op: "trough" }>,
+  x: number,
+  z: number,
+): number {
+  const c = Math.cos(f.angle);
+  const s = Math.sin(f.angle);
+  const u = x * c + z * s;
+  const v = -x * s + z * c;
+  // Distance is measured from the bent axis, not across the valley's run, so a bend keeps the valley's width and
+  // sides. A few Newton steps from the point straight across find the nearest point on the axis.
+  let a = u;
+  for (let step = 0; step < 4; step++) {
+    const off = troughOffset(f, a);
+    const d1 = (troughOffset(f, a + 0.5) - troughOffset(f, a - 0.5)) / 1;
+    const d2 =
+      (troughOffset(f, a + 0.5) - 2 * off + troughOffset(f, a - 0.5)) / 0.25;
+    const g1 = a - u + (off - v) * d1;
+    const g2 = 1 + d1 * d1 + (off - v) * d2;
+    if (g2 <= 0) break;
+    a -= g1 / g2;
+  }
+  const across = Math.hypot(a - u, troughOffset(f, a) - v) / f.halfWidth;
+  return smooth(f.floor, 1, across);
+}
+
+function productAt(
+  fields: readonly HeightField[],
+  x: number,
+  z: number,
+): number {
+  let total = 1;
+  for (const g of fields) {
+    total *= fieldAt(g, x, z);
+    if (total === 0) return 0;
+  }
+  return total;
+}
+
+type LeafField = Exclude<
+  HeightField,
+  { op: "terrace" | "sum" | "product" | "scale" }
+>;
+
+function leafFieldAt(f: LeafField, x: number, z: number): number {
   switch (f.op) {
     case "constant":
       return f.value;
-    case "noise": {
-      const c = Math.cos(f.angle);
-      const s = Math.sin(f.angle);
-      const u = (x * c + z * s) / (f.wavelength * f.stretch);
-      const v = (-x * s + z * c) / f.wavelength;
-      return f.style === "ridged"
-        ? ridged(f.seed, u, v, f.octaves, f.gain)
-        : fbm(f.seed, u, v, f.octaves, f.gain);
-    }
-    case "dunes": {
-      const c = Math.cos(f.angle);
-      const s = Math.sin(f.angle);
-      const u = x * c + z * s;
-      const big = f.wavelength * 2.5;
-      const p =
-        u / f.wavelength +
-        f.wander * 0.8 * fbm(f.seed, x / big, z / big, 2, 0.5);
-      const t = p - Math.floor(p);
-      // A long windward climb, then a shorter, steeper lee face, flat at both ends.
-      const rise = 0.62;
-      const shape = t < rise ? smooth(0, rise, t) : 1 - smooth(rise, 1, t);
-      const crest =
-        0.68 + 0.32 * fbm(f.seed + 7, x / (big * 1.3), z / (big * 1.3), 2, 0.5);
-      return shape * crest;
-    }
-    case "trough": {
-      const c = Math.cos(f.angle);
-      const s = Math.sin(f.angle);
-      const u = x * c + z * s;
-      const v = -x * s + z * c;
-      // Distance is measured from the bent axis, not across the valley's run, so a bend keeps the valley's width and
-      // sides. A few Newton steps from the point straight across find the nearest point on the axis.
-      let a = u;
-      for (let step = 0; step < 4; step++) {
-        const off = troughOffset(f, a);
-        const d1 = (troughOffset(f, a + 0.5) - troughOffset(f, a - 0.5)) / 1;
-        const d2 =
-          (troughOffset(f, a + 0.5) - 2 * off + troughOffset(f, a - 0.5)) /
-          0.25;
-        const g1 = a - u + (off - v) * d1;
-        const g2 = 1 + d1 * d1 + (off - v) * d2;
-        if (g2 <= 0) break;
-        a -= g1 / g2;
-      }
-      const across = Math.hypot(a - u, troughOffset(f, a) - v) / f.halfWidth;
-      return smooth(f.floor, 1, across);
-    }
+    case "noise":
+      return noiseAt(f, x, z);
+    case "dunes":
+      return dunesAt(f, x, z);
+    case "trough":
+      return troughAt(f, x, z);
     case "plane": {
       const u = x * Math.cos(f.angle) + z * Math.sin(f.angle);
       return f.grade * f.reach * Math.tanh(u / f.reach);
@@ -233,25 +270,25 @@ export function fieldAt(f: HeightField, x: number, z: number): number {
       const d = (Math.hypot(x, z) - f.radius) / f.width;
       return Math.exp(-d * d);
     }
-    case "terrace": {
-      const q = fieldAt(f.of, x, z) / f.step;
-      const i = Math.floor(q);
-      return f.step * (i + smooth(1 - f.riser, 1, q - i));
+    default: {
+      const neverField: never = f;
+      return neverField;
     }
-    case "sum": {
-      let total = 0;
-      for (const g of f.of) total += fieldAt(g, x, z);
-      return total;
-    }
-    case "product": {
-      let total = 1;
-      for (const g of f.of) {
-        total *= fieldAt(g, x, z);
-        if (total === 0) return 0;
-      }
-      return total;
-    }
-    case "scale":
-      return f.by * fieldAt(f.of, x, z);
   }
+}
+
+export function fieldAt(f: HeightField, x: number, z: number): number {
+  if (f.op === "terrace") {
+    const q = fieldAt(f.of, x, z) / f.step;
+    const i = Math.floor(q);
+    return f.step * (i + smooth(1 - f.riser, 1, q - i));
+  }
+  if (f.op === "sum") {
+    let total = 0;
+    for (const g of f.of) total += fieldAt(g, x, z);
+    return total;
+  }
+  if (f.op === "product") return productAt(f.of, x, z);
+  if (f.op === "scale") return f.by * fieldAt(f.of, x, z);
+  return leafFieldAt(f, x, z);
 }

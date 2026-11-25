@@ -136,24 +136,25 @@ export function createImmersive(
     map.open(false);
     layPlace(at);
     cover.classList.add("on");
-    window.setTimeout(async () => {
+    window.setTimeout(() => {
       // Bakes the land around the new place while the cover hides the view.
-      await world.place(at);
-      // The minimap writes the new place's name as the cover lifts.
-      minimap.show(active);
-      let frames = 0;
-      const settle = (): void => {
-        if (++frames < JUMP.settleFrames) {
-          requestAnimationFrame(settle);
-          return;
-        }
-        cover.classList.remove("on");
-        window.setTimeout(() => {
-          jumping = false;
-          cover.replaceChildren();
-        }, JUMP.revealMs);
-      };
-      requestAnimationFrame(settle);
+      void world.place(at).then(() => {
+        // The minimap writes the new place's name as the cover lifts.
+        minimap.show(active);
+        let frames = 0;
+        const settle = (): void => {
+          if (++frames < JUMP.settleFrames) {
+            requestAnimationFrame(settle);
+            return;
+          }
+          cover.classList.remove("on");
+          window.setTimeout(() => {
+            jumping = false;
+            cover.replaceChildren();
+          }, JUMP.revealMs);
+        };
+        requestAnimationFrame(settle);
+      });
     }, JUMP.coverMs);
     return true;
   }
@@ -238,9 +239,9 @@ export function createImmersive(
       };
     }
     const of =
-      words.journal.entry(entityOf(thing)) !== undefined
-        ? entityOf(thing)
-        : thing;
+      words.journal.entry(entityOf(thing)) === undefined
+        ? thing
+        : entityOf(thing);
     return [
       code.projectId,
       Math.round(code.size),
@@ -278,9 +279,9 @@ export function createImmersive(
     const by = (t: { x: number; z: number }): number =>
       Math.hypot(t.x - p.x, t.z - p.z);
     paintings.near(
-      [...paintable]
+      paintable
         .filter((t) => by(t) < NEAR.reach)
-        .sort((a, b) => by(a) - by(b))
+        .toSorted((a, b) => by(a) - by(b))
         .slice(0, NEAR.count)
         .map((t) => t.id),
     );
@@ -339,10 +340,13 @@ export function createImmersive(
     person: () => world.person(),
     mapped: () =>
       new Promise<void>((resolve) => {
-        const look = (): void =>
-          void (map.paper() !== null
-            ? resolve()
-            : window.setTimeout(look, 150));
+        const look = (): void => {
+          if (map.paper() === null) {
+            window.setTimeout(look, 150);
+          } else {
+            resolve();
+          }
+        };
         look();
       }),
     trip: () => world.trip(),
@@ -407,12 +411,13 @@ export function createImmersive(
     if (kept === null) return null;
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.addEventListener("load", () => {
         if (typeof reader.result === "string") resolve(reader.result);
         else reject(new Error("the painting could not be read"));
-      };
-      reader.onerror = () =>
+      });
+      reader.addEventListener("error", () => {
         reject(reader.error ?? new Error("the painting could not be read"));
+      });
       reader.readAsDataURL(kept);
     });
   }
@@ -556,8 +561,10 @@ export function createImmersive(
         journal: journalOf(code, ROOM),
         world: code,
         vitality: pageVitality(code),
-        lines: (path) => source.lines(path) ?? undefined,
-        thing: (of) => world.thing(thingIdOf(of)),
+        lines: (path): ReturnType<WordsSource["lines"]> =>
+          source.lines(path) ?? undefined,
+        thing: (of): ReturnType<WorldHandle["thing"]> =>
+          world.thing(thingIdOf(of)),
       };
     }
     // A directory's vitality pools its files and subdirectories, weighted by patch area, as the map's wash does.
@@ -660,29 +667,39 @@ export function createImmersive(
     },
     (at) => journal.open(at),
   );
+  const closeOpenOverlay = (): boolean => {
+    if (map.isOpen) {
+      map.open(false);
+      return true;
+    }
+    if (slip.classList.contains("open")) {
+      setSlip(false);
+      return true;
+    }
+    return false;
+  };
   // Listens in the capture phase, so Escape closes the open paper before any other handler gets the key.
   window.addEventListener(
     "keydown",
     (e) => {
       if (!active || e.target instanceof HTMLInputElement) return;
+      if (e.code === "Escape") {
+        if (closeOpenOverlay()) e.stopPropagation();
+        return;
+      }
+      if (jumping) return;
       // "/" opens the finder over the world or the open book.
-      if (e.key === "/" && !jumping) {
+      if (e.key === "/") {
         finder.open();
         e.preventDefault();
         e.stopPropagation();
         return;
       }
       // M opens the journal at the map. While the journal is open, it handles every key.
-      if (e.code === "KeyM" && !jumping && !journal.isOpen) {
+      if (e.code === "KeyM" && !journal.isOpen) {
         journal.open();
         e.stopPropagation();
-        return;
       }
-      if (e.code !== "Escape") return;
-      if (map.isOpen) map.open(false);
-      else if (slip.classList.contains("open")) setSlip(false);
-      else return;
-      e.stopPropagation();
     },
     true,
   );
@@ -698,7 +715,7 @@ export function createImmersive(
   apply();
   let night = -1;
   return {
-    setActive(on) {
+    setActive(on): void {
       active = on;
       layer.hidden = !on;
       if (!on) {
@@ -709,7 +726,7 @@ export function createImmersive(
       apply();
     },
     book: () => journal.state(),
-    frame(dt) {
+    frame(dt): void {
       if (!active || !standing) return;
       const p = world.person();
       const place = world.placeAt(p.x, p.z);
@@ -756,7 +773,14 @@ export function createImmersive(
       /** Tucks the minimap below the bottom of the screen or brings it back, as a tap on its edge does. */
       tuck: (on: boolean) => minimap.tuck(on),
       /** The person's place, the state of the minimap, compass, field map and journal, and the number of marked trail crossings. */
-      state: () => {
+      state: (): {
+        place: ReturnType<WorldHandle["placeAt"]>;
+        minimap: ReturnType<typeof minimap.state>;
+        compass: ReturnType<typeof compass.state>;
+        map: ReturnType<typeof map.state>;
+        markers: number;
+        journal: ReturnType<typeof journal.state>;
+      } => {
         const p = world.person();
         return {
           place: world.placeAt(p.x, p.z),

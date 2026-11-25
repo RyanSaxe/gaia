@@ -102,10 +102,13 @@ const CLOUD_GLOW = {
   lightness: -0.03,
 } as const;
 
-function slotOutput<T>(built: ReturnType<typeof buildSlots>, name: string): T {
+function slotOutput(
+  built: ReturnType<typeof buildSlots>,
+  name: string,
+): unknown {
   const out = built.get(name)?.output;
   if (out === undefined) throw new Error(`The blueprint has no ${name}.`);
-  return out as T;
+  return out;
 }
 
 /**
@@ -157,8 +160,8 @@ export function realizeSky(
     seed,
     facts: {},
   });
-  const day = slotOutput<DaySpec>(built, "light");
-  const sky = slotOutput<SkySpec>(built, "sky");
+  const day = slotOutput(built, "light") as DaySpec;
+  const sky = slotOutput(built, "sky") as SkySpec;
   const overcast = sky.clouds.overcast ?? 0;
   const light = overcastLight(lightAt(day, hour), overcast);
   const night = light.nightness;
@@ -226,7 +229,7 @@ export function realizeSky(
       moon: day.moon,
       stars: day.stars,
     },
-    wind: slotOutput<WindSpec>(built, "wind"),
+    wind: slotOutput(built, "wind") as WindSpec,
   };
 }
 
@@ -240,11 +243,11 @@ export function realizeRegion(
     facts: {},
   });
   return {
-    ground: slotOutput<GroundSpec>(built, "cover"),
+    ground: slotOutput(built, "cover") as GroundSpec,
     groundDecline: GROUND_DECLINE,
     air: airOf(built),
     drift: (built.get("accents")?.output as AccentSpec | undefined) ?? null,
-    natives: slotOutput<NativeFamilies>(built, "natives").families,
+    natives: (slotOutput(built, "natives") as NativeFamilies).families,
   };
 }
 

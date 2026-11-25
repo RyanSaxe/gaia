@@ -103,7 +103,7 @@ export function createSoundscape(
 
   let last = -1;
   return {
-    at(t, mix) {
+    at(t, mix): void {
       for (const b of beds) {
         const layer = mix[b.name];
         const heard = plays(b.name) && layer.gain > HEARD;
@@ -139,7 +139,7 @@ export function createSoundscape(
         );
       }
     },
-    step(t, ground, side) {
+    step(t, ground, side): void {
       if (!plays("steps")) return;
       const sprite = bank.steps[ground];
       let k = Math.floor(random() * sprite.cuts.length);
@@ -159,7 +159,7 @@ export function createSoundscape(
       source.connect(pan).connect(level).connect(world);
       source.start(t, cut.at, cut.length);
     },
-    paper(t, what) {
+    paper(t, what): { stop(t: number): void } {
       const buffer = bank.paper[what];
       const source = ctx.createBufferSource();
       source.buffer = buffer;
@@ -170,7 +170,7 @@ export function createSoundscape(
       if (what === "turn") source.start(t, 0, ONE_TURN);
       else source.start(t);
       return {
-        stop(at) {
+        stop(at): void {
           if (at >= t + buffer.duration) return;
           level.gain.setValueAtTime(gain, at);
           level.gain.linearRampToValueAtTime(0, at + 0.1);

@@ -302,7 +302,7 @@ export function createWildGrowth(
   return {
     all: () => views,
     farBuilds: () => builds,
-    build(blueprints) {
+    build(blueprints): void {
       if (views.length > 0) {
         throw new Error(
           "The wild builds a world's bushes once, when it opens.",
@@ -337,23 +337,23 @@ export function createWildGrowth(
           : [
               {
                 blueprint: ask.blueprint,
-                plant: () => made(ask, floraLib),
+                plant: (): ReturnType<typeof made> => made(ask, floraLib),
                 far,
               },
             ];
       });
       if (terrain !== null) placeThickets(terrain, true);
     },
-    show(on) {
+    show(on): void {
       shown = on;
       for (const v of views) v.object.visible = on;
     },
-    update(t) {
+    update(t): void {
       terrain = t;
       cache.clear();
       placeThickets(t, true);
     },
-    follow(x, z) {
+    follow(x, z): void {
       const next = queue.shift();
       if (next !== undefined) next.view.respot(next.spots);
       if (

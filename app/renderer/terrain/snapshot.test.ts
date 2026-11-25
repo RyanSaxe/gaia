@@ -12,10 +12,10 @@ describe("the showcase's world from its bundled snapshot", () => {
     async (of) => {
       const { world, summary } = await laySnapshot("a test", of);
       expect(world.trails.length).toBeGreaterThan(0);
-      expect(world.patches.map((p) => p.path).sort()).toEqual(
+      expect(world.patches.map((p) => p.path).toSorted()).toEqual(
         snapshotGraphOf(of)
           .nodes.flatMap((n) => (n.kind === "file" ? [n.path] : []))
-          .sort(),
+          .toSorted(),
       );
       expect(summary).toContain("judged by Jev");
     },

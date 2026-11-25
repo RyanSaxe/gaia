@@ -46,12 +46,34 @@ const env = {
 };
 const engine = engineBinary(repo, "release");
 
+interface RpcResults {
+  "project.clone": Cloned;
+  "project.graph": CodeGraph;
+}
+
+interface Measurement {
+  ms: number;
+  files: number;
+  languages: Record<string, number>;
+  definitions: number;
+  roles: Record<string, number>;
+  blocks: Record<string, number>;
+  pending: Record<string, number>;
+  edges: Record<string, number>;
+  unparsed: number;
+  unparsedFiles: string[];
+  conventions: Record<string, number>;
+}
+
+const pct = (n: number, of: number): string =>
+  `${of === 0 ? 0 : Math.round((100 * n) / of)}%`;
+
 /** One request to a fresh engine, and how long it took to answer. */
-async function call<T>(
-  method: string,
+async function call<M extends keyof RpcResults>(
+  method: M,
   params: object,
   dataDir?: string,
-): Promise<{ result: T; ms: number }> {
+): Promise<{ result: RpcResults[M]; ms: number }> {
   const childEnv =
     dataDir === undefined ? env : { ...env, GAIA_DATA_DIR: dataDir };
   const child = spawn(engine, ["rpc"], {
@@ -67,7 +89,7 @@ async function call<T>(
     const ms = performance.now() - t0;
     child.stdin.end();
     const response = JSON.parse(line) as {
-      result?: T;
+      result?: RpcResults[M];
       error?: { message: string };
     };
     if (response.result === undefined) {
@@ -78,20 +100,24 @@ async function call<T>(
   throw new Error(`${method}: the engine closed without answering`);
 }
 
+function localRootOf(rootPath: string, make?: readonly string[]): string {
+  const root = resolve(repo, rootPath);
+  const [command, ...rest] = make ?? [];
+  if (command !== undefined && !existsSync(root)) {
+    execFileSync(command, rest, { cwd: repo, env, stdio: "inherit" });
+  }
+  return root;
+}
+
 /** The repository's folder, cloned and at its pinned commit. */
 async function rootOf(r: Repo): Promise<string> {
   if (r.root !== undefined) {
-    const root = resolve(repo, r.root);
-    const [command, ...rest] = r.make ?? [];
-    if (command !== undefined && !existsSync(root)) {
-      execFileSync(command, rest, { cwd: repo, env, stdio: "inherit" });
-    }
-    return root;
+    return localRootOf(r.root, r.make);
   }
   if (r.address === undefined || r.commit === undefined) {
     throw new Error(`${r.name} needs a root, or an address and a commit`);
   }
-  const { result } = await call<Cloned>("project.clone", {
+  const { result } = await call("project.clone", {
     address: r.address,
   });
   if (!result.cloned) {
@@ -117,14 +143,16 @@ const tally = <T>(
 ): Record<string, number> => {
   const out: Record<string, number> = {};
   for (const item of items) out[key(item)] = (out[key(item)] ?? 0) + 1;
-  return Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1]));
+  return Object.fromEntries(
+    Object.entries(out).toSorted((a, b) => b[1] - a[1]),
+  );
 };
 const words = (counts: Record<string, number>): string =>
   Object.entries(counts)
     .map(([k, n]) => `${k} ${n.toLocaleString("en")}`)
     .join(", ");
 
-function measure(graph: CodeGraph, ms: number) {
+function measure(graph: CodeGraph, ms: number): Measurement {
   const files = graph.nodes.flatMap((n) => (n.kind === "file" ? [n] : []));
   const defs = graph.nodes.flatMap((n) => (n.kind === "def" ? [n] : []));
   const blocks = graph.nodes.flatMap((n) => (n.kind === "block" ? [n] : []));
@@ -180,11 +208,7 @@ async function replay(
   try {
     for (const c of commits) {
       git("-c", "advice.detachedHead=false", "checkout", "--quiet", c);
-      const { result } = await call<CodeGraph>(
-        "project.graph",
-        { root },
-        store,
-      );
+      const { result } = await call("project.graph", { root }, store);
       defsAt.push(
         result.nodes.flatMap((n) =>
           n.kind === "def"
@@ -212,8 +236,6 @@ async function replay(
   const names = new Set(last.map((d) => d.qualified));
   // A definition survives when its qualified name still exists somewhere, wherever it moved.
   const surviving = first.filter((d) => names.has(d.qualified));
-  const pct = (n: number, of: number): string =>
-    `${of === 0 ? 0 : Math.round((100 * n) / of)}%`;
   const byId = first.filter((d) => ids.has(d.id)).length;
   const byLineage = surviving.filter((d) => lineages.has(d.lineage)).length;
   console.log(
@@ -257,7 +279,7 @@ if (replayAt >= 0) {
 const results: Record<string, ReturnType<typeof measure>> = {};
 for (const r of chosen) {
   const root = await rootOf(r);
-  const { result, ms } = await call<CodeGraph>("project.graph", { root });
+  const { result, ms } = await call("project.graph", { root });
   const m = measure(result, ms);
   results[r.name] = m;
   const blocks = Object.values(m.blocks).reduce((a, b) => a + b, 0);

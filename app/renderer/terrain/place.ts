@@ -238,6 +238,52 @@ export const houseGround = (b: {
   readonly beside: Extent | null;
 }): number => reachOf(b) + 2;
 
+function collectGroundPoints(
+  part: Built["parts"][number],
+): Map<number, number[]> {
+  const pieces = new Map<number, number[]>();
+  for (let v = 0; v * 3 < part.positions.length; v++) {
+    if (
+      (part.channels.grow?.[v] ?? 0) > 0 ||
+      (part.positions[v * 3 + 1] as number) >= 0.3
+    ) {
+      continue;
+    }
+    const id = part.piece[v * 2] as number;
+    let points = pieces.get(id);
+    if (points === undefined) pieces.set(id, (points = []));
+    points.push(
+      part.positions[v * 3] as number,
+      part.positions[v * 3 + 2] as number,
+    );
+  }
+  return pieces;
+}
+
+function footFromPoints(points: readonly number[]): {
+  x: number;
+  z: number;
+  radius: number;
+} {
+  let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
+  for (let k = 0; k < points.length; k += 2) {
+    x0 = Math.min(x0, points[k] as number);
+    x1 = Math.max(x1, points[k] as number);
+    z0 = Math.min(z0, points[k + 1] as number);
+    z1 = Math.max(z1, points[k + 1] as number);
+  }
+  const x = (x0 + x1) / 2;
+  const z = (z0 + z1) / 2;
+  let reach = 0;
+  for (let k = 0; k < points.length; k += 2) {
+    reach = Math.max(
+      reach,
+      Math.hypot((points[k] as number) - x, (points[k + 1] as number) - z),
+    );
+  }
+  return { x, z, radius: reach + 0.2 };
+}
+
 /**
  * Where a landmark meets the ground, in its own frame: a disc around each solid piece that touches the ground, such as
  * a step, a stone, a foot, a tower's lowest blocks or a great tree's roots, centered on that piece's footing. A disc
@@ -250,46 +296,14 @@ export function landmarkFeet(
   const feet: { x: number; z: number; radius: number }[] = [];
   for (const part of built.parts) {
     if (part.collision === "none") continue;
-    const pieces = new Map<number, number[]>();
-    for (let v = 0; v * 3 < part.positions.length; v++) {
-      if (
-        (part.channels.grow?.[v] ?? 0) > 0 ||
-        (part.positions[v * 3 + 1] as number) >= 0.3
-      ) {
-        continue;
-      }
-      const id = part.piece[v * 2] as number;
-      let points = pieces.get(id);
-      if (points === undefined) pieces.set(id, (points = []));
-      points.push(
-        part.positions[v * 3] as number,
-        part.positions[v * 3 + 2] as number,
-      );
-    }
-    for (const points of pieces.values()) {
-      let [x0, x1, z0, z1] = [Infinity, -Infinity, Infinity, -Infinity];
-      for (let k = 0; k < points.length; k += 2) {
-        x0 = Math.min(x0, points[k] as number);
-        x1 = Math.max(x1, points[k] as number);
-        z0 = Math.min(z0, points[k + 1] as number);
-        z1 = Math.max(z1, points[k + 1] as number);
-      }
-      const x = (x0 + x1) / 2;
-      const z = (z0 + z1) / 2;
-      let reach = 0;
-      for (let k = 0; k < points.length; k += 2) {
-        reach = Math.max(
-          reach,
-          Math.hypot((points[k] as number) - x, (points[k + 1] as number) - z),
-        );
-      }
-      feet.push({ x, z, radius: reach + 0.2 });
+    for (const points of collectGroundPoints(part).values()) {
+      feet.push(footFromPoints(points));
     }
   }
-  feet.sort((a, b) => b.radius - a.radius);
-  return feet.filter(
+  const sorted = feet.toSorted((a, b) => b.radius - a.radius);
+  return sorted.filter(
     (f, i) =>
-      !feet.some(
+      !sorted.some(
         (g, k) =>
           k < i && Math.hypot(f.x - g.x, f.z - g.z) + f.radius <= g.radius,
       ),
@@ -506,27 +520,13 @@ function ownGround(
   };
 }
 
-/**
- * Places each landmark on its lot and routes the trails Jev chose between
- * the sited buildings and the landmarks, leveled into the ground.
- */
-function settleCode(
+function placeLandmarks(
   t: Terrain,
   req: PlaceRequest,
   code: CodeLayout,
-  sites: readonly BuildingSite[],
+  avoid: Occupied[],
   offGround: string[],
-): { landmarks: PlacedLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
-  const homes = req.buildings.map((b, i) => ({
-    ...b,
-    site: sites[i] as BuildingSite,
-    id: code.lots[i]?.id ?? b.name,
-  }));
-  const avoid: Occupied[] = homes.map((b) => ({
-    x: b.site.x,
-    z: b.site.z,
-    radius: houseGround(b),
-  }));
+): { landmarks: PlacedLandmark[]; ids: string[] } {
   const own = ownGround(code);
   const landmarks: PlacedLandmark[] = [];
   const ids: string[] = [];
@@ -548,6 +548,31 @@ function settleCode(
     ids.push(lot.id);
     avoid.push({ x: site.x, z: site.z, radius: landmarkGround(lm.base) });
   }
+  return { landmarks, ids };
+}
+
+/**
+ * Places each landmark on its lot and routes the trails Jev chose between
+ * the sited buildings and the landmarks, leveled into the ground.
+ */
+function settleCode(
+  t: Terrain,
+  req: PlaceRequest,
+  code: CodeLayout,
+  sites: readonly BuildingSite[],
+  offGround: string[],
+): { landmarks: PlacedLandmark[]; network: TrailNetwork; ways: WayEdit[] } {
+  const homes = req.buildings.map((b, i) => ({
+    ...b,
+    site: sites[i] as BuildingSite,
+    id: code.lots[i]?.id ?? b.name,
+  }));
+  const avoid: Occupied[] = homes.map((b) => ({
+    x: b.site.x,
+    z: b.site.z,
+    radius: houseGround(b),
+  }));
+  const { landmarks, ids } = placeLandmarks(t, req, code, avoid, offGround);
   // A trail ends at a building's door, at a landmark's foot on the side facing the mean direction to its trails' other
   // ends, or for an entity that is neither, at its lot's center. Each place has one end spot that its trails share. A
   // foot or lot in water moves to the nearest dry ground, so no trail begins or ends in water.
@@ -627,73 +652,156 @@ function settleCode(
 /** Fewest meters between trunks, whatever the crowns. */
 const TRUNK_GAP = 4.5;
 
-/** Places everything on a finished bake, leveling the lattice under the buildings and the trails first. */
-export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
-  const took: Record<string, number> = {};
-  let since = performance.now();
-  const mark = (step: string): void => {
-    const now = performance.now();
-    took[step] = Math.round(now - since);
-    since = now;
-  };
-  const code = req.code;
+function buildingNeedsBank(b: BuildingToPlace): boolean {
+  return b.wheel !== undefined && b.wheel !== null && b.beside !== null;
+}
+
+function siteOneBuilding(
+  t: Terrain,
+  b: BuildingToPlace,
+  lot: CodeLayout["lots"][number] | null,
+  mine: ((x: number, z: number) => boolean) | null,
+  taken: readonly BuildingSite[],
+  pads: readonly PadEdit[],
+  dry: string[],
+  offGround: string[],
+): BuildingSite {
+  const site = findSite(t, b.plan, taken, 30, b.beside, lot, pads, mine);
+  if (buildingNeedsBank(b)) {
+    const bank = findBankSite(
+      t,
+      b.plan,
+      b.beside as Extent,
+      b.wheel as Extent,
+      regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z),
+      taken,
+      lot,
+      pads,
+    );
+    if (bank !== null) return bank;
+    dry.push(b.name);
+    return site;
+  }
+  if (lot !== null && mine !== null && !mine(site.x, site.z)) {
+    offGround.push(lot.id);
+  }
+  return site;
+}
+
+function siteBuildings(
+  t: Terrain,
+  req: PlaceRequest,
+  code: CodeLayout,
+  offGround: string[],
+): { sites: BuildingSite[]; pads: PadEdit[]; dry: string[] } {
   const own = ownGround(code);
   const sites: BuildingSite[] = [];
   const pads: PadEdit[] = [];
   const dry: string[] = [];
-  const offGround: string[] = [];
   // A building whose wheel needs running water goes on the bank of its own area's stream, so it is sited before the
   // others while the banks are free.
-  const onBank = (i: number): boolean => {
-    const b = req.buildings[i] as BuildingToPlace;
-    return b.wheel !== undefined && b.wheel !== null && b.beside !== null;
-  };
+  const onBank = (k: number): boolean =>
+    buildingNeedsBank(req.buildings[k] as BuildingToPlace);
   const all = [...req.buildings.keys()];
   const taken: BuildingSite[] = [];
-  for (const i of [...all.filter(onBank), ...all.filter((i) => !onBank(i))]) {
+  for (const i of [...all.filter(onBank), ...all.filter((k) => !onBank(k))]) {
     const b = req.buildings[i] as BuildingToPlace;
     const lot = code.lots[i] ?? null;
     const mine = lot === null ? null : own(lot);
-    let site: BuildingSite = findSite(
-      t,
-      b.plan,
-      taken,
-      30,
-      b.beside,
-      lot,
-      pads,
-      mine,
-    );
-    if (onBank(i)) {
-      const bank = findBankSite(
-        t,
-        b.plan,
-        b.beside as Extent,
-        b.wheel as Extent,
-        regionAt(t.spec, lot?.x ?? site.x, lot?.z ?? site.z),
-        taken,
-        lot,
-        pads,
-      );
-      if (bank === null) dry.push(b.name);
-      else site = bank;
-    } else if (lot !== null && mine !== null && !mine(site.x, site.z)) {
-      offGround.push(lot.id);
-    }
+    const site = siteOneBuilding(t, b, lot, mine, taken, pads, dry, offGround);
     pads.push(levelPad(t, b.plan, site, b.beside));
     taken.push(site);
     sites[i] = site;
   }
-  mark("sites");
-  const { landmarks, network, ways } = settleCode(
-    t,
-    req,
-    code,
-    sites,
-    offGround,
-  );
-  mark("ways");
+  return { sites, pads, dry };
+}
 
+function offSymbolPatch(
+  cells: CodeLayout["cells"],
+  sym: LayoutSymbol,
+  x: number,
+  z: number,
+): boolean {
+  return (
+    sym.patch !== undefined &&
+    cells.length > 0 &&
+    cells[siteAt(cells, x, z)]?.patch !== sym.patch
+  );
+}
+
+function hitsOccupied(
+  list: readonly Occupied[],
+  x: number,
+  z: number,
+  reach: number,
+): boolean {
+  return list.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach);
+}
+
+function spiralSpot(
+  from: { readonly x: number; readonly z: number },
+  clash: (x: number, z: number) => boolean,
+): readonly [number, number] | null {
+  for (let k = 0; k <= 24; k++) {
+    const a = k * 2.4;
+    const x = from.x + Math.cos(a) * k * 0.6;
+    const z = from.z + Math.sin(a) * k * 0.6;
+    if (!clash(x, z)) return [x, z];
+  }
+  return null;
+}
+
+function findSymbolSpot(
+  t: Terrain,
+  sym: LayoutSymbol,
+  cells: CodeLayout["cells"],
+  tree: boolean,
+  baseFootprint: number,
+  blocked: (x: number, z: number) => boolean,
+  occupied: readonly Occupied[],
+  crowned: readonly Occupied[],
+): readonly [number, number, number] {
+  // Try around its plot's center, then around each of its patch's cells, nearest first.
+  const patchCells =
+    sym.patch === undefined || cells.length === 0
+      ? []
+      : cells
+          .filter((c) => c.patch === sym.patch)
+          .toSorted(
+            (a, b) =>
+              Math.hypot(a.x - sym.x, a.z - sym.z) -
+              Math.hypot(b.x - sym.x, b.z - sym.z),
+          );
+  const centers = [{ x: sym.x, z: sym.z }, ...patchCells];
+  const maxSlope = tree ? PLANT_SLOPE : 24;
+  for (const crowded of [false, true]) {
+    for (const from of centers) {
+      for (const shrink of SHRINKS) {
+        const reach = baseFootprint * shrink;
+        const clash = (x: number, z: number): boolean =>
+          offSymbolPatch(cells, sym, x, z) ||
+          isWet(t, x, z) ||
+          slopeAt(t.lattice, x, z) > maxSlope ||
+          ((!crowded || tree) && blocked(x, z)) ||
+          hitsOccupied(occupied, x, z, reach) ||
+          (!crowded && hitsOccupied(crowned, x, z, reach));
+        const found = spiralSpot(from, clash);
+        if (found !== null) return [found[0], found[1], shrink];
+      }
+    }
+  }
+  // With no room anywhere on its patch even then, place it where the layout put it, at its smallest scale.
+  return [sym.x, sym.z, SHRINKS[SHRINKS.length - 1] as number];
+}
+
+function placeSymbols(
+  t: Terrain,
+  req: PlaceRequest,
+  code: CodeLayout,
+  sites: readonly BuildingSite[],
+  landmarks: readonly PlacedLandmark[],
+  network: TrailNetwork,
+): { trees: PlacedTree[]; placements: Placement[]; symbols: number[] } {
   // Trees keep off the trails and their cairns, out of the buildings and out from under a landmark.
   const clear: Occupied[] = [
     ...trailDiscs(network, 1.6),
@@ -725,7 +833,6 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
     }),
   );
   const occupied: Occupied[] = [
-    ...trees.map((tr) => ({ x: tr.x, z: tr.z, radius: 1.6 })),
     ...homes,
     ...trailDiscs(network, 0.5),
     ...landmarks.map((s) => ({
@@ -752,7 +859,7 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
   const symbols = syms.map(() => -1);
   const order = syms
     .map((_, i) => i)
-    .sort(
+    .toSorted(
       (a, b) =>
         footprint(syms[b] as LayoutSymbol) -
           footprint(syms[a] as LayoutSymbol) || a - b,
@@ -761,56 +868,19 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
     const sym = syms[i] as LayoutSymbol;
     if (sym.rule === AS_THING) continue;
     const tree = sym.rule === "trees";
-    let at: [number, number, number] | null = null;
-    // Try around its plot's center, then around each of its patch's cells, nearest first.
-    const own =
-      sym.patch === undefined || cells.length === 0
-        ? []
-        : cells
-            .filter((c) => c.patch === sym.patch)
-            .sort(
-              (a, b) =>
-                Math.hypot(a.x - sym.x, a.z - sym.z) -
-                Math.hypot(b.x - sym.x, b.z - sym.z),
-            );
-    for (const crowded of [false, true]) {
-      for (const from of [{ x: sym.x, z: sym.z }, ...own]) {
-        for (const shrink of SHRINKS) {
-          const reach = footprint(sym) * shrink;
-          const clash = (x: number, z: number): boolean =>
-            (sym.patch !== undefined &&
-              cells.length > 0 &&
-              cells[siteAt(cells, x, z)]?.patch !== sym.patch) ||
-            isWet(t, x, z) ||
-            slopeAt(t.lattice, x, z) > (tree ? PLANT_SLOPE : 24) ||
-            ((!crowded || tree) && blocked(x, z)) ||
-            occupied.some(
-              (o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach,
-            ) ||
-            (!crowded &&
-              crowned.some(
-                (o) => Math.hypot(o.x - x, o.z - z) < o.radius + reach,
-              ));
-          for (let k = 0; at === null && k <= 24; k++) {
-            const a = k * 2.4;
-            const x = from.x + Math.cos(a) * k * 0.6;
-            const z = from.z + Math.sin(a) * k * 0.6;
-            if (!clash(x, z)) at = [x, z, shrink];
-          }
-          if (at !== null) break;
-        }
-        if (at !== null) break;
-      }
-      if (at !== null) break;
-    }
-    // With no room anywhere on its patch even then, place it where the layout put it, at its smallest scale.
-    const [x, z, shrink] = at ?? [
-      sym.x,
-      sym.z,
-      SHRINKS[SHRINKS.length - 1] as number,
-    ];
+    const baseFootprint = footprint(sym);
+    const [x, z, shrink] = findSymbolSpot(
+      t,
+      sym,
+      cells,
+      tree,
+      baseFootprint,
+      blocked,
+      occupied,
+      crowned,
+    );
     const scale = sym.scale * shrink;
-    const reach = footprint(sym) * shrink;
+    const reach = baseFootprint * shrink;
     const slope = groundSlope(t.lattice, x, z);
     if (tree) {
       // Record the crown, which the first pass keeps other symbols out from under.
@@ -845,6 +915,38 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
     });
     symbols[i] = placements.length - 1;
   }
+  return { trees, placements, symbols };
+}
+
+/** Places everything on a finished bake, leveling the lattice under the buildings and the trails first. */
+export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
+  const took: Record<string, number> = {};
+  let since = performance.now();
+  const mark = (step: string): void => {
+    const now = performance.now();
+    took[step] = Math.round(now - since);
+    since = now;
+  };
+  const code = req.code;
+  const offGround: string[] = [];
+  const { sites, pads, dry } = siteBuildings(t, req, code, offGround);
+  mark("sites");
+  const { landmarks, network, ways } = settleCode(
+    t,
+    req,
+    code,
+    sites,
+    offGround,
+  );
+  mark("ways");
+  const { trees, placements, symbols } = placeSymbols(
+    t,
+    req,
+    code,
+    sites,
+    landmarks,
+    network,
+  );
   mark("symbols");
   const edging = network.ways.map((way) =>
     edgeStones(t, way, seedOf(`${way.id}/edging`)),

@@ -197,7 +197,7 @@ export function createPlantBatch(
           .map((part) => part.swatch),
       ),
     ),
-  ].sort();
+  ].toSorted();
   const slotOf = new Map(swatches.map((s, i) => [s, i]));
   const width = HEAD + PER_SWATCH * swatches.length;
   const data = new Float32Array(width * Math.max(1, members.length) * 4);
@@ -262,7 +262,7 @@ export function createPlantBatch(
       if (!spinning) return;
       turns[i] =
         (turns[i] as number) + dt * spinAt(data[(i * width + 4) * 4] as number);
-      data[(i * width + 4) * 4 + 2] = turns[i] as number;
+      data[(i * width + 4) * 4 + 2] = turns[i];
     });
     texture.needsUpdate = true;
   };
@@ -309,7 +309,7 @@ export function createPlantBatch(
   const materials: THREE.Material[] = [];
   const geometries: THREE.BufferGeometry[] = [];
   let triangles = 0;
-  for (const [key, g] of [...groups].sort(([a], [b]) => (a < b ? -1 : 1))) {
+  for (const [key, g] of [...groups].toSorted(([a], [b]) => (a < b ? -1 : 1))) {
     const [side, cover, ruin] = key.split("|");
     const part = mergeParts(g.parts)[0] as Part;
     const geometry = geometryOf(part);
@@ -421,14 +421,14 @@ export function createPlantBatch(
     object,
     members: members.length,
     triangles,
-    setVitality(member, v) {
+    setVitality(member, v): void {
       const value = shownVitality(v);
       // The member's shown vitality, and its smoke, ease toward it from where it is.
       targets[member] = value;
       lagging.add(member);
       closeEachFrame(closeLags);
     },
-    move(member, at) {
+    move(member, at): void {
       const p = prepared[member];
       if (p === undefined) return;
       const before = p.matrix.clone().invert();
@@ -447,7 +447,9 @@ export function createPlantBatch(
         if (v.userData.member === member) v.applyMatrix4(moved);
       }
     },
-    pick(raycaster) {
+    pick(
+      raycaster,
+    ): { readonly member: number; readonly distance: number } | undefined {
       let best: { member: number; distance: number } | undefined;
       picks.forEach((group, member) => {
         const hit = raycaster.intersectObject(group, true)[0];
@@ -460,14 +462,16 @@ export function createPlantBatch(
       });
       return best;
     },
-    useDepth(on) {
+    useDepth(on): void {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;
       for (const v of veils) v.visible = !on;
     },
-    dispose() {
+    dispose(): void {
       for (const g of geometries) g.dispose();
       for (const group of picks) {
-        group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+        group.traverse((o) => {
+          if (o instanceof THREE.Mesh) o.geometry.dispose();
+        });
       }
       for (const m of materials) m.dispose();
       texture.dispose();

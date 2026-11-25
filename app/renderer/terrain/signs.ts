@@ -108,63 +108,77 @@ void main() {
 }
 `;
 
+interface BoxBuffers {
+  pos: number[];
+  nrm: number[];
+  face: number[];
+  uv: number[];
+  idx: number[];
+}
+
+const BOX_AXES: readonly (readonly [number, number, number])[] = [
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+];
+
+const QUAD_CORNERS: readonly (readonly [number, number])[] = [
+  [-1, -1],
+  [1, -1],
+  [1, 1],
+  [-1, 1],
+];
+
+function addBoxFace(
+  out: BoxBuffers,
+  c: readonly number[],
+  half: readonly number[],
+  i: number,
+  sign: number,
+  painted: boolean,
+): void {
+  const n = (BOX_AXES[i] as readonly number[]).map((x) => x * sign);
+  const t1 = BOX_AXES[(i + 1) % 3] as readonly [number, number, number];
+  const t2 = BOX_AXES[(i + 2) % 3] as readonly [number, number, number];
+  const h1 = half[(i + 1) % 3] as number;
+  const h2 = half[(i + 2) % 3] as number;
+  const base = out.pos.length / 3;
+  const front = painted && i === 2 && sign === 1;
+  for (const [u, v] of QUAD_CORNERS) {
+    for (let k = 0; k < 3; k++) {
+      out.pos.push(
+        (c[k] as number) +
+          (n[k] as number) * (half[i] as number) +
+          (t1[k] as number) * u * h1 +
+          (t2[k] as number) * v * h2,
+      );
+    }
+    out.nrm.push(...n);
+    out.face.push(front ? 1 : 0);
+    // On the front (+z) face, t1 is x and t2 is y.
+    out.uv.push(front ? (u + 1) / 2 : 0, front ? 1 - (v + 1) / 2 : 0);
+  }
+  const [ax, ay, az] = t1;
+  const [bx, by, bz] = t2;
+  const facing =
+    (ay * bz - az * by) * (n[0] as number) +
+      (az * bx - ax * bz) * (n[1] as number) +
+      (ax * by - ay * bx) * (n[2] as number) >
+    0;
+  if (facing) {
+    out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  } else out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+}
+
 /** Appends one box's faces to the arrays. `face` marks the painted front, which gets atlas coordinates. */
 function addBox(
-  out: {
-    pos: number[];
-    nrm: number[];
-    face: number[];
-    uv: number[];
-    idx: number[];
-  },
+  out: BoxBuffers,
   c: readonly number[],
   half: readonly number[],
   painted: boolean,
 ): void {
-  const axes: readonly (readonly [number, number, number])[] = [
-    [1, 0, 0],
-    [0, 1, 0],
-    [0, 0, 1],
-  ];
   for (let i = 0; i < 3; i++) {
-    for (const sign of [-1, 1]) {
-      const n = (axes[i] as readonly number[]).map((x) => x * sign);
-      const t1 = axes[(i + 1) % 3] as readonly [number, number, number];
-      const t2 = axes[(i + 2) % 3] as readonly [number, number, number];
-      const h1 = half[(i + 1) % 3] as number;
-      const h2 = half[(i + 2) % 3] as number;
-      const base = out.pos.length / 3;
-      const front = painted && i === 2 && sign === 1;
-      for (const [u, v] of [
-        [-1, -1],
-        [1, -1],
-        [1, 1],
-        [-1, 1],
-      ] as const) {
-        for (let k = 0; k < 3; k++) {
-          out.pos.push(
-            (c[k] as number) +
-              (n[k] as number) * (half[i] as number) +
-              (t1[k] as number) * u * h1 +
-              (t2[k] as number) * v * h2,
-          );
-        }
-        out.nrm.push(...n);
-        out.face.push(front ? 1 : 0);
-        // On the front (+z) face, t1 is x and t2 is y.
-        out.uv.push(front ? (u + 1) / 2 : 0, front ? 1 - (v + 1) / 2 : 0);
-      }
-      const [ax, ay, az] = t1;
-      const [bx, by, bz] = t2;
-      const facing =
-        (ay * bz - az * by) * (n[0] as number) +
-          (az * bx - ax * bz) * (n[1] as number) +
-          (ax * by - ay * bx) * (n[2] as number) >
-        0;
-      if (facing) {
-        out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      } else out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
-    }
+    for (const sign of [-1, 1]) addBoxFace(out, c, half, i, sign, painted);
   }
 }
 
@@ -306,7 +320,7 @@ export function createSigns(
   const unit = new THREE.Vector3(1, 1, 1);
   return {
     mesh,
-    set(signs) {
+    set(signs): void {
       const shown = signs.slice(0, capacity);
       const widths = paintNames(canvas, shown);
       names.needsUpdate = true;
@@ -327,11 +341,11 @@ export function createSigns(
       mesh.instanceMatrix.needsUpdate = true;
       life.needsUpdate = true;
     },
-    setVitality(index, v) {
+    setVitality(index, v): void {
       life.setX(index, shownVitality(v));
       life.needsUpdate = true;
     },
-    dispose() {
+    dispose(): void {
       geometry.dispose();
       material.dispose();
       names.dispose();

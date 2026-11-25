@@ -12,6 +12,7 @@ import {
   type Limb,
   type Resolved,
   type Skeleton,
+  type Vec3,
 } from "@gaia/schema";
 import type {
   brambleParams,
@@ -425,6 +426,204 @@ const CLUSTER = 2;
 /** The fewest twigs of clusters a clump grows. */
 const FEWEST_CLUSTER_TWIGS = 2;
 
+function pickLayerDepth(
+  layers: readonly (readonly [number, number])[],
+  total: number,
+  tr: BuildContext["rand"],
+): number {
+  let pick = tr.next() * total;
+  let depth = 1;
+  for (const [at, w] of layers) {
+    depth = at;
+    if (pick < w) break;
+    pick -= w;
+  }
+  return depth;
+}
+
+function emitClumpSprays(
+  leaf: PartBuilder,
+  mound: Crown,
+  clump: MoundClump,
+  root: V3,
+  goal: V3,
+  along: V3,
+  ts: readonly number[],
+  size: number,
+  loss: number,
+  tint: number,
+  b: { readonly bough: Vec3; readonly droop: number },
+  tr: BuildContext["rand"],
+): void {
+  for (const t of ts) {
+    const at = lerp(root, goal, t);
+    // A card reaches up to 2.65 of its size along its direction and 1.15 across it. None may dip into the soil.
+    if (at[1] - CARD_ACROSS * size < SOIL) continue;
+    const out = normalize([
+      at[0] - clump.center[0],
+      (at[1] - clump.center[1]) * 1.2,
+      at[2] - clump.center[2],
+    ]);
+    const jitter: V3 = [tr.range(-1, 1), tr.range(-0.6, 0.6), tr.range(-1, 1)];
+    // Across the clump's surface, a little down its slope, faced out and up.
+    const level = cross(out, UP);
+    let downhill =
+      length(level) < 0.15
+        ? normalize([jitter[0], 0, jitter[2]])
+        : normalize(cross(level, out));
+    if (downhill[1] > 0) downhill = scale(downhill, -1);
+    const dir = normalize(
+      add(
+        add(scale(downhill, 0.5), scale(along, 0.45)),
+        add(scale(out, 0.2), scale(jitter, 0.25)),
+      ),
+    );
+    if (
+      at[1] + Math.min(0, dir[1]) * CARD_ALONG * size - CARD_ACROSS * size <
+      SOIL
+    ) {
+      dir[1] = Math.abs(dir[1]);
+    }
+    const shallow = clamp(length(sub(at, clump.center)) / clump.radius, 0, 1);
+    emitSpray(
+      leaf,
+      mound,
+      at,
+      dir,
+      normalize(addScaled(out, UP, 0.45)),
+      size * tr.range(0.85, 1.15),
+      CUT.crowded,
+      tr,
+      {
+        loss: clamp(loss + tr.range(-0.08, 0.08), 0.02, 0.9),
+        droop: b.droop,
+        wither: clamp(0.95 + tr.range(-0.05, 0.05), 0, 1),
+        glow: 0,
+        pivot: at,
+        bough: b.bough,
+        twig: root,
+        tint: clamp(tint * 0.4 + tr.range(-0.03, 0.03), -0.1, 0.1),
+      },
+      -0.16 * (1 - shallow),
+    );
+  }
+}
+
+interface MoundEmitContext {
+  readonly skel: Skeleton;
+  readonly boughs: Boughs;
+  readonly mound: Crown;
+  readonly look: typeof MOUND;
+  readonly half: number;
+  readonly larger: number;
+  readonly layerTotal: number;
+  readonly leaf: PartBuilder;
+  readonly twigs: PartBuilder;
+  readonly anchors: Anchor[];
+}
+
+function emitMoundTwig(
+  mctx: MoundEmitContext,
+  clump: MoundClump,
+  limb: Limb,
+  k: number,
+  count: number,
+  tint: number,
+  lump: (d: V3) => number,
+  notch: (d: V3) => number,
+  tr: BuildContext["rand"],
+): void {
+  const {
+    boughs,
+    mound,
+    look,
+    half,
+    larger,
+    layerTotal,
+    leaf,
+    twigs,
+    anchors,
+  } = mctx;
+  // Spread over the directions that do not face the soil.
+  const y = 1 - (1.55 * (k + tr.range(0.2, 0.8))) / count;
+  const ring = Math.sqrt(Math.max(0, 1 - y * y));
+  const phi = k * 2.39996 + tr.range(-0.4, 0.4);
+  const d = normalize([Math.cos(phi) * ring, y, Math.sin(phi) * ring]);
+  let depth = pickLayerDepth(look.layers, layerTotal, tr);
+  const stray = tr.next() < look.strays;
+  if (stray) depth = tr.range(1.2, 1.45);
+  // Only the outer layer is notched, so notches open gaps in the outline, never holes through it.
+  if (depth >= 0.95 && !stray && notch(d) < -1 + 1.2 * look.notches) {
+    return;
+  }
+  let goal = addScaled(
+    clump.center,
+    d,
+    clump.radius * depth * lump(d) * tr.range(0.92, 1.05),
+  );
+  goal[1] = Math.max(goal[1], half * 1.4);
+  const root = onLimb(limb, goal);
+  // A goal on the stem itself moves out from it, so the twig still grows from its stem.
+  if (length(sub(goal, root)) < 0.06) goal = addScaled(root, d, 0.08);
+  const along = normalize(sub(goal, root));
+  const b = boughs.at(clump.limb, root);
+  // A cluster holds many leaves, so a bush must lose clusters steadily for its decline to show.
+  // Clusters drop evenly between vitality 0.75 and 0.25, outer ones first, so about three in ten
+  // have gone by 0.6 and half by 0.5, and the bush is bare by 0.25.
+  const loss = clamp(
+    DROP.from -
+      (DROP.from - DROP.to) * tr.next() +
+      (depth >= 0.95 ? DROP.rim : -DROP.rim),
+    0.02,
+    0.9,
+  );
+  const n = stray ? 2 : look.perTwig;
+  const size =
+    half *
+    larger *
+    clump.leaves *
+    (look.inside +
+      (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
+  const ts = Array.from(
+    { length: n },
+    (_, j) => 0.2 + 0.8 * ((j + tr.range(0.15, 0.85)) / n),
+  );
+  const twigCh: Channels = {
+    loss: 0,
+    droop: b.droop,
+    wither: 0.5,
+    glow: 0,
+    pivot: root,
+    bough: b.bough,
+    twig: root,
+  };
+  const tip = Math.max(...ts);
+  emitTwig(twigs, [root, lerp(root, goal, tip)], 0.003, 0.0015, () => twigCh);
+  emitClumpSprays(
+    leaf,
+    mound,
+    clump,
+    root,
+    goal,
+    along,
+    ts,
+    size,
+    loss,
+    tint,
+    b,
+    tr,
+  );
+  // Flowers and berries hang among the outer clusters.
+  if (depth >= 0.95) {
+    anchors.push({
+      position: lerp(root, goal, Math.min(0.9, tip)),
+      normal: d,
+      size: 1,
+      carry: { bough: b.bough, twig: root, droop: b.droop },
+    });
+  }
+}
+
 /**
  * Builds a bush's leaves. Rounded and glossy bushes grow crowded leaf
  * clusters (`CUT.crowded`) on short twigs: over clumps at every stem tip and
@@ -482,6 +681,18 @@ export function buildLeafMound(
   const twigs = new PartBuilder("bark");
   const anchors: Anchor[] = [];
   const layerTotal = look.layers.reduce((n, [, w]) => n + w, 0);
+  const mctx: MoundEmitContext = {
+    skel,
+    boughs,
+    mound,
+    look,
+    half,
+    larger,
+    layerTotal,
+    leaf,
+    twigs,
+    anchors,
+  };
   clumps.forEach((clump, ci) => {
     const cr = r.fork(`clump${ci}`);
     const limb = skel.limbs[clump.limb] as Limb;
@@ -501,143 +712,17 @@ export function buildLeafMound(
     const notch = (d: V3): number =>
       fbm3(d[0] * 0.9 + 7.3, d[1] * 0.9, d[2] * 0.9, seed + 11, 2);
     for (let k = 0; k < count; k++) {
-      const tr = cr.fork(`twig${k}`);
-      // Spread over the directions that do not face the soil.
-      const y = 1 - (1.55 * (k + tr.range(0.2, 0.8))) / count;
-      const ring = Math.sqrt(Math.max(0, 1 - y * y));
-      const phi = k * 2.39996 + tr.range(-0.4, 0.4);
-      const d = normalize([Math.cos(phi) * ring, y, Math.sin(phi) * ring]);
-      let pick = tr.next() * layerTotal;
-      let depth = 1;
-      for (const [at, w] of look.layers) {
-        depth = at;
-        if (pick < w) break;
-        pick -= w;
-      }
-      const stray = tr.next() < look.strays;
-      if (stray) depth = tr.range(1.2, 1.45);
-      // Only the outer layer is notched, so notches open gaps in the outline, never holes through it.
-      if (depth >= 0.95 && !stray && notch(d) < -1 + 1.2 * look.notches) {
-        continue;
-      }
-      let goal = addScaled(
-        clump.center,
-        d,
-        clump.radius * depth * lump(d) * tr.range(0.92, 1.05),
+      emitMoundTwig(
+        mctx,
+        clump,
+        limb,
+        k,
+        count,
+        tint,
+        lump,
+        notch,
+        cr.fork(`twig${k}`),
       );
-      goal[1] = Math.max(goal[1], half * 1.4);
-      const root = onLimb(limb, goal);
-      // A goal on the stem itself moves out from it, so the twig still grows from its stem.
-      if (length(sub(goal, root)) < 0.06) goal = addScaled(root, d, 0.08);
-      const along = normalize(sub(goal, root));
-      const b = boughs.at(clump.limb, root);
-      // A cluster holds many leaves, so a bush must lose clusters steadily for its decline to show.
-      // Clusters drop evenly between vitality 0.75 and 0.25, outer ones first, so about three in ten
-      // have gone by 0.6 and half by 0.5, and the bush is bare by 0.25.
-      const loss = clamp(
-        DROP.from -
-          (DROP.from - DROP.to) * tr.next() +
-          (depth >= 0.95 ? DROP.rim : -DROP.rim),
-        0.02,
-        0.9,
-      );
-      const n = stray ? 2 : look.perTwig;
-      const size =
-        half *
-        larger *
-        clump.leaves *
-        (look.inside +
-          (look.rim - look.inside) * clamp((depth - 0.55) / 0.45, 0, 1));
-      const ts = Array.from(
-        { length: n },
-        (_, j) => 0.2 + 0.8 * ((j + tr.range(0.15, 0.85)) / n),
-      );
-      const twigCh: Channels = {
-        loss: 0,
-        droop: b.droop,
-        wither: 0.5,
-        glow: 0,
-        pivot: root,
-        bough: b.bough,
-        twig: root,
-      };
-      const tip = Math.max(...ts);
-      emitTwig(
-        twigs,
-        [root, lerp(root, goal, tip)],
-        0.003,
-        0.0015,
-        () => twigCh,
-      );
-      for (const t of ts) {
-        const at = lerp(root, goal, t);
-        // A card reaches up to 2.65 of its size along its direction and 1.15 across it. None may dip into the soil.
-        if (at[1] - CARD_ACROSS * size < SOIL) continue;
-        const out = normalize([
-          at[0] - clump.center[0],
-          (at[1] - clump.center[1]) * 1.2,
-          at[2] - clump.center[2],
-        ]);
-        const jitter: V3 = [
-          tr.range(-1, 1),
-          tr.range(-0.6, 0.6),
-          tr.range(-1, 1),
-        ];
-        // Across the clump's surface, a little down its slope, faced out and up.
-        const level = cross(out, UP);
-        let downhill =
-          length(level) < 0.15
-            ? normalize([jitter[0], 0, jitter[2]])
-            : normalize(cross(level, out));
-        if (downhill[1] > 0) downhill = scale(downhill, -1);
-        const dir = normalize(
-          add(
-            add(scale(downhill, 0.5), scale(along, 0.45)),
-            add(scale(out, 0.2), scale(jitter, 0.25)),
-          ),
-        );
-        if (
-          at[1] + Math.min(0, dir[1]) * CARD_ALONG * size - CARD_ACROSS * size <
-          SOIL
-        ) {
-          dir[1] = Math.abs(dir[1]);
-        }
-        const shallow = clamp(
-          length(sub(at, clump.center)) / clump.radius,
-          0,
-          1,
-        );
-        emitSpray(
-          leaf,
-          mound,
-          at,
-          dir,
-          normalize(addScaled(out, UP, 0.45)),
-          size * tr.range(0.85, 1.15),
-          CUT.crowded,
-          tr,
-          {
-            loss: clamp(loss + tr.range(-0.08, 0.08), 0.02, 0.9),
-            droop: b.droop,
-            wither: clamp(0.95 + tr.range(-0.05, 0.05), 0, 1),
-            glow: 0,
-            pivot: at,
-            bough: b.bough,
-            twig: root,
-            tint: clamp(tint * 0.4 + tr.range(-0.03, 0.03), -0.1, 0.1),
-          },
-          -0.16 * (1 - shallow),
-        );
-      }
-      // Flowers and berries hang among the outer clusters.
-      if (depth >= 0.95) {
-        anchors.push({
-          position: lerp(root, goal, Math.min(0.9, tip)),
-          normal: d,
-          size: 1,
-          carry: { bough: b.bough, twig: root, droop: b.droop },
-        });
-      }
     }
   });
   const parts = [twigs.part(), leaf.part()];
@@ -690,6 +775,41 @@ const leavesOf = (size: number): number =>
 const fillOf = (n: number, fullness: number, tufts: boolean): number =>
   tufts ? 0 : Math.round(n * Math.max(0, fullness - 0.2) * 1.2);
 
+function appendFillClumps(
+  out: MoundClump[],
+  skel: Skeleton,
+  fill: number,
+  r: BuildContext["rand"],
+  base: number,
+  grow: number,
+): void {
+  const bearing = skel.limbs.flatMap((l, k) => (aboveSoil(l) ? [k] : []));
+  for (let i = 0; i < fill && bearing.length > 0; i++) {
+    const fr = r.fork(`fill${i}`);
+    const k = bearing[Math.floor(fr.next() * bearing.length)] as number;
+    const limb = skel.limbs[k] as Limb;
+    const center = lerp(limb.start, limb.end, fr.range(0.5, 1));
+    // A clump along a stem is as small as the small tips near it.
+    const near = skel.tips.reduce(
+      (best, t) =>
+        length(sub(t.position, center)) < length(sub(best.position, center))
+          ? t
+          : best,
+      skel.tips[0] as Anchor,
+    );
+    const small =
+      near.size < SMALL_TIP ? clumpShare(near.size) / clumpShare(SMALL_TIP) : 1;
+    const radius =
+      base *
+      fr.range(0.8, 1.05) *
+      fr.range(1 - MOUND.spread, 1 + MOUND.spread) *
+      small *
+      grow;
+    center[1] = Math.max(center[1], radius * 0.6);
+    out.push({ center, radius, limb: k, r: fr, leaves: leavesOf(near.size) });
+  }
+}
+
 /**
  * Clumps over a bush: one at each kept stem tip (`crownTips`) and more along the stems, of uneven sizes, or for scrub
  * a tuft at most tips. When the frame has more tips than the mound keeps, each clump grows to hold the leaves of the
@@ -729,32 +849,14 @@ function clumpsOf(
     });
   }
   if (tufts) return out;
-  const fill = fillOf(kept.length, p.fullness, false);
-  const bearing = skel.limbs.flatMap((l, k) => (aboveSoil(l) ? [k] : []));
-  for (let i = 0; i < fill && bearing.length > 0; i++) {
-    const fr = r.fork(`fill${i}`);
-    const k = bearing[Math.floor(fr.next() * bearing.length)] as number;
-    const limb = skel.limbs[k] as Limb;
-    const center = lerp(limb.start, limb.end, fr.range(0.5, 1));
-    // A clump along a stem is as small as the small tips near it.
-    const near = skel.tips.reduce(
-      (best, t) =>
-        length(sub(t.position, center)) < length(sub(best.position, center))
-          ? t
-          : best,
-      skel.tips[0] as Anchor,
-    );
-    const small =
-      near.size < SMALL_TIP ? clumpShare(near.size) / clumpShare(SMALL_TIP) : 1;
-    const radius =
-      base *
-      fr.range(0.8, 1.05) *
-      fr.range(1 - MOUND.spread, 1 + MOUND.spread) *
-      small *
-      grow;
-    center[1] = Math.max(center[1], radius * 0.6);
-    out.push({ center, radius, limb: k, r: fr, leaves: leavesOf(near.size) });
-  }
+  appendFillClumps(
+    out,
+    skel,
+    fillOf(kept.length, p.fullness, false),
+    r,
+    base,
+    grow,
+  );
   return out;
 }
 

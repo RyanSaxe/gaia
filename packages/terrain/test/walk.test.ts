@@ -63,7 +63,7 @@ import { sampleWorld } from "@gaia/terrain/testing";
 
 const lib = new Library([...RELIEF_PRIMITIVES, ...BIOME_PRIMITIVES]);
 const t: Terrain = bakeTerrain(sampleWorld(), lib);
-const pond = t.ponds[0]!;
+const pond = t.ponds[0] as (typeof t.ponds)[number];
 const dt = 1 / 60;
 const hold = (
   solids: Solids,
@@ -76,18 +76,33 @@ const hold = (
   const path = [from];
   for (let i = 0; i < steps; i++) {
     path.push(
-      walkStep(t, solids, path[path.length - 1]!, { dx, dz, speed }, dt),
+      walkStep(
+        t,
+        solids,
+        path[path.length - 1] as Walker,
+        { dx, dz, speed },
+        dt,
+      ),
     );
   }
   return path;
 };
+
+interface TapWalkResult {
+  readonly state: "arrived" | "stalled" | "walking";
+  readonly at: Walker;
+  readonly path: Walker[];
+  readonly walk: ReturnType<typeof planWalk>;
+  readonly seconds: number;
+}
+
 /** Steps a tapped walk until it ends, for at most two minutes. Each step aims for the point a little ahead along the way, at its pace. */
 const tapWalk = (
   solids: Solids,
   from: Walker,
   to: Walker,
   land: Terrain = t,
-) => {
+): TapWalkResult => {
   // Move one walker in place, as the lab does, so a way must not depend on the walker it was planned from.
   const at = { x: from.x, z: from.z };
   let walk = planWalk(land, solids, at, to);
@@ -182,9 +197,13 @@ describe("wading and swimming", () => {
     const path = hold(NO_SOLIDS, dry, 1, 0, 60 * 90).filter(
       (p) => p.x < pond.x + pond.reach * 1.5,
     );
-    const stream = t.streams[0]!.stations;
-    const mid = stream[Math.floor(stream.length / 2)]!;
-    const next = stream[Math.floor(stream.length / 2) + 1]!;
+    const stream = (t.streams[0] as (typeof t.streams)[number]).stations;
+    const mid = stream[
+      Math.floor(stream.length / 2)
+    ] as (typeof stream)[number];
+    const next = stream[
+      Math.floor(stream.length / 2) + 1
+    ] as (typeof stream)[number];
     const across = { x: -(next.z - mid.z), z: next.x - mid.x };
     const len = Math.hypot(across.x, across.z);
     // Out of a stream and up its bank.
@@ -198,7 +217,7 @@ describe("wading and swimming", () => {
     let swam = 0;
     for (const walk of [path, bank]) {
       for (let i = 0; i < walk.length; i++) {
-        const p = walk[i]!;
+        const p = walk[i] as Walker;
         const s = stanceAt(t, p.x, p.z);
         const ground = heightAt(t.lattice, p.x, p.z);
         if (s.depth === 0) expect(s.eye).toBeCloseTo(ground + EYE_HEIGHT, 6);
@@ -210,7 +229,7 @@ describe("wading and swimming", () => {
         }
         swam = Math.max(swam, s.swim);
         if (i === 0) continue;
-        const q = walk[i - 1]!;
+        const q = walk[i - 1] as Walker;
         const moved = Math.hypot(p.x - q.x, p.z - q.z);
         // The eyes never jump. They rise and fall no faster than the steepest bank the relief budget allows.
         expect(Math.abs(s.eye - stanceAt(t, q.x, q.z).eye)).toBeLessThanOrEqual(
@@ -274,15 +293,15 @@ describe("solids", () => {
           const dz = -Math.sin(ang + off);
           const path = hold(solids, start, dx, dz, 240);
           for (let i = 1; i < path.length; i++) {
-            const p = path[i]!;
-            const q = path[i - 1]!;
+            const p = path[i] as Walker;
+            const q = path[i - 1] as Walker;
             expect(outside(p)).toBe(true);
             // No step goes backward against the push, so there is no jitter.
             expect((p.x - q.x) * dx + (p.z - q.z) * dz).toBeGreaterThanOrEqual(
               -1e-9,
             );
           }
-          const end = path[path.length - 1]!;
+          const end = path[path.length - 1] as Walker;
           if (off === 0 && c === centers[0]) {
             // Pushing straight at a round trunk stops at its bark.
             expect(clearanceAt(solids, end.x, end.z)).toBeCloseTo(
@@ -316,7 +335,7 @@ describe("solids", () => {
           BODY_RADIUS - 1e-6,
         );
       }
-      const end = path[path.length - 1]!;
+      const end = path[path.length - 1] as Walker;
       expect(end.x < dry.x - 12).toBe(passes);
       if (!passes) {
         const still = path.slice(-60);
@@ -341,8 +360,8 @@ describe("solids", () => {
     ).toBeLessThanOrEqual(WALK_TO.reach);
     let heading = Number.NaN;
     for (let i = 1; i < walk.path.length; i++) {
-      const p = walk.path[i]!;
-      const q = walk.path[i - 1]!;
+      const p = walk.path[i] as Walker;
+      const q = walk.path[i - 1] as Walker;
       expect(clearanceAt(wall, p.x, p.z)).toBeGreaterThanOrEqual(
         BODY_RADIUS - 1e-6,
       );
@@ -387,6 +406,223 @@ describe("solids", () => {
   });
 });
 
+type Vec3 = readonly [number, number, number];
+
+function sampleTriangleInBodyBand(
+  a: Vec3,
+  b: Vec3,
+  c: Vec3,
+  floor: Floor | null,
+  out: number[],
+): void {
+  const n = Math.max(
+    1,
+    Math.ceil(
+      Math.max(
+        Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]),
+        Math.hypot(b[0] - c[0], b[1] - c[1], b[2] - c[2]),
+        Math.hypot(c[0] - a[0], c[1] - a[1], c[2] - a[2]),
+      ) / 0.2,
+    ),
+  );
+  for (let i = 0; i <= n; i++) {
+    for (let j = 0; i + j <= n; j++) {
+      const [u, v, w] = [i / n, j / n, 1 - (i + j) / n];
+      const [x, y, z] = [
+        a[0] * u + b[0] * v + c[0] * w,
+        a[1] * u + b[1] * v + c[1] * w,
+        a[2] * u + b[2] * v + c[2] * w,
+      ];
+      const under = floor === null ? 0 : Math.max(0, deckAt([floor], x, z));
+      if (y >= under + BODY_BAND.from && y <= under + BODY_BAND.to) {
+        out.push(x, z);
+      }
+    }
+  }
+}
+
+function inTheWay(parts: readonly Part[], floor: Floor | null): number[] {
+  const out: number[] = [];
+  for (const part of parts) {
+    const p = part.positions;
+    for (let k = 0; k < part.indices.length; k += 3) {
+      const vs = [
+        part.indices[k] as number,
+        part.indices[k + 1] as number,
+        part.indices[k + 2] as number,
+      ] as const;
+      // A piece that grows in only as the thing declines, such as fallen stone, is not there at full vitality.
+      if (vs.some((v) => (part.channels.grow?.[v] ?? 0) > 0)) continue;
+      const corner = (v: number): Vec3 => [
+        p[v * 3] as number,
+        p[v * 3 + 1] as number,
+        p[v * 3 + 2] as number,
+      ];
+      sampleTriangleInBodyBand(
+        corner(vs[0]),
+        corner(vs[1]),
+        corner(vs[2]),
+        floor,
+        out,
+      );
+    }
+  }
+  return out;
+}
+
+function farthestOut(
+  solids: Solids,
+  points: readonly number[],
+  place: (x: number, z: number) => Walker,
+): { out: number; x: number; z: number } {
+  let worst = { out: -Infinity, x: 0, z: 0 };
+  for (let k = 0; k < points.length; k += 2) {
+    const x = points[k] as number;
+    const z = points[k + 1] as number;
+    const q = place(x, z);
+    const out = clearanceAt(solids, q.x, q.z);
+    if (out > worst.out) worst = { out, x, z };
+  }
+  return worst;
+}
+
+function buildSpatialIndex(points: readonly number[]): {
+  reach: number;
+  near: Map<string, number[]>;
+} {
+  let reach = 0;
+  const near = new Map<string, number[]>();
+  for (let k = 0; k < points.length; k += 2) {
+    const x = points[k] as number;
+    const z = points[k + 1] as number;
+    reach = Math.max(reach, Math.hypot(x, z));
+    const key = `${Math.floor(x)},${Math.floor(z)}`;
+    const list = near.get(key);
+    if (list === undefined) near.set(key, [x, z]);
+    else list.push(x, z);
+  }
+  return { reach, near };
+}
+
+function hasRoomAt(
+  near: Map<string, number[]>,
+  x: number,
+  z: number,
+  room: number,
+): boolean {
+  for (let i = Math.floor(x - room); i <= Math.floor(x + room); i++) {
+    for (let j = Math.floor(z - room); j <= Math.floor(z + room); j++) {
+      const list = near.get(`${i},${j}`) ?? [];
+      for (let k = 0; k < list.length; k += 2) {
+        if (
+          Math.hypot((list[k] as number) - x, (list[k + 1] as number) - z) <
+          room
+        ) {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+function isBorderCell(u: number, v: number, n: number): boolean {
+  return u === 0 || v === 0 || u === n - 1 || v === n - 1;
+}
+
+function isInsideGrid(u: number, v: number, n: number): boolean {
+  return u >= 0 && v >= 0 && u < n && v < n;
+}
+
+function floodOpenGrid(
+  n: number,
+  at: (i: number) => Walker,
+  hasRoom: (x: number, z: number) => boolean,
+): Int32Array {
+  // Out from the open land around the thing, one spot with room after another.
+  const from = new Int32Array(n * n).fill(-2);
+  const queue: number[] = [];
+  for (let i = 0; i < n * n; i++) {
+    const [u, v] = [i % n, Math.floor(i / n)];
+    if (isBorderCell(u, v, n)) {
+      from[i] = -1;
+      queue.push(i);
+    }
+  }
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head] as number;
+    const [u, v] = [i % n, Math.floor(i / n)];
+    for (const [du, dv] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      const [nu, nv] = [u + du, v + dv];
+      const k = nv * n + nu;
+      if (!isInsideGrid(nu, nv, n) || from[k] !== -2) continue;
+      const spot = at(k);
+      if (!hasRoom(spot.x, spot.z)) continue;
+      from[k] = i;
+      queue.push(k);
+    }
+  }
+  return from;
+}
+
+function traceWay(
+  from: Int32Array,
+  start: number,
+  at: (i: number) => Walker,
+): Walker[] {
+  const way: Walker[] = [];
+  for (let k = start; k >= 0; k = from[k] as number) way.unshift(at(k));
+  return way;
+}
+
+type ValueOf<T> = T extends unknown ? T[keyof T] : never;
+type ParamField = ValueOf<(typeof LANDMARK_PRIMITIVES)[number]["params"]>;
+
+function fieldOptionCount(f: ParamField): number {
+  if (f.type === "choice") return Object.keys(f.options).length;
+  if (f.type === "scale") return f.levels.length;
+  return 2;
+}
+
+function landmarkVariantParams(
+  fields: readonly [string, ParamField][],
+  k: number,
+): Record<string, string | boolean> {
+  const params: Record<string, string | boolean> = {};
+  for (const [i, [name, f]] of fields.entries()) {
+    if (f.type === "choice") {
+      const keys = Object.keys(f.options);
+      const key = keys[k % keys.length];
+      if (key !== undefined) params[name] = key;
+    } else if (f.type === "scale") {
+      const levels: readonly { readonly words: string }[] = f.levels;
+      const level = levels[(k + i) % levels.length];
+      if (level !== undefined) params[name] = level.words;
+    } else if (f.type === "flag") {
+      params[name] = (k + i) % 2 === 0;
+    }
+  }
+  return params;
+}
+
+function expectMaxStepHeight(
+  ground: readonly number[],
+  maxStep: number,
+  label: string,
+): void {
+  for (let i = 1; i < ground.length; i++) {
+    expect(
+      Math.abs((ground[i] as number) - (ground[i - 1] as number)),
+      label,
+    ).toBeLessThan(maxStep);
+  }
+}
+
 describe("every opening is walkable", () => {
   /** The room a spot needs to count as open: a body, and the clearance a planned walk keeps from what stops it. */
   const ROOM = BODY_RADIUS + WALK_TO.clearance;
@@ -411,22 +647,24 @@ describe("every opening is walkable", () => {
    * until the body stands on its end or is wedged. Returns each frame's place.
    */
   const keysAlong = (solids: Solids, way: readonly Walker[]): Walker[] => {
-    const path = [way[0]!];
-    const end = way[way.length - 1]!;
+    const path = [way[0] as Walker];
+    const end = way[way.length - 1] as Walker;
     for (let i = 0, k = 0; i < 60 * 60; i++) {
-      const at = path[path.length - 1]!;
+      const at = path[path.length - 1] as Walker;
       if (Math.hypot(end.x - at.x, end.z - at.z) <= BODY_RADIUS) break;
       while (
         k < way.length - 1 &&
-        Math.hypot(way[k]!.x - at.x, way[k]!.z - at.z) < WALK_TO.lookAhead
+        Math.hypot((way[k] as Walker).x - at.x, (way[k] as Walker).z - at.z) <
+          WALK_TO.lookAhead
       ) {
         k++;
       }
+      const aim = way[k] as Walker;
       const next = walkStep(
         flat,
         solids,
         at,
-        { dx: way[k]!.x - at.x, dz: way[k]!.z - at.z, speed: WALK_TO.pace },
+        { dx: aim.x - at.x, dz: aim.z - at.z, speed: WALK_TO.pace },
         dt,
       );
       if (
@@ -441,100 +679,12 @@ describe("every opening is walkable", () => {
   };
 
   /**
-   * Points a fifth of a meter apart or closer, as x, z pairs in a built thing's own frame, on each face of `parts` that
-   * a person would bump into there: within their height above the ground or the thing's `floor` beneath, and shown at
-   * full vitality.
-   */
-  function inTheWay(parts: readonly Part[], floor: Floor | null): number[] {
-    const out: number[] = [];
-    for (const part of parts) {
-      const p = part.positions;
-      for (let k = 0; k < part.indices.length; k += 3) {
-        const vs = [
-          part.indices[k]!,
-          part.indices[k + 1]!,
-          part.indices[k + 2]!,
-        ] as const;
-        // A piece that grows in only as the thing declines, such as fallen stone, is not there at full vitality.
-        if (vs.some((v) => (part.channels.grow?.[v] ?? 0) > 0)) continue;
-        const corner = (v: number): readonly [number, number, number] => [
-          p[v * 3]!,
-          p[v * 3 + 1]!,
-          p[v * 3 + 2]!,
-        ];
-        const [a, b, c] = [corner(vs[0]), corner(vs[1]), corner(vs[2])];
-        const n = Math.max(
-          1,
-          Math.ceil(
-            Math.max(
-              Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]),
-              Math.hypot(b[0] - c[0], b[1] - c[1], b[2] - c[2]),
-              Math.hypot(c[0] - a[0], c[1] - a[1], c[2] - a[2]),
-            ) / 0.2,
-          ),
-        );
-        for (let i = 0; i <= n; i++) {
-          for (let j = 0; i + j <= n; j++) {
-            const [u, v, w] = [i / n, j / n, 1 - (i + j) / n];
-            const [x, y, z] = [
-              a[0] * u + b[0] * v + c[0] * w,
-              a[1] * u + b[1] * v + c[1] * w,
-              a[2] * u + b[2] * v + c[2] * w,
-            ];
-            const under =
-              floor === null ? 0 : Math.max(0, deckAt([floor], x, z));
-            if (y >= under + BODY_BAND.from && y <= under + BODY_BAND.to) {
-              out.push(x, z);
-            }
-          }
-        }
-      }
-    }
-    return out;
-  }
-
-  /** How far any of `points`, x, z pairs placed by `place`, lies outside what stops a walker, with the farthest point. */
-  const farthestOut = (
-    solids: Solids,
-    points: readonly number[],
-    place: (x: number, z: number) => Walker,
-  ): { out: number; x: number; z: number } => {
-    let worst = { out: -Infinity, x: 0, z: 0 };
-    for (let k = 0; k < points.length; k += 2) {
-      const q = place(points[k]!, points[k + 1]!);
-      const out = clearanceAt(solids, q.x, q.z);
-      if (out > worst.out) worst = { out, x: points[k]!, z: points[k + 1]! };
-    }
-    return worst;
-  };
-
-  /**
    * The openings of a built thing, in its own frame: every spot inside its outline on the ground where a body has
    * room to stand clear of all it shows, a meter apart, each with the shortest way in to it from the open land around
    * the thing over such spots.
    */
   function openingsOf(points: readonly number[]): Walker[][] {
-    let reach = 0;
-    const near = new Map<string, number[]>();
-    for (let k = 0; k < points.length; k += 2) {
-      const [x, z] = [points[k]!, points[k + 1]!];
-      reach = Math.max(reach, Math.hypot(x, z));
-      const key = `${Math.floor(x)},${Math.floor(z)}`;
-      const list = near.get(key);
-      if (list === undefined) near.set(key, [x, z]);
-      else list.push(x, z);
-    }
-    const roomAt = (x: number, z: number): boolean => {
-      for (let i = Math.floor(x - ROOM); i <= Math.floor(x + ROOM); i++) {
-        for (let j = Math.floor(z - ROOM); j <= Math.floor(z + ROOM); j++) {
-          const list = near.get(`${i},${j}`) ?? [];
-          for (let k = 0; k < list.length; k += 2) {
-            if (Math.hypot(list[k]! - x, list[k + 1]! - z) < ROOM) return false;
-          }
-        }
-      }
-      return true;
-    };
+    const { reach, near } = buildSpatialIndex(points);
     const outline = solidsOf([{ points }]);
     const side = Math.ceil((reach + 3) / CELL);
     const n = side * 2 + 1;
@@ -542,50 +692,218 @@ describe("every opening is walkable", () => {
       x: ((i % n) - side) * CELL,
       z: (Math.floor(i / n) - side) * CELL,
     });
-    // Out from the open land around the thing, one spot with room after another.
-    const from = new Int32Array(n * n).fill(-2);
-    const queue: number[] = [];
-    for (let i = 0; i < n * n; i++) {
-      const [u, v] = [i % n, Math.floor(i / n)];
-      if (u === 0 || v === 0 || u === n - 1 || v === n - 1) {
-        from[i] = -1;
-        queue.push(i);
-      }
-    }
-    for (let head = 0; head < queue.length; head++) {
-      const i = queue[head]!;
-      const [u, v] = [i % n, Math.floor(i / n)];
-      for (const [du, dv] of [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ] as const) {
-        const [nu, nv] = [u + du, v + dv];
-        const k = nv * n + nu;
-        if (nu < 0 || nv < 0 || nu >= n || nv >= n || from[k] !== -2) continue;
-        const spot = at(k);
-        if (!roomAt(spot.x, spot.z)) continue;
-        from[k] = i;
-        queue.push(k);
-      }
-    }
+    const from = floodOpenGrid(n, at, (x, z) => hasRoomAt(near, x, z, ROOM));
     const step = Math.round(1 / CELL);
     const ways: Walker[][] = [];
-    from.forEach((f, i) => {
+    for (let i = 0; i < from.length; i++) {
+      const spot = at(i);
       if (
-        f === -2 ||
+        from[i] === -2 ||
         (i % n) % step !== 0 ||
         Math.floor(i / n) % step !== 0 ||
-        clearanceAt(outline, at(i).x, at(i).z) >= 0
+        clearanceAt(outline, spot.x, spot.z) >= 0
       ) {
-        return;
+        continue;
       }
-      const way: Walker[] = [];
-      for (let k = i; k >= 0; k = from[k]!) way.unshift(at(k));
-      ways.push(way);
-    });
+      ways.push(traceWay(from, i, at));
+    }
     return ways;
+  }
+
+  function checkLandmarkOpenings(
+    name: string,
+    parts: readonly Part[],
+    solids: Solids,
+    floor: Floor | null,
+    own: Floor | null,
+    world: (p: Walker) => Walker,
+  ): { openings: number; raised: number } {
+    let openings = 0;
+    let raised = 0;
+    for (const way of openingsOf(
+      inTheWay(
+        parts.filter((p) => p.collision !== "walkable"),
+        own,
+      ),
+    )) {
+      openings++;
+      const spot = way[way.length - 1] as Walker;
+      const where = `${name} at ${spot.x}, ${spot.z}`;
+      // Walked in with the keys from outside, along the way its open ground leaves.
+      const path = keysAlong(solids, way.map(world));
+      const end = path[path.length - 1] as Walker;
+      expect(
+        Math.hypot(end.x - world(spot).x, end.z - world(spot).z),
+        where,
+      ).toBeLessThanOrEqual(BODY_RADIUS);
+      if (floor === null) continue;
+      // Up steps a stride at a time, never dropping through the floor, to stand on it where it is raised.
+      const ground = path.map((q) => footingAt(flat, [floor], q.x, q.z).ground);
+      expectMaxStepHeight(ground, STEP, where);
+      if (own === null || deckAt([own], spot.x, spot.z) <= 0.05) continue;
+      raised++;
+      expect(footingAt(flat, [floor], end.x, end.z).deck, where).toBe(true);
+    }
+    return { openings, raised };
+  }
+
+  function checkLandmarks(draws: ReturnType<typeof rand>): void {
+    const landmarks = new Library([
+      ...LANDMARK_PRIMITIVES,
+      ...FLORA_PRIMITIVES,
+    ]);
+    const centre = { x: dry.x - 12, z: dry.z - 32 };
+    let openings = 0;
+    let raised = 0;
+    for (const form of LANDMARK_PRIMITIVES) {
+      const fields = Object.entries(form.params);
+      const count = Math.max(2, ...fields.map(([, f]) => fieldOptionCount(f)));
+      for (let k = 0; k < count; k++) {
+        // Each option of each field in turn, and each level of each scale.
+        const params = landmarkVariantParams(fields, k);
+        const blueprint = blueprintOf(landmark.id, {
+          ...randomSlots(landmark, landmarks, () => draws.next()),
+          form: { use: form.id, params },
+        });
+        const built = realize(blueprint, landmark, landmarks, {
+          seed: seedOf(`every opening ${form.id} ${k}`),
+          facts: { scale: 0.85 + 0.4 * draws.next() },
+        });
+        const name = `${form.id} ${JSON.stringify(params)}`;
+        const at = {
+          ...centre,
+          y: heightAt(flat.lattice, centre.x, centre.z),
+          yaw: k * 1.3,
+        };
+        const [c, s] = [Math.cos(at.yaw), Math.sin(at.yaw)];
+        const world = (p: Walker): Walker => ({
+          x: at.x + p.x * c + p.z * s,
+          z: at.z - p.x * s + p.z * c,
+        });
+        const solids = solidsOf(piecesShapes(built.parts, at));
+        const floor = floorOf(built.parts, at);
+        const own = floorOf(built.parts, { x: 0, y: 0, z: 0, yaw: 0 });
+        // Every solid piece it shows within a person's height stops a walker there.
+        const solid = farthestOut(
+          solids,
+          inTheWay(
+            built.parts.filter((p) => p.collision === "solid"),
+            own,
+          ),
+          (x, z) => world({ x, z }),
+        );
+        expect(
+          solid.out,
+          `${name}: a solid piece at ${solid.x.toFixed(2)}, ${solid.z.toFixed(2)} lies outside what stops a walker`,
+        ).toBeLessThanOrEqual(TOUCH);
+        const counts = checkLandmarkOpenings(
+          name,
+          built.parts,
+          solids,
+          floor,
+          own,
+          world,
+        );
+        openings += counts.openings;
+        raised += counts.raised;
+      }
+    }
+    expect(openings).toBeGreaterThan(0);
+    expect(raised).toBeGreaterThan(0);
+  }
+
+  function checkBuildingDoors(draws: ReturnType<typeof rand>): void {
+    const buildings = new Library([
+      ...STRUCTURE_PRIMITIVES,
+      ...FLORA_PRIMITIVES,
+    ]);
+    for (let i = 0; i < 24; i++) {
+      const blueprint = blueprintOf(
+        structure.id,
+        randomSlots(structure, buildings, () => draws.next()),
+      );
+      const built = realize(blueprint, structure, buildings, {
+        seed: seedOf(`every door ${i}`),
+        facts: { size: 1, floors: 1 },
+      });
+      const plan = built.slots.get("footprint")?.output as BuildingPlan;
+      const name = JSON.stringify(blueprint.slots);
+      const site = {
+        x: dry.x - 40,
+        z: dry.z,
+        yaw: i * 0.9,
+        level: heightAt(flat.lattice, dry.x - 40, dry.z),
+      };
+      const origin = { x: 0, y: 0, z: 0, yaw: 0 };
+      const solids = solidsOf(
+        buildingShapes(
+          plan,
+          buildingPieces(plan, built.parts),
+          extentOf(built.slots.get("feature")?.output as Built | undefined),
+          site,
+        ),
+      );
+      const floor = floorOf(built.parts, {
+        x: site.x,
+        y: site.level,
+        z: site.z,
+        yaw: site.yaw,
+      });
+      // A building is solid: every mass stops a walker, and so does every solid piece it shows within a person's height.
+      for (const m of plan.masses) {
+        expect(
+          clearanceAt(solids, ...siteToWorld(site, m.x, m.z)),
+          name,
+        ).toBeLessThan(0);
+      }
+      const solid = farthestOut(
+        solids,
+        inTheWay(
+          built.parts.filter((p) => p.collision === "solid"),
+          floorOf(built.parts, origin),
+        ),
+        (x, z) => {
+          const [wx, wz] = siteToWorld(site, x, z);
+          return { x: wx, z: wz };
+        },
+      );
+      expect(
+        solid.out,
+        `${name}: a solid piece at ${solid.x.toFixed(2)}, ${solid.z.toFixed(2)} lies outside what stops a walker`,
+      ).toBeLessThanOrEqual(TOUCH);
+      const doors = plan.openings.filter((o) => o.kind === "door");
+      expect(doors.length, name).toBeGreaterThan(0);
+      for (const door of doors) {
+        // A tap on the door from out in front of it plans a way to within reach of it, so no wing stands in front of it
+        // and any fence leaves a gap, and the walk arrives.
+        const foot = {
+          x: siteToWorld(site, door.position[0], door.position[2])[0],
+          z: siteToWorld(site, door.position[0], door.position[2])[1],
+        };
+        const [fx, fz] = siteToWorld(
+          site,
+          door.position[0] + door.normal[0] * 20,
+          door.position[2] + door.normal[2] * 20,
+        );
+        const walk = tapWalk(solids, { x: fx, z: fz }, foot, flat);
+        expect(walk.state, name).toBe("arrived");
+        expect(
+          Math.hypot(walk.walk.target.x - foot.x, walk.walk.target.z - foot.z),
+          name,
+        ).toBeLessThanOrEqual(WALK_TO.reach);
+        // Walking on at the door, the person climbs any steps a stride at a time and comes up against it, within a
+        // body's width of it.
+        const up = keysAlong(solids, [walk.at, foot]);
+        const end = up[up.length - 1] as Walker;
+        expect(
+          Math.hypot(end.x - foot.x, end.z - foot.z),
+          name,
+        ).toBeLessThanOrEqual(2 * BODY_RADIUS);
+        if (floor === null) continue;
+        const ground = up.map((q) => footingAt(flat, [floor], q.x, q.z).ground);
+        expectMaxStepHeight(ground, STEP, name);
+      }
+    }
   }
 
   // Builds a landmark for every option of every field of every landmark primitive, and twenty-four buildings drawn from
@@ -595,210 +913,9 @@ describe("every opening is walkable", () => {
     "lets a person walk into every landmark's openings, up its steps and under its spans, and reach every building's door from outside",
     { timeout: 120_000 },
     () => {
-      const landmarks = new Library([
-        ...LANDMARK_PRIMITIVES,
-        ...FLORA_PRIMITIVES,
-      ]);
       const draws = rand(seedOf("every opening"));
-      const centre = { x: dry.x - 12, z: dry.z - 32 };
-      let openings = 0;
-      let raised = 0;
-      for (const form of LANDMARK_PRIMITIVES) {
-        const fields = Object.entries(form.params);
-        const count = Math.max(
-          2,
-          ...fields.map(([, f]) =>
-            f.type === "choice"
-              ? Object.keys(f.options).length
-              : f.type === "scale"
-                ? f.levels.length
-                : 2,
-          ),
-        );
-        for (let k = 0; k < count; k++) {
-          // Each option of each field in turn, and each level of each scale.
-          const params: Record<string, string | boolean> = {};
-          fields.forEach(([name, f], i) => {
-            if (f.type === "choice") {
-              params[name] = Object.keys(f.options)[
-                k % Object.keys(f.options).length
-              ]!;
-            } else if (f.type === "scale") {
-              params[name] = f.levels[(k + i) % f.levels.length]!.words;
-            } else if (f.type === "flag") params[name] = (k + i) % 2 === 0;
-          });
-          const blueprint = blueprintOf(landmark.id, {
-            ...randomSlots(landmark, landmarks, () => draws.next()),
-            form: { use: form.id, params },
-          });
-          const built = realize(blueprint, landmark, landmarks, {
-            seed: seedOf(`every opening ${form.id} ${k}`),
-            facts: { scale: 0.85 + 0.4 * draws.next() },
-          });
-          const name = `${form.id} ${JSON.stringify(params)}`;
-          const at = {
-            ...centre,
-            y: heightAt(flat.lattice, centre.x, centre.z),
-            yaw: k * 1.3,
-          };
-          const [c, s] = [Math.cos(at.yaw), Math.sin(at.yaw)];
-          const world = (p: Walker): Walker => ({
-            x: at.x + p.x * c + p.z * s,
-            z: at.z - p.x * s + p.z * c,
-          });
-          const solids = solidsOf(piecesShapes(built.parts, at));
-          const floor = floorOf(built.parts, at);
-          const own = floorOf(built.parts, { x: 0, y: 0, z: 0, yaw: 0 });
-          // Every solid piece it shows within a person's height stops a walker there.
-          const solid = farthestOut(
-            solids,
-            inTheWay(
-              built.parts.filter((p) => p.collision === "solid"),
-              own,
-            ),
-            (x, z) => world({ x, z }),
-          );
-          expect(
-            solid.out,
-            `${name}: a solid piece at ${solid.x.toFixed(2)}, ${solid.z.toFixed(2)} lies outside what stops a walker`,
-          ).toBeLessThanOrEqual(TOUCH);
-          for (const way of openingsOf(
-            inTheWay(
-              built.parts.filter((p) => p.collision !== "walkable"),
-              own,
-            ),
-          )) {
-            openings++;
-            const spot = way[way.length - 1]!;
-            const where = `${name} at ${spot.x}, ${spot.z}`;
-            // Walked in with the keys from outside, along the way its open ground leaves.
-            const path = keysAlong(solids, way.map(world));
-            const end = path[path.length - 1]!;
-            expect(
-              Math.hypot(end.x - world(spot).x, end.z - world(spot).z),
-              where,
-            ).toBeLessThanOrEqual(BODY_RADIUS);
-            if (floor === null) continue;
-            // Up steps a stride at a time, never dropping through the floor, to stand on it where it is raised.
-            const ground = path.map(
-              (q) => footingAt(flat, [floor], q.x, q.z).ground,
-            );
-            for (let i = 1; i < ground.length; i++) {
-              expect(Math.abs(ground[i]! - ground[i - 1]!), where).toBeLessThan(
-                STEP,
-              );
-            }
-            if (own === null || deckAt([own], spot.x, spot.z) <= 0.05) continue;
-            raised++;
-            expect(footingAt(flat, [floor], end.x, end.z).deck, where).toBe(
-              true,
-            );
-          }
-        }
-      }
-      expect(openings).toBeGreaterThan(0);
-      expect(raised).toBeGreaterThan(0);
-
-      const buildings = new Library([
-        ...STRUCTURE_PRIMITIVES,
-        ...FLORA_PRIMITIVES,
-      ]);
-      for (let i = 0; i < 24; i++) {
-        const blueprint = blueprintOf(
-          structure.id,
-          randomSlots(structure, buildings, () => draws.next()),
-        );
-        const built = realize(blueprint, structure, buildings, {
-          seed: seedOf(`every door ${i}`),
-          facts: { size: 1, floors: 1 },
-        });
-        const plan = built.slots.get("footprint")?.output as BuildingPlan;
-        const name = JSON.stringify(blueprint.slots);
-        const site = {
-          x: dry.x - 40,
-          z: dry.z,
-          yaw: i * 0.9,
-          level: heightAt(flat.lattice, dry.x - 40, dry.z),
-        };
-        const origin = { x: 0, y: 0, z: 0, yaw: 0 };
-        const solids = solidsOf(
-          buildingShapes(
-            plan,
-            buildingPieces(plan, built.parts),
-            extentOf(built.slots.get("feature")?.output as Built | undefined),
-            site,
-          ),
-        );
-        const floor = floorOf(built.parts, {
-          x: site.x,
-          y: site.level,
-          z: site.z,
-          yaw: site.yaw,
-        });
-        // A building is solid: every mass stops a walker, and so does every solid piece it shows within a person's height.
-        for (const m of plan.masses) {
-          expect(
-            clearanceAt(solids, ...siteToWorld(site, m.x, m.z)),
-            name,
-          ).toBeLessThan(0);
-        }
-        const solid = farthestOut(
-          solids,
-          inTheWay(
-            built.parts.filter((p) => p.collision === "solid"),
-            floorOf(built.parts, origin),
-          ),
-          (x, z) => {
-            const [wx, wz] = siteToWorld(site, x, z);
-            return { x: wx, z: wz };
-          },
-        );
-        expect(
-          solid.out,
-          `${name}: a solid piece at ${solid.x.toFixed(2)}, ${solid.z.toFixed(2)} lies outside what stops a walker`,
-        ).toBeLessThanOrEqual(TOUCH);
-        const doors = plan.openings.filter((o) => o.kind === "door");
-        expect(doors.length, name).toBeGreaterThan(0);
-        for (const door of doors) {
-          // A tap on the door from out in front of it plans a way to within reach of it, so no wing stands in front of it
-          // and any fence leaves a gap, and the walk arrives.
-          const foot = {
-            x: siteToWorld(site, door.position[0], door.position[2])[0],
-            z: siteToWorld(site, door.position[0], door.position[2])[1],
-          };
-          const [fx, fz] = siteToWorld(
-            site,
-            door.position[0] + door.normal[0] * 20,
-            door.position[2] + door.normal[2] * 20,
-          );
-          const walk = tapWalk(solids, { x: fx, z: fz }, foot, flat);
-          expect(walk.state, name).toBe("arrived");
-          expect(
-            Math.hypot(
-              walk.walk.target.x - foot.x,
-              walk.walk.target.z - foot.z,
-            ),
-            name,
-          ).toBeLessThanOrEqual(WALK_TO.reach);
-          // Walking on at the door, the person climbs any steps a stride at a time and comes up against it, within a
-          // body's width of it.
-          const up = keysAlong(solids, [walk.at, foot]);
-          const end = up[up.length - 1]!;
-          expect(
-            Math.hypot(end.x - foot.x, end.z - foot.z),
-            name,
-          ).toBeLessThanOrEqual(2 * BODY_RADIUS);
-          if (floor === null) continue;
-          const ground = up.map(
-            (q) => footingAt(flat, [floor], q.x, q.z).ground,
-          );
-          for (let k = 1; k < ground.length; k++) {
-            expect(Math.abs(ground[k]! - ground[k - 1]!), name).toBeLessThan(
-              STEP,
-            );
-          }
-        }
-      }
+      checkLandmarks(draws);
+      checkBuildingDoors(draws);
     },
   );
 });
@@ -832,80 +949,88 @@ describe("walking off the land", () => {
   });
 });
 
-describe("a walker's stride", () => {
-  /** Walks `seconds` from `from` toward (dx, dz) at `speed`, then rests for `rest` seconds. Returns each frame's body and whether it was asked to move. */
-  const walkThen = (
-    decks: readonly Deck[],
-    from: Walker,
-    dx: number,
-    dz: number,
-    seconds: number,
-    rest: number,
-    speed = WALK_TO.pace,
-  ) => {
-    let body = standAt(t, decks, from.x, from.z);
-    const frames: { body: Stride; moving: boolean }[] = [];
-    for (let i = 0; i < Math.round((seconds + rest) * 60); i++) {
-      const moving = i < seconds * 60;
-      body = stride(
-        t,
-        NO_SOLIDS,
-        decks,
-        body,
-        moving ? { dx, dz, speed } : { dx: 0, dz: 0, speed: 0 },
-        dt,
-      );
-      frames.push({ body, moving });
-    }
-    return frames;
-  };
-  const speedOf = (b: Stride): number => Math.hypot(b.vx, b.vz);
-  /**
-   * Dry ground near `dry` whose westward grade is steady over the first 2 m, so the pace the grade allows stays
-   * constant while a walker heading west speeds up. Any overshoot then comes from the gait alone.
-   */
-  const evenGround = (): Walker => {
-    for (let r = 0; r <= 200; r += 4) {
-      for (let a = 0; a < 16; a++) {
-        const x = dry.x + r * Math.cos((a * Math.PI) / 8);
-        const z = dry.z + r * Math.sin((a * Math.PI) / 8);
-        if (waterDepthAt(t, x, z) > 0 || waterDepthAt(t, x - 2, z) > 0) {
-          continue;
-        }
-        const h = [0, 1, 2, 3, 4].map((d) => groundHeightAt(t, x - d * 0.5, z));
-        const grades = h.slice(1).map((y, i) => (h[i]! - y) / 0.5);
-        if (Math.max(...grades) - Math.min(...grades) < 1e-3) return { x, z };
-      }
-    }
-    throw new Error(
-      "No dry ground with a steady grade near the sample world's dry land.",
-    );
-  };
+interface StrideFrame {
+  readonly body: Stride;
+  readonly moving: boolean;
+}
 
+function walkThen(
+  decks: readonly Deck[],
+  from: Walker,
+  dx: number,
+  dz: number,
+  seconds: number,
+  rest: number,
+  speed = WALK_TO.pace,
+): StrideFrame[] {
+  let body = standAt(t, decks, from.x, from.z);
+  const frames: StrideFrame[] = [];
+  for (let i = 0; i < Math.round((seconds + rest) * 60); i++) {
+    const moving = i < seconds * 60;
+    body = stride(
+      t,
+      NO_SOLIDS,
+      decks,
+      body,
+      moving ? { dx, dz, speed } : { dx: 0, dz: 0, speed: 0 },
+      dt,
+    );
+    frames.push({ body, moving });
+  }
+  return frames;
+}
+
+function speedOf(b: Stride): number {
+  return Math.hypot(b.vx, b.vz);
+}
+
+/**
+ * Dry ground near `dry` whose westward grade is steady over the first 2 m, so the pace the grade allows stays
+ * constant while a walker heading west speeds up. Any overshoot then comes from the gait alone.
+ */
+function evenGround(): Walker {
+  for (let r = 0; r <= 200; r += 4) {
+    for (let a = 0; a < 16; a++) {
+      const x = dry.x + r * Math.cos((a * Math.PI) / 8);
+      const z = dry.z + r * Math.sin((a * Math.PI) / 8);
+      if (waterDepthAt(t, x, z) > 0 || waterDepthAt(t, x - 2, z) > 0) {
+        continue;
+      }
+      const h = [0, 1, 2, 3, 4].map((d) => groundHeightAt(t, x - d * 0.5, z));
+      const grades = h.slice(1).map((y, i) => ((h[i] as number) - y) / 0.5);
+      if (Math.max(...grades) - Math.min(...grades) < 1e-3) return { x, z };
+    }
+  }
+  throw new Error(
+    "No dry ground with a steady grade near the sample world's dry land.",
+  );
+}
+
+describe("a walker's stride", () => {
   it("gets going and stops at once, never overshooting or turning, and its eyes ride the ground without bob or jitter", () => {
     const frames = walkThen([], evenGround(), -1, 0, 6, 3);
     const striding = frames.slice(120, 360);
     const pace = striding.reduce((m, f) => Math.max(m, speedOf(f.body)), 0);
     // Up to speed within a fraction of a second, as in games, with no overshoot. While it speeds up on a steady grade,
     // its speed only rises.
-    expect(speedOf(frames[Math.round(0.15 * 60)]!.body)).toBeGreaterThan(
-      pace * 0.9,
-    );
+    expect(
+      speedOf((frames[Math.round(0.15 * 60)] as StrideFrame).body),
+    ).toBeGreaterThan(pace * 0.9);
     const going = frames.slice(0, Math.round(0.3 * 60));
     for (let i = 1; i < going.length; i++) {
-      expect(speedOf(going[i]!.body)).toBeGreaterThanOrEqual(
-        speedOf(going[i - 1]!.body) - 1e-3,
+      expect(speedOf((going[i] as StrideFrame).body)).toBeGreaterThanOrEqual(
+        speedOf((going[i - 1] as StrideFrame).body) - 1e-3,
       );
     }
     // It moves in the requested direction without swinging. Every frame's velocity points along -x.
-    for (const f of frames.filter((f) => speedOf(f.body) > 1e-3)) {
+    for (const f of frames.filter((frame) => speedOf(frame.body) > 1e-3)) {
       expect(Math.abs(f.body.vz) / speedOf(f.body)).toBeLessThan(1e-6);
     }
     // After release it stops within a fraction of a second, slowing along its direction and never stepping back.
     const stopped = frames.findIndex((f) => !f.moving);
-    expect(speedOf(frames[stopped + Math.round(0.15 * 60)]!.body)).toBeLessThan(
-      pace * 0.05,
-    );
+    expect(
+      speedOf((frames[stopped + Math.round(0.15 * 60)] as StrideFrame).body),
+    ).toBeLessThan(pace * 0.05);
     for (const f of frames.slice(stopped)) {
       expect(f.body.vx).toBeLessThanOrEqual(1e-9);
     }
@@ -920,9 +1045,9 @@ describe("a walker's stride", () => {
       .slice(1, -1)
       .map(
         (f, i, all) =>
-          ((striding[i + 2]!.body.eye -
+          (((striding[i + 2] as StrideFrame).body.eye -
             2 * f.body.eye +
-            striding[i]!.body.eye) /
+            (striding[i] as StrideFrame).body.eye) /
             (dt * dt)) *
           (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (all.length - 1))),
       );
@@ -943,7 +1068,9 @@ describe("a walker's stride", () => {
     const settled = frames.slice(Math.round(7.5 * 60));
     for (const f of settled) {
       expect(speedOf(f.body)).toBeLessThan(0.01);
-      expect(Math.abs(f.body.eye - settled[0]!.body.eye)).toBeLessThan(1e-3);
+      expect(
+        Math.abs(f.body.eye - (settled[0] as StrideFrame).body.eye),
+      ).toBeLessThan(1e-3);
     }
     // Carried at travel's pace, it stands exactly where it is carried, its eyes riding the ground.
     let body = standAt(t, [], dry.x, dry.z);
@@ -1017,9 +1144,9 @@ describe("a walker's stride", () => {
       ).toBe(false);
     }
     for (let i = 1; i < ford.length; i++) {
-      expect(
-        Math.hypot(ford[i]!.x - ford[i - 1]!.x, ford[i]!.z - ford[i - 1]!.z),
-      ).toBeLessThan(1.6);
+      const curr = ford[i] as Walker;
+      const prev = ford[i - 1] as Walker;
+      expect(Math.hypot(curr.x - prev.x, curr.z - prev.z)).toBeLessThan(1.6);
     }
     expect([ford[0], ford[ford.length - 1]]).toEqual([
       way[0],

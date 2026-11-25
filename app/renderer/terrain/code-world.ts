@@ -198,7 +198,9 @@ export function plantGroup(
       ? "mushrooms"
       : "flowers";
   }
-  return as === "tree" ? "trees" : as === "bush" ? "shrubs" : "rocks";
+  if (as === "tree") return "trees";
+  if (as === "bush") return "shrubs";
+  return "rocks";
 }
 
 /** The scale range each plant group looks right in, chosen by importance. A stone can grow to landmark size, and a flower barely grows. */
@@ -208,6 +210,12 @@ const STAND_SCALE: Readonly<Record<string, readonly [number, number]>> = {
   shrubs: [0.5, 1.6],
   flowers: [0.7, 1.3],
   mushrooms: [0.7, 1.3],
+};
+
+const LINE_SCALE: Readonly<Record<string, readonly [number, number]>> = {
+  trees: [0.7, 0.5],
+  rocks: [0.45, 0.75],
+  shrubs: [0.6, 0.6],
 };
 
 /**
@@ -223,13 +231,8 @@ export const symbolScale = (
 ): number => {
   if (importance === undefined) {
     const t = Math.min(1, Math.log2(1 + (lines ?? 1)) / 8);
-    return rule === "trees"
-      ? 0.7 + 0.5 * t
-      : rule === "rocks"
-        ? 0.45 + 0.75 * t
-        : rule === "shrubs"
-          ? 0.6 + 0.6 * t
-          : 0.8 + 0.4 * t;
+    const [base, span] = LINE_SCALE[rule] ?? [0.8, 0.4];
+    return base + span * t;
   }
   const [small, large] = STAND_SCALE[rule] ?? [0.7, 1.3];
   return small + (large - small) * Math.min(1, Math.max(0, importance)) ** 1.3;
@@ -280,16 +283,18 @@ const SNAPSHOT_JUDGED: Readonly<Record<Snapshot, unknown>> = {
   "showcase-fixed": showcaseFixedJudged,
 };
 
+function layoutFailed(reason: string): Error {
+  return new Error(`The showcase could not be laid out: ${reason}`);
+}
+
 /** Lays out a world from a bundled showcase snapshot (`snapshot.ts`) on a worker while the wait screen draws. */
 function snapshotWorld(why: string, of: Snapshot): Promise<WorldDocument> {
   const facts = snapshotFacts(of);
   const worker = new LayoutWorker();
-  const failed = (why: string): Error =>
-    new Error(`The showcase could not be laid out: ${why}`);
   return new Promise<WorldDocument>((resolve, reject) => {
-    worker.onmessage = (e: MessageEvent<LayoutReply>) => {
+    worker.addEventListener("message", (e: MessageEvent<LayoutReply>) => {
       const reply = e.data;
-      if ("failed" in reply) reject(failed(reply.failed));
+      if ("failed" in reply) reject(layoutFailed(reply.failed));
       else {
         resolve({
           root: facts.repository.name,
@@ -298,9 +303,11 @@ function snapshotWorld(why: string, of: Snapshot): Promise<WorldDocument> {
           ...reply,
         });
       }
-    };
-    worker.onerror = (e) => reject(failed(e.message));
-    worker.postMessage({ why, of } satisfies LayoutRequest);
+    });
+    worker.addEventListener("error", (e) => {
+      reject(layoutFailed(e.message));
+    });
+    worker.postMessage({ why, of } satisfies LayoutRequest, []);
   }).finally(() => worker.terminate());
 }
 
@@ -336,7 +343,7 @@ const ASKS_PROVING =
  * an engine. `?world=showcase` has its old `v1/` as it is, and
  * `?world=showcase-fixed` is the same land with `v1/` fixed.
  */
-const ASKS_SHOWCASE: Snapshot | null = ((world) =>
+const ASKS_SHOWCASE: Snapshot | null = ((world): Snapshot | null =>
   world === "showcase" || world === "showcase-fixed" ? world : null)(
   typeof location === "undefined"
     ? null
@@ -496,6 +503,19 @@ const representNaturalThing = (
   return representEntity(e, s.vitality);
 };
 
+function entityThingOf(
+  t: CodeWorld["things"][number],
+  entities: ReadonlyMap<string, EntityFacts>,
+): { facts: ThingFacts; represented: Represented } {
+  const e = entities.get(t.path);
+  if (e === undefined) {
+    throw new Error(
+      `${t.path || "The repository's root"} is placed as an entity but is not one.`,
+    );
+  }
+  return { facts: e, represented: representEntity(e, t.vitality) };
+}
+
 /** The facts a building or landmark is built from, and its page, for whatever it represents. */
 function thingOf(
   t: CodeWorld["things"][number],
@@ -504,15 +524,7 @@ function thingOf(
   entities: ReadonlyMap<string, EntityFacts>,
 ): { facts: ThingFacts; represented: Represented } {
   const of = t.of ?? "entity";
-  if (of === "entity") {
-    const e = entities.get(t.path);
-    if (e === undefined) {
-      throw new Error(
-        `${t.path || "The repository's root"} is placed as an entity but is not one.`,
-      );
-    }
-    return { facts: e, represented: representEntity(e, t.vitality) };
-  }
+  if (of === "entity") return entityThingOf(t, entities);
   const file = files.get(t.file ?? "");
   if (file === undefined) {
     throw new Error(
@@ -536,6 +548,24 @@ function thingOf(
   return { facts, represented: representSymbol(sym, file) };
 }
 
+function landOf(r: CodeWorld["regions"][number]): Blueprint {
+  if (r.biome === undefined) {
+    throw new Error(
+      `${r.area || "The repository's root"} has no land: Jev composes every area's.`,
+    );
+  }
+  return r.biome;
+}
+
+function lotOf(t: CodeWorld["things"][number]): LayoutLot {
+  return {
+    id: t.path,
+    x: t.x,
+    z: t.z,
+    radius: t.lot * 0.6,
+  };
+}
+
 /** Everything the world needs to bake and furnish a world document. */
 export function openedWorld({
   facts,
@@ -556,14 +586,6 @@ export function openedWorld({
       `${world.name} has no wild bushes: Jev composes the bush of each of the wild's grounds.`,
     );
   }
-  const landOf = (r: CodeWorld["regions"][number]): Blueprint => {
-    if (r.biome === undefined) {
-      throw new Error(
-        `${r.area || "The repository's root"} has no land: Jev composes every area's.`,
-      );
-    }
-    return r.biome;
-  };
   const spec: WorldSpec = {
     size: world.size,
     // The terrain is baked to the land's own rectangle, the one its areas are laid out on.
@@ -580,12 +602,6 @@ export function openedWorld({
   };
   const entities = new Map(facts.entities.map((e) => [e.path, e]));
   const files = new Map(facts.files.map((f) => [f.path, f]));
-  const lot = (t: CodeWorld["things"][number]): LayoutLot => ({
-    id: t.path,
-    x: t.x,
-    z: t.z,
-    radius: t.lot * 0.6,
-  });
   const houses = world.things.filter((t) => t.as === "building");
   const rises = world.things.filter((t) => t.as === "landmark");
   // What each of the layout's symbols represents: every definition, then each file and entity that appears as a plant, stone or flowers.
@@ -677,6 +693,7 @@ export function openedWorld({
       symbol(s, s.path || "The repository's root"),
     ),
   ];
+  const areaOf = new Map(world.areas.map((a, i) => [a.path, i]));
   return {
     world,
     spec,
@@ -699,26 +716,22 @@ export function openedWorld({
     sky,
     wild,
     layout: {
-      lots: houses.map(lot),
-      landmarks: rises.map((t, i) => ({ landmark: i, lot: lot(t) })),
+      lots: houses.map(lotOf),
+      landmarks: rises.map((t, i) => ({ landmark: i, lot: lotOf(t) })),
       // An entity that appears as a plant, stone or flowers. Its trails end at its lot's center.
       places: world.naturalThings.flatMap((s) =>
         s.of === "entity" ? [{ id: s.path, x: s.x, z: s.z, radius: 2 }] : [],
       ),
       patches: world.patches.map((p) => ({ x: p.x, z: p.z, radius: p.radius })),
-      cells: (() => {
-        const patchOf = new Map(world.patches.map((p, i) => [p.path, i]));
-        const areaOf = new Map(world.areas.map((a, i) => [a.path, i]));
-        return world.cells.map((c) => ({
-          x: c.x,
-          z: c.z,
-          patch:
-            c.file === null || c.file === undefined
-              ? -1
-              : (patchOf.get(c.file) ?? -1),
-          area: areaOf.get(c.area) ?? 0,
-        }));
-      })(),
+      cells: world.cells.map((c) => ({
+        x: c.x,
+        z: c.z,
+        patch:
+          c.file === null || c.file === undefined
+            ? -1
+            : (patchOf.get(c.file) ?? -1),
+        area: areaOf.get(c.area) ?? 0,
+      })),
       symbols,
       // Trails joining parts of the code no other trail joins route first, then the most wanted.
       // Each trail keeps the width, wear, edging, winding and crossing Jev composed for it.

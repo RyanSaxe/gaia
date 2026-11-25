@@ -35,7 +35,7 @@ export function engineJev(engine: EngineClient): JevClient {
     );
   };
   return {
-    ask(request) {
+    ask(request): Promise<JevResponse> {
       return new Promise((resolve, reject) => {
         if (queue.length === 0) setTimeout(flush, 0);
         queue.push({ request, resolve, reject });

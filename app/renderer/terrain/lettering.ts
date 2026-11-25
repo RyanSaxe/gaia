@@ -73,12 +73,12 @@ export function letter(
   if (sizeAt(one, 1) < board.least) {
     const best = layouts
       .slice(1)
-      .sort((a, b) => sizeAt(b, 1) - sizeAt(a, 1))[0];
+      .toSorted((a, b) => sizeAt(b, 1) - sizeAt(a, 1))[0];
     if (best !== undefined && sizeAt(best, 1) >= board.least) chosen = best;
     else {
       const need = layouts
         .map((l) => ({ l, f: (board.least * l.per) / board.width }))
-        .sort((a, b) => a.f - b.f)[0] as {
+        .toSorted((a, b) => a.f - b.f)[0] as {
         l: (typeof layouts)[number];
         f: number;
       };
@@ -87,11 +87,9 @@ export function letter(
         widen = need.f;
       } else {
         widen = board.widen;
-        chosen = layouts
-          .slice()
-          .sort(
-            (a, b) => sizeAt(b, widen) - sizeAt(a, widen),
-          )[0] as (typeof layouts)[number];
+        chosen = layouts.toSorted(
+          (a, b) => sizeAt(b, widen) - sizeAt(a, widen),
+        )[0] as (typeof layouts)[number];
       }
     }
   }

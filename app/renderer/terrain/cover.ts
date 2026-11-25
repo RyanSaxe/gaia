@@ -450,7 +450,7 @@ export function createGrass(
   // Each camera that draws the grass, such as the view or a painting's, culls its blades by its own frustum.
   const frustum = new THREE.Frustum();
   const viewProjection = new THREE.Matrix4();
-  mesh.onBeforeRender = (_renderer, _scene, camera) => {
+  mesh.onBeforeRender = (_renderer, _scene, camera): void => {
     frustum.setFromProjectionMatrix(
       viewProjection.multiplyMatrices(
         camera.projectionMatrix,
@@ -470,7 +470,7 @@ export function createGrass(
   };
   return {
     mesh,
-    follow(c) {
+    follow(c): void {
       center.value.copy(c);
       // Center the clearings' mask on the grass.
       under.follow(c.x, c.z);

@@ -99,7 +99,10 @@ export type BakeReply =
   | { readonly id: number; readonly kind: "failed"; readonly message: string };
 
 interface WorkerScope {
-  onmessage: ((e: MessageEvent<BakeRequest>) => void) | null;
+  addEventListener(
+    type: "message",
+    listener: (e: MessageEvent<BakeRequest>) => void,
+  ): void;
   postMessage(message: BakeReply, transfer: Transferable[]): void;
 }
 
@@ -132,7 +135,7 @@ let source: { readonly world: number; readonly source: LandSource } | null =
  */
 let whole: Terrain | null = null;
 
-scope.onmessage = (e) => {
+scope.addEventListener("message", (e): void => {
   const req = e.data;
   let reply: BakeReply;
   let moved: Transferable[] = [];
@@ -194,4 +197,4 @@ scope.onmessage = (e) => {
     };
   }
   scope.postMessage(reply, moved);
-};
+});

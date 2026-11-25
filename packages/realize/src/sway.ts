@@ -289,11 +289,7 @@ export function swayAt(
           Math.sin(s.time * (0.5 + s.frequency) * WIND.leaf.rate + phase),
         WIND.leaf.most,
       );
-      const d = Math.hypot(
-        (p[0] as number) - p0,
-        (p[1] as number) - p1,
-        (p[2] as number) - p2,
-      );
+      const d = Math.hypot(p[0] - p0, p[1] - p1, p[2] - p2);
       turnAbout(
         p,
         p0,
@@ -334,14 +330,14 @@ export function swayAt(
       );
     }
     // The whole plant bends from its base. Each point leans by its height and drops to keep its length.
-    const y = Math.max(0, p[1] as number);
+    const y = Math.max(0, p[1]);
     const k = (y * y) / Math.max(s.height, 0.3);
     const ux = tx * k;
     const uz = tz * k;
     const drop = y > 1e-4 ? (ux * ux + uz * uz) / (2 * y) : 0;
-    out[i * 3] = (p[0] as number) + ux;
-    out[i * 3 + 1] = (p[1] as number) - drop;
-    out[i * 3 + 2] = (p[2] as number) + uz;
+    out[i * 3] = p[0] + ux;
+    out[i * 3 + 1] = p[1] - drop;
+    out[i * 3 + 2] = p[2] + uz;
   }
   return out;
 }

@@ -22,7 +22,7 @@ export function createClock(): Clock {
   }, 60_000);
   return {
     hour: () => pinned ?? clockHour,
-    pin(h) {
+    pin(h): void {
       pinned = h === null ? null : ((h % 24) + 24) % 24;
       if (pinned === null) clockHour = localHour(new Date());
     },

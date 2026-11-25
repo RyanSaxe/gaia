@@ -5,7 +5,7 @@
 // integer hash both sides compute bit for bit.
 
 import { heightAt } from "./lattice.ts";
-import { TERRAIN, type Terrain, frameOf } from "./world.ts";
+import { DRY, TERRAIN, type Terrain, frameOf } from "./world.ts";
 import { landReach } from "./edge.ts";
 
 export const WILDS = {
@@ -163,6 +163,57 @@ export const inWilds = (t: Terrain, x: number, z: number): boolean =>
 /** The ground's height anywhere: the baked lattice on the land, the wild land past it. */
 export function groundHeightAt(t: Terrain, x: number, z: number): number {
   return inWilds(t, x, z) ? wildHeightAt(t, x, z) : heightAt(t.lattice, x, z);
+}
+
+/** The water's depth at lattice sample i, 0 where it is dry. */
+const sampleDepth = (t: Terrain, i: number): number => {
+  const level = t.waterLevel[i] as number;
+  return level > DRY / 2
+    ? Math.max(0, level - (t.lattice.heights[i] as number))
+    : 0;
+};
+
+/**
+ * Water depth at a point: the water surface minus the ground, never below 0,
+ * and 0 in the wild. It reads the land's arrays on every call, so a land
+ * whose arrays change in place, such as the page's moving window, is always
+ * read as it is now. Past a land's window it reads the finest level that
+ * holds the point (`Lattice.beyond`).
+ */
+export function waterDepthAt(t: Terrain, x: number, z: number): number {
+  if (inWilds(t, x, z)) return 0;
+  const l = t.lattice;
+  const ux = (x - l.origin) / l.spacing;
+  const uz = (z - (l.originZ ?? l.origin)) / l.spacing;
+  if (
+    l.beyond !== undefined &&
+    (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)
+  ) {
+    const level = heightAt(l, x, z, t.waterLevel);
+    return level > DRY / 2 ? Math.max(0, level - heightAt(l, x, z)) : 0;
+  }
+  // Interpolate the cell's corner depths with the same triangles as the ground.
+  const gx = Math.min(l.n - 1.000001, Math.max(0, ux));
+  const gz = Math.min(l.n - 1.000001, Math.max(0, uz));
+  const ix = Math.floor(gx);
+  const iz = Math.floor(gz);
+  const fx = gx - ix;
+  const fz = gz - iz;
+  const i = iz * l.n + ix;
+  if (fx + fz <= 1) {
+    const d00 = sampleDepth(t, i);
+    return (
+      d00 +
+      fx * (sampleDepth(t, i + 1) - d00) +
+      fz * (sampleDepth(t, i + l.n) - d00)
+    );
+  }
+  const d11 = sampleDepth(t, i + l.n + 1);
+  return (
+    d11 +
+    (1 - fx) * (sampleDepth(t, i + l.n) - d11) +
+    (1 - fz) * (sampleDepth(t, i + 1) - d11)
+  );
 }
 
 // What grows on the wild land. The renderer's ground shader draws the wild's

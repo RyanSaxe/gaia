@@ -28,7 +28,10 @@ export type MakeReply =
   | { readonly id: number; readonly failed: string };
 
 interface WorkerScope {
-  onmessage: ((e: MessageEvent<MakeRequest>) => void) | null;
+  addEventListener(
+    type: "message",
+    listener: (e: MessageEvent<MakeRequest>) => void,
+  ): void;
   postMessage(message: MakeReply, transfer: Transferable[]): void;
 }
 
@@ -68,7 +71,7 @@ function buffersOf(
   return found;
 }
 
-scope.onmessage = (e) => {
+scope.addEventListener("message", (e): void => {
   const { id, ask } = e.data;
   try {
     const built = realize(ask.blueprint, KINDS[ask.kind], lib, {
@@ -82,4 +85,4 @@ scope.onmessage = (e) => {
       [],
     );
   }
-};
+});

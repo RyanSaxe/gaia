@@ -139,6 +139,12 @@ export interface NamePlaces {
   readonly places: readonly NamePlace[];
 }
 
+const pathTail = (segs: readonly string[], k: number): string =>
+  segs.slice(-k).join("/");
+
+const parentPath = (path: string): string =>
+  path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+
 /**
  * Returns, for each path, the parent folders the map letters above its name.
  * A name no other path shares gets none. Otherwise it gets just enough of the
@@ -147,14 +153,12 @@ export interface NamePlaces {
  */
 export function nameTails(paths: readonly string[]): Map<string, string> {
   const parts = paths.map((p) => p.split("/"));
-  const ends = (segs: readonly string[], k: number): string =>
-    segs.slice(-k).join("/");
   const tails = new Map<string, string>();
   for (const segs of parts) {
     let k = 1;
     while (
       k < segs.length &&
-      parts.some((o) => o !== segs && ends(o, k) === ends(segs, k))
+      parts.some((o) => o !== segs && pathTail(o, k) === pathTail(segs, k))
     ) {
       k++;
     }
@@ -190,11 +194,9 @@ export function* nameLand(
 ): Generator<void, NameLand> {
   const n = Math.ceil((reach * 2) / CELL);
   const at = new Int16Array(n * n).fill(-1);
-  const parentOf = (path: string): string =>
-    path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
   for (const [i, o] of areas.entries()) {
     const holes = areas.flatMap((c) =>
-      c.depth === o.depth + 1 && parentOf(c.path) === o.path ? c.rings : [],
+      c.depth === o.depth + 1 && parentPath(c.path) === o.path ? c.rings : [],
     );
     fillCells(at, n, reach, [...o.rings, ...holes], i);
     if (i % 4 === 3) yield;
@@ -323,22 +325,27 @@ function slantOf(s: {
   return Math.max(-0.42, Math.min(0.42, angle)) * elongated;
 }
 
-/**
- * Returns each area's default name position from a raster of the land. `at` gives, for each of the `n` by `n` cells
- * of `cell` meters from (-reach, -reach), the index in `areas` of the area whose own ground holds it, or -1. A name
- * sits on the cell of its area's ground farthest from the area's edges, nearest the area's centroid among equals, so
- * it never sits on the area's rim. It runs along the area's long axis.
- */
-export function labelsOf<
-  A extends { readonly path: string; readonly depth: number },
->(
+interface AreaMoment {
+  x: number;
+  z: number;
+  xx: number;
+  zz: number;
+  xz: number;
+  cells: number;
+  i0: number;
+  i1: number;
+  j0: number;
+  j1: number;
+}
+
+function areaMoments(
   at: Int16Array,
   n: number,
   cell: number,
   reach: number,
-  areas: readonly A[],
-): AreaLabel<A>[] {
-  const sums = areas.map(() => ({
+  count: number,
+): AreaMoment[] {
+  const sums: AreaMoment[] = Array.from({ length: count }, () => ({
     x: 0,
     z: 0,
     xx: 0,
@@ -368,24 +375,30 @@ export function labelsOf<
       s.j1 = Math.max(s.j1, j);
     }
   }
-  // Each cell's distance in cells from its area's edge, uncapped, by a two-pass chamfer. A name goes where its area is widest.
+  return sums;
+}
+
+function isAreaBorderCell(
+  at: Int16Array,
+  n: number,
+  i: number,
+  j: number,
+  c: number,
+): boolean {
+  if (i === 0 || j === 0 || i === n - 1 || j === n - 1) return true;
+  const k = at[c];
+  return (
+    at[c - 1] !== k || at[c + 1] !== k || at[c - n] !== k || at[c + n] !== k
+  );
+}
+
+// Each cell's distance in cells from its area's edge, uncapped, by a two-pass chamfer. A name goes where its area is widest.
+function areaEdgeDistances(at: Int16Array, n: number): Float32Array {
   const deep = new Float32Array(n * n).fill(n);
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const c = j * n + i;
-      const k = at[c];
-      if (
-        i === 0 ||
-        j === 0 ||
-        i === n - 1 ||
-        j === n - 1 ||
-        at[c - 1] !== k ||
-        at[c + 1] !== k ||
-        at[c - n] !== k ||
-        at[c + n] !== k
-      ) {
-        deep[c] = 0;
-      }
+      if (isAreaBorderCell(at, n, i, j, c)) deep[c] = 0;
     }
   }
   for (let c = 0; c < n * n; c++) {
@@ -404,31 +417,64 @@ export function labelsOf<
       deep[c] = Math.min(deep[c] as number, (deep[c + n] as number) + 1);
     }
   }
-  const tails = nameTails(areas.filter((a) => a.depth > 0).map((a) => a.path));
-  return areas.flatMap((area, k): AreaLabel<A>[] => {
-    const s = sums[k] as (typeof sums)[number];
-    if (s.cells === 0) return [];
-    const mx = s.x / s.cells;
-    const mz = s.z / s.cells;
-    let x = mx;
-    let z = mz;
-    let best = -Infinity;
-    for (let j = s.j0; j <= s.j1; j++) {
-      for (let i = s.i0; i <= s.i1; i++) {
-        if (at[j * n + i] !== k) continue;
-        const cx = -reach + (i + 0.5) * cell;
-        const cz = -reach + (j + 0.5) * cell;
-        const score =
-          (deep[j * n + i] as number) -
-          Math.hypot(cx - mx, cz - mz) / (cell * 40);
-        if (score > best) {
-          best = score;
-          x = cx;
-          z = cz;
-        }
+  return deep;
+}
+
+function widestSpot(
+  at: Int16Array,
+  deep: Float32Array,
+  n: number,
+  cell: number,
+  reach: number,
+  k: number,
+  s: AreaMoment,
+): [number, number] {
+  const mx = s.x / s.cells;
+  const mz = s.z / s.cells;
+  let x = mx;
+  let z = mz;
+  let best = -Infinity;
+  for (let j = s.j0; j <= s.j1; j++) {
+    for (let i = s.i0; i <= s.i1; i++) {
+      if (at[j * n + i] !== k) continue;
+      const cx = -reach + (i + 0.5) * cell;
+      const cz = -reach + (j + 0.5) * cell;
+      const score =
+        (deep[j * n + i] as number) -
+        Math.hypot(cx - mx, cz - mz) / (cell * 40);
+      if (score > best) {
+        best = score;
+        x = cx;
+        z = cz;
       }
     }
-    const edge = (i: number): number => -reach + i * cell;
+  }
+  return [x, z];
+}
+
+/**
+ * Returns each area's default name position from a raster of the land. `at` gives, for each of the `n` by `n` cells
+ * of `cell` meters from (-reach, -reach), the index in `areas` of the area whose own ground holds it, or -1. A name
+ * sits on the cell of its area's ground farthest from the area's edges, nearest the area's centroid among equals, so
+ * it never sits on the area's rim. It runs along the area's long axis.
+ */
+export function labelsOf<
+  A extends { readonly path: string; readonly depth: number },
+>(
+  at: Int16Array,
+  n: number,
+  cell: number,
+  reach: number,
+  areas: readonly A[],
+): AreaLabel<A>[] {
+  const sums = areaMoments(at, n, cell, reach, areas.length);
+  const deep = areaEdgeDistances(at, n);
+  const tails = nameTails(areas.filter((a) => a.depth > 0).map((a) => a.path));
+  const edge = (i: number): number => -reach + i * cell;
+  return areas.flatMap((area, k): AreaLabel<A>[] => {
+    const s = sums[k] as AreaMoment;
+    if (s.cells === 0) return [];
+    const [x, z] = widestSpot(at, deep, n, cell, reach, k, s);
     return [
       {
         area,
@@ -597,7 +643,7 @@ export function* placeNames(
   // Places the smallest areas first. They have the least room, and a larger area has room to spare on its own
   // ground.
   const places: NamePlace[] = [];
-  for (const l of [...land.labels].sort((a, b) => a.cells - b.cells)) {
+  for (const l of land.labels.toSorted((a, b) => a.cells - b.cells)) {
     // The repository's root covers the whole sheet and gets no name.
     if (l.area.depth === 0) continue;
     const ax = px(l.x);
@@ -609,18 +655,19 @@ export function* placeNames(
       const [i0, j0, i1, j1] = l.bounds.map((v) =>
         Math.floor((v + land.reach) / CELL),
       ) as [number, number, number, number];
-      cells = [];
+      const found: [number, number][] = [];
       for (let j = Math.max(0, j0); j < Math.min(land.n, j1); j++) {
         for (let i = Math.max(0, i0); i < Math.min(land.n, i1); i++) {
           if (land.at[j * land.n + i] === l.index) {
-            cells.push([(i + 0.5) * CELL * scale, (j + 0.5) * CELL * scale]);
+            found.push([(i + 0.5) * CELL * scale, (j + 0.5) * CELL * scale]);
           }
         }
       }
-      return cells.sort(
+      cells = found.toSorted(
         (a, b) =>
           Math.hypot(a[0] - ax, a[1] - ay) - Math.hypot(b[0] - ax, b[1] - ay),
       );
+      return cells;
     };
     /** Whether a name in `b` is on its own ground: its center is there, or it is beside the mark of a lot there. */
     const on = (b: Box, beside: boolean): boolean =>
@@ -682,7 +729,7 @@ export function* placeNames(
           around.push(spot(x, y, lotArea[k] === l.index));
         }
       }
-      yield* around.sort(
+      yield* around.toSorted(
         ([, a], [, b]) =>
           Math.hypot(a.x - ax, a.y - ay) - Math.hypot(b.x - ax, b.y - ay),
       );
@@ -735,23 +782,25 @@ export function* placeNames(
 
     const full = shapeOf(measure, l, NAME_SIZE);
     const small = shapeOf(measure, l, NAME_SIZE * SMALLER);
-    const { shape, x, y, over } =
+    const pickClear = (): Chosen | null =>
       // Clear of every mark: on its own ground, then near it, at full size and then at the smaller size.
       pick(spots(full), (b, beside) => free(b) && on(b, beside)) ??
-        pick(spots(full), (b, beside) => free(b) && near(b, beside)) ??
-        pick(spots(small), (b, beside) => free(b) && on(b, beside)) ??
-        pick(spots(small), (b, beside) => free(b) && near(b, beside)) ??
-        // Over a mark, near its own ground, where it covers the marks least.
-        pick([...spots(full), ...spots(small)], near, true) ??
-        // When other names fill its ground, it takes the nearest room around it, clear of the marks if possible. A name
-        // is never left out. On a sheet too full for it, it sits at its own spot.
-        pick(afield(), free) ??
-        pick(afield(), () => true) ?? {
-          shape: full,
-          x: ax,
-          y: ay,
-          over: !free(boxOf(full, ax, ay)),
-        };
+      pick(spots(full), (b, beside) => free(b) && near(b, beside)) ??
+      pick(spots(small), (b, beside) => free(b) && on(b, beside)) ??
+      pick(spots(small), (b, beside) => free(b) && near(b, beside));
+    const pickFallback = (): Chosen =>
+      // Over a mark, near its own ground, where it covers the marks least.
+      pick([...spots(full), ...spots(small)], near, true) ??
+      // When other names fill its ground, it takes the nearest room around it, clear of the marks if possible. A name
+      // is never left out. On a sheet too full for it, it sits at its own spot.
+      pick(afield(), free) ??
+      pick(afield(), () => true) ?? {
+        shape: full,
+        x: ax,
+        y: ay,
+        over: !free(boxOf(full, ax, ay)),
+      };
+    const { shape, x, y, over } = pickClear() ?? pickFallback();
     named.push(boxOf(shape, x, y));
     lines.push({ x, y, angle: l.angle, halfW: shape.halfW });
     places.push({

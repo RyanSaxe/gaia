@@ -35,7 +35,7 @@ import { cargoEnv } from "../../tools/cargo-env.ts";
 import { openedWorld } from "../renderer/terrain/code-world.ts";
 import { COMPOSING } from "../renderer/terrain/looks.ts";
 import { landmarkBase, placeWorld } from "../renderer/terrain/place.ts";
-import { createEngineClient } from "./engine-client.ts";
+import { createEngineClient, type LineClient } from "./engine-client.ts";
 import { openWorld, setSpendLimit } from "./open-world.ts";
 import type { ConsentPlan, WorldDocument } from "./protocol.ts";
 
@@ -135,7 +135,7 @@ function linkedCodebase(name: string): string {
 }
 
 /** Starts the engine binary, live, against the stand-in, keeping its store in `data`. */
-function engineAt(data: string) {
+function engineAt(data: string): LineClient {
   const child = spawn(ENGINE, ["rpc"], {
     env: {
       ...process.env,
@@ -155,8 +155,51 @@ function engineAt(data: string) {
   return client;
 }
 
+function composeTarget(
+  s: Record<string, { path?: string } | undefined>,
+): string | undefined {
+  if (s.repository !== undefined) return "world";
+  if (s.trail !== undefined) return "trail";
+  return (s.entity ?? s.directory)?.path;
+}
+
+function describeSentRequest(body: Record<string, unknown>): string {
+  const s = body.state as Record<
+    string,
+    { path?: string; name?: string } | string
+  >;
+  // An understanding request names its file or directory with `path` at the top level of its state.
+  if (typeof s.path === "string") return `understand:${s.path}`;
+  const state = s as Record<
+    string,
+    { path?: string; name?: string } | undefined
+  >;
+  // Composing the sky, a land, a building, a landmark or a trail asks for its parts first, then for each stage's
+  // details, with one request per wave.
+  const ids = Object.keys(body.questions as object);
+  if (
+    s.decided !== undefined ||
+    ids.some((id) => /^[a-z]+\.(use|present)$/.test(id))
+  ) {
+    return `compose:${composeTarget(state)}:${ids.toSorted().join(",")}`;
+  }
+  if (state.file) return `file:${state.file.path}`;
+  if (state.entity) return `entity:${state.entity.path}`;
+  if (state.directory) return `area:${state.directory.path}`;
+  return "repository";
+}
+
 /** Opens a world on a fresh engine process, recording what the person was asked and what was sent to Jev. */
-async function open(root: string, data: string, approve: boolean) {
+async function open(
+  root: string,
+  data: string,
+  approve: boolean,
+): Promise<{
+  document: WorldDocument;
+  asked: ConsentPlan[];
+  sent: StandIn["received"][number][];
+  about: string[];
+}> {
   const asked: ConsentPlan[] = [];
   const before = standIn.received.length;
   const document = await openWorld({
@@ -166,40 +209,7 @@ async function open(root: string, data: string, approve: boolean) {
     progress: () => {},
   });
   const sent = standIn.received.slice(before);
-  const about = sent.map(({ body }) => {
-    const s = body.state as Record<
-      string,
-      { path?: string; name?: string } | string
-    >;
-    // An understanding request names its file or directory with `path` at the top level of its state.
-    if (typeof s.path === "string") return `understand:${s.path}`;
-    const { file, entity, directory, repository, trail } = s as Record<
-      string,
-      { path?: string; name?: string } | undefined
-    >;
-    // Composing the sky, a land, a building, a landmark or a trail asks for its parts first, then for each stage's
-    // details, with one request per wave.
-    const ids = Object.keys(body.questions as object);
-    if (
-      s.decided !== undefined ||
-      ids.some((id) => /^[a-z]+\.(use|present)$/.test(id))
-    ) {
-      const of =
-        repository !== undefined
-          ? "world"
-          : trail !== undefined
-            ? "trail"
-            : (entity ?? directory)?.path;
-      return `compose:${of}:${ids.sort().join(",")}`;
-    }
-    return file
-      ? `file:${file.path}`
-      : entity
-        ? `entity:${entity.path}`
-        : directory
-          ? `area:${directory.path}`
-          : "repository";
-  });
+  const about = sent.map(({ body }) => describeSentRequest(body));
   return { document, asked, sent, about };
 }
 
@@ -231,7 +241,11 @@ describe("judging a codebase with Jev", () => {
     // Every request carries the placeholder key and only the model, state and questions.
     for (const [i, { authorization, body }] of first.sent.entries()) {
       expect(authorization).toBe("Bearer local-stand-in");
-      expect(Object.keys(body).sort()).toEqual(["model", "questions", "state"]);
+      expect(Object.keys(body).toSorted()).toEqual([
+        "model",
+        "questions",
+        "state",
+      ]);
       if (!first.about[i]?.startsWith("understand:")) {
         expect(JSON.stringify(body), first.about[i]).not.toContain(
           "secretSourceLine",
@@ -303,74 +317,74 @@ describe("judging a codebase with Jev", () => {
   }, 60_000);
 });
 
-describe("opening an unusual codebase", () => {
-  /** A folder holding `files`, made a Git repository. */
-  function repository(name: string, files: Record<string, string>): string {
-    const root = join(scratch, name);
-    mkdirSync(root, { recursive: true });
-    for (const [path, text] of Object.entries(files)) {
-      mkdirSync(join(root, path, ".."), { recursive: true });
-      writeFileSync(join(root, path), text);
-    }
-    execFileSync("git", ["init", "--quiet"], { cwd: root });
-    return root;
+/** A folder holding `files`, made a Git repository. */
+function repository(name: string, files: Record<string, string>): string {
+  const root = join(scratch, name);
+  mkdirSync(root, { recursive: true });
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(join(root, path, ".."), { recursive: true });
+    writeFileSync(join(root, path), text);
   }
+  execFileSync("git", ["init", "--quiet"], { cwd: root });
+  return root;
+}
 
-  /** Lays the world out, bakes and places it as the page does, and checks that the person first stands among the code on dry ground. */
-  function expectWalkable(
-    document: WorldDocument,
-    files: readonly string[],
-  ): void {
-    expect(document.world.patches.map((p) => p.path).sort()).toEqual(
-      [...files].sort(),
-    );
-    const code = openedWorld(document);
-    const terrain = bakeTerrain(code.spec, COMPOSING.lib);
-    placeWorld(terrain, {
-      buildings: code.buildings.map((b) => {
-        const built = realize(b.blueprint, structure, COMPOSING.lib, {
-          seed: seedOf(`terrain-lab/${b.facts.path}`),
+/** Lays the world out, bakes and places it as the page does, and checks that the person first stands among the code on dry ground. */
+function expectWalkable(
+  document: WorldDocument,
+  files: readonly string[],
+): void {
+  expect(document.world.patches.map((p) => p.path).toSorted()).toEqual(
+    [...files].toSorted(),
+  );
+  const code = openedWorld(document);
+  const terrain = bakeTerrain(code.spec, COMPOSING.lib);
+  placeWorld(terrain, {
+    buildings: code.buildings.map((b) => {
+      const built = realize(b.blueprint, structure, COMPOSING.lib, {
+        seed: seedOf(`terrain-lab/${b.facts.path}`),
+        facts: Object.fromEntries(
+          Object.entries(structure.facts).map(([k, bind]) => [
+            k,
+            bind(b.facts),
+          ]),
+        ),
+      });
+      return {
+        name: b.facts.path,
+        plan: built.slots.get("footprint")?.output as BuildingPlan,
+        beside: extentOf(
+          built.slots.get("feature")?.output as Built | undefined,
+        ),
+      };
+    }),
+    landmarks: code.landmarks.map((l) => ({
+      tree: false,
+      base: landmarkBase(
+        realize(l.blueprint, landmark, COMPOSING.lib, {
+          seed: seedOf(`terrain-lab/landmark/${l.path}`),
           facts: Object.fromEntries(
-            Object.entries(structure.facts).map(([k, bind]) => [
+            Object.entries(landmark.facts).map(([k, bind]) => [
               k,
-              bind(b.facts),
+              bind(l.facts),
             ]),
           ),
-        });
-        return {
-          name: b.facts.path,
-          plan: built.slots.get("footprint")?.output as BuildingPlan,
-          beside: extentOf(
-            built.slots.get("feature")?.output as Built | undefined,
-          ),
-        };
-      }),
-      landmarks: code.landmarks.map((l) => ({
-        tree: false,
-        base: landmarkBase(
-          realize(l.blueprint, landmark, COMPOSING.lib, {
-            seed: seedOf(`terrain-lab/landmark/${l.path}`),
-            facts: Object.fromEntries(
-              Object.entries(landmark.facts).map(([k, bind]) => [
-                k,
-                bind(l.facts),
-              ]),
-            ),
-          }),
-        ),
-      })),
-      trees: {
-        bases: code.naturalBuilds.trees.map(() => 0.5),
-        crowns: code.naturalBuilds.trees.map(() => 4),
-      },
-      code: code.layout,
-    });
-    const at = openingSpot(terrain, document.world);
-    expect(amongCode(document.world, at.x, at.z)).toBe(true);
-    expect(waterDepthAt(terrain, at.x, at.z)).toBeLessThanOrEqual(OPENING.dry);
-    expect(clearOfCode(document.world, at.x, at.z)).toBe(true);
-  }
+        }),
+      ),
+    })),
+    trees: {
+      bases: code.naturalBuilds.trees.map(() => 0.5),
+      crowns: code.naturalBuilds.trees.map(() => 4),
+    },
+    code: code.layout,
+  });
+  const at = openingSpot(terrain, document.world);
+  expect(amongCode(document.world, at.x, at.z)).toBe(true);
+  expect(waterDepthAt(terrain, at.x, at.z)).toBeLessThanOrEqual(OPENING.dry);
+  expect(clearOfCode(document.world, at.x, at.z)).toBe(true);
+}
 
+describe("opening an unusual codebase", () => {
   it("fails to open an empty repository, saying it has no files to make a world from, and sends nothing", async () => {
     const before = standIn.received.length;
     await expect(

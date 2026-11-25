@@ -114,6 +114,94 @@ function joinsOf(network: TrailNetwork): Map<string, number[]> {
   return out;
 }
 
+function nearestUnvisitedNode(
+  cost: Map<string, number>,
+  done: Set<string>,
+): string | null {
+  let at: string | null = null;
+  for (const [node, c] of cost) {
+    if (!done.has(node) && (at === null || c < (cost.get(at) as number))) {
+      at = node;
+    }
+  }
+  return at;
+}
+
+function shortestWayTree(
+  network: TrailNetwork,
+  start: Way,
+  aPoint: number,
+): { readonly cost: Map<string, number>; readonly via: Map<string, number> } {
+  // Dijkstra over places and junctions, starting from both ends of the trip's first way.
+  const onStart = alongWay(start, aPoint);
+  const cost = new Map<string, number>([[start.from, onStart]]);
+  cost.set(
+    start.to,
+    Math.min(cost.get(start.to) ?? Infinity, start.length - onStart),
+  );
+  const via = new Map<string, number>();
+  const done = new Set<string>();
+  const ways = joinsOf(network);
+  for (;;) {
+    const at = nearestUnvisitedNode(cost, done);
+    if (at === null) break;
+    done.add(at);
+    for (const i of ways.get(at) ?? []) {
+      const w = network.ways[i] as Way;
+      const next = w.from === at ? w.to : w.from;
+      const c = (cost.get(at) as number) + w.length;
+      if (c < (cost.get(next) ?? Infinity)) {
+        cost.set(next, c);
+        via.set(next, i);
+      }
+    }
+  }
+  return { cost, via };
+}
+
+function stitchTrailWays(
+  network: TrailNetwork,
+  start: Way,
+  end: Way,
+  aPoint: number,
+  bPoint: number,
+  enter: string,
+  via: Map<string, number>,
+): Walker[] {
+  // Walk back from that end to the start way, recording each way taken and the end the trip entered it by.
+  const taken: { way: number; from: string }[] = [];
+  let first = enter;
+  while (via.has(first)) {
+    const i = via.get(first) as number;
+    const w = network.ways[i] as Way;
+    first = w.to === first ? w.from : w.to;
+    taken.unshift({ way: i, from: first });
+  }
+  const out: Walker[] = [];
+  slice(
+    start,
+    aPoint,
+    first === start.from ? 0 : start.points.length / 2 - 1,
+    out,
+  );
+  for (const step of taken) {
+    const w = network.ways[step.way] as Way;
+    const n = w.points.length / 2 - 1;
+    if (w.from === step.from) slice(w, 0, n, out);
+    else slice(w, n, 0, out);
+  }
+  slice(end, enter === end.from ? 0 : end.points.length / 2 - 1, bPoint, out);
+  // Where two ways meet, their shared end is listed twice.
+  return out.filter(
+    (p, i) =>
+      i === 0 ||
+      Math.hypot(
+        p.x - (out[i - 1] as Walker).x,
+        p.z - (out[i - 1] as Walker).z,
+      ) > 1e-3,
+  );
+}
+
 /**
  * The shortest way along the trails from the tread nearest `from` to the
  * tread nearest `to`, as points about a meter apart. Returns null when there
@@ -129,77 +217,19 @@ export function trailWay(
   if (a === null || b === null) return null;
   const start = network.ways[a.way] as Way;
   const end = network.ways[b.way] as Way;
-  const out: Walker[] = [];
   if (a.way === b.way) {
+    const out: Walker[] = [];
     slice(start, a.point, b.point, out);
     return out;
   }
-  // Dijkstra over places and junctions, starting from both ends of the trip's first way.
-  const onStart = alongWay(start, a.point);
-  const cost = new Map<string, number>([[start.from, onStart]]);
-  cost.set(
-    start.to,
-    Math.min(cost.get(start.to) ?? Infinity, start.length - onStart),
-  );
-  const via = new Map<string, number>();
-  const done = new Set<string>();
-  const ways = joinsOf(network);
-  for (;;) {
-    let at: string | null = null;
-    for (const [node, c] of cost) {
-      if (!done.has(node) && (at === null || c < (cost.get(at) as number))) {
-        at = node;
-      }
-    }
-    if (at === null) break;
-    done.add(at);
-    for (const i of ways.get(at) ?? []) {
-      const w = network.ways[i] as Way;
-      const next = w.from === at ? w.to : w.from;
-      const c = (cost.get(at) as number) + w.length;
-      if (c < (cost.get(next) ?? Infinity)) {
-        cost.set(next, c);
-        via.set(next, i);
-      }
-    }
-  }
+  const { cost, via } = shortestWayTree(network, start, a.point);
   // Enter the last way from whichever end gives the shorter total.
   const inFrom = (cost.get(end.from) ?? Infinity) + alongWay(end, b.point);
   const inTo =
     (cost.get(end.to) ?? Infinity) + end.length - alongWay(end, b.point);
   if (!Number.isFinite(Math.min(inFrom, inTo))) return null;
   const enter = inFrom <= inTo ? end.from : end.to;
-  // Walk back from that end to the start way, recording each way taken and the end the trip entered it by.
-  const taken: { way: number; from: string }[] = [];
-  let first = enter;
-  while (via.has(first)) {
-    const i = via.get(first) as number;
-    const w = network.ways[i] as Way;
-    first = w.to === first ? w.from : w.to;
-    taken.unshift({ way: i, from: first });
-  }
-  slice(
-    start,
-    a.point,
-    first === start.from ? 0 : start.points.length / 2 - 1,
-    out,
-  );
-  for (const step of taken) {
-    const w = network.ways[step.way] as Way;
-    const n = w.points.length / 2 - 1;
-    if (w.from === step.from) slice(w, 0, n, out);
-    else slice(w, n, 0, out);
-  }
-  slice(end, enter === end.from ? 0 : end.points.length / 2 - 1, b.point, out);
-  // Where two ways meet, their shared end is listed twice.
-  return out.filter(
-    (p, i) =>
-      i === 0 ||
-      Math.hypot(
-        p.x - (out[i - 1] as Walker).x,
-        p.z - (out[i - 1] as Walker).z,
-      ) > 1e-3,
-  );
+  return stitchTrailWays(network, start, end, a.point, b.point, enter, via);
 }
 
 // ---------- the way straight across ----------
@@ -238,6 +268,186 @@ function dryLine(t: Terrain, a: Walker, b: Walker): boolean {
   return true;
 }
 
+function acrossHeapPush(heap: number[], key: Float32Array, i: number): void {
+  let c = heap.length;
+  heap.push(i);
+  while (c > 0) {
+    const up = (c - 1) >> 1;
+    if ((key[heap[up] as number] as number) <= (key[i] as number)) break;
+    heap[c] = heap[up] as number;
+    c = up;
+  }
+  heap[c] = i;
+}
+
+function acrossHeapPop(heap: number[], key: Float32Array): number {
+  const top = heap[0] as number;
+  const last = heap.pop() as number;
+  if (heap.length > 0) {
+    let c = 0;
+    for (;;) {
+      const l = c * 2 + 1;
+      if (l >= heap.length) break;
+      const r = l + 1;
+      const m =
+        r < heap.length &&
+        (key[heap[r] as number] as number) < (key[heap[l] as number] as number)
+          ? r
+          : l;
+      if ((key[heap[m] as number] as number) >= (key[last] as number)) break;
+      heap[c] = heap[m] as number;
+      c = m;
+    }
+    heap[c] = last;
+  }
+  return top;
+}
+
+interface AcrossGrid {
+  readonly nx: number;
+  readonly nz: number;
+  readonly gx: number;
+  readonly gz: number;
+  readonly kind: (i: number) => number;
+  readonly g: Float32Array;
+  readonly parent: Int32Array;
+  readonly key: Float32Array;
+  readonly heap: number[];
+}
+
+function canStepAcross(
+  grid: AcrossGrid,
+  i: number,
+  ix: number,
+  iz: number,
+  dx: number,
+  dz: number,
+  diagonal: boolean,
+): boolean {
+  const x = ix + dx;
+  const z = iz + dz;
+  if (x < 0 || x >= grid.nx || z < 0 || z >= grid.nz) return false;
+  if (grid.kind(i + dz * grid.nx + dx) === 3) return false;
+  if (!diagonal) return true;
+  // A diagonal step never cuts a corner of deep water.
+  return grid.kind(i + dx) !== 3 && grid.kind(i + dz * grid.nx) !== 3;
+}
+
+function tryAcrossStep(
+  grid: AcrossGrid,
+  i: number,
+  ix: number,
+  iz: number,
+  dx: number,
+  dz: number,
+): void {
+  if (dx === 0 && dz === 0) return;
+  const diagonal = dx !== 0 && dz !== 0;
+  if (!canStepAcross(grid, i, ix, iz, dx, dz, diagonal)) return;
+  const j = i + dz * grid.nx + dx;
+  const stepCost =
+    (diagonal ? Math.SQRT2 : 1) * (grid.kind(j) === 2 ? ACROSS.wet : 1);
+  const c = (grid.g[i] as number) + stepCost;
+  if (c >= (grid.g[j] as number)) return;
+  grid.g[j] = c;
+  grid.parent[j] = i;
+  grid.key[j] =
+    c + Math.hypot((j % grid.nx) - grid.gx, Math.floor(j / grid.nx) - grid.gz);
+  acrossHeapPush(grid.heap, grid.key, j);
+}
+
+function pullDryTaut(t: Terrain, cells: readonly Walker[]): Walker[] {
+  // Pull the path taut by going straight from each corner to the farthest cell with a dry straight line.
+  const taut: Walker[] = [cells[0] as Walker];
+  for (let i = 0; i < cells.length - 1;) {
+    let j = i + 1;
+    while (
+      j + 1 < cells.length &&
+      dryLine(t, cells[i] as Walker, cells[j + 1] as Walker)
+    ) {
+      j++;
+    }
+    taut.push(cells[j] as Walker);
+    i = j;
+  }
+  return taut;
+}
+
+function planSolidLegs(
+  t: Terrain,
+  solids: Solids,
+  taut: readonly Walker[],
+): Walker[] {
+  // Plan around solids a piece at a time, each piece starting where the last ended.
+  const way: Walker[] = [taut[0] as Walker];
+  for (let k = 1; k < taut.length; k++) {
+    const a = taut[k - 1] as Walker;
+    const b = taut[k] as Walker;
+    const pieces = Math.max(
+      1,
+      Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / ACROSS.leg),
+    );
+    for (let p = 1; p <= pieces; p++) {
+      const target = {
+        x: a.x + ((b.x - a.x) * p) / pieces,
+        z: a.z + ((b.z - a.z) * p) / pieces,
+      };
+      const walk = planWalk(t, solids, way[way.length - 1] as Walker, target);
+      way.push(...walk.way.slice(1));
+    }
+  }
+  return way;
+}
+
+function cellKindFromDepth(depth: number): number {
+  if (depth > ACROSS.deep) return 3;
+  if (depth > DAMP) return 2;
+  return 1;
+}
+
+function markCrossingsDry(
+  state: Uint8Array,
+  crossings: readonly Crossing[],
+  h: number,
+  cellOf: (p: Walker) => number,
+): void {
+  // Mark a crossing's cells dry from bank to bank along its axis, where local +x runs along the way.
+  for (const c of crossings) {
+    const dx = Math.cos(c.yaw);
+    const dz = -Math.sin(c.yaw);
+    for (let u = -c.span / 2 - h; u <= c.span / 2 + h; u += 1) {
+      const i = cellOf({ x: c.x + dx * u, z: c.z + dz * u });
+      if (i >= 0 && i < state.length) state[i] = 1;
+    }
+  }
+}
+
+function searchAcrossGrid(
+  grid: AcrossGrid,
+  start: number,
+  goal: number,
+): boolean {
+  const done = new Uint8Array(grid.nx * grid.nz);
+  grid.g[start] = 0;
+  grid.key[start] = Math.hypot(
+    (start % grid.nx) - grid.gx,
+    Math.floor(start / grid.nx) - grid.gz,
+  );
+  acrossHeapPush(grid.heap, grid.key, start);
+  while (grid.heap.length > 0) {
+    const i = acrossHeapPop(grid.heap, grid.key);
+    if (done[i] === 1) continue;
+    done[i] = 1;
+    if (i === goal) break;
+    const ix = i % grid.nx;
+    const iz = Math.floor(i / grid.nx);
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) tryAcrossStep(grid, i, ix, iz, dx, dz);
+    }
+  }
+  return done[goal] === 1;
+}
+
 /**
  * The way across the land from `from` to `to`, on a grid of `ACROSS.cell`
  * meters. It stays out of water, crossing a stream on one of the trails'
@@ -267,148 +477,34 @@ export function acrossWay(
   const start = cellOf(from);
   const goal = cellOf(to);
   const state = new Uint8Array(nx * nz); // 0 unknown, 1 dry, 2 wet, 3 deep
-  // Mark a crossing's cells dry from bank to bank along its axis, where local +x runs along the way.
-  for (const c of crossings) {
-    const dx = Math.cos(c.yaw);
-    const dz = -Math.sin(c.yaw);
-    for (let u = -c.span / 2 - h; u <= c.span / 2 + h; u += 1) {
-      const i = cellOf({ x: c.x + dx * u, z: c.z + dz * u });
-      if (i >= 0 && i < state.length) state[i] = 1;
-    }
-  }
+  markCrossingsDry(state, crossings, h, cellOf);
   const kind = (i: number): number => {
     if (i === start || i === goal) return 1;
     if (state[i] === 0) {
       const p = at(i);
-      const depth = waterAt(t, p.x, p.z);
-      state[i] = depth > ACROSS.deep ? 3 : depth > DAMP ? 2 : 1;
+      state[i] = cellKindFromDepth(waterAt(t, p.x, p.z));
     }
     return state[i] as number;
   };
-  const open = (i: number): boolean => kind(i) !== 3;
-  const g = new Float32Array(nx * nz).fill(Infinity);
-  const parent = new Int32Array(nx * nz).fill(-1);
-  const done = new Uint8Array(nx * nz);
-  const gx = goal % nx;
-  const gz = Math.floor(goal / nx);
-  const guess = (i: number): number =>
-    Math.hypot((i % nx) - gx, Math.floor(i / nx) - gz);
-  // A binary heap of cells by g + guess.
-  const heap: number[] = [];
-  const key = new Float32Array(nx * nz);
-  const push = (i: number): void => {
-    let c = heap.length;
-    heap.push(i);
-    while (c > 0) {
-      const up = (c - 1) >> 1;
-      if ((key[heap[up] as number] as number) <= (key[i] as number)) break;
-      heap[c] = heap[up] as number;
-      c = up;
-    }
-    heap[c] = i;
+  const grid: AcrossGrid = {
+    nx,
+    nz,
+    gx: goal % nx,
+    gz: Math.floor(goal / nx),
+    kind,
+    g: new Float32Array(nx * nz).fill(Infinity),
+    parent: new Int32Array(nx * nz).fill(-1),
+    key: new Float32Array(nx * nz),
+    heap: [],
   };
-  const pop = (): number => {
-    const top = heap[0] as number;
-    const last = heap.pop() as number;
-    if (heap.length > 0) {
-      let c = 0;
-      for (;;) {
-        const l = c * 2 + 1;
-        if (l >= heap.length) break;
-        const r = l + 1;
-        const m =
-          r < heap.length &&
-          (key[heap[r] as number] as number) <
-            (key[heap[l] as number] as number)
-            ? r
-            : l;
-        if ((key[heap[m] as number] as number) >= (key[last] as number)) break;
-        heap[c] = heap[m] as number;
-        c = m;
-      }
-      heap[c] = last;
-    }
-    return top;
-  };
-  g[start] = 0;
-  key[start] = guess(start);
-  push(start);
-  while (heap.length > 0) {
-    const i = pop();
-    if (done[i] === 1) continue;
-    done[i] = 1;
-    if (i === goal) break;
-    const ix = i % nx;
-    const iz = Math.floor(i / nx);
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (
-          (dx === 0 && dz === 0) ||
-          ix + dx < 0 ||
-          ix + dx >= nx ||
-          iz + dz < 0 ||
-          iz + dz >= nz
-        ) {
-          continue;
-        }
-        const j = i + dz * nx + dx;
-        // A diagonal step never cuts a corner of deep water.
-        if (
-          !open(j) ||
-          (dx !== 0 && dz !== 0 && (!open(i + dx) || !open(i + dz * nx)))
-        ) {
-          continue;
-        }
-        const c =
-          (g[i] as number) +
-          (dx !== 0 && dz !== 0 ? Math.SQRT2 : 1) *
-            (kind(j) === 2 ? ACROSS.wet : 1);
-        if (c < (g[j] as number)) {
-          g[j] = c;
-          parent[j] = i;
-          key[j] = c + guess(j);
-          push(j);
-        }
-      }
-    }
-  }
-  if (done[goal] !== 1) return null;
+  if (!searchAcrossGrid(grid, start, goal)) return null;
   const cells: Walker[] = [];
-  for (let i = goal; i !== -1; i = parent[i] as number) cells.unshift(at(i));
+  for (let i = goal; i !== -1; i = grid.parent[i] as number) {
+    cells.unshift(at(i));
+  }
   cells[0] = { x: from.x, z: from.z };
   cells[cells.length - 1] = { x: to.x, z: to.z };
-  // Pull the path taut by going straight from each corner to the farthest cell with a dry straight line.
-  const taut: Walker[] = [cells[0] as Walker];
-  for (let i = 0; i < cells.length - 1;) {
-    let j = i + 1;
-    while (
-      j + 1 < cells.length &&
-      dryLine(t, cells[i] as Walker, cells[j + 1] as Walker)
-    ) {
-      j++;
-    }
-    taut.push(cells[j] as Walker);
-    i = j;
-  }
-  // Plan around solids a piece at a time, each piece starting where the last ended.
-  const way: Walker[] = [taut[0] as Walker];
-  for (let k = 1; k < taut.length; k++) {
-    const a = taut[k - 1] as Walker;
-    const b = taut[k] as Walker;
-    const pieces = Math.max(
-      1,
-      Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / ACROSS.leg),
-    );
-    for (let p = 1; p <= pieces; p++) {
-      const target = {
-        x: a.x + ((b.x - a.x) * p) / pieces,
-        z: a.z + ((b.z - a.z) * p) / pieces,
-      };
-      const walk = planWalk(t, solids, way[way.length - 1] as Walker, target);
-      way.push(...walk.way.slice(1));
-    }
-  }
-  return way;
+  return planSolidLegs(t, solids, pullDryTaut(t, cells));
 }
 
 // ---------- a broken footbridge ----------
@@ -482,18 +578,12 @@ export interface Trip {
   readonly face: number | null;
 }
 
-/**
- * Plans a trip along `way`. Its first `off.start` and last `off.end` meters
- * are off the tread. It goes at `pace` on the tread and at walking pace
- * wherever it is `wading` (`TRAVEL.ford`), and ends facing `face` if given.
- */
-export function planTrip(
-  way: readonly Walker[],
-  off: { readonly start: number; readonly end: number },
-  face: number | null = null,
-  pace: number = TRAVEL.pace,
-  wading: (x: number, z: number) => boolean = () => false,
-): Trip {
+function resampleWay(way: readonly Walker[]): {
+  readonly points: Float32Array;
+  readonly length: number;
+  readonly n: number;
+  readonly ds: number;
+} {
   const along = [0];
   for (let i = 1; i < way.length; i++) {
     along.push(
@@ -524,6 +614,14 @@ export function planTrip(
     points[i * 2] = p.x + (q.x - p.x) * k;
     points[i * 2 + 1] = p.z + (q.z - p.z) * k;
   }
+  return { points, length, n, ds };
+}
+
+function computeTripHeadings(
+  points: Float32Array,
+  n: number,
+  ds: number,
+): Float32Array {
   // The heading is the chord over the next `TRAVEL.ahead` meters. Near the end the chord keeps its length and ends at the last point.
   const reach = Math.max(1, Math.round(TRAVEL.ahead / Math.max(ds, 1e-9)));
   const heading = new Float32Array(n);
@@ -532,13 +630,18 @@ export function planTrip(
     const lo = Math.max(0, hi - reach);
     const dx = (points[hi * 2] as number) - (points[lo * 2] as number);
     const dz = (points[hi * 2 + 1] as number) - (points[lo * 2 + 1] as number);
-    heading[i] =
-      Math.hypot(dx, dz) > 1e-6
-        ? yawAlong(dx, dz)
-        : i > 0
-          ? (heading[i - 1] as number)
-          : 0;
+    if (Math.hypot(dx, dz) > 1e-6) heading[i] = yawAlong(dx, dz);
+    else heading[i] = i > 0 ? (heading[i - 1] as number) : 0;
   }
+  return heading;
+}
+
+function markWadingSamples(
+  points: Float32Array,
+  n: number,
+  ds: number,
+  wading: (x: number, z: number) => boolean,
+): Uint8Array {
   // Where the way wades, and `fordReach` either side, it goes at walking pace.
   const wet = new Uint8Array(n);
   const reachFord = Math.ceil(TRAVEL.fordReach / Math.max(ds, 1e-9));
@@ -552,22 +655,44 @@ export function planTrip(
       wet[j] = 1;
     }
   }
+  return wet;
+}
+
+function bendAtSample(
+  heading: Float32Array,
+  i: number,
+  n: number,
+  ds: number,
+): number {
+  let bend = 0;
+  for (const j of [i - 1, i]) {
+    if (j >= 0 && j < n - 1) {
+      bend = Math.max(
+        bend,
+        Math.abs(turnTo(heading[j] as number, heading[j + 1] as number)) /
+          Math.max(ds, 1e-9),
+      );
+    }
+  }
+  return bend;
+}
+
+function computeTripPaces(
+  heading: Float32Array,
+  wet: Uint8Array,
+  n: number,
+  ds: number,
+  length: number,
+  off: { readonly start: number; readonly end: number },
+  pace: number,
+): Float32Array {
   const paces = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const s = i * ds;
     // A sample within a step of the tread's end is off it too, so the pace between samples never rises past `off`.
     const offTread = s < off.start + ds || s > length - off.end - ds;
     // How fast the heading turns here in radians per meter, over the steps either side.
-    let bend = 0;
-    for (const j of [i - 1, i]) {
-      if (j >= 0 && j < n - 1) {
-        bend = Math.max(
-          bend,
-          Math.abs(turnTo(heading[j] as number, heading[j + 1] as number)) /
-            Math.max(ds, 1e-9),
-        );
-      }
-    }
+    const bend = bendAtSample(heading, i, n, ds);
     paces[i] = Math.min(
       offTread ? Math.min(TRAVEL.off, pace) : pace,
       wet[i] === 1 ? TRAVEL.ford : Infinity,
@@ -582,6 +707,25 @@ export function planTrip(
       Math.sqrt((paces[i + 1] as number) ** 2 + 2 * TRAVEL.accel * ds),
     );
   }
+  return paces;
+}
+
+/**
+ * Plans a trip along `way`. Its first `off.start` and last `off.end` meters
+ * are off the tread. It goes at `pace` on the tread and at walking pace
+ * wherever it is `wading` (`TRAVEL.ford`), and ends facing `face` if given.
+ */
+export function planTrip(
+  way: readonly Walker[],
+  off: { readonly start: number; readonly end: number },
+  face: number | null = null,
+  pace: number = TRAVEL.pace,
+  wading: (x: number, z: number) => boolean = () => false,
+): Trip {
+  const { points, length, n, ds } = resampleWay(way);
+  const heading = computeTripHeadings(points, n, ds);
+  const wet = markWadingSamples(points, n, ds, wading);
+  const paces = computeTripPaces(heading, wet, n, ds, length, off, pace);
   return { points, heading, pace: paces, length, face };
 }
 
@@ -700,6 +844,128 @@ export function travelFrom(trip: Trip, yaw: number): Travel {
   };
 }
 
+function updateTravelView(
+  at: Travel,
+  yaw: number,
+  ahead: number,
+  stop: boolean,
+  dt: number,
+): { readonly follows: boolean; readonly y: number } {
+  // A hand that turned the view takes control of it. Facing the way again gives control back.
+  let follows = at.follows && Math.abs(turnTo(at.yaw, yaw)) < 1e-6;
+  if (!follows && !stop && Math.abs(turnTo(yaw, ahead)) < TRAVEL.facing) {
+    follows = true;
+  }
+  if (!follows || stop) return { follows, y: yaw };
+  const left = turnTo(yaw, ahead);
+  return {
+    follows,
+    y: yaw + Math.sign(left) * Math.min(Math.abs(left), TRAVEL.turn * dt),
+  };
+}
+
+function nextTravelSpeed(
+  trip: Trip,
+  at: Travel,
+  dt: number,
+  going: boolean,
+  stop: boolean,
+  ready: number,
+  least: number,
+  waits: boolean,
+): number {
+  // The pace where this step would take the body, with its square interpolated between samples so slowing is steady
+  // between them too. It also slows steadily toward the point where the world ahead is not yet ready.
+  const next = Math.min(trip.length, at.s + at.v * dt);
+  const cap = Math.min(
+    paceAt(trip, next),
+    waits
+      ? Math.max(least, Math.sqrt(2 * TRAVEL.accel * Math.max(0, ready - next)))
+      : Infinity,
+  );
+  let v = 0;
+  if (stop) v = Math.min(cap, Math.max(0, at.v - TRAVEL.brake * dt));
+  else if (going) v = Math.min(cap, at.v + TRAVEL.accel * dt);
+  // Near the end the pace falls to 0, so the body creeps the last of the way at `TRAVEL.creep` instead of never arriving.
+  if (going && !stop && !waits) v = Math.max(v, Math.min(TRAVEL.creep, at.v));
+  return v;
+}
+
+function isTravelFinished(
+  trip: Trip,
+  s: number,
+  v: number,
+  y: number,
+  stop: boolean,
+  follows: boolean,
+): boolean {
+  if (stop && v === 0) return true;
+  if (s < trip.length - 1e-3) return false;
+  return (
+    stop ||
+    trip.face === null ||
+    !follows ||
+    Math.abs(turnTo(y, trip.face)) < 1e-6
+  );
+}
+
+function arrivedTravel(
+  at: Travel,
+  y: number,
+  ahead: number,
+  follows: boolean,
+  stop: boolean,
+): Travel {
+  return {
+    ...at,
+    v: 0,
+    yaw: y,
+    follows,
+    done: stop || !follows || Math.abs(turnTo(y, ahead)) < 1e-6,
+  };
+}
+
+function advanceTravelDistance(
+  trip: Trip,
+  at: Travel,
+  v: number,
+  dt: number,
+  ready: number,
+  least: number,
+  waits: boolean,
+): number {
+  const limit = waits && least <= 0 ? Math.max(at.s, ready) : Infinity;
+  return Math.min(trip.length, limit, at.s + ((at.v + v) / 2) * dt);
+}
+
+function advanceTravelBody(
+  trip: Trip,
+  at: Travel,
+  dt: number,
+  y: number,
+  ahead: number,
+  follows: boolean,
+  stop: boolean,
+  ready: number,
+  least: number,
+): Travel {
+  const going =
+    at.going || !follows || Math.abs(turnTo(y, ahead)) < TRAVEL.facing;
+  const waits = ready < trip.length;
+  const v = nextTravelSpeed(trip, at, dt, going, stop, ready, least, waits);
+  const s = advanceTravelDistance(trip, at, v, dt, ready, least, waits);
+  return {
+    s,
+    v,
+    x: sampleAt(trip, trip.points, s, 2, 0),
+    z: sampleAt(trip, trip.points, s, 2, 1),
+    yaw: y,
+    follows,
+    going,
+    done: isTravelFinished(trip, s, v, y, stop, follows),
+  };
+}
+
 /**
  * One step of `dt` seconds. `yaw` is where the view faces now: the trip's
  * last yaw, or where a hand or a key turned it since. With `stop`, the person
@@ -721,65 +987,7 @@ export function travelStep(
   if (at.done || dt <= 0) return at;
   const arrived = at.s >= trip.length - 1e-3;
   const ahead = arrived ? (trip.face ?? yaw) : headingAt(trip, at.s);
-  // A hand that turned the view takes control of it. Facing the way again gives control back.
-  let follows = at.follows && Math.abs(turnTo(at.yaw, yaw)) < 1e-6;
-  if (!follows && !stop && Math.abs(turnTo(yaw, ahead)) < TRAVEL.facing) {
-    follows = true;
-  }
-  let y = yaw;
-  if (follows && !stop) {
-    const left = turnTo(yaw, ahead);
-    y = yaw + Math.sign(left) * Math.min(Math.abs(left), TRAVEL.turn * dt);
-  }
-  if (arrived) {
-    return {
-      ...at,
-      v: 0,
-      yaw: y,
-      follows,
-      done: stop || !follows || Math.abs(turnTo(y, ahead)) < 1e-6,
-    };
-  }
-  const going =
-    at.going || !follows || Math.abs(turnTo(y, ahead)) < TRAVEL.facing;
-  // The pace where this step would take the body, with its square interpolated between samples so slowing is steady
-  // between them too. It also slows steadily toward the point where the world ahead is not yet ready.
-  const next = Math.min(trip.length, at.s + at.v * dt);
-  const waits = ready < trip.length;
-  const cap = Math.min(
-    paceAt(trip, next),
-    waits
-      ? Math.max(least, Math.sqrt(2 * TRAVEL.accel * Math.max(0, ready - next)))
-      : Infinity,
-  );
-  let v = 0;
-  if (stop) v = Math.min(cap, Math.max(0, at.v - TRAVEL.brake * dt));
-  else if (going) v = Math.min(cap, at.v + TRAVEL.accel * dt);
-  // Near the end the pace falls to 0, so the body creeps the last of the way at `TRAVEL.creep` instead of never arriving.
-  if (going && !stop && !waits) v = Math.max(v, Math.min(TRAVEL.creep, at.v));
-  const s = Math.min(
-    trip.length,
-    waits && least <= 0 ? Math.max(at.s, ready) : Infinity,
-    at.s + ((at.v + v) / 2) * dt,
-  );
-  const x = sampleAt(trip, trip.points, s, 2, 0);
-  const z = sampleAt(trip, trip.points, s, 2, 1);
-  const end = s >= trip.length - 1e-3;
-  const stood = stop && v === 0;
-  return {
-    s,
-    v,
-    x,
-    z,
-    yaw: y,
-    follows,
-    going,
-    done:
-      stood ||
-      (end &&
-        (stop ||
-          trip.face === null ||
-          !follows ||
-          Math.abs(turnTo(y, trip.face)) < 1e-6)),
-  };
+  const { follows, y } = updateTravelView(at, yaw, ahead, stop, dt);
+  if (arrived) return arrivedTravel(at, y, ahead, follows, stop);
+  return advanceTravelBody(trip, at, dt, y, ahead, follows, stop, ready, least);
 }

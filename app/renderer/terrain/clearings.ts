@@ -78,6 +78,17 @@ function reachOf(c: Clearing): number {
   return reach * c.scale + (c.turf === true ? TURF_EASE : 0);
 }
 
+function cellAt(v: number, from: number, side: number): number {
+  return Math.max(0, Math.min(side - 1, Math.floor((v - from) / CELL)));
+}
+
+function snapCorner(v: number, from: number): number {
+  return (
+    Math.round((v - from) / RESOLUTION / WINDOW.recenter) * WINDOW.recenter -
+    WINDOW.size / 2
+  );
+}
+
 export function createClearings(t: Terrain): Clearings {
   let l = t.lattice;
   /** Texels per side of the land's mask, the area whose cells the land's outlines are sorted into. */
@@ -125,8 +136,6 @@ export function createClearings(t: Terrain): Clearings {
     x: 0,
     z: 0,
   };
-  const cellAt = (v: number, from: number, side: number): number =>
-    Math.max(0, Math.min(side - 1, Math.floor((v - from) / CELL)));
   const sort = (): void => {
     const side = Math.max(1, Math.ceil((n * RESOLUTION) / CELL));
     const x = l.origin;
@@ -188,12 +197,10 @@ export function createClearings(t: Terrain): Clearings {
         const z = oz + (j + r + 0.5) * RESOLUTION;
         for (let c = c0; c < c1; c++) {
           const v = inside(l.origin + (i + c + 0.5) * RESOLUTION, z);
-          const level =
-            v === true
-              ? 255
-              : v === false
-                ? 0
-                : Math.round(Math.min(1, Math.max(0, v)) * 255);
+          let level: number;
+          if (v === true) level = 255;
+          else if (v === false) level = 0;
+          else level = Math.round(Math.min(1, Math.max(0, v)) * 255);
           if (level > (into[r * size + c] as number)) {
             into[r * size + c] = level;
           }
@@ -215,14 +222,14 @@ export function createClearings(t: Terrain): Clearings {
       const abz = c.bz - c.az;
       const len = abx * abx + abz * abz;
       clear(i0, i1, j0, j1, (x, z) => {
-        const t =
+        const u =
           len > 0
             ? Math.max(
                 0,
                 Math.min(1, ((x - c.ax) * abx + (z - c.az) * abz) / len),
               )
             : 0;
-        return Math.hypot(x - c.ax - abx * t, z - c.az - abz * t) < c.radius;
+        return Math.hypot(x - c.ax - abx * u, z - c.az - abz * u) < c.radius;
       });
     }
     /** Draws outline `c`, which reaches `reach` from its center. */
@@ -285,38 +292,36 @@ export function createClearings(t: Terrain): Clearings {
     turf.texture.needsUpdate = true;
   };
   /** The window's first texel for grass around (x, z), snapped to a step of `WINDOW.recenter`. */
-  const cornerAt = (x: number, z: number): { i: number; j: number } => {
-    const snap = (v: number, from: number): number =>
-      Math.round((v - from) / RESOLUTION / WINDOW.recenter) * WINDOW.recenter -
-      size / 2;
-    return { i: snap(x, l.origin), j: snap(z, originZ()) };
-  };
+  const cornerAt = (x: number, z: number): { i: number; j: number } => ({
+    i: snapCorner(x, l.origin),
+    j: snapCorner(z, originZ()),
+  });
   const redraw = (): void => {
     const at = cornerAt(middle.x, middle.z);
     draw(at.i, at.j);
   };
   return {
     uniforms,
-    fit(next) {
+    fit(next): void {
       if (next.lattice.n === l.n && next.lattice.origin === l.origin) return;
       l = next.lattice;
       n = Math.ceil(((l.n - 1) * l.spacing) / RESOLUTION);
       sort();
       corner = null;
     },
-    update(next) {
+    update(next): void {
       outlines = next;
       reaches = Float64Array.from(next, reachOf);
       sort();
       redraw();
     },
-    setCapsules(next) {
+    setCapsules(next): void {
       capsules = next;
     },
-    setNear(next) {
+    setNear(next): void {
       near = next;
     },
-    follow(x, z) {
+    follow(x, z): void {
       middle = { x, z };
       const at = cornerAt(x, z);
       if (corner !== null && at.i === corner.i && at.j === corner.j) return;

@@ -301,12 +301,12 @@ export function createWays(
   return {
     views,
     largest: pieces.reduce((r, p) => Math.max(r, p.size), 0),
-    setVitality(of) {
+    setVitality(of): void {
       vitalityOf = of;
       for (const p of pieces) p.view?.setVitality(p.vitality(of));
     },
     pieces,
-    place(wanted) {
+    place(wanted): void {
       const keep = new Set(wanted);
       for (const p of pieces) {
         if (!keep.has(p)) {
@@ -333,7 +333,7 @@ export function createWays(
         p.view = view;
       }
     },
-    dispose() {
+    dispose(): void {
       for (const p of pieces) drop(p);
     },
   };

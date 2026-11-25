@@ -234,13 +234,27 @@ interface Thread {
   readonly jobs: Map<number, Pending>;
 }
 
+interface LandWorkers {
+  keep(world: number, source: LandSource): Promise<void>;
+  adopt(worker: Worker): void;
+  stats(): ReturnType<PageLand["workers"]>;
+  drop(): void;
+  chunk(
+    world: number,
+    k: number,
+    cx: number,
+    cz: number,
+    priority?: number,
+  ): Promise<Chunk | null>;
+}
+
 /**
  * A few workers that bake chunks of the land, each keeping the source of the
  * world it was last given. When a worker ends or dies with jobs left, as the
  * kept finishing thread does when dropped, its jobs go to the others, so
  * nothing waits on a reply that will never come.
  */
-function createLandWorkers(threads: number) {
+function createLandWorkers(threads: number): LandWorkers {
   let nextId = 0;
   /** The world whose source the workers have, and that source, to give a worker that starts later. */
   let kept: { readonly world: number; readonly source: LandSource } | null =
@@ -249,7 +263,7 @@ function createLandWorkers(threads: number) {
   const took = new Map<string, number[]>();
   const listen = (worker: Worker): Thread => {
     const on: Thread = { worker, jobs: new Map() };
-    worker.onmessage = (e: MessageEvent<BakeReply>) => {
+    worker.addEventListener("message", (e: MessageEvent<BakeReply>): void => {
       const pending = on.jobs.get(e.data.id);
       on.jobs.delete(e.data.id);
       if (pending?.sent !== undefined) {
@@ -260,11 +274,11 @@ function createLandWorkers(threads: number) {
       }
       pending?.answer(e.data);
       pump();
-    };
-    worker.onerror = (e) => {
+    });
+    worker.addEventListener("error", (e: ErrorEvent): void => {
       e.preventDefault();
       replace(on);
-    };
+    });
     return on;
   };
   const workers = Array.from({ length: threads }, () =>
@@ -276,7 +290,7 @@ function createLandWorkers(threads: number) {
     const id = nextId++;
     pending.sent = performance.now();
     on.jobs.set(id, pending);
-    on.worker.postMessage({ ...pending.job, id });
+    on.worker.postMessage({ ...pending.job, id }, []);
   };
   /** Jobs no worker has yet, taken by priority and in request order within a priority. */
   const queue: Pending[] = [];
@@ -355,7 +369,7 @@ function createLandWorkers(threads: number) {
       if (was !== null) end(was, undefined);
     },
     /** The jobs each thread has yet to answer, and how long each kind took lately, for reports. */
-    stats: () => ({
+    stats: (): ReturnType<PageLand["workers"]> => ({
       waiting: [
         ...workers.map((w) => w.jobs.size),
         ...(whole === null ? [] : [whole.jobs.size]),
@@ -489,16 +503,15 @@ export function createPageLand(
     originZ: 0,
     heights,
   };
+  const channelOf = (values: Float32Array): number => {
+    if (values === heights) return 0;
+    if (values === waterLevel) return 1;
+    if (values === shore) return 2;
+    return -1;
+  };
   /** Reads past level 0's window from the finest coarser level that contains the point. */
-  lattice.beyond = (x, z, values) => {
-    const channel =
-      values === heights
-        ? 0
-        : values === waterLevel
-          ? 1
-          : values === shore
-            ? 2
-            : -1;
+  lattice.beyond = (x, z, values): number => {
+    const channel = channelOf(values);
     // An array no level stores is read at the window's edge, as a lattice without `beyond` would read it.
     if (channel < 0) {
       return heightAt(
@@ -654,13 +667,13 @@ export function createPageLand(
     ...all,
     origins,
     layers,
-    get onMoved() {
+    get onMoved(): PageLand["onMoved"] {
       return onMoved;
     },
     set onMoved(fn) {
       onMoved = fn;
     },
-    async open(next, x, z) {
+    async open(next, x, z): Promise<void> {
       generation++;
       const mine = generation;
       source = next.source;
@@ -689,19 +702,19 @@ export function createPageLand(
         Array.from({ length: levels }, (_, k) => moveAround(k, x, z)),
       );
     },
-    follow(x, z) {
+    follow(x, z): void {
       if (source === null) return;
       for (let k = 0; k < levels; k++) {
         if (moving[k] === null) void moveAround(k, x, z);
       }
     },
-    async around(x, z) {
+    async around(x, z): Promise<void> {
       if (source === null) return;
       await Promise.all(
         Array.from({ length: levels }, (_, k) => moveAround(k, x, z)),
       );
     },
-    async aside(x, z) {
+    async aside(x, z): Promise<{ paint<T>(draw: () => T): T } | null> {
       const mine = generation;
       const src = source;
       if (src === null) return null;
@@ -730,7 +743,7 @@ export function createPageLand(
       if (mine !== generation) return null;
       let fresh = true;
       return {
-        paint(draw) {
+        paint<T>(draw: () => T): T {
           // Switching to the aside layers and back happens within one task, so no frame drawn for the person falls
           // between. Their own layers are never touched, so none of their data uploads again.
           const kept = apart.map(({ k, ox, oz }) => {

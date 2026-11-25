@@ -92,7 +92,7 @@ interface Hues {
 
 const huesOf = (palette: Palette, g: Growth): Hues => ({
   g,
-  of: (name, fallback) => {
+  of: (name, fallback): string => {
     const s = palette.swatches[name];
     if (s === undefined) return fallback;
     return mix(
@@ -195,38 +195,39 @@ export type PlantInk =
 // Each helper types an entry's drawing by its own primitive's parameters.
 const skeleton = <P extends Params>(
   _: P,
-  ink: Omit<SkeletonInk<Resolved<P>>, "role">,
-): SkeletonInk => ({ role: "Skeleton", ...ink }) as unknown as SkeletonInk;
+  spec: Omit<SkeletonInk<Resolved<P>>, "role">,
+): SkeletonInk => ({ role: "Skeleton", ...spec }) as unknown as SkeletonInk;
 const surface = <P extends Params>(
   _: P,
-  ink: Omit<SurfaceInk<Resolved<P>>, "role">,
-): SurfaceInk => ({ role: "Surface", ...ink }) as unknown as SurfaceInk;
+  spec: Omit<SurfaceInk<Resolved<P>>, "role">,
+): SurfaceInk => ({ role: "Surface", ...spec }) as unknown as SurfaceInk;
 const foliage = <P extends Params>(
   _: P,
-  ink: Omit<FoliageInk<Resolved<P>>, "role">,
-): FoliageInk => ({ role: "Foliage", ...ink }) as unknown as FoliageInk;
+  spec: Omit<FoliageInk<Resolved<P>>, "role">,
+): FoliageInk => ({ role: "Foliage", ...spec }) as unknown as FoliageInk;
 const ornament = <P extends Params>(
   _: P,
-  ink: Omit<OrnamentInk<Resolved<P>>, "role">,
-): OrnamentInk => ({ role: "Ornament", ...ink }) as unknown as OrnamentInk;
+  spec: Omit<OrnamentInk<Resolved<P>>, "role">,
+): OrnamentInk => ({ role: "Ornament", ...spec }) as unknown as OrnamentInk;
 const rock = <P extends Params>(
   _: P,
-  ink: Omit<RockInk<Resolved<P>>, "role">,
-): RockInk => ({ role: "Rock", ...ink }) as unknown as RockInk;
+  spec: Omit<RockInk<Resolved<P>>, "role">,
+): RockInk => ({ role: "Rock", ...spec }) as unknown as RockInk;
 const overgrowth = <P extends Params>(
   _: P,
-  ink: Omit<OvergrowthInk<Resolved<P>>, "role">,
+  spec: Omit<OvergrowthInk<Resolved<P>>, "role">,
 ): OvergrowthInk =>
-  ({ role: "Overgrowth", ...ink }) as unknown as OvergrowthInk;
+  ({ role: "Overgrowth", ...spec }) as unknown as OvergrowthInk;
 const drift = <P extends Params>(
   _: P,
-  ink: Omit<DriftInk<Resolved<P>>, "role">,
-): DriftInk => ({ role: "Drift", ...ink }) as unknown as DriftInk;
+  spec: Omit<DriftInk<Resolved<P>>, "role">,
+): DriftInk => ({ role: "Drift", ...spec }) as unknown as DriftInk;
 
 // ---------------------------------------------------------------------------------------------------------------
 // Drawing helpers shared by the inks, flat to the viewer, in meters from the base.
 
 const up = (b: Brush, [dx, h]: Pt): Pt => b.pen.up(dx, h);
+const newPath = (): Path2D => new Path2D();
 
 /** A woody stroke, tapering from its foot to its tip, outlined in ink and washed in `color`. */
 function bough(b: Brush, w: Bough, color: string, inked = true): void {
@@ -285,8 +286,8 @@ function crown(
   ctx.fill(path);
   ctx.save();
   ctx.clip(path);
-  const shade = new Path2D();
-  const light = new Path2D();
+  const shade = newPath();
+  const light = newPath();
   for (const [dx, h, r] of lobes) {
     const [px, py] = up(b, [dx, h]);
     const R = r * b.pen.s;
@@ -419,10 +420,10 @@ function crownLobes(
   seed: number,
   droop = 0,
 ): Lobe[] {
-  const r = Math.max(
-    0.3,
-    Math.min(w, ht) * (n <= 5 ? 0.56 : n <= 7 ? 0.5 : 0.44),
-  );
+  let lobeScale = 0.44;
+  if (n <= 5) lobeScale = 0.56;
+  else if (n <= 7) lobeScale = 0.5;
+  const r = Math.max(0.3, Math.min(w, ht) * lobeScale);
   const lobes: Lobe[] = [[0, hc + ht * 0.12, r * 1.12]];
   for (let k = 0; k < n; k++) {
     const t = n === 1 ? 0.5 : k / (n - 1);
@@ -459,10 +460,11 @@ function limbsTo(
   });
 }
 
+const DEFAULT_HABIT = { base: 0.36, wide: 1, droop: 0 };
 const HABIT_FORM: Readonly<
   Record<string, { base: number; wide: number; droop: number }>
 > = {
-  upright: { base: 0.36, wide: 1, droop: 0 },
+  upright: DEFAULT_HABIT,
   spreading: { base: 0.3, wide: 1, droop: 0.1 },
   weeping: { base: 0.34, wide: 1, droop: 0.75 },
   columnar: { base: 0.18, wide: 0.9, droop: 0 },
@@ -470,14 +472,13 @@ const HABIT_FORM: Readonly<
 
 function branchingFrame(
   p: Resolved<typeof branchingParams>,
-  { height: H, radius: R, crown }: Size,
+  { height: H, radius: R, crown: crownBase }: Size,
   seed: number,
 ): Frame {
-  const habit =
-    HABIT_FORM[p.habit] ??
-    (HABIT_FORM.upright as NonNullable<(typeof HABIT_FORM)[string]>);
+  const habit = HABIT_FORM[p.habit] ?? DEFAULT_HABIT;
   // The crown starts where the build's leaves begin. If the leaves hang near the ground, as strands do, the habit sets the crown's base instead.
-  const base = crown > H * 0.12 ? Math.min(crown, H * 0.7) : H * habit.base;
+  const base =
+    crownBase > H * 0.12 ? Math.min(crownBase, H * 0.7) : H * habit.base;
   const ht = (H - base) / 2;
   const hc = base + ht;
   const w = R * habit.wide;
@@ -501,12 +502,12 @@ function branchingFrame(
 
 function spireFrame(
   p: Resolved<typeof spireParams>,
-  { height: H, radius: R, crown }: Size,
+  { height: H, radius: R, crown: crownBase }: Size,
 ): Frame {
   const n = Math.max(3, Math.min(9, Math.round(p.whorls * 0.75)));
-  const foot = Math.min(H * 0.5, Math.max(H * 0.04, crown));
+  const foot = Math.min(H * 0.5, Math.max(H * 0.04, crownBase));
   const rise = ((H - foot) / n) * 1.35;
-  const tiers: Tier[] = Array.from({ length: n }, (_, k) => {
+  const rings: Tier[] = Array.from({ length: n }, (_, k) => {
     const t = k / n;
     return {
       h: foot + (H - foot) * t,
@@ -525,7 +526,7 @@ function spireFrame(
     tip: girth * 0.25,
   };
   // Bare whorls: limbs out to each tier's span, as on a fir that has lost its needles.
-  const whorls = tiers.flatMap((t): Bough[] =>
+  const whorls = rings.flatMap((t): Bough[] =>
     [-1, 1].map((side) => ({
       pts: [
         [0, t.h + t.rise * 0.2],
@@ -536,7 +537,7 @@ function spireFrame(
     })),
   );
   // Leaves on a spire fill its cone: a lobe up the trunk at each whorl and one out along each side.
-  const lobes = tiers.flatMap((t): Lobe[] => {
+  const lobes = rings.flatMap((t): Lobe[] => {
     const r = Math.max(0.25, Math.min(t.half * 0.5, t.rise * 0.75));
     return [
       [0, t.h + t.rise * 0.45, Math.max(r, t.half * 0.45)],
@@ -544,7 +545,7 @@ function spireFrame(
       [t.half * 0.55, t.h + t.rise * 0.2, r],
     ];
   });
-  return { wood: [trunk, ...whorls], lobes, tiers, trunk: true };
+  return { wood: [trunk, ...whorls], lobes, tiers: rings, trunk: true };
 }
 
 function saplingFrame(
@@ -554,7 +555,7 @@ function saplingFrame(
 ): Frame {
   const leanX = p.habit === "leaning" ? H * 0.22 : 0;
   const n = Math.max(2, Math.round(p.tiers));
-  const tiers: Tier[] = Array.from({ length: n }, (_, k) => {
+  const rings: Tier[] = Array.from({ length: n }, (_, k) => {
     const t = (k + 1) / (n + 1);
     const half =
       R *
@@ -578,7 +579,7 @@ function saplingFrame(
     foot: Math.max(0.03, 0.025 * H),
     tip: 0.015,
   };
-  const shoots = tiers.flatMap((t): Bough[] =>
+  const shoots = rings.flatMap((t): Bough[] =>
     [-1, 1].map((side) => ({
       pts: [
         [at(t.h), t.h],
@@ -591,7 +592,7 @@ function saplingFrame(
       tip: 0.01,
     })),
   );
-  const lobes = tiers.flatMap((t): Lobe[] =>
+  const lobes = rings.flatMap((t): Lobe[] =>
     [-1, 1].map((side) => [
       at(t.h) + side * t.half * 0.6,
       t.h + t.rise * 0.2,
@@ -599,13 +600,14 @@ function saplingFrame(
     ]),
   );
   lobes.unshift([at(H), H * 0.93, Math.max(0.12, R * 0.3)]);
-  return { wood: [stem, ...shoots], lobes, tiers, trunk: true };
+  return { wood: [stem, ...shoots], lobes, tiers: rings, trunk: true };
 }
 
+const DEFAULT_THICKET = { wide: 1, base: 0.08, flare: 0.5 };
 const THICKET_FORM: Readonly<
   Record<string, { wide: number; base: number; flare: number }>
 > = {
-  mound: { wide: 1, base: 0.08, flare: 0.5 },
+  mound: DEFAULT_THICKET,
   spreading: { wide: 1.15, base: 0.05, flare: 0.8 },
   vase: { wide: 0.85, base: 0.4, flare: 1 },
   scrub: { wide: 1, base: 0.15, flare: 0.7 },
@@ -616,11 +618,9 @@ function thicketFrame(
   { height: H, radius: R }: Size,
   seed: number,
 ): Frame {
-  const form =
-    THICKET_FORM[p.habit] ??
-    (THICKET_FORM.mound as NonNullable<(typeof THICKET_FORM)[string]>);
+  const form = THICKET_FORM[p.habit] ?? DEFAULT_THICKET;
   const n = Math.max(3, Math.min(9, Math.round(p.stems)));
-  const stems: Bough[] = Array.from({ length: n }, (_, k) => {
+  const wood: Bough[] = Array.from({ length: n }, (_, k) => {
     const t = n === 1 ? 0 : k / (n - 1) - 0.5;
     const top: Pt = [
       t * 2 * R * form.wide * 0.8,
@@ -650,7 +650,7 @@ function thicketFrame(
       r * (0.9 + noise(seed, k + 90) * 0.25),
     ]);
   }
-  return { wood: stems, lobes, tiers: [], trunk: false };
+  return { wood, lobes, tiers: [], trunk: false };
 }
 
 function brambleFrame(
@@ -715,7 +715,7 @@ function gathered(lobes: readonly Lobe[], shape: string, seed: number): Lobe[] {
 /** Draws lobes with a spiked outline, as a spray of needles reads from a distance. */
 function spiky(b: Brush, lobes: readonly Lobe[], color: string): void {
   const { ctx } = b.pen;
-  const path = new Path2D();
+  const path = newPath();
   for (const [dx, h, r] of lobes) {
     const [px, py] = up(b, [dx, h]);
     const R = r * b.pen.s;
@@ -803,8 +803,8 @@ function strands(
   const right = Math.max(...lobes.map(([dx, , r]) => dx + r));
   const span = right - left;
   const n = Math.round(7 + 6 * full);
-  const tresses = new Path2D();
-  const whips = new Path2D();
+  const tresses = newPath();
+  const whips = newPath();
   for (let k = 0; k < n; k++) {
     const dx = left + ((k + 0.5) / n) * span;
     // Each hangs from the center height of the highest lobe over it, or from the dome's lowest lobe at its edges.
@@ -996,7 +996,7 @@ function plantsOver(
       : Math.sqrt(noise(seed, i * 2 + 2));
     spots.push([Math.cos(a) * d * rx, Math.sin(a) * d * rx * 0.85]);
   }
-  return spots.sort((p, q) => q[1] - p[1]);
+  return spots.toSorted((p, q) => q[1] - p[1]);
 }
 
 /** Draws a stem about `h` meters tall at each spot, with a head drawn by `head` at its top. */
@@ -1127,9 +1127,12 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
         p.leaf === "blossom"
           ? mix(b.hues.of("bloom", "#f4e6ea"), leaf, 0.25)
           : leaf;
+      let scallop = 0.45;
+      if (p.leaf === "lobed") scallop = 0.7;
+      else if (p.leaf === "pointed") scallop = 0.3;
       crown(b, lobes, color, {
         squash: p.shape === "plates" ? 0.5 : 1,
-        scallop: p.leaf === "lobed" ? 0.7 : p.leaf === "pointed" ? 0.3 : 0.45,
+        scallop,
       });
       return lobes;
     },
@@ -1309,7 +1312,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       const color = stoneHue(b);
       const tops: Lobe[] = [];
       // One large stone at the center and smaller ones around it, drawn in a seeded order.
-      const order = Array.from({ length: n }, (_, k) => k).sort(
+      const order = Array.from({ length: n }, (_, k) => k).toSorted(
         (a, c) => noise(b.seed, a + 50) - noise(b.seed, c + 50),
       );
       for (const k of order) {
@@ -1349,10 +1352,10 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       );
       const back = Array.from({ length: n + 1 }, (_, i) =>
         b.pen.at(X(i) + w * 0.02, d, rise(i) * 0.9),
-      ).reverse();
+      ).toReversed();
       const foot = Array.from({ length: n + 1 }, (_, i) =>
         b.pen.at(X(i), -d, -0.05),
-      ).reverse();
+      ).toReversed();
       const round = p.layering === "blocky" ? 0 : 2;
       const face = [...front, ...foot];
       const top = [...front, ...back];
@@ -1365,7 +1368,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
         if (p.layering === "layered") {
           for (const u of [0.35, 0.65]) {
             front.forEach(([fx, fy], i) => {
-              const gy = (b.pen.at(X(i), -d, 0) as Pt)[1];
+              const gy = b.pen.at(X(i), -d, 0)[1];
               const y = fy + (gy - fy) * u;
               if (i === 0) ctx.moveTo(fx, y);
               else ctx.lineTo(fx, y);
@@ -1512,38 +1515,40 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
   }),
   "daisies@1": drift(driftParams, {
     draw: (b, size, p) =>
-      flowerDrift(b, size, p, (b, top, r, i) => {
-        if (noise(b.seed, i + 400) > b.hues.g.leaf + 0.15) return;
-        dot(b, top, r, b.hues.of("bloom", "#f4f1e6"), true);
-        if (b.detail > 0.4) dot(b, top, r * 0.4, b.hues.of("eye", "#f0c43c"));
+      flowerDrift(b, size, p, (br, top, r, i) => {
+        if (noise(br.seed, i + 400) > br.hues.g.leaf + 0.15) return;
+        dot(br, top, r, br.hues.of("bloom", "#f4f1e6"), true);
+        if (br.detail > 0.4) {
+          dot(br, top, r * 0.4, br.hues.of("eye", "#f0c43c"));
+        }
       }),
   }),
   "cups@1": drift(driftParams, {
     draw: (b, size, p) =>
-      flowerDrift(b, size, p, (b, [x, y], r, i) => {
-        if (noise(b.seed, i + 400) > b.hues.g.leaf + 0.15) return;
-        const R = Math.max(0.9, r * b.pen.s * 1.25);
+      flowerDrift(b, size, p, (br, [x, y], r, i) => {
+        if (noise(br.seed, i + 400) > br.hues.g.leaf + 0.15) return;
+        const R = Math.max(0.9, r * br.pen.s * 1.25);
         const cup = [
           [x - R, y - R * 0.5],
           [x - R * 0.6, y + R * 0.6],
           [x + R * 0.6, y + R * 0.6],
           [x + R, y - R * 0.5],
         ] as Pt[];
-        for (const [px, py] of cup) b.pen.reach(px, py);
-        wash(b.pen, cup, b.hues.of("bloom", "#d2553a"), R * 0.5);
-        if (b.detail > 0.4) {
-          dot(b, [x, y], r * 0.3, b.hues.of("eye", "#3a2a20"));
+        for (const [px, py] of cup) br.pen.reach(px, py);
+        wash(br.pen, cup, br.hues.of("bloom", "#d2553a"), R * 0.5);
+        if (br.detail > 0.4) {
+          dot(br, [x, y], r * 0.3, br.hues.of("eye", "#3a2a20"));
         }
       }),
   }),
   "bells@1": drift(driftParams, {
     draw: (b, size, p) =>
-      flowerDrift(b, size, p, (b, [x, y], r, i) => {
-        if (noise(b.seed, i + 400) > b.hues.g.leaf + 0.15) return;
+      flowerDrift(b, size, p, (br, [x, y], r, i) => {
+        if (noise(br.seed, i + 400) > br.hues.g.leaf + 0.15) return;
         // A stem arching over, with bells hanging below the arch.
-        const R = r * b.pen.s;
-        const { ctx } = b.pen;
-        const side = noise(b.seed, i + 420) < 0.5 ? -1 : 1;
+        const R = r * br.pen.s;
+        const { ctx } = br.pen;
+        const side = noise(br.seed, i + 420) < 0.5 ? -1 : 1;
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.quadraticCurveTo(
@@ -1552,40 +1557,40 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
           x + side * R * 2.6,
           y + R * 0.4,
         );
-        b.pen.reach(x + side * R * 1.6, y - R * 1.4);
-        b.pen.reach(x + side * R * 2.6, y + R * 0.4);
-        ctx.lineWidth = Math.max(0.5, b.pen.line * 0.5);
-        ctx.strokeStyle = rgba(b.hues.of("stem", "#4f8a48"), 0.8);
+        br.pen.reach(x + side * R * 1.6, y - R * 1.4);
+        br.pen.reach(x + side * R * 2.6, y + R * 0.4);
+        ctx.lineWidth = Math.max(0.5, br.pen.line * 0.5);
+        ctx.strokeStyle = rgba(br.hues.of("stem", "#4f8a48"), 0.8);
         ctx.stroke();
         for (const u of [0.45, 0.75, 1]) {
           dot(
-            b,
+            br,
             [
               x + side * R * 2.6 * u,
               y - R * 0.9 * Math.sin(u * Math.PI * 0.8) + R * 0.9,
             ],
             r * 0.75,
-            b.hues.of("bloom", "#8088dc"),
+            br.hues.of("bloom", "#8088dc"),
           );
         }
       }),
   }),
   "spikes@1": drift(driftParams, {
     draw: (b, size, p) =>
-      flowerDrift(b, size, p, (b, [x, y], r, i) => {
-        if (noise(b.seed, i + 400) > b.hues.g.leaf + 0.15) return;
-        const { ctx } = b.pen;
-        const R = r * b.pen.s;
+      flowerDrift(b, size, p, (br, [x, y], r, i) => {
+        if (noise(br.seed, i + 400) > br.hues.g.leaf + 0.15) return;
+        const { ctx } = br.pen;
+        const R = r * br.pen.s;
         // The floret spike is at most three head radii long and at most 0.6 of the plant's height, however wide the head is drawn.
-        const long = Math.min(R * 3, size.height * 0.6 * b.pen.s);
-        b.pen.reach(x, y - long - R * 0.2, R);
-        b.pen.reach(x, y + R * 0.5, R);
+        const long = Math.min(R * 3, size.height * 0.6 * br.pen.s);
+        br.pen.reach(x, y - long - R * 0.2, R);
+        br.pen.reach(x, y + R * 0.5, R);
         ctx.beginPath();
         ctx.moveTo(x, y + R * 0.5);
         ctx.lineTo(x, y - long);
         ctx.lineWidth = Math.max(0.9, R * 1.3);
         ctx.lineCap = "round";
-        ctx.strokeStyle = b.hues.of("bloom", "#8088dc");
+        ctx.strokeStyle = br.hues.of("bloom", "#8088dc");
         ctx.stroke();
       }),
   }),
@@ -1657,12 +1662,9 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
         ctx.strokeStyle = stalk;
         ctx.stroke();
         const R = Math.max(0.9, h * 0.45 * b.pen.s);
-        const H2 =
-          p.cap === "pointed"
-            ? R * 1.3
-            : p.cap === "flat"
-              ? R * 0.35
-              : R * 0.75;
+        let H2 = R * 0.75;
+        if (p.cap === "pointed") H2 = R * 1.3;
+        else if (p.cap === "flat") H2 = R * 0.35;
         const capPts: Pt[] =
           p.cap === "pointed"
             ? [
@@ -1714,6 +1716,39 @@ function slotOf<R extends PlantInk["role"]>(
   return undefined;
 }
 
+function drawWoodyPlant(
+  b: Brush,
+  plant: PlantComposition,
+  size: Size,
+  frameSlot: { ink: SkeletonInk; p: Values },
+): void {
+  const frame = frameSlot.ink.frame(frameSlot.p, size, b.seed);
+  const leafy = b.hues.g.leaf;
+  castShadow(
+    b.pen,
+    ellipseFeet(
+      plant.radius * 0.1,
+      -plant.radius * 0.1,
+      plant.radius * 0.8 * (0.45 + 0.55 * leafy),
+      plant.radius * 0.55 * (0.45 + 0.55 * leafy),
+      plant.height * 0.8,
+    ),
+    0.45 + 0.5 * leafy,
+  );
+  const bark = slotOf(plant, "Surface");
+  const wood = b.hues.of("bark", "#6d533a");
+  for (const w of frame.wood) {
+    bough(b, w, wood, frame.trunk || leafy < 0.5);
+    bark?.ink.texture(b, w, bark.p);
+  }
+  const crownSlot = slotOf(plant, "Foliage");
+  const lobes = crownSlot?.ink.draw(b, frame, crownSlot.p, size) ?? [];
+  const bloom = slotOf(plant, "Ornament");
+  if (bloom !== undefined && lobes.length > 0) {
+    bloom.ink.draw(b, lobes, bloom.p);
+  }
+}
+
 /**
  * Draws a tree, bush, stone or drift with its base on the ground at (x, y), at `s` pixels per meter of its build, worn
  * by its shown `vitality`. Returns the box it took.
@@ -1754,31 +1789,7 @@ export function drawPlant(
   const rockSlot = slotOf(plant, "Rock");
   const driftSlot = slotOf(plant, "Drift");
   if (frameSlot !== undefined) {
-    const frame = frameSlot.ink.frame(frameSlot.p, size, seed);
-    const leafy = g.leaf;
-    castShadow(
-      pen,
-      ellipseFeet(
-        plant.radius * 0.1,
-        -plant.radius * 0.1,
-        plant.radius * 0.8 * (0.45 + 0.55 * leafy),
-        plant.radius * 0.55 * (0.45 + 0.55 * leafy),
-        plant.height * 0.8,
-      ),
-      0.45 + 0.5 * leafy,
-    );
-    const bark = slotOf(plant, "Surface");
-    const wood = hues.of("bark", "#6d533a");
-    for (const w of frame.wood) {
-      bough(b, w, wood, frame.trunk || leafy < 0.5);
-      bark?.ink.texture(b, w, bark.p);
-    }
-    const crownSlot = slotOf(plant, "Foliage");
-    const lobes = crownSlot?.ink.draw(b, frame, crownSlot.p, size) ?? [];
-    const bloom = slotOf(plant, "Ornament");
-    if (bloom !== undefined && lobes.length > 0) {
-      bloom.ink.draw(b, lobes, bloom.p);
-    }
+    drawWoodyPlant(b, plant, size, frameSlot);
   } else if (rockSlot !== undefined) {
     castShadow(
       pen,
