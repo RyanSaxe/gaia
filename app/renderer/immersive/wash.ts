@@ -112,12 +112,13 @@ export function borderPath(
       // A ring that never meets the edge is one closed curve.
       const n = kept.length;
       d += `M${mid(kept[0] as number, kept[1 % n] as number)}`;
-      for (let q = 1; q <= n; q++)
+      for (let q = 1; q <= n; q++) {
         d += `Q${at(kept[q % n] as number)
           .map(f)
           .join(
             " ",
           )} ${mid(kept[q % n] as number, kept[(q + 1) % n] as number)}`;
+      }
       d += "Z";
       continue;
     }
@@ -129,10 +130,11 @@ export function borderPath(
         d += `M${at(run[0] as number)
           .map(f)
           .join(" ")}`;
-        for (let q = 1; q < run.length - 1; q++)
+        for (let q = 1; q < run.length - 1; q++) {
           d += `Q${at(run[q] as number)
             .map(f)
             .join(" ")} ${mid(run[q] as number, run[q + 1] as number)}`;
+        }
         d += `L${at(run[run.length - 1] as number)
           .map(f)
           .join(" ")}`;
@@ -233,11 +235,12 @@ export function noiseCanvas(
   c.width = c.height = cells;
   const g = c.getContext("2d") as CanvasRenderingContext2D;
   const img = g.createImageData(cells, cells);
-  for (let k = 0; k < cells * cells; k++)
+  for (let k = 0; k < cells * cells; k++) {
     img.data.set(
       [rgb[0], rgb[1], rgb[2], Math.round(255 * hash(k + seed, seed))],
       k * 4,
     );
+  }
   g.putImageData(img, 0, 0);
   noises.set(key, c);
   return c;
@@ -291,7 +294,7 @@ export function* fadeMask(
   const img = g.createImageData(FADE_CELLS, FADE_CELLS);
   for (let j0 = 0; j0 < FADE_CELLS; j0 += 96) {
     for (let j = j0; j < Math.min(FADE_CELLS, j0 + 96); j++) {
-      for (let i = 0; i < FADE_CELLS; i++)
+      for (let i = 0; i < FADE_CELLS; i++) {
         img.data[(j * FADE_CELLS + i) * 4 + 3] = Math.round(
           255 *
             paintAt(
@@ -301,6 +304,7 @@ export function* fadeMask(
               aspect,
             ),
         );
+      }
     }
     yield;
   }
@@ -467,8 +471,9 @@ export function* layWash(
       x - reachOf > box[2] ||
       y + reachOf < box[1] ||
       y - reachOf > box[3]
-    )
+    ) {
       continue;
+    }
     const a = -0.5 + (hash(k, 72) - 0.5) * 0.9;
     const len = 50 + hash(k, 73) * 120;
     const tone = hash(k, 74);

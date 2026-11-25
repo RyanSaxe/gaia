@@ -60,8 +60,9 @@ void app.whenReady().then(() => {
   );
   service.on("message", (message: ToMain) => {
     if (message.type === "engine.send") {
-      if (!engine.send(message.line))
+      if (!engine.send(message.line)) {
         console.error("gaia: no engine is running to take the request");
+      }
     } else if (message.type === "world.opened") {
       // The start page opened a world. The window title shows its name, and `root` keeps it so a reload reopens it.
       root = message.root;
@@ -159,11 +160,12 @@ void app.whenReady().then(() => {
   function load(): Promise<void> {
     const world = carried ?? undefined;
     carried = null;
-    if (url === undefined)
+    if (url === undefined) {
       return window.loadFile(
         join(here, "../renderer/index.html"),
         world === undefined ? {} : { query: { world } },
       );
+    }
     return window.loadURL(world === undefined ? url : `${url}?world=${world}`);
   }
   void load();

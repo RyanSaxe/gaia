@@ -26,8 +26,9 @@ export type BuildKind = keyof typeof KINDS;
  * Its seed comes from the blueprint's content alone, so the same blueprint builds the same in every world.
  */
 export function plantAsk(blueprint: Blueprint): BuildAsk {
-  if (!(blueprint.kind in KINDS))
+  if (!(blueprint.kind in KINDS)) {
     throw new Error(`No build is made for a ${blueprint.kind} blueprint.`);
+  }
   return {
     kind: blueprint.kind as BuildKind,
     blueprint,
@@ -80,8 +81,13 @@ export function makeAhead(
       };
       worker.onmessage = (e: MessageEvent<MakeReply>) => {
         const ask = left[e.data.id];
-        if (ask !== undefined && making.delete(keyOf(ask)) && "built" in e.data)
+        if (
+          ask !== undefined &&
+          making.delete(keyOf(ask)) &&
+          "built" in e.data
+        ) {
           ready.set(keyOf(ask), e.data.built);
+        }
         give();
       };
       worker.onerror = finish;

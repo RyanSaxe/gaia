@@ -17,8 +17,9 @@ export function telemetryLine(body: string, received: Date): string | null {
   } catch {
     return null;
   }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed))
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     return null;
+  }
   return `${JSON.stringify({ received: received.toISOString(), ...parsed })}\n`;
 }
 

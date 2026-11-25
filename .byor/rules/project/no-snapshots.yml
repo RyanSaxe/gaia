@@ -1,0 +1,13 @@
+id: no-snapshots
+language: TypeScript
+severity: error
+message: "No snapshots: they freeze whatever the code printed. Assert the behavior that matters."
+files:
+  - packages/*/test/**/*.ts
+  - app/**/*.test.ts
+  - tools/**/*.test.ts
+rule:
+  pattern: $EXPR.$METHOD($$$ARGS)
+constraints:
+  METHOD:
+    regex: ^(toMatchSnapshot|toMatchInlineSnapshot|toThrowErrorMatchingSnapshot|toThrowErrorMatchingInlineSnapshot)$

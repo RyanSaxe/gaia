@@ -170,8 +170,9 @@ export function landformsOf(spec: WorldSpec, lib: Library): Landform[] {
     const slot = r.biome.slots.relief;
     if (slot === undefined) throw new Error(`Region ${r.id} has no relief.`);
     const p: AnyPrimitive = lib.get(slot.use);
-    if (p.role !== "Relief")
+    if (p.role !== "Relief") {
       throw new Error(`${p.id} is not a Relief primitive.`);
+    }
     const root = rand(seedOf(r.id));
     const params = resolveParams(
       p,
@@ -273,8 +274,9 @@ function regionField(spec: WorldSpec): RegionField {
         if ((regionLo[r] as number) > bestHi + TERRAIN.blend) return;
         const los = lo[r] as Float64Array;
         const from = order.length;
-        for (let k = 0; k < list.length; k++)
+        for (let k = 0; k < list.length; k++) {
           if ((los[k] as number) <= (regionHi[r] as number)) order.push(k);
+        }
         runs.push(r, from, order.length);
       });
     }
@@ -347,8 +349,9 @@ export function regionWeights(
   } else {
     nearest = outsideDistances(f, wx, wz, out);
   }
-  for (let r = 0; r < count; r++)
+  for (let r = 0; r < count; r++) {
     out[r] = 1 - smooth(((out[r] as number) - nearest) / TERRAIN.blend);
+  }
 }
 
 /** Side in meters of the cells `siteCellsOf` sorts sites into, for points outside the region field. */
@@ -381,7 +384,7 @@ function siteCellsOf(f: RegionField): SiteCells {
       const cz = Math.floor(s.z / OUTSIDE_CELL);
       const key = `${cx},${cz}`;
       let cell = byCell.get(key);
-      if (cell === undefined)
+      if (cell === undefined) {
         byCell.set(
           key,
           (cell = {
@@ -391,6 +394,7 @@ function siteCellsOf(f: RegionField): SiteCells {
             sites: [],
           }),
         );
+      }
       cell.sites.push([r, s]);
       cell.reach = Math.max(cell.reach, s.reach ?? 0);
     }
@@ -424,14 +428,16 @@ function outsideDistances(
   );
   // Start from the cell with the smallest bound, so the first pass skips nearly every other cell.
   let first = 0;
-  for (let k = 1; k < least.length; k++)
+  for (let k = 1; k < least.length; k++) {
     if ((least[k] as number) < (least[first] as number)) first = k;
+  }
   let nearest = Infinity;
-  for (const [, s] of cells[first]?.sites ?? [])
+  for (const [, s] of cells[first]?.sites ?? []) {
     nearest = Math.min(
       nearest,
       Math.hypot(wx - s.x, wz - s.z) - (s.reach ?? 0),
     );
+  }
   for (let pass = 0; pass < 2; pass++) {
     // Pass 0 finds the nearest distance. Pass 1 records every site within `TERRAIN.blend` of it, since no other has weight.
     const within =
@@ -486,8 +492,9 @@ function coverFromBlend(
     out[i] = c;
     total += c;
   }
-  for (let i = 0; i < spec.regions.length; i++)
+  for (let i = 0; i < spec.regions.length; i++) {
     out[i] = (out[i] as number) / total;
+  }
 }
 
 /** Height of the rim around the land's rounded rectangle (`pastTheEdge`), varied by noise. */
@@ -633,10 +640,11 @@ function composeRect(
   z1: number,
 ): ComposedRect {
   const count = spec.regions.length;
-  if (count > 255)
+  if (count > 255) {
     throw new Error(
       `A world holds at most 255 regions; this one has ${count}.`,
     );
+  }
   const n = x1 - x0;
   const rows = z1 - z0;
   const raw = new Float32Array(rows * n);
@@ -673,9 +681,11 @@ function composeRect(
         }
       }
       let kept = 0;
-      for (let t = 0; t < COVER_TAPS; t++)
-        if ((top[t] as number) >= 0)
+      for (let t = 0; t < COVER_TAPS; t++) {
+        if ((top[t] as number) >= 0) {
           kept += weights[top[t] as number] as number;
+        }
+      }
       let given = 0;
       for (let t = 0; t < COVER_TAPS; t++) {
         const i = top[t] as number;
@@ -708,10 +718,11 @@ export function finishTerrain(
   const coverShares = new Uint8Array(n * n * COVER_TAPS);
   let filled = 0;
   for (const p of [...parts].sort((a, b) => a.z0 - b.z0)) {
-    if (p.z0 !== filled)
+    if (p.z0 !== filled) {
       throw new Error(
         `Composed rows ${p.z0} to ${p.z1} leave a gap or overlap at row ${filled}.`,
       );
+    }
     raw.set(p.raw, p.z0 * n);
     region.set(p.region, p.z0 * n);
     coverRegions.set(p.coverRegions, p.z0 * n * COVER_TAPS);
@@ -729,9 +740,11 @@ export function finishTerrain(
   const s = TERRAIN.survey;
   const sn = Math.floor((n - 1) / s) + 1;
   const surveyed = new Float32Array(sn * sn);
-  for (let j = 0; j < sn; j++)
-    for (let i = 0; i < sn; i++)
+  for (let j = 0; j < sn; j++) {
+    for (let i = 0; i < sn; i++) {
       surveyed[j * sn + i] = raw[j * s * n + i * s] as number;
+    }
+  }
   const survey: Lattice = {
     ...lattice,
     n: sn,
@@ -740,8 +753,9 @@ export function finishTerrain(
   };
   let { mean, fit } = fitRelief(spec, survey);
   if (fit < 1) fit *= 1 - TERRAIN.surveyMargin;
-  if (!fitsBudget(spec, lattice, raw, mean, fit))
+  if (!fitsBudget(spec, lattice, raw, mean, fit)) {
     ({ mean, fit } = fitRelief(spec, { ...lattice, heights: raw }));
+  }
   const heights = raw.map((h) => mean + (h - mean) * fit);
   const final: Lattice = { ...lattice, heights };
 
@@ -754,8 +768,9 @@ export function finishTerrain(
       const out = new Float32Array(side * side);
       for (let j = 0; j < side; j++) {
         const row = Math.min(n - 1, z0 + j) * n;
-        for (let i = 0; i < side; i++)
+        for (let i = 0; i < side; i++) {
           out[j * side + i] = heights[row + Math.min(n - 1, x0 + i)] as number;
+        }
       }
       return out;
     },
@@ -1074,10 +1089,12 @@ export function bakeTile(
   );
   const window: Lattice = { ...frame, heights };
   const waterLevel = new Float32Array(side * side).fill(DRY);
-  for (const stream of plan.streams)
+  for (const stream of plan.streams) {
     carveStream(window, heights, waterLevel, stream);
-  for (const { pond, depth } of plan.ponds)
+  }
+  for (const { pond, depth } of plan.ponds) {
     carvePond(window, heights, waterLevel, pond, depth);
+  }
   const shore = shoreField(window, heights, waterLevel);
   const pond = nearPond(
     window,
@@ -1089,7 +1106,7 @@ export function bakeTile(
   /** The tile's own samples, `per` values each, without the margin. */
   const inner = <T extends Float32Array | Uint8Array>(a: T, per: number): T => {
     const out = a.slice(0, size * size * per) as T;
-    for (let j = 0; j < size; j++)
+    for (let j = 0; j < size; j++) {
       out.set(
         a.subarray(
           ((j + m) * side + m) * per,
@@ -1097,6 +1114,7 @@ export function bakeTile(
         ),
         j * size * per,
       );
+    }
     return out;
   };
   return {

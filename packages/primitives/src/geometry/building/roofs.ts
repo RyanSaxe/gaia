@@ -186,11 +186,12 @@ function extrudeRoof(
     (pt, i) => {
       const prev = seg(i - 1 + n);
       const next = seg(i);
-      if (pt.crease === true)
+      if (pt.crease === true) {
         return [
           { pt, nb: prev[0], ny: prev[1] },
           { pt, nb: next[0], ny: next[1] },
         ];
+      }
       const l = Math.hypot(prev[0] + next[0], prev[1] + next[1]) || 1;
       return [{ pt, nb: (prev[0] + next[0]) / l, ny: (prev[1] + next[1]) / l }];
     },
@@ -249,8 +250,9 @@ function extrudeRoof(
       const p1 = under[i + 1] as ProfilePoint;
       const lo = Math.min(p0.b, p1.b);
       const hi = Math.max(p0.b, p1.b);
-      if (bv >= lo - 1e-6 && bv <= hi + 1e-6)
+      if (bv >= lo - 1e-6 && bv <= hi + 1e-6) {
         return p0.y + ((p1.y - p0.y) * (bv - p0.b)) / (p1.b - p0.b || 1);
+      }
     }
     const ends = under.map((pt) => pt.b);
     const edge =
@@ -578,8 +580,9 @@ function rafters(
     const foot = Math.abs(s < 0 ? a0 : a1) - 0.06;
     // Hip rafters from the ridge's end down each hip, to the eave's corner or to where a half-hip's gable takes over.
     const most = Math.min(reach - 0.06, hipB(foot));
-    for (const side of [-1, 1])
+    for (const side of [-1, 1]) {
       timber(at(s * start, 0), at(s * hipA(most), side * most));
+    }
     // Jack rafters up the end from its eave to the hips, a rafter's spacing apart.
     const n = Math.max(1, Math.round((reach - 0.1) / 0.62));
     for (let k = -n; k <= n; k++) {
@@ -592,7 +595,7 @@ function rafters(
   const r0 = hipped(-1) ? Math.max(a0, -start) : a0;
   const r1 = hipped(1) ? Math.min(a1, start) : a1;
   const ridgeB = lean ? -f.m.fall * (f.halfSpan - 0.08) : 0;
-  if (r1 - r0 > 0.2)
+  if (r1 - r0 > 0.2) {
     beam(
       frame,
       roofPoint(f, r0 + 0.05, ridgeB, under(ridgeB) - 0.1),
@@ -603,10 +606,11 @@ function rafters(
       0.42,
       still(hingeOf(f, 0), 0.55),
     );
+  }
   // Purlins carry the rafters across the slopes, notched a little into them.
   for (const bv of lean ? [0] : [-f.halfSpan * 0.5, f.halfSpan * 0.5]) {
     const y = under(bv) - 0.17;
-    if (r1 - r0 > 0.4)
+    if (r1 - r0 > 0.4) {
       beam(
         frame,
         roofPoint(f, r0 + 0.1, bv, y),
@@ -617,6 +621,7 @@ function rafters(
         0.4,
         still(hingeOf(f, 0), 0.55),
       );
+    }
   }
   // Below the collapsed eaves, fallen covering lies on the ground.
   const corner = {
@@ -816,8 +821,9 @@ function doorGable(
       for (const pt of profile) {
         const p = place(a, pt, [0, 0]);
         const { out, along } = toDoor(d, p);
-        if (out > 0 && out < 1.5 && along < d.width / 2 + 0.2)
+        if (out > 0 && out < 1.5 && along < d.width / 2 + 0.2) {
           y = Math.min(y, p[1]);
+        }
       }
     }
     return y;
@@ -1257,8 +1263,9 @@ function cone(
     }
   };
   const band = (rings: number[][], flip: boolean): void => {
-    for (let j = 0; j + 1 < rings.length; j++)
+    for (let j = 0; j + 1 < rings.length; j++) {
       stitch(rings[j] as number[], rings[j + 1] as number[], flip);
+    }
   };
   for (let c = 0; c < courses; c++) {
     const r0 = radOf(c);

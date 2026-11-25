@@ -11,6 +11,8 @@ cache is GAIA_SOUND_CACHE, or ~/.cache/gaia-sound:
   sfizz-1.2.3/bin/         sfizz_render, built from source
 
 A symbolic link can point one of these at a folder already on the machine, and it is checked like a download.
+This module also provides `run_command` to invoke external CLI tools (curl, cmake, ffmpeg, ffprobe, sfizz_render)
+via resolved executable paths.
 """
 
 import hashlib
@@ -18,13 +20,57 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import zipfile
+from collections.abc import Sequence
 from pathlib import Path
+from typing import IO, Literal, TypedDict
 from urllib.parse import quote
 
+
+class _LicenceInfo(TypedDict):
+    name: str
+    url: str
+
+
+class _FreesoundRecording(TypedDict):
+    preview: str
+    sha256: str
+    recordist: str
+    title: str
+    url: str
+
+
+class _VcslSource(TypedDict):
+    repository: str
+    commit: str
+    files: dict[str, str]
+
+
+class _VscoSource(TypedDict):
+    folder: str
+    archive: str
+    patches: dict[str, str]
+
+
+class _SfizzSource(TypedDict):
+    version: str
+    archive: str
+    sha256: str
+
+
+class _SourcesManifest(TypedDict):
+    licence: _LicenceInfo
+    recordings: dict[str, _FreesoundRecording]
+    celesta: dict[str, _FreesoundRecording]
+    vcsl: _VcslSource
+    vsco: _VscoSource
+    sfizz: _SfizzSource
+
+
 HERE = Path(__file__).resolve().parent
-SOURCES = json.loads((HERE / "sources.json").read_text())
+SOURCES: _SourcesManifest = json.loads((HERE / "sources.json").read_text())
 CACHE = Path(os.environ.get("GAIA_SOUND_CACHE") or Path.home() / ".cache" / "gaia-sound").expanduser()
 RECORDINGS = CACHE / "recordings"
 CELESTA = CACHE / "celesta"
@@ -35,80 +81,117 @@ SFIZZ_DIR = CACHE / f"sfizz-{SOURCES['sfizz']['version']}"
 SFIZZ = SFIZZ_DIR / "bin" / "sfizz_render"
 
 
-def require(*programs):
+def _resolve_executable(program: str | Path) -> str:
+    if isinstance(program, Path):
+        return str(program)
+    resolved = shutil.which(program)
+    if resolved is None:
+        sys.exit(f"the sound tools need {program} on PATH (tools/sound/README.md)")
+    return resolved
+
+
+def run_command(
+    program: str | Path,
+    args: Sequence[str],
+    *,
+    nice: bool = False,
+    check: bool = True,
+    capture_output: bool = False,
+    stdin_bytes: bytes | None = None,
+    stdout: int | IO[str] | None = None,
+    stderr: int | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    cmd = [_resolve_executable(program), *args]
+    if nice:
+        cmd = [_resolve_executable("nice"), "-n", "10", *cmd]
+    return subprocess.run(  # noqa: S603 -- executes resolved local build/media binary with fixed argv
+        cmd,
+        check=check,
+        capture_output=capture_output,
+        input=stdin_bytes,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def require(*programs: str) -> None:
     missing = [p for p in programs if shutil.which(p) is None]
     if missing:
-        raise SystemExit(f"the sound tools need {', '.join(missing)} on PATH (tools/sound/README.md)")
+        sys.exit(f"the sound tools need {', '.join(missing)} on PATH (tools/sound/README.md)")
 
 
-def sha256(path):
+def sha256(path: Path) -> str:
     h = hashlib.sha256()
-    with open(path, "rb") as f:
+    with path.open("rb") as f:
         for block in iter(lambda: f.read(1 << 20), b""):
             h.update(block)
     return h.hexdigest()
 
 
-def fetch(url, dest, digest=None):
-    """Downloads url to dest, unless dest is already there with the right digest."""
+def fetch(url: str, dest: Path, *, digest: str | None = None) -> Path:
     if dest.exists() and (digest is None or sha256(dest) == digest):
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_name(dest.name + ".part")
     print(f"fetching {url}", flush=True)
-    subprocess.run(["curl", "-fL", "--retry", "3", "--silent", "--show-error", "-o", str(part), url], check=True)
+    run_command("curl", ["-fL", "--retry", "3", "--silent", "--show-error", "-o", str(part), url])
     if digest is not None and sha256(part) != digest:
         part.unlink()
-        raise SystemExit(f"{url}: its sha256 is not the one in sources.json; the source has changed")
+        sys.exit(f"{url}: its sha256 is not the one in sources.json; the source has changed")
     part.replace(dest)
     return dest
 
 
-def freesound(group, folder):
+def freesound(group: Literal["recordings", "celesta"], folder: Path) -> None:
     for fid, s in SOURCES[group].items():
-        fetch(s["preview"], folder / f"fs{fid}.ogg", s["sha256"])
+        fetch(s["preview"], folder / f"fs{fid}.ogg", digest=s["sha256"])
 
 
-def vcsl():
+def vcsl() -> None:
     v = SOURCES["vcsl"]
     base = v["repository"].replace("github.com", "raw.githubusercontent.com") + "/" + v["commit"] + "/"
     for rel, digest in v["files"].items():
-        fetch(base + quote(rel), VCSL / rel, digest)
+        fetch(base + quote(rel), VCSL / rel, digest=digest)
 
 
-def vsco():
+def _extract_zip_safely(archive: Path, dest: Path) -> None:
+    dest_root = dest.resolve()
+    with zipfile.ZipFile(archive) as z:
+        for info in z.infolist():
+            target = (dest_root / info.filename).resolve()
+            if not target.is_relative_to(dest_root):
+                sys.exit(f"{archive.name}: unsafe archive entry {info.filename!r}")
+            z.extract(info, dest_root)
+
+
+def vsco() -> None:
     v = SOURCES["vsco"]
     if all((VSCO / p).exists() and sha256(VSCO / p) == d for p, d in v["patches"].items()):
         return
     archive = fetch(v["archive"], CACHE / f"{v['folder']}.zip")
     print(f"unpacking {archive.name}", flush=True)
-    with zipfile.ZipFile(archive) as z:
-        z.extractall(CACHE)
+    _extract_zip_safely(archive, CACHE)
     archive.unlink()
     wrong = [p for p, d in v["patches"].items() if sha256(VSCO / p) != d]
     if wrong:
-        raise SystemExit(f"VSCO 2 CE: these patches are not the ones in sources.json: {wrong}")
+        sys.exit(f"VSCO 2 CE: these patches are not the ones in sources.json: {wrong}")
 
 
-def sfizz():
-    """sfizz_render, built from the release's source with the system's compiler, two jobs at a time."""
+def sfizz() -> None:
     if SFIZZ.exists():
         return
     require("cmake", "ninja", "c++")
     s = SOURCES["sfizz"]
-    archive = fetch(s["archive"], CACHE / f"sfizz-{s['version']}.tar.gz", s["sha256"])
+    archive = fetch(s["archive"], CACHE / f"sfizz-{s['version']}.tar.gz", digest=s["sha256"])
     build = CACHE / "sfizz-build"
     shutil.rmtree(build, ignore_errors=True)
     with tarfile.open(archive) as t:
         t.extractall(build, filter="data")
     src = build / f"sfizz-{s['version']}"
     print("building sfizz_render (a few minutes)", flush=True)
-    subprocess.run(
+    run_command(
+        "cmake",
         [
-            "nice",
-            "-n",
-            "10",
-            "cmake",
             "-S",
             str(src),
             "-B",
@@ -121,12 +204,13 @@ def sfizz():
             "-DSFIZZ_RENDER=ON",
             "-DSFIZZ_GIT_SUBMODULE_CHECK=OFF",
         ],
-        check=True,
+        nice=True,
         stdout=subprocess.DEVNULL,
     )
-    subprocess.run(
-        ["nice", "-n", "10", "cmake", "--build", str(build / "out"), "--target", "sfizz_render", "-j", "2"],
-        check=True,
+    run_command(
+        "cmake",
+        ["--build", str(build / "out"), "--target", "sfizz_render", "-j", "2"],
+        nice=True,
         stdout=subprocess.DEVNULL,
     )
     SFIZZ.parent.mkdir(parents=True, exist_ok=True)
@@ -135,14 +219,12 @@ def sfizz():
     archive.unlink()
 
 
-def world():
-    """Everything the world sounds need."""
+def world() -> None:
     require("curl", "ffmpeg", "ffprobe")
     freesound("recordings", RECORDINGS)
 
 
-def music():
-    """Everything the music needs, before its patches are written."""
+def music() -> None:
     require("curl", "ffmpeg")
     freesound("celesta", CELESTA)
     vcsl()

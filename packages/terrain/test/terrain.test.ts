@@ -73,16 +73,16 @@ describe("landforms", () => {
       for (const end of ["first", "last"] as const) {
         const params: Record<string, string | boolean> = {};
         for (const [name, f] of Object.entries(p.params)) {
-          if (f.type === "scale")
+          if (f.type === "scale") {
             params[name] =
               (end === "first" ? f.levels[0] : f.levels[f.levels.length - 1])
                 ?.words ?? "";
-          else if (f.type === "choice")
+          } else if (f.type === "choice") {
             params[name] =
               Object.keys(f.options)[
                 end === "first" ? 0 : Object.keys(f.options).length - 1
               ] ?? "";
-          else if (f.type === "flag") params[name] = end === "last";
+          } else if (f.type === "flag") params[name] = end === "last";
         }
         const region = blueprintOf("biome", {
           relief: { use: p.id, params },
@@ -103,7 +103,7 @@ describe("landforms", () => {
         expect(validate(region, biome, lib), p.id).toEqual([]);
         const [lf] = landformsOf(world, lib);
         expect(lf).toBeDefined();
-        for (let k = 0; k < 200; k++)
+        for (let k = 0; k < 200; k++) {
           expect(
             Number.isFinite(
               fieldAt(
@@ -114,6 +114,7 @@ describe("landforms", () => {
             ),
             p.id,
           ).toBe(true);
+        }
         // It is plain data, so a structured clone evaluates identically.
         const clone = structuredClone(lf!);
         expect(fieldAt(clone.height, 13.7, -41.2)).toBe(
@@ -163,12 +164,13 @@ describe("terrain", { timeout: 20_000 }, () => {
             Math.abs(heights[iz * n + ix + 1]! - h0),
             Math.abs(heights[(iz + 1) * n + ix]! - h0),
           );
-          if (step > steepest.step)
+          if (step > steepest.step) {
             steepest = {
               step,
               x: origin + ix * spacing,
               z: origin + iz * spacing,
             };
+          }
         }
       }
       expect(
@@ -393,9 +395,11 @@ describe("terrain", { timeout: 20_000 }, () => {
       const spots: { x: number; z: number }[] = [];
       const half = t.spec.size / 2 - 20;
       for (let z = -half; z <= half && spots.length < 16; z += 23) {
-        for (let x = -half; x <= half && spots.length < 16; x += 23)
-          if (slopeAt(t.lattice, x, z) <= PLANT_SLOPE / 2 && !isWet(t, x, z))
+        for (let x = -half; x <= half && spots.length < 16; x += 23) {
+          if (slopeAt(t.lattice, x, z) <= PLANT_SLOPE / 2 && !isWet(t, x, z)) {
             spots.push({ x, z });
+          }
+        }
       }
       return spots;
     };
@@ -420,7 +424,7 @@ describe("terrain", { timeout: 20_000 }, () => {
       };
     };
     const barkOf = (
-      k: typeof tree | typeof bush,
+      k: typeof tree,
       blueprint: Blueprint,
     ): { points: Point[]; skel: Skeleton } => {
       const built = realize(blueprint, k, floraLib, {
@@ -429,12 +433,13 @@ describe("terrain", { timeout: 20_000 }, () => {
       });
       const bark = built.parts.find((p) => p.swatch === "bark")!;
       const points: Point[] = [];
-      for (let k = 0; k < bark.positions.length; k += 3)
+      for (let k = 0; k < bark.positions.length; k += 3) {
         points.push([
           bark.positions[k]!,
           bark.positions[k + 1]!,
           bark.positions[k + 2]!,
         ]);
+      }
       return { points, skel: built.slots.get("form")?.output as Skeleton };
     };
     /**
@@ -458,11 +463,12 @@ describe("terrain", { timeout: 20_000 }, () => {
         const { points, skel } = barkOf(k, blueprint);
         return rootRing(points, skel);
       });
-      for (const ring of bases)
+      for (const ring of bases) {
         expect(
           ring.length,
           "the origin is the trunk base",
         ).toBeGreaterThanOrEqual(3);
+      }
       baked.slice(0, 8).forEach((t, w) => {
         const spots = spotsOf(t);
         expect(spots.length).toBe(16);
@@ -532,8 +538,9 @@ describe("wild land past the rim", () => {
       for (let cj = -60; cj < 60; cj++) {
         for (let ci = -60; ci < 60; ci++) {
           const thicket = wildThicket(t, ci, cj);
-          if ((ci * 7 + cj) % 23 === 0)
+          if ((ci * 7 + cj) % 23 === 0) {
             expect(wildThicket(t, ci, cj)).toEqual(thicket);
+          }
           for (const b of thicket?.bushes ?? []) {
             bushes++;
             expect(wildPast(t, b.x, b.z)).toBeGreaterThan(0);
@@ -593,11 +600,12 @@ describe("a cottage on the land", () => {
     levelPad(terrain, plan, site, beside);
     const ground = (lx: number, lz: number): number =>
       heightAt(terrain.lattice, ...siteToWorld(site, lx, lz));
-    for (const other of taken)
+    for (const other of taken) {
       expect(
         Math.hypot(site.x - other.x, site.z - other.z),
         `${name} apart`,
       ).toBeGreaterThanOrEqual(30);
+    }
     expect(
       Math.max(Math.abs(site.x), Math.abs(site.z)),
       `${name} inside the world`,
@@ -612,11 +620,12 @@ describe("a cottage on the land", () => {
     for (let lx = -plan.width / 2 - 1; lx <= plan.width / 2 + 1; lx += 0.5) {
       for (let lz = -plan.depth / 2 - 1; lz <= front + 5.5; lz += 0.5) {
         expect(Math.abs(ground(lx, lz) - site.level), name).toBeLessThan(0.02);
-        if (Math.abs(lx) <= plan.width / 2 && lz >= -plan.depth / 2)
+        if (Math.abs(lx) <= plan.width / 2 && lz >= -plan.depth / 2) {
           expect(
             waterDepthAt(terrain, ...siteToWorld(site, lx, lz)),
             `${name} dry`,
           ).toBe(0);
+        }
       }
     }
     // The ground under a feature, such as a mill wheel's pit or a tower, is the building's level ground.
@@ -626,11 +635,12 @@ describe("a cottage on the land", () => {
         [beside.x1, beside.z0],
         [beside.x0, beside.z1],
         [beside.x1, beside.z1],
-      ] as const)
+      ] as const) {
         expect(
           Math.abs(ground(lx, lz) - site.level),
           `${name} feature`,
         ).toBeLessThan(0.02);
+      }
     }
     for (const part of built.parts) {
       let lowest = Infinity;

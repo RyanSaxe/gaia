@@ -265,7 +265,7 @@ export function buildWaterwheel(
         0.48,
         ch,
       );
-      for (const sx of [-1, 1])
+      for (const sx of [-1, 1]) {
         box(
           wood,
           [cx + sx * W * 0.42, y + 0.14, (a + b) / 2],
@@ -274,6 +274,7 @@ export function buildWaterwheel(
           0.44,
           ch,
         );
+      }
     }
     for (const z of crossbeams) {
       for (const sx of [-1, 1]) {
@@ -336,7 +337,7 @@ function capFace(
   const [a, c] = corners;
   const n = normalize(cross3(sub3(c, a), sub3(apex, a)));
   const count = Math.max(1, Math.round(Math.hypot(...sub3(c, a)) / 0.75));
-  for (let k = 0; k < count; k++)
+  for (let k = 0; k < count; k++) {
     beam(
       frame,
       addScaled(lerp3(a, c, k / count), n, -0.05),
@@ -348,6 +349,7 @@ function capFace(
       still(pivot, 0.55, { droop: 0.05 }),
       { open: true },
     );
+  }
   for (let j = 0; j < rows; j++) {
     const t0 = j / rows;
     const t1 = (j + 1) / rows;
@@ -365,9 +367,9 @@ function capFace(
       pivot,
       rot: rotAt(q),
     });
-    if (j === rows - 1)
+    if (j === rows - 1) {
       tri(b, [add(p0, lip), add(p1, lip), apex], n, 0.55, ch(p0));
-    else {
+    } else {
       const i0 = b.vertex(add(p0, lip), n, 0.5 + 0.05 * (j % 2), ch(p0));
       const i1 = b.vertex(add(p1, lip), n, 0.5 + 0.05 * (j % 2), ch(p1));
       const i2 = b.vertex(q1, n, 0.58, ch(q1));
@@ -445,7 +447,7 @@ export function buildTower(
       // Windows face away from the house, and face every way once above its roof.
       const outward =
         w.n[0] * side > 0.5 || w.n[2] < -0.5 || y > houseTop - 0.5;
-      if (outward)
+      if (outward) {
         windows.push({
           kind: "window",
           mass: 0,
@@ -454,6 +456,7 @@ export function buildTower(
           width: 0.52,
           height: 1.15,
         });
+      }
     }
   }
   const tower: BuildingPlan = { ...tower0, openings: windows };
@@ -600,12 +603,13 @@ export function buildTower(
     const surround = (c: V3, half: Vec3): void =>
       box(stone, c, axes, half, 0.62, still(c, 0.45));
     surround(at(0, -0.07, 0.06), [hw + 0.16, 0.07, 0.1]);
-    for (const sx of [-1, 1])
+    for (const sx of [-1, 1]) {
       surround(at(sx * (hw + 0.08), o.height / 2, 0.05), [
         0.08,
         o.height / 2 + 0.02,
         0.07,
       ]);
+    }
     // A round head of five voussoirs.
     for (let k = 0; k < 5; k++) {
       const a0 = (k / 5) * Math.PI;
@@ -624,7 +628,7 @@ export function buildTower(
     }
     // A shadowed reveal fills the round head behind the voussoirs.
     const head: V3[] = [];
-    for (let k = 0; k <= 6; k++)
+    for (let k = 0; k <= 6; k++) {
       head.push(
         at(
           Math.cos((k / 6) * Math.PI) * hw,
@@ -632,7 +636,8 @@ export function buildTower(
           -0.015,
         ),
       );
-    for (let k = 0; k < 6; k++)
+    }
+    for (let k = 0; k < 6; k++) {
       tri(
         glass,
         [at(0, o.height, -0.015), head[k] as V3, head[k + 1] as V3],
@@ -640,6 +645,7 @@ export function buildTower(
         0.15,
         still(pivot, 1),
       );
+    }
   }
   // The roof of the tower: a ceiling over its top, then the chosen cap.
   const eave = T / 2 + 0.32;
@@ -753,7 +759,7 @@ export function buildTower(
       0.25,
       still(capPivot, 0.6),
     );
-    for (let k = 0; k < 4; k++)
+    for (let k = 0; k < 4; k++) {
       capFace(
         roof,
         wood,
@@ -763,9 +769,10 @@ export function buildTower(
         capRot,
         capPivot,
       );
+    }
   } else {
     apex = [0, H + T * 0.95, 0];
-    for (let k = 0; k < 4; k++)
+    for (let k = 0; k < 4; k++) {
       capFace(
         roof,
         wood,
@@ -775,6 +782,7 @@ export function buildTower(
         capRot,
         capPivot,
       );
+    }
   }
   // A finial that leans and falls as vitality falls, coming to rest along the
   // cap's hip with its foot at the apex.

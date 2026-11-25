@@ -82,12 +82,14 @@ function toeOf(s: Stone, local: readonly V3[]): V3 {
   const c = Math.cos(s.yaw);
   const sn = Math.sin(s.yaw);
   let reach = 0;
-  for (const q of local)
-    if (q[1] > -0.1 && q[1] < 0.25)
+  for (const q of local) {
+    if (q[1] > -0.1 && q[1] < 0.25) {
       reach = Math.max(
         reach,
         (q[0] * c + q[2] * sn) * dir[0] + (-q[0] * sn + q[2] * c) * dir[2],
       );
+    }
+  }
   return [s.x + dir[0] * reach * 0.98, 0, s.z + dir[2] * reach * 0.98];
 }
 
@@ -165,12 +167,13 @@ function slabShape(
     let q: V3 = [n[0] * bump, n[1] * bump, n[2] * bump];
     for (const pl of planes) {
       const over = q[0] * pl.n[0] + q[1] * pl.n[1] + q[2] * pl.n[2] - pl.d;
-      if (over > 0)
+      if (over > 0) {
         q = [
           q[0] - pl.n[0] * over * cut,
           q[1] - pl.n[1] * over * cut,
           q[2] - pl.n[2] * over * cut,
         ];
+      }
     }
     const t = (q[1] + 1) / 2;
     const taper = 1 - 0.28 * t * t;
@@ -288,8 +291,9 @@ function emitStone(
       ...(fall === undefined ? {} : { fall }),
     });
   });
-  for (const [a, bb, c] of shape.triangles)
+  for (const [a, bb, c] of shape.triangles) {
     b.triangle(first + a, first + bb, first + c);
+  }
   // A snapped top lies in the grass beside its stump, growing in as the top goes.
   if (d.kind === "snap") {
     const len = s.height * (1 - d.at);
@@ -365,8 +369,9 @@ export function emitFallen(
       grow: clamp(grow, 0.05, 0.9),
     });
   });
-  for (const [a, bb, cc] of shape.triangles)
+  for (const [a, bb, cc] of shape.triangles) {
     b.triangle(first + a, first + bb, first + cc);
+  }
 }
 
 /** A slab lying across two stones' tops. It falls away first, and then lies broken in the grass below. */
@@ -421,8 +426,9 @@ function emitLintel(
       tint: 0.02 * mottle,
     });
   });
-  for (const [i, j, k] of sphere.triangles)
+  for (const [i, j, k] of sphere.triangles) {
     b.triangle(first + i, first + j, first + k);
+  }
   // The fallen lintel lies outward of the gateway, where it slid off.
   const out =
     Math.hypot(x, z) > 0.5 ? Math.atan2(z, x) : r.next() * Math.PI * 2;
@@ -446,14 +452,16 @@ function emitLintel(
 /** How each stone of a group gives way, drawn from its own stream: about two in five lean, one in three snaps, the rest fall flat. */
 function declineOf(sr: Rand, lean: number): Decline {
   const kind = sr.next();
-  if (kind < 0.42)
+  if (kind < 0.42) {
     return {
       kind: "tilt",
       most: sr.range(0.18, 0.42),
       from: sr.range(0.38, 0.58),
     };
-  if (kind < 0.75)
+  }
+  if (kind < 0.75) {
     return { kind: "snap", at: sr.range(0.3, 0.55), loss: sr.range(0.3, 0.55) };
+  }
   return {
     kind: "tilt",
     most: Math.PI / 2 - lean,
@@ -539,8 +547,9 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
         ),
       );
     }
-    if (p.lintels)
+    if (p.lintels) {
       for (let k = 0; k + 1 < count; k += 2) lintels.push([k, k + 1]);
+    }
   } else if (p.arrangement === "avenue") {
     // Two facing rows, rising toward the head, which stands at +x.
     const pairs = Math.max(2, Math.round(count / 2));
@@ -563,8 +572,9 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
           ),
         );
       }
-      if (p.lintels && k % 2 === 1)
+      if (p.lintels && k % 2 === 1) {
         lintels.push([stones.length - 2, stones.length - 1]);
+      }
     }
     center = [length / 2 + spacing * 1.1, 0];
   } else if (p.arrangement === "dolmen") {
@@ -669,8 +679,9 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
         placed.some(
           ([px, pz, pr]) => Math.hypot(px - x, pz - z) < pr + tall * 0.6 + 0.8,
         )
-      )
+      ) {
         continue;
+      }
       placed.push([x, z, tall * 0.6]);
       emitCairn(out, x, z, tall, p.facets, cr);
       k++;
@@ -696,14 +707,15 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       stones.push(stoneAt(sr, x, z, sr.next() * Math.PI, tall, downwind, lean));
     }
     center = [0, 0];
-    if (stones.some((s) => Math.hypot(s.x, s.z) < h))
+    if (stones.some((s) => Math.hypot(s.x, s.z) < h)) {
       center = [spread + h * 0.6, 0];
+    }
   }
 
   stones.forEach((s, k) =>
     emitStone(out, s, p.facets, r.fork(`emit${k}`), s.height > h * 0.4 ? 3 : 2),
   );
-  for (const [i, j] of lintels)
+  for (const [i, j] of lintels) {
     emitLintel(
       out,
       stones[i] as Stone,
@@ -713,6 +725,7 @@ export function buildStandingStones(p: StonesParams, ctx: BuildContext): Built {
       p.facets,
       r.fork(`lintel${i}`),
     );
+  }
 
   if (p.centre !== "nothing" && p.arrangement !== "dolmen") {
     const cr = r.fork("centre");
@@ -796,8 +809,9 @@ function emitCapstone(
     };
     b.vertex(p, n, 0.5 + 0.14 * mottle + 0.1 * n[1], ch);
   });
-  for (const [i, j, k] of shape.triangles)
+  for (const [i, j, k] of shape.triangles) {
     b.triangle(first + i, first + j, first + k);
+  }
 }
 
 /**

@@ -183,10 +183,12 @@ export function mostImportant(
   for (const of of parts) {
     const importance = src.thing?.(of)?.importance;
     if (
-      importance != null &&
+      importance !== undefined &&
+      importance !== null &&
       (top === undefined || importance > top.importance)
-    )
+    ) {
       top = { of, importance };
+    }
   }
   return top?.of;
 }
@@ -229,8 +231,9 @@ function leadOf(src: WordsSource, e: JournalEntry): Snippet | undefined {
     shown === undefined ||
     of === undefined ||
     symbol === undefined
-  )
+  ) {
     return undefined;
+  }
   const text = src.lines(symbol.id.slice(0, symbol.id.indexOf("#")));
   if (text === undefined) return undefined;
   const end = symbol.line + symbol.lines - 1;
@@ -264,7 +267,7 @@ const importanceOf = (
   of: string,
 ): { importance?: number } => {
   const i = src.thing?.(of)?.importance;
-  return i == null ? {} : { importance: i };
+  return i === undefined || i === null ? {} : { importance: i };
 };
 
 const folders = (path: string): string[] => path.split("/").slice(0, -1);
@@ -275,10 +278,13 @@ export function contentsWords(src: WordsSource): PageWords {
   for (const of of src.journal.contents) {
     const e = src.journal.entry(of) as JournalEntry;
     rows.push(rowOf(src, e, 0));
-    if (e.kind === "chapter")
-      for (const sub of e.lists)
-        if (src.journal.entry(sub)?.kind === "chapter")
+    if (e.kind === "chapter") {
+      for (const sub of e.lists) {
+        if (src.journal.entry(sub)?.kind === "chapter") {
           rows.push(rowOf(src, src.journal.entry(sub) as JournalEntry, 1));
+        }
+      }
+    }
   }
   return {
     path: [],
@@ -515,8 +521,9 @@ function setOf(lines: readonly string[] | undefined): {
   if (
     lines === undefined ||
     lines.slice(0, 50).some((l) => l.includes("\u0000") || l.includes("\uFFFD"))
-  )
+  ) {
     return { lines: [], rest: 0 };
+  }
   return {
     lines: lines
       .slice(0, SET.lines)

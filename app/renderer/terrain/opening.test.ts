@@ -159,11 +159,12 @@ describe("where a person first stands in a world from code", () => {
     "is among the code in made-up codebases of every shape, wherever their rivers run",
     { timeout: 300_000 },
     async () => {
-      for (const seed of [2, 4, 5])
+      for (const seed of [2, 4, 5]) {
         expectAmongCode(
           landing(await randomWorld(seed)),
           `made-up world ${seed}`,
         );
+      }
     },
   );
 });

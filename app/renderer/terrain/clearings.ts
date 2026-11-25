@@ -137,8 +137,9 @@ export function createClearings(t: Terrain): Clearings {
     );
     const starts = new Int32Array(side * side + 1);
     for (const k of of) starts[k + 1] = (starts[k + 1] as number) + 1;
-    for (let k = 0; k < side * side; k++)
+    for (let k = 0; k < side * side; k++) {
       starts[k + 1] = (starts[k + 1] as number) + (starts[k] as number);
+    }
     const next = starts.slice(0, side * side);
     const order = new Int32Array(outlines.length);
     of.forEach((k, o) => {
@@ -193,8 +194,9 @@ export function createClearings(t: Terrain): Clearings {
               : v === false
                 ? 0
                 : Math.round(Math.min(1, Math.max(0, v)) * 255);
-          if (level > (into[r * size + c] as number))
+          if (level > (into[r * size + c] as number)) {
             into[r * size + c] = level;
+          }
         }
       }
     };
@@ -276,8 +278,9 @@ export function createClearings(t: Terrain): Clearings {
         }
       }
     }
-    if (near !== null)
+    if (near !== null) {
       for (const c of near(x0, z0, x1, z1)) outline(c, reachOf(c));
+    }
     texture.needsUpdate = true;
     turf.texture.needsUpdate = true;
   };

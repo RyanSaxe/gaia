@@ -161,8 +161,9 @@ export class Boughs {
         let up = limbs[at]?.parent ?? -1;
         up >= 0 && !(this.#trunk[up] ?? false);
         up = limbs[at]?.parent ?? -1
-      )
+      ) {
         at = up;
+      }
       return at;
     });
     limbs.forEach((l, i) => {
@@ -631,8 +632,9 @@ export function buildBark(
   const boughs = new Boughs(skel);
   const flare = flareOf(trunkRadius, lobesOf(r.fork("lobes")), 1.1);
   const children = skel.limbs.map(() => 0);
-  for (const l of skel.limbs)
+  for (const l of skel.limbs) {
     if (l.parent >= 0) children[l.parent] = (children[l.parent] ?? 0) + 1;
+  }
 
   for (const { chain, radial, rings, flared } of tubesOf(skel)) {
     const head = chain[0] as number;
@@ -725,8 +727,9 @@ export function buildBark(
       pivot: b.bough,
       bough: b.bough,
     });
-    for (let j = 0; j < radial; j++)
+    for (let j = 0; j < radial; j++) {
       out.triangle(last + j, last + j + 1, tipIndex);
+    }
   }
 
   return { parts: [out.part()], anchors: skel.tips };
@@ -946,8 +949,9 @@ export function emitClumps(
   const leaf = new PartBuilder("leaf");
   const twigs = new PartBuilder("bark");
   const anchors: Anchor[] = [];
-  for (const clump of clumps)
+  for (const clump of clumps) {
     emitClump(leaf, twigs, anchors, lit(clump), boughs, clump, look, density);
+  }
   return { parts: [twigs.part(), leaf.part()], anchors };
 }
 
@@ -1156,14 +1160,16 @@ export function emitClump(
         if (
           at0[1] + sdir[1] * 2.3 * half - half < look.ground ||
           (look.low === true && at0[1] - look.ground < 3.1 * half)
-        )
+        ) {
           sdir[1] = Math.abs(sdir[1]);
+        }
         if (
           look.low === true
             ? half < LOWEST_SPRAY * look.half
             : at0[1] - 1.2 * look.half < look.ground
-        )
+        ) {
           continue;
+        }
         const b = carry(at0);
         const depth = clamp(
           length(sub(at0, clump.center)) / clump.radius,
@@ -1524,8 +1530,9 @@ export function buildLeafStrands(
           wither: clamp(wither + 0.15 * t, 0, 1),
           tint: strandTint,
         };
-        for (const v of row)
+        for (const v of row) {
           out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
+        }
       });
       for (let k = 0; k < segments; k++) {
         const a = first + k * 2;
@@ -1574,8 +1581,13 @@ function chainsOf(skel: Skeleton): number[][] {
   const next = new Map<number, number>();
   skel.limbs.forEach((l, i) => {
     const parent = skel.limbs[l.parent];
-    if (parent !== undefined && parent.depth === l.depth && !next.has(l.parent))
+    if (
+      parent !== undefined &&
+      parent.depth === l.depth &&
+      !next.has(l.parent)
+    ) {
       next.set(l.parent, i);
+    }
   });
   skel.limbs.forEach((l, i) => {
     const parent = skel.limbs[l.parent];
@@ -1583,11 +1595,13 @@ function chainsOf(skel: Skeleton): number[][] {
       parent !== undefined &&
       parent.depth === l.depth &&
       next.get(l.parent) === i
-    )
+    ) {
       return;
+    }
     const chain = [i];
-    for (let at = next.get(i); at !== undefined; at = next.get(at))
+    for (let at = next.get(i); at !== undefined; at = next.get(at)) {
       chain.push(at);
+    }
     chains.push(chain);
   });
   return chains;
@@ -2189,7 +2203,7 @@ function emitFrond(
         FROND.drape.drop * outer;
       branchlet(t, sideSign, reach, drop, forward);
       // A second card hung lower and steeper beneath, so the frond is deep rather than one sheet.
-      if (r.next() < FROND.lowerTier)
+      if (r.next() < FROND.lowerTier) {
         branchlet(
           clamp(t + 0.04, 0, 1),
           sideSign,
@@ -2197,6 +2211,7 @@ function emitFrond(
           drop + 0.8,
           forward * 0.8,
         );
+      }
     }
   }
 }
@@ -2428,15 +2443,17 @@ function emitFruit(
 ): void {
   const sphere = icosphere(1);
   const first = out.vertexCount;
-  for (const n of sphere.points)
+  for (const n of sphere.points) {
     out.vertex(
       addScaled(center, shape(n), size),
       n,
       shadeBase + 0.45 * (n[1] * 0.5 + 0.5),
       ch,
     );
-  for (const [a, b, c] of sphere.triangles)
+  }
+  for (const [a, b, c] of sphere.triangles) {
     out.triangle(first + a, first + b, first + c);
+  }
 }
 
 function emitBall(
@@ -2457,8 +2474,9 @@ function emitBall(
     ];
     out.vertex(q, n, shadeBase + 0.4 * (n[1] * 0.5 + 0.5), ch);
   }
-  for (const [a, b, c] of sphere.triangles)
+  for (const [a, b, c] of sphere.triangles) {
     out.triangle(first + a, first + b, first + c);
+  }
 }
 
 function emitStalk(

@@ -8,8 +8,9 @@ const EVERY = 10_000;
 
 /** Returns the same-origin path to post reports to, or null when this page does not report. */
 export function telemetryEndpoint(): string | null {
-  if (location.protocol !== "http:" && location.protocol !== "https:")
+  if (location.protocol !== "http:" && location.protocol !== "https:") {
     return null;
+  }
   const meta = document.querySelector<HTMLMetaElement>(
     'meta[name="gaia-telemetry"]',
   );

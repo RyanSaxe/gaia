@@ -114,10 +114,11 @@ export interface PlantInstances extends PlantView {
 }
 
 function swap(source: string, from: string, to: string): string {
-  if (!source.includes(from))
+  if (!source.includes(from)) {
     throw new Error(
       `The plant shader no longer contains "${from}"; update instances.ts.`,
     );
+  }
   return source.split(from).join(to);
 }
 
@@ -144,11 +145,12 @@ function instanced(vertex: string): string {
     "void main() {",
     "mat4 placed() { mat4 m = instanceMatrix; m[0][3] = 0.0; m[1][3] = 0.0; m[2][3] = 0.0; return modelMatrix * m; }\nvoid main() {",
   );
-  if (out.includes("vTint = aTint;"))
+  if (out.includes("vTint = aTint;")) {
     out = out.replace(
       "vTint = aTint;",
       "vTint = aTint + instanceMatrix[1][3];",
     );
+  }
   return out;
 }
 
@@ -247,7 +249,7 @@ export function createPlantInstances(
   const point = new THREE.Vector3();
   for (const part of plant.parts) {
     const p = part.positions;
-    for (let i = 0; i < p.length; i += 3)
+    for (let i = 0; i < p.length; i += 3) {
       box.expandByPoint(
         point.set(
           p[i] as number,
@@ -255,9 +257,11 @@ export function createPlantInstances(
           p[i + 2] as number,
         ),
       );
+    }
   }
-  if (box.isEmpty())
+  if (box.isEmpty()) {
     box.set(new THREE.Vector3(-0.3, 0, -0.3), new THREE.Vector3(0.3, 0.3, 0.3));
+  }
   const height = Math.max(0.3, box.max.y);
   const radius = Math.max(
     Math.abs(box.min.x),
@@ -440,10 +444,11 @@ export function createPlantInstances(
     levels.forEach((level, k) => {
       const picked = chosen[k];
       const n = picked?.copies.length ?? 0;
-      if (n > count)
+      if (n > count) {
         throw new Error(
           `draw was given ${n} copies at level ${k} of a plant with ${count}.`,
         );
+      }
       if (
         picked !== undefined &&
         (level.key !== picked.key || level.generation !== generation)
@@ -478,8 +483,9 @@ export function createPlantInstances(
     if (
       v === targets[index] &&
       (lagging.has(index) || source[index * 16 + 3] === v)
-    )
+    ) {
       return;
+    }
     targets[index] = v;
     lagging.add(index);
     closeEachFrame(closeLags);

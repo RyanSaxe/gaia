@@ -48,8 +48,14 @@ const LANGUAGES: Readonly<Record<string, string>> = {
   rust: "Rust",
 };
 /** The last part of a path, which names an entity among its neighbors. The root's entity is "the repository". */
-export const shortName = (path: string): string =>
-  path.split("/").filter(Boolean).pop() ?? "the repository";
+export const shortName = (path: string): string => {
+  const parts = path.split("/");
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i];
+    if (part !== undefined && part !== "") return part;
+  }
+  return "the repository";
+};
 
 export function representEntity(e: EntityFacts, vitality: number): Represented {
   return {

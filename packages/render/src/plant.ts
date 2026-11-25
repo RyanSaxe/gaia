@@ -898,8 +898,9 @@ function interleave(...columns: readonly Float32Array[]): Float32Array {
   const size = columns.length;
   const out = new Float32Array((columns[0]?.length ?? 0) * size);
   columns.forEach((column, k) => {
-    for (let i = 0; i < column.length; i++)
+    for (let i = 0; i < column.length; i++) {
       out[i * size + k] = column[i] as number;
+    }
   });
   return out;
 }
@@ -913,10 +914,11 @@ function snorm16(values: Float32Array, size: number): THREE.BufferAttribute {
   const n = values.length / size;
   const out = new Int16Array(n * 4);
   for (let i = 0; i < n; i++) {
-    for (let k = 0; k < size; k++)
+    for (let k = 0; k < size; k++) {
       out[i * 4 + k] = Math.round(
         Math.min(1, Math.max(-1, values[i * size + k] as number)) * 32767,
       );
+    }
   }
   return new THREE.BufferAttribute(out, 4, true);
 }
@@ -1025,8 +1027,9 @@ export function letGoOnUpload(
       (a as unknown as { array: null }).array = null;
     });
   };
-  for (const [name, a] of Object.entries(geometry.attributes))
+  for (const [name, a] of Object.entries(geometry.attributes)) {
     if (!keep.includes(name) && a instanceof THREE.BufferAttribute) letGo(a);
+  }
   if (geometry.index !== null && !keep.includes("index")) letGo(geometry.index);
 }
 
@@ -1090,8 +1093,9 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
   const geometries = plant.parts.map(geometryOf);
   // A building or a landmark is picked by a ray, which reads its positions, normals and index.
   for (const g of geometries) letGoOnUpload(g, ["position", "normal", "index"]);
-  for (const g of geometries)
+  for (const g of geometries) {
     if (g.boundingBox !== null) box.union(g.boundingBox);
+  }
   const height = Math.max(0.3, box.max.y);
   const radius = Math.max(
     Math.abs(box.min.x),
@@ -1224,8 +1228,12 @@ export function createPlant(plant: Realized, light: SceneLight): PlantView {
       vitality = Math.min(1, Math.max(0, v));
       target = shownVitality(vitality);
       // The shown vitality eases toward it from where it is.
-      if (target !== shared.uVitality.value || shared.uVitalityLag.value !== 0)
+      if (
+        target !== shared.uVitality.value ||
+        shared.uVitalityLag.value !== 0
+      ) {
         closeEachFrame(closeMine);
+      }
     },
     useDepth(on) {
       for (const m of meshes) m.mesh.material = on ? m.depth : m.color;

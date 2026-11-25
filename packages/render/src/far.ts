@@ -102,8 +102,9 @@ export function droopField(
       const k = d / Math.hypot(ox, ly, oz);
       const moved = [ox * k - ox, ly * k - oy, oz * k - oz] as const;
       reach = Math.max(reach, Math.hypot(...moved));
-      for (let a = 0; a < 3; a++)
+      for (let a = 0; a < 3; a++) {
         sums[at + a] = (sums[at + a] as number) + (moved[a] as number);
+      }
     }
   }
   const field = new Float32Array(n * n * n * 3);
@@ -111,8 +112,9 @@ export function droopField(
   for (let c = 0; c < n * n * n; c++) {
     const count = sums[c * 4 + 3] as number;
     if (count === 0) continue;
-    for (let a = 0; a < 3; a++)
+    for (let a = 0; a < 3; a++) {
       field[c * 3 + a] = (sums[c * 4 + a] as number) / count;
+    }
     filled[c] = 1;
   }
   // Empty cells take the mean of their filled neighbors, a ring at a time outward.
@@ -137,24 +139,27 @@ export function droopField(
         if (x < 0 || y < 0 || z < 0 || x >= n || y >= n || z >= n) continue;
         const o = (z * n + y) * n + x;
         if (was[o] !== 1) continue;
-        for (let a = 0; a < 3; a++)
+        for (let a = 0; a < 3; a++) {
           mean[a] = (mean[a] as number) + (field[o * 3 + a] as number);
+        }
         count++;
       }
       if (count === 0) continue;
-      for (let a = 0; a < 3; a++)
+      for (let a = 0; a < 3; a++) {
         field[c * 3 + a] = (mean[a] as number) / count;
+      }
       filled[c] = 1;
     }
   }
   const scale = field.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
   const cells = new Uint8Array(n * n * n * 4);
   for (let c = 0; c < n * n * n; c++) {
-    for (let a = 0; a < 3; a++)
+    for (let a = 0; a < 3; a++) {
       cells[c * 4 + a] =
         scale > 0
           ? Math.round(((field[c * 3 + a] as number) / scale) * 127.5 + 127.5)
           : 128;
+    }
     cells[c * 4 + 3] = 255;
   }
   return { cells, scale, reach };
@@ -196,10 +201,11 @@ export function farViewDir(i: number, j: number): THREE.Vector3 {
 }
 
 const swap = (source: string, from: string, to: string): string => {
-  if (!source.includes(from))
+  if (!source.includes(from)) {
     throw new Error(
       `The plant shader no longer contains "${from.slice(0, 70)}"; update far.ts.`,
     );
+  }
   return source.split(from).join(to);
 };
 
@@ -419,7 +425,7 @@ export function startFarBake(
   const point = new THREE.Vector3();
   for (const part of parts) {
     const p = part.positions;
-    for (let i = 0; i < p.length; i += 3)
+    for (let i = 0; i < p.length; i += 3) {
       box.expandByPoint(
         point.set(
           p[i] as number,
@@ -427,6 +433,7 @@ export function startFarBake(
           p[i + 2] as number,
         ),
       );
+    }
   }
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const height = Math.max(0.3, box.max.y);
@@ -584,14 +591,16 @@ export function startFarBake(
   // pixel across, a frame apart, before the bake steps.
   const ready = (async (): Promise<void> => {
     for (const output of Object.keys(OUTPUT) as Output[]) {
-      for (const m of meshes)
+      for (const m of meshes) {
         m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
+      }
       await renderer.compileAsync(scene, camera);
     }
     await renderer.compileAsync(quadScene, quadCamera);
     for (const output of Object.keys(OUTPUT) as Output[]) {
-      for (const m of meshes)
+      for (const m of meshes) {
         m.mesh.material = m.materials.get(output) as THREE.ShaderMaterial;
+      }
       const was = renderer.getRenderTarget();
       row.viewport.set(0, 0, 1, 1);
       row.scissor.set(0, 0, 1, 1);
@@ -632,8 +641,9 @@ export function startFarBake(
     const pass = PASSES[pk % PASSES.length] as Pass;
     shared.uVitality.value = pass.vitality;
     shared.uColorVitality.value = pass.colorVitality;
-    for (const m of meshes)
+    for (const m of meshes) {
       m.mesh.material = m.materials.get(pass.output) as THREE.ShaderMaterial;
+    }
     if (i === 0) {
       row.scissorTest = false;
       renderer.setRenderTarget(row);
@@ -760,10 +770,11 @@ export async function farFormData(
   form: FarForm,
 ): Promise<FarFormData> {
   const targets = form.atlas.targets;
-  if (targets === undefined)
+  if (targets === undefined) {
     throw new Error(
       "farFormData reads a form just baked; this one was read from storage.",
     );
+  }
   const first = targets[0] as THREE.WebGLRenderTarget;
   const width = first.width;
   const height = first.height;
@@ -1440,8 +1451,9 @@ interface Member {
 
 /** Whether `o` draws, meaning it and every object above it are visible. */
 const visibleUp = (o: THREE.Object3D): boolean => {
-  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent)
+  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) {
     if (!a.visible) return false;
+  }
   return true;
 };
 
@@ -1467,10 +1479,11 @@ export function farSlotBytes(
   slots: number,
 ): number {
   let texels = 0;
-  for (let level = 0; level < farLevels(frame, gone); level++)
+  for (let level = 0; level < farLevels(frame, gone); level++) {
     texels +=
       ((FAR_VIEWS.azimuths * frame) >> level) *
       ((FAR_VIEWS.elevations.length * frame) >> level);
+  }
   return slots * (texels * 4 * 4 + DROOP_CELLS ** 3 * 4);
 }
 
@@ -1487,10 +1500,11 @@ export function createFarCards(
   most: number,
   bareEdge: readonly [number, number] = CARD.coverEdge,
 ): FarCards {
-  if (!(most >= 1))
+  if (!(most >= 1)) {
     throw new Error(
       `A set of far cards holds at least one form; it was given ${most} slots.`,
     );
+  }
   let slots = most;
   const card = new THREE.PlaneGeometry(2, 2, 1, 5);
   const pass = {
@@ -1665,9 +1679,11 @@ export function createFarCards(
       slope.array.set(m.places.subarray(at + 7, at + 9), i * 2);
       crown.array.set(m.crowns.subarray(k * 4, k * 4 + 4), i * 4);
     }
-    for (const [k, e] of m.easing)
-      if (k < m.count)
+    for (const [k, e] of m.easing) {
+      if (k < m.count) {
         more.array[(m.offset + k) * 4 + 1] = e.shown + 0.5 * e.lag;
+      }
+    }
     for (const a of [spot, more, slope, crown]) a.needsUpdate = true;
   };
   /** Packs every member's copies afresh, each with room to grow, in a geometry large enough to hold them. */
@@ -1708,10 +1724,11 @@ export function createFarCards(
       return slots;
     },
     fit(count) {
-      if (layers !== null)
+      if (layers !== null) {
         throw new Error(
           "A set's far cards are fitted before any form fills a slot.",
         );
+      }
       slots = Math.max(1, Math.min(most, Math.floor(count)));
       slotData = new Float32Array(slots * 3 * 4);
       slotTable.dispose();
@@ -1730,8 +1747,9 @@ export function createFarCards(
       return layers === null ? 0 : farSlotBytes(frame, turn.gone.end, slots);
     },
     fill(renderer, slot, form, layer) {
-      if (!(slot >= 0 && slot < slots))
+      if (!(slot >= 0 && slot < slots)) {
         throw new Error(`No slot ${slot}; the set holds ${slots}.`);
+      }
       const width = FAR_VIEWS.azimuths * form.atlas.frame;
       const height = FAR_VIEWS.elevations.length * form.atlas.frame;
       if (layers === null) {
@@ -1772,10 +1790,11 @@ export function createFarCards(
         droop.needsUpdate = true;
         uniforms.uDroop.value = droop;
       }
-      if (form.atlas.frame !== frame)
+      if (form.atlas.frame !== frame) {
         throw new Error(
           `A set's far forms all bake at one size; this one is ${form.atlas.frame} texels a view, the set's ${frame}.`,
         );
+      }
       const levels = farLevels(frame, turn.gone.end);
       const at = new THREE.Vector3(0, 0, slot);
       form.atlas.layers.forEach((source, l) => {
@@ -1851,8 +1870,9 @@ export function createFarCards(
         const more = attribute("aMore");
         for (const [k, e] of m.easing) {
           [e.shown, e.lag] = followVitality(e.shown, e.lag, e.target, keep);
-          if (k < m.count)
+          if (k < m.count) {
             more.array[(m.offset + k) * 4 + 1] = e.shown + 0.5 * e.lag;
+          }
           if (e.shown === e.target && e.lag === 0) m.easing.delete(k);
         }
         more.needsUpdate = true;
@@ -1930,8 +1950,9 @@ export function createFarCards(
     dispose() {
       geometry.dispose();
       card.dispose();
-      for (const m of [solidMaterial, fadingMaterial, depthMaterial])
+      for (const m of [solidMaterial, fadingMaterial, depthMaterial]) {
         m.dispose();
+      }
       slotTable.dispose();
       memberTable.dispose();
       for (const l of layers ?? []) l.dispose();

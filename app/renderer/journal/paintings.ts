@@ -112,7 +112,7 @@ const named = (thing: string, wide: boolean): string =>
   wide ? `${WIDE}${thing}` : thing;
 /** A painting's seed from its id, so the same thing always gets the same strokes. */
 const seedOf = (id: string): number =>
-  [...id].reduce(
+  Array.from(id).reduce(
     (h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619),
     2166136261,
   ) >>> 0;
@@ -167,13 +167,15 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       p.done = bitmap;
     }
     p.state = p.done === null ? state : "done";
-    if (bitmap !== null)
-      for (const c of p.shown)
+    if (bitmap !== null) {
+      for (const c of p.shown) {
         (c.getContext("2d") as CanvasRenderingContext2D).drawImage(
           bitmap,
           0,
           0,
         );
+      }
+    }
     p.shown.clear();
     p.settle();
   };
@@ -181,12 +183,14 @@ export function createPaintings(options: PaintingsOptions): Paintings {
   /** The waiting painting with the best rank, in request order. A near thing waits while the person walks and until `NEAR_EVERY` has passed. */
   function take(): string | undefined {
     let best: [string, Painting] | undefined;
-    for (const [id, p] of paintings)
+    for (const [id, p] of paintings) {
       if (
         p.state === "waiting" &&
         (best === undefined || p.rank < best[1].rank)
-      )
+      ) {
         best = [id, p];
+      }
+    }
     if (best === undefined) return undefined;
     if (best[1].rank === 2) {
       const wait =
@@ -194,8 +198,9 @@ export function createPaintings(options: PaintingsOptions): Paintings {
           ? IDLE_CHECK
           : lastNear + NEAR_EVERY - performance.now();
       if (wait > 0) {
-        if (idleTimer === 0)
+        if (idleTimer === 0) {
           idleTimer = window.setTimeout(() => ((idleTimer = 0), pump()), wait);
+        }
         return undefined;
       }
       lastNear = performance.now();
@@ -226,8 +231,9 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       const key = options.keyOf?.(thing, wide) ?? null;
       const kept =
         key === null ? null : ((await options.store?.get(key)) ?? null);
-      if (kept !== null)
+      if (kept !== null) {
         return finish(p, "done", await createImageBitmap(kept));
+      }
       const look = viewing.then(() =>
         options.view(thing, VIEW.w, VIEW.h, wide),
       );
@@ -251,10 +257,11 @@ export function createPaintings(options: PaintingsOptions): Paintings {
         worker.postMessage(job, [job.color.data.buffer, job.mask.data.buffer]);
       });
       if (!("painting" in reply)) return finish(p, "none", null);
-      if (mine !== paintings) return void reply.painting.close();
+      if (mine !== paintings) return reply.painting.close();
       finish(p, "done", reply.painting);
-      if (key !== null && reply.kept !== null)
+      if (key !== null && reply.kept !== null) {
         void options.store?.put(key, reply.kept);
+      }
     } catch {
       finish(p, "none", null);
     } finally {
@@ -270,12 +277,13 @@ export function createPaintings(options: PaintingsOptions): Paintings {
       canvas.width = PAINTED.w;
       canvas.height = PAINTED.h;
       const p = want(id, 0);
-      if (p.done !== null)
+      if (p.done !== null) {
         (canvas.getContext("2d") as CanvasRenderingContext2D).drawImage(
           p.done,
           0,
           0,
         );
+      }
       // A painting being redone shows its old painting until the new one is done.
       if (p.state === "waiting" || p.state === "painting") p.shown.add(canvas);
       pump();

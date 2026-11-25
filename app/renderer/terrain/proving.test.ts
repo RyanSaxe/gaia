@@ -67,8 +67,9 @@ describe("the proving ground", () => {
     const half = doc.world.size / 2 - 20;
     for (let x = -half; x <= half; x += 4) {
       for (let z = -half; z <= half; z += 4) {
-        if (placeAt(doc.world, x, z).area.depth < 0 || !clearOfEdges(x, z))
+        if (placeAt(doc.world, x, z).area.depth < 0 || !clearOfEdges(x, z)) {
           continue;
+        }
         // The ground has its file's vitality, or on a lot its area's.
         inside++;
         expect(

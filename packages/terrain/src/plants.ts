@@ -68,8 +68,9 @@ export function lowestUnder(
   radius: number,
 ): number {
   let low = Infinity;
-  for (const [px, pz] of footprint(x, z, radius))
+  for (const [px, pz] of footprint(x, z, radius)) {
     low = Math.min(low, heightAt(l, px, pz));
+  }
   return low;
 }
 
@@ -90,8 +91,9 @@ export function isWet(
         t.waterLevel,
       ) >
       DRY / 2
-    )
+    ) {
       return true;
+    }
   }
   return false;
 }

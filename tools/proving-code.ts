@@ -133,8 +133,9 @@ function streamOf(seed: string): {
   pick<T>(items: readonly T[]): T;
 } {
   let h = 2166136261;
-  for (let i = 0; i < seed.length; i++)
+  for (let i = 0; i < seed.length; i++) {
     h = Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0;
+  }
   const next = (): number => {
     h = (h + 0x6d2b79f5) >>> 0;
     let t = h;
@@ -763,11 +764,12 @@ function writeTypeScript(
     const name = other?.symbols.find(
       (s) => s.exported && s.kind === "function",
     )?.name;
-    if (name !== undefined && target.endsWith(".ts"))
+    if (name !== undefined && target.endsWith(".ts")) {
       out.push(`import { ${name} } from "${relative(f.path, target)}";`);
+    }
   }
   out.push("");
-  if (spoil.hidden)
+  if (spoil.hidden) {
     out.push(
       `// set by init(); everything below assumes it ran first`,
       `let ready = false;`,
@@ -779,6 +781,7 @@ function writeTypeScript(
       `}`,
       "",
     );
+  }
   // The record and the bounds.
   out.push(
     ...(good
@@ -805,7 +808,7 @@ function writeTypeScript(
       : []),
   );
   out.push(`const BOUNDS = { least: 0, most: 100, step: 5 } as const;`, "");
-  if (w.limit !== undefined)
+  if (w.limit !== undefined) {
     out.push(
       ...(good
         ? [
@@ -815,6 +818,7 @@ function writeTypeScript(
       `export const ${w.limit} = 64;`,
       "",
     );
+  }
   // Each function and class symbol: a recipe written well, or a tangle.
   const functions = f.symbols.filter((s) => s.kind === "function");
   const tangledCount = Math.round(functions.length * spoil.tangled);
@@ -854,11 +858,11 @@ function writeTypeScript(
     helpers.add("newer");
     const agent = s.name.slice(w.stem.length);
     const method = METHODS[verbOf(agent)] as (typeof METHODS)[string];
-    if (spoil.docs === "fit")
+    if (spoil.docs === "fit") {
       bodies.push(
         `/** The ${w.noun}'s ${agent.toLowerCase()}: keeps its readings by id, the newest of each. */`,
       );
-    else bodies.push(...documented(s, undefined, w, spoil, r, 0));
+    } else bodies.push(...documented(s, undefined, w, spoil, r, 0));
     if (spoil.tangled >= 0.5) {
       bodies.push(
         `export class ${s.name} {`,
@@ -899,16 +903,18 @@ function writeTypeScript(
     bodies.push("");
   }
   // Unrelated helpers in a poorly kept file.
-  for (let k = 0; k < spoil.unrelated; k++)
+  for (let k = 0; k < spoil.unrelated; k++) {
     bodies.push(
       ...(UNRELATED[k % UNRELATED.length] as (n: string) => string[])(
         UNRELATED_NAMES[k % UNRELATED_NAMES.length] as string,
       ),
       "",
     );
+  }
   // Shared helpers come first, then the functions.
-  for (const h of helpers)
+  for (const h of helpers) {
     out.push(...(HELPERS[h] as (w: Words) => string[])(w), "");
+  }
   out.push(...bodies);
   // A well-kept file fills out toward its planned length with the steps it doesn't have yet, each under its own name.
   const taken = new Set(f.symbols.map((sym) => sym.name));
@@ -924,7 +930,7 @@ function writeTypeScript(
     }
     out.push(`/** ${recipe.doc(w)} */`, ...recipe.lines(name, w), "");
   }
-  while (out.length < f.lines - 8 && spoil.tangled >= 1)
+  while (out.length < f.lines - 8 && spoil.tangled >= 1) {
     out.push(
       ...tangle(
         `${r.pick(["doIt", "run2", "proc", "handle", "go"])}${out.length}`,
@@ -940,6 +946,7 @@ function writeTypeScript(
       ),
       "",
     );
+  }
   const level = (bad: boolean, fair: boolean): Level =>
     bad ? "poor" : fair ? "fair" : "good";
   const ruin = spoil.tangled >= 1;
@@ -1074,8 +1081,9 @@ function writeTest(
         `    expect(r).toEqual(${k % 4 === 0 ? "42" : "undefined"});`,
         `  });`,
       );
-      if (k % 4 === 2)
+      if (k % 4 === 2) {
         out.push(`  it.skip("handles the empty case", () => {});`);
+      }
     } else {
       out.push(
         `  it("${e.what} of the ${s.noun}", () => {`,
@@ -1231,16 +1239,20 @@ function writeRust(
         ? `//! The ${w.noun} crate: readings, their bounds, and how they add up.`
         : `// ${w.noun}`,
     );
-    for (const other of crateFiles)
-      if (other !== file && other.facts.path.endsWith(".rs"))
+    for (const other of crateFiles) {
+      if (other !== file && other.facts.path.endsWith(".rs")) {
         out.push(`pub mod ${baseOf(other.facts.path)};`);
+      }
+    }
     out.push("");
-  } else
+  } else {
     out.push(spoil.docs === "fit" ? `//! Part of the ${w.noun} crate.` : "");
+  }
   if (spoil.tangled > 0) out.push(`use std::collections::HashMap;`);
   out.push("");
-  if (spoil.docs === "fit")
+  if (spoil.docs === "fit") {
     out.push(`/// One reading: what it is, its level and its rate.`);
+  }
   out.push(
     `#[derive(Clone, Debug, PartialEq)]`,
     `pub struct ${record} {`,
@@ -1376,10 +1388,11 @@ function writeOther(file: PlannedFile): string {
       `  "private": true,`,
     );
     let k = 0;
-    for (; out.length < f.lines - 2; k++)
+    for (; out.length < f.lines - 2; k++) {
       out.push(
         `  "setting${k}": ${k % 3 === 0 ? `"${w.noun}-${k}"` : k % 3 === 1 ? String(k * 7) : "true"},`,
       );
+    }
     out.push(`  "end": true`, `}`);
   } else if (ext === "toml") {
     out.push(
@@ -1390,11 +1403,12 @@ function writeOther(file: PlannedFile): string {
       "",
     );
     let k = 0;
-    for (; out.length < f.lines; k++)
+    for (; out.length < f.lines; k++) {
       out.push(
         `# setting ${k}`,
         `option_${k} = ${k % 2 === 0 ? "true" : String(k)}`,
       );
+    }
   } else if (ext === "sh") {
     out.push(
       `#!/usr/bin/env bash`,
@@ -1405,19 +1419,21 @@ function writeOther(file: PlannedFile): string {
       "",
     );
     let k = 0;
-    for (; out.length < f.lines; k++)
+    for (; out.length < f.lines; k++) {
       out.push(
         poor
           ? `cd dir${k} && make || true`
           : `echo "step ${k}: checking ${w.noun}"`,
         poor ? "" : `test -d "./part-${k}" || mkdir -p "./part-${k}"`,
       );
+    }
   } else {
     out.push(`id,level,rate,at`);
-    for (let k = 1; out.length < f.lines; k++)
+    for (let k = 1; out.length < f.lines; k++) {
       out.push(
         `${w.noun.replace(/ /g, "-")}-${k},${(k * 37) % 100},${(k * 13) % 50},${1700000000 + k * 60}`,
       );
+    }
   }
   return `${out.join("\n").trimEnd()}\n`;
 }
@@ -1439,9 +1455,9 @@ export function provingCode(files: readonly PlannedFile[]): {
       "path" | "vitality" | "health" | "planned" | "lines"
     > | null = null;
     if (f.kind === "test") text = writeTest(file, facts, health);
-    else if (f.path.endsWith(".ts"))
+    else if (f.path.endsWith(".ts")) {
       ({ text, entry } = writeTypeScript(file, facts));
-    else if (f.path.endsWith(".rs")) {
+    } else if (f.path.endsWith(".rs")) {
       const dir = f.path.split("/").slice(0, -1).join("/");
       ({ text, entry } = writeRust(
         file,
@@ -1451,7 +1467,7 @@ export function provingCode(files: readonly PlannedFile[]): {
       ));
     } else text = writeOther(file);
     code.set(f.path, text);
-    if (entry !== null)
+    if (entry !== null) {
       manifest.push({
         path: f.path,
         vitality: Math.round(file.vitality * 100) / 100,
@@ -1460,6 +1476,7 @@ export function provingCode(files: readonly PlannedFile[]): {
         lines: text.split("\n").length - 1,
         ...entry,
       });
+    }
   }
   return { code, manifest };
 }

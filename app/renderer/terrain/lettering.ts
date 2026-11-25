@@ -35,10 +35,11 @@ function breaksOf(text: string): [string, string][] {
     const before = text[i - 1] as string;
     const at = text[i] as string;
     if (before === " ") out.push([text.slice(0, i - 1), text.slice(i)]);
-    else if ("/-_.".includes(before) && at !== " ")
+    else if ("/-_.".includes(before) && at !== " ") {
       out.push([text.slice(0, i), text.slice(i)]);
-    else if (/[a-z0-9]/.test(before) && /[A-Z]/.test(at))
+    } else if (/[a-z0-9]/.test(before) && /[A-Z]/.test(at)) {
       out.push([text.slice(0, i), text.slice(i)]);
+    }
   }
   return out.filter(([a, b]) => a.trim() !== "" && b.trim() !== "");
 }
@@ -59,8 +60,9 @@ export function letter(
   const layouts = [{ lines: [text], per: per(text), cap: board.size }];
   if (board.twoLines) {
     const cap = Math.min(board.size, board.height * TWO_LINE_SHARE);
-    for (const [a, b] of breaksOf(text))
+    for (const [a, b] of breaksOf(text)) {
       layouts.push({ lines: [a, b], per: Math.max(per(a), per(b)), cap });
+    }
   }
   const sizeAt = (l: (typeof layouts)[number], widen: number): number =>
     Math.min(l.cap, (board.width * widen) / l.per);

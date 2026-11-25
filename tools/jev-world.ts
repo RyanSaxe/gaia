@@ -65,10 +65,11 @@ const allowed = Number(flag("spend-up-to", "0"));
 const out = resolve(flag("out", SNAPSHOT.answers));
 const ledger = flag("ledger", "");
 const graphFile = resolve(flag("graph", SNAPSHOT.graph));
-if (!existsSync(graphFile))
+if (!existsSync(graphFile)) {
   throw new Error(
     `No graph snapshot at ${graphFile}: write one with \`GAIA_DATA_DIR=dir pnpm graph-snapshot\`, or pass --graph.`,
   );
+}
 const graph = JSON.parse(readFileSync(graphFile, "utf8")) as CodeGraph;
 const facts = factsOf(graph);
 
@@ -95,17 +96,18 @@ function startEngine(env: Record<string, string>): EngineClient {
   const client = createEngineClient((line) =>
     engine?.stdin?.write(`${line}\n`),
   );
-  if (engine.stdout !== null)
+  if (engine.stdout !== null) {
     createInterface({ input: engine.stdout }).on("line", (line) =>
       client.receive(line),
     );
+  }
   return client;
 }
 
 let client: EngineClient;
 if (judge === "local") {
   const standIn = await startOpenRouterStandIn({ delayMs: 0 });
-  closeStandIn = standIn.close;
+  closeStandIn = () => standIn.close();
   client = startEngine({
     GAIA_JEV: "live",
     GAIA_JEV_ENDPOINT: standIn.endpoint,
@@ -114,8 +116,9 @@ if (judge === "local") {
 else throw new Error(`Unknown judge ${judge}; choose jev or local.`);
 
 const status = await client.call("jev.status", {});
-if (!status.live || !status.key)
+if (!status.live || !status.key) {
   throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
+}
 
 // What this run would send: the look and form requests (`planWorldRequests`, `planForms`) with no kept answer, at
 // most --limit of them.
@@ -163,8 +166,9 @@ const guarded: JevClient = {
         (await client.call("jev.estimate", { requests: [request] }))
           .estimatedUsd >
         allowed
-    )
+    ) {
       throw new Error("over --spend-up-to");
+    }
     sent++;
     const r = await live.ask(request);
     spent += r.costUsd;
@@ -197,9 +201,11 @@ try {
 }
 // Once a whole run has sent every request, drop answers to requests the world no longer makes, because their questions
 // or options changed.
-if (stopped === undefined)
-  for (const key of Object.keys(kept.answers))
+if (stopped === undefined) {
+  for (const key of Object.keys(kept.answers)) {
     if (!asked.has(key)) delete kept.answers[key];
+  }
+}
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, fixtureJson({ answers: kept.answers }));
 

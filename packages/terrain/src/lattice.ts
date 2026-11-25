@@ -64,8 +64,9 @@ export function heightAt(
   if (
     l.beyond !== undefined &&
     (ux < 0 || uz < 0 || ux > l.n - 1 || uz > l.n - 1)
-  )
+  ) {
     return l.beyond(x, z, values);
+  }
   const gx = Math.min(l.n - 1.000001, Math.max(0, ux));
   const gz = Math.min(l.n - 1.000001, Math.max(0, uz));
   const ix = Math.floor(gx);

@@ -118,10 +118,11 @@ async function decode(
   url: string,
 ): Promise<AudioBuffer> {
   const response = await fetch(url);
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(
       `Could not load the sound at ${url.slice(0, 80)}: ${response.status}.`,
     );
+  }
   return ctx.decodeAudioData(await response.arrayBuffer());
 }
 
@@ -147,10 +148,11 @@ export async function loadBank(
       at: s.start,
       length: s.length,
     }));
-    if (cuts.length === 0)
+    if (cuts.length === 0) {
       throw new Error(
         `The sound manifest lists no footfalls in ${STEPS[g][1]}.`,
       );
+    }
     return { buffer: stepBuffers[g], cuts };
   };
   const steps = {
@@ -197,8 +199,9 @@ export function loadMusic(ctx: BaseAudioContext, keep = false): MusicBank {
     let bytes = files.get(stem);
     if (bytes === undefined) {
       bytes = fetch(STEM_URLS[stem]).then((r) => {
-        if (!r.ok)
+        if (!r.ok) {
           throw new Error(`Could not load the music's ${stem}: ${r.status}.`);
+        }
         return r.arrayBuffer();
       });
       files.set(stem, bytes);

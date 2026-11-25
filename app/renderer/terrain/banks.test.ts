@@ -298,8 +298,9 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
         }
         const p = tree ? trees.get(k)! : placed.placements[i]!;
         const on = placeAt(world, p.x, p.z).file?.path;
-        if (s.file !== undefined && on !== s.file)
+        if (s.file !== undefined && on !== s.file) {
           astray.push(`${path} (${s.as}) on ${on ?? "no file"}`);
+        }
       });
       // Every stone, bush or flowers represents code.
       expect(placed.placements.length, root).toBe(
@@ -333,8 +334,9 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
         const at = sited.find((x) => x.path === t.path)?.at;
         const on =
           at === undefined ? undefined : placeAt(world, at.x, at.z).file?.path;
-        if (on !== t.file)
+        if (on !== t.file) {
           astray.push(`${t.path} (${t.as}) on ${on ?? "no file"}`);
+        }
       }
       expect(astray, root).toEqual([]);
     }
@@ -348,11 +350,12 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
           c.x + Math.cos(-c.yaw) * s,
           c.z + Math.sin(-c.yaw) * s,
         ];
-        for (const end of [-c.span / 2, c.span / 2])
+        for (const end of [-c.span / 2, c.span / 2]) {
           expect(
             waterDepthAt(land, ...at(end)),
             `${root}: ${c.x}, ${c.z} ends dry`,
           ).toBeLessThan(0.01);
+        }
         expect(
           Math.max(
             ...Array.from({ length: 21 }, (_, i) =>
@@ -374,11 +377,12 @@ describe("the showcase, as it is and fixed, and the proving ground, placed as th
       );
       expect(shown.length, root).toBe(placed.placements.length);
       placed.symbols.forEach((i, k) => {
-        if (i >= 0)
+        if (i >= 0) {
           expect(shown[i], root).toBeCloseTo(
             code.layout.symbols[k]!.vitality,
             5,
           );
+        }
       });
     }
   });

@@ -116,14 +116,16 @@ function faceNormals(rows: readonly (readonly V3[])[]): V3[][] {
         [i, j],
         [i, j + 1],
         [i + 1, j],
-      ] as const)
+      ] as const) {
         put(ii, jj, f1);
+      }
       for (const [ii, jj] of [
         [i, j + 1],
         [i + 1, j + 1],
         [i + 1, j],
-      ] as const)
+      ] as const) {
         put(ii, jj, f2);
+      }
     }
   }
   return acc.map((row) => row.map(normalize));
@@ -166,10 +168,12 @@ function emitGrid(
   for (let i = 0; i + 1 < rows.length; i++) {
     for (let j = 0; j + 1 < cols; j++) {
       const a = first + i * cols + j;
-      if (!same(rows[i]?.[j], rows[i]?.[j + 1]))
+      if (!same(rows[i]?.[j], rows[i]?.[j + 1])) {
         out.triangle(a, a + 1, a + cols);
-      if (!same(rows[i + 1]?.[j], rows[i + 1]?.[j + 1]))
+      }
+      if (!same(rows[i + 1]?.[j], rows[i + 1]?.[j + 1])) {
         out.triangle(a + 1, a + cols + 1, a + cols);
+      }
     }
   }
 }
@@ -229,13 +233,14 @@ function emitPlates(
         pick(normals),
       );
       const cols = j1 - j0;
-      if (backing !== undefined)
+      if (backing !== undefined) {
         emitGrid(
           backing.out,
           pick(backing.rows).map((row) => row.reverse()),
           () => ({ shade: 0.08, tint: 0.02 }),
           (i, j) => held(i, cols - j),
         );
+      }
     }
   }
 }
@@ -790,8 +795,9 @@ export function buildFallenLog(
         let at = 1 + Math.floor(strips.next() * 3);
         at < count - 1;
         at += 3 + Math.floor(strips.next() * 4)
-      )
+      ) {
         cuts.push(at);
+      }
       return [...cuts, count - 1];
     };
     const ragged = (q: V3): number =>
@@ -824,16 +830,18 @@ export function buildFallenLog(
   });
 
   // Stubs of boughs toward the crown end, which break off one by one as vitality falls.
-  for (let s = 0; s < Math.round(p.boughs); s++)
+  for (let s = 0; s < Math.round(p.boughs); s++) {
     emitStub(bark, wood, stem, r.fork(`stub${s}`), carries);
+  }
   const anchors: Anchor[] = [];
   stations.forEach((st, i) => {
-    if (i % 2 === 1)
+    if (i % 2 === 1) {
       anchors.push({
         position: ringPoint(st, Math.PI / 2, 1),
         normal: UP,
         size: clamp(girth * 2, 0, 1),
       });
+    }
   });
   return { parts: [bark.part(), wood.part()], anchors };
 }
@@ -1045,7 +1053,7 @@ export function buildStump(
       () => ({ ...held, wither: 0.9 }),
     );
   });
-  for (const lobe of lobes)
+  for (const lobe of lobes) {
     emitRoot(
       bark,
       stem,
@@ -1054,6 +1062,7 @@ export function buildStump(
       girth * Math.max(0.3, (p.roots - 0.2) * 1.5),
       halves[Math.sin(lobe.angle - stem.split) >= 0 ? 0 : 1] as Channels,
     );
+  }
   const anchors: Anchor[] = [
     {
       position: capPoint(crown, 0, 0),

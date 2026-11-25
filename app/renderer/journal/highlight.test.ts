@@ -9,10 +9,11 @@ describe("code on a page", () => {
       "  ${x}`); /* a",
       "note */ ok",
     ];
-    for (const path of ["app/x.ts", "tools/a.py", "engine/src/a.rs"])
+    for (const path of ["app/x.ts", "tools/a.py", "engine/src/a.rs"]) {
       expect(
         highlight(lines, path).map((l) => l.map((p) => p.text).join("")),
         path,
       ).toEqual(lines);
+    }
   });
 });

@@ -92,8 +92,9 @@ function bucketsOf(sites: readonly OwnedSite[]): Buckets {
     Math.floor((s.z - z0) / BUCKET) * nx + Math.floor((s.x - x0) / BUCKET);
   const starts = new Int32Array(nx * nz + 1);
   for (const s of sites) starts[at(s) + 1] = (starts[at(s) + 1] as number) + 1;
-  for (let c = 0; c < nx * nz; c++)
+  for (let c = 0; c < nx * nz; c++) {
     starts[c + 1] = (starts[c + 1] as number) + (starts[c] as number);
+  }
   const fill = starts.slice(0, nx * nz);
   const ids = new Int32Array(sites.length);
   sites.forEach((s, k) => {
@@ -177,8 +178,9 @@ function ownersInto(
     shares[k] = Math.exp(-(shares[k] as number) / soft) - floor;
     total += shares[k] as number;
   }
-  for (let k = 0; k < count; k++)
+  for (let k = 0; k < count; k++) {
     shares[k] = ((shares[k] as number) / total) * (1 - wild);
+  }
   if (wild > 0) {
     owners[count] = WILD_OWNER;
     shares[count++] = wild;
@@ -239,11 +241,13 @@ export function ownershipRows(
 ): { owners: Uint16Array; shares: Uint8Array } {
   const { n, origin, spacing } = grid;
   const taps = GROUND_VITALITY.taps;
-  for (const s of sites)
-    if (s.owner < 0 || s.owner >= WILD_TAP)
+  for (const s of sites) {
+    if (s.owner < 0 || s.owner >= WILD_TAP) {
       throw new Error(
         `Ground has at most ${WILD_TAP} owners, numbered from 0; a site names owner ${s.owner}.`,
       );
+    }
+  }
   const owners = new Uint16Array((k1 - k0) * n * taps).fill(WILD_TAP);
   const shares = new Uint8Array((k1 - k0) * n * taps);
   const who = new Int32Array(MOST + 1);
@@ -266,8 +270,12 @@ export function ownershipRows(
         let best = t;
         for (let j = t + 1; j < count; j++) {
           const d = (much[j] as number) - (much[best] as number);
-          if (d > 0 || (d === 0 && (who[j] as number) < (who[best] as number)))
+          if (
+            d > 0 ||
+            (d === 0 && (who[j] as number) < (who[best] as number))
+          ) {
             best = j;
+          }
         }
         [who[t], who[best]] = [who[best] as number, who[t] as number];
         [much[t], much[best]] = [much[best] as number, much[t] as number];

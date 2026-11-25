@@ -70,8 +70,9 @@ async function call<T>(
       result?: T;
       error?: { message: string };
     };
-    if (response.result === undefined)
+    if (response.result === undefined) {
       throw new Error(`${method}: ${response.error?.message ?? "no answer"}`);
+    }
     return { result: response.result, ms };
   }
   throw new Error(`${method}: the engine closed without answering`);
@@ -82,17 +83,20 @@ async function rootOf(r: Repo): Promise<string> {
   if (r.root !== undefined) {
     const root = resolve(repo, r.root);
     const [command, ...rest] = r.make ?? [];
-    if (command !== undefined && !existsSync(root))
+    if (command !== undefined && !existsSync(root)) {
       execFileSync(command, rest, { cwd: repo, env, stdio: "inherit" });
+    }
     return root;
   }
-  if (r.address === undefined || r.commit === undefined)
+  if (r.address === undefined || r.commit === undefined) {
     throw new Error(`${r.name} needs a root, or an address and a commit`);
+  }
   const { result } = await call<Cloned>("project.clone", {
     address: r.address,
   });
-  if (!result.cloned)
+  if (!result.cloned) {
     throw new Error(`${r.name} could not be cloned: ${result.why}`);
+  }
   const git = (...args: string[]): void =>
     void execFileSync("git", ["-C", result.root, ...args], { stdio: "ignore" });
   try {
@@ -101,8 +105,9 @@ async function rootOf(r: Repo): Promise<string> {
     git("fetch", "--quiet", "origin", r.commit);
   }
   git("-c", "advice.detachedHead=false", "checkout", "--quiet", r.commit);
-  for (const path of r.drop ?? [])
+  for (const path of r.drop ?? []) {
     rmSync(resolve(result.root, path), { recursive: true, force: true });
+  }
   return result.root;
 }
 
@@ -196,8 +201,9 @@ async function replay(
     }
   } finally {
     rmSync(store, { recursive: true, force: true });
-    if (r.commit !== undefined)
+    if (r.commit !== undefined) {
       git("-c", "advice.detachedHead=false", "checkout", "--quiet", r.commit);
+    }
   }
   const first = defsAt[0] ?? [];
   const last = defsAt.at(-1) ?? [];
@@ -243,8 +249,9 @@ execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], {
 if (replayAt >= 0) {
   const [name, from, to] = args.slice(replayAt + 1, replayAt + 4);
   const r = repos.find((x) => x.name === name);
-  if (r === undefined || from === undefined || to === undefined)
+  if (r === undefined || from === undefined || to === undefined) {
     throw new Error("Usage: pnpm bench --replay name FROM TO [--monthly]");
+  }
   await replay(r, from, to, args.includes("--monthly"));
 }
 const results: Record<string, ReturnType<typeof measure>> = {};
@@ -263,8 +270,10 @@ for (const r of chosen) {
   console.log(`  definitions: ${words(m.roles)}`);
   console.log(`  blocks: ${words(m.blocks)}`);
   console.log(`  edges: ${words(m.edges)}`);
-  if (Object.keys(m.conventions).length > 0)
+  if (Object.keys(m.conventions).length > 0) {
     console.log(`  conventions: ${words(m.conventions)}`);
+  }
 }
-if (out !== undefined)
+if (out !== undefined) {
   writeFileSync(resolve(out), `${JSON.stringify(results, null, 2)}\n`);
+}

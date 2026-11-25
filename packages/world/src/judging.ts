@@ -61,14 +61,18 @@ export function requestSubject(request: JevRequest): string {
     ) || (s as Record<string, unknown>).decided !== undefined;
   const verb = composing ? "composing" : "judging";
   if (s.file !== undefined) return `${verb} the file ${at(s.file.path)}`;
-  if (s.definition !== undefined)
+  if (s.definition !== undefined) {
     return `${verb} ${s.definition.file ?? ""}#${s.definition.name ?? ""}'s building or landmark`;
-  if (s.entity !== undefined)
+  }
+  if (s.entity !== undefined) {
     return `${verb} ${at(s.entity.path)}'s ${composing ? "building or landmark" : "entity"}`;
-  if (s.directory !== undefined)
+  }
+  if (s.directory !== undefined) {
     return `${verb} the area ${at(s.directory.path)}${composing ? "'s land" : ""}`;
-  if (s.trail !== undefined)
+  }
+  if (s.trail !== undefined) {
     return `${verb} the trail from ${at(s.trail.from?.path)} to ${at(s.trail.to?.path)}`;
+  }
   if (s.repository !== undefined) return `${verb} the world's sky`;
   return `a request (${requestKey(request).slice(0, 12)})`;
 }
@@ -92,10 +96,12 @@ export function answersFit(
   return Object.entries(request.questions).every(([id, q]) => {
     const a: JevAnswer | undefined = response.answers?.[id];
     if (a === undefined || a.type !== q.type) return false;
-    if (a.type === "choice")
+    if (a.type === "choice") {
       return q.type === "choice" && Object.hasOwn(q.criteria, a.choice);
-    if (a.type === "noul")
+    }
+    if (a.type === "noul") {
       return Number.isFinite(a.noul) && a.noul >= 0 && a.noul <= 1;
+    }
     return (
       q.type === "score" &&
       Number.isFinite(a.score) &&
@@ -122,11 +128,12 @@ export function keptJev(jev: JevClient | null, keeping: Keeping): JevClient {
         keeping.settled?.(key);
         return stored;
       }
-      if (jev === null)
+      if (jev === null) {
         throw new RequestFailed(
           requestSubject(request),
           `there is no answer kept for it, and ${keeping.unasked ?? "Jev is not asked"}`,
         );
+      }
       let response: JevResponse;
       try {
         response = await jev.ask(request);
@@ -136,11 +143,12 @@ export function keptJev(jev: JevClient | null, keeping: Keeping): JevClient {
           error instanceof Error ? error.message : String(error),
         );
       }
-      if (!answersFit(request, response))
+      if (!answersFit(request, response)) {
         throw new RequestFailed(
           requestSubject(request),
           "Jev answered outside the options it was given",
         );
+      }
       keeping.keep(key, response);
       keeping.settled?.(key);
       return response;

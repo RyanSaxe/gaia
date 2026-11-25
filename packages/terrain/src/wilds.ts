@@ -232,8 +232,9 @@ export function wildThicket(
   if (
     wildHash(ci, cj, 101) >=
     g.chance * scrub * smoothstep(g.thinIn[0], g.thinIn[1], past)
-  )
+  ) {
     return null;
+  }
   const tx = (ci + wildHash(ci, cj, 102)) * g.cell;
   const tz = (cj + wildHash(ci, cj, 103)) * g.cell;
   const members =

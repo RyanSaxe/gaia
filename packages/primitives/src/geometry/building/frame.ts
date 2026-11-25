@@ -141,12 +141,13 @@ export function hipSlope(m: Mass): number {
 /** The height of a hipped end's plane at `a` along the ridge. A half-hip keeps the lower part of its gables. */
 export function hipPlane(m: Mass, a: number, top: number): number {
   const { halfLength, halfSpan } = spanOf(m);
-  if (m.roof === "hip")
+  if (m.roof === "hip") {
     return (
       top +
       m.rise -
       hipSlope(m) * (Math.abs(a) - Math.max(0, halfLength - halfSpan))
     );
+  }
   const cut = (0.45 * m.rise) / hipSlope(m);
   return top + m.rise - hipSlope(m) * (Math.abs(a) - (halfLength - cut));
 }
@@ -156,8 +157,9 @@ export function hipPlane(m: Mass, a: number, top: number): number {
  * (a, b): the end planes that cut the gables back. Zero for every other form.
  */
 export function hipDrop(m: Mass, a: number, b: number, top: number): number {
-  if ((m.roof !== "hip" && m.roof !== "half-hip") || !m.ends[a < 0 ? 0 : 1])
+  if ((m.roof !== "hip" && m.roof !== "half-hip") || !m.ends[a < 0 ? 0 : 1]) {
     return 0;
+  }
   const slope = top + m.rise - (m.rise / spanOf(m).halfSpan) * Math.abs(b);
   return Math.max(0, slope - hipPlane(m, a, top));
 }
@@ -170,12 +172,14 @@ export function roofY(
   z: number,
 ): number {
   const top = wallTop(plan, m);
-  if (m.roof === "cone")
+  if (m.roof === "cone") {
     return top + m.rise * (1 - Math.hypot(x - m.x, z - m.z) / (m.width / 2));
+  }
   const { a, b } = roofCoords(m, x, z);
   const { halfSpan } = spanOf(m);
-  if (m.roof === "lean-to")
+  if (m.roof === "lean-to") {
     return top + m.rise * (1 - (m.fall * b + halfSpan) / (2 * halfSpan));
+  }
   return (
     top + m.rise - (m.rise / halfSpan) * Math.abs(b) - hipDrop(m, a, b, top)
   );
@@ -236,8 +240,9 @@ export function shownWalls(plan: BuildingPlan): Wall[] {
         (plan.floor + top) / 2,
         top - 0.1,
         topAt(plan, w, s) - 0.15,
-      ])
+      ]) {
         if (!hidden(plan, w, s, y)) return true;
+      }
     }
     return false;
   });
@@ -335,8 +340,9 @@ export function chimneyEnd(plan: BuildingPlan): -1 | 0 | 1 {
         plan.masses.some(
           (other, i) => i !== 0 && insideMass(plan, other, p, -0.3),
         )
-      )
+      ) {
         return false;
+      }
     }
     // A gable end facing the door would put the chimney across the walk.
     return !(m.ridge === "z" && sign > 0);

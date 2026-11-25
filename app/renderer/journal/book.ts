@@ -198,8 +198,9 @@ export function createJournalBook(
     ribbon.style.transformOrigin = `${-drawn.left}px 0`;
     ribbon.style.setProperty("--head", `${-PAGE.h / 2 - drawn.top}px`);
     ribbon.style.setProperty("--foot", `${PAGE.h / 2 - drawn.top}px`);
-    for (const [name, pose] of Object.entries(RIBBON_POSES))
+    for (const [name, pose] of Object.entries(RIBBON_POSES)) {
       ribbon.style.setProperty(`--${name}`, ribbonTransform(pose));
+    }
     ribbon.innerHTML = drawn.svg;
     ribbon.dataset.side = "here";
   }
@@ -226,17 +227,26 @@ export function createJournalBook(
         let n: HTMLElement | null = e;
         n !== null && n !== body;
         n = n.offsetParent as HTMLElement | null
-      )
+      ) {
         y += n.offsetTop;
+      }
       return y;
     };
     const rows = [...body.querySelectorAll<HTMLElement>(".jp-line, .jp-row")];
-    for (const row of rows)
+    for (const row of rows) {
       row.classList.toggle("jp-past", down(row) + row.offsetHeight > bottom);
+    }
     // A definition too long for its page gets a fold note where the page ends. The last row that fits is hidden to make room for it.
     const fold = body.querySelector<HTMLElement>(".jp-fold.after");
     if (fold !== null && rows.some((r) => r.classList.contains("jp-past"))) {
-      const last = rows.filter((r) => !r.classList.contains("jp-past")).at(-1);
+      let last: HTMLElement | undefined;
+      for (let i = rows.length - 1; i >= 0; i--) {
+        const row = rows[i];
+        if (row !== undefined && !row.classList.contains("jp-past")) {
+          last = row;
+          break;
+        }
+      }
       if (last !== undefined) {
         last.classList.add("jp-past");
         const more = rows.filter(
@@ -374,12 +384,13 @@ export function createJournalBook(
     }
   }
   function markTabs(place: string): void {
-    for (const t of tabs.children)
+    for (const t of tabs.children) {
       t.classList.toggle(
         "on",
         (t as HTMLElement).dataset.from !== undefined &&
           within(place, (t as HTMLElement).dataset.from as string),
       );
+    }
   }
   function show(place: string): void {
     layDepth(place);
@@ -462,8 +473,9 @@ export function createJournalBook(
    */
   function liftMargins(scale: number): void {
     const k = (MARGIN_PERSPECTIVE - MARGIN_LIFT * scale) / MARGIN_PERSPECTIVE;
-    for (const m of margins)
+    for (const m of margins) {
       m.style.transform = `translateZ(${MARGIN_LIFT}px) scale(${k})`;
+    }
   }
   place(false);
   // A window resize moves the book without a transition. It animates between its corner and the middle only to open and shut.
@@ -613,8 +625,9 @@ export function createJournalBook(
       let p: string | null = from;
       p !== null && p !== target && distance < 400;
       distance++
-    )
+    ) {
       p = pages.next(p, forward ? 1 : -1);
+    }
     const leaves = Math.max(
       2,
       Math.min(wholeNow ? RIFFLE.whole : RIFFLE.most, distance - 1),
@@ -702,7 +715,7 @@ export function createJournalBook(
       const falling: [HTMLElement, number, number][] = flying.map(
         ({ leaf: l, z }) => [l, z, 0],
       );
-      if (ribbon.dataset.side === "carried")
+      if (ribbon.dataset.side === "carried") {
         falling.push(
           riding === null
             ? [
@@ -712,6 +725,7 @@ export function createJournalBook(
               ]
             : [ribbon, riding, RIBBON_ON_LEAF],
         );
+      }
       fallShut(falling);
       window.setTimeout(() => {
         for (const f of flying) f.leaf.remove();
@@ -1006,8 +1020,9 @@ export function createJournalBook(
     const toward = taken.side === "right" ? -dx : dx;
     if (taken.turn === null) {
       // A drag starts only after `DRAG.start` px toward the spine, more than a tap's wobble.
-      if (toward < DRAG.start || Math.abs(e.clientY - taken.y0) > toward)
+      if (toward < DRAG.start || Math.abs(e.clientY - taken.y0) > toward) {
         return;
+      }
       const target =
         at === null ? null : pages.next(at, taken.side === "right" ? 1 : -1);
       if (target === null || turning) {
@@ -1027,7 +1042,7 @@ export function createJournalBook(
   });
   const letGo = (): void => {
     root.classList.remove("taking");
-    if (taken?.turn != null) {
+    if (taken?.turn !== undefined && taken.turn !== null) {
       if (taken.progress >= 0.5) taken.turn.finish(taken.progress);
       else taken.turn.cancel(taken.progress);
     }
@@ -1165,9 +1180,9 @@ export function createJournalBook(
         last.x1 === x1 &&
         y <= last.y1 + 1 &&
         y >= last.y0
-      )
+      ) {
         last.y1 = Math.max(last.y1, y + b.offsetHeight);
-      else holes.push({ x0, x1, y0: y, y1: y + b.offsetHeight });
+      } else holes.push({ x0, x1, y0: y, y1: y + b.offsetHeight });
     }
     if (holes.length === 0) return "";
     return `path(evenodd, "M0 0H${EDGE}V${PAGE.h}H0Z${holes.map((h) => `M${h.x0} ${h.y0}H${h.x1}V${h.y1}H${h.x0}Z`).join("")}")`;
@@ -1274,8 +1289,9 @@ export function createJournalBook(
         setOpen(false);
         // `view.ts` also listens on window in the capture phase. On M it would reopen the book, and on Escape close the map.
         e.stopImmediatePropagation();
-      } else if (e.code === "ArrowRight" || e.code === "ArrowLeft")
+      } else if (e.code === "ArrowRight" || e.code === "ArrowLeft") {
         turnBy(e.code === "ArrowRight" ? 1 : -1);
+      }
       e.stopPropagation();
       if (e.code !== "Tab") e.preventDefault();
     },
@@ -1294,8 +1310,9 @@ export function createJournalBook(
       const target = place0 ?? "map";
       const ready = wholeAt(target);
       void settledSoon(ready).then((now) => {
-        if (now || target === "map")
+        if (now || target === "map") {
           return void ready.then(() => setOpen(true, target));
+        }
         setOpen(true, "map", () => turnTo(target));
       });
     },

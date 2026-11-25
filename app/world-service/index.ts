@@ -102,8 +102,9 @@ async function engineUp(): Promise<void> {
     connected.promise.then(() => true),
     new Promise<false>((r) => setTimeout(() => r(false), 20_000)),
   ]);
-  if (!up)
+  if (!up) {
     throw new Error("The engine did not start. Build it with pnpm engine.");
+  }
 }
 
 /** Sends one page the start page's offer: the worlds opened before, and why the last address failed, if it did. */
@@ -281,8 +282,9 @@ async function choose(
     const located = await engine.call("project.locate", {
       address: place.address,
     });
-    if (!located.found)
+    if (!located.found) {
       return offerStart(port, { address: place.address, why: located.why });
+    }
     send(port, {
       type: "world.progress",
       opening: { stage: "reading", root: located.root },
@@ -290,8 +292,9 @@ async function choose(
     const cloned = await engine.call("project.clone", {
       address: place.address,
     });
-    if (!cloned.cloned)
+    if (!cloned.cloned) {
       return offerStart(port, { address: place.address, why: cloned.why });
+    }
     console.log(
       `gaia: ${cloned.fetched ? "fetched into" : "cloned"} ${cloned.owner}/${cloned.repo} in ${Date.now() - started} ms`,
     );
@@ -329,18 +332,20 @@ parent.on("message", (event) => {
       renderer = port;
       port?.on("message", (e) => {
         const m = e.data as FromRenderer;
-        if (m.type === "world.open")
+        if (m.type === "world.open") {
           void (root === null ? offerStart(port) : open(port, root));
-        else if (m.type === "world.choose") void choose(port, m.place);
+        } else if (m.type === "world.choose") void choose(port, m.place);
         else if (m.type === "world.source") void sendSource(port, m.path);
         else if (m.type === "world.painting") {
           const opened = openedOn.get(port);
-          if (opened !== undefined)
+          if (opened !== undefined) {
             void keep(() => keepPainting(engine, opened.folder, m.painting));
+          }
         } else if (m.type === "world.stood") {
           const opened = openedOn.get(port);
-          if (opened !== undefined)
+          if (opened !== undefined) {
             void keep(() => keepLastSpot(engine, opened.folder, m.stood));
+          }
         } else if (m.type === "world.consent") {
           consenting?.resolve(m.approve);
           consenting = null;

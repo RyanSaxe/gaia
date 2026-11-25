@@ -62,8 +62,9 @@ export function reliefAt(t: Terrain, x: number, z: number): number {
     pull = lo;
   }
   const held = heightAt(t.lattice, x * pull, z * pull);
-  if (toRim < 0)
+  if (toRim < 0) {
     return held + (wildRollAt(t, x, z) - held) * smooth(-toRim / WILDS.settle);
+  }
   return (
     held +
     (heightAt(t.lattice, x, z) - held) *
@@ -158,8 +159,9 @@ function groundOf(style: MapStyle): HTMLCanvasElement {
           x + ox < side + reach &&
           y + oy > -reach &&
           y + oy < side + reach
-        )
+        ) {
           draw(x + ox, y + oy);
+        }
       }
     }
   };
@@ -413,8 +415,9 @@ function* inkTile(
   const interval = c.interval * 2 ** Math.max(0, k - 1);
   let lo = Infinity;
   let hi = -Infinity;
-  for (const v of heights)
+  for (const v of heights) {
     if (!Number.isNaN(v)) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
+  }
   const lines = [new Path2D(), new Path2D()];
   for (let s = Math.ceil(lo / interval); s * interval <= hi; s++) {
     const segments: number[] = [];
@@ -463,8 +466,9 @@ function* inkTile(
         z < z0 - long ||
         z > z0 + side + long ||
         !inked(x, z, hs)
-      )
+      ) {
         continue;
+      }
       const gx =
         (heightOf(x + 2 * step, z) - heightOf(x - 2 * step, z)) / (4 * step);
       const gz =
@@ -558,8 +562,9 @@ function* inkTile(
         ci <= Math.floor((x0 + side + pad) / cell);
         ci++
       ) {
-        if (k === INK.thickets && wildHash(ci, cj, SEEDS.thicket) > 0.35)
+        if (k === INK.thickets && wildHash(ci, cj, SEEDS.thicket) > 0.35) {
           continue;
+        }
         const thicket = wildThicket(t, ci, cj);
         if (thicket === null) continue;
         const bushes =
@@ -583,15 +588,16 @@ function* inkTile(
             const a = (l / lobes) * Math.PI * 2 + turn;
             const rr = r * (0.86 + hash(bush.seed * 97, l) * 0.24);
             const mid = a - Math.PI / lobes;
-            if (l === 0)
+            if (l === 0) {
               crown.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-            else
+            } else {
               crown.quadraticCurveTo(
                 x + Math.cos(mid) * rr * 1.22,
                 y + Math.sin(mid) * rr * 1.22,
                 x + Math.cos(a) * rr,
                 y + Math.sin(a) * rr,
               );
+            }
           }
           crown.closePath();
           crowns.push({ crown, x, y, r });
@@ -736,8 +742,9 @@ export function createWildInk(
         let i = Math.floor(box[0] / side);
         i <= Math.floor(box[2] / side);
         i++
-      )
+      ) {
         if (bare(k, i, j)) out.push({ k, i, j, key: keyOf(k, i, j) });
+      }
     }
     return out;
   };
@@ -803,11 +810,12 @@ export function createWildInk(
         ctx.globalAlpha = weight;
         for (const tile of tilesOf(k, box)) {
           let found = kept.get(tile.key);
-          if (found === undefined && now)
+          if (found === undefined && now) {
             found = {
               canvas: inkNow(tile.k, tile.i, tile.j, tile.key),
               used: 0,
             };
+          }
           if (found === undefined) {
             missed.add(tile.key);
             if (!queue.some((q) => q.key === tile.key)) queue.unshift(tile);

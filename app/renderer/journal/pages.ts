@@ -109,8 +109,9 @@ function captionFor(words: WordsSource, e: JournalEntry): CaptionFact[] {
   if (
     thing !== undefined &&
     (e.kind !== "chapter" || words.journal.entry(entityOf(e.of)) === undefined)
-  )
+  ) {
     return conceptsCaption(thing);
+  }
   return [];
 }
 
@@ -174,8 +175,9 @@ export function thumbIndex(
   names: readonly string[],
   room = TABS,
 ): { readonly from: number; readonly to: number; readonly label: string }[] {
-  if (names.length <= room)
+  if (names.length <= room) {
     return names.map((name, k) => ({ from: k, to: k + 1, label: name }));
+  }
   const runs = Array.from({ length: room }, (_, k) => ({
     from: Math.round((k * names.length) / room),
     to: Math.round(((k + 1) * names.length) / room),
@@ -197,11 +199,12 @@ export function thumbIndex(
         ? 2
         : 1;
     // A run of one folder gets one label, with as many letters as either neighbor needs.
-    if (r.to - r.from === 1)
+    if (r.to - r.from === 1) {
       return {
         ...r,
         label: letters(first[k] as string, Math.max(before, after)),
       };
+    }
     const [a, b] = [
       letters(first[k] as string, before),
       letters(last[k] as string, after),
@@ -331,8 +334,9 @@ export function journalPages(src: JournalPagesSource): JournalPages {
       said.body.kind !== "full" ||
       file === undefined ||
       words.lines(file) === undefined
-    )
+    ) {
       return null;
+    }
     if (host === null) {
       host = document.createElement("div");
       host.className = "journal-measure";
@@ -353,8 +357,9 @@ export function journalPages(src: JournalPagesSource): JournalPages {
     const words = src.words();
     const e = words?.journal.entry(id);
     const laid = pagesInFull(id);
-    if (words === null || e === undefined || laid === null)
+    if (words === null || e === undefined || laid === null) {
       return { left: blank(), right: blank() };
+    }
     const said = appendixWords(words, e);
     if (said.body.kind !== "full") return { left: blank(), right: blank() };
     const body = said.body;
@@ -370,7 +375,7 @@ export function journalPages(src: JournalPagesSource): JournalPages {
             slice,
             p === 0,
             () => src.turnTo(id),
-            src.turnTo,
+            (...args) => src.turnTo(...args),
           );
     };
     return { left: page(2 * kk), right: page(2 * kk + 1) };
@@ -472,8 +477,9 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         const trip = src.trip();
         if (trip === null) {
           // The trip has ended, so the line and its cross fade out.
-          if (drawn !== null)
+          if (drawn !== null) {
             for (const e of [way, end]) e.classList.add("over");
+          }
           drawn = null;
           return;
         }
@@ -507,8 +513,9 @@ export function journalPages(src: JournalPagesSource): JournalPages {
             i > 0 &&
             i < left.length - 1 &&
             Math.hypot(q.px - prior.px, q.py - prior.py) < 1.5
-          )
+          ) {
             return;
+          }
           d += `${i === 0 ? "M" : "L"}${q.px.toFixed(1)} ${q.py.toFixed(1)}`;
           prior = q;
         });
@@ -532,14 +539,14 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         : renderPage(
             said,
             folio(e.page + p),
-            src.turnTo,
+            (...args) => src.turnTo(...args),
             said.body.kind === "rows" ? rowsOn(p, e.lead) : undefined,
             fileOfEntry(e) === undefined ? undefined : fullOf(e.of),
             fullOf,
           );
     // A container faces its map and a thing faces its painting, each with its caption.
     const caption = captionFor(words, e);
-    if (k === 0)
+    if (k === 0) {
       return {
         left: mapped(e)
           ? mapPage(src.map(e.of), folio(e.page - 1), caption)
@@ -551,6 +558,7 @@ export function journalPages(src: JournalPagesSource): JournalPages {
             ),
         right: page(0),
       };
+    }
     return { left: page(2 * k - 1), right: page(2 * k) };
   }
 
@@ -560,18 +568,20 @@ export function journalPages(src: JournalPagesSource): JournalPages {
     if (full === null) {
       const k = (order.get(at) ?? 0) + by;
       // The appendix follows the journal's last page.
-      if (k === places.length && by === 1)
+      if (k === places.length && by === 1) {
         return inOrder().ids[0] === undefined
           ? null
           : inFull(inOrder().ids[0] as string, 0);
+      }
       return places[k] ?? null;
     }
     const { ids, at: where } = inOrder();
     const n = where.get(full.id) ?? 0;
     const k = spreadIn(full.id, full.k);
     if (by === 1) {
-      if (k + 1 < Math.ceil((pagesInFull(full.id)?.length ?? 1) / 2))
+      if (k + 1 < Math.ceil((pagesInFull(full.id)?.length ?? 1) / 2)) {
         return inFull(full.id, k + 1);
+      }
       return ids[n + 1] === undefined ? null : inFull(ids[n + 1] as string, 0);
     }
     if (k > 0) return inFull(full.id, k - 1);
@@ -586,13 +596,14 @@ export function journalPages(src: JournalPagesSource): JournalPages {
       if (
         !arrived.includes(file) &&
         (src.words()?.lines(file)?.length ?? 0) > 0
-      )
+      ) {
         arrived.push(file);
+      }
     });
   };
   /** A deterministic draw in 0..1 for a name. */
   const draw = (name: string): number =>
-    ([...name].reduce(
+    (Array.from(name).reduce(
       (h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619),
       2166136261,
     ) >>>
@@ -629,8 +640,13 @@ export function journalPages(src: JournalPagesSource): JournalPages {
       for (let i = lo; i <= hi; i += step) {
         const e = all[i];
         const file = e === undefined ? undefined : fileOfEntry(e);
-        if (file !== undefined && !NOT_CODE.test(file) && !along.includes(file))
+        if (
+          file !== undefined &&
+          !NOT_CODE.test(file) &&
+          !along.includes(file)
+        ) {
           along.push(file);
+        }
       }
       for (const f of along) fetchText(f);
       const [p0, p1] = [a?.page ?? 0, b?.page ?? 0];
@@ -640,10 +656,11 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         const want = Math.round(t * (along.length - 1));
         const ready = (f: string): boolean => arrived.includes(f);
         let file: string | undefined;
-        for (let d = 0; d < along.length && file === undefined; d++)
+        for (let d = 0; d < along.length && file === undefined; d++) {
           file = [along[want + d], along[want - d]].find(
             (f) => f !== undefined && ready(f),
           );
+        }
         file ??= arrived.length === 0 ? undefined : arrived[k % arrived.length];
         if (file === undefined) return null;
         const lines = words.lines(file) ?? [];
@@ -679,11 +696,12 @@ export function journalPages(src: JournalPagesSource): JournalPages {
       const full = fullAt(at);
       if (full !== null) return fullSpread(full.id, full.k);
       const words = src.words();
-      if (at === "map" || words === null)
+      if (at === "map" || words === null) {
         return {
           left: mapPage(src.endpaper("left"), ""),
           right: mapPage(src.endpaper("right"), ""),
         };
+      }
       const [of, kk] = at.split(SEP);
       const k = Number(kk ?? 0);
       if (of === "contents") {
@@ -695,7 +713,7 @@ export function journalPages(src: JournalPagesSource): JournalPages {
             ? renderPage(
                 { ...contents, name: "Contents", path: [] },
                 roman(p + 2),
-                src.turnTo,
+                (...args) => src.turnTo(...args),
                 rowsOn(p),
               )
             : blank();
@@ -715,8 +733,9 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         ...words.journal.entries.slice(Math.max(0, here - BEHIND), here),
       ];
       src.ahead(around.filter((n) => !mapped(n)).map((n) => n.of));
-      for (const n of [e, ...around])
+      for (const n of [e, ...around]) {
         for (const file of textsOf(words, n)) fetchText(file);
+      }
       return entrySpread(words, e, k);
     },
     next: nextPlace,
@@ -756,11 +775,13 @@ export function journalPages(src: JournalPagesSource): JournalPages {
       const [of, k = "0"] = at.split(SEP);
       // The endpapers and a container's first spread are maps.
       const e = src.words()?.journal.entry(of as string);
-      if (of === "map" || (k === "0" && e !== undefined && mapped(e)))
+      if (of === "map" || (k === "0" && e !== undefined && mapped(e))) {
         return src.mapped();
+      }
       // The title page faces the contents, and a thing's first spread faces its painting.
-      if (of === "contents")
+      if (of === "contents") {
         return k === "0" ? src.painted("") : Promise.resolve();
+      }
       return e !== undefined && k === "0"
         ? src.painted(e.of)
         : Promise.resolve();
@@ -772,8 +793,9 @@ export function journalPages(src: JournalPagesSource): JournalPages {
         const e = journal?.entry(of);
         return e?.kind === "chapter" ? [e] : [];
       });
-      if (chapters.length <= TABS || words === null || words === undefined)
+      if (chapters.length <= TABS || words === null || words === undefined) {
         return chapters.map((e) => ({ name: e.name, at: e.of, from: e.of }));
+      }
       // A thumb index tab opens the contents at the spread where its run starts.
       const listed = contentsWords(words).body;
       const rows = listed.kind === "rows" ? listed.rows.map((r) => r.of) : [];

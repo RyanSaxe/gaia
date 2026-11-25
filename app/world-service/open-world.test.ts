@@ -23,9 +23,11 @@ import type { Opening } from "./protocol.ts";
 /** Builds the engine's graph of the proving ground at commit "c0ffee": its directories, entities, files, definitions and imports. */
 function graphOf(m: CodeFacts): CodeGraph {
   const dirs = new Set<string>([""]);
-  for (const f of m.files)
-    for (let d = f.path; d.includes("/");)
+  for (const f of m.files) {
+    for (let d = f.path; d.includes("/");) {
       dirs.add((d = d.slice(0, d.lastIndexOf("/"))));
+    }
+  }
   const entities = new Map(m.entities.map((e) => [e.path, e]));
   const nodes: GraphNode[] = [
     ...[...dirs].map((path): GraphNode => {
@@ -229,7 +231,7 @@ function engineWith(
       batches.push(params.requests);
       return {
         responses: await Promise.all(
-          params.requests.map((r) => o.answer?.(r) ?? jev.ask(r)),
+          params.requests.map(async (r) => o.answer?.(r) ?? jev.ask(r)),
         ),
       };
     },

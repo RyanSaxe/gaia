@@ -37,15 +37,17 @@ function disagreements(code: OpenedWorld): string[] {
     shown: number | undefined,
     map: number,
   ): void => {
-    if (shown !== map)
+    if (shown !== map) {
       off.push(
         `${what} ${id || "(root)"}: the map shows ${map}, the journal ${shown ?? "no page"}`,
       );
+    }
   };
   // The wash: each file's own vitality on its ground, and each folder's pooled from its files, beside the file's page
   // and the folder's chapter.
-  for (const p of world.patches)
+  for (const p of world.patches) {
     compare("file", p.path, page(p.path), p.vitality);
+  }
   const pooled = areaVitality(
     world.patches.map((p) => ({
       area: p.area,
@@ -67,8 +69,9 @@ function disagreements(code: OpenedWorld): string[] {
   // The marks: each thing worn by the vitality the world gives what it represents.
   const marked = vitalityOf(world);
   const mark = (what: string, r: Represented | undefined): void => {
-    if (r !== undefined)
+    if (r !== undefined) {
       compare(what, r.id, page(r.id), marked.get(r.id) ?? r.vitality);
+    }
   };
   for (const b of code.buildings) mark("building", b.represented);
   for (const l of code.landmarks) mark("landmark", l.represented);

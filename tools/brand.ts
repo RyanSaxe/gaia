@@ -141,8 +141,9 @@ const env: NodeJS.ProcessEnv = {
 };
 delete env.ELECTRON_RUN_AS_NODE;
 const painted = spawnSync(electron, [main], { env, stdio: "inherit" });
-if (painted.status !== 0)
+if (painted.status !== 0) {
   throw new Error(`Electron exited with ${painted.status ?? painted.signal}`);
+}
 const icns = spawnSync(
   "iconutil",
   ["-c", "icns", iconset, "-o", join(buildDir, "icon.icns")],
@@ -154,17 +155,19 @@ rmSync(scratch, { recursive: true, force: true });
 const sizeOf = (file: string): string => {
   const head = readFileSync(file);
   // A PNG's width and height follow its IHDR tag. A lossy WebP's follow its VP8 frame's start code.
-  if (file.endsWith(".png"))
+  if (file.endsWith(".png")) {
     return `${head.readUInt32BE(16)}x${head.readUInt32BE(20)}`;
+  }
   const at = head.indexOf(Buffer.from([0x9d, 0x01, 0x2a]));
   return at < 0
     ? ""
     : `${head.readUInt16LE(at + 3) & 0x3fff}x${head.readUInt16LE(at + 5) & 0x3fff}`;
 };
-for (const j of jobs.filter((j) => !j.out.startsWith(iconset)))
+for (const j of jobs.filter((j) => !j.out.startsWith(iconset))) {
   console.log(
     `${j.out} ${sizeOf(j.out)} ${(statSync(j.out).size / 1024).toFixed(0)} KiB`,
   );
+}
 console.log(
   `${join(buildDir, "icon.icns")} ${(statSync(join(buildDir, "icon.icns")).size / 1024).toFixed(0)} KiB`,
 );

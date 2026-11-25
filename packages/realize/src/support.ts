@@ -47,7 +47,7 @@ function keepOf(part: Part, i: number, v: number): number {
   const loss = part.channels.loss[i] ?? 0;
   const grow = part.channels.grow?.[i] ?? 0;
   // A spray stays where it is while its leaves drop one by one, the last a little below its loss.
-  if (SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0)))
+  if (SPRAYS.has(Math.floor(part.cutout[i * 3 + 2] ?? 0))) {
     return loss > 0
       ? smoothstep(
           loss - CHANNEL_MATH.dropSpread,
@@ -55,6 +55,7 @@ function keepOf(part: Part, i: number, v: number): number {
           v,
         )
       : 1;
+  }
   return (
     (loss > 0 ? smoothstep(loss, loss + CHANNEL_MATH.lossBand, v) : 1) *
     (grow > 0 ? 1 - smoothstep(grow, grow + CHANNEL_MATH.lossBand, v) : 1)
@@ -70,8 +71,9 @@ function fallenOf(part: Part, i: number, v: number): number {
     from <= 0 ||
     Math.hypot(fall[i * 4] ?? 0, fall[i * 4 + 1] ?? 0, fall[i * 4 + 2] ?? 0) <
       1e-6
-  )
+  ) {
     return -1;
+  }
   return 1 - smoothstep(from - CHANNEL_MATH.fallBand, from, v);
 }
 
@@ -84,10 +86,11 @@ class Unions {
   find(a: number): number {
     let r = a;
     while (this.#up[r] !== r) r = this.#up[r] as number;
-    while (this.#up[a] !== r) {
-      const next = this.#up[a] as number;
-      this.#up[a] = r;
-      a = next;
+    let cur = a;
+    while (this.#up[cur] !== r) {
+      const next = this.#up[cur] as number;
+      this.#up[cur] = r;
+      cur = next;
     }
     return r;
   }
@@ -365,11 +368,13 @@ export function unsupportedAt(
       const ia = part.indices[t] as number;
       const body = bodies[bodyOf[base + ia] as number] as Body;
       if (!body.card || body.stalkGap <= SUPPORT.glue) continue;
-      for (let k = 0; k < 3; k++)
-        for (let c = 0; c < 3; c++)
+      for (let k = 0; k < 3; k++) {
+        for (let c = 0; c < 3; c++) {
           restTri[k * 3 + c] = part.positions[
             (part.indices[t + k] as number) * 3 + c
           ] as number;
+        }
+      }
       const pv = part.channels.pivot;
       closest(
         pv[ia * 3] as number,
@@ -432,12 +437,13 @@ export function unsupportedAt(
         ic = part.indices[t + 2] as number;
       const b = bodyOf[base + ia] as number;
       if (!shown(bodies[b] as Body)) continue;
-      for (const g of [base + ia, base + ib, base + ic])
+      for (const g of [base + ia, base + ib, base + ic]) {
         tris.push(
           pos[g * 3] as number,
           pos[g * 3 + 1] as number,
           pos[g * 3 + 2] as number,
         );
+      }
       triBody.push(b);
       triMesh.push(meshes.find(base + ia));
       const was = crossOf(part.positions, ia, ib, ic);
@@ -495,12 +501,12 @@ export function unsupportedAt(
       let x = Math.floor((lx - m) / CELL);
       x <= Math.floor((hx + m) / CELL);
       x++
-    )
+    ) {
       for (
         let y = Math.floor((ly - m) / CELL);
         y <= Math.floor((hy + m) / CELL);
         y++
-      )
+      ) {
         for (
           let z = Math.floor((lz - m) / CELL);
           z <= Math.floor((hz + m) / CELL);
@@ -511,6 +517,8 @@ export function unsupportedAt(
           if (list === undefined) cells.set(key, [t]);
           else list.push(t);
         }
+      }
+    }
   }
 
   // Contacts: which piece rests on which, which pieces touch, and the farthest
@@ -569,11 +577,12 @@ export function unsupportedAt(
       const n = Math.floor(len / EDGE);
       for (let k = 1; k <= n; k++) {
         const f = k / (n + 1);
-        for (let i = 0; i < 3; i++)
+        for (let i = 0; i < 3; i++) {
           probes.push(
             (triPos[a + i] as number) +
               ((triPos[c + i] as number) - (triPos[a + i] as number)) * f,
           );
+        }
         probeBody.push(triBody[t] as number);
       }
     }
@@ -613,8 +622,9 @@ export function unsupportedAt(
         px > (triBox[o + 3] as number) ||
         py > (triBox[o + 4] as number) ||
         pz > (triBox[o + 5] as number)
-      )
+      ) {
         continue;
+      }
       closest(px, py, pz, triPos, t * 9, near);
       const d = Math.hypot(
         px - (near[0] as number),
@@ -675,9 +685,9 @@ export function unsupportedAt(
     const cx = Math.floor(px / CELL),
       cy = Math.floor(py / CELL),
       cz = Math.floor(pz / CELL);
-    for (let x = cx - 1; x <= cx + 1; x++)
-      for (let y = cy - 1; y <= cy + 1; y++)
-        for (let z = cz - 1; z <= cz + 1; z++)
+    for (let x = cx - 1; x <= cx + 1; x++) {
+      for (let y = cy - 1; y <= cy + 1; y++) {
+        for (let z = cz - 1; z <= cz + 1; z++) {
           for (const t of cells.get(cellKey(x, y, z)) ?? []) {
             const other = triBody[t] as number;
             if (other === b) continue;
@@ -688,9 +698,13 @@ export function unsupportedAt(
                 py - (near[1] as number),
                 pz - (near[2] as number),
               ) <= SUPPORT.cling
-            )
+            ) {
               onRest(b, other, px, py, pz);
+            }
           }
+        }
+      }
+    }
   });
 
   // Support spreads up from the ground through what rests on what.
@@ -703,8 +717,9 @@ export function unsupportedAt(
     }
   });
   const carried = new Map<number, number[]>();
-  for (const [top, unders] of restsOn)
+  for (const [top, unders] of restsOn) {
     for (const u of unders) carried.set(u, [...(carried.get(u) ?? []), top]);
+  }
   while (queue.length > 0) {
     const b = queue.pop() as number;
     for (const top of carried.get(b) ?? []) {
@@ -741,8 +756,9 @@ export function unsupportedAt(
     // from it as a shutter or a lantern does, must lie on the ground or rest
     // on a standing piece away from its hinge.
     if (body.fallen < 0.999 || at[1] < body.pivot[1]) return;
-    if (body.lo[1] < Math.min(body.restLow, 0) - SUPPORT.sink)
+    if (body.lo[1] < Math.min(body.restLow, 0) - SUPPORT.sink) {
       return report("sunk");
+    }
     if (body.lo[1] <= SUPPORT.ground) return;
     const rests = [...(restsOn.get(b) ?? [])].some(
       (u) =>

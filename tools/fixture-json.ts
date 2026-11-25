@@ -6,8 +6,9 @@
 export function fixtureJson(value: object): string {
   const one = (v: unknown): string => JSON.stringify(v) ?? "null";
   const field = (v: unknown): string => {
-    if (Array.isArray(v))
+    if (Array.isArray(v)) {
       return v.length === 0 ? "[]" : `[\n${v.map(one).join(",\n")}\n]`;
+    }
     if (typeof v !== "object" || v === null) return one(v);
     const entries = Object.entries(v).filter(([, e]) => e !== undefined);
     return entries.length === 0

@@ -131,8 +131,9 @@ export function createCapture(renderer: THREE.WebGLRenderer): Capture {
     await renderer.readRenderTargetPixelsAsync(target, 0, 0, w, h, raw);
     // GL's rows run bottom first.
     const data = new Uint8ClampedArray(w * h * 4);
-    for (let y = 0; y < h; y++)
+    for (let y = 0; y < h; y++) {
       data.set(raw.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+    }
     return { data, width: w, height: h };
   };
 

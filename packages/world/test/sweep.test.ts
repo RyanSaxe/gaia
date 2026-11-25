@@ -39,9 +39,11 @@ function covered(
         continue;
       }
       out.add(`${name}: ${filled.use}`);
-      for (const [param, value] of Object.entries(filled.params))
-        for (const v of Array.isArray(value) ? value : [value])
+      for (const [param, value] of Object.entries(filled.params)) {
+        for (const v of Array.isArray(value) ? value : [value]) {
           out.add(`${name}: ${filled.use} ${param} "${String(v)}"`);
+        }
+      }
     }
   }
   return [...out];

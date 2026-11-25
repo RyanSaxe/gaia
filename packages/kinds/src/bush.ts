@@ -44,10 +44,11 @@ function askedAs(
   const names = Object.keys(k.slots);
   const missing = names.filter((n) => asks[n] === undefined);
   const extra = Object.keys(asks).filter((n) => !names.includes(n));
-  if (missing.length > 0 || extra.length > 0)
+  if (missing.length > 0 || extra.length > 0) {
     throw new Error(
       `Every slot of ${k.id} is asked anew or none is: missing ${missing.join(", ") || "none"}, unknown ${extra.join(", ") || "none"}.`,
     );
+  }
   return Object.fromEntries(
     Object.entries(k.slots).map(([name, s]) => [
       name,

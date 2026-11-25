@@ -220,7 +220,7 @@ export function createWays(
       const seed = crossingSeed(trail, k);
       const vitality = (of: (place: string) => number): number =>
         crossingVitality(network, i, c, of);
-      if (trail.style.crossing === "footbridge")
+      if (trail.style.crossing === "footbridge") {
         piece(
           c.x,
           c.z,
@@ -232,7 +232,7 @@ export function createWays(
           }),
           vitality,
         );
-      else
+      } else {
         piece(
           c.x,
           c.z,
@@ -244,6 +244,7 @@ export function createWays(
           }),
           vitality,
         );
+      }
     });
     // A way's edging stones, one mesh per square, each following its way's vitality.
     const stones =

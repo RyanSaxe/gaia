@@ -225,12 +225,13 @@ export function applyVitality(
       const az = fall[i * 4 + 2] ?? 0;
       const most = Math.hypot(ax, ay, az);
       const angle = most * (1 - easedStep(from - m.fallBand, from, v, lag));
-      if (most > 1e-6 && angle !== 0)
+      if (most > 1e-6 && angle !== 0) {
         [ox, oy, oz] = turn(
           [ox, oy, oz],
           [ax / most, ay / most, az / most],
           angle,
         );
+      }
     }
     collapsed[i * 3] = px + ox;
     collapsed[i * 3 + 1] = py + oy;

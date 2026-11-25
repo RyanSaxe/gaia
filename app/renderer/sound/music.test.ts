@@ -109,8 +109,9 @@ describe("the piece, streamed a chunk at a time", () => {
       const behind = (((from(s) - s.at) % piece) + piece) % piece;
       expect(Math.min(behind, piece - behind), `start ${k}`).toBeLessThan(1e-6);
       const next = bed[k + 1];
-      if (next !== undefined)
+      if (next !== undefined) {
         expect(next.at, `start ${k + 1}`).toBeCloseTo(s.at + s.duration, 9);
+      }
     }
   }
 

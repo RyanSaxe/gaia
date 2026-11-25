@@ -83,9 +83,9 @@ export function drawMapPage(
   const whole = Math.max(w / (reach.x * 2), h / (reach.z * 2));
   let view: { x: number; z: number; zoom: number };
   if (area === "") view = { x: 0, z: 0, zoom: whole * 1.02 };
-  else if (places.patches.some((p) => p.path === area))
+  else if (places.patches.some((p) => p.path === area)) {
     view = folderView(places, (k) => k.file === area, w, h, FILE_CLOSEST);
-  else
+  } else {
     view = folderView(
       places,
       (k) => k.area === area || k.area.startsWith(`${area}/`),
@@ -93,6 +93,7 @@ export function drawMapPage(
       h,
       FOLDER_CLOSEST,
     );
+  }
   drawLand(ctx, w, h, paper, src.baked(), view, 1.35, true);
   const sx = (x: number): number => (x - view.x) * view.zoom + w / 2;
   const sy = (z: number): number => (z - view.z) * view.zoom + h / 2;
@@ -174,8 +175,9 @@ export function drawMapPage(
             offFold(box) &&
             clear(box) &&
             (!own || ownAt(a.path, x, y))
-          )
+          ) {
             spot = { x, y, size, box };
+          }
         }
       }
       if (spot !== null) break;
@@ -286,11 +288,14 @@ function folderView(
   [mx, mz] = [mx / Math.max(1, own), mz / Math.max(1, own)];
   const v = (t: Float64Array, i: number, j: number): number =>
     t[j * (n + 1) + i] as number;
-  for (const t of sums)
-    for (let j = 1; j <= n; j++)
-      for (let i = 1; i <= n; i++)
+  for (const t of sums) {
+    for (let j = 1; j <= n; j++) {
+      for (let i = 1; i <= n; i++) {
         t[j * (n + 1) + i] =
           v(t, i, j) + v(t, i, j - 1) + v(t, i - 1, j) - v(t, i - 1, j - 1);
+      }
+    }
+  }
   const count = (
     t: Float64Array,
     x: number,
@@ -339,13 +344,15 @@ function folderView(
   const widest = Math.max(w / (reach.x * 2), h / (reach.z * 2));
   const closest = widest * closestBy;
   for (let zoom = widest; zoom <= closest; zoom *= 1.08) {
-    for (let j = 0; j <= 24; j++)
-      for (let i = 0; i <= 24; i++)
+    for (let j = 0; j <= 24; j++) {
+      for (let i = 0; i <= 24; i++) {
         consider(
           -reach.x + (reach.x * 2 * i) / 24,
           -reach.z + (reach.z * 2 * j) / 24,
           zoom,
         );
+      }
+    }
   }
   // Then refines around the best window.
   for (let step = (reach.x * 2) / 48; step > 1; step /= 2) {
@@ -357,8 +364,9 @@ function folderView(
       [0, -step, 1],
       [0, 0, 1.03],
       [0, 0, 1 / 1.03],
-    ] as const)
+    ] as const) {
       consider(x + dx, z + dz, zoom * dzoom);
+    }
   }
   return { x: best.x, z: best.z, zoom: best.zoom };
 }

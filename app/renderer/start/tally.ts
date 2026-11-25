@@ -135,13 +135,14 @@ export function drawTally(
             top + TALLY.stroke * h * r.range(0.94, 1),
           );
         }
-        if (n === 5)
+        if (n === 5) {
           pass(
             left - 0.5 * TALLY.apart * h,
             top + TALLY.stroke * h * 0.78,
             left + 3.5 * TALLY.apart * h,
             top + TALLY.stroke * h * 0.2,
           );
+        }
         left += 3 * TALLY.apart * h + TALLY.gate * h;
       }
     }

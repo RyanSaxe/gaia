@@ -74,11 +74,12 @@ export function definitionsOf(
         line: s.line ?? 0,
         lines: s.lines ?? 1,
       }));
-      if (defs.length > 0)
+      if (defs.length > 0) {
         out.set(
           f.path,
           defs.sort((a, b) => a.line - b.line || (a.id < b.id ? -1 : 1)),
         );
+      }
     }
     return out;
   }
@@ -103,8 +104,9 @@ export function definitionsOf(
     const path = pathOf.get(n.file) as string;
     // A definition inside an unplaced one, such as an arrow function assigned to a constant, takes the nearest placed ancestor as parent.
     let parent = n.parent;
-    while (parent !== undefined && !kept.has(parent))
+    while (parent !== undefined && !kept.has(parent)) {
       parent = every.get(parent)?.parent;
+    }
     const importance = n.judged?.value?.importance ?? undefined;
     const def: PlacedDef = {
       id: idOf(n),

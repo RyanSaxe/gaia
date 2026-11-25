@@ -64,8 +64,9 @@ describe("the showcase's code", () => {
         ),
       );
       expect(files).toEqual([...read.keys()].sort());
-      for (const f of files)
+      for (const f of files) {
         expect(text(f).split("\n").length - 1, f).toBe(read.get(f));
+      }
     }
   });
 

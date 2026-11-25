@@ -266,7 +266,7 @@ function whereOf(
 /** Leading spaces, counted with a tab as two. */
 const indentOf = (line: string): number => {
   const lead = /^[ \t]*/.exec(line)?.[0] ?? "";
-  return [...lead].reduce((n, c) => n + (c === "\t" ? 2 : 1), 0);
+  return Array.from(lead).reduce((n, c) => n + (c === "\t" ? 2 : 1), 0);
 };
 
 /** The smallest indent among a definition's non-blank lines, which the page removes from every line. */
@@ -314,14 +314,16 @@ function codeOf(
     // The first mark covering a line sets its stroke, and the block's first line gets the mark's label.
     const mark = body.marks.find((m) => m.from <= n && n <= m.to);
     marked(row, mark);
-    if (mark !== undefined && mark.from === n)
+    if (mark !== undefined && mark.from === n) {
       row.dataset.label = MARK_LABEL[mark.kind];
+    }
     if (body.prose === true) {
       // A Markdown heading is styled as a heading without its # marks, and a fenced block's lines as code.
       const heading =
         body.pre?.[k] === true ? null : /^(#{1,6})\s+(.*)$/.exec(line);
-      if (heading !== null)
+      if (heading !== null) {
         row.classList.add(`h${(heading[1] as string).length}`);
+      }
       if (body.pre?.[k] === true) row.classList.add("pre");
       else if (line === "") row.classList.add("gap");
       row.append(
@@ -395,11 +397,11 @@ export function renderPage(
   const page = el("div", "jp");
   page.style.setProperty("--health", healthColor(words.vitality));
   const head = el("div", "jp-head");
-  if (rows !== undefined && rows.from > 0)
+  if (rows !== undefined && rows.from > 0) {
     head.append(
       el("div", "jp-running", [...words.path, words.name].join(" / ")),
     );
-  else {
+  } else {
     if (words.path.length > 0) head.append(whereOf(words.path, turnTo));
     const title = el("div", "jp-title");
     // A definition's name turns to it in full, in the appendix.
@@ -417,8 +419,9 @@ export function renderPage(
     }
     title.append(name, numbersOf(words));
     head.append(title);
-    if (words.signature !== undefined)
+    if (words.signature !== undefined) {
       head.append(signatureOf(words.signature, words.path.join("/")));
+    }
     head.append(el("div", "jp-rule"));
   }
   const body = el("div", "jp-body");
@@ -426,8 +429,9 @@ export function renderPage(
     words.body.kind === "rows" &&
     words.body.lead !== undefined &&
     (rows === undefined || rows.from === 0)
-  )
+  ) {
     body.append(leadOf(words.body.lead, words.path.join("/"), turnTo, fullOf));
+  }
   if (words.body.kind === "rows") {
     body.append(
       rowsOf(
@@ -437,8 +441,9 @@ export function renderPage(
         turnTo,
       ),
     );
-    if (words.trails !== undefined && (rows === undefined || rows.from === 0))
+    if (words.trails !== undefined && (rows === undefined || rows.from === 0)) {
       body.append(trailsOf(words.trails, turnTo));
+    }
   } else if (words.body.kind === "code") {
     // Starts at `opensAt` and folds the lines above it.
     const { opensAt, kind: _, ...code } = words.body;
@@ -449,8 +454,9 @@ export function renderPage(
       first: opensAt,
       lines: code.lines.slice(skipped),
     };
-    if (skipped > 0 && inFull !== undefined)
+    if (skipped > 0 && inFull !== undefined) {
       body.append(foldOf(linesOf(skipped), inFull));
+    }
     setItems(
       body,
       shown,
@@ -540,7 +546,7 @@ export function renderFullPage(
     });
     return e;
   };
-  if (!first)
+  if (!first) {
     head.append(
       backTo(
         el(
@@ -550,13 +556,14 @@ export function renderFullPage(
         ),
       ),
     );
-  else {
+  } else {
     if (words.path.length > 0) head.append(whereOf(words.path, turnTo));
     const title = el("div", "jp-title");
     title.append(backTo(el("button", "jp-name", words.name)), numbersOf(words));
     head.append(title);
-    if (words.signature !== undefined)
+    if (words.signature !== undefined) {
       head.append(signatureOf(words.signature, words.path.join("/")));
+    }
     head.append(el("div", "jp-rule"));
   }
   const content = el("div", "jp-body");
@@ -599,7 +606,7 @@ function setItems(
   const close = (): void => {
     const [start] = run;
     if (start === undefined) return;
-    if (start.kind === "line")
+    if (start.kind === "line") {
       content.append(
         codeOf(
           run.map((r) => (r.kind === "line" ? r.at : 0)),
@@ -608,22 +615,23 @@ function setItems(
           pieces,
         ),
       );
-    else {
+    } else {
       for (const r of run) {
         // A definition with its own page folds to one line that turns there. A "rest" item counts the lines the appendix leaves out.
-        if (r.kind === "fold")
+        if (r.kind === "fold") {
           content.append(
             foldOf(
               `${linesOf(r.fold.to - r.fold.from + 1)}, page ${r.fold.page.toLocaleString("en-US")}`,
               () => turnTo(r.fold.of),
             ),
           );
-        else
+        } else {
           content.append(
             foldOf(
               `${linesOf((r as Extract<FullItem, { kind: "rest" }>).lines)}, not set here`,
             ),
           );
+        }
       }
     }
     run = [];
@@ -740,8 +748,9 @@ export function placeTraveller(
   if (here.style.left !== left) here.style.left = left;
   if (here.style.top !== top) here.style.top = top;
   const steps = here.querySelector(".traveller-steps");
-  if (steps !== null && steps.getAttribute("transform") !== facing)
+  if (steps !== null && steps.getAttribute("transform") !== facing) {
     steps.setAttribute("transform", facing);
+  }
 }
 
 /**

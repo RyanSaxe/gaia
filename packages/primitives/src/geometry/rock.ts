@@ -142,12 +142,13 @@ function emitStone(
     if (s.top > 0) {
       const over =
         q[0] * topNormal[0] + q[1] * topNormal[1] + q[2] * topNormal[2] - s.top;
-      if (over > 0)
+      if (over > 0) {
         q = [
           q[0] - topNormal[0] * over,
           q[1] - topNormal[1] * over,
           q[2] - topNormal[2] * over,
         ];
+      }
     }
     if (splitN !== null && s.split !== undefined) {
       const along = q[0] * splitN[0] + q[2] * splitN[2];
@@ -221,11 +222,13 @@ function emitStone(
       tint:
         tint + 0.02 * mottle + (faceHue[i] as number) * (fracture[i] as number),
     });
-    if (n[1] > 0.75 && above > 0.55 && i % 7 === 0)
+    if (n[1] > 0.75 && above > 0.55 && i % 7 === 0) {
       anchors.push({ position: p, normal: n, size: clamp(height, 0, 1) });
+    }
   });
-  for (const [a, b, c] of sphere.triangles)
+  for (const [a, b, c] of sphere.triangles) {
     out.triangle(first + a, first + b, first + c);
+  }
 }
 
 /** Smooth normals from area-weighted face normals, so cut planes stay flat-lit inside and soft at their edges. */
@@ -290,7 +293,7 @@ export function buildBoulder(
   };
   // One stone in two halves that meet exactly. It looks whole at high vitality and cracks open as vitality falls.
   const angle = r.next() * Math.PI;
-  for (const side of [1, -1])
+  for (const side of [1, -1]) {
     emitStone(
       out,
       { ...stone, split: { angle, side, droop: CRACK_DROOP } },
@@ -298,6 +301,7 @@ export function buildBoulder(
       anchors,
       3,
     );
+  }
   return built(out, anchors);
 }
 
@@ -377,8 +381,9 @@ export function buildStoneCluster(
           placed.every(
             (q) => Math.hypot(q.x - x, q.z - z) > (q.rad + rad) * 0.7,
           )
-        )
+        ) {
           break;
+        }
       }
     }
     placed.push({ x, z, rad });
@@ -540,8 +545,9 @@ export function buildMoss(
     const nrm = part.normals;
     const count = pos.length / 3;
     let top = -Infinity;
-    for (let i = 0; i < count; i++)
+    for (let i = 0; i < count; i++) {
       top = Math.max(top, pos[i * 3 + 1] as number);
+    }
     const mask = new Float32Array(count);
     for (let i = 0; i < count; i++) {
       const x = pos[i * 3] as number;
@@ -630,8 +636,9 @@ export function buildMoss(
       // Skip faces with every vertex below mask 0.12. The patch edge never reaches them, and the shader would cut them away.
       if (
         Math.max(mask[a] as number, mask[b] as number, mask[c] as number) < 0.12
-      )
+      ) {
         continue;
+      }
       out.triangle(skinVertex(a), skinVertex(b), skinVertex(c));
     }
   }

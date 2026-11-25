@@ -154,11 +154,11 @@ export function beam(
       );
     }
   }
-  if (!open)
+  if (!open) {
     for (const [t, n] of [
       [0, scale(a, -1)],
       [1, a],
-    ] as const)
+    ] as const) {
       quad(
         b,
         [at(t, -1, -1), at(t, 1, -1), at(t, 1, 1), at(t, -1, 1)],
@@ -166,6 +166,8 @@ export function beam(
         shade,
         ch,
       );
+    }
+  }
 }
 
 /** A log: a six-sided cylinder with lighter end grain. */

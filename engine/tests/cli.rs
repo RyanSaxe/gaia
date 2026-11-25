@@ -50,16 +50,18 @@ fn rpc(env: &[(&str, &str)], requests: &[serde_json::Value]) -> Vec<serde_json::
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .expect("spawn gaia-engine rpc");
-    let mut stdin = child.stdin.take().expect("stdin");
+        .unwrap_or_else(|e| panic!("spawn gaia-engine rpc: {e}"));
+    let mut stdin = child.stdin.take().unwrap_or_else(|| panic!("stdin"));
     for r in requests {
-        writeln!(stdin, "{r}").unwrap();
+        writeln!(stdin, "{r}").unwrap_or_else(|e| panic!("write request: {e}"));
     }
     drop(stdin);
-    let out = child.wait_with_output().expect("wait");
+    let out = child
+        .wait_with_output()
+        .unwrap_or_else(|e| panic!("wait: {e}"));
     String::from_utf8_lossy(&out.stdout)
         .lines()
-        .map(|l| serde_json::from_str(l).unwrap())
+        .map(|l| serde_json::from_str(l).unwrap_or_else(|e| panic!("parse rpc output: {e}")))
         .collect()
 }
 
@@ -70,10 +72,12 @@ fn stand_in_curl(name: &str, script: &str) -> (std::path::PathBuf, String) {
     use std::os::unix::fs::PermissionsExt;
     let dir = std::env::temp_dir().join(format!("gaia-curl-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::create_dir_all(&dir).unwrap_or_else(|e| panic!("create stand-in dir: {e}"));
     let curl = dir.join("curl");
-    std::fs::write(&curl, format!("#!/bin/sh\n{script}")).unwrap();
-    std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::write(&curl, format!("#!/bin/sh\n{script}"))
+        .unwrap_or_else(|e| panic!("write stand-in curl: {e}"));
+    std::fs::set_permissions(&curl, std::fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| panic!("chmod stand-in curl: {e}"));
     let path = format!(
         "{}:{}",
         dir.display(),
@@ -347,7 +351,7 @@ esac
             .filter(|n| n["kind"] == "def")
             .count()
     };
-    let kept = || std::fs::read_dir(data.join("grammars")).map_or(0, |entries| entries.count());
+    let kept = || std::fs::read_dir(data.join("grammars")).map_or(0, std::iter::Iterator::count);
 
     std::fs::write(dir.join("served"), &altered).unwrap();
     assert_eq!(

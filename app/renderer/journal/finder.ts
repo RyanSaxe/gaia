@@ -73,8 +73,9 @@ function matchOf(
       const last = letters[letters.length - 1];
       const from = last === undefined ? 0 : last + 1;
       let k = runOn && last !== undefined && lower[from] === ch ? from : -1;
-      for (let q = from; k === -1 && q < lower.length; q++)
+      for (let q = from; k === -1 && q < lower.length; q++) {
         if (lower[q] === ch && startsWord(text, q)) k = q;
+      }
       if (k === -1) k = lower.indexOf(ch, from);
       if (k === -1) return null;
       const gap = last === undefined ? 0 : k - last - 1;
@@ -125,12 +126,13 @@ export function find(
         letters.push(...named.letters);
       } else score += (placed as { score: number }).score;
     }
-    if (ok)
+    if (ok) {
       found.push({
         item,
         score: score - item.name.length * 0.05 - item.where.length * 0.01,
         letters,
       });
+    }
   }
   return found
     .sort((a, b) => b.score - a.score || a.item.page - b.item.page)
@@ -197,7 +199,7 @@ export function createFinder(
         // The name, with its matched letters in bold.
         const name = el("span", "finder-name");
         const marked = new Set(f.letters);
-        [...f.item.name].forEach((ch, q) =>
+        Array.from(f.item.name).forEach((ch, q) =>
           name.append(
             marked.has(q) ? el("b", "", ch) : document.createTextNode(ch),
           ),
@@ -262,7 +264,7 @@ export function findablesOf(journal: Pick<Journal, "entries">): Findable[] {
   return journal.entries.flatMap((e): Findable[] => {
     // Skips a file's own page, since the file's entry is found by the same name.
     if (e.kind === "own") return [];
-    if (e.kind === "definition")
+    if (e.kind === "definition") {
       return [
         {
           at: e.of,
@@ -271,7 +273,8 @@ export function findablesOf(journal: Pick<Journal, "entries">): Findable[] {
           page: e.page,
         },
       ];
-    if (e.kind === "entity")
+    }
+    if (e.kind === "entity") {
       return [
         {
           at: e.of,
@@ -280,6 +283,7 @@ export function findablesOf(journal: Pick<Journal, "entries">): Findable[] {
           page: e.page,
         },
       ];
+    }
     return [{ at: e.of, name: e.name, where: parent(e.of), page: e.page }];
   });
 }

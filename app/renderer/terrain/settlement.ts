@@ -132,8 +132,9 @@ export function composedName(bp: Blueprint): string {
   const named = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
   const frame = bp.slots.form?.use;
   const crown = bp.slots.crown?.use;
-  if (frame !== undefined && crown !== undefined)
+  if (frame !== undefined && crown !== undefined) {
     return named(`${wordsOf(frame)} with ${wordsOf(crown)}`);
+  }
   const drift = bp.slots.drift?.use;
   if (drift !== undefined) return named(wordsOf(drift));
   const form = bp.slots.form?.use;
@@ -232,8 +233,9 @@ export function createSettlement(
     seat(sites) {
       buildings.forEach((b, i) => {
         b.site = sites[i] ?? b.site;
-        if (b.batchSlot !== null)
+        if (b.batchSlot !== null) {
           b.batchSlot.batch.move(b.batchSlot.member, atSite(b));
+        }
       });
     },
     blocked: (x, z, margin) =>
@@ -244,17 +246,19 @@ export function createSettlement(
     views: () => [...batches.values()].map((t) => t.batch),
     place(held, scene, tileOf) {
       const want = new Map<string, Building[]>();
-      for (const b of held)
+      for (const b of held) {
         want.set(tileOf(b), [...(want.get(tileOf(b)) ?? []), b]);
+      }
       // Drop the batch of a tile no longer held or whose buildings changed.
-      for (const [key, tile] of [...batches]) {
+      for (const [key, tile] of batches) {
         const next = want.get(key);
         if (
           next !== undefined &&
           next.length === tile.members.length &&
           next.every((b) => tile.members.includes(b))
-        )
+        ) {
           continue;
+        }
         tile.batch.dispose();
         for (const b of tile.members) b.batchSlot = null;
         batches.delete(key);
@@ -283,8 +287,9 @@ export function createSettlement(
           hit !== undefined &&
           building !== undefined &&
           (best === undefined || hit.distance < best.distance)
-        )
+        ) {
           best = { building, distance: hit.distance };
+        }
       }
       return best;
     },

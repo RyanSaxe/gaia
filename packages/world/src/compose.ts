@@ -123,10 +123,11 @@ export async function composeThing(
   }
   const blueprint = assemble(k, lib, structure, waves, answers);
   const problems = validate(blueprint, k, lib);
-  if (problems.length > 0)
+  if (problems.length > 0) {
     throw new Error(
       `The ${thing.as} composed for ${thing.path || "the repository's root"} does not hold together: ${problems.join(" ")}`,
     );
+  }
   return blueprint;
 }
 
@@ -287,8 +288,9 @@ export function definitionState(
   const node = graph?.nodes.find(
     (n): n is DefNode => n.kind === "def" && n.id === `def:${id}`,
   );
-  if (node === undefined)
+  if (node === undefined) {
     return { definition: { name: id.slice(id.indexOf("#") + 1), file } };
+  }
   const value = node.judged?.value;
   const concepts = Object.entries(value?.concepts ?? {}).flatMap(([k, v]) =>
     share(v) === undefined ? [] : [[k, share(v)] as const],

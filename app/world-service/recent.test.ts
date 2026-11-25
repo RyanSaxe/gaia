@@ -33,16 +33,20 @@ function storeEngine(
         writes?: { key: string; value: unknown }[];
       },
     ) => {
-      if (method === "store.get")
+      if (method === "store.get") {
         return settings.has(params.key ?? "")
           ? { value: settings.get(params.key ?? "") }
           : null;
-      if (method === "store.put")
+      }
+      if (method === "store.put") {
         for (const w of params.writes ?? []) settings.set(w.key, w.value);
-      if (method === "project.commit")
+      }
+      if (method === "project.commit") {
         return { commit: checkedOut[params.root ?? ""] ?? null };
-      if (method === "project.commits")
+      }
+      if (method === "project.commits") {
         return { commits: since[params.from ?? ""] ?? null };
+      }
       return { ok: true };
     },
     on: () => () => {},

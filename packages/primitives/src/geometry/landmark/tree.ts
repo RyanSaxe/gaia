@@ -107,8 +107,9 @@ function aged(
   const gone = new Set<number>();
   skel.limbs.forEach((l, i) => {
     if (gone.has(l.parent) || stubs.has(l.parent)) gone.add(i);
-    else if (l.depth === 1 && skel.limbs[l.parent]?.depth === 0 && broken(i))
+    else if (l.depth === 1 && skel.limbs[l.parent]?.depth === 0 && broken(i)) {
       stubs.add(i);
+    }
   });
   const removed = (i: number): boolean => gone.has(i);
   const kept = new Map<number, number>();
@@ -256,8 +257,9 @@ function buildButtresses(
           (grid[i] as V3[])[(j + around - 1) % around] as V3,
         );
         let nrm = normalize(cross(du, dv));
-        if (dot(nrm, sub(q, centers[i] as V3)) < 0)
+        if (dot(nrm, sub(q, centers[i] as V3)) < 0) {
           nrm = [-nrm[0], -nrm[1], -nrm[2]];
+        }
         (normals[i] as V3[]).push(nrm);
         const wobble = fbm3(q[0] * 1.7, q[1] * 0.8, q[2] * 1.7, seed + n, 2);
         const furrow =

@@ -46,8 +46,9 @@ export function bandOf(
   if (!("by" in measure)) return measure;
   const word = String(answers[measure.by]);
   const band = measure.bands[word];
-  if (band === undefined)
+  if (band === undefined) {
     throw new Error(`No band for ${measure.by} "${word}".`);
+  }
   return band;
 }
 
@@ -134,6 +135,7 @@ export function lump(
       ch,
     );
   });
-  for (const [a, bb, cc] of blob.triangles)
+  for (const [a, bb, cc] of blob.triangles) {
     b.triangle(base + a, base + bb, base + cc);
+  }
 }

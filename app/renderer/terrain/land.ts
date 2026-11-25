@@ -252,11 +252,12 @@ function createLandWorkers(threads: number) {
     worker.onmessage = (e: MessageEvent<BakeReply>) => {
       const pending = on.jobs.get(e.data.id);
       on.jobs.delete(e.data.id);
-      if (pending?.sent !== undefined)
+      if (pending?.sent !== undefined) {
         took.set(pending.job.kind, [
           ...(took.get(pending.job.kind) ?? []).slice(-39),
           performance.now() - pending.sent,
         ]);
+      }
       pending?.answer(e.data);
       pump();
     };
@@ -284,11 +285,13 @@ function createLandWorkers(threads: number) {
     for (const on of [...(whole === null ? [] : [whole]), ...workers]) {
       while (on.jobs.size < IN_FLIGHT && queue.length > 0) {
         let best = 0;
-        for (let i = 1; i < queue.length; i++)
+        for (let i = 1; i < queue.length; i++) {
           if (
             (queue[i] as Pending).priority < (queue[best] as Pending).priority
-          )
+          ) {
             best = i;
+          }
+        }
         send(on, queue.splice(best, 1)[0] as Pending);
       }
     }
@@ -319,12 +322,13 @@ function createLandWorkers(threads: number) {
     if (i >= 0) {
       const fresh = listen(new BakeWorker());
       workers[i] = fresh;
-      if (kept !== null)
+      if (kept !== null) {
         send(fresh, {
           job: { kind: "land", ...kept },
           answer: () => undefined,
           priority: JOB_PRIORITY.land,
         });
+      }
     }
     end(on, kept?.world);
   };
@@ -388,8 +392,9 @@ function createLandWorkers(threads: number) {
       const reply = await ask({ kind: "chunk", world, k, cx, cz }, priority);
       if (reply === null) return null;
       if (reply.kind === "failed") throw new Error(reply.message);
-      if (reply.kind !== "chunk")
+      if (reply.kind !== "chunk") {
         throw new Error(`A land worker answered a chunk with "${reply.kind}".`);
+      }
       return reply.chunk;
     },
   };
@@ -495,7 +500,7 @@ export function createPageLand(
             ? 2
             : -1;
     // An array no level stores is read at the window's edge, as a lattice without `beyond` would read it.
-    if (channel < 0)
+    if (channel < 0) {
       return heightAt(
         {
           n: size,
@@ -508,6 +513,7 @@ export function createPageLand(
         z,
         values,
       );
+    }
     for (let k = 1; k < levels; k++) {
       const o = origins[k] as { x: number; z: number };
       const unit = spacing * 2 ** k;
@@ -516,8 +522,9 @@ export function createPageLand(
       if (
         (gx >= 0 && gz >= 0 && gx <= size - 1 && gz <= size - 1) ||
         k === levels - 1
-      )
+      ) {
         return sampleLevel(k, channel, gx, gz);
+      }
     }
     return 0;
   };
@@ -572,8 +579,9 @@ export function createPageLand(
     const per = size / CHUNK;
     // Request the window's center chunks first, nearest the person.
     const order: [number, number][] = [];
-    for (let j = 0; j < per; j++)
+    for (let j = 0; j < per; j++) {
       for (let i = 0; i < per; i++) order.push([i, j]);
+    }
     const middle = (c: [number, number]): number =>
       Math.hypot(c[0] - per / 2 + 0.5, c[1] - per / 2 + 0.5);
     order.sort((a, b) => middle(a) - middle(b));
@@ -587,9 +595,9 @@ export function createPageLand(
         cx * CHUNK + CHUNK <= was.x + size &&
         cz * CHUNK + CHUNK <= was.z + size;
       if (held) carry(cx, cz, from, was.x, was.z, into, ox, oz);
-      else if (chunkPastLand(src.plan, k, cx, cz))
+      else if (chunkPastLand(src.plan, k, cx, cz)) {
         place(emptyChunk(src.plan, k, cx, cz), ox, oz, into);
-      else
+      } else {
         asks.push(
           workers
             .chunk(mine, k, cx, cz, priority)
@@ -599,6 +607,7 @@ export function createPageLand(
                 : undefined,
             ),
         );
+      }
     }
     return Promise.all(asks).then(() => undefined);
   }
@@ -627,8 +636,9 @@ export function createPageLand(
   /** Moves level `k` around (x, z) unless it is already there, after any move in progress. Resolves once it contains (x, z). */
   function moveAround(k: number, x: number, z: number): Promise<void> {
     const going = moving[k];
-    if (going !== null && going !== undefined)
+    if (going !== null && going !== undefined) {
       return going.then(() => moveAround(k, x, z));
+    }
     const at = windowAt(spacing, k, x, z);
     const o = origins[k] as { x: number; z: number };
     if (o.x === at.x && o.z === at.z) return Promise.resolve();
@@ -681,8 +691,9 @@ export function createPageLand(
     },
     follow(x, z) {
       if (source === null) return;
-      for (let k = 0; k < levels; k++)
+      for (let k = 0; k < levels; k++) {
         if (moving[k] === null) void moveAround(k, x, z);
+      }
     },
     async around(x, z) {
       if (source === null) return;

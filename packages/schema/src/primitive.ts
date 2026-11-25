@@ -75,8 +75,9 @@ export function primitive<R extends Role, const P extends Params>(
   if (!/^[a-z][a-z0-9-]*@\d+$/.test(def.id)) {
     throw new Error(`Primitive ID "${def.id}" must look like "name@1".`);
   }
-  if (def.doc.trim().length === 0)
+  if (def.doc.trim().length === 0) {
     throw new Error(`${def.id} needs a doc for Jev.`);
+  }
   return Object.freeze(def);
 }
 
@@ -103,8 +104,9 @@ export class Library {
   }
 
   add(p: AnyPrimitive): void {
-    if (this.#byId.has(p.id))
+    if (this.#byId.has(p.id)) {
       throw new Error(`Primitive ${p.id} is registered twice.`);
+    }
     this.#byId.set(p.id, p);
   }
 

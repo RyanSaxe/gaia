@@ -126,9 +126,9 @@ function slope(
     const q1 = lerp(e1, t1, (j + 1) / rows);
     const shade = 0.48 + 0.06 * (j % 2) + 0.05 * r.next();
     const c = ch(lerp(lerp(p0, p1, 0.5), lerp(q0, q1, 0.5), 0.5));
-    if (Math.hypot(q0[0] - q1[0], q0[1] - q1[1], q0[2] - q1[2]) < 1e-4)
+    if (Math.hypot(q0[0] - q1[0], q0[1] - q1[1], q0[2] - q1[2]) < 1e-4) {
       tri(b, [p0, p1, q0], n, shade, c);
-    else
+    } else {
       quad(
         b,
         [p0, p1, q1, q0],
@@ -136,6 +136,7 @@ function slope(
         [shade, shade, shade + 0.08, shade + 0.08],
         c,
       );
+    }
   }
 }
 
@@ -155,7 +156,7 @@ function slopeFrame(
   let n = normalize(cross(sub(e1, e0), sub(t0, e0)));
   if (n[0] * out[0] + n[1] * out[1] + n[2] * out[2] < 0) n = scale(n, -1);
   const count = Math.max(1, Math.round(Math.hypot(...sub(e1, e0)) / 0.55));
-  for (let k = 0; k <= count; k++)
+  for (let k = 0; k <= count; k++) {
     beam(
       b,
       addScaled(lerp(e0, e1, k / count), n, -0.05),
@@ -166,6 +167,7 @@ function slopeFrame(
       0.42,
       ch,
     );
+  }
 }
 
 /** Tufts of rank grass in a ring round a feature's foot, which grow in as vitality falls. */
@@ -277,9 +279,11 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
   for (const [shift, y] of [
     [0, H - 0.5],
     [0.5, H - 1.0],
-  ] as const)
-    for (let k = 0; k < 7; k++)
+  ] as const) {
+    for (let k = 0; k < 7; k++) {
       holes.push({ a: ((k + shift) / 7) * TAU + 0.22, y });
+    }
+  }
   for (let j = 0; j < rows; j++) {
     const y0 = -0.6 + j * rowH;
     const y1 = y0 + rowH;
@@ -334,8 +338,9 @@ function roundCote(r: Rand, plan: BuildingPlan): Built {
       const a1 = ((k + 1) / sides) * TAU;
       const am = (a0 + a1) / 2;
       // None across the doorway, which shows dark once the door swings open.
-      if (y1 <= doorTop + 1e-6 && (a0 < doorHalf || a1 > TAU - doorHalf))
+      if (y1 <= doorTop + 1e-6 && (a0 < doorHalf || a1 > TAU - doorHalf)) {
         continue;
+      }
       const n = fbm3(Math.cos(am) * 2, y0 * 2, Math.sin(am) * 2, seed, 2);
       // Rows count down from the top, so each block breaks away from its top edge.
       const grain = (p: Vec3): Vec3 => [
@@ -615,7 +620,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
     0.45,
     held(0.55),
   );
-  for (const s of [-1, 1])
+  for (const s of [-1, 1]) {
     beam(
       wood,
       Y.at(0, top - 0.5, 0),
@@ -626,6 +631,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
       0.4,
       held(0.55),
     );
+  }
   // The painted cote: a box under a pitched roof, two rows of arched doorways on each long side, each with a ledge.
   const hx = 0.5;
   const hz = 0.66;
@@ -667,7 +673,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
         const c = Y.at(s * (hx + 0.006), y, zf * hz);
         const w = 0.075;
         const arch: V3[] = [];
-        for (let q = 0; q <= 4; q++)
+        for (let q = 0; q <= 4; q++) {
           arch.push(
             addScaled(
               addScaled(c, Z, Math.cos((q / 4) * Math.PI) * w),
@@ -675,6 +681,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
               0.09 + Math.sin((q / 4) * Math.PI) * w,
             ),
           );
+        }
         quad(
           wood,
           [
@@ -687,7 +694,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
           0,
           held(0.3),
         );
-        for (let q = 0; q < 4; q++)
+        for (let q = 0; q < 4; q++) {
           tri(
             wood,
             [addScaled(c, UP, 0.09), arch[q] as V3, arch[q + 1] as V3],
@@ -695,6 +702,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
             0,
             held(0.3),
           );
+        }
         box(
           wood,
           addScaled(addScaled(c, n, 0.07), UP, -0.02),
@@ -745,7 +753,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
     0.5,
     held(0.5),
   );
-  for (const s of [-1, 1])
+  for (const s of [-1, 1]) {
     log(
       wood,
       Y.at(0, ridge, s * (hz + over)),
@@ -755,6 +763,7 @@ function postCote(r: Rand, plan: BuildingPlan): Built {
       held(0.5, { loss: 0.3 }),
       6,
     );
+  }
 
   weedsAbout(weed, Y, 0.25, 1.0, 8, r.fork("weeds"));
   const parts = [wood, paint, roof, weed]
@@ -875,7 +884,7 @@ function bucket(b: PartBuilder, c: V3, ch: Channels): void {
     for (const [y, rad] of [
       [0.05, 0.149],
       [h - 0.05, 0.168],
-    ] as const)
+    ] as const) {
       quad(
         b,
         [
@@ -888,6 +897,7 @@ function bucket(b: PartBuilder, c: V3, ch: Channels): void {
         0.22,
         ch,
       );
+    }
     tri(
       b,
       [[c[0], c[1] + 0.02, c[2]], at(k + 1, 0.14, 0.02), at(k, 0.14, 0.02)],
@@ -1026,7 +1036,7 @@ export function buildWell(
       still(Y.at(postX, 0, 0), 0.55, { rot: 0.3 }),
       8,
     );
-    for (const s of [-1, 1])
+    for (const s of [-1, 1]) {
       log(
         wood,
         Y.at(postX, 1.85, 0),
@@ -1036,6 +1046,7 @@ export function buildWell(
         still(Y.at(postX, 1.9, 0), 0.55),
         6,
       );
+    }
     const pin = Y.at(postX, 2.15, 0);
     log(
       wood,
@@ -1162,7 +1173,7 @@ export function buildWell(
         sag,
         r,
       );
-      for (const z of [-endZ, endZ])
+      for (const z of [-endZ, endZ]) {
         beam(
           wood,
           Y.at(0, ridgeY + 0.02, z),
@@ -1173,6 +1184,7 @@ export function buildWell(
           0.45,
           still(Y.at(0, ridgeY, z), 0.55, { droop: 0.04 }),
         );
+      }
       beam(
         wood,
         Y.at(-eaveX + 0.1, eaveY - 0.1, s * postZ),
@@ -1260,9 +1272,9 @@ function castBell(b: PartBuilder, hang: V3, B: number, ch: Channels): void {
         (r0 - r1) * B,
         Math.sin(a) * (y1 - y0) * H,
       ]);
-      if (r1 < 1e-6)
+      if (r1 < 1e-6) {
         tri(b, [at(k, r0, y0), at(k + 1, r0, y0), at(k, 0, y1)], n, 0.62, ch);
-      else
+      } else {
         quad(
           b,
           [at(k, r0, y0), at(k + 1, r0, y0), at(k + 1, r1, y1), at(k, r1, y1)],
@@ -1270,6 +1282,7 @@ function castBell(b: PartBuilder, hang: V3, B: number, ch: Channels): void {
           0.5 + 0.25 * y0,
           ch,
         );
+      }
     }
   }
   // The lip's underside and the dark inside of the bell.
@@ -1411,7 +1424,7 @@ export function buildBell(
         still(Y.at(0, spring, s * legZ), 0.55),
       );
     }
-    for (const lx of [-1, 1])
+    for (const lx of [-1, 1]) {
       beam(
         wood,
         Y.at(lx * 0.53, 0.6, -legZ),
@@ -1422,6 +1435,7 @@ export function buildBell(
         0.42,
         still(Y.at(lx * 0.53, 0.6, 0), 0.55, { rot: 0.3 }),
       );
+    }
     beam(
       wood,
       Y.at(0, spring + 0.12, -legZ - 0.1),
@@ -1544,7 +1558,7 @@ export function buildBell(
       sag,
       r,
     );
-    for (const z of [-span, span])
+    for (const z of [-span, span]) {
       beam(
         wood,
         Y.at(0, ridgeY + 0.02, z),
@@ -1555,6 +1569,7 @@ export function buildBell(
         0.45,
         still(Y.at(0, ridgeY, z), 0.55, { droop: 0.04 }),
       );
+    }
   }
   beam(
     wood,
@@ -1566,7 +1581,7 @@ export function buildBell(
     0.48,
     still(Y.at(0, ridgeY, 0), 0.5),
   );
-  for (const s of [-1, 1])
+  for (const s of [-1, 1]) {
     facet(
       wood,
       Y.at(-eaveX + 0.08, eaveY + 0.02, s * (span - 0.05)),
@@ -1576,6 +1591,7 @@ export function buildBell(
       still(Y.at(0, ridgeY, 0), 0.55, { rot: 0.4 }),
       Y.at(0, eaveY, 0),
     );
+  }
 
   castBell(metal, hang, B, swung(0.2));
   // A lever on the headstock and a rope down from it, to ring the bell by.
@@ -1693,7 +1709,7 @@ export function buildForge(
     0.55,
     hoodRot(lipY),
   );
-  for (const s of [-1, 1])
+  for (const s of [-1, 1]) {
     facet(
       plaster,
       Y.at(1.7, lipY, s * 0.62),
@@ -1703,6 +1719,7 @@ export function buildForge(
       hoodRot(backY),
       Y.at(2.1, 1.9, 0),
     );
+  }
   quad(
     plaster,
     [
@@ -1725,7 +1742,7 @@ export function buildForge(
     0.42,
     still(Y.at(lipX, lipY, 0), 0.55),
   );
-  for (const s of [-1, 1])
+  for (const s of [-1, 1]) {
     beam(
       wood,
       Y.at(lipX - 0.02, hearthTop, s * 0.6),
@@ -1736,6 +1753,7 @@ export function buildForge(
       0.42,
       still(Y.at(lipX, hearthTop, s * 0.6), 0.55),
     );
+  }
 
   // The anvil on its stump, tongs leaning against it, a hammer on its face, and a quench trough by the hearth.
   const stumpAt = Y.at(3.35, 0, -0.35);
@@ -1783,7 +1801,7 @@ export function buildForge(
     ironCh,
   );
   box(iron, Y.at(3.32, 0.86, -0.44), Y.axes, [0.06, 0.035, 0.035], 0.4, ironCh);
-  for (const dz of [-0.04, 0.04])
+  for (const dz of [-0.04, 0.04]) {
     beam(
       iron,
       Y.at(3.66, 0, -0.2 + dz),
@@ -1794,6 +1812,7 @@ export function buildForge(
       0.4,
       ironCh,
     );
+  }
   const troughAt = Y.at(2.38, 0, 1.05);
   const trough = still(troughAt, 0.55, { rot: 0.35 });
   for (const [dx, dz, hx, hz] of [
@@ -1801,7 +1820,7 @@ export function buildForge(
     [0, 0.2, 0.4, 0.03],
     [-0.37, 0, 0.03, 0.17],
     [0.37, 0, 0.03, 0.17],
-  ] as const)
+  ] as const) {
     box(
       wood,
       Y.at(2.38 + dx, 0.22, 1.05 + dz),
@@ -1810,6 +1829,7 @@ export function buildForge(
       0.42 + 0.06 * r.next(),
       trough,
     );
+  }
   quad(
     iron,
     [
@@ -1822,7 +1842,7 @@ export function buildForge(
     0.5,
     { loss: 0.4, droop: 0, wither: 0, glow: 0, pivot: Y.at(2.38, -0.2, 1.05) },
   );
-  for (let k = 0; k < 4; k++)
+  for (let k = 0; k < 4; k++) {
     lump(
       stone,
       Y.at(2.8 + 0.25 * r.next(), 0.02, 0.45 + 0.3 * r.next()),
@@ -1832,6 +1852,7 @@ export function buildForge(
       still(Y.at(2.9, 0, 0.6), 0.2),
       r,
     );
+  }
 
   if (p.shelter === "an open shed") {
     // Four posts carry plates and rafters under one slope falling away from
@@ -1877,7 +1898,7 @@ export function buildForge(
     }
     const rise = (x: number): number =>
       hiY + 0.14 + ((loY - hiY) * (x - inX)) / (outX - inX);
-    for (const z of [-edge, -edge / 3, edge / 3, edge])
+    for (const z of [-edge, -edge / 3, edge / 3, edge]) {
       beam(
         wood,
         Y.at(inX - 0.2, rise(inX - 0.2), z),
@@ -1888,6 +1909,7 @@ export function buildForge(
         0.42,
         still(Y.at(2.4, 0, z), 0.55, { loss: 0.16 }),
       );
+    }
     const covering = (q: V3): Channels => ({
       loss: lossThreshold(r.next(), 0.36, 0.24),
       droop: 0.05,
@@ -2067,7 +2089,7 @@ export function buildGranary(
     fall: [0, 0, -side * 0.38, 0.2],
     ...extra,
   });
-  for (const sx of [-1, 1])
+  for (const sx of [-1, 1]) {
     box(
       wood,
       Y.at(sx * rowX, 0.69, 0),
@@ -2076,8 +2098,10 @@ export function buildGranary(
       0.4,
       body(0.55),
     );
-  for (const z of zs)
+  }
+  for (const z of zs) {
     box(wood, Y.at(0, 0.81, z), Y.axes, [W / 2, 0.05, 0.06], 0.4, body(0.55));
+  }
   box(
     wood,
     Y.at(0, 0.89, 0),
@@ -2163,7 +2187,7 @@ export function buildGranary(
     );
   }
   for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1])
+    for (const sz of [-1, 1]) {
       box(
         paint,
         Y.at(sx * (W / 2 + 0.03), (floor + eave) / 2, sz * (L / 2 + 0.03)),
@@ -2172,6 +2196,7 @@ export function buildGranary(
         0.55,
         body(0.6, { rot: 0.4 }),
       );
+    }
   }
   for (let k = 0; k < 3; k++) {
     const z = -doorHalf + ((k + 0.5) / 3) * doorHalf * 2;
@@ -2184,7 +2209,7 @@ export function buildGranary(
       body(0.6, { rot: 0.5 }),
     );
   }
-  for (const sz of [-1, 1])
+  for (const sz of [-1, 1]) {
     box(
       paint,
       Y.at(W / 2 + 0.04, (floor + doorTop) / 2 + 0.03, sz * (doorHalf + 0.03)),
@@ -2193,6 +2218,7 @@ export function buildGranary(
       0.55,
       body(0.6),
     );
+  }
   box(
     paint,
     Y.at(W / 2 + 0.04, doorTop + 0.06, 0),
@@ -2274,7 +2300,7 @@ export function buildGranary(
         rafter,
       );
     }
-    if (half > 0.05)
+    if (half > 0.05) {
       box(
         roof,
         Y.at(0, ridgeY + 0.03, 0),
@@ -2283,6 +2309,7 @@ export function buildGranary(
         0.5,
         body(0.6),
       );
+    }
   } else {
     const ez = L / 2 + verge;
     for (const s of [-1, 1]) {
@@ -2306,7 +2333,7 @@ export function buildGranary(
         Y.dir(s, 1, 0),
         rafter,
       );
-      for (const z of [-ez, ez])
+      for (const z of [-ez, ez]) {
         beam(
           wood,
           Y.at(0, ridgeY + 0.03, z),
@@ -2317,6 +2344,7 @@ export function buildGranary(
           0.45,
           body(0.55, { droop: 0.04 }),
         );
+      }
     }
     box(
       roof,

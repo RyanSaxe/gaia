@@ -467,12 +467,13 @@ export const sky = primitive({
   build: (p) => {
     const colors = SKY_COLORS[p.character];
     const form = CLOUD_FORMS[p.clouds];
-    if (p.overcast === "fair")
+    if (p.overcast === "fair") {
       return {
         zenith: hex(colors.zenith),
         horizon: hex(colors.horizon),
         clouds: { ...form, threshold: p.cover },
       };
+    }
     // An overcast sky ignores `p.cover`, uses its own threshold and softens the cloud edges.
     const o = OVERCAST[p.overcast];
     return {

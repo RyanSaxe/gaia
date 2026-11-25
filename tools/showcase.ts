@@ -46,8 +46,9 @@ const args = parseArgs({
     "spend-up-to": { type: "string" },
   },
 }).values;
-if (args.v1 !== undefined && args.v1 !== "broken" && args.v1 !== "fixed")
+if (args.v1 !== undefined && args.v1 !== "broken" && args.v1 !== "fixed") {
   throw new Error("--v1 is broken (the default) or fixed.");
+}
 const fixedV1 = args.v1 === "fixed";
 /** The variant's name, which its fixtures carry: the showcase with v1 as written, or with v1 fixed. */
 const variant = fixedV1 ? "showcase-fixed" : "showcase";
@@ -59,10 +60,11 @@ if (fixedV1) {
     readFileSync(resolve(fixtures, "showcase-code-v1-fixed.txt"), "utf8"),
   );
   const broken = [...files.keys()].filter((path) => path.startsWith("v1/"));
-  if (broken.join("\n") !== [...fixed.keys()].join("\n"))
+  if (broken.join("\n") !== [...fixed.keys()].join("\n")) {
     throw new Error(
       "The fixed v1 must hold exactly the files the broken one does, in the same order, so the land lays out the same.",
     );
+  }
   for (const [path, text] of fixed) files.set(path, text);
 }
 
@@ -71,10 +73,11 @@ function writeCode(dir: string): void {
   const inside = relative(repo, dir);
   const outside =
     inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside);
-  if (!outside && !inside.split(sep).includes("node_modules"))
+  if (!outside && !inside.split(sep).includes("node_modules")) {
     throw new Error(
       `Write the showcase's code outside Gaia's repository or under node_modules, or Gaia's own world reads it: ${dir}.`,
     );
+  }
   for (const [path, text] of files) {
     mkdirSync(dirname(join(dir, path)), { recursive: true });
     writeFileSync(join(dir, path), text);
@@ -90,15 +93,17 @@ if (args.code !== undefined) {
 }
 
 const judge = args.judge;
-if (judge !== "jev" && judge !== "local")
+if (judge !== "jev" && judge !== "local") {
   throw new Error(
     "Write the showcase's source (--code DIR) or judge its world (--judge jev|local).",
   );
+}
 const data = process.env.GAIA_DATA_DIR;
-if (data === undefined)
+if (data === undefined) {
   throw new Error(
     "Set GAIA_DATA_DIR to the store that keeps Jev's answers about the showcase, so a later run asks only what changed.",
   );
+}
 // The showcase uses the same folder on every run, so the store keeps its answers under the same project. The folder's
 // name is the codebase's name, as a checkout's folder is, so its world and the journal's title page show that name.
 const root = resolve(data, "gaia");
@@ -131,10 +136,11 @@ const engine: ChildProcess = spawn(engineBinary(repo, "release"), ["rpc"], {
   stdio: ["pipe", "pipe", "inherit"],
 });
 const client = createEngineClient((line) => engine.stdin?.write(`${line}\n`));
-if (engine.stdout !== null)
+if (engine.stdout !== null) {
   createInterface({ input: engine.stdout }).on("line", (line) =>
     client.receive(line),
   );
+}
 
 /** What every answer the store keeps for the showcase was billed: the understanding pass's calls and the world's answers. */
 async function billed(
@@ -158,12 +164,13 @@ async function billed(
 
 try {
   const status = await client.call("jev.status", {});
-  if (!status.live || !status.key)
+  if (!status.live || !status.key) {
     throw new Error("Jev needs GAIA_JEV=live and OPENROUTER_API_KEY.");
+  }
   const first = await client.call("project.graph", { root, judged: true });
   const project = first.projectId;
   // The answers kept before go into the store, so only what changed is sent to Jev.
-  if (Object.keys(kept.answers).length > 0)
+  if (Object.keys(kept.answers).length > 0) {
     await client.call("store.put", {
       project,
       writes: Object.entries(kept.answers).map(([key, value]) => ({
@@ -172,6 +179,7 @@ try {
         value,
       })),
     });
+  }
   const before = await billed(project);
 
   // What the run would send: the understanding pass, then the look and form requests on the current graph, and
@@ -202,10 +210,11 @@ try {
     `showcase: about ${understanding.estimate.requests + judging.requests} requests before composing and ${composing?.requests ?? 0} composing, about $${estimate.toFixed(4)}`,
   );
   const allowed = Number(args["spend-up-to"] ?? "0");
-  if (judge === "jev" && !(allowed >= estimate * 2))
+  if (judge === "jev" && !(allowed >= estimate * 2)) {
     throw new Error(
       `Refusing to spend: pass --spend-up-to ${(estimate * 2).toFixed(4)} or more to ask Jev.`,
     );
+  }
 
   // The showcase opened as the app opens any folder.
   const document = await openWorld({

@@ -113,16 +113,20 @@ export function journalOf(
   const chapters = new Map<string, Item[]>();
   const files = new Map<string, Item[]>();
   const definitions = new Map<string, { item: Item; line: number }[]>();
-  for (const a of world.areas)
-    if (a.parent !== null)
+  for (const a of world.areas) {
+    if (a.parent !== null) {
       push(chapters, a.parent, { kind: "chapter", of: a.path, name: a.name });
-  for (const p of world.patches)
+    }
+  }
+  for (const p of world.patches) {
     push(files, p.area, { kind: "file", of: p.path, name: p.name });
-  for (const s of world.symbols)
+  }
+  for (const s of world.symbols) {
     push(definitions, s.parent ?? s.file, {
       item: { kind: "definition", of: s.id, name: s.name },
       line: s.line,
     });
+  }
   // Every entity gets a spread for its thing, whatever form it has.
   const things = new Map(
     [
@@ -147,20 +151,23 @@ export function journalOf(
   });
   /** Each folder's README, which its entity's page shows. */
   const readmes = new Map<string, string>();
-  for (const p of world.patches)
+  for (const p of world.patches) {
     if (
       /^readme(\.(md|markdown|txt|rst))?$/i.test(p.name) &&
       !readmes.has(p.area)
-    )
+    ) {
       readmes.set(p.area, p.path);
+    }
+  }
   const listOf = (item: Item | { kind: "root"; of: string }): Item[] => {
     // A container lists its own thing first.
-    if (item.kind === "chapter" || item.kind === "root")
+    if (item.kind === "chapter" || item.kind === "root") {
       return [
         ...(things.has(item.of) ? [entityItem(item.of)] : []),
         ...(chapters.get(item.of) ?? []).sort(byName),
         ...(files.get(item.of) ?? []).sort(byName),
       ];
+    }
     if (item.kind === "entity") {
       // An entity's page shows its folder's README. Without one, it lists the folder's contents so the reader can go deeper.
       const folder = item.of.slice("entity:".length);
@@ -249,8 +256,9 @@ export function journalOf(
     const lists = listOf(item);
     add(item, under, lists);
     // Don't recurse into an entity's list, since those entries follow in the folder's own chapter. An own entry lists nothing.
-    if (item.kind !== "entity" && item.kind !== "own")
+    if (item.kind !== "entity" && item.kind !== "own") {
       for (const l of lists) visit(l, item.of);
+    }
   };
   const contents = listOf({ kind: "root", of: "" });
   for (const item of contents) visit(item, undefined);

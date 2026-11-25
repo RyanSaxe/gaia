@@ -1,8 +1,8 @@
-//! Sends typed requests through OpenRouter's Decisions API when
+//! Sends typed requests through `OpenRouter`'s Decisions API when
 //! `GAIA_JEV=live`. The key comes from `OPENROUTER_API_KEY` and reaches curl
 //! only through stdin, never through command-line arguments or the engine's
 //! JSON-RPC protocol. `endpoint` keeps the key from going anywhere but
-//! OpenRouter.
+//! `OpenRouter`.
 
 use serde_json::{Value, json};
 use std::io::Write;
@@ -12,15 +12,16 @@ use std::time::Instant;
 
 pub const ENDPOINT: &str = "https://openrouter.ai/api/alpha/decisions";
 /// USD per million input tokens for typesafe/jev-1.13. Output tokens are free.
-/// From OpenRouter's model page on 2026-10-06.
+/// From `OpenRouter`'s model page on 2026-10-06.
 pub const USD_PER_MILLION_INPUT: f64 = 0.042;
 /// Maximum concurrent requests. The runner reduces concurrency on overload.
 pub const CONCURRENCY: usize = 64;
-/// OpenRouter's own example request is 858 bytes of JSON billed as 476 input
-/// tokens, so Jev bills about 1.8 bytes per token. `price` uses it as an
+/// `OpenRouter`'s own example request is 858 bytes of JSON billed as 476 input
+/// tokens, so Jev bills about 1.8 (9/5) bytes per token. `price` uses it as an
 /// estimate until a live run reports `usage.input_tokens`.
-pub const BYTES_PER_TOKEN: f64 = 1.8;
-/// The key a local stand-in for OpenRouter receives in place of the person's.
+const BYTES_PER_TOKEN_NUM: u64 = 9;
+const BYTES_PER_TOKEN_DEN: u64 = 5;
+/// The key a local stand-in for `OpenRouter` receives in place of the person's.
 pub const LOCAL_KEY: &str = "local-stand-in";
 
 /// True when the person turned live Jev calls on for this engine.
@@ -28,7 +29,7 @@ pub fn live() -> bool {
     std::env::var("GAIA_JEV").is_ok_and(|v| v == "live")
 }
 
-/// Where requests go: OpenRouter, or a local stand-in for it that only tests use.
+/// Where requests go: `OpenRouter`, or a local stand-in for it that only tests use.
 enum Endpoint {
     OpenRouter,
     Local(String),
@@ -43,10 +44,10 @@ impl Endpoint {
     }
 }
 
-/// OpenRouter, unless `GAIA_JEV_ENDPOINT` names a loopback address, which tests
+/// `OpenRouter`, unless `GAIA_JEV_ENDPOINT` names a loopback address, which tests
 /// set for a local stand-in. Any other address is an error. A local endpoint
 /// gets `LOCAL_KEY` and the configured key is never read, so the person's key
-/// only goes to OpenRouter.
+/// only goes to `OpenRouter`.
 fn endpoint() -> Result<Endpoint, String> {
     match std::env::var("GAIA_JEV_ENDPOINT") {
         Err(_) => Ok(Endpoint::OpenRouter),
@@ -63,7 +64,7 @@ fn is_loopback(url: &str) -> bool {
         .any(|prefix| url.starts_with(prefix))
 }
 
-/// Whether a nonempty OpenRouter key is configured. A local stand-in needs no key.
+/// Whether a nonempty `OpenRouter` key is configured. A local stand-in needs no key.
 pub fn has_key() -> bool {
     match endpoint() {
         Ok(Endpoint::Local(_)) => true,
@@ -77,8 +78,12 @@ pub fn has_key() -> bool {
 /// One request's body exactly as it would be posted, and its estimated cost.
 pub fn price(request: &Value) -> (String, u64, f64) {
     let body = request.to_string();
-    let tokens = (body.len() as f64 / BYTES_PER_TOKEN).ceil() as u64;
-    (body, tokens, tokens as f64 * USD_PER_MILLION_INPUT / 1e6)
+    let bytes = u64::try_from(body.len()).unwrap_or(u64::MAX);
+    let tokens = bytes
+        .saturating_mul(BYTES_PER_TOKEN_DEN)
+        .div_ceil(BYTES_PER_TOKEN_NUM);
+    let tokens_f64 = f64::from(u32::try_from(tokens).unwrap_or(u32::MAX));
+    (body, tokens, tokens_f64 * USD_PER_MILLION_INPUT / 1e6)
 }
 
 /// What a batch would send: its endpoint, each body's size and tokens, and the totals.
@@ -88,7 +93,7 @@ pub fn dry_run(requests: &[Value]) -> Value {
     json!({
         "endpoint": endpoint().map_or(ENDPOINT.to_string(), |e| e.url().to_string()),
         "requests": requests.len(),
-        "questions": requests.iter().map(|r| r["questions"].as_object().map_or(0, |q| q.len())).sum::<usize>(),
+        "questions": requests.iter().map(|r| r["questions"].as_object().map_or(0, serde_json::Map::len)).sum::<usize>(),
         "bytes": priced.iter().map(|p| p.0.len()).sum::<usize>(),
         "estimatedTokens": priced.iter().map(|p| p.1).sum::<u64>(),
         "estimatedUsd": priced.iter().map(|p| p.2).sum::<f64>(),
@@ -204,7 +209,7 @@ fn send(url: &str, key: &str, request: &Value) -> Result<Value, Failure> {
         "model": body["model"],
         "costUsd": body["usage"]["cost"].as_f64().unwrap_or(0.0),
         "inputTokens": body["usage"]["input_tokens"].as_u64().unwrap_or(0),
-        "ms": started.elapsed().as_millis() as u64,
+        "ms": u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
     }))
 }
 

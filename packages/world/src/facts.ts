@@ -59,8 +59,9 @@ function symbolsOf(defs: readonly DefNode[]): SymbolFact[] {
     const kind = KIND_OF_ROLE[d.role];
     if (kind === undefined) continue;
     const top = d.parent === undefined && d.owner === undefined;
-    if (!d.exported && !(top && (kind === "function" || kind === "class")))
+    if (!d.exported && !(top && (kind === "function" || kind === "class"))) {
       continue;
+    }
     const s: SymbolFact = {
       name: d.name,
       kind,
@@ -69,8 +70,9 @@ function symbolsOf(defs: readonly DefNode[]): SymbolFact[] {
       lines: Math.max(1, d.span.end - d.span.start + 1),
     };
     const had = byName.get(d.name);
-    if (had === undefined || (s.lines ?? 1) > (had.lines ?? 1))
+    if (had === undefined || (s.lines ?? 1) > (had.lines ?? 1)) {
       byName.set(d.name, s);
+    }
   }
   return [...byName.values()].sort(
     (a, b) => (a.line ?? 0) - (b.line ?? 0) || byText(a.name, b.name),

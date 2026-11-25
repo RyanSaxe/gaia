@@ -54,11 +54,11 @@ export function createEngineClient(send: (line: string) => void): LineClient {
         typeof message.id === "number" ? pending.get(message.id) : undefined;
       if (call === undefined) return;
       pending.delete(message.id as number);
-      if (message.error !== undefined)
+      if (message.error !== undefined) {
         call.reject(
           new Error(`${message.error.message} (${message.error.code})`),
         );
-      else call.resolve(message.result);
+      } else call.resolve(message.result);
     },
     disconnect(reason) {
       for (const call of pending.values()) call.reject(new Error(reason));

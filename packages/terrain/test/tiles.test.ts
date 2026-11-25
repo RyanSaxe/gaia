@@ -45,9 +45,11 @@ function tilesOf(t: Terrain): [number, number][] {
     const cx = Math.floor((x - origin) / spacing / SIZE) * SIZE;
     const cz = Math.floor((z - origin) / spacing / SIZE) * SIZE;
     for (const ix of [cx - SIZE, cx, cx + SIZE]) {
-      for (const iz of [cz - SIZE, cz, cz + SIZE])
-        if (ix >= 0 && iz >= 0 && ix < n && iz < n)
+      for (const iz of [cz - SIZE, cz, cz + SIZE]) {
+        if (ix >= 0 && iz >= 0 && ix < n && iz < n) {
           at.set(`${ix},${iz}`, [ix, iz]);
+        }
+      }
     }
   };
   for (const [ix, iz] of [
@@ -55,8 +57,9 @@ function tilesOf(t: Terrain): [number, number][] {
     [last, 0],
     [0, last],
     [last, last],
-  ] as const)
+  ] as const) {
     at.set(`${ix},${iz}`, [ix, iz]);
+  }
   for (const s of t.streams) for (const st of s.stations) add(st.x, st.z);
   for (const p of t.ponds) add(p.x, p.z);
   return [...at.values()];
@@ -127,8 +130,9 @@ describe("land baked in tiles", () => {
       "region",
       "coverRegions",
       "coverShares",
-    ] as const)
+    ] as const) {
       expect(bytes(banded[key]).equals(bytes(whole[key])), key).toBe(true);
+    }
     expect(
       bytes(banded.lattice.heights).equals(bytes(whole.lattice.heights)),
     ).toBe(true);
@@ -136,13 +140,15 @@ describe("land baked in tiles", () => {
     // Who owns the ground, computed in rows apart as the bake's threads do, is who owns it computed whole.
     const size = 300;
     const sites: OwnedSite[] = [];
-    for (let x = -144; x <= 144; x += 16)
-      for (let z = -144; z <= 144; z += 16)
+    for (let x = -144; x <= 144; x += 16) {
+      for (let z = -144; z <= 144; z += 16) {
         sites.push({
           x,
           z,
           owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1,
         });
+      }
+    }
     const own = ownershipOf(sites, { size }, size + 80);
     const grid = ownershipGrid(size + 80);
     const top = ownershipRows(sites, { size }, grid, 0, 40);

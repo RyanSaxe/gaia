@@ -176,10 +176,12 @@ export function tourStops(w: TourWorld): TourStop[] {
       .sort((a, b) => a.vitality - b.vitality);
     const worst = all[0];
     const best = all[all.length - 1];
-    if (worst !== undefined && worst.vitality < 0.35)
+    if (worst !== undefined && worst.vitality < 0.35) {
       add({ ...seeThing(worst), name: `ruined ${as}` });
-    if (best !== undefined && best.vitality >= 0.85)
+    }
+    if (best !== undefined && best.vitality >= 0.85) {
       add({ ...seeThing(best), name: `thriving ${as}` });
+    }
   }
 
   // Each crossing from its way, a few meters back along the trail, looking across.
@@ -188,7 +190,7 @@ export function tourStops(w: TourWorld): TourStop[] {
       const pts = way.points;
       const count = pts.length / 2;
       let k = 0;
-      for (let j = 0; j < count; j++)
+      for (let j = 0; j < count; j++) {
         if (
           Math.hypot(
             (pts[j * 2] as number) - c.x,
@@ -198,8 +200,10 @@ export function tourStops(w: TourWorld): TourStop[] {
             (pts[k * 2] as number) - c.x,
             (pts[k * 2 + 1] as number) - c.z,
           )
-        )
+        ) {
           k = j;
+        }
+      }
       const along = count < 2 ? 0.5 : k / (count - 1);
       const back = Math.round(c.span / 2 + 7);
       const candidates = [k - back, k + back]
@@ -227,10 +231,12 @@ export function tourStops(w: TourWorld): TourStop[] {
       `${kind === "footbridge" ? "A footbridge" : "Stepping stones"} across ${c.span.toFixed(0)} m of water, vitality ${c.vitality.toFixed(2)}`;
     const best = all[0];
     const worst = all[all.length - 1];
-    if (best !== undefined)
+    if (best !== undefined) {
       add(stop(label, what(best), best.from, best.at, -6));
-    if (worst !== undefined && worst !== best && worst.vitality < 0.35)
+    }
+    if (worst !== undefined && worst !== best && worst.vitality < 0.35) {
       add(stop(`ruined ${label}`, what(worst), worst.from, worst.at, -6));
+    }
   }
 
   // A junction's cairn, close enough to see its stones.
@@ -262,10 +268,11 @@ export function tourStops(w: TourWorld): TourStop[] {
     worstCairn !== undefined &&
     worstCairn !== bestCairn &&
     worstCairn.vitality < 0.35
-  )
+  ) {
     add(cairnStop(worstCairn, "ruined cairn"));
+  }
 
-  for (const p of w.ponds)
+  for (const p of w.ponds) {
     add(
       stop(
         "pond",
@@ -275,6 +282,7 @@ export function tourStops(w: TourWorld): TourStop[] {
         -4,
       ),
     );
+  }
 
   // The largest grove with vitality of at least 0.85, and the largest below 0.35.
   const groveStop = (g: TourGrove, name: string): TourStop =>
@@ -291,8 +299,9 @@ export function tourStops(w: TourWorld): TourStop[] {
     )[0];
   const thrivingGrove = largest(w.groves.filter((g) => g.vitality >= 0.85));
   const failingGrove = largest(w.groves.filter((g) => g.vitality < 0.35));
-  if (thrivingGrove !== undefined)
+  if (thrivingGrove !== undefined) {
     add(groveStop(thrivingGrove, "thriving grove"));
+  }
   if (failingGrove !== undefined) add(groveStop(failingGrove, "failing grove"));
 
   // Areas: the most and least vital of any size, the largest, the smallest and the most deeply nested.

@@ -155,8 +155,9 @@ export function nameTails(paths: readonly string[]): Map<string, string> {
     while (
       k < segs.length &&
       parts.some((o) => o !== segs && ends(o, k) === ends(segs, k))
-    )
+    ) {
       k++;
+    }
     tails.set(segs.join("/"), segs.slice(-k, -1).join(" / "));
   }
   return tails;
@@ -382,21 +383,26 @@ export function labelsOf<
         at[c + 1] !== k ||
         at[c - n] !== k ||
         at[c + n] !== k
-      )
+      ) {
         deep[c] = 0;
+      }
     }
   }
   for (let c = 0; c < n * n; c++) {
-    if (c % n > 0)
+    if (c % n > 0) {
       deep[c] = Math.min(deep[c] as number, (deep[c - 1] as number) + 1);
-    if (c >= n)
+    }
+    if (c >= n) {
       deep[c] = Math.min(deep[c] as number, (deep[c - n] as number) + 1);
+    }
   }
   for (let c = n * n - 1; c >= 0; c--) {
-    if (c % n < n - 1)
+    if (c % n < n - 1) {
       deep[c] = Math.min(deep[c] as number, (deep[c + 1] as number) + 1);
-    if (c < n * n - n)
+    }
+    if (c < n * n - n) {
       deep[c] = Math.min(deep[c] as number, (deep[c + n] as number) + 1);
+    }
   }
   const tails = nameTails(areas.filter((a) => a.depth > 0).map((a) => a.path));
   return areas.flatMap((area, k): AreaLabel<A>[] => {
@@ -605,9 +611,11 @@ export function* placeNames(
       ) as [number, number, number, number];
       cells = [];
       for (let j = Math.max(0, j0); j < Math.min(land.n, j1); j++) {
-        for (let i = Math.max(0, i0); i < Math.min(land.n, i1); i++)
-          if (land.at[j * land.n + i] === l.index)
+        for (let i = Math.max(0, i0); i < Math.min(land.n, i1); i++) {
+          if (land.at[j * land.n + i] === l.index) {
             cells.push([(i + 0.5) * CELL * scale, (j + 0.5) * CELL * scale]);
+          }
+        }
       }
       return cells.sort(
         (a, b) =>
@@ -635,17 +643,21 @@ export function* placeNames(
       ): readonly [Shape, Spot] => [shape, { x, y, beside }];
       yield spot(ax, ay);
       const [cos, sin] = [Math.cos(l.angle), Math.sin(l.angle)];
-      for (const t of SLANT)
+      for (const t of SLANT) {
         yield* [
           spot(ax + t * cos, ay + t * sin),
           spot(ax - t * cos, ay - t * sin),
         ];
+      }
       const [x0, y0, x1, y1] = shape.box;
       const here = boxOf(shape, ax, ay);
       const around: (readonly [Shape, Spot])[] = [];
       for (const [k, m] of marks.entries()) {
-        if (!hits(m, [here[0] - 60, here[1] - 60, here[2] + 60, here[3] + 60]))
+        if (
+          !hits(m, [here[0] - 60, here[1] - 60, here[2] + 60, here[3] + 60])
+        ) {
           continue;
+        }
         const [left, right, above, below] = [
           m[0] - GAP - x1,
           m[2] + GAP - x0,
@@ -711,8 +723,9 @@ export function* placeNames(
           !inside(b) ||
           !clear(b, { x, y, angle: l.angle, halfW: shape.halfW }) ||
           !ok(b, beside)
-        )
+        ) {
           continue;
+        }
         const c = covers(b);
         if (!least) return { shape, x, y, over: c > 0 };
         if (c < fewest) [fewest, best] = [c, { shape, x, y, over: c > 0 }];

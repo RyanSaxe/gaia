@@ -150,8 +150,9 @@ export interface FarForms {
 
 /** Whether `o` and every ancestor are visible. */
 const shows = (o: THREE.Object3D): boolean => {
-  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent)
+  for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) {
     if (!a.visible) return false;
+  }
   return true;
 };
 
@@ -185,8 +186,9 @@ export function createFarForms(
     swapPx: (form) => state[form]?.swapPx ?? 0,
     set(form, slot, swapPx) {
       const s = state[form];
-      if (s === undefined)
+      if (s === undefined) {
         throw new Error(`No far form ${form}; there are ${plants.length}.`);
+      }
       s.slot = slot;
       s.swapPx = slot < 0 ? 0 : swapPx;
       if (slot >= 0) cards.turnAt(slot, s.swapPx);
@@ -194,8 +196,9 @@ export function createFarForms(
     },
     join(form, anchor, far) {
       const list = members[form];
-      if (list === undefined)
+      if (list === undefined) {
         throw new Error(`No far form ${form}; there are ${plants.length}.`);
+      }
       const own = cards.copies(anchor);
       own.slot = forms.slotOf(form);
       const copies: FarCopies = {
@@ -382,8 +385,9 @@ export function createCopies(
       (cell.built.center.distanceTo(light.uEye.value) - cell.built.radius) *
       smaller;
     let pick = 0;
-    for (let k = 1; k < levels.length; k++)
+    for (let k = 1; k < levels.length; k++) {
       if ((levels[k] as number) <= near - LEVEL_MARGIN) pick = k;
+    }
     return pick;
   };
 
@@ -438,8 +442,9 @@ export function createCopies(
       // The card shader chooses each card on the GPU by the same rule as the full form below, at the form's current
       // `swapPx`. No card draws while the form has no slot or while detail is forced.
       const swapPx = far === undefined ? 0 : far.forms.swapPx(far.form);
-      if (cards !== null && far !== undefined)
+      if (cards !== null && far !== undefined) {
         cards.slot = detail === "auto" ? far.forms.slotOf(far.form) : -1;
+      }
       const swapping = swapPx > 0 && detail === "auto" && sized;
       // Below `swapPx`, a perspective pass dissolves the full form under its whole card until the crown spans
       // `leavePx`. The sun's shadow is orthographic, so it keeps the full form down to `swapPx` and the card casts the
@@ -460,14 +465,16 @@ export function createCopies(
         if (
           d - cell.built.radius >= AIR.dissolveEnd ||
           !frustum.intersectsSphere(cell.bounds)
-        )
+        ) {
           return;
+        }
         if (
           sized &&
           !size.ortho &&
           span(cell.crowns[1], d - cell.built.radius) <= GONE.end
-        )
+        ) {
           return;
+        }
         const level = parts[levelFor(cell, size.smaller)] as (
           | number
           | readonly number[]

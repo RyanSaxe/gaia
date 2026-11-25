@@ -84,9 +84,9 @@ export function randomSlots(
     const params: Record<string, string | boolean | string[]> = {};
     for (const [param, f] of Object.entries(p.params)) {
       if (f.type === "scale") params[param] = pick(f.levels, random).words;
-      else if (f.type === "choice")
+      else if (f.type === "choice") {
         params[param] = pick(Object.keys(f.options), random);
-      else if (f.type === "flag") params[param] = random() < 0.5;
+      } else if (f.type === "flag") params[param] = random() < 0.5;
       else params[param] = Object.keys(f.members).filter(() => random() < 0.5);
     }
     slots[name] = { use: p.id, params };

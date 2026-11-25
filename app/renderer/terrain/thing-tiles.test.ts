@@ -39,8 +39,9 @@ describe("what is placed on the land, tile by tile", () => {
           if (
             Math.hypot(x - cx, z - cz) + TILE.size < reach &&
             !held.has(`${ti},${tj}`)
-          )
+          ) {
             out.push(`${ti},${tj}`);
+          }
         }
       }
       return out;

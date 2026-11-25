@@ -321,7 +321,7 @@ export function ringBlock(
       ch,
     );
   }
-  if (under)
+  if (under) {
     quad(
       b,
       [outer(a0, y0), inner(a0, y0), inner(a1, y0), outer(a1, y0)],
@@ -329,6 +329,7 @@ export function ringBlock(
       shade - 0.22,
       ch,
     );
+  }
 }
 
 /** A flat floor across the top of a shaft, in wedges. Each wedge shrinks toward `foot` at its middle angle as it goes. */
@@ -400,9 +401,11 @@ class Courses {
   /** The highest threshold among blocks overlapping angles a0..a1 whose tops lie between y0 and y1. -1 when there are none. */
   under(a0: number, a1: number, y0: number, y1: number): number {
     let most = -1;
-    for (const b of this.laid)
-      if (b.y1 >= y0 && b.y1 <= y1 && overlaps(a0, a1, b.a0, b.a1))
+    for (const b of this.laid) {
+      if (b.y1 >= y0 && b.y1 <= y1 && overlaps(a0, a1, b.a0, b.a1)) {
         most = Math.max(most, b.loss);
+      }
+    }
     return most;
   }
   /** The highest threshold of any block whose top lies between y0 and y1, all round. */
@@ -475,7 +478,7 @@ function gallery(
       ch,
       true,
     );
-    if (parapet > 0)
+    if (parapet > 0) {
       ringBlock(
         stone,
         sides,
@@ -488,6 +491,7 @@ function gallery(
         0.56 + 0.1 * u,
         ch,
       );
+    }
   }
   return most;
 }
@@ -526,8 +530,9 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       sides === 0
         ? r.next() * Math.PI * 2
         : facetOf(sides, r.next() * Math.PI * 2);
-    if (!busy(c, 3))
+    if (!busy(c, 3)) {
       slits.push({ course: c, rows: 3, along, half: 0.3 / wallAt(c * ch) });
+    }
   }
   // Where a going block at angle `a` and height `y` sinks to, just behind the face of its wall: the top of the
   // plinth, which never goes, or the foot of its own stage, moved beside any opening on the way, so that partway gone
@@ -602,8 +607,9 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
         fallsAt(rise, u) +
         seeded.exposure * (2 * facing(mid, seeded.weather) - 1);
       const loss = c < 2 ? 0 : clamp(Math.max(weathered, under), 0.02, MOST);
-      for (const [b0, b1] of pieces)
+      for (const [b0, b1] of pieces) {
         laid.laid.push({ a0: b0, a1: b1, y0, y1, loss });
+      }
       // A falling block sinks into the wall below it as it goes, never hanging in the air. When an opening cuts a
       // block in two, each piece sinks into the wall below itself, not into the opening.
       const shade = 0.52 + 0.22 * cr.next() + 0.08 * rise - (c < 2 ? 0.08 : 0);
@@ -615,7 +621,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
         tint: (cr.next() - 0.5) * 0.05,
       };
       const bulge = (cr.next() - 0.5) * 0.04;
-      for (const [b0, b1] of pieces)
+      for (const [b0, b1] of pieces) {
         ringBlock(
           stone,
           sides,
@@ -631,6 +637,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
           JOINT,
           rad - 0.02 - MORTAR,
         );
+      }
     }
   }
 
@@ -665,7 +672,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       );
     }
   }
-  for (const g of midGalleries)
+  for (const g of midGalleries) {
     gallery(
       stone,
       sides,
@@ -677,6 +684,7 @@ export function buildLookoutTower(p: TowerParams, ctx: BuildContext): Built {
       seeded.reach,
       r.fork(`gallery${g.toFixed(1)}`),
     );
+  }
 
   // The openings: a dark pane and a lit pane in each slit, and a plank door at the foot.
   for (const sl of slits) {
@@ -1095,7 +1103,7 @@ function crownRoof(
       const n = normalize(cross(sub(pb, pa), sub(pd, pa)));
       const nn: V3 = n[1] < 0 ? [-n[0], -n[1], -n[2]] : n;
       if (t1 === 1) tri(roof, [pa, pb, pc], nn, 0.5 + 0.08 * u, ch);
-      else
+      else {
         quad(
           roof,
           [pa, pb, pc, pd],
@@ -1103,6 +1111,7 @@ function crownRoof(
           [0.42 + 0.08 * u, 0.42 + 0.08 * u, 0.55, 0.55],
           ch,
         );
+      }
     }
     // Under the eaves, a dark soffit so the roof never shows daylight through.
     quad(
@@ -1114,7 +1123,7 @@ function crownRoof(
     );
   }
   // The finial goes down with the first facet, at whose apex it stands.
-  if (first !== null)
+  if (first !== null) {
     box(
       timber,
       [0, height + 0.35, 0],
@@ -1123,6 +1132,7 @@ function crownRoof(
       0.4,
       { ...first, wither: 0.8 },
     );
+  }
 }
 
 export function angleDiff(a: number, b: number): number {

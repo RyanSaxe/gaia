@@ -21,6 +21,7 @@ use model::{
 use parse::FileParse;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -51,9 +52,14 @@ fn parse_cached(language: &str, hash: &str, text: &str) -> Result<Arc<FileParse>
     Ok(parsed)
 }
 
+fn saturating_u32(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
 /// Parses every file with a grammar, on every core. A grammar from a
 /// release that cannot be fetched leaves its files without a grammar.
 fn parse_all(files: &[walk::Walked]) -> Result<Vec<Option<Arc<FileParse>>>, String> {
+    type Parsed = (usize, Result<Arc<FileParse>, String>);
     let mut available: HashMap<&str, bool> = HashMap::new();
     for f in files.iter().filter(|f| f.text.is_some()) {
         let Some(spec) = languages::of_path(&f.path) else {
@@ -90,32 +96,32 @@ fn parse_all(files: &[walk::Walked]) -> Result<Vec<Option<Arc<FileParse>>>, Stri
         })
         .collect();
     let workers = std::thread::available_parallelism()
-        .map_or(4, |n| n.get())
+        .map_or(4, std::num::NonZero::get)
         .min(jobs.len().max(1));
-    let next = Mutex::new(0usize);
-    type Parsed = (usize, Result<Arc<FileParse>, String>);
-    let results: Mutex<Vec<Parsed>> = Mutex::new(Vec::new());
-    std::thread::scope(|s| {
-        for _ in 0..workers {
-            s.spawn(|| {
-                loop {
-                    let job = {
-                        let mut n = next.lock().expect("the job counter");
-                        let j = jobs.get(*n).copied();
-                        *n += 1;
-                        j
-                    };
-                    let Some((i, language, hash, text)) = job else {
-                        break;
-                    };
-                    let parsed = parse_cached(language, hash, text);
-                    results.lock().expect("the results").push((i, parsed));
-                }
-            });
-        }
-    });
+    let next = AtomicUsize::new(0);
+    let chunks: Vec<Vec<Parsed>> = std::thread::scope(|s| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                s.spawn(|| {
+                    let mut local = Vec::new();
+                    loop {
+                        let idx = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(&(i, language, hash, text)) = jobs.get(idx) else {
+                            break;
+                        };
+                        local.push((i, parse_cached(language, hash, text)));
+                    }
+                    local
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|h| h.join().map_err(|_| "parser worker panicked".to_string()))
+            .collect::<Result<Vec<_>, _>>()
+    })?;
     let mut out: Vec<Option<Arc<FileParse>>> = vec![None; files.len()];
-    for (i, parsed) in results.into_inner().map_err(|e| e.to_string())? {
+    for (i, parsed) in chunks.into_iter().flatten() {
         out[i] = Some(parsed.map_err(|e| format!("{}: {e}", files[i].path))?);
     }
     Ok(out)
@@ -156,13 +162,14 @@ impl Touches {
             return None;
         }
         Some(History {
-            commits: self.times.len() as u32,
-            recent: self
-                .times
-                .iter()
-                .filter(|t| now - **t <= RECENT_DAYS * DAY)
-                .count() as u32,
-            authors: self.authors.len() as u32,
+            commits: saturating_u32(self.times.len()),
+            recent: saturating_u32(
+                self.times
+                    .iter()
+                    .filter(|t| now - **t <= RECENT_DAYS * DAY)
+                    .count(),
+            ),
+            authors: saturating_u32(self.authors.len()),
         })
     }
 }
@@ -215,27 +222,10 @@ pub fn build_linked(root: &Path, links: &Links) -> Result<CodeGraph, String> {
     build_with(root, &lineage::Store, links)
 }
 
-/// Builds the graph, matching lineage against the record `keeper` loads.
-fn build_with(
-    root: &Path,
-    keeper: &dyn lineage::Keeper,
-    links: &Links,
-) -> Result<CodeGraph, String> {
-    if !root.is_dir() {
-        return Err(format!("{} is not a directory.", root.display()));
-    }
-    let snapshot = walk::Snapshot::of(root);
-    let files = snapshot.files();
-    let parsed = parse_all(&files)?;
-
-    // History, per file and per directory.
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs() as i64);
+fn collect_history(root: &Path) -> (HashMap<String, Touches>, HashMap<String, Touches>) {
     let mut file_touches: HashMap<String, Touches> = HashMap::new();
     let mut dir_touches: HashMap<String, Touches> = HashMap::new();
-    let commits = git::history(root);
-    for c in &commits {
+    for c in &git::history(root) {
         let mut dirs: BTreeSet<String> = BTreeSet::new();
         for f in &c.files {
             let t = file_touches.entry(f.clone()).or_default();
@@ -249,64 +239,62 @@ fn build_with(
             t.authors.insert(c.author.clone());
         }
     }
+    (file_touches, dir_touches)
+}
 
-    // Directories: every one holding a file, and each above it.
+fn count_lines(
+    files: &[walk::Walked],
+    parsed: &[Option<Arc<FileParse>>],
+) -> (BTreeMap<String, u32>, Vec<u32>) {
     let mut dir_lines: BTreeMap<String, u32> = BTreeMap::new();
     let mut file_lines: Vec<u32> = Vec::new();
-    for (f, p) in files.iter().zip(&parsed) {
-        let lines = match (p, &f.text) {
+    for (f, p) in files.iter().zip(parsed) {
+        let line_count = match (p, &f.text) {
             (Some(p), _) => p.lines,
-            (None, Some(t)) => t.lines().count() as u32,
+            (None, Some(t)) => saturating_u32(t.lines().count()),
             (None, None) => 0,
         };
-        file_lines.push(lines);
+        file_lines.push(line_count);
         for d in ancestors(parent_dir(&f.path)) {
-            *dir_lines.entry(d).or_insert(0) += lines;
+            *dir_lines.entry(d).or_insert(0) += line_count;
         }
     }
+    (dir_lines, file_lines)
+}
 
-    // The entities rooted in its directories (`entities.rs`).
-    let listed: Vec<entities::Listed> = files
-        .iter()
-        .map(|f| entities::Listed {
-            path: &f.path,
-            text: f.text.as_deref(),
-        })
-        .collect();
-    let found = entities::manifests(&listed);
-    let entity_at: BTreeMap<String, Entity> = found
-        .iter()
-        .map(|e| {
-            (
-                e.path.clone(),
-                Entity {
-                    name: e.name.clone(),
-                    form: e.form,
-                    manifest: e.manifest.clone(),
-                    entry: e.entry.clone(),
-                },
-            )
-        })
-        .collect();
+struct NodeInputs<'a> {
+    files: &'a [walk::Walked],
+    parsed: &'a [Option<Arc<FileParse>>],
+    dir_lines: &'a BTreeMap<String, u32>,
+    file_lines: &'a [u32],
+    file_touches: &'a HashMap<String, Touches>,
+    dir_touches: &'a HashMap<String, Touches>,
+    entity_at: &'a BTreeMap<String, Entity>,
+    now: i64,
+}
 
+fn build_nodes(input: &NodeInputs<'_>) -> (Vec<Node>, Vec<Vec<String>>) {
     let mut nodes: Vec<Node> = Vec::new();
-    let mut all_def_ids: Vec<Vec<String>> = vec![Vec::new(); files.len()];
-    for (dir, lines) in &dir_lines {
+    let mut all_def_ids: Vec<Vec<String>> = vec![Vec::new(); input.files.len()];
+    for (dir, line_count) in input.dir_lines {
         let id = format!("dir:{dir}");
         nodes.push(Node::Dir(DirNode {
             lineage: fresh_lineage(&id),
             judged: None,
             id,
             measures: Measures {
-                lines: *lines,
-                history: dir_touches.get(dir).and_then(|t| t.history(now)),
+                lines: *line_count,
+                history: input
+                    .dir_touches
+                    .get(dir)
+                    .and_then(|t| t.history(input.now)),
             },
             path: dir.clone(),
-            entity: entity_at.get(dir).cloned(),
+            entity: input.entity_at.get(dir).cloned(),
         }));
     }
 
-    for (k, (f, p)) in files.iter().zip(&parsed).enumerate() {
+    for (k, (f, p)) in input.files.iter().zip(input.parsed).enumerate() {
         let spec = languages::of_path(&f.path);
         let file_id = format!("file:{}", f.path);
         nodes.push(Node::File(FileNode {
@@ -314,8 +302,11 @@ fn build_with(
             judged: None,
             id: file_id.clone(),
             measures: Measures {
-                lines: file_lines[k],
-                history: file_touches.get(&f.path).and_then(|t| t.history(now)),
+                lines: input.file_lines[k],
+                history: input
+                    .file_touches
+                    .get(&f.path)
+                    .and_then(|t| t.history(input.now)),
             },
             path: f.path.clone(),
             language: p.as_ref().and(spec).map(|s| s.name.clone()),
@@ -375,32 +366,10 @@ fn build_with(
         }
         all_def_ids[k] = def_ids;
     }
+    (nodes, all_def_ids)
+}
 
-    // Resolve imports, calls and references by rule, or leave them pending.
-    let dirs: BTreeSet<String> = dir_lines.keys().cloned().collect();
-    let units: Vec<resolve::Unit> = files
-        .iter()
-        .zip(&parsed)
-        .zip(&all_def_ids)
-        .map(|((f, p), ids)| resolve::Unit {
-            path: &f.path,
-            spec: languages::of_path(&f.path),
-            parse: p.as_deref(),
-            def_ids: ids,
-            text: f.text.as_deref(),
-        })
-        .collect();
-    let packages: Vec<resolve::Package> = found
-        .iter()
-        .filter(|e| e.form == "package")
-        .map(|e| resolve::Package {
-            name: &e.name,
-            root: &e.path,
-            entry: e.entry.as_deref(),
-            exports: &e.exports_map,
-        })
-        .collect();
-    let resolved = resolve::run(&units, &dirs, &packages, &entities::installed(&listed));
+fn apply_jev_links(resolved: resolve::Resolved, links: &Links) -> (Vec<Edge>, Vec<PendingRef>) {
     let mut edges = resolved.edges;
     // References Jev resolved become edges, and ones it placed outside the
     // repository leave the pending list. A reference whose candidates changed
@@ -432,29 +401,39 @@ fn build_with(
             None => pending.push(r),
         }
     }
+    (edges, pending)
+}
 
-    let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let project_id = project_id(root);
+struct LineageInputs<'a> {
+    root: &'a Path,
+    project_id: &'a str,
+    commit: Option<&'a str>,
+    dirs: &'a BTreeSet<String>,
+    files: &'a [walk::Walked],
+    parsed: &'a [Option<Arc<FileParse>>],
+    file_lines: &'a [u32],
+    all_def_ids: &'a [Vec<String>],
+}
 
-    // Lineage, matched against the store's record of this project's last graph.
-    let commit = snapshot.commit().map(String::from);
-    let previous = keeper.load(&project_id);
+fn apply_lineages(nodes: &mut [Node], keeper: &dyn lineage::Keeper, input: &LineageInputs) {
+    let previous = keeper.load(input.project_id);
     let renames = match (
         previous.as_ref().and_then(|p| p.commit.as_deref()),
-        commit.as_deref(),
+        input.commit,
     ) {
-        (Some(from), Some(to)) if from != to => git::renames(root, from, to),
+        (Some(from), Some(to)) if from != to => git::renames(input.root, from, to),
         _ => None,
     };
     let current = lineage::Current {
-        commit: commit.clone(),
-        dirs: dirs.iter().map(String::as_str).collect(),
-        files: files
+        commit: input.commit.map(String::from),
+        dirs: input.dirs.iter().map(String::as_str).collect(),
+        files: input
+            .files
             .iter()
             .enumerate()
             .map(|(k, f)| lineage::File {
                 path: &f.path,
-                lines: file_lines[k],
+                lines: input.file_lines[k],
                 fingerprint: f
                     .text
                     .as_deref()
@@ -462,10 +441,11 @@ fn build_with(
                     .unwrap_or_default(),
             })
             .collect(),
-        defs: files
+        defs: input
+            .files
             .iter()
-            .zip(&parsed)
-            .zip(&all_def_ids)
+            .zip(input.parsed)
+            .zip(input.all_def_ids)
             .flat_map(|((f, p), ids)| {
                 p.iter().flat_map(move |p| {
                     p.defs.iter().zip(ids).map(move |(d, id)| lineage::Def {
@@ -480,14 +460,14 @@ fn build_with(
             .collect(),
     };
     let (lineages, record) = lineage::assign(previous.as_ref(), renames.as_ref(), &current);
-    keeper.save(&project_id, &record);
+    keeper.save(input.project_id, &record);
     let lineage_of = |id: &str| {
         lineages
             .get(id)
             .cloned()
             .unwrap_or_else(|| fresh_lineage(id))
     };
-    for n in &mut nodes {
+    for n in nodes {
         match n {
             Node::Dir(d) => d.lineage = lineage_of(&d.id),
             Node::File(f) => f.lineage = lineage_of(&f.id),
@@ -500,6 +480,104 @@ fn build_with(
             }
         }
     }
+}
+
+/// Builds the graph, matching lineage against the record `keeper` loads.
+fn build_with(
+    root: &Path,
+    keeper: &dyn lineage::Keeper,
+    links: &Links,
+) -> Result<CodeGraph, String> {
+    if !root.is_dir() {
+        return Err(format!("{} is not a directory.", root.display()));
+    }
+    let snapshot = walk::Snapshot::of(root);
+    let files = snapshot.files();
+    let parsed = parse_all(&files)?;
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs().cast_signed());
+    let (file_touches, dir_touches) = collect_history(root);
+    let (dir_lines, file_lines) = count_lines(&files, &parsed);
+
+    let listed: Vec<entities::Listed> = files
+        .iter()
+        .map(|f| entities::Listed {
+            path: &f.path,
+            text: f.text.as_deref(),
+        })
+        .collect();
+    let found = entities::manifests(&listed);
+    let entity_at: BTreeMap<String, Entity> = found
+        .iter()
+        .map(|e| {
+            (
+                e.path.clone(),
+                Entity {
+                    name: e.name.clone(),
+                    form: e.form,
+                    manifest: e.manifest.clone(),
+                    entry: e.entry.clone(),
+                },
+            )
+        })
+        .collect();
+
+    let (mut nodes, all_def_ids) = build_nodes(&NodeInputs {
+        files: &files,
+        parsed: &parsed,
+        dir_lines: &dir_lines,
+        file_lines: &file_lines,
+        file_touches: &file_touches,
+        dir_touches: &dir_touches,
+        entity_at: &entity_at,
+        now,
+    });
+
+    let dirs: BTreeSet<String> = dir_lines.keys().cloned().collect();
+    let units: Vec<resolve::Unit> = files
+        .iter()
+        .zip(&parsed)
+        .zip(&all_def_ids)
+        .map(|((f, p), ids)| resolve::Unit {
+            path: &f.path,
+            spec: languages::of_path(&f.path),
+            parse: p.as_deref(),
+            def_ids: ids,
+            text: f.text.as_deref(),
+        })
+        .collect();
+    let packages: Vec<resolve::Package> = found
+        .iter()
+        .filter(|e| e.form == "package")
+        .map(|e| resolve::Package {
+            name: &e.name,
+            root: &e.path,
+            entry: e.entry.as_deref(),
+            exports: &e.exports_map,
+        })
+        .collect();
+    let resolved = resolve::run(&units, &dirs, &packages, &entities::installed(&listed));
+    let (edges, pending) = apply_jev_links(resolved, links);
+
+    let canonical = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let project_id = project_id(root);
+    let commit = snapshot.commit().map(String::from);
+    apply_lineages(
+        &mut nodes,
+        keeper,
+        &LineageInputs {
+            root,
+            project_id: &project_id,
+            commit: commit.as_deref(),
+            dirs: &dirs,
+            files: &files,
+            parsed: &parsed,
+            file_lines: &file_lines,
+            all_def_ids: &all_def_ids,
+        },
+    );
     let name = git::name(root).unwrap_or_else(|| {
         canonical
             .file_name()
@@ -566,6 +644,77 @@ mod tests {
             .collect()
     }
 
+    fn assert_capture_fires(
+        spec_name: &str,
+        file: &FileNode,
+        g: &CodeGraph,
+        defs: &HashMap<&str, &DefNode>,
+        parsed: &parse::FileParse,
+        capture: &str,
+    ) {
+        let in_file = |id: &str| id == file.id || defs.get(id).is_some_and(|d| d.file == file.id);
+        if let Some(shape) = capture.strip_prefix("block.") {
+            let found = g
+                .nodes
+                .iter()
+                .any(|n| matches!(n, Node::Block(b) if b.shape == shape && in_file(&b.def)));
+            assert!(
+                found,
+                "{spec_name}'s @{capture} makes a block in {}",
+                file.path
+            );
+        }
+        if let Some(kind) = capture.strip_prefix("alias.") {
+            let found = parsed.refs.iter().flat_map(|r| &r.aliases).any(|a| {
+                matches!(
+                    (&a.of, kind),
+                    (parse::Aliased::Item(_), "renamed")
+                        | (parse::Aliased::Module, "module")
+                        | (parse::Aliased::Default, "default")
+                )
+            });
+            assert!(
+                found,
+                "{spec_name}'s @{capture} makes an alias in {}",
+                file.path
+            );
+        }
+        if let Some(kind) = capture.strip_prefix("reexport.") {
+            let found = parsed.refs.iter().any(|r| {
+                (kind == "all" && r.passes_all)
+                    || r.passes.iter().any(|a| {
+                        matches!(
+                            (&a.of, kind),
+                            (parse::Aliased::Item(_), "named" | "renamed")
+                                | (parse::Aliased::Module, "module")
+                        )
+                    })
+            });
+            assert!(
+                found,
+                "{spec_name}'s @{capture} passes a name on in {}",
+                file.path
+            );
+        }
+        if capture == "export.default" {
+            assert!(
+                parsed.default_export.is_some(),
+                "{spec_name}'s @{capture} names a default in {}",
+                file.path
+            );
+        }
+        let kind = match capture {
+            "reference.import" => parse::RefKind::Import,
+            "reference.call" | "reference.send" => parse::RefKind::Call,
+            _ => return,
+        };
+        assert!(
+            parsed.refs.iter().any(|r| r.kind == kind),
+            "{spec_name}'s @{capture} makes a reference in {}",
+            file.path
+        );
+    }
+
     #[test]
     fn every_language_parses_its_sample_and_fires_every_capture_the_graph_shows() {
         let g = graph(&fixtures()).unwrap();
@@ -585,8 +734,6 @@ mod tests {
                     panic!("{} has a sample in tests/fixtures/languages", spec.name)
                 });
             assert_eq!(file.unparsed, 0, "{} parses its sample cleanly", spec.name);
-            let in_file =
-                |id: &str| id == file.id || defs.get(id).is_some_and(|d| d.file == file.id);
             assert!(
                 defs.values().any(|d| d.file == file.id),
                 "{} finds a definition in {}",
@@ -601,70 +748,7 @@ mod tests {
             let text = std::fs::read_to_string(fixtures().join(&file.path)).unwrap();
             let parsed = parse::parse(&loaded, &text).unwrap();
             for capture in captures {
-                if let Some(shape) = capture.strip_prefix("block.") {
-                    let found = g.nodes.iter().any(
-                        |n| matches!(n, Node::Block(b) if b.shape == shape && in_file(&b.def)),
-                    );
-                    assert!(
-                        found,
-                        "{}'s @{capture} makes a block in {}",
-                        spec.name, file.path
-                    );
-                }
-                // An alias attaches to the import that contains it, and a default export names its definition.
-                if let Some(kind) = capture.strip_prefix("alias.") {
-                    let found = parsed.refs.iter().flat_map(|r| &r.aliases).any(|a| {
-                        matches!(
-                            (&a.of, kind),
-                            (parse::Aliased::Item(_), "renamed")
-                                | (parse::Aliased::Module, "module")
-                                | (parse::Aliased::Default, "default")
-                        )
-                    });
-                    assert!(
-                        found,
-                        "{}'s @{capture} makes an alias in {}",
-                        spec.name, file.path
-                    );
-                }
-                // A re-export attaches to the import that contains it.
-                if let Some(kind) = capture.strip_prefix("reexport.") {
-                    let found = parsed.refs.iter().any(|r| {
-                        (kind == "all" && r.passes_all)
-                            || r.passes.iter().any(|a| {
-                                matches!(
-                                    (&a.of, kind),
-                                    (parse::Aliased::Item(_), "named" | "renamed")
-                                        | (parse::Aliased::Module, "module")
-                                )
-                            })
-                    });
-                    assert!(
-                        found,
-                        "{}'s @{capture} passes a name on in {}",
-                        spec.name, file.path
-                    );
-                }
-                if capture == "export.default" {
-                    assert!(
-                        parsed.default_export.is_some(),
-                        "{}'s @{capture} names a default in {}",
-                        spec.name,
-                        file.path
-                    );
-                }
-                // An import or call may resolve, become pending or point outside, so the test checks the parse.
-                let kind = match capture {
-                    "reference.import" => parse::RefKind::Import,
-                    "reference.call" | "reference.send" => parse::RefKind::Call,
-                    _ => continue,
-                };
-                assert!(
-                    parsed.refs.iter().any(|r| r.kind == kind),
-                    "{}'s @{capture} makes a reference in {}",
-                    spec.name,
-                    file.path
-                );
+                assert_capture_fires(&spec.name, file, &g, &defs, &parsed, capture);
             }
         }
     }
@@ -777,394 +861,392 @@ mod tests {
         std::fs::remove_dir_all(dir).unwrap();
     }
 
+    const FORM_FILES: &[(&str, &str)] = &[
+        // TypeScript and JavaScript imports. The command line defines the very name it renames.
+        (
+            "src/v1/index.ts",
+            "export function buildSite() {\n  return 1;\n}\n\nexport default function legacy() {\n  return 2;\n}\n",
+        ),
+        ("src/walk.ts", "export function walk() {\n  return 3;\n}\n"),
+        (
+            "src/make.ts",
+            "function make() {\n  return 4;\n}\n\nexport default make;\n",
+        ),
+        (
+            "src/strings.ts",
+            "export function join() {\n  return 5;\n}\n",
+        ),
+        (
+            "src/cli.ts",
+            "import { buildSite as buildV1 } from \"./v1/index\";\nimport * as walker from \"./walk\";\nimport legacyBuild from \"./v1/index\";\nimport made from \"./make\";\nimport * as path from \"node:path\";\n\nexport function buildSite() {\n  buildV1();\n  walker.walk();\n  legacyBuild();\n  made();\n  path.join(\"a\", \"b\");\n}\n",
+        ),
+        (
+            "lib/tools.js",
+            "export function helper() {\n  return 6;\n}\n\nexport function other() {\n  return 7;\n}\n",
+        ),
+        (
+            "lib/main.js",
+            "import { helper as assist } from \"./tools.js\";\nimport * as tools from \"./tools.js\";\n\nexport function main() {\n  assist();\n  tools.other();\n}\n",
+        ),
+        // A package's index that re-exports, with a cycle and a chain longer than `HOPS`.
+        (
+            "packages/geo/package.json",
+            r#"{ "name": "@demo/geo", "main": "src/index.ts" }"#,
+        ),
+        (
+            "packages/geo/src/index.ts",
+            "export { area } from \"./shapes/area\";\nexport { perimeter as edge } from \"./shapes/perimeter\";\nexport * from \"./more\";\nexport * as units from \"./units/convert\";\nexport * from \"./loop/a\";\nexport * from \"./far/f1\";\nexport * from \"./hidden\";\n",
+        ),
+        (
+            "packages/geo/src/shapes/area.ts",
+            "export function area() {\n  return 1;\n}\n",
+        ),
+        (
+            "packages/geo/src/shapes/perimeter.ts",
+            "export function perimeter() {\n  return 2;\n}\n",
+        ),
+        (
+            "packages/geo/src/more.js",
+            "export * from \"./deep/scale\";\n",
+        ),
+        (
+            "packages/geo/src/deep/scale.ts",
+            "export function scale() {\n  return 3;\n}\n",
+        ),
+        (
+            "packages/geo/src/units/convert.ts",
+            "export function toMeters() {\n  return 4;\n}\n",
+        ),
+        (
+            "packages/geo/src/hidden.ts",
+            "function tidy() {\n  return 7;\n}\n\nexport const kept = tidy();\n",
+        ),
+        ("packages/geo/src/loop/a.ts", "export * from \"./b\";\n"),
+        ("packages/geo/src/loop/b.ts", "export * from \"./a\";\n"),
+        ("packages/geo/src/far/f1.ts", "export * from \"./f2\";\n"),
+        ("packages/geo/src/far/f2.ts", "export * from \"./f3\";\n"),
+        ("packages/geo/src/far/f3.ts", "export * from \"./f4\";\n"),
+        ("packages/geo/src/far/f4.ts", "export * from \"./f5\";\n"),
+        (
+            "packages/geo/src/far/f5.ts",
+            "export function distant() {\n  return 5;\n}\n",
+        ),
+        (
+            "apps/web/scale.ts",
+            "export function scale() {\n  return 6;\n}\n",
+        ),
+        (
+            "apps/web/app.ts",
+            "import { area, edge, scale, units, missing, distant } from \"@demo/geo\";\nimport * as geo from \"@demo/geo\";\n\nexport function draw() {\n  area();\n  edge();\n  scale();\n  units.toMeters();\n  missing();\n  distant();\n  tidy();\n}\n\nexport function drawAll() {\n  geo.area();\n}\n",
+        ),
+        // Python imports, and a package's `__init__` that re-exports.
+        (
+            "pkg/core.py",
+            "def run():\n    return 1\n\n\ndef stop():\n    return 3\n\n\nclass Loader:\n    def load(self):\n        return 2\n",
+        ),
+        (
+            "pkg/app.py",
+            "from .core import run as start\nfrom . import core as c\nimport pkg.core as engine\nimport numpy as np\n\n\ndef run():\n    return 0\n\n\ndef renamed():\n    start()\n\n\ndef module():\n    c.run()\n\n\ndef dotted():\n    engine.run()\n\n\ndef outside():\n    np.load()\n\n\ndef begin():\n    from .core import run as f\n    return f()\n\n\ndef end():\n    from .core import stop as f\n    return f()\n",
+        ),
+        (
+            "shop/__init__.py",
+            "from .billing.invoice import total\nfrom .billing.tax import rate as tax_rate\nfrom .catalog import *\n",
+        ),
+        ("shop/billing/invoice.py", "def total():\n    return 1\n"),
+        ("shop/billing/tax.py", "def rate():\n    return 2\n"),
+        (
+            "shop/catalog/__init__.py",
+            "from .store.items import find\n",
+        ),
+        ("shop/catalog/store/items.py", "def find():\n    return 3\n"),
+        ("shop/cli/helpers.py", "def find():\n    return 4\n"),
+        (
+            "shop/cli/main.py",
+            "from .. import total, tax_rate, find\n\n\ndef run():\n    total()\n    tax_rate()\n    find()\n",
+        ),
+        // Rust's `use … as` and `pub use`.
+        (
+            "src/util.rs",
+            "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n",
+        ),
+        ("src/graph/mod.rs", "pub mod resolve;\n"),
+        ("src/graph/resolve.rs", "pub fn run() {}\n"),
+        (
+            "src/geo/mod.rs",
+            "pub mod shapes;\npub use self::shapes::flat::area;\npub use self::shapes::flat::perimeter as edge;\npub use self::shapes::flat::{span, mass as weight};\npub use self::shapes::solid::*;\nuse self::shapes::flat::hidden;\n",
+        ),
+        ("src/geo/shapes/mod.rs", "pub mod flat;\npub mod solid;\n"),
+        (
+            "src/geo/shapes/flat.rs",
+            "pub fn area() {}\npub fn perimeter() {}\npub fn span() {}\npub fn mass() {}\npub fn hidden() {}\n",
+        ),
+        ("src/geo/shapes/solid.rs", "pub fn volume() {}\n"),
+        (
+            "src/main.rs",
+            "mod geo;\nuse crate::util::format as fmt_u8;\nuse crate::util::Tool as T;\nuse crate::graph::resolve as res;\nuse crate::geo::{area, edge, span, weight, volume, hidden};\n\nfn main() {\n    let t = T::new();\n    let x = fmt_u8(1);\n    res::run();\n}\n\nfn format() {}\n\nfn shapes() {\n    area();\n    edge();\n    span();\n    weight();\n    volume();\n    hidden();\n}\n",
+        ),
+    ];
+
+    const FORM_CASES: &[(&str, &str, &str, &str, bool)] = &[
+        (
+            "TypeScript",
+            "a renamed import of a name the file also defines",
+            "def:src/cli.ts#buildSite",
+            "def:src/v1/index.ts#buildSite",
+            true,
+        ),
+        (
+            "TypeScript",
+            "a namespace import",
+            "def:src/cli.ts#buildSite",
+            "def:src/walk.ts#walk",
+            true,
+        ),
+        (
+            "TypeScript",
+            "a default import of `export default function`",
+            "def:src/cli.ts#buildSite",
+            "def:src/v1/index.ts#legacy",
+            true,
+        ),
+        (
+            "TypeScript",
+            "a default import of `export default name`",
+            "def:src/cli.ts#buildSite",
+            "def:src/make.ts#make",
+            true,
+        ),
+        (
+            "TypeScript",
+            "a namespace from outside the repository",
+            "def:src/cli.ts#buildSite",
+            "def:src/strings.ts#join",
+            false,
+        ),
+        (
+            "JavaScript",
+            "a renamed import",
+            "def:lib/main.js#main",
+            "def:lib/tools.js#helper",
+            true,
+        ),
+        (
+            "JavaScript",
+            "a namespace import",
+            "def:lib/main.js#main",
+            "def:lib/tools.js#other",
+            true,
+        ),
+        (
+            "TypeScript",
+            "`export { a }` in a package's index",
+            "def:apps/web/app.ts#draw",
+            "def:packages/geo/src/shapes/area.ts#area",
+            true,
+        ),
+        (
+            "TypeScript",
+            "a namespace import of a package's index",
+            "def:apps/web/app.ts#drawAll",
+            "def:packages/geo/src/shapes/area.ts#area",
+            true,
+        ),
+        (
+            "TypeScript",
+            "`export { a as b }`",
+            "def:apps/web/app.ts#draw",
+            "def:packages/geo/src/shapes/perimeter.ts#perimeter",
+            true,
+        ),
+        (
+            "TypeScript",
+            "two `export *`, one in JavaScript",
+            "def:apps/web/app.ts#draw",
+            "def:packages/geo/src/deep/scale.ts#scale",
+            true,
+        ),
+        (
+            "TypeScript",
+            "`export * as ns`",
+            "def:apps/web/app.ts#draw",
+            "def:packages/geo/src/units/convert.ts#toMeters",
+            true,
+        ),
+        (
+            "TypeScript",
+            "a neighbour that shares a re-exported name",
+            "def:apps/web/app.ts#draw",
+            "def:apps/web/scale.ts#scale",
+            false,
+        ),
+        (
+            "TypeScript",
+            "`export *` of a module that does not export the name",
+            "def:apps/web/app.ts#draw",
+            "def:packages/geo/src/hidden.ts#tidy",
+            false,
+        ),
+        (
+            "TypeScript",
+            "a chain of re-exports longer than `HOPS`",
+            "def:apps/web/app.ts#draw",
+            "def:packages/geo/src/far/f5.ts#distant",
+            false,
+        ),
+        (
+            "Python",
+            "`from .x import a as b`",
+            "def:pkg/app.py#renamed",
+            "def:pkg/core.py#run",
+            true,
+        ),
+        (
+            "Python",
+            "`from . import x as y`",
+            "def:pkg/app.py#module",
+            "def:pkg/core.py#run",
+            true,
+        ),
+        (
+            "Python",
+            "`import a.x as y`",
+            "def:pkg/app.py#dotted",
+            "def:pkg/core.py#run",
+            true,
+        ),
+        (
+            "Python",
+            "a module from outside the repository",
+            "def:pkg/app.py#outside",
+            "def:pkg/core.py#Loader.load",
+            false,
+        ),
+        (
+            "Python",
+            "an import inside a function",
+            "def:pkg/app.py#begin",
+            "def:pkg/core.py#run",
+            true,
+        ),
+        (
+            "Python",
+            "an import inside another function",
+            "def:pkg/app.py#end",
+            "def:pkg/core.py#stop",
+            true,
+        ),
+        (
+            "Python",
+            "a name another function imports",
+            "def:pkg/app.py#end",
+            "def:pkg/core.py#run",
+            false,
+        ),
+        (
+            "Python",
+            "`from .x import a` in a package's `__init__`",
+            "def:shop/cli/main.py#run",
+            "def:shop/billing/invoice.py#total",
+            true,
+        ),
+        (
+            "Python",
+            "`from .x import a as b` in a package's `__init__`",
+            "def:shop/cli/main.py#run",
+            "def:shop/billing/tax.py#rate",
+            true,
+        ),
+        (
+            "Python",
+            "`from .x import *`, then `from .x import a`",
+            "def:shop/cli/main.py#run",
+            "def:shop/catalog/store/items.py#find",
+            true,
+        ),
+        (
+            "Python",
+            "a neighbour that shares a re-exported name",
+            "def:shop/cli/main.py#run",
+            "def:shop/cli/helpers.py#find",
+            false,
+        ),
+        (
+            "Rust",
+            "`use x::a as b` of a name the file also defines",
+            "def:src/main.rs#main",
+            "def:src/util.rs#format",
+            true,
+        ),
+        (
+            "Rust",
+            "`use x::T as U`",
+            "def:src/main.rs#main",
+            "def:src/util.rs#Tool.new",
+            true,
+        ),
+        (
+            "Rust",
+            "`use x::module as m`",
+            "def:src/main.rs#main",
+            "def:src/graph/resolve.rs#run",
+            true,
+        ),
+        (
+            "Rust",
+            "`use x::module as m` names the module, not the folder above it",
+            "file:src/main.rs",
+            "file:src/graph/resolve.rs",
+            true,
+        ),
+        (
+            "Rust",
+            "`pub use x::a`",
+            "def:src/main.rs#shapes",
+            "def:src/geo/shapes/flat.rs#area",
+            true,
+        ),
+        (
+            "Rust",
+            "`pub use x::a as b`",
+            "def:src/main.rs#shapes",
+            "def:src/geo/shapes/flat.rs#perimeter",
+            true,
+        ),
+        (
+            "Rust",
+            "`pub use x::{a}`",
+            "def:src/main.rs#shapes",
+            "def:src/geo/shapes/flat.rs#span",
+            true,
+        ),
+        (
+            "Rust",
+            "`pub use x::{a as b}`",
+            "def:src/main.rs#shapes",
+            "def:src/geo/shapes/flat.rs#mass",
+            true,
+        ),
+        (
+            "Rust",
+            "`pub use x::*`",
+            "def:src/main.rs#shapes",
+            "def:src/geo/shapes/solid.rs#volume",
+            true,
+        ),
+        (
+            "Rust",
+            "a private `use`",
+            "def:src/main.rs#shapes",
+            "def:src/geo/shapes/flat.rs#hidden",
+            false,
+        ),
+    ];
+
     #[test]
     fn each_language_s_import_and_re_export_forms_reach_what_they_name() {
-        let dir = project(
-            "forms",
-            &[
-                // TypeScript and JavaScript imports. The command line defines the very name it renames.
-                (
-                    "src/v1/index.ts",
-                    "export function buildSite() {\n  return 1;\n}\n\nexport default function legacy() {\n  return 2;\n}\n",
-                ),
-                ("src/walk.ts", "export function walk() {\n  return 3;\n}\n"),
-                (
-                    "src/make.ts",
-                    "function make() {\n  return 4;\n}\n\nexport default make;\n",
-                ),
-                (
-                    "src/strings.ts",
-                    "export function join() {\n  return 5;\n}\n",
-                ),
-                (
-                    "src/cli.ts",
-                    "import { buildSite as buildV1 } from \"./v1/index\";\nimport * as walker from \"./walk\";\nimport legacyBuild from \"./v1/index\";\nimport made from \"./make\";\nimport * as path from \"node:path\";\n\nexport function buildSite() {\n  buildV1();\n  walker.walk();\n  legacyBuild();\n  made();\n  path.join(\"a\", \"b\");\n}\n",
-                ),
-                (
-                    "lib/tools.js",
-                    "export function helper() {\n  return 6;\n}\n\nexport function other() {\n  return 7;\n}\n",
-                ),
-                (
-                    "lib/main.js",
-                    "import { helper as assist } from \"./tools.js\";\nimport * as tools from \"./tools.js\";\n\nexport function main() {\n  assist();\n  tools.other();\n}\n",
-                ),
-                // A package's index that re-exports, with a cycle and a chain longer than `HOPS`.
-                (
-                    "packages/geo/package.json",
-                    r#"{ "name": "@demo/geo", "main": "src/index.ts" }"#,
-                ),
-                (
-                    "packages/geo/src/index.ts",
-                    "export { area } from \"./shapes/area\";\nexport { perimeter as edge } from \"./shapes/perimeter\";\nexport * from \"./more\";\nexport * as units from \"./units/convert\";\nexport * from \"./loop/a\";\nexport * from \"./far/f1\";\nexport * from \"./hidden\";\n",
-                ),
-                (
-                    "packages/geo/src/shapes/area.ts",
-                    "export function area() {\n  return 1;\n}\n",
-                ),
-                (
-                    "packages/geo/src/shapes/perimeter.ts",
-                    "export function perimeter() {\n  return 2;\n}\n",
-                ),
-                (
-                    "packages/geo/src/more.js",
-                    "export * from \"./deep/scale\";\n",
-                ),
-                (
-                    "packages/geo/src/deep/scale.ts",
-                    "export function scale() {\n  return 3;\n}\n",
-                ),
-                (
-                    "packages/geo/src/units/convert.ts",
-                    "export function toMeters() {\n  return 4;\n}\n",
-                ),
-                (
-                    "packages/geo/src/hidden.ts",
-                    "function tidy() {\n  return 7;\n}\n\nexport const kept = tidy();\n",
-                ),
-                ("packages/geo/src/loop/a.ts", "export * from \"./b\";\n"),
-                ("packages/geo/src/loop/b.ts", "export * from \"./a\";\n"),
-                ("packages/geo/src/far/f1.ts", "export * from \"./f2\";\n"),
-                ("packages/geo/src/far/f2.ts", "export * from \"./f3\";\n"),
-                ("packages/geo/src/far/f3.ts", "export * from \"./f4\";\n"),
-                ("packages/geo/src/far/f4.ts", "export * from \"./f5\";\n"),
-                (
-                    "packages/geo/src/far/f5.ts",
-                    "export function distant() {\n  return 5;\n}\n",
-                ),
-                (
-                    "apps/web/scale.ts",
-                    "export function scale() {\n  return 6;\n}\n",
-                ),
-                (
-                    "apps/web/app.ts",
-                    "import { area, edge, scale, units, missing, distant } from \"@demo/geo\";\nimport * as geo from \"@demo/geo\";\n\nexport function draw() {\n  area();\n  edge();\n  scale();\n  units.toMeters();\n  missing();\n  distant();\n  tidy();\n}\n\nexport function drawAll() {\n  geo.area();\n}\n",
-                ),
-                // Python imports, and a package's `__init__` that re-exports.
-                (
-                    "pkg/core.py",
-                    "def run():\n    return 1\n\n\ndef stop():\n    return 3\n\n\nclass Loader:\n    def load(self):\n        return 2\n",
-                ),
-                (
-                    "pkg/app.py",
-                    "from .core import run as start\nfrom . import core as c\nimport pkg.core as engine\nimport numpy as np\n\n\ndef run():\n    return 0\n\n\ndef renamed():\n    start()\n\n\ndef module():\n    c.run()\n\n\ndef dotted():\n    engine.run()\n\n\ndef outside():\n    np.load()\n\n\ndef begin():\n    from .core import run as f\n    return f()\n\n\ndef end():\n    from .core import stop as f\n    return f()\n",
-                ),
-                (
-                    "shop/__init__.py",
-                    "from .billing.invoice import total\nfrom .billing.tax import rate as tax_rate\nfrom .catalog import *\n",
-                ),
-                ("shop/billing/invoice.py", "def total():\n    return 1\n"),
-                ("shop/billing/tax.py", "def rate():\n    return 2\n"),
-                (
-                    "shop/catalog/__init__.py",
-                    "from .store.items import find\n",
-                ),
-                ("shop/catalog/store/items.py", "def find():\n    return 3\n"),
-                ("shop/cli/helpers.py", "def find():\n    return 4\n"),
-                (
-                    "shop/cli/main.py",
-                    "from .. import total, tax_rate, find\n\n\ndef run():\n    total()\n    tax_rate()\n    find()\n",
-                ),
-                // Rust's `use … as` and `pub use`.
-                (
-                    "src/util.rs",
-                    "pub struct Tool;\n\nimpl Tool {\n    pub fn new() -> Self {\n        Tool\n    }\n}\n\npub fn format(x: u8) -> u8 {\n    x\n}\n",
-                ),
-                ("src/graph/mod.rs", "pub mod resolve;\n"),
-                ("src/graph/resolve.rs", "pub fn run() {}\n"),
-                (
-                    "src/geo/mod.rs",
-                    "pub mod shapes;\npub use self::shapes::flat::area;\npub use self::shapes::flat::perimeter as edge;\npub use self::shapes::flat::{span, mass as weight};\npub use self::shapes::solid::*;\nuse self::shapes::flat::hidden;\n",
-                ),
-                ("src/geo/shapes/mod.rs", "pub mod flat;\npub mod solid;\n"),
-                (
-                    "src/geo/shapes/flat.rs",
-                    "pub fn area() {}\npub fn perimeter() {}\npub fn span() {}\npub fn mass() {}\npub fn hidden() {}\n",
-                ),
-                ("src/geo/shapes/solid.rs", "pub fn volume() {}\n"),
-                (
-                    "src/main.rs",
-                    "mod geo;\nuse crate::util::format as fmt_u8;\nuse crate::util::Tool as T;\nuse crate::graph::resolve as res;\nuse crate::geo::{area, edge, span, weight, volume, hidden};\n\nfn main() {\n    let t = T::new();\n    let x = fmt_u8(1);\n    res::run();\n}\n\nfn format() {}\n\nfn shapes() {\n    area();\n    edge();\n    span();\n    weight();\n    volume();\n    hidden();\n}\n",
-                ),
-            ],
-        );
+        let dir = project("forms", FORM_FILES);
         let g = graph(&dir).unwrap();
-        // Each row is a language, a form, where it is used, the target it names and whether the link reaches it. From
-        // a definition the link is a call, and from a file it is an import.
-        let forms = [
-            (
-                "TypeScript",
-                "a renamed import of a name the file also defines",
-                "def:src/cli.ts#buildSite",
-                "def:src/v1/index.ts#buildSite",
-                true,
-            ),
-            (
-                "TypeScript",
-                "a namespace import",
-                "def:src/cli.ts#buildSite",
-                "def:src/walk.ts#walk",
-                true,
-            ),
-            (
-                "TypeScript",
-                "a default import of `export default function`",
-                "def:src/cli.ts#buildSite",
-                "def:src/v1/index.ts#legacy",
-                true,
-            ),
-            (
-                "TypeScript",
-                "a default import of `export default name`",
-                "def:src/cli.ts#buildSite",
-                "def:src/make.ts#make",
-                true,
-            ),
-            (
-                "TypeScript",
-                "a namespace from outside the repository",
-                "def:src/cli.ts#buildSite",
-                "def:src/strings.ts#join",
-                false,
-            ),
-            (
-                "JavaScript",
-                "a renamed import",
-                "def:lib/main.js#main",
-                "def:lib/tools.js#helper",
-                true,
-            ),
-            (
-                "JavaScript",
-                "a namespace import",
-                "def:lib/main.js#main",
-                "def:lib/tools.js#other",
-                true,
-            ),
-            (
-                "TypeScript",
-                "`export { a }` in a package's index",
-                "def:apps/web/app.ts#draw",
-                "def:packages/geo/src/shapes/area.ts#area",
-                true,
-            ),
-            (
-                "TypeScript",
-                "a namespace import of a package's index",
-                "def:apps/web/app.ts#drawAll",
-                "def:packages/geo/src/shapes/area.ts#area",
-                true,
-            ),
-            (
-                "TypeScript",
-                "`export { a as b }`",
-                "def:apps/web/app.ts#draw",
-                "def:packages/geo/src/shapes/perimeter.ts#perimeter",
-                true,
-            ),
-            (
-                "TypeScript",
-                "two `export *`, one in JavaScript",
-                "def:apps/web/app.ts#draw",
-                "def:packages/geo/src/deep/scale.ts#scale",
-                true,
-            ),
-            (
-                "TypeScript",
-                "`export * as ns`",
-                "def:apps/web/app.ts#draw",
-                "def:packages/geo/src/units/convert.ts#toMeters",
-                true,
-            ),
-            (
-                "TypeScript",
-                "a neighbour that shares a re-exported name",
-                "def:apps/web/app.ts#draw",
-                "def:apps/web/scale.ts#scale",
-                false,
-            ),
-            (
-                "TypeScript",
-                "`export *` of a module that does not export the name",
-                "def:apps/web/app.ts#draw",
-                "def:packages/geo/src/hidden.ts#tidy",
-                false,
-            ),
-            (
-                "TypeScript",
-                "a chain of re-exports longer than `HOPS`",
-                "def:apps/web/app.ts#draw",
-                "def:packages/geo/src/far/f5.ts#distant",
-                false,
-            ),
-            (
-                "Python",
-                "`from .x import a as b`",
-                "def:pkg/app.py#renamed",
-                "def:pkg/core.py#run",
-                true,
-            ),
-            (
-                "Python",
-                "`from . import x as y`",
-                "def:pkg/app.py#module",
-                "def:pkg/core.py#run",
-                true,
-            ),
-            (
-                "Python",
-                "`import a.x as y`",
-                "def:pkg/app.py#dotted",
-                "def:pkg/core.py#run",
-                true,
-            ),
-            (
-                "Python",
-                "a module from outside the repository",
-                "def:pkg/app.py#outside",
-                "def:pkg/core.py#Loader.load",
-                false,
-            ),
-            (
-                "Python",
-                "an import inside a function",
-                "def:pkg/app.py#begin",
-                "def:pkg/core.py#run",
-                true,
-            ),
-            (
-                "Python",
-                "an import inside another function",
-                "def:pkg/app.py#end",
-                "def:pkg/core.py#stop",
-                true,
-            ),
-            (
-                "Python",
-                "a name another function imports",
-                "def:pkg/app.py#end",
-                "def:pkg/core.py#run",
-                false,
-            ),
-            (
-                "Python",
-                "`from .x import a` in a package's `__init__`",
-                "def:shop/cli/main.py#run",
-                "def:shop/billing/invoice.py#total",
-                true,
-            ),
-            (
-                "Python",
-                "`from .x import a as b` in a package's `__init__`",
-                "def:shop/cli/main.py#run",
-                "def:shop/billing/tax.py#rate",
-                true,
-            ),
-            (
-                "Python",
-                "`from .x import *`, then `from .x import a`",
-                "def:shop/cli/main.py#run",
-                "def:shop/catalog/store/items.py#find",
-                true,
-            ),
-            (
-                "Python",
-                "a neighbour that shares a re-exported name",
-                "def:shop/cli/main.py#run",
-                "def:shop/cli/helpers.py#find",
-                false,
-            ),
-            (
-                "Rust",
-                "`use x::a as b` of a name the file also defines",
-                "def:src/main.rs#main",
-                "def:src/util.rs#format",
-                true,
-            ),
-            (
-                "Rust",
-                "`use x::T as U`",
-                "def:src/main.rs#main",
-                "def:src/util.rs#Tool.new",
-                true,
-            ),
-            (
-                "Rust",
-                "`use x::module as m`",
-                "def:src/main.rs#main",
-                "def:src/graph/resolve.rs#run",
-                true,
-            ),
-            (
-                "Rust",
-                "`use x::module as m` names the module, not the folder above it",
-                "file:src/main.rs",
-                "file:src/graph/resolve.rs",
-                true,
-            ),
-            (
-                "Rust",
-                "`pub use x::a`",
-                "def:src/main.rs#shapes",
-                "def:src/geo/shapes/flat.rs#area",
-                true,
-            ),
-            (
-                "Rust",
-                "`pub use x::a as b`",
-                "def:src/main.rs#shapes",
-                "def:src/geo/shapes/flat.rs#perimeter",
-                true,
-            ),
-            (
-                "Rust",
-                "`pub use x::{a}`",
-                "def:src/main.rs#shapes",
-                "def:src/geo/shapes/flat.rs#span",
-                true,
-            ),
-            (
-                "Rust",
-                "`pub use x::{a as b}`",
-                "def:src/main.rs#shapes",
-                "def:src/geo/shapes/flat.rs#mass",
-                true,
-            ),
-            (
-                "Rust",
-                "`pub use x::*`",
-                "def:src/main.rs#shapes",
-                "def:src/geo/shapes/solid.rs#volume",
-                true,
-            ),
-            (
-                "Rust",
-                "a private `use`",
-                "def:src/main.rs#shapes",
-                "def:src/geo/shapes/flat.rs#hidden",
-                false,
-            ),
-        ];
-        let wrong: Vec<String> = forms
+        let wrong: Vec<String> = FORM_CASES
             .iter()
             .filter(|(_, _, from, to, reaches)| {
                 let kind = if from.starts_with("file:") {

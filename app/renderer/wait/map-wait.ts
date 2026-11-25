@@ -148,8 +148,9 @@ const show = (el: Element): void =>
 function thin(ring: readonly number[]): number[] {
   if (ring.length < 24) return [...ring];
   const out: number[] = [];
-  for (let k = 0; k < ring.length; k += 4)
+  for (let k = 0; k < ring.length; k += 4) {
     out.push(ring[k] as number, ring[k + 1] as number);
+  }
   return out;
 }
 
@@ -408,14 +409,15 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     ticking = 0;
     const now = performance.now();
     for (const path of names.due(now)) letterNow(path);
-    for (const stroke of [...areaMarks.due(now), ...fileMarks.due(now)])
+    for (const stroke of [...areaMarks.due(now), ...fileMarks.due(now)]) {
       drawMark(stroke);
+    }
     const due = washesDue.due(now);
     if (due.length > 0) settle(Object.fromEntries(due));
     const next = Math.min(...pacers.map((q) => q.next() ?? Infinity));
-    if (Number.isFinite(next))
+    if (Number.isFinite(next)) {
       ticking = window.setTimeout(tick, Math.max(16, next - now));
-    else for (const resolve of paced.splice(0)) resolve();
+    } else for (const resolve of paced.splice(0)) resolve();
   }
   /** Restarts the timer after new strokes are queued. */
   const pace = (): void => {
@@ -532,8 +534,14 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   }
   function drawMarksDue(): void {
     const l = land;
-    if (l === null || fileOf === null || drawingMarks || marksDue.length === 0)
+    if (
+      l === null ||
+      fileOf === null ||
+      drawingMarks ||
+      marksDue.length === 0
+    ) {
       return;
+    }
     drawingMarks = true;
     laying++;
     work(
@@ -581,10 +589,13 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     cells.height = ch;
     const cctx = cells.getContext("2d") as CanvasRenderingContext2D;
     const img = cctx.createImageData(cw, ch);
-    for (let j = j0; j <= j1; j++)
-      for (let i = i0; i <= i1; i++)
-        if (owner[j * l.n + i] === index)
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        if (owner[j * l.n + i] === index) {
           img.data[((j - j0) * cw + (i - i0)) * 4 + 3] = 255;
+        }
+      }
+    }
     cctx.putImageData(img, 0, 0);
     yield;
     // The hatching, in the device pixels the cells cover.
@@ -786,12 +797,14 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
               let x = 0;
               let z = 0;
               let m = 0;
-              for (const ring of eased[i] ?? [])
-                for (let q = 0; q < ring.length; q += 2, m++)
+              for (const ring of eased[i] ?? []) {
+                for (let q = 0; q < ring.length; q += 2, m++) {
                   [x, z] = [
                     x + (ring[q] as number),
                     z + (ring[q + 1] as number),
                   ];
+                }
+              }
               return {
                 o,
                 i,
@@ -990,7 +1003,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
   function* settleIn(l: Land): Generator<void> {
     let cells: CellBox | null = null;
     const grow = (more: CellBox | null): void => {
-      if (more !== null)
+      if (more !== null) {
         cells =
           cells === null
             ? more
@@ -1000,6 +1013,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
                 Math.max(cells[2], more[2]),
                 Math.max(cells[3], more[3]),
               ];
+      }
     };
     const grounds: string[] = [];
     for (;;) {
@@ -1359,7 +1373,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
               yield;
             }
             drawTrails(whole, baked.ways, sx, sx, zoom, 1, STYLE);
-            for (const c of [lands, whole])
+            for (const c of [lands, whole]) {
               yield* drawingPlants(
                 c,
                 baked,
@@ -1370,6 +1384,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
                 () => true,
                 STEP_MS,
               );
+            }
             yield;
             yield* reliefWashes(l, lands.canvas, lay);
             resolve(whole.canvas);
@@ -1416,9 +1431,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       if (a < 0) continue;
       const [i, j] = [c % n, Math.floor(c / n)];
       const b = boxes.get(a);
-      if (b === undefined)
+      if (b === undefined) {
         boxes.set(a, { i0: i, j0: j, i1: i, j1: j, x: i, z: j, m: 1 });
-      else
+      } else {
         Object.assign(b, {
           i0: Math.min(b.i0, i),
           j0: Math.min(b.j0, j),
@@ -1428,6 +1443,7 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
           z: b.z + j,
           m: b.m + 1,
         });
+      }
     }
     yield;
     const pad = Math.ceil(FEATHER.reach + FEATHER.soft * 3);
@@ -1452,17 +1468,20 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
         for (let i = i0; i <= i1; i++) {
           if (nearest[j * n + i] !== a) continue;
           own.data[((j - j0) * cols + (i - i0)) * 4 + 3] = 255;
-          for (let dj = -r; dj <= r; dj++)
-            for (let di = -r; di <= r; di++)
+          for (let dj = -r; dj <= r; dj++) {
+            for (let di = -r; di <= r; di++) {
               if (
                 di * di + dj * dj <= r * r &&
                 i + di >= i0 &&
                 i + di <= i1 &&
                 j + dj >= j0 &&
                 j + dj <= j1
-              )
+              ) {
                 reached.data[((j + dj - j0) * cols + (i + di - i0)) * 4 + 3] =
                   255;
+              }
+            }
+          }
         }
       }
       // Blurs the grown cells into a feather at one pixel per cell, where a blur is cheap, and keeps the own cells sharp.
@@ -1552,13 +1571,14 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
       },
     ): number => {
       let length = 0;
-      for (let k = 1; k < points.length; k++)
+      for (let k = 1; k < points.length; k++) {
         length += Math.hypot(
           (points[k] as [number, number])[0] -
             (points[k - 1] as [number, number])[0],
           (points[k] as [number, number])[1] -
             (points[k - 1] as [number, number])[1],
         );
+      }
       return Math.max(
         pace.ms[0],
         Math.min(pace.ms[1], (length * zoom) / pace.pxPerMs),
@@ -1627,8 +1647,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
     baked.ways.forEach((trail, q) => {
       const p = trail.points;
       const points: [number, number][] = [];
-      for (let k = 0; k < p.length; k += stride)
+      for (let k = 0; k < p.length; k += stride) {
         points.push([p[k] as number, p[k + 1] as number]);
+      }
       if (points.length < 2) return;
       const d = points
         .map(([x, z], k) => `${k === 0 ? "M" : "L"}${f(x)} ${f(z)}`)
@@ -1647,9 +1668,9 @@ export function createMapWait(veil: HTMLElement, aspect: number): WaitView {
 
   return {
     opening(o) {
-      if (o.stage === "land")
+      if (o.stage === "land") {
         divide(o.size, o.aspect, o.areas, o.patches, o.lots);
-      else if (o.stage === "health") {
+      } else if (o.stage === "health") {
         washesDue.add(Object.entries(o.vitality), performance.now());
         pace();
       } else if (o.stage === "asking") {

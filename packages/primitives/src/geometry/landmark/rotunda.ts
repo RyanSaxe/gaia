@@ -166,7 +166,7 @@ function sector(
         shade + 0.07,
         ch,
       );
-      if (under)
+      if (under) {
         quad(
           b,
           [
@@ -179,6 +179,7 @@ function sector(
           shade - 0.2,
           ch,
         );
+      }
     } else {
       tri(
         b,
@@ -187,7 +188,7 @@ function sector(
         shade + 0.07,
         ch,
       );
-      if (under)
+      if (under) {
         tri(
           b,
           [[0, y0, 0], around(u0, r1, y0), around(u1, r1, y0)],
@@ -195,6 +196,7 @@ function sector(
           shade - 0.2,
           ch,
         );
+      }
     }
   }
   for (const [a, sign] of [
@@ -460,8 +462,9 @@ function fallenDrums(
     }
     if (
       lying.some((o) => Math.hypot(o.x - x, o.z - z) < o.reach + reach + 0.04)
-    )
+    ) {
       return;
+    }
     lying.push({ x, z, reach });
     const ch = still([x, 0, z], 0.6, { grow, tint: (r.next() - 0.5) * 0.04 });
     if (capital) {
@@ -549,21 +552,23 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
       );
     }
   };
-  for (let k = 0; k < count - 1; k++)
+  for (let k = 0; k < count - 1; k++) {
     lay(
       top + (count - 2 - k) * shape.tread - 0.05,
       top + (count - 1 - k) * shape.tread,
       (k + 1) * STEP.rise,
       1.7,
     );
+  }
   const paving = Math.max(2, Math.round(top / 1.5));
-  for (let k = 0; k < paving; k++)
+  for (let k = 0; k < paving; k++) {
     lay(
       k === 0 ? 0 : (top * k) / paving + JOINT,
       (top * (k + 1)) / paving,
       floor,
       1.4,
     );
+  }
 
   // The columns, with a gap between two of them facing +z, toppling outward one by one in a seeded order, those
   // facing the weather mostly first.
@@ -578,7 +583,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
     }))
     .sort((a, b) => a.u - b.u)
     .map((o) => o.k);
-  const falls = new Array<number>(n).fill(0);
+  const falls = Array.from({ length: n }, () => 0);
   // Each column starts to topple at its own vitality. Halfway down it breaks, and the shaft goes as its drums appear
   // in the grass, so every column lies broken before vitality reaches 0.
   order.forEach(
@@ -708,7 +713,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
       ch,
       true,
     );
-    if (p.roof === "an open ring")
+    if (p.roof === "an open ring") {
       sector(
         stone,
         a,
@@ -720,6 +725,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
         shade,
         ch,
       );
+    }
     // What rests on a span sinks onto the middle of its top.
     return { a0: a, a1, loss, centre: around((a + a1) / 2, ring, beam + e) };
   });
@@ -835,7 +841,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
         true,
       );
       const cap = domeOf(true, rad + 0.1, peak + 1.65 * s, LANTERN_RISE);
-      for (let k = 0; k < 8; k++)
+      for (let k = 0; k < 8; k++) {
         domeBlock(
           stone,
           roof,
@@ -848,6 +854,7 @@ export function buildRotunda(p: RotundaParams, ctx: BuildContext): Built {
           crown,
           0.12,
         );
+      }
       drum(
         stone,
         0,
@@ -1059,7 +1066,7 @@ function domeBlock(
       ],
       [0, -1, 0],
     );
-    if (t1 < 1)
+    if (t1 < 1) {
       edge(
         [
           d.at(u0, t1, 0),
@@ -1069,6 +1076,7 @@ function domeBlock(
         ],
         UP,
       );
+    }
   }
   for (const [a, sign] of [
     [a0, -1],

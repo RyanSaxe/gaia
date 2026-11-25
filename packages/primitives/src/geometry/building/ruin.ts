@@ -104,8 +104,9 @@ export function wallSheet(
     for (let i = 0; i + 1 < n; i++) {
       const sm = ((cols[i] as number) + (cols[i + 1] as number)) / 2;
       const ym = (yAt(sm, j) + yAt(sm, j + 1)) / 2;
-      if (holes.some((h) => sm > h.s0 && sm < h.s1 && ym > h.y0 && ym < h.y1))
+      if (holes.some((h) => sm > h.s0 && sm < h.s1 && ym > h.y0 && ym < h.y1)) {
         continue;
+      }
       const a = idx[j * n + i] as number;
       const bb = idx[j * n + i + 1] as number;
       const c = idx[(j + 1) * n + i + 1] as number;
@@ -190,8 +191,9 @@ export function ivy(
           holes.some((h) => s > h.s0 && s < h.s1 && y < h.y1) ||
           hidden(plan, w, s, y) ||
           y > topAt(plan, w, s) - 0.3
-        )
+        ) {
           continue;
+        }
         for (let k = 0; k < 2; k++) {
           const ss = clamp(s + (r.next() - 0.5) * 0.5, 0.05, w.length - 0.05);
           const c = on(
@@ -358,8 +360,9 @@ export function lump(
       ch,
     );
   });
-  for (const [a, bb, cc] of blob.triangles)
+  for (const [a, bb, cc] of blob.triangles) {
     b.triangle(base + a, base + bb, base + cc);
+  }
 }
 
 /**

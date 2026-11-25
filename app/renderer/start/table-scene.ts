@@ -926,10 +926,11 @@ export function createTableScene(
       "position",
     ) as THREE.BufferAttribute;
     const at = position.array as Float32Array;
-    for (let i = 0; i < at.length; i++)
+    for (let i = 0; i < at.length; i++) {
       at[i] =
         (c.rest[i] as number) +
         ((c.flat[i] as number) - (c.rest[i] as number)) * flatness;
+    }
     position.needsUpdate = true;
     c.mesh.geometry.computeVertexNormals();
   }
@@ -1208,8 +1209,9 @@ export function createTableScene(
       scene.traverse((o) => {
         if (!(o instanceof THREE.Mesh)) return;
         o.geometry.dispose();
-        for (const m of Array.isArray(o.material) ? o.material : [o.material])
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
           (m as THREE.Material).dispose();
+        }
       });
       for (const t of [
         ink,
@@ -1217,8 +1219,9 @@ export function createTableScene(
         featherTexture,
         deckleTexture,
         ...pictures,
-      ])
+      ]) {
         t.dispose();
+      }
       postQuad.geometry.dispose();
       post.dispose();
       depthOnly.dispose();
@@ -1236,11 +1239,12 @@ export function createTableScene(
 /** Returns the triangle indices of an `nx` by `ny` cell grid. */
 function indices(nx: number, ny: number): number[] {
   const out: number[] = [];
-  for (let iy = 0; iy < ny; iy++)
+  for (let iy = 0; iy < ny; iy++) {
     for (let ix = 0; ix < nx; ix++) {
       const a = iy * (nx + 1) + ix;
       out.push(a, a + nx + 1, a + 1, a + 1, a + nx + 1, a + nx + 2);
     }
+  }
   return out;
 }
 
@@ -1254,13 +1258,14 @@ function grid(
 ): THREE.BufferGeometry {
   const position = new Float32Array((nx + 1) * (ny + 1) * 3);
   const uv = new Float32Array((nx + 1) * (ny + 1) * 2);
-  for (let iy = 0; iy <= ny; iy++)
+  for (let iy = 0; iy <= ny; iy++) {
     for (let ix = 0; ix <= nx; ix++) {
       const k = iy * (nx + 1) + ix;
       const p = at((ix / nx) * w, (iy / ny) * h);
       position.set([p.x, p.y, p.z], k * 3);
       uv.set([ix / nx, 1 - iy / ny], k * 2);
     }
+  }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
   geometry.setAttribute("uv", new THREE.BufferAttribute(uv, 2));

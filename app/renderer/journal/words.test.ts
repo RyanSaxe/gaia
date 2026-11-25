@@ -64,8 +64,9 @@ describe("what a journal page says", () => {
     const src = source(TEXT);
     const code = (id: string): string[] => {
       const page = wordsOf(src, src.journal.entry(id)!);
-      if (page.body.kind !== "code")
+      if (page.body.kind !== "code") {
         throw new Error(`${id}'s page shows no code.`);
+      }
       return [
         ...(page.signature === undefined ? [] : [page.signature]),
         ...page.body.lines,
@@ -74,9 +75,10 @@ describe("what a journal page says", () => {
     // Each definition's lines in the file, from its first, whatever their indentation.
     const trimmed = (lines: readonly string[]): string[] =>
       lines.map((l) => l.trim());
-    for (const { id, line, lines } of world.symbols)
+    for (const { id, line, lines } of world.symbols) {
       expect(trimmed(code(id)), id).toEqual(
         trimmed(TEXT.slice(line - 1, line - 1 + lines)),
       );
+    }
   });
 });

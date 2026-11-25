@@ -4,10 +4,11 @@ import { webglErrors } from "./webgl-errors.ts";
 describe("WebGL errors on a page's console", () => {
   it("counts every WebGL error a page reports, and nothing else", () => {
     const errors = webglErrors();
-    for (let i = 0; i < 3; i++)
+    for (let i = 0; i < 3; i++) {
       errors.note(
         "[.WebGL-0x13c00a1e00]GL_INVALID_OPERATION: glDrawElements: Mismatch between texture format and sampler type (signed/unsigned/float/shadow).",
       );
+    }
     errors.note(
       "[.WebGL-0x13c00b2f00]GL_INVALID_OPERATION: glDrawElements: Mismatch between texture format and sampler type (signed/unsigned/float/shadow).",
     );

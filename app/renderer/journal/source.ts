@@ -20,8 +20,9 @@ export function createSourceText(
   carried: ReadonlyMap<string, string> | null = null,
 ): SourceText {
   const files = new Map<string, readonly string[] | null | "asked">();
-  for (const [path, text] of carried ?? [])
+  for (const [path, text] of carried ?? []) {
     files.set(path, text.replace(/\n$/, "").split("\n"));
+  }
   const listeners: ((path: string) => void)[] = [];
   /** Resolvers waiting on each file, each called once. */
   const waiting = new Map<string, (() => void)[]>();
@@ -34,9 +35,11 @@ export function createSourceText(
   service?.on((m) => {
     if (m.type === "world.source") arrive(m.path, m.lines);
     // Keeps each file's old lines until the new ones arrive, so no page shows a file empty.
-    else if (m.type === "world.vitality" && m.commit !== undefined)
-      for (const [path, had] of files)
+    else if (m.type === "world.vitality" && m.commit !== undefined) {
+      for (const [path, had] of files) {
         if (had !== "asked") service.send({ type: "world.source", path });
+      }
+    }
   });
   return {
     lines(path) {

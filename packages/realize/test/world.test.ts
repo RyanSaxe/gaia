@@ -26,8 +26,9 @@ const seeded = (seed: number): (() => number) => {
 const finite = (value: unknown): boolean => {
   if (typeof value === "number") return Number.isFinite(value);
   if (Array.isArray(value)) return value.every(finite);
-  if (value !== null && typeof value === "object")
+  if (value !== null && typeof value === "object") {
     return Object.values(value).every(finite);
+  }
   return true;
 };
 

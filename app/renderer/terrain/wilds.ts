@@ -190,8 +190,9 @@ function wildClearings(
 ): Clearing[] {
   const { cell, spread, scale } = WILD_THICKETS;
   let farthest = 0;
-  for (const outline of clears)
+  for (const outline of clears) {
     for (const r of outline) farthest = Math.max(farthest, r);
+  }
   // A bush lies within `spread` of its thicket's center, which is in the thicket's cell.
   const margin = spread + farthest * scale[1];
   const out: Clearing[] = [];
@@ -209,8 +210,9 @@ function wildClearings(
       const thicket = thicketOf(t, ci, cj, clears.length, cache);
       const outline = thicket === null ? undefined : clears[thicket.ground];
       if (thicket === null || outline === undefined) continue;
-      for (const s of thicket.spots)
+      for (const s of thicket.spots) {
         out.push({ x: s.x, z: s.z, yaw: s.yaw, scale: s.scale, outline });
+      }
     }
   }
   return out;
@@ -301,14 +303,16 @@ export function createWildGrowth(
     all: () => views,
     farBuilds: () => builds,
     build(blueprints) {
-      if (views.length > 0)
+      if (views.length > 0) {
         throw new Error(
           "The wild builds a world's bushes once, when it opens.",
         );
-      if (blueprints.length !== WILD_GROUNDS.length)
+      }
+      if (blueprints.length !== WILD_GROUNDS.length) {
         throw new Error(
           `The wild has ${WILD_GROUNDS.length} grounds, each with its own bush; the world gives ${blueprints.length}.`,
         );
+      }
       const asks = blueprints.map(plantAsk);
       const plants = asks.map((ask) => made(ask, floraLib));
       clears = plants.map((p) => outlineOf(p).map((r) => r * SHRUB_CLEARS));
@@ -355,8 +359,9 @@ export function createWildGrowth(
       if (
         terrain === null ||
         Math.hypot(x - anchor.x, z - anchor.z) <= WILD_GROWTH.recenter
-      )
+      ) {
         return;
+      }
       anchor.x = Math.round(x / WILD_THICKETS.cell) * WILD_THICKETS.cell;
       anchor.z = Math.round(z / WILD_THICKETS.cell) * WILD_THICKETS.cell;
       placeThickets(terrain, false);

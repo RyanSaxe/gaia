@@ -11,42 +11,44 @@ import json
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import TypedDict
 
 import mido
 
-from cache import SFIZZ, VSCO
+from cache import SFIZZ, VSCO, run_command
+from music.patches import parse, write_if_changed
 
-from .patches import parse, write_if_changed
+
+class _PartMeta(TypedDict):
+    sfz: str
 
 
-def patch(name):
-    """A part's patch: a VSCO 2 CE file name, or an absolute path to one of patches.py's."""
+def patch(name: str) -> Path:
     return Path(name) if name.startswith("/") else VSCO / name
 
 
-def in_ram(sfz):
+def in_ram(sfz: Path) -> Path:
     ram = sfz.parent / ("ram-" + sfz.name)
     write_if_changed(ram, "<control>\nhint_ram_based=1\n\n" + sfz.read_text(encoding="latin-1"), encoding="latin-1")
     return ram
 
 
-def silent_notes(mid_dir, parts):
-    """Notes that land on no region of their patch: sfizz drops them without a word."""
-    out = {}
+def silent_notes(mid_dir: Path, parts: Mapping[str, _PartMeta]) -> dict[str, list[tuple[int, int]]]:
+    out: dict[str, list[tuple[int, int]]] = {}
     for name, info in parts.items():
-        regs = []
-        for h, o in parse(patch(info["sfz"]).read_text(encoding="latin-1")):
-            if h == "region":
-                regs.append(
-                    (
-                        int(o.get("lokey", o.get("key", 0))),
-                        int(o.get("hikey", o.get("key", 127))),
-                        int(o.get("lovel", 0)),
-                        int(o.get("hivel", 127)),
-                    )
-                )
+        regs = [
+            (
+                int(o.get("lokey", o.get("key", 0))),
+                int(o.get("hikey", o.get("key", 127))),
+                int(o.get("lovel", 0)),
+                int(o.get("hivel", 127)),
+            )
+            for h, o in parse(patch(info["sfz"]).read_text(encoding="latin-1"))
+            if h == "region"
+        ]
         miss = sorted(
             {
                 (m.note, m.velocity)
@@ -61,22 +63,19 @@ def silent_notes(mid_dir, parts):
     return out
 
 
-def render_song(mid_dir, out_dir):
+def render_song(mid_dir: Path, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    parts = json.loads((mid_dir / "parts.json").read_text())
+    parts: dict[str, _PartMeta] = json.loads((mid_dir / "parts.json").read_text())
     for name, miss in silent_notes(mid_dir, parts).items():
         print(f"{mid_dir.name}/{name}: {len(miss)} notes hit no region, e.g. {miss[:8]}")
     jobs = [(name, in_ram(patch(v["sfz"]))) for name, v in parts.items()]
 
-    def one(job):
+    def one(job: tuple[str, Path]) -> tuple[str, int]:
         name, sfz = job
-        with open(out_dir / f"{name}.log", "w") as log:
-            r = subprocess.run(
+        with (out_dir / f"{name}.log").open("w") as log:
+            r = run_command(
+                SFIZZ,
                 [
-                    "nice",
-                    "-n",
-                    "10",
-                    str(SFIZZ),
                     "--sfz",
                     str(sfz),
                     "--midi",
@@ -90,6 +89,8 @@ def render_song(mid_dir, out_dir):
                     "-p",
                     "256",
                 ],
+                nice=True,
+                check=False,
                 stdout=log,
                 stderr=subprocess.STDOUT,
             )
@@ -99,15 +100,15 @@ def render_song(mid_dir, out_dir):
     with ThreadPoolExecutor(3) as pool:
         failed = [name for name, code in pool.map(one, jobs) if code != 0]
     if failed:
-        raise SystemExit(f"{mid_dir.name}: sfizz_render failed on {failed} (see their .log in {out_dir})")
+        sys.exit(f"{mid_dir.name}: sfizz_render failed on {failed} (see their .log in {out_dir})")
     print(f"{mid_dir.name}: rendered {len(jobs)} parts in {time.time() - start:.0f} s", flush=True)
 
 
-def main(midi_root, parts_root):
+def main(midi_root: Path | str, parts_root: Path | str) -> None:
     for d in sorted(Path(midi_root).iterdir()):
         if d.is_dir():
             render_song(d, Path(parts_root) / d.name)
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:3])
+    main(sys.argv[1], sys.argv[2])

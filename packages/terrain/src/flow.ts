@@ -90,8 +90,9 @@ export function flowAt(t: Terrain, x: number, z: number): Velocity {
         d >= best ||
         d >
           surfaceHalfWidth(a) + (surfaceHalfWidth(b) - surfaceHalfWidth(a)) * k
-      )
+      ) {
         continue;
+      }
       best = d;
       vx =
         (flow[i * 2] as number) +

@@ -156,8 +156,9 @@ function coursesOf(y0: number, y1: number, mean: number, r: Rand): number[] {
   );
   const total = weights.reduce((a, w) => a + w, 0);
   const ys = [y0];
-  for (const w of weights)
+  for (const w of weights) {
     ys.push((ys[ys.length - 1] as number) + ((y1 - y0) * w) / total);
+  }
   return ys;
 }
 
@@ -171,8 +172,9 @@ function rowsFor(
   while (
     course + k < ys.length - 1 &&
     (ys[course + k] as number) - (ys[course] as number) < height
-  )
+  ) {
     k++;
+  }
   return k;
 }
 
@@ -219,11 +221,12 @@ function stoneSpans(
     : [mean * 0.6, mean * 1.2];
   const inner = fillOf(Math.max(mean * 0.5, 2 * half - first - last));
   const ts = [-half, -half + first];
-  for (const l of inner.slice(0, -1))
+  for (const l of inner.slice(0, -1)) {
     ts.push(
       (ts[ts.length - 1] as number) +
         (l * (2 * half - first - last)) / inner.reduce((a, x) => a + x, 0),
     );
+  }
   ts.push(half - last, half);
   const out: { a0: number; a1: number; quoin: boolean }[] = [];
   for (let j = 0; j < sides; j++) {
@@ -467,7 +470,7 @@ function fantail(
 ): void {
   const ch = listing(hub, list, 0.65);
   const fan: V3 = [0, capY + 1.5, -capR - 1.25];
-  for (const x of [-0.35, 0.35])
+  for (const x of [-0.35, 0.35]) {
     beam(
       parts.timber,
       [x, capY + 0.1, -capR * 0.75],
@@ -478,6 +481,7 @@ function fantail(
       0.42,
       ch,
     );
+  }
   log(
     parts.timber,
     [-0.3, fan[1], fan[2]],
@@ -999,7 +1003,7 @@ function postMill(h: number, m: MillShape): Body {
           still([x, 0, z], 0.6),
         );
       }
-      for (const a of diag.slice(0, 2))
+      for (const a of diag.slice(0, 2)) {
         beam(
           parts.timber,
           [Math.cos(a) * reach, 0.8, Math.sin(a) * reach],
@@ -1010,6 +1014,7 @@ function postMill(h: number, m: MillShape): Body {
           0.42,
           still([0, 0, 0], 0.6),
         );
+      }
       log(
         parts.timber,
         [0, 0.7, 0],
@@ -1146,7 +1151,7 @@ function postMill(h: number, m: MillShape): Body {
         ch(0.5),
       );
       const foot = -D / 2 - yb * 0.75;
-      for (const x of [-0.5, 0.5])
+      for (const x of [-0.5, 0.5]) {
         beam(
           parts.timber,
           [x, yb + 0.15, -D / 2 - 0.1],
@@ -1157,6 +1162,7 @@ function postMill(h: number, m: MillShape): Body {
           0.42,
           ch(0.5),
         );
+      }
       for (let k = 1; k * 0.34 < yb; k++) {
         const t = (k * 0.34) / yb;
         const y = 0.05 + (yb + 0.1) * (1 - t);
@@ -1297,7 +1303,7 @@ function sails(
     );
     for (let j = 0; j < bars; j++) {
       const [u0, u1] = [us[j] as number, us[j + 1] as number];
-      for (const v of [-trail, -trail / 2])
+      for (const v of [-trail, -trail / 2]) {
         beam(
           parts.lath,
           at(u0, v, 0.02),
@@ -1308,6 +1314,7 @@ function sails(
           0.52,
           turning(0.6, { tint }),
         );
+      }
       beam(
         parts.lath,
         at(u0, lead * 0.55, 0.02),
@@ -1404,11 +1411,12 @@ export function buildWindmill(p: MillParams, ctx: BuildContext): Built {
   // The hub stands far enough out that every sail, at every turn, clears the body behind it.
   const setback = R * 0.07 + 0.3;
   let z = body.front(body.hubY) + 0.6;
-  for (let L = -R; L <= R; L += 0.25)
+  for (let L = -R; L <= R; L += 0.25) {
     z = Math.max(
       z,
       body.front(body.hubY - L * Math.cos(TILT)) - L * Math.sin(TILT) + setback,
     );
+  }
   const hub: V3 = [0, body.hubY, z];
   body.build(parts, hub, r.fork("body"));
   sails(

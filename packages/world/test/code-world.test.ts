@@ -205,8 +205,9 @@ const formPicker = (
           ? "entity"
           : "file";
       for (const [id, q] of Object.entries(request.questions)) {
-        if (q.type !== "choice" || (id !== "form" && !id.startsWith("form#")))
+        if (q.type !== "choice" || (id !== "form" && !id.startsWith("form#"))) {
           continue;
+        }
         const choice = pick(about, id, Object.keys(q.criteria));
         answers[id] = {
           type: "choice",
@@ -245,19 +246,23 @@ describe("a world laid out from code", () => {
     expect(composing.length).toBeGreaterThan(0);
     for (const r of composing) {
       // Each part is chosen among primitives, never a whole preset.
-      for (const [id, q] of Object.entries(r.questions))
-        if (id.endsWith(".use") && q.type === "choice")
-          for (const option of Object.keys(q.criteria))
+      for (const [id, q] of Object.entries(r.questions)) {
+        if (id.endsWith(".use") && q.type === "choice") {
+          for (const option of Object.keys(q.criteria)) {
             expect(
               () => LOOKS.compose.lib.get(option as never),
               option,
             ).not.toThrow();
+          }
+        }
+      }
     }
     // Every thing, raised or small, is composed as what it stands as.
     for (const [path, t] of Object.entries(judged.things)) {
       const k = LOOKS.compose[t.as];
-      if (t.blueprint === undefined)
+      if (t.blueprint === undefined) {
         throw new Error(`Nothing was composed for ${path}.`);
+      }
       expect(t.blueprint.kind, path).toBe(k.id);
       expect(validate(t.blueprint, k, LOOKS.compose.lib), path).toEqual([]);
     }
@@ -268,14 +273,16 @@ describe("a world laid out from code", () => {
     expect(Object.keys(judged.lands).sort()).toEqual(
       Object.keys(judged.waters).sort(),
     );
-    for (const [path, land] of Object.entries(judged.lands))
+    for (const [path, land] of Object.entries(judged.lands)) {
       expect(validate(land, biome, LOOKS.compose.lib), path).toEqual([]);
+    }
     expect(judged.trails.length).toBeGreaterThan(0);
     for (const t of judged.trails) {
-      if (t.route === undefined)
+      if (t.route === undefined) {
         throw new Error(
           `Nothing was composed for the trail ${t.from} to ${t.to}.`,
         );
+      }
       expect(
         validate(t.route, link, LOOKS.compose.lib),
         `${t.from}->${t.to}`,
@@ -284,8 +291,9 @@ describe("a world laid out from code", () => {
     // The laid-out world carries the composed sky, and each region carries its composed land.
     const laid = layoutWorld(facts(), judged);
     expect(laid.sky).toEqual(judged.sky);
-    for (const r of laid.regions)
+    for (const r of laid.regions) {
       expect(r.biome, r.area).toEqual(judged.lands[r.area]);
+    }
     // Every tree, bush, stone and flowers stands as the form Jev chose, with the blueprint composed for it.
     const small = [
       ...laid.symbols.map((s) => ({ ...s, key: s.id })),
@@ -437,10 +445,12 @@ describe("a world laid out from code", () => {
       // A choice offers at most 255 options and a score at most 10 levels (`packages/schema/src/fields.ts`).
       for (const q of Object.values(request.questions) as JevQuestion[]) {
         expect(["choice", "noul", "score"]).toContain(q.type);
-        if (q.type === "choice")
+        if (q.type === "choice") {
           expect(Object.keys(q.criteria).length).toBeLessThanOrEqual(255);
-        if (q.type === "score")
+        }
+        if (q.type === "score") {
           expect(q.criteria.length).toBeLessThanOrEqual(10);
+        }
       }
     }
     const b = layoutWorld(facts(), await composed(facts(), fakeJevClient()));
@@ -460,8 +470,9 @@ describe("a world laid out from code", () => {
         const cell = world.cells[cellUnder(world, x, z)]!;
         expect(here.area.path).toBe(cell.area);
         expect(here.file?.path ?? null).toBe(cell.file ?? null);
-        if (here.file !== null)
+        if (here.file !== null) {
           expect(here.file.path.startsWith(here.area.path)).toBe(true);
+        }
         counts.set(
           here.file?.path ?? `lot:${here.area.path}`,
           (counts.get(here.file?.path ?? `lot:${here.area.path}`) ?? 0) + 16,
@@ -490,11 +501,13 @@ describe("a world laid out from code", () => {
     ).toBeLessThan(200);
     // Each entity's thing is in its own area, and each symbol is on its own file's patch.
     expect(world.things.length).toBeGreaterThan(0);
-    for (const t of world.things)
+    for (const t of world.things) {
       expect(placeAt(world, t.x, t.z).area.path).toBe(t.path);
+    }
     expect(world.symbols.length).toBeGreaterThan(0);
-    for (const s of world.symbols)
+    for (const s of world.symbols) {
       expect(placeAt(world, s.x, s.z).file?.path).toBe(s.file);
+    }
     // Every file also gets one small form, on its own patch.
     expect(
       world.naturalThings
@@ -506,9 +519,11 @@ describe("a world laid out from code", () => {
         .files.map((f) => f.path)
         .sort(),
     );
-    for (const s of world.naturalThings)
-      if (s.file !== undefined)
+    for (const s of world.naturalThings) {
+      if (s.file !== undefined) {
         expect(placeAt(world, s.x, s.z).file?.path).toBe(s.file);
+      }
+    }
     // A region's sites are its cells' sites, so its ground cover changes exactly where its areas end.
     for (const r of world.regions) expect(r.sites.length).toBeGreaterThan(0);
     expect(world.regions.reduce((n, r) => n + r.sites.length, 0)).toBe(
@@ -594,8 +609,9 @@ describe("a world laid out from code", () => {
     expect(defined.length).toBeGreaterThan(0);
     expect(defined.find((s) => s.name === "add")?.parent).toBe(`${math}#Calc`);
     // Each definition is on its file's patch, at a point of its own.
-    for (const s of defined)
+    for (const s of defined) {
       expect(placeAt(world, s.x, s.z).file?.path).toBe(math);
+    }
     expect(new Set(defined.map((s) => `${s.x},${s.z}`)).size).toBe(
       defined.length,
     );
@@ -613,9 +629,11 @@ describe("a world laid out from code", () => {
       world.symbols.length;
     expect(new Set(journal.entries.map((e) => e.of)).size).toBe(count);
     expect(journal.entries.length).toBe(count);
-    for (const e of journal.entries)
-      if (e.under !== undefined)
+    for (const e of journal.entries) {
+      if (e.under !== undefined) {
         expect(journal.entry(e.under)?.page).toBeLessThan(e.page);
+      }
+    }
   });
 
   it("gives every definition of a crowded file a plot of its own, and stands what Jev raises there on the file's ground: a closure holding two hundred functions, sixty more beside it", async () => {
@@ -698,15 +716,19 @@ describe("a world laid out from code", () => {
     );
     const defined = world.symbols.filter((s) => s.file === lab);
     expect(defined.length).toBe(261);
-    for (const s of defined)
+    for (const s of defined) {
       expect(placeAt(world, s.x, s.z).file?.path, s.name).toBe(lab);
+    }
     expect(new Set(defined.map((s) => `${s.x},${s.z}`)).size).toBe(
       defined.length,
     );
     const raised = world.things.filter((t) => t.file === lab);
-    expect(raised.map((t) => t.of).sort()).toEqual(["definition", "file"]);
-    for (const t of raised)
+    expect(
+      raised.map((t) => t.of).sort((a, b) => (a ?? "").localeCompare(b ?? "")),
+    ).toEqual(["definition", "file"]);
+    for (const t of raised) {
       expect(placeAt(world, t.x, t.z).file?.path, t.path).toBe(lab);
+    }
   });
 
   it("reads vitality from Jev's quality: a file's and a definition's are their own", async () => {
@@ -928,8 +950,9 @@ describe("a world laid out from code", () => {
     ];
     expect(standing.length).toBeGreaterThan(0);
     for (const [id, form] of standing) expect(form, id).toBe(chosen.get(id));
-    for (const t of world.things)
+    for (const t of world.things) {
       expect(t.as, t.path).toBe(FORMS[chosen.get(t.path) as string]?.composes);
+    }
   });
 
   it("keeps Jev's answers: a stored one is used without asking, and a request Jev cannot answer fails, naming it and why, with nothing guessed", async () => {
@@ -993,8 +1016,9 @@ describe("a world laid out from code", () => {
     const needing = PRIMITIVES.find(
       (p) => p.role === "Feature" && (p.needs ?? []).length > 0,
     );
-    if (needing === undefined)
+    if (needing === undefined) {
       throw new Error("No feature needs anything of its place.");
+    }
     const wants = (needing.needs ?? []).filter(
       (n): n is string => typeof n === "string",
     );

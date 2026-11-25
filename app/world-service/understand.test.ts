@@ -66,10 +66,11 @@ function engineAt(data: string) {
   });
   engines.push(child);
   const client = createEngineClient((line) => child.stdin?.write(`${line}\n`));
-  if (child.stdout !== null)
+  if (child.stdout !== null) {
     createInterface({ input: child.stdout }).on("line", (line) =>
       client.receive(line),
     );
+  }
   return client;
 }
 

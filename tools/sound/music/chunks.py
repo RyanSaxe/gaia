@@ -1,5 +1,7 @@
-"""The piece's four stems as chunks the game streams: each stem cut into 4-bar chunks, each chunk encoded on its own
-as Ogg Opus with a little of the music either side of it, and the chunks of a stem laid end to end in one file.
+"""Encode the piece's four stems as streamable 4-bar Ogg Opus chunks laid end to end.
+
+Each stem is cut into 4-bar chunks, each chunk encoded on its own as Ogg Opus with a little of the music either side
+of it, and the chunks of a stem laid end to end in one file.
 
 The game decodes one chunk just before it plays and keeps only the chunk's own frames. The music either side of a
 chunk is there for the codec: an Opus stream starts and ends a few milliseconds off the signal it was given, so a
@@ -12,13 +14,14 @@ Usage: python -m music.chunks STEMS_DIR OUT_DIR MANIFEST.json   (from tools/soun
 """
 
 import json
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+
+from cache import run_command
 
 STEMS = ["bed", "melody", "shimmer", "minor"]
 RATE = 48000
@@ -32,12 +35,9 @@ def encode(x: np.ndarray) -> bytes:
     with tempfile.TemporaryDirectory() as tmp:
         wav, ogg = Path(tmp) / "c.wav", Path(tmp) / "c.ogg"
         sf.write(wav, x.astype(np.float32), RATE, subtype="FLOAT")
-        subprocess.run(
+        run_command(
+            "ffmpeg",
             [
-                "nice",
-                "-n",
-                "10",
-                "ffmpeg",
                 "-v",
                 "error",
                 "-y",
@@ -57,42 +57,47 @@ def encode(x: np.ndarray) -> bytes:
                 "+bitexact",
                 str(ogg),
             ],
-            check=True,
+            nice=True,
         )
         return ogg.read_bytes()
 
 
 def decode(data: bytes) -> np.ndarray:
-    raw = subprocess.run(
-        ["ffmpeg", "-v", "error", "-f", "ogg", "-i", "pipe:0", "-f", "f32le", "-ac", "2", "-ar", str(RATE), "pipe:1"],
-        input=data,
+    raw = run_command(
+        "ffmpeg",
+        ["-v", "error", "-f", "ogg", "-i", "pipe:0", "-f", "f32le", "-ac", "2", "-ar", str(RATE), "pipe:1"],
         capture_output=True,
-        check=True,
+        stdin_bytes=data,
     ).stdout
     return np.frombuffer(raw, np.float32).reshape(-1, 2)
 
 
-def main(stems_dir, out_dir, manifest_path):
+def main(stems_dir: Path | str, out_dir: Path | str, *, manifest_path: Path | str) -> None:
     stems_dir, out_dir, manifest_path = Path(stems_dir), Path(out_dir), Path(manifest_path)
     manifest = json.loads(manifest_path.read_text())
     piece = manifest["piece"]
     chunk = round(RATE * 60 / piece["bpm"] * 4) * BARS_PER_CHUNK
     out_dir.mkdir(parents=True, exist_ok=True)
-    report = {}
+    report: dict[str, dict[str, float | int]] = {}
     for stem in STEMS:
         x, rate = sf.read(stems_dir / f"{stem}.wav", always_2d=True)
-        assert rate == RATE, f"{stem} is at {rate} Hz"
+        if rate != RATE:
+            sys.exit(f"{stem} is at {rate} Hz")
         loop = len(x)
-        assert loop % chunk == 0, f"{stem}: {loop} frames is not a whole number of {chunk}-frame chunks"
+        if loop % chunk != 0:
+            sys.exit(f"{stem}: {loop} frames is not a whole number of {chunk}-frame chunks")
         count = loop // chunk
         # The loop's music either side of each chunk wraps round, since the piece plays round without end.
         wrapped = np.concatenate([x[-MARGIN:], x, x[:MARGIN]])
-        files, spans, kept = [], [], []
+        files: list[bytes] = []
+        spans: list[dict[str, int]] = []
+        kept: list[np.ndarray] = []
         at = 0
         for k in range(count):
             data = encode(wrapped[k * chunk : (k + 1) * chunk + 2 * MARGIN])
             decoded = decode(data)
-            assert len(decoded) == chunk + 2 * MARGIN, f"{stem} chunk {k} decodes to {len(decoded)} frames"
+            if len(decoded) != chunk + 2 * MARGIN:
+                sys.exit(f"{stem} chunk {k} decodes to {len(decoded)} frames")
             kept.append(decoded[MARGIN : MARGIN + chunk])
             spans.append({"at": at, "bytes": len(data)})
             files.append(data)
@@ -118,4 +123,4 @@ def main(stems_dir, out_dir, manifest_path):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:4])
+    main(sys.argv[1], sys.argv[2], manifest_path=sys.argv[3])

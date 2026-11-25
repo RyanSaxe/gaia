@@ -24,11 +24,11 @@ export function engineJev(engine: EngineClient): JevClient {
       ({ responses }) =>
         batch.forEach((q, i) => {
           const r = responses[i];
-          if (r === undefined)
+          if (r === undefined) {
             q.reject(
               new Error("Jev answered fewer requests than it was asked."),
             );
-          else if ("error" in r) q.reject(new Error(r.error));
+          } else if ("error" in r) q.reject(new Error(r.error));
           else q.resolve(r);
         }),
       (error: unknown) => batch.forEach((q) => q.reject(error)),

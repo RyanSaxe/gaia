@@ -27,14 +27,16 @@ function glslFunction(name: string): (...args: unknown[]) => unknown {
   const mean = /const vec2 WIND_MEAN = vec2\(([^,]+), ([^)]+)\);/.exec(
     WIND_FIELD_GLSL,
   );
-  if (fn === null || mean === null)
+  if (fn === null || mean === null) {
     throw new Error(`no ${name} in WIND_FIELD_GLSL`);
+  }
   const params = (fn[1] as string)
     .split(",")
     .map((p) => p.trim().split(/\s+/)[1] as string);
   const body = (fn[2] as string)
     .replace(/\b(?:float|vec2) (\w+) =/g, "const $1 =")
     .replace(/\b(sin|cos|abs|floor|pow)\(/g, "Math.$1(");
+  // oxlint-disable-next-line typescript/no-implied-eval -- test compiles WIND_FIELD_GLSL float math to JS to verify CPU/GPU parity without a GPU
   const run = new Function(
     "WIND_MEAN",
     ...Object.keys(BUILT_INS),
@@ -60,9 +62,11 @@ describe("WIND_FIELD_GLSL", () => {
   ] as const;
 
   it("blows the same gusts as gustAt, everywhere and at every moment, turning with windDirAt by the scene light's clock", () => {
-    for (const [x, z] of spots)
-      for (const t of moments)
+    for (const [x, z] of spots) {
+      for (const t of moments) {
         expect(gust({ x, y: z }, t)).toBeCloseTo(gustAt(x, z, t), 3);
+      }
+    }
     const light = createSceneLight();
     for (const t of moments) {
       light.uTime.value = t;

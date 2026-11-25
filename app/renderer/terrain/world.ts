@@ -972,8 +972,9 @@ export function createWorld(root: HTMLElement): World {
       if (lot !== undefined) entityOfPlace.set(lot.id, b.represented.id);
     });
     // An entity that appears as a plant, stone or flowers.
-    for (const s of code?.world.naturalThings ?? [])
+    for (const s of code?.world.naturalThings ?? []) {
       if (s.of === "entity") entityOfPlace.set(s.path, s.path);
+    }
   }
   knowEntities();
   /** The entity that placed landmark `i` represents, found by its place id. */
@@ -1165,8 +1166,9 @@ export function createWorld(root: HTMLElement): World {
   /** Shows on each sign naming one of `ids` the vitality of what it names, where its change has eased to. */
   function showSigns(ids: ReadonlySet<string>): void {
     signSubjects.forEach((s, k) => {
-      if (ids.has(s.represented.id))
+      if (ids.has(s.represented.id)) {
         signs.setVitality(k, shownVitalityOf(s.represented.id));
+      }
     });
   }
   /** Each understory placement's shown vitality, which is that of the thing it represents. */
@@ -1215,8 +1217,9 @@ export function createWorld(root: HTMLElement): World {
     trees.forEach((t, i) => {
       const v = changes.get(t.represented.id);
       const copy = treeCopies[i] ?? -1;
-      if (v !== undefined && copy >= 0)
+      if (v !== undefined && copy >= 0) {
         groves.get(t.variant)?.setVitalityAt(copy, v);
+      }
     });
     showVitality();
     showLandVitality();
@@ -1312,7 +1315,7 @@ export function createWorld(root: HTMLElement): World {
     readonly z: number;
   }): void {
     if (skyLook === null) return;
-    if (airs?.world !== world)
+    if (airs?.world !== world) {
       airs = {
         world,
         airs: world.regions.map((r) =>
@@ -1320,6 +1323,7 @@ export function createWorld(root: HTMLElement): World {
         ),
         weights: new Float64Array(world.regions.length),
       };
+    }
     regionWeights(world, eye.x, eye.z, airs.weights);
     const decline = declineAround(eye.x, eye.z, MURK_REACH);
     const height = eye.y - groundHeightAt(terrain, eye.x, eye.z);
@@ -1356,7 +1360,7 @@ export function createWorld(root: HTMLElement): World {
     let trunk = 0;
     if (bark !== undefined) {
       for (let i = 0; i < bark.positions.length; i += 3) {
-        if ((bark.positions[i + 1] as number) < TRUNK_BASE)
+        if ((bark.positions[i + 1] as number) < TRUNK_BASE) {
           trunk = Math.max(
             trunk,
             Math.hypot(
@@ -1364,6 +1368,7 @@ export function createWorld(root: HTMLElement): World {
               bark.positions[i + 2] as number,
             ),
           );
+        }
       }
     }
     const base = Math.max(0.5, trunk);
@@ -1470,8 +1475,9 @@ export function createWorld(root: HTMLElement): World {
    * bake.
    */
   function buildTrees(blueprints: readonly Blueprint[]): void {
-    if (treeAsks.length > 0)
+    if (treeAsks.length > 0) {
       throw new Error("The woods build a world's trees once, when it opens.");
+    }
     treeAsks = blueprints.map(plantAsk);
     treeBuilds = treeAsks.map((ask) => made(ask, floraLib));
     variants = treeBuilds.map((built) => variantOf(built as Realized));
@@ -1531,8 +1537,9 @@ export function createWorld(root: HTMLElement): World {
               ortho: true,
             }
           : { smaller: 1, focal: 0, ortho: false };
-    for (const v of swapping === null ? instanced() : [swapping])
+    for (const v of swapping === null ? instanced() : [swapping]) {
       v.cull(passCamera, size);
+    }
     // The card shader measures each copy's crown on this pass's screen from buffers written when the copies were
     // placed. A plant's cards draw in this pass only while the plant is visible.
     for (const set of farSets) set.forms.cards.pass(size.focal, size.ortho);
@@ -1609,8 +1616,9 @@ export function createWorld(root: HTMLElement): World {
 
   /** The request the bake thread places the codebase's world from: plain data for its buildings, landmarks, trails and code things. */
   const placeRequest = (): PlaceRequest => {
-    if (code === null)
+    if (code === null) {
       throw new Error("No world to place: a codebase's world opens first.");
+    }
     // A stone, bush or flowers keeps clear of the rest by its build's widest reach at the ground, which for a fallen log runs along its length.
     const symbols = code.layout.symbols.map((s) => {
       const outline =
@@ -1687,10 +1695,11 @@ export function createWorld(root: HTMLElement): World {
     // Each tree represents a definition, file or entity and takes its vitality.
     trees = placed.trees.map((t) => {
       const sym = treeSymbol(t);
-      if (sym === undefined)
+      if (sym === undefined) {
         throw new Error(
           `Tree ${t.index} represents nothing in the world's code.`,
         );
+      }
       return { ...t, represented: sym.represented };
     });
     treesByTile = new Map();
@@ -1726,12 +1735,14 @@ export function createWorld(root: HTMLElement): World {
         Math.abs(t.x - x) > reach ||
         Math.abs(t.z - z) > reach ||
         Math.hypot(t.x - x, t.z - z) > reach
-      )
+      ) {
         return;
+      }
       const v = variants[t.variant] as TreeVariant;
       let region = treeRegions.get(id);
-      if (region === undefined)
+      if (region === undefined) {
         treeRegions.set(id, (region = dominantRegion(world, t.x, t.z)));
+      }
       out.push({
         id,
         x: t.x,
@@ -1762,8 +1773,9 @@ export function createWorld(root: HTMLElement): World {
         foot === undefined ||
         p.y + foot.top * p.scale - heightAt(terrain.lattice, p.x, p.z) <
           STEP_OVER
-      )
+      ) {
         return [];
+      }
       return [outlineShape(p.x, p.z, p.yaw, p.scale, foot.outline, share)];
     });
     // A landmark blocks a walker at each of its solid pieces, such as a tower's blocks, each standing stone or a great trunk.
@@ -2045,8 +2057,9 @@ export function createWorld(root: HTMLElement): World {
   let cardAt: { x: number; z: number } | null = null;
   const cardListeners: ((thing: CardThing | null) => void)[] = [];
   function showCard(s: Subject): void {
-    for (const l of cardListeners)
+    for (const l of cardListeners) {
       l({ represented: s.represented, formName: s.formName });
+    }
     shown = s.represented;
     cardAt = { x: walker.x, z: walker.z };
   }
@@ -2057,12 +2070,13 @@ export function createWorld(root: HTMLElement): World {
   function headFor(s: Subject | null): void {
     if (s === heading) return;
     heading = s;
-    for (const l of headingListeners)
+    for (const l of headingListeners) {
       l(
         s === null
           ? null
           : { x: s.x, z: s.z, reach: s.reach, name: s.represented.name },
       );
+    }
   }
   function hideCard(): void {
     if (shown !== null) for (const l of cardListeners) l(null);
@@ -2110,8 +2124,9 @@ export function createWorld(root: HTMLElement): World {
       const dz = s.z - walker.z;
       const far = Math.hypot(dx, dz);
       const spot = s.readingSpot(walker.x, walker.z);
-      if (far > Math.hypot(spot.x - s.x, spot.z - s.z) + STOP_AT.slack)
+      if (far > Math.hypot(spot.x - s.x, spot.z - s.z) + STOP_AT.slack) {
         continue;
+      }
       const dy =
         heightAt(terrain.lattice, s.x, s.z) + s.height * 0.4 - walker.eye;
       const cos = (dx * fx + dy * fy + dz * fz) / (Math.hypot(dx, dy, dz) || 1);
@@ -2147,8 +2162,9 @@ export function createWorld(root: HTMLElement): World {
         Math.hypot(o.x + d.x * s - t.x, o.z + d.z * s - t.z) > 1.2 * t.scale ||
         y < t.y ||
         y > t.y + v.height * t.scale
-      )
+      ) {
         continue;
+      }
       if (best === null || s < best.distance) best = { tree: t, distance: s };
     }
     return best;
@@ -2181,8 +2197,9 @@ export function createWorld(root: HTMLElement): World {
       if (
         Math.hypot(x - p.x, z - p.z) > reach ||
         y > p.y + Math.max(foot.top * p.scale, 0.5)
-      )
+      ) {
         continue;
+      }
       if (best === null || s < best.distance) best = { x, z, distance: s, at };
     }
     return best;
@@ -2213,7 +2230,7 @@ export function createWorld(root: HTMLElement): World {
           cz += (shape.points[k * 2 + 1] as number) / n;
         }
         r = 0;
-        for (let k = 0; k < n; k++)
+        for (let k = 0; k < n; k++) {
           r = Math.max(
             r,
             Math.hypot(
@@ -2221,6 +2238,7 @@ export function createWorld(root: HTMLElement): World {
               (shape.points[k * 2 + 1] as number) - cz,
             ),
           );
+        }
       } else {
         cx = shape.x;
         cz = shape.z;
@@ -2234,8 +2252,9 @@ export function createWorld(root: HTMLElement): World {
         Math.hypot(o.x + d.x * s - cx, o.z + d.z * s - cz) > r + 0.25 ||
         y < ground - 0.2 ||
         y > ground + FURNISHING_TOP
-      )
+      ) {
         continue;
+      }
       const back = Math.hypot(o.x - cx, o.z - cz) || 1;
       best = {
         x: cx + ((o.x - cx) / back) * (r + 1.1),
@@ -2263,8 +2282,9 @@ export function createWorld(root: HTMLElement): World {
     [...keys].some((k) => k !== code && STEER_KEYS.get(k) === way);
   function press(code: string): void {
     const way = STEER_KEYS.get(code);
-    if (way !== undefined && !heldElsewhere(code, way))
+    if (way !== undefined && !heldElsewhere(code, way)) {
       steer = steerPress(steer, way, clock());
+    }
     keys.add(code);
   }
   function release(code?: string): void {
@@ -2275,16 +2295,18 @@ export function createWorld(root: HTMLElement): World {
     }
     keys.delete(code);
     const way = STEER_KEYS.get(code);
-    if (way !== undefined && !heldElsewhere(code, way))
+    if (way !== undefined && !heldElsewhere(code, way)) {
       steer = steerRelease(steer, way);
+    }
   }
   window.addEventListener("keydown", (e) => {
     if (
       !active ||
       e.target instanceof HTMLInputElement ||
       e.target instanceof HTMLSelectElement
-    )
+    ) {
       return;
+    }
     if (STEER_KEYS.has(e.code)) {
       e.preventDefault();
       if (e.repeat) return;
@@ -2313,8 +2335,9 @@ export function createWorld(root: HTMLElement): World {
     if (
       !drag.looking &&
       Math.hypot(e.clientX - drag.x, e.clientY - drag.y) <= tapSlop(e)
-    )
+    ) {
       return;
+    }
     drag.looking = true;
     // The view turns with the hand one to one. Turning it ends a tap's walk.
     if (goal !== null && e.clientX !== drag.x) endWalk();
@@ -2388,9 +2411,9 @@ export function createWorld(root: HTMLElement): World {
     const to = pending;
     pending = null;
     goal = null;
-    if (to !== null && Math.hypot(walker.x - to.x, walker.z - to.z) < 14)
+    if (to !== null && Math.hypot(walker.x - to.x, walker.z - to.z) < 14) {
       arrive(to);
-    else if (shown === null) headFor(null);
+    } else if (shown === null) headFor(null);
   }
 
   // A tap on a building, tree or sign walks the person up to it and then shows
@@ -2471,16 +2494,16 @@ export function createWorld(root: HTMLElement): World {
       (land === null || nearest.distance < land.distance + 0.5)
     ) {
       // With a journal listening, a tap on a thing opens its page without moving the person. Otherwise they walk up to it.
-      if (pickListeners.length > 0)
+      if (pickListeners.length > 0) {
         for (const l of pickListeners) l(nearest.subject.represented.id);
-      else approach(nearest.subject);
+      } else approach(nearest.subject);
       return;
     }
     // A tap on a fingerpost or a boundary stone walks up to it, not to the ground hidden behind it.
     const near = furnishingHit(ray);
-    if (near !== null && (land === null || near.distance < land.distance))
+    if (near !== null && (land === null || near.distance < land.distance)) {
       setGoal(near.x, near.z);
-    else if (land !== null) setGoal(land.x, land.z);
+    } else if (land !== null) setGoal(land.x, land.z);
   });
 
   /** Switches the ground and growth between walking and a view from above, which uses the whole-world mesh and the wild ring. */
@@ -2520,7 +2543,7 @@ export function createWorld(root: HTMLElement): World {
   /** Puts the walker at a point at once, looking along `yaw`. */
   function walkTo(x: number, z: number, yaw: number, pitch = -0.05): void {
     endWalk();
-    if (trip !== null)
+    if (trip !== null) {
       tripEnd = {
         done: false,
         s: +trip.at.s.toFixed(1),
@@ -2529,6 +2552,7 @@ export function createWorld(root: HTMLElement): World {
         goal: goal !== null,
         by: "put elsewhere",
       };
+    }
     trip = null;
     stood = 0;
     arrived = false;
@@ -2579,8 +2603,9 @@ export function createWorld(root: HTMLElement): World {
       ...floors,
     ];
     broken = allDecks.filter((d) => !decks.includes(d));
-    if (broken.length !== was.length || broken.some((d, i) => d !== was[i]))
+    if (broken.length !== was.length || broken.some((d, i) => d !== was[i])) {
       gatherSolids();
+    }
   }
   /** The person's body: its velocity, its stride and its eye height over the ground, eased frame by frame. */
   let body: Stride | null = null;
@@ -2657,8 +2682,9 @@ export function createWorld(root: HTMLElement): World {
         by: "trails",
       };
     }
-    if (trails !== null && lengthOf(trails.way) <= straight * TRAVEL.detour)
+    if (trails !== null && lengthOf(trails.way) <= straight * TRAVEL.detour) {
       return trails;
+    }
     const across = acrossWay(
       terrain,
       solids,
@@ -2672,8 +2698,9 @@ export function createWorld(root: HTMLElement): World {
     if (
       across === null ||
       (trails !== null && lengthOf(across) >= lengthOf(trails.way))
-    )
+    ) {
       return trails;
+    }
     return { way: across, off: { start: 0, end: 0 }, by: "across" };
   }
   /**
@@ -2757,12 +2784,13 @@ export function createWorld(root: HTMLElement): World {
     const fromX = walker.x;
     const fromZ = walker.z;
     // A hook may have moved the walker, so move the body to the walker.
-    if (body === null || body.x !== walker.x || body.z !== walker.z)
+    if (body === null || body.x !== walker.x || body.z !== walker.z) {
       body = {
         ...(body ?? standAt(terrain, decks, walker.x, walker.z)),
         x: walker.x,
         z: walker.z,
       };
+    }
     // The keys turn the view only at one steady rate.
     const steered = steerStep(steer, clock(), walker.yaw, dt);
     steer = steered.steering;
@@ -2773,17 +2801,20 @@ export function createWorld(root: HTMLElement): World {
       if ([...keys].some((k) => WALK_KEYS.has(k))) trip.stopping = true;
       // The body goes no farther than the world has loaded, so everything visible from there is placed. While paper
       // hides the world and the trip hurries, it waits on nothing, and the marks it passes are never requested.
-      if (trip.hurry !== null)
-        for (const m of trip.marks)
+      if (trip.hurry !== null) {
+        for (const m of trip.marks) {
           if (m.s < trip.at.s) m.asked = m.ready = true;
+        }
+      }
       const ready = trip.hurry !== null ? Infinity : readyAlong(trip);
       if (
         ready < trip.plan.length &&
         trip.at.going &&
         trip.at.v < 1 &&
         trip.at.s >= ready - 1
-      )
+      ) {
         trip.waited += dt;
+      }
       // Where the way ahead has not loaded, the trip slows to walking pace but never stops. A person sent somewhere
       // gets there, and at walking pace things load as they do for a walk.
       trip.at = travelStep(
@@ -2795,8 +2826,9 @@ export function createWorld(root: HTMLElement): World {
         ready,
         WALK_TO.pace,
       );
-      if (trip.setOff === null && trip.at.s > 0)
+      if (trip.setOff === null && trip.at.s > 0) {
         trip.setOff = performance.now();
+      }
       walker.yaw = trip.at.yaw;
       body = carry(terrain, decks, body, trip.at.x, trip.at.z, dt);
       if (trip.at.done || (trip.stopping && trip.at.v <= WALK_TO.pace)) {
@@ -2808,10 +2840,11 @@ export function createWorld(root: HTMLElement): World {
           goal: goal !== null,
         };
         // Log a trip the person took over, so a trip that ends short is never a mystery.
-        if (!trip.at.done)
+        if (!trip.at.done) {
           console.info(
             `travel: taken over at ${Math.round(trip.at.s)} of ${Math.round(trip.plan.length)} m by ${goal !== null ? "a tap on the world" : `the keys (${[...keys].join(", ")})`}`,
           );
+        }
         trip = null;
       }
     } else {
@@ -2835,14 +2868,16 @@ export function createWorld(root: HTMLElement): World {
     if (
       (before < STOP_AT.great && stood >= STOP_AT.great) ||
       (before < STOP_AT.small && stood >= STOP_AT.small)
-    )
+    ) {
       stopAt();
+    }
     // A card belongs to the thing it opened at, so walking away closes it.
     if (
       cardAt !== null &&
       Math.hypot(walker.x - cardAt.x, walker.z - cardAt.z) > LEAVE_CARD
-    )
+    ) {
       hideCard();
+    }
     // The eyes are 1.6 m above the ground or a bridge's deck, easing down to just above deep water.
     walker.eye = body.eye;
     const footing = footingAt(terrain, decks, walker.x, walker.z);
@@ -3173,9 +3208,11 @@ export function createWorld(root: HTMLElement): World {
     light.uEye.value.copy(aerial === null ? detailEye : camera.position);
     if (aerial === null) drifts.follow(crownsNear, viewFocal());
     // The far streams follow the person and advance their fades by the frame's own time.
-    if (!streamPaused && aerial === null)
-      for (const set of farSets)
+    if (!streamPaused && aerial === null) {
+      for (const set of farSets) {
         set.stream.follow(light.uEye.value, viewFocal(), dt);
+      }
+    }
     castShadows();
     frameCalls = renderer.info.render.calls;
     passes.shadow = {
@@ -3317,8 +3354,9 @@ export function createWorld(root: HTMLElement): World {
     });
     await warmed;
     // The world's first frames draw behind the paper, so the world shows only once its motion is smooth.
-    for (let k = 0; k < LIFT_FRAMES; k++)
+    for (let k = 0; k < LIFT_FRAMES; k++) {
       await new Promise((r) => requestAnimationFrame(r));
+    }
     await veil.lift();
     reportStage("lifted");
     for (const listener of liftedListeners) listener();
@@ -3354,20 +3392,22 @@ export function createWorld(root: HTMLElement): World {
       if (
         waterDepthAt(terrain, at.x, at.z) <= LAND.wade &&
         clearanceAt(solids, at.x, at.z) >= LAND.clear * 0.5
-      )
+      ) {
         return {
           x: at.x,
           z: at.z,
           yaw: Math.atan2(-(house.site.x - at.x), -(house.site.z - at.z)),
         };
+      }
     }
     const asked = placeAt(places, x, z).area;
     const fits = (px: number, pz: number, depth: number): boolean => {
       if (
         waterDepthAt(terrain, px, pz) > depth ||
         clearanceAt(solids, px, pz) < LAND.clear
-      )
+      ) {
         return false;
+      }
       const area = placeAt(places, px, pz).area;
       return asked.depth < 0
         ? area.depth < 0
@@ -3398,8 +3438,9 @@ export function createWorld(root: HTMLElement): World {
         if (
           waterDepthAt(terrain, px, pz) <= LAND.wade &&
           clearanceAt(solids, px, pz) >= LAND.clear
-        )
+        ) {
           spot = { x: px, z: pz };
+        }
       }
     }
     if (spot === null) {
@@ -3433,12 +3474,13 @@ export function createWorld(root: HTMLElement): World {
       const p = way.points;
       for (let k = 0; k + 3 < p.length; k += 2) {
         const d = Math.hypot((p[k] as number) - lx, (p[k + 1] as number) - lz);
-        if (d < FACE_TRAIL && (best === null || d < best.d))
+        if (d < FACE_TRAIL && (best === null || d < best.d)) {
           best = {
             d,
             tx: (p[k + 2] as number) - (p[k] as number),
             tz: (p[k + 3] as number) - (p[k + 1] as number),
           };
+        }
       }
     }
     if (best !== null && Math.hypot(best.tx, best.tz) > 1e-6) {
@@ -3551,8 +3593,9 @@ export function createWorld(root: HTMLElement): World {
         if (
           clearanceAt(solids, px, pz) < 0.25 ||
           heightAt(terrain.lattice, px, pz) > from + (to - from) * t - 0.3
-        )
+        ) {
           return false;
+        }
       }
       return true;
     };
@@ -3576,8 +3619,9 @@ export function createWorld(root: HTMLElement): World {
         !withinLand(world, x, z, 2) ||
         waterDepthAt(terrain, x, z) > LAND.wade ||
         clearanceAt(solids, x, z) < 0.6
-      )
+      ) {
         return false;
+      }
       if (!wide) return lineClear(x, z, 0, aim);
       const across = s.reach * 0.8;
       return (
@@ -3851,17 +3895,20 @@ export function createWorld(root: HTMLElement): World {
     z: number,
     reach: number,
   ): Generator<T> {
-    for (let cx = cellOf(x - reach); cx <= cellOf(x + reach); cx++)
-      for (let cz = cellOf(z - reach); cz <= cellOf(z + reach); cz++)
+    for (let cx = cellOf(x - reach); cx <= cellOf(x + reach); cx++) {
+      for (let cz = cellOf(z - reach); cz <= cellOf(z + reach); cz++) {
         yield* cells.get(cellKey(cx, cz)) ?? [];
+      }
+    }
   }
   function earshotFiles(): NonNullable<typeof earshotIndex> {
     if (
       earshotIndex?.terrain === terrain &&
       earshotIndex.trees === trees &&
       earshotIndex.settlement === settlement
-    )
+    ) {
       return earshotIndex;
+    }
     earshotIndex = {
       terrain,
       trees,
@@ -3883,8 +3930,9 @@ export function createWorld(root: HTMLElement): World {
     x: number,
     z: number,
   ): number {
-    if (Math.hypot(x - canopyAt.x, z - canopyAt.z) < EAR.move)
+    if (Math.hypot(x - canopyAt.x, z - canopyAt.z) < EAR.move) {
       return canopyAt.cover;
+    }
     let cover = 0;
     for (const t of within(crowns, x, z, EAR.canopy * 2)) {
       const v = variants[t.variant];
@@ -3918,8 +3966,9 @@ export function createWorld(root: HTMLElement): World {
     let stream: (Heard & { width: number }) | null = null;
     for (const p of within(files.stations, x, z, EAR.reach)) {
       const d = Math.hypot(p.x - x, p.z - z) - p.halfWidth;
-      if (d <= EAR.reach && (stream === null || d < stream.d))
+      if (d <= EAR.reach && (stream === null || d < stream.d)) {
         stream = { ...heard(p.x, p.z, d), d, width: p.halfWidth * 2 };
+      }
     }
     let mill: (Heard & { turning: number }) | null = null;
     for (const b of files.wheels) {
@@ -3930,8 +3979,9 @@ export function createWorld(root: HTMLElement): World {
         (wheel.z0 + wheel.z1) / 2,
       );
       const d = Math.hypot(wx - x, wz - z);
-      if (d <= EAR.reach && (mill === null || d < mill.d))
+      if (d <= EAR.reach && (mill === null || d < mill.d)) {
         mill = { ...heard(wx, wz, d), turning: spinAt(b.vitality) };
+      }
     }
     const footing = footingAt(terrain, decks, x, z);
     return {

@@ -108,8 +108,9 @@ function codebase(name: string): string {
  */
 function linkedCodebase(name: string): string {
   const root = join(scratch, name);
-  for (const dir of ["src/app", "src/lend", "src/keep"])
+  for (const dir of ["src/app", "src/lend", "src/keep"]) {
     mkdirSync(join(root, dir), { recursive: true });
+  }
   writeFileSync(
     join(root, "package.json"),
     JSON.stringify({ name, version: "1.0.0" }),
@@ -146,10 +147,11 @@ function engineAt(data: string) {
   });
   engines.push(child);
   const client = createEngineClient((line) => child.stdin?.write(`${line}\n`));
-  if (child.stdout !== null)
+  if (child.stdout !== null) {
     createInterface({ input: child.stdout }).on("line", (line) =>
       client.receive(line),
     );
+  }
   return client;
 }
 
@@ -230,10 +232,11 @@ describe("judging a codebase with Jev", () => {
     for (const [i, { authorization, body }] of first.sent.entries()) {
       expect(authorization).toBe("Bearer local-stand-in");
       expect(Object.keys(body).sort()).toEqual(["model", "questions", "state"]);
-      if (!first.about[i]?.startsWith("understand:"))
+      if (!first.about[i]?.startsWith("understand:")) {
         expect(JSON.stringify(body), first.about[i]).not.toContain(
           "secretSourceLine",
         );
+      }
     }
     expect(
       first.sent.some(

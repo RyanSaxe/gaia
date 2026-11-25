@@ -65,8 +65,9 @@ export function footbridgeHolds(span: number, seed: number): number {
   );
   const run = Math.floor(STRIDE_GAP / (span / count)) + 1;
   let holds = 0;
-  for (let k = 0; k + run <= count; k++)
+  for (let k = 0; k + run <= count; k++) {
     holds = Math.max(holds, Math.min(...losses.slice(k, k + run)));
+  }
   return holds + LOSS_BAND;
 }
 

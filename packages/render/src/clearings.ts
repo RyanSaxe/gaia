@@ -45,7 +45,9 @@ export function createClearings(): Clearings {
     uClearings: {
       value: Array.from({ length: MAX_CLEARINGS }, () => new THREE.Vector4()),
     },
-    uClearingRadius: { value: new Array<number>(MAX_CLEARINGS).fill(0) },
+    uClearingRadius: {
+      value: Array.from({ length: MAX_CLEARINGS }, () => 0),
+    },
   };
   return {
     uniforms,

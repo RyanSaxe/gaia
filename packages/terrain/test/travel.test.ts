@@ -98,8 +98,9 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     for (let k = 1; k < steps.length; k++) {
       const a = steps[k - 1] as Travel;
       const b = steps[k] as Travel;
-      if (b.v >= TRAVEL.creep)
+      if (b.v >= TRAVEL.creep) {
         expect(a.v - b.v).toBeLessThanOrEqual(TRAVEL.accel * DT * 1.05 + 1e-6);
+      }
     }
     // Once going, the view stays on the way ahead, and the bends never outrun it.
     const going = steps.findIndex((s) => s.going);
@@ -150,8 +151,9 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     const trip = planTrip(way, { start: 0, end: 0 });
     let at = travelFrom(trip, trip.heading[0] as number);
     // With nothing ready, the view turns but the body stays put.
-    for (let k = 0; k < 60; k++)
+    for (let k = 0; k < 60; k++) {
       at = travelStep(trip, at, DT, at.yaw, false, 0);
+    }
     expect(at.s).toBe(0);
     // With the world ready to 200 m, it goes and slows to a stop there.
     for (let k = 0; k < 60 * 40; k++) {
@@ -165,8 +167,9 @@ describe("travel along the trails", { timeout: 20_000 }, () => {
     expect(at.s).toBeGreaterThan(199);
     expect(at.v).toBeLessThan(0.5);
     // With the world ready to the end, it goes on and arrives.
-    for (let k = 0; k < 60 * 600 && !at.done; k++)
+    for (let k = 0; k < 60 * 600 && !at.done; k++) {
       at = travelStep(trip, at, DT, at.yaw);
+    }
     expect(at.done).toBe(true);
     expect(at.s).toBeCloseTo(trip.length, 2);
   });

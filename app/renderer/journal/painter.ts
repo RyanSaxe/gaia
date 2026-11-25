@@ -203,11 +203,12 @@ export function paint(job: PaintJob): OffscreenCanvas {
   const fh = Math.ceil(h / q);
   const small = grab(color, 3, fw, fh).data;
   const lum = new Float32Array(fw * fh);
-  for (let i = 0; i < fw * fh; i++)
+  for (let i = 0; i < fw * fh; i++) {
     lum[i] =
       0.3 * (small[i * 4] as number) +
       0.59 * (small[i * 4 + 1] as number) +
       0.11 * (small[i * 4 + 2] as number);
+  }
   const tensor = [
     new Float32Array(fw * fh),
     new Float32Array(fw * fh),

@@ -107,10 +107,11 @@ export function labPage(bundle: LabBundle): string {
   // The page's CSP allows only 'self', which an inline bundle is not.
   const csp = /<meta http-equiv="Content-Security-Policy"[^>]*>\n/;
   const entry = '<script type="module" src="./main.ts"></script>';
-  if (!csp.test(page) || !page.includes(entry))
+  if (!csp.test(page) || !page.includes(entry)) {
     throw new Error(
       "app/renderer/index.html changed shape; update tools/lab-page.ts.",
     );
+  }
   return page
     .replace(csp, "")
     .replace("</head>", () => `<style>${bundle.css}</style>\n</head>`)

@@ -90,11 +90,12 @@ const alongWay = (w: Way, p: number): number =>
 /** Points `from` to `to` of a way, both included, in that order. */
 function slice(w: Way, from: number, to: number, out: Walker[]): void {
   const step = to >= from ? 1 : -1;
-  for (let p = from; p !== to + step; p += step)
+  for (let p = from; p !== to + step; p += step) {
     out.push({
       x: w.points[p * 2] as number,
       z: w.points[p * 2 + 1] as number,
     });
+  }
 }
 
 /** The ways at each place and junction, cached per network. */
@@ -104,8 +105,9 @@ function joinsOf(network: TrailNetwork): Map<string, number[]> {
   if (out === undefined) {
     out = new Map();
     network.ways.forEach((w, i) => {
-      for (const end of new Set([w.from, w.to]))
+      for (const end of new Set([w.from, w.to])) {
         out?.set(end, [...(out.get(end) ?? []), i]);
+      }
     });
     joins.set(network, out);
   }
@@ -144,9 +146,11 @@ export function trailWay(
   const ways = joinsOf(network);
   for (;;) {
     let at: string | null = null;
-    for (const [node, c] of cost)
-      if (!done.has(node) && (at === null || c < (cost.get(at) as number)))
+    for (const [node, c] of cost) {
+      if (!done.has(node) && (at === null || c < (cost.get(at) as number))) {
         at = node;
+      }
+    }
     if (at === null) break;
     done.add(at);
     for (const i of ways.get(at) ?? []) {
@@ -223,12 +227,14 @@ export function wadingAt(
 /** Whether the straight line from a to b stays dry, checked every meter. */
 function dryLine(t: Terrain, a: Walker, b: Walker): boolean {
   const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z)));
-  for (let i = 1; i < n; i++)
+  for (let i = 1; i < n; i++) {
     if (
       waterAt(t, a.x + ((b.x - a.x) * i) / n, a.z + ((b.z - a.z) * i) / n) >
       DAMP
-    )
+    ) {
       return false;
+    }
+  }
   return true;
 }
 
@@ -342,15 +348,17 @@ export function acrossWay(
           ix + dx >= nx ||
           iz + dz < 0 ||
           iz + dz >= nz
-        )
+        ) {
           continue;
+        }
         const j = i + dz * nx + dx;
         // A diagonal step never cuts a corner of deep water.
         if (
           !open(j) ||
           (dx !== 0 && dz !== 0 && (!open(i + dx) || !open(i + dz * nx)))
-        )
+        ) {
           continue;
+        }
         const c =
           (g[i] as number) +
           (dx !== 0 && dz !== 0 ? Math.SQRT2 : 1) *
@@ -376,8 +384,9 @@ export function acrossWay(
     while (
       j + 1 < cells.length &&
       dryLine(t, cells[i] as Walker, cells[j + 1] as Walker)
-    )
+    ) {
       j++;
+    }
     taut.push(cells[j] as Walker);
     i = j;
   }
@@ -437,8 +446,9 @@ export function fordBeside(
       if (
         Math.abs(v) > Math.abs(side) ||
         Math.abs(u) > d.half + FORD_BESIDE.ease
-      )
+      ) {
         return;
+      }
       const e = Math.min(
         1,
         Math.max(
@@ -485,7 +495,7 @@ export function planTrip(
   wading: (x: number, z: number) => boolean = () => false,
 ): Trip {
   const along = [0];
-  for (let i = 1; i < way.length; i++)
+  for (let i = 1; i < way.length; i++) {
     along.push(
       (along[i - 1] as number) +
         Math.hypot(
@@ -493,6 +503,7 @@ export function planTrip(
           (way[i] as Walker).z - (way[i - 1] as Walker).z,
         ),
     );
+  }
   const length = along[along.length - 1] ?? 0;
   const n = Math.max(2, Math.ceil(length / TRAVEL.spacing) + 1);
   const ds = length / (n - 1);
@@ -537,8 +548,9 @@ export function planTrip(
       let j = Math.max(0, i - reachFord);
       j <= Math.min(n - 1, i + reachFord);
       j++
-    )
+    ) {
       wet[j] = 1;
+    }
   }
   const paces = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -547,13 +559,15 @@ export function planTrip(
     const offTread = s < off.start + ds || s > length - off.end - ds;
     // How fast the heading turns here in radians per meter, over the steps either side.
     let bend = 0;
-    for (const j of [i - 1, i])
-      if (j >= 0 && j < n - 1)
+    for (const j of [i - 1, i]) {
+      if (j >= 0 && j < n - 1) {
         bend = Math.max(
           bend,
           Math.abs(turnTo(heading[j] as number, heading[j + 1] as number)) /
             Math.max(ds, 1e-9),
         );
+      }
+    }
     paces[i] = Math.min(
       offTread ? Math.min(TRAVEL.off, pace) : pace,
       wet[i] === 1 ? TRAVEL.ford : Infinity,
@@ -562,11 +576,12 @@ export function planTrip(
   }
   // Cap each pace so the body can slow at `TRAVEL.accel` for every bend ahead and stop at the end. `travelStep` handles speeding up.
   paces[n - 1] = 0;
-  for (let i = n - 2; i >= 0; i--)
+  for (let i = n - 2; i >= 0; i--) {
     paces[i] = Math.min(
       paces[i] as number,
       Math.sqrt((paces[i + 1] as number) ** 2 + 2 * TRAVEL.accel * ds),
     );
+  }
   return { points, heading, pace: paces, length, face };
 }
 
@@ -640,11 +655,12 @@ export function wayLeft(trip: Trip, s: number): Walker[] {
     Math.max(0, (s / Math.max(trip.length, 1e-9)) * (n - 1)),
   );
   const out = [travelPoint(trip, s)];
-  for (let i = Math.floor(f) + 1; i < n; i++)
+  for (let i = Math.floor(f) + 1; i < n; i++) {
     out.push({
       x: trip.points[i * 2] as number,
       z: trip.points[i * 2 + 1] as number,
     });
+  }
   return out;
 }
 
@@ -707,14 +723,15 @@ export function travelStep(
   const ahead = arrived ? (trip.face ?? yaw) : headingAt(trip, at.s);
   // A hand that turned the view takes control of it. Facing the way again gives control back.
   let follows = at.follows && Math.abs(turnTo(at.yaw, yaw)) < 1e-6;
-  if (!follows && !stop && Math.abs(turnTo(yaw, ahead)) < TRAVEL.facing)
+  if (!follows && !stop && Math.abs(turnTo(yaw, ahead)) < TRAVEL.facing) {
     follows = true;
+  }
   let y = yaw;
   if (follows && !stop) {
     const left = turnTo(yaw, ahead);
     y = yaw + Math.sign(left) * Math.min(Math.abs(left), TRAVEL.turn * dt);
   }
-  if (arrived)
+  if (arrived) {
     return {
       ...at,
       v: 0,
@@ -722,6 +739,7 @@ export function travelStep(
       follows,
       done: stop || !follows || Math.abs(turnTo(y, ahead)) < 1e-6,
     };
+  }
   const going =
     at.going || !follows || Math.abs(turnTo(y, ahead)) < TRAVEL.facing;
   // The pace where this step would take the body, with its square interpolated between samples so slowing is steady

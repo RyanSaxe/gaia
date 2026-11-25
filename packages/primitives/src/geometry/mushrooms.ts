@@ -121,8 +121,9 @@ export function buildMushrooms(
   const flesh = new PartBuilder("stalk");
   const spots = new PartBuilder("spot");
   const s = 0.85 + 0.15 * (ctx.facts.scale ?? 1);
-  for (const m of layout(p.grouping, p.cap, p.height * s, r.fork("layout")))
+  for (const m of layout(p.grouping, p.cap, p.height * s, r.fork("layout"))) {
     emitMushroom(caps, flesh, spots, m, p.cap);
+  }
   const parts = [flesh.part(), caps.part()];
   if (spots.vertexCount > 0) parts.push(spots.part());
   return { parts, anchors: [] };
@@ -245,8 +246,9 @@ function layout(
         centers.some(
           ([cx, cz]) => Math.hypot(cx - x, cz - z) < 0.3 + 0.35 * tallest,
         )
-      )
+      ) {
         continue;
+      }
       centers.push([x, z]);
     }
     for (const [cx, cz] of centers) {
@@ -439,14 +441,16 @@ function emitMushroom(
     }
     at.push(row);
   }
-  for (let j = 0; j < sides; j++)
+  for (let j = 0; j < sides; j++) {
     caps.triangle(
       apex,
       (rows[0] as number) + j,
       (rows[0] as number) + ((j + 1) % sides),
     );
-  for (let k = 0; k + 1 < rows.length; k++)
+  }
+  for (let k = 0; k + 1 < rows.length; k++) {
     band(caps, rows[k] as number, rows[k + 1] as number, sides);
+  }
   // Spots in the palette's spot swatch, shaded like the cap beneath them. `SPOTS` in palettes.ts makes them white on silver-birch caps and the cap color elsewhere.
   if (shape !== "pointed") {
     const count = 8 + Math.floor(m.r.next() * 6);
@@ -491,8 +495,9 @@ function emitMushroom(
           ch,
         );
       }
-      for (let j = 0; j < 6; j++)
+      for (let j = 0; j < 6; j++) {
         spots.triangle(hub, hub + 1 + j, hub + 1 + ((j + 1) % 6));
+      }
     }
   }
   // Ridged gills under the cap, rising from the lip to the stalk, in the stalk's swatch.
@@ -522,8 +527,9 @@ function emitMushroom(
       );
     }
   }
-  for (let k = 0; k + 1 < under.length; k++)
+  for (let k = 0; k + 1 < under.length; k++) {
     band(flesh, under[k] as number, under[k + 1] as number, sides);
+  }
   // The stalk: swollen at its foot, darkened by the soil, bowed a little, and running up into the cap.
   const stalkCh = {
     loss: stubborn ? 0 : clamp(capLoss * 0.5, 0.02, 0.3),
@@ -569,13 +575,14 @@ function emitMushroom(
       );
     }
   });
-  for (let k = 0; k + 1 < stalkRows.length; k++)
+  for (let k = 0; k + 1 < stalkRows.length; k++) {
     band(
       flesh,
       stalkRows[k + 1] as number,
       stalkRows[k] as number,
       STALK_SIDES,
     );
+  }
   // 75% of grown domed and flat mushrooms get a skirt round the stalk under the cap, like fly agarics and parasols.
   if (shape !== "pointed" && !m.young && m.r.next() < 0.75) {
     const t = 0.8;

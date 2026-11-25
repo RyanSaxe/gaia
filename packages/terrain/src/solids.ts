@@ -42,8 +42,9 @@ const cellKey = (ix: number, iz: number): number =>
 /** Andrew's monotone chain: the convex hull of x, z pairs, counter-clockwise, without collinear corners. */
 function hullOf(points: readonly number[]): Float64Array {
   const pts: [number, number][] = [];
-  for (let i = 0; i + 1 < points.length; i += 2)
+  for (let i = 0; i + 1 < points.length; i += 2) {
     pts.push([points[i] as number, points[i + 1] as number]);
+  }
   pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
   if (pts.length < 3) return Float64Array.from(pts.flat());
   const cross = (
@@ -56,8 +57,9 @@ function hullOf(points: readonly number[]): Float64Array {
     while (
       lower.length >= 2 &&
       cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 1e-12
-    )
+    ) {
       lower.pop();
+    }
     lower.push(p);
   }
   const upper: [number, number][] = [];
@@ -66,8 +68,9 @@ function hullOf(points: readonly number[]): Float64Array {
     while (
       upper.length >= 2 &&
       cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 1e-12
-    )
+    ) {
       upper.pop();
+    }
     upper.push(p);
   }
   lower.pop();
@@ -178,7 +181,7 @@ export function placeShapes(
       return { x, z, radius: shape.radius };
     }
     const points: number[] = [];
-    for (let i = 0; i + 1 < shape.points.length; i += 2)
+    for (let i = 0; i + 1 < shape.points.length; i += 2) {
       points.push(
         ...siteToWorld(
           at,
@@ -186,6 +189,7 @@ export function placeShapes(
           shape.points[i + 1] as number,
         ),
       );
+    }
     return { points };
   });
 }
@@ -201,15 +205,17 @@ export function buildingPieces(
   const walls = solidsOf(wallsShape(plan, { x: 0, z: 0, yaw: 0, level: 0 }));
   return piecesShapes(parts, { x: 0, y: 0, z: 0, yaw: 0 }).filter((shape) => {
     if (!("points" in shape)) return true;
-    for (let i = 0; i + 1 < shape.points.length; i += 2)
+    for (let i = 0; i + 1 < shape.points.length; i += 2) {
       if (
         clearanceAt(
           walls,
           shape.points[i] as number,
           shape.points[i + 1] as number,
         ) > PAST_WALLS
-      )
+      ) {
         return true;
+      }
+    }
     return false;
   });
 }
@@ -263,17 +269,19 @@ function clip(
     const a = poly[i * stride + axis] as number;
     const b = poly[j * stride + axis] as number;
     const inA = (a - edge) * keep >= 0;
-    if (inA)
+    if (inA) {
       for (let k = 0; k < stride; k++) out.push(poly[i * stride + k] as number);
+    }
     if (inA !== (b - edge) * keep >= 0) {
       const u = (edge - a) / (b - a);
-      for (let k = 0; k < stride; k++)
+      for (let k = 0; k < stride; k++) {
         out.push(
           (poly[i * stride + k] as number) +
             ((poly[j * stride + k] as number) -
               (poly[i * stride + k] as number)) *
               u,
         );
+      }
     }
   }
   return out;
@@ -344,8 +352,9 @@ export function piecesShapes(
     }
     const flat = (poly: readonly number[]): number[] => {
       const out: number[] = [];
-      for (let i = 0; i < poly.length; i += 3)
+      for (let i = 0; i < poly.length; i += 3) {
         out.push(poly[i] as number, poly[i + 2] as number);
+      }
       return out;
     };
     const over =
@@ -440,16 +449,18 @@ export function piecesShapes(
       if (
         Math.max(...ys) < BODY_BAND.from ||
         Math.min(...ys) > highest + BODY_BAND.to
-      )
+      ) {
         continue;
+      }
       for (const poly of inBand(
         vs.flatMap((v) => [
           p[v * 3] as number,
           p[v * 3 + 1] as number,
           p[v * 3 + 2] as number,
         ]),
-      ))
+      )) {
         if (poly.length > 0) add(poly);
+      }
     }
   }
   const c = Math.cos(at.yaw);
@@ -457,11 +468,12 @@ export function piecesShapes(
   const shapes: SolidShape[] = [];
   for (const local of squares.values()) {
     const points: number[] = [];
-    for (let i = 0; i + 1 < local.length; i += 2)
+    for (let i = 0; i + 1 < local.length; i += 2) {
       points.push(
         at.x + (local[i] as number) * c + (local[i + 1] as number) * s,
         at.z - (local[i] as number) * s + (local[i + 1] as number) * c,
       );
+    }
     shapes.push({ points });
   }
   return shapes;

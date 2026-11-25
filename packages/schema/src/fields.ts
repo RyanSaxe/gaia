@@ -62,8 +62,9 @@ const MIN_LEVELS = 2;
 const MAX_LEVELS = 10;
 
 function requireAsk(ask: string): void {
-  if (ask.trim().length === 0)
+  if (ask.trim().length === 0) {
     throw new Error("Every field needs an instruction for Jev.");
+  }
 }
 
 export const t = {
@@ -131,8 +132,9 @@ export function resolveScale(
 ): number {
   const index = field.levels.findIndex((l) => l.words === words);
   const level = field.levels[index];
-  if (level === undefined)
+  if (level === undefined) {
     throw new Error(`"${words}" is not a level of "${field.ask}".`);
+  }
   const below = field.levels[index - 1]?.value ?? level.value;
   const above = field.levels[index + 1]?.value ?? level.value;
   const low = (below + level.value) / 2;

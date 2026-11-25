@@ -102,8 +102,9 @@ export function createTable(
   // ---------- drawing, only when something changes ----------
   let frame = 0;
   const draw = (): void => {
-    if (frame === 0 && scene !== null && !gone)
+    if (frame === 0 && scene !== null && !gone) {
       frame = requestAnimationFrame(tick);
+    }
   };
   function tick(now: number): void {
     frame = 0;
@@ -257,8 +258,9 @@ export function createTable(
           // A card with a painting or a tally becomes the wait's sheet face up, then flips to the sheet's bare paper for the
           // map. A bare card already shows the sheet.
           const face = faces[i];
-          if (face !== null && face !== undefined && face !== bare)
+          if (face !== null && face !== undefined && face !== bare) {
             options.chosen?.(face);
+          }
           lift(i, performance.now());
           choose(placeOf(r));
         });
@@ -400,7 +402,7 @@ export function createTable(
       // A chosen card is already rising. A folder, an address, or a world opened without the start page gets a fresh card,
       // on the current table or, without the start page, on an empty table built for it.
       if (scene !== null) liftFresh();
-      else
+      else {
         void build([]).then(() => {
           if (scene === null) return;
           scene.choose(null, 0);
@@ -410,6 +412,7 @@ export function createTable(
           // Waits for the empty table to fade in (start.css), so the card is laid on a visible table.
           liftFresh(SHOWN_MS);
         });
+      }
     },
     close() {
       gone = true;

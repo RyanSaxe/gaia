@@ -5,9 +5,11 @@ const W = 256;
 const H = 128;
 const frame = (fill: (x: number, y: number) => number): Uint8Array => {
   const f = new Uint8Array(W * H * 4);
-  for (let y = 0; y < H; y++)
-    for (let x = 0; x < W; x++)
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
       f.fill(fill(x, y), (y * W + x) * 4, (y * W + x) * 4 + 3);
+    }
+  }
   return f;
 };
 

@@ -73,14 +73,16 @@ function openingEdge(
 ): [number, number][] {
   const straight = Math.max(0, rise - head);
   const out: [number, number][] = [];
-  for (let k = 0; k < 40; k++)
+  for (let k = 0; k < 40; k++) {
     out.push([-half, -SINK + ((straight + SINK) * k) / 40]);
+  }
   for (let k = 0; k <= 400; k++) {
     const phi = Math.PI * (1 - k / 400);
     out.push([half * Math.cos(phi), straight + head * Math.sin(phi)]);
   }
-  for (let k = 1; k <= 40; k++)
+  for (let k = 1; k <= 40; k++) {
     out.push([half, straight - ((straight + SINK) * k) / 40]);
+  }
   return out;
 }
 
@@ -248,8 +250,9 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
       .findIndex((c, i) => count - 1 - i > crack + 3 && c[1] >= springH);
   const firstUp = (from: number, to: number, h: number): number => {
     const step = from < to ? 1 : -1;
-    for (let i = from; i !== to; i += step)
+    for (let i = from; i !== to; i += step) {
       if ((centers[i] as V3)[1] >= h) return i;
+    }
     return to;
   };
   // Each stack breaks into a stump a third to a half of the arch's height and two blocks above it.
@@ -395,11 +398,13 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
   ): { inner: number; outer: number; deep: number } => {
     let ground = side < 0 ? 0 : count - 1;
     const step = side < 0 ? 1 : -1;
-    for (let i = ground; i !== stump; i += step)
+    for (let i = ground; i !== stump; i += step) {
       if (
         Math.abs((centers[i] as V3)[1]) < Math.abs((centers[ground] as V3)[1])
-      )
+      ) {
         ground = i;
+      }
+    }
     const ring = grid[ground] as V3[];
     const xs = ring.map((q) => q[0]);
     return {
@@ -432,7 +437,7 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
         fallen,
       );
     }
-    for (let m = 0; m < 6; m++)
+    for (let m = 0; m < 6; m++) {
       rubble(
         out,
         side * half * fallen.range(0, 1.3 * far),
@@ -441,8 +446,9 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
         grow,
         fallen,
       );
+    }
     const foot = footing(k === 0 ? leftStump : rightStump, side);
-    for (let m = 0; m < 4; m++)
+    for (let m = 0; m < 4; m++) {
       rubble(
         out,
         foot.outer + side * fallen.range(0.2, 1.6),
@@ -451,6 +457,7 @@ export function buildRockArch(p: ArchParams, ctx: BuildContext): Built {
         1,
         fallen,
       );
+    }
     if (!fell) continue;
     // The bare stack's broken blocks lie clear of its stump: beyond it, in front of it and behind it.
     for (const c of [
@@ -521,12 +528,13 @@ function chunk(
     let p: V3 = [q[0], q[1], q[2]];
     for (const pl of planes) {
       const over = p[0] * pl.n[0] + p[1] * pl.n[1] + p[2] * pl.n[2] - pl.d;
-      if (over > 0)
+      if (over > 0) {
         p = [
           p[0] - pl.n[0] * over,
           p[1] - pl.n[1] * over,
           p[2] - pl.n[2] * over,
         ];
+      }
     }
     const lx = p[0] * size[0];
     const lz = p[2] * size[2];
@@ -561,9 +569,9 @@ function chunk(
     const shade =
       0.47 + 0.14 * mottle + 0.08 * n[1] - 0.12 * Math.max(0, -n[1]);
     const ids = [pa, pb, pc].map((q) => b.vertex(q, n, shade, ch));
-    if (outward)
+    if (outward) {
       b.triangle(ids[0] as number, ids[1] as number, ids[2] as number);
-    else b.triangle(ids[0] as number, ids[2] as number, ids[1] as number);
+    } else b.triangle(ids[0] as number, ids[2] as number, ids[1] as number);
   }
 }
 
@@ -680,7 +688,7 @@ function emitSweep(
     const rim = ring.map((q) =>
       b.vertex(q, n, look(q, n).shade + 0.03, { ...ch, wither: 0.6 }),
     );
-    for (let j = 0; j < AROUND; j++)
+    for (let j = 0; j < AROUND; j++) {
       face(
         centre,
         rim[j] as number,
@@ -690,5 +698,6 @@ function emitSweep(
         ring[j] as V3,
         ring[(j + 1) % AROUND] as V3,
       );
+    }
   }
 }

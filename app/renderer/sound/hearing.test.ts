@@ -26,7 +26,8 @@ describe("what a person hears", () => {
       stream: { d: 0, bearing: 0, width: 30 },
       mill: { d: 0, bearing: 0, turning: 1 },
     });
-    for (const bed of BEDS)
+    for (const bed of BEDS) {
       expect(dB(loudest[bed].gain)).toBeLessThanOrEqual(6.03);
+    }
   });
 });

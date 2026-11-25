@@ -141,9 +141,13 @@ export function worldHooks(
       ],
       network: world.ways.network,
       wayVitality: (way, along) =>
-        wayVitalityAt(world.ways.network, way, along, world.vitalityOfPlace),
+        wayVitalityAt(world.ways.network, way, along, (id) =>
+          world.vitalityOfPlace(id),
+        ),
       junctionVitality: (j) =>
-        junctionVitality(world.ways.network, j, world.vitalityOfPlace),
+        junctionVitality(world.ways.network, j, (id) =>
+          world.vitalityOfPlace(id),
+        ),
       areas: (world.code?.world.areas ?? []).map((a) => ({
         path: a.path,
         x: a.x,
@@ -164,7 +168,7 @@ export function worldHooks(
         z: p.z,
         reach: p.reach,
       })),
-      standable: world.standable,
+      standable: (...args) => world.standable(...args),
     });
   }
 
@@ -304,8 +308,9 @@ export function worldHooks(
       set(from);
       settleVitality();
       let before = grabFrame();
-      if (snaps.includes(0))
+      if (snaps.includes(0)) {
         shots[0] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+      }
       const frames = Math.round(seconds * fps);
       for (let k = 1; k <= frames + Math.round(hold * fps); k++) {
         const v = from + ((to - from) * Math.min(k, frames)) / frames;
@@ -313,8 +318,9 @@ export function worldHooks(
         // Advance one frame of time so the change eases in. The wind's clock stays frozen.
         world.frame(1 / fps, performance.now(), world.hour);
         const now = grabFrame(1);
-        if (snaps.includes(k))
+        if (snaps.includes(k)) {
           shots[k] = world.renderer.domElement.toDataURL("image/jpeg", 0.92);
+        }
         const change = frameChange(before, now);
         steps.push([+v.toFixed(4), change.mean, change.worst]);
         before = now;
@@ -367,12 +373,12 @@ export function worldHooks(
   ) {
     // Start at a landing, since the given point may be inside a thing.
     const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
-    x0 = start.x;
-    z0 = start.z;
-    world.walkTo(x0, z0, 0, pitch);
+    const sx = start.x;
+    const sz = start.z;
+    world.walkTo(sx, sz, 0, pitch);
     await Promise.all([
-      world.land.around(x0, z0),
-      world.thingTiles.ready(x0, z0),
+      world.land.around(sx, sz),
+      world.thingTiles.ready(sx, sz),
     ]);
     const at = world.landingNear(x1, z1);
     world.travelPace = pace;
@@ -607,10 +613,11 @@ export function worldHooks(
     const set = [world.treeSet, world.bushSet].find(
       (s) => s.forms === preset.far.forms,
     );
-    if (set === undefined)
+    if (set === undefined) {
       throw new Error(
         `The swap test's ${name} belongs to no set of far forms.`,
       );
+    }
     const release = await set.stream.hold(preset.far.form);
     const gl = world.renderer.getContext();
     const focal =
@@ -770,9 +777,10 @@ export function worldHooks(
           if (beat % 3 === 0) world.press("ShiftLeft");
           else world.release("ShiftLeft");
         }
-        if (beat > 0 && t - beat * 2.5 < 0.5)
+        if (beat > 0 && t - beat * 2.5 < 0.5) {
           world.walker.yaw +=
             ((beat % 2 === 1 ? 1.2 : -1.2) * (now - last)) / 1000 / 0.5;
+        }
         last = now;
         requestAnimationFrame(tick);
       };
@@ -805,10 +813,11 @@ export function worldHooks(
     sky: (k: number): number => {
       const skies = sweep(COMPOSING.world, COMPOSING.lib).blueprints;
       const sky = skies[k];
-      if (sky === undefined)
+      if (sky === undefined) {
         throw new Error(
           `The sweep holds ${skies.length} skies, numbered from 0: there is no sky ${k}.`,
         );
+      }
       world.skyWorld = sky;
       return skies.length;
     },
@@ -875,9 +884,9 @@ export function worldHooks(
           yaw: +c.yaw.toFixed(2),
         })),
         carries: w.carries.map((c) => world.ways.network.trails[c.trail]?.id),
-        wear: wayWear(world.ways.network, i, world.vitalityOfPlace).map(
-          (v) => +v.toFixed(2),
-        ),
+        wear: wayWear(world.ways.network, i, (id) =>
+          world.vitalityOfPlace(id),
+        ).map((v) => +v.toFixed(2)),
         points: Array.from(
           { length: Math.ceil(w.points.length / 20) },
           (_, k) => [
@@ -996,11 +1005,11 @@ export function worldHooks(
     tripTime: (x0: number, z0: number, x1: number, z1: number) => {
       // Start at a landing, since the given point may be inside a thing.
       const start = world.landingNear(x0, z0) ?? { x: x0, z: z0 };
-      x0 = start.x;
-      z0 = start.z;
+      const sx = start.x;
+      const sz = start.z;
       const at = world.landingNear(x1, z1);
       const t0 = performance.now();
-      const chosen = at === null ? null : world.travelWay({ x: x0, z: z0 }, at);
+      const chosen = at === null ? null : world.travelWay({ x: sx, z: sz }, at);
       const planMs = Math.round(performance.now() - t0);
       if (at === null || chosen === null) return null;
       const plan = planTrip(
@@ -1058,13 +1067,14 @@ export function worldHooks(
      */
     tour: (name?: string) => {
       const stops = tour();
-      if (name === undefined)
+      if (name === undefined) {
         return stops.map((s) => ({
           name: s.name,
           what: s.what,
           x: Math.round(s.x),
           z: Math.round(s.z),
         }));
+      }
       const s = stops.find((t) => t.name === name.toLowerCase());
       if (s !== undefined) world.walkTo(s.x, s.z, s.yaw, s.pitch);
       return s ?? null;
@@ -1517,8 +1527,9 @@ export function worldHooks(
       for (const k of drive.keys ?? []) world.press(k);
       const rows: number[][] = [];
       for (let i = 0; i < Math.round(seconds * 60); i++) {
-        if (drive.hold !== undefined && i === Math.round(drive.hold * 60))
+        if (drive.hold !== undefined && i === Math.round(drive.hold * 60)) {
           world.release();
+        }
         world.updateWalk(1 / 60);
         const f = footingAt(
           world.terrain,

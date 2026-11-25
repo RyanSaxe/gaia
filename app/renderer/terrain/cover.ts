@@ -367,12 +367,13 @@ export function createGrass(
     const a = round[r] as number;
     const onRim = r >= 2 ? 1 : 0;
     // The stem's foot is (0, 0) and its top (0, -1). The rim's points lie left and right of the bloom's center.
-    for (const side of [-1, 1])
+    for (const side of [-1, 1]) {
       bloom.push(
         onRim === 1 ? side * Math.cos(a) : 0,
         r === 0 ? 0 : Math.sin(a),
         onRim,
       );
+    }
   });
   verts.push(0, 1, 0);
   bloom.push(0, 1, 1);

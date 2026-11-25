@@ -137,17 +137,19 @@ export function kind<S extends Subject>(def: Kind<S>): Kind<S> {
   for (const [name, s] of Object.entries(def.slots)) {
     const io = ROLE_IO[s.role];
     if (s.on === undefined) {
-      if (io.input !== null)
+      if (io.input !== null) {
         throw new Error(
           `${def.id}.${name} is a ${s.role} and needs an "on" slot.`,
         );
+      }
       continue;
     }
     const source = def.slots[s.on];
-    if (source === undefined)
+    if (source === undefined) {
       throw new Error(
         `${def.id}.${name} is on "${s.on}", which does not exist.`,
       );
+    }
     const out = ROLE_IO[source.role].output;
     if (io.input === null || !feeds(out, io.input)) {
       throw new Error(

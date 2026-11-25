@@ -25,8 +25,9 @@ function commentsOf(path: string): {
   readonly block: boolean;
 } {
   const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
-  if (["py", "toml", "sh", "yml", "yaml", "rb"].includes(ext))
+  if (["py", "toml", "sh", "yml", "yaml", "rb"].includes(ext)) {
     return { line: "#", block: false };
+  }
   if (["css"].includes(ext)) return { line: "", block: true };
   return { line: "//", block: true };
 }
@@ -40,9 +41,9 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
     if (t === "") return;
     const last = pieces[pieces.length - 1];
     // Merges adjacent plain text into one piece.
-    if (ink === undefined && last !== undefined && last.ink === undefined)
+    if (ink === undefined && last !== undefined && last.ink === undefined) {
       pieces[pieces.length - 1] = { text: last.text + t };
-    else pieces.push(ink === undefined ? { text: t } : { text: t, ink });
+    } else pieces.push(ink === undefined ? { text: t } : { text: t, ink });
   };
   // Sticky regexes match at the current position, so a long definition is scanned in one pass.
   const at = (re: RegExp, k: number): string | null => {
@@ -81,8 +82,9 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
         j < text.length &&
         text[j] !== c &&
         (c === "`" || text[j] !== "\n")
-      )
+      ) {
         j += text[j] === "\\" ? 2 : 1;
+      }
       const t = text.slice(i, Math.min(text.length, j + 1));
       push(t, "str");
       i += t.length;
@@ -117,10 +119,11 @@ export function highlight(lines: readonly string[], path: string): Piece[][] {
   for (const p of pieces) {
     p.text.split("\n").forEach((part, k) => {
       if (k > 0) out.push([]);
-      if (part !== "")
+      if (part !== "") {
         (out[out.length - 1] as Piece[]).push(
           p.ink === undefined ? { text: part } : { text: part, ink: p.ink },
         );
+      }
     });
   }
   while (out.length < lines.length) out.push([]);

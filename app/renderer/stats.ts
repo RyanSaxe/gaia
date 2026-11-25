@@ -64,8 +64,9 @@ function createProbe() {
   let watchesLongTasks = false;
   try {
     new PerformanceObserver((list) => {
-      for (const e of list.getEntries())
+      for (const e of list.getEntries()) {
         long.push({ at: e.startTime + e.duration, ms: e.duration });
+      }
     }).observe({ type: "longtask", buffered: false });
     watchesLongTasks =
       PerformanceObserver.supportedEntryTypes?.includes("longtask") ?? false;
@@ -94,10 +95,12 @@ function createProbe() {
         n === 0 ? 0 : (view[Math.min(n - 1, Math.floor(p * n))] as number);
       const median = q(0.5);
       let stutters = 0;
-      for (let k = 0; k < n; k++)
+      for (let k = 0; k < n; k++) {
         if ((view[k] as number) > median * STUTTER) stutters++;
-      while (long.length > 0 && now - (long[0] as { at: number }).at > WINDOW)
+      }
+      while (long.length > 0 && now - (long[0] as { at: number }).at > WINDOW) {
         long.shift();
+      }
       const round = (v: number): number => Math.round(v * 10) / 10;
       return {
         seconds: round((now - first) / 1000),

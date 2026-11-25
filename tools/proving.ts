@@ -705,7 +705,7 @@ const KIND: Readonly<Record<string, FileKind>> = {
   csv: "data",
 };
 const kindOf = (name: string): FileKind =>
-  /\.test\.ts$/.test(name)
+  name.endsWith(".test.ts")
     ? "test"
     : (KIND[name.split(".").pop() ?? ""] ?? "source");
 
@@ -928,8 +928,9 @@ const entryOf = (root: string): Drafted => {
   const own = drafted.filter((f) => f.dir === root && f.kind === "source");
   const entry =
     own.find((f) => /\/?(index|lib|main|server)\.\w+$/.test(f.path)) ?? own[0];
-  if (entry === undefined)
+  if (entry === undefined) {
     throw new Error(`${root} has no source file to be its entry.`);
+  }
   return entry;
 };
 
@@ -942,16 +943,22 @@ for (const d of PLAN) {
   sources.forEach(
     (f, i) => i > 0 && f.imports.add((sources[i - 1] as Drafted).path),
   );
-  for (const t of drafted.filter((f) => f.dir === d.path && f.kind === "test"))
+  for (const t of drafted.filter(
+    (f) => f.dir === d.path && f.kind === "test",
+  )) {
     for (const s of sources) t.imports.add(s.path);
+  }
 }
-for (const [from, to] of TRAIL_PLAN)
+for (const [from, to] of TRAIL_PLAN) {
   entryOf(from).imports.add(entryOf(to).path);
+}
 
 const importedBy = new Map<string, string[]>();
-for (const f of drafted)
-  for (const i of f.imports)
+for (const f of drafted) {
+  for (const i of f.imports) {
     importedBy.set(i, [...(importedBy.get(i) ?? []), f.path]);
+  }
+}
 /** The tests covering a file: test files importing it or a file it is imported by, transitively. */
 const coveringTests = (path: string): string[] => {
   const seen = new Set<string>([path]);
@@ -988,8 +995,9 @@ const files: PlannedFacts[] = drafted.map((f) => {
   const near = testOf(f.dir);
   const covering = new Set(coveringTests(f.path));
   // Its health decides whether tests cover it: its own entity's tests, or none.
-  if (f.kind === "source" && s.tested !== "none" && near !== undefined)
+  if (f.kind === "source" && s.tested !== "none" && near !== undefined) {
     covering.add(near);
+  }
   const coveredBy = f.kind === "source" ? [...covering].sort() : [];
   const own =
     s.tested === "own"
@@ -1077,8 +1085,9 @@ for (const f of files) {
       to === undefined ||
       to === from ||
       dependents.get(to)?.includes(from)
-    )
+    ) {
       continue;
+    }
     dependents.set(to, [...(dependents.get(to) ?? []), from].sort());
   }
 }
@@ -1087,11 +1096,12 @@ const entities: EntityFacts[] = PLAN.filter((d) => d.entity !== undefined).map(
     const plan = d.entity as NonNullable<PlannedDir["entity"]>;
     const mine = files.filter((f) => ownerOf(f.path) === d.path);
     const depends = new Set<string>();
-    for (const f of mine)
+    for (const f of mine) {
       for (const i of f.imports) {
         const o = ownerOf(i);
         if (o !== undefined && o !== d.path) depends.add(o);
       }
+    }
     const entry = entryOf(d.path);
     const exported =
       files
@@ -1102,10 +1112,11 @@ const entities: EntityFacts[] = PLAN.filter((d) => d.entity !== undefined).map(
         /(^|\/)(package\.json|Cargo\.toml)$/.test(f.path) &&
         parentOf(f.path) === d.path,
     )?.path;
-    if (manifest === undefined)
+    if (manifest === undefined) {
       throw new Error(
         `${d.path || "The root"} is planned as an entity but has no package.json or Cargo.toml to declare it.`,
       );
+    }
     const sum = (pick: (f: PlannedFacts) => number): number =>
       mine.reduce((n, f) => n + pick(f), 0);
     return {
@@ -1144,7 +1155,7 @@ const others = Object.keys(FORMS).filter((k) => FORMS[k]?.composes !== "tree");
 let tree = 0;
 let other = 0;
 for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
-  if (f.kind === "source")
+  if (f.kind === "source") {
     f.symbols.forEach(
       (s, k) =>
         (forms[`${f.path}#${s.name}`] =
@@ -1152,6 +1163,7 @@ for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : 1))) {
             ? (trees[tree++ % trees.length] as string)
             : (others[other++ % others.length] as string)),
     );
+  }
 }
 /** The forms other than a building or a landmark: a tree, a bush, a stone or flowers. */
 type SmallFormKind = Exclude<FormKind, "building" | "landmark">;
@@ -1188,11 +1200,12 @@ sources.forEach((f, k) => {
   if (f.lines < 40) return;
   if (k % 7 === 3) raise(f.path, (k / 7) % 2 < 1 ? "building" : "landmark");
   const first = f.symbols[0];
-  if (first !== undefined && k % 11 === 5)
+  if (first !== undefined && k % 11 === 5) {
     raise(
       `${f.path}#${first.name}`,
       (k / 11) % 2 < 1 ? "landmark" : "building",
     );
+  }
 });
 
 // Every file's quality by its health, and every entity's its own files' pooled by their lines.
@@ -1259,10 +1272,11 @@ const regionOf = (path: string): PlannedDir => {
 const regions = PLAN.filter((d) => d.water !== undefined);
 const waterOf = (d: PlannedDir): Look => {
   const water = WATERS[d.water ?? ""];
-  if (water === undefined)
+  if (water === undefined) {
     throw new Error(
       `${d.path || "The root"} plans a water Jev is never offered: ${d.water}.`,
     );
+  }
   return water;
 };
 
@@ -1414,8 +1428,9 @@ gaps.push(
   ...missing("form", FORMS, definitionForms()),
   ...missing("raised form", COMPOSED_FORMS, Object.values(forms)),
 );
-if (gaps.length > 0)
+if (gaps.length > 0) {
   throw new Error(`The proving ground lacks ${gaps.join(", ")}.`);
+}
 const world = layoutWorld(facts, judged, undefined, 1);
 const laidOut = world.regions.map((r) => r.area);
 const planned = Object.keys(judged.lands);
@@ -1427,10 +1442,11 @@ const astray = [
     .filter((p) => !planned.includes(p))
     .map((p) => `${p} has land but no planned look`),
 ];
-if (astray.length > 0)
+if (astray.length > 0) {
   throw new Error(
     `The proving ground lays out differently from its plan: ${astray.join("; ")}.`,
   );
+}
 
 const repo = resolve(import.meta.dirname, "..");
 const args = parseArgs({
@@ -1447,20 +1463,22 @@ if (args.code !== undefined) {
     const inside = relative(repo, path);
     const outside =
       inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside);
-    if (!outside && !inside.split(sep).includes("node_modules"))
+    if (!outside && !inside.split(sep).includes("node_modules")) {
       throw new Error(
         `Write the proving ground's code and manifest outside Gaia's repository or under node_modules, or Gaia's own world reads them: ${path}.`,
       );
+    }
   }
   const manifestRelative = relative(dir, manifestPath);
   const manifestOutside =
     manifestRelative === ".." ||
     manifestRelative.startsWith(`..${sep}`) ||
     isAbsolute(manifestRelative);
-  if (!manifestOutside)
+  if (!manifestOutside) {
     throw new Error(
       `Write the manifest beside the code, not in it, or the engine takes every file it names for used: ${manifestPath}.`,
     );
+  }
   const vitality = new Map(world.patches.map((p) => [p.path, p.vitality]));
   const { code, manifest } = provingCode(
     files.map((facts, i) => ({

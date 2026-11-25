@@ -235,8 +235,9 @@ describe("placing a world's things on a bake", () => {
               if (
                 tile.trailPlaces[k * 2] !== places[w * 2] ||
                 tile.trailPlaces[k * 2 + 1] !== places[w * 2 + 1]
-              )
+              ) {
                 differ.places++;
+              }
             }
           }
         }
@@ -271,8 +272,9 @@ describe("placing a world's things on a bake", () => {
             if (tile.waterLevel[k] !== t.waterLevel[w]) coarse.water++;
             if (tile.region[k] !== t.region[w]) coarse.region++;
             if ((t.shore[w] as number) < SHORE_CAP) wet++;
-            else if (tile.heights[k] !== t.lattice.heights[w])
+            else if (tile.heights[k] !== t.lattice.heights[w]) {
               coarse.dryHeights++;
+            }
           }
         }
         expect(coarse, `stride ${stride}`).toEqual({

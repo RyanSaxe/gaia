@@ -83,8 +83,9 @@ function letter(
     [-0.6, 0],
     [0, 0.6],
     [0, -0.6],
-  ] as const)
+  ] as const) {
     g.fillText(text, x + dx, y + dy);
+  }
   g.globalAlpha = 1;
   g.fillText(text, x, y);
   g.restore();
@@ -130,8 +131,14 @@ function inkLine(
   g.restore();
 }
 
-const baseName = (path: string): string =>
-  path.split("/").filter(Boolean).pop() ?? path;
+const baseName = (path: string): string => {
+  const parts = path.split("/");
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i];
+    if (part !== undefined && part !== "") return part;
+  }
+  return path;
+};
 /** A world's location, shown in italic with its name: its GitHub owner, or its parent folder. */
 export const whereOf = (r: StartOffer["recent"][number]): string =>
   r.github !== undefined
@@ -180,7 +187,7 @@ export function paintSheetInk(
     if (card === undefined) break;
     const below = card.y + card.side / 2;
     const where = whereOf(r);
-    if (where !== "")
+    if (where !== "") {
       letter(
         g,
         where,
@@ -189,6 +196,7 @@ export function paintSheetInk(
         `italic ${fitted(g, where, `italic {}px ${SERIF}`, P(l.name * 0.72), P(card.nameWidth), 0)}px ${SERIF}`,
         INK_SOFT,
       );
+    }
     const { lines, size } = nameLines(
       g,
       nameOf(r).toUpperCase(),
@@ -252,8 +260,9 @@ function nameLines(
 ): { lines: string[]; size: number } {
   const font = `600 {}px ${SERIF}`;
   const one = fitted(g, name, font, size, width, 0.17, 0);
-  if (one >= size * 0.8 || name.length < 6)
+  if (one >= size * 0.8 || name.length < 6) {
     return { lines: [name], size: Math.max(one, size * 0.5) };
+  }
   const marks = [...name.matchAll(/[-._/ ]/g)]
     .map((m) => (m.index ?? 0) + 1)
     .filter((k) => k > 1 && k < name.length - 1);
@@ -288,8 +297,9 @@ function clipped(
   g.font = font;
   g.letterSpacing = `${spacing}px`;
   let shown = text;
-  while (shown.length > 1 && g.measureText(shown).width > width)
+  while (shown.length > 1 && g.measureText(shown).width > width) {
     shown = shown.slice(0, -2) + "…";
+  }
   g.restore();
   return shown;
 }
@@ -330,7 +340,7 @@ export function paintWriting(
   const mid = (ln.x0 + ln.x1) / 2;
   g.clearRect(0, 0, g.canvas.width, g.canvas.height);
   inkLine(g, X(ln.x0), X(ln.x1), Y(ln.y), mm, 5, "rgba(46,34,22,0.88)");
-  if (w.typed === "")
+  if (w.typed === "") {
     letter(
       g,
       "github.com/…",
@@ -339,7 +349,7 @@ export function paintWriting(
       `italic ${P(ln.size * 1.2)}px ${SERIF}`,
       "rgba(96,92,86,0.42)",
     );
-  else
+  } else {
     letter(
       g,
       fit(g, w.typed, `${P(ln.size * 1.2)}px ${SERIF}`, P(ln.x1 - ln.x0)),
@@ -348,7 +358,8 @@ export function paintWriting(
       `${P(ln.size * 1.2)}px ${SERIF}`,
       w.answer === "" ? "rgba(30,24,40,0.9)" : "rgba(30,24,40,0.62)",
     );
-  if (w.reading > 0)
+  }
+  if (w.reading > 0) {
     inkLine(
       g,
       X(ln.x0),
@@ -359,6 +370,7 @@ export function paintWriting(
       "rgba(30,22,14,0.95)",
       w.reading,
     );
+  }
   const lines =
     w.answer === ""
       ? []
@@ -415,8 +427,9 @@ function fit(
   g.save();
   g.font = font;
   let shown = text;
-  while (shown.length > 1 && g.measureText(shown).width > width)
+  while (shown.length > 1 && g.measureText(shown).width > width) {
     shown = shown.slice(1);
+  }
   g.restore();
   return shown === text ? text : `…${shown.slice(1)}`;
 }

@@ -375,9 +375,9 @@ export function randomWorld(
       const params: Record<string, string | boolean | string[]> = {};
       for (const [name, f] of Object.entries(p.params)) {
         if (f.type === "scale") params[name] = pick(f.levels, random).words;
-        else if (f.type === "choice")
+        else if (f.type === "choice") {
           params[name] = pick(Object.keys(f.options), random);
-        else if (f.type === "flag") params[name] = random() < 0.5;
+        } else if (f.type === "flag") params[name] = random() < 0.5;
         else params[name] = Object.keys(f.members).filter(() => random() < 0.5);
       }
       return {

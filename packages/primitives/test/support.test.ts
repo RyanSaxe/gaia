@@ -83,15 +83,16 @@ function samples(p: AnyPrimitive): Stored[] {
   ).map((at, i) => {
     const out: Stored = {};
     for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
-      if (f.type === "scale")
+      if (f.type === "scale") {
         out[name] =
           f.levels[Math.round(at * (f.levels.length - 1))]?.words ?? "";
-      else if (f.type === "choice") {
+      } else if (f.type === "choice") {
         const keys = Object.keys(f.options);
         out[name] = keys[i % keys.length] ?? "";
       } else if (f.type === "flag") out[name] = i % 2 === 0;
-      else
+      else {
         out[name] = Object.keys(f.members).filter((_, k) => (k + i) % 2 === 0);
+      }
     }
     return out;
   });
@@ -266,10 +267,11 @@ describe.each(lib.forRole("Rock").map((p) => [p.id, p] as const))(
               .parts as Part[]) {
               const roots = rootsOf(skin, host);
               const rootless = roots.filter((r) => r === undefined).length;
-              if (rootless > 0)
+              if (rootless > 0) {
                 pulled.push(
                   `sample ${i}, overgrowth ${j}: ${rootless} vertices move unlike anything under them`,
                 );
+              }
               // As built, each vertex lies a little off its root. It may come closer as both decline, but no farther than surfaces that touch.
               for (const v of VITALITIES) {
                 const grown = applyVitality(skin, v).positions;
@@ -293,10 +295,11 @@ describe.each(lib.forRole("Rock").map((p) => [p.id, p] as const))(
                       ),
                   );
                 });
-                if (widest > SUPPORT.glue)
+                if (widest > SUPPORT.glue) {
                   pulled.push(
                     `sample ${i}, overgrowth ${j}: ${widest.toFixed(3)} m off what it grows on at vitality ${v}`,
                   );
+                }
               }
             }
           });
@@ -337,8 +340,9 @@ describe.each(lib.forRole("Drift").map((p) => [p.id, p] as const))(
  */
 const GUST: WindState = (() => {
   let time = 0;
-  for (let t = 0; t < 600; t += 0.05)
+  for (let t = 0; t < 600; t += 0.05) {
     if (gustAt(0, 0, t) > gustAt(0, 0, time)) time = t;
+  }
   return {
     time,
     strength: 2,
@@ -421,8 +425,9 @@ function misshapen(
           sub(m[1] as number[], m[0] as number[]),
           sub(m[2] as number[], m[0] as number[]),
         );
-        if (Math.hypot(...nr) > 1e-5 && dot(nr, nm) < 0)
+        if (Math.hypot(...nr) > 1e-5 && dot(nr, nm) < 0) {
           out.push(`${where}: it turns over`);
+        }
       }
     }
   }
@@ -592,10 +597,11 @@ describe("plants", () => {
             ).parts as Part[];
             const parts = [...plant, ...flowers];
             const hanging = new Set(flowers.map((_, j) => plant.length + j));
-            for (const u of unsupportedAt(parts, 1, { hanging }))
+            for (const u of unsupportedAt(parts, 1, { hanging })) {
               loose.push(
                 `${bloom.id} ${JSON.stringify(bs)} on frame sample ${i}: ${parts[u.part]?.swatch} at (${u.at.map((c) => c.toFixed(2)).join(", ")})`,
               );
+            }
           });
         }
       });

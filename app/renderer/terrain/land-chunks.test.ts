@@ -42,15 +42,17 @@ describe("the land's chunks", () => {
           if (
             chunk.coverShares[c * 4] !== terrain.coverShares[w * 4] ||
             chunk.coverRegions[c * 4] !== terrain.coverRegions[w * 4]
-          )
+          ) {
             differ.covers++;
+          }
           // A coarser level measures the shore between its own samples, so only its samples clear of the water match the land's.
           if (k > 0 && (terrain.shore[w] as number) < SHORE_CAP) near++;
           else if (
             chunk.ground[c * 4] !== terrain.lattice.heights[w] ||
             chunk.ground[c * 4 + 2] !== terrain.shore[w]
-          )
+          ) {
             differ.heights++;
+          }
         }
       }
       expect(differ, `level ${k}, chunk (${cx}, ${cz})`).toEqual({

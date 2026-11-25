@@ -105,14 +105,16 @@ export function missingFrom(
       }
       const key = `${name}=${filled.use}`;
       under.set(key, (under.get(key) ?? new Set()).add(label ?? ""));
-      for (const [param, value] of Object.entries(filled.params))
+      for (const [param, value] of Object.entries(filled.params)) {
         for (const v of keysOf(value)) seen.add(`${key}.${param}=${v}`);
+      }
     }
     for (const [a, b] of coverage.pairs ?? []) {
       const pa = blueprint.slots[a]?.use;
       const pb = blueprint.slots[b]?.use;
-      if (pa !== undefined && pb !== undefined)
+      if (pa !== undefined && pb !== undefined) {
         paired.add(`${a}=${pa}+${b}=${pb}`);
+      }
     }
   }
   const out: string[] = [];
@@ -122,23 +124,31 @@ export function missingFrom(
       const at = under.get(`${name}=${p.id}`);
       if (labels.length === 0) {
         if (at === undefined) out.push(`${name}: ${p.id}`);
-      } else
-        for (const l of labels)
+      } else {
+        for (const l of labels) {
           if (!(at?.has(l) ?? false)) out.push(`${name}: ${p.id} (${l})`);
-      for (const [param, f] of Object.entries(p.params))
-        for (const key of allKeys(f))
-          if (!seen.has(`${name}=${p.id}.${param}=${key}`))
+        }
+      }
+      for (const [param, f] of Object.entries(p.params)) {
+        for (const key of allKeys(f)) {
+          if (!seen.has(`${name}=${p.id}.${param}=${key}`)) {
             out.push(`${name}: ${p.id} ${param} "${key}"`);
+          }
+        }
+      }
     }
     if (s.optional && !absent.has(name)) out.push(`${name} left out`);
   }
   for (const [a, b] of coverage.pairs ?? []) {
     const parts = (name: string): AnyPrimitive[] =>
       lib.forRole((k.slots[name] as AnyKind["slots"][string]).role);
-    for (const pa of parts(a))
-      for (const pb of parts(b))
-        if (!paired.has(`${a}=${pa.id}+${b}=${pb.id}`))
+    for (const pa of parts(a)) {
+      for (const pb of parts(b)) {
+        if (!paired.has(`${a}=${pa.id}+${b}=${pb.id}`)) {
           out.push(`${a} ${pa.id} with ${b} ${pb.id}`);
+        }
+      }
+    }
   }
   return out;
 }
@@ -159,10 +169,13 @@ export function sweep(
 ): Sweep {
   const places = options.places;
   const pairs = options.pairs ?? [];
-  for (const pair of pairs)
-    for (const name of pair)
-      if (k.slots[name] === undefined)
+  for (const pair of pairs) {
+    for (const name of pair) {
+      if (k.slots[name] === undefined) {
         throw new Error(`${k.id} has no slot ${name} to pair.`);
+      }
+    }
+  }
   const labels = [
     ...new Set(
       (places ?? []).flatMap((p) => (p.label === undefined ? [] : [p.label])),
@@ -231,8 +244,9 @@ export function sweep(
     field: Field,
     uses: number,
   ): Value => {
-    if (field.type === "set")
+    if (field.type === "set") {
       return Object.keys(field.members).filter((_, i) => i % 2 === uses % 2);
+    }
     const values = valuesOf(field);
     return (
       values.find((v) => !seen.has(option(name, p, param, String(v)))) ??
@@ -254,8 +268,9 @@ export function sweep(
               s.role,
               place === undefined ? undefined : { has: place.has ?? [] },
             );
-      if (fitting.some((p) => p.role !== s.role))
+      if (fitting.some((p) => p.role !== s.role)) {
         throw new Error(`${k.id}'s ${name} needs a ${s.role}, not ${settled}.`);
+      }
       if (fitting.length === 0) {
         if (s.optional) continue;
         throw new Error(
@@ -282,8 +297,13 @@ export function sweep(
           ],
         };
       });
-      if (s.optional && settled === undefined && !ranked.some((r) => r.wanted))
+      if (
+        s.optional &&
+        settled === undefined &&
+        !ranked.some((r) => r.wanted)
+      ) {
         continue;
+      }
       const ahead = (a: readonly number[], b: readonly number[]): boolean => {
         const i = a.findIndex((x, j) => x !== b[j]);
         return i >= 0 && (a[i] as number) > (b[i] as number);
@@ -293,31 +313,35 @@ export function sweep(
       const params: Record<string, Value> = {};
       for (const [param, field] of Object.entries(best.params)) {
         const fixed = place?.fixed?.[`${name}.${param}`];
-        if (fixed !== undefined && !isStoredValue(field, fixed))
+        if (fixed !== undefined && !isStoredValue(field, fixed)) {
           throw new Error(
             `${String(fixed)} is not a value of ${best.id}'s ${param}.`,
           );
+        }
         params[param] = fixed ?? valueFor(name, best, param, field, uses);
       }
       slots[name] = { use: best.id, params };
       const key = part(name, best);
       used.set(key, uses + 1);
       labelsOf.set(key, (labelsOf.get(key) ?? new Set()).add(label ?? ""));
-      for (const [param, value] of Object.entries(params))
+      for (const [param, value] of Object.entries(params)) {
         for (const v of keysOf(value)) seen.add(option(name, best, param, v));
+      }
     }
     for (const [a, b] of pairs) {
       const pa = slots[a]?.use;
       const pb = slots[b]?.use;
-      if (pa !== undefined && pb !== undefined)
+      if (pa !== undefined && pb !== undefined) {
         paired.add(pairing(a, pa, b, pb));
+      }
     }
     const bp = blueprintOf(k.id, slots);
     const problems = validate(bp, k, lib);
-    if (problems.length > 0)
+    if (problems.length > 0) {
       throw new Error(
         `The sweep of ${k.id} stood an invalid blueprint: ${problems.join(" ")}`,
       );
+    }
     return bp;
   };
 
@@ -337,10 +361,11 @@ export function sweep(
     return { blueprints, missing: missingNow() };
   }
   for (let missing = missingNow(); missing.length > 0; missing = missingNow()) {
-    if (blueprints.length === MOST_ROWS)
+    if (blueprints.length === MOST_ROWS) {
       throw new Error(
         `The sweep of ${k.id} still lacks ${missing.join(", ")} after ${MOST_ROWS} blueprints.`,
       );
+    }
     blueprints.push(blueprintAt(undefined));
   }
   return { blueprints, missing: [] };

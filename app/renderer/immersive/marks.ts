@@ -85,8 +85,9 @@ export const noise = (seed: number, i: number): number => {
 };
 export const seedOf = (text: string): number => {
   let h = 2166136261;
-  for (let k = 0; k < text.length; k++)
+  for (let k = 0; k < text.length; k++) {
     h = Math.imul(h ^ text.charCodeAt(k), 16777619);
+  }
   return (h >>> 0) / 4294967296;
 };
 
@@ -319,10 +320,11 @@ function hatch(
   if (lines.length === 0 || pen.fine < 0.02) return;
   const { ctx } = pen;
   ctx.beginPath();
-  for (const l of lines)
+  for (const l of lines) {
     on(pen, l).forEach(([px, py], i) =>
       i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py),
     );
+  }
   ctx.lineWidth = pen.line * weight;
   ctx.strokeStyle = color;
   ctx.globalAlpha = pen.fine;
@@ -340,8 +342,9 @@ function hull(pts: readonly Pt[]): Pt[] {
       lower.length >= 2 &&
       cross(lower[lower.length - 2] as Pt, lower[lower.length - 1] as Pt, q) <=
         0
-    )
+    ) {
       lower.pop();
+    }
     lower.push(q);
   }
   const upper: Pt[] = [];
@@ -350,8 +353,9 @@ function hull(pts: readonly Pt[]): Pt[] {
       upper.length >= 2 &&
       cross(upper[upper.length - 2] as Pt, upper[upper.length - 1] as Pt, q) <=
         0
-    )
+    ) {
       upper.pop();
+    }
     upper.push(q);
   }
   return [...lower.slice(0, -1), ...upper.slice(0, -1)];
@@ -492,10 +496,11 @@ function ivy(
   if (amount < 0.05) return;
   const top = height * amount;
   const pts: Pt[] = [];
-  for (let k = 0; k <= 4; k++)
+  for (let k = 0; k <= 4; k++) {
     pts.push(pen.at(X - dir * noise(seed, k) * 0.4, Z - 0.1, (top * k) / 4));
+  }
   pts.push(pen.at(X - dir * 0.9, Z - 0.1, top));
-  for (let k = 4; k >= 0; k--)
+  for (let k = 4; k >= 0; k--) {
     pts.push(
       pen.at(
         X - dir * (1.3 + noise(seed, k + 7) * 1.1),
@@ -503,6 +508,7 @@ function ivy(
         (top * k) / 4,
       ),
     );
+  }
   wash(pen, pts, rgba("#5f7f3e", 0.75));
 }
 
@@ -520,12 +526,13 @@ function breach(
   const width = 1 + amount * 3.6;
   const drop = height * (0.25 + amount * 0.6);
   const pts: P3[] = [[X - dir * width, Z, height]];
-  for (let k = 1; k <= 4; k++)
+  for (let k = 1; k <= 4; k++) {
     pts.push([
       X - dir * width * (1 - k / 4.4),
       Z,
       height - drop * (k / 4) * (0.7 + noise(seed, k) * 0.5),
     ]);
+  }
   pts.push([X, Z, height - drop], [X, Z, height]);
   const p = on(pen, pts);
   wash(pen, p, HOLLOW);
@@ -918,16 +925,17 @@ function blocksOf(plan: BuildingPlan): Block[] {
       const ox = Math.min(k.x1, h.x1) - Math.max(k.x0, h.x0);
       const oz = Math.min(k.z1, h.z1) - Math.max(k.z0, h.z0);
       if (ox <= 0 || oz <= 0) continue;
-      if (oz <= ox)
+      if (oz <= ox) {
         k =
           k.z0 + k.z1 < h.z0 + h.z1
             ? { ...k, z1: Math.max(k.z0 + 0.5, h.z0) }
             : { ...k, z0: Math.min(k.z1 - 0.5, h.z1) };
-      else
+      } else {
         k =
           k.x0 + k.x1 < h.x0 + h.x1
             ? { ...k, x1: Math.max(k.x0 + 0.5, h.x0) }
             : { ...k, x0: Math.min(k.x1 - 0.5, h.x1) };
+      }
     }
     blocks[i] = k;
   }
@@ -957,8 +965,9 @@ const inFoot = (m: Mass, x: number, z: number, margin: number): boolean =>
 /** The end of the main body's ridge, -1 or +1 along it in the plan, where a gable chimney goes. It picks a free gable that does not face the door, with the fewest windows, or returns 0 when there is none. */
 function chimneyEnd(plan: BuildingPlan): -1 | 0 | 1 {
   const m = plan.masses[0];
-  if (m === undefined || (m.roof !== "gable" && m.roof !== "half-hip"))
+  if (m === undefined || (m.roof !== "gable" && m.roof !== "half-hip")) {
     return 0;
+  }
   const alongX = m.ridge === "x";
   const half = (alongX ? m.width : m.depth) / 2;
   const free = (sign: number): boolean => {
@@ -1085,8 +1094,9 @@ function shapeOf(k: Block, e: number, seed: number): Shape {
       for (let i = 1; i < profile.length; i++) {
         const [b0, h0] = profile[i - 1] as readonly [number, number];
         const [b1, h1] = profile[i] as readonly [number, number];
-        if (b <= b1 + 1e-6)
+        if (b <= b1 + 1e-6) {
           return h0 + ((h1 - h0) * (b - b0)) / Math.max(1e-6, b1 - b0);
+        }
       }
       return (profile[profile.length - 1] as readonly [number, number])[1];
     };
@@ -1147,14 +1157,16 @@ function shapeOf(k: Block, e: number, seed: number): Shape {
     const free = k.ends[sign < 0 ? 0 : 1];
     const ea = sign * (L + e);
     const eave = at(ea, side * (S + e), low);
-    if (free && k.form === "hip")
+    if (free && k.form === "hip") {
       return [eave, at(sign * Math.max(0, L - S), 0, ridge)];
-    if (free && k.form === "half-hip")
+    }
+    if (free && k.form === "half-hip") {
       return [
         eave,
         at(ea, side * tb, trunc),
         at(sign * Math.max(0, L + e - 0.6 * tb), 0, ridge),
       ];
+    }
     return [eave, at(ea, 0, ridge)];
   };
   const slopeOf = (side: -1 | 1): P3[] => [
@@ -1166,18 +1178,20 @@ function shapeOf(k: Block, e: number, seed: number): Shape {
   const hipEnd = (sign: -1 | 1): P3[] | null => {
     if (!k.ends[sign < 0 ? 0 : 1]) return null;
     const ea = sign * (L + e);
-    if (k.form === "hip")
+    if (k.form === "hip") {
       return [
         at(ea, -(S + e), low),
         at(ea, S + e, low),
         at(sign * Math.max(0, L - S), 0, ridge),
       ];
-    if (k.form === "half-hip")
+    }
+    if (k.form === "half-hip") {
       return [
         at(ea, -tb, trunc),
         at(ea, tb, trunc),
         at(sign * Math.max(0, L + e - 0.6 * tb), 0, ridge),
       ];
+    }
     return null;
   };
   const nearFree = k.ends[0];
@@ -1417,7 +1431,7 @@ function drawBlock(
     w.seed + k.index,
     ivyX === k.x1 ? 1 : -1,
   );
-  if (sh.near !== null)
+  if (sh.near !== null) {
     face(
       pen,
       sh.near,
@@ -1425,6 +1439,7 @@ function drawBlock(
       1,
       round,
     );
+  }
   if (sh.front !== null && sh.frontQuad !== null) {
     const [n0, f0] = sh.frontQuad;
     const weakFar = ruinAt(weak, f0[0], f0[1]) > ruinAt(weak, n0[0], n0[1]);
@@ -1564,7 +1579,7 @@ function drawTurret(
   ctx.lineWidth = pen.line;
   ctx.strokeStyle = INK;
   ctx.stroke();
-  if (cone >= apex - 0.5)
+  if (cone >= apex - 0.5) {
     ink(
       pen,
       [
@@ -1574,7 +1589,7 @@ function drawTurret(
       false,
       0.7,
     );
-  else
+  } else {
     rotHole(
       pen,
       [tx + er * 0.2, ty + er * 0.3],
@@ -1584,6 +1599,7 @@ function drawTurret(
       w.rot * 0.8,
       w.seed + 3,
     );
+  }
 }
 
 /** A chimney stack `wx` by `wz` units that topples along the ridge toward `fall` as vitality falls. Returns the top point that smoke rises from. */
@@ -1604,7 +1620,7 @@ function chimney(
   const fallen = ease(w.v, 0.2, 0.05);
   const top = Math.max(h0 + 0.5, h1 - (h1 - ridge) * 1.2 * fallen);
   // A gable stack is broad up to its shoulder, round the hearth, and narrows above.
-  if (shoulder > h0)
+  if (shoulder > h0) {
     box(
       pen,
       X - wx * 0.75,
@@ -1617,6 +1633,7 @@ function chimney(
       shaded(worn(color, w), 0.2),
       0.85,
     );
+  }
   box(
     pen,
     X - wx / 2,
@@ -1675,12 +1692,14 @@ function timberFace(pen: Pen, f: WallFace, look: Look, framing: string): void {
     f.eave,
   ];
   for (const h of floors.slice(1)) lines.push([at(0, h), at(1, h)]);
-  if (framing === "posts and rails")
-    for (let i = 0; i + 1 < floors.length; i++)
+  if (framing === "posts and rails") {
+    for (let i = 0; i + 1 < floors.length; i++) {
       lines.push([
         at(0, ((floors[i] as number) + (floors[i + 1] as number)) / 2),
         at(1, ((floors[i] as number) + (floors[i + 1] as number)) / 2),
       ]);
+    }
+  }
   if (framing === "crossed braces") {
     for (let i = 0; i + 1 < floors.length; i++) {
       const h0 = floors[i] as number;
@@ -1689,8 +1708,9 @@ function timberFace(pen: Pen, f: WallFace, look: Look, framing: string): void {
     }
   }
   // A king post up into the gable.
-  if (f.end && f.top(0.5) > f.eave + 1)
+  if (f.end && f.top(0.5) > f.eave + 1) {
     lines.push([at(0.5, f.eave), at(0.5, f.top(0.5))]);
+  }
   hatch(pen, lines, timber, 0.62);
 }
 
@@ -1947,11 +1967,12 @@ export const INKS: Readonly<Record<string, Ink>> = {
           [lerp(bl, br, 0.5), lerp(tl, tr, 0.5)],
           [lerp(bl, tl, 0.5), lerp(br, tr, 0.5)],
         ];
-        if (p.panes === "six panes")
+        if (p.panes === "six panes") {
           bars.push(
             [lerp(bl, br, 0.25), lerp(tl, tr, 0.25)],
             [lerp(bl, br, 0.75), lerp(tl, tr, 0.75)],
           );
+        }
         const { ctx } = pen;
         ctx.beginPath();
         for (const [a, b] of bars) {
@@ -2071,8 +2092,12 @@ export const INKS: Readonly<Record<string, Ink>> = {
         const top = 0.95 * K;
         for (let X = west - 1.2 * K; X <= east + 1.2 * K; X += 0.55 * K) {
           if (Math.abs(X - dX) < 1.1 * K) continue;
-          if (noise(w.seed, Math.round(X * 10) + 170) * 0.6 + 0.3 > w.v + 0.25)
+          if (
+            noise(w.seed, Math.round(X * 10) + 170) * 0.6 + 0.3 >
+            w.v + 0.25
+          ) {
             continue;
+          }
           lines.push([
             [X, Z, 0],
             [X, Z, top],
@@ -2128,8 +2153,9 @@ export const INKS: Readonly<Record<string, Ink>> = {
         ctx.beginPath();
         for (const b of house.blocks) {
           for (const o of openingsOn(house.plan, b.index)) {
-            if (o.door || (o.q[0] as P3)[2] > (house.plan.floor + 1.6) * K)
+            if (o.door || (o.q[0] as P3)[2] > (house.plan.floor + 1.6) * K) {
               continue;
+            }
             const [l, r] = [o.q[0] as P3, o.q[1] as P3];
             for (let j = 0; j < 3; j++) {
               const [px, py] = pen.at(
@@ -2358,7 +2384,7 @@ function drawWaterwheel(
       INK,
       0.8,
     );
-    if (water > 0.05)
+    if (water > 0.05) {
       ink(
         pen,
         on(pen, [
@@ -2370,6 +2396,7 @@ function drawWaterwheel(
         1.3 * water,
         rgba("#5f93b0", 0.9),
       );
+    }
   } else if (water > 0.05) {
     // Water running under the wheel's base.
     ink(
@@ -2412,19 +2439,21 @@ function jagged(
   fallen: number,
   seed: number,
 ): P3[] {
-  if (fallen < 0.05)
+  if (fallen < 0.05) {
     return [
       [xa, z, h],
       [xb, z, h],
     ];
+  }
   const n = 5;
   const pts: P3[] = [];
-  for (let k = 0; k <= n; k++)
+  for (let k = 0; k <= n; k++) {
     pts.push([
       xa + ((xb - xa) * k) / n,
       z,
       h - fallen * (noise(seed, k + 200) * 3 + (k % 2) * 1),
     ]);
+  }
   return pts;
 }
 
@@ -2437,18 +2466,20 @@ function jaggedWest(
   fallen: number,
   seed: number,
 ): P3[] {
-  if (fallen < 0.05)
+  if (fallen < 0.05) {
     return [
       [x, zb, h],
       [x, za, h],
     ];
+  }
   const pts: P3[] = [];
-  for (let k = 5; k >= 0; k--)
+  for (let k = 5; k >= 0; k--) {
     pts.push([
       x,
       za + ((zb - za) * k) / 5,
       h - fallen * (noise(seed, k + 300) * 2.2 + (k % 2) * 0.7),
     ]);
+  }
   return pts;
 }
 
@@ -2490,7 +2521,7 @@ function drawArchiveTower(
     for (const [X, dir] of [
       [x1, -1],
       [x0, 1],
-    ] as const)
+    ] as const) {
       pane(
         pen,
         [
@@ -2501,9 +2532,10 @@ function drawArchiveTower(
         ],
         shaded(stone, 0.1),
       );
+    }
   }
   const glow = mix("#e2b75a", GLASS, ease(w.v, 0.75, 0.4));
-  for (let h = house.top * K + 1.5; h < top - 2.2; h += 2.7 * K)
+  for (let h = house.top * K + 1.5; h < top - 2.2; h += 2.7 * K) {
     pane(
       pen,
       [
@@ -2514,6 +2546,7 @@ function drawArchiveTower(
       ],
       glow,
     );
+  }
   if (fallen < 0.05) {
     face(
       pen,
@@ -2607,7 +2640,7 @@ function lantern(
   const postsGone = ease(w.v, 0.48, 0.36);
   const top = base + 2.6;
   const glow = ease(w.v, 0.55, 0.85);
-  if (glow > 0.02)
+  if (glow > 0.02) {
     wash(
       pen,
       on(pen, [
@@ -2618,6 +2651,7 @@ function lantern(
       ]),
       rgba(mix(look.hue("glass", "#f3c768"), "#f3c768", 0.5), 0.75 * glow),
     );
+  }
   if (postsGone < 0.95) {
     const h = base + (top - base) * (1 - postsGone);
     hatch(
@@ -2795,7 +2829,7 @@ function gableRoof(
     ],
     lit(color, 0.2),
   );
-  if (gable !== null)
+  if (gable !== null) {
     face(
       pen,
       [
@@ -2805,6 +2839,7 @@ function gableRoof(
       ],
       shaded(gable, 0.14),
     );
+  }
 }
 
 /** A dovecote: a squat round stone cote under a cone and lantern, or a painted box on a post. As vitality falls the cone rots open or the box shifts off its post. */
@@ -2846,7 +2881,7 @@ function drawDovecote(pen: Pen, house: House, look: Look, cote: string): void {
       [0.25, 0.3],
       [-0.12, 0.62],
       [0.12, 0.62],
-    ] as const)
+    ] as const) {
       pane(
         pen,
         [
@@ -2857,6 +2892,7 @@ function drawDovecote(pen: Pen, house: House, look: Look, cote: string): void {
         ],
         "#2c2219",
       );
+    }
     gableRoof(
       pen,
       X - hx - 0.3 + lean,
@@ -3013,7 +3049,7 @@ function drawWell(
     ink(pen, on(pen, pole), false, 1.7);
     ink(pen, on(pen, pole), false, 0.8, timber);
     rubble(pen, (pole[1] as P3)[0], Z, 0.6, w.seed + 3, stone);
-    if (bucket)
+    if (bucket) {
       ink(
         pen,
         on(pen, [
@@ -3023,6 +3059,7 @@ function drawWell(
         false,
         0.5,
       );
+    }
   } else {
     const postZ = (outer + 0.09) * K;
     for (const dz of [-postZ, postZ]) {
@@ -3055,7 +3092,7 @@ function drawWell(
       false,
       1.4,
     );
-    if (bucket)
+    if (bucket) {
       ink(
         pen,
         on(pen, [
@@ -3065,6 +3102,7 @@ function drawWell(
         false,
         0.5,
       );
+    }
     const ex = (outer * 0.75 + 0.25) * K;
     gableRoof(
       pen,
@@ -3078,8 +3116,9 @@ function drawWell(
       null,
     );
   }
-  if (bucket)
+  if (bucket) {
     box(pen, X - 0.22, X + 0.22, Z - 0.2, Z + 0.2, 0.98 * K, 1.26 * K, timber);
+  }
 }
 
 /** A bell under a small roof, in a stone arch or a raked timber frame facing the front. As vitality falls it hangs askew and then is gone. */
@@ -3126,12 +3165,13 @@ function drawBell(
     const rise = half + 0.16 * K;
     const wallTop = spring + rise + 0.32 * K;
     const arch: P3[] = [];
-    for (let k = 0; k <= 10; k++)
+    for (let k = 0; k <= 10; k++) {
       arch.push([
         X + Math.cos((k / 10) * Math.PI) * half,
         front,
         spring + Math.sin((k / 10) * Math.PI) * half,
       ]);
+    }
     box(pen, X - half - pier, X - half, front, Z + pier / 2, 0, spring, stone);
     face(
       pen,
@@ -3241,8 +3281,8 @@ function drawForge(
   if (shelter === "an open shed") {
     const [x0, x1] = span(0.9, 4.05);
     const fallen = ease(w.v, 0.24, 0.12);
-    for (const x of [x0, x1])
-      for (const dz of [-1.45 * K, 1.45 * K])
+    for (const x of [x0, x1]) {
+      for (const dz of [-1.45 * K, 1.45 * K]) {
         ink(
           pen,
           on(pen, [
@@ -3258,6 +3298,8 @@ function drawForge(
           false,
           1.6,
         );
+      }
+    }
     if (fallen < 0.9) {
       const hi = 2.95 * K;
       const lo = 2.25 * K;
@@ -3549,12 +3591,13 @@ function drum(
     const [bx1, bz1] = ringPoint(sides, a + sector / 2 - 1e-6, r1);
     const topEdge: P3[] = [];
     const n = jag > 0.05 ? 4 : 1;
-    for (let j = n; j >= 0; j--)
+    for (let j = n; j >= 0; j--) {
       topEdge.push([
         ax1 + ((bx1 - ax1) * j) / n,
         az1 + ((bz1 - az1) * j) / n,
         h1 - (j === 0 || j === n ? 0 : dip(k * 5 + j)),
       ]);
+    }
     const l = lightOf(a);
     const c = l > 0 ? lit(color, 0.18 * l) : shaded(color, -0.34 * l);
     face(
@@ -3611,7 +3654,7 @@ function lanternRoom(
 ): void {
   const glow = 1 - glass;
   const top = base + height;
-  if (glow > 0.02)
+  if (glow > 0.02) {
     drum(
       pen,
       sides,
@@ -3622,6 +3665,7 @@ function lanternRoom(
       mix(look.hue("glass", "#f4cb6a"), "#f4cb6a", 0.5),
       { weight: 0, alpha: 0.85 * glow },
     );
+  }
   if (posts < 0.95) {
     const lines: P3[][] = [];
     const n = sides === 0 ? 6 : sides;
@@ -3650,8 +3694,9 @@ function gallery(
   const out = r + 0.95 * LK;
   drum(pen, sides, h - 0.8 * LK, r, h, out, shaded(stone, 0.22));
   disc(pen, sides, h, out, lit(stone, 0.2));
-  if (parapet > 0)
+  if (parapet > 0) {
     drum(pen, sides, h, out, h + parapet, out, stone, { weight: 0.8 });
+  }
 }
 
 /** Battlements around an open top at `h` on a wall of radius `r`: far merlons, the walk, the near parapet and its merlons. Merlons drop out one by one as vitality falls. */
@@ -3672,13 +3717,17 @@ function battlements(
     box(pen, X - m, X + m, Z - m, Z + m, h0, h1, stone, null, 0.7);
   };
   disc(pen, sides, h + 0.2, r, shaded(stone, 0.45));
-  for (let k = 0; k < n; k++)
-    if (Math.sin((k / n) * Math.PI * 2) > 0 && kept(k))
+  for (let k = 0; k < n; k++) {
+    if (Math.sin((k / n) * Math.PI * 2) > 0 && kept(k)) {
       merlon(k, h, h + 1.7 * LK);
+    }
+  }
   drum(pen, sides, h - 0.2, r, h + 1, r, stone, { weight: 0.9 });
-  for (let k = 0; k < n; k++)
-    if (Math.sin((k / n) * Math.PI * 2) <= 0 && kept(k))
+  for (let k = 0; k < n; k++) {
+    if (Math.sin((k / n) * Math.PI * 2) <= 0 && kept(k)) {
       merlon(k, h + 1, h + 1.8 * LK);
+    }
+  }
 }
 
 /** A cone or many-sided spire from radius `r` at `h0` up to its point at `h1`. It has a finial while whole and rots through as `gone` rises. */
@@ -3768,7 +3817,7 @@ function drawLookoutTower(
   const r0 = wallAt(0);
   castShadow(pen, ellipseFeet(0, 0, r0, r0, top * 0.8));
   // The hollow inside a crumbling top, its far wall in shade.
-  if (jag > 0.05)
+  if (jag > 0.05) {
     disc(
       pen,
       sides,
@@ -3777,6 +3826,7 @@ function drawLookoutTower(
       shaded(stone, 0.55),
       0.6,
     );
+  }
   // The shaft stage by stage, with a string course where each stage sets back.
   const breaks = [
     0,
@@ -3797,8 +3847,9 @@ function drawLookoutTower(
       stone,
       { jag: last ? jag : 0, seed, course },
     );
-    if (!last && p.profile === "stepped")
+    if (!last && p.profile === "stepped") {
       disc(pen, sides, h1, wallAt(h1 / LK - 0.01), lit(stone, 0.2), 0.8);
+    }
   }
   // Slit windows up the face toward the viewer, and the door.
   const ahead = Math.atan2(-0.91, -0.415);
@@ -3832,10 +3883,13 @@ function drawLookoutTower(
     posts: ease(w.v, 0.5, 0.38),
     gallery: ease(w.v, 0.42, 0.34),
   };
-  if (p.galleries === "a gallery at every stage" && tiers.gallery < 0.9)
-    for (const y of stagesM)
-      if (y * LK < top - 1)
+  if (p.galleries === "a gallery at every stage" && tiers.gallery < 0.9) {
+    for (const y of stagesM) {
+      if (y * LK < top - 1) {
         gallery(pen, sides, y * LK, wallAt(y), 0.9 * LK, stone);
+      }
+    }
+  }
   if (jag > 0.05) {
     ivy(pen, -r0 * 0.5, -r0 * 0.9, top, w.ivy, seed, -1);
     rubble(pen, r0 * 0.8, -r0 - 1.2, fall * 3, seed + 4, stone);
@@ -3862,7 +3916,7 @@ function drawLookoutTower(
     const lr = head * 0.72;
     const lh = Math.max(2.2, m * 0.12) * LK;
     lanternRoom(pen, sides, crownBase, lr, lh, look, tiers.posts, tiers.glass);
-    if (tiers.cap < 0.9)
+    if (tiers.cap < 0.9) {
       spire(
         pen,
         sides,
@@ -3873,6 +3927,7 @@ function drawLookoutTower(
         tiers.cap,
         seed,
       );
+    }
   } else if (tiers.cap < 0.9) {
     // With a gallery, a drum inside it carries the roof, so the eaves sit about three quarters of the way up the tower.
     let eaves = crownBase;
@@ -4190,8 +4245,9 @@ function drawStone(
   ctx.lineWidth = pen.line * (st.king ? 1 : 0.9);
   ctx.strokeStyle = INK;
   ctx.stroke();
-  if (noise(seed, 1) > 0.4 && st.lean < 0.5)
+  if (noise(seed, 1) > 0.4 && st.lean < 0.5) {
     hatch(pen, [[tipAt(0.3, -0.2), tipAt(0.55, 0.15)]], rgba(INK, 0.4), 0.45);
+  }
 }
 
 /** A cairn of small stones in a rounded cone at (`X`, `Z`), `tall` units high. As vitality falls it loses height and spreads, with rubble at its base. */
@@ -4377,7 +4433,7 @@ function drawStones(
     ];
     for (let k = 0; k < pairs; k++) {
       const t = k / (pairs - 1);
-      for (const side of [-1, 1])
+      for (const side of [-1, 1]) {
         stones.push(
           stand(
             stones.length,
@@ -4387,8 +4443,10 @@ function drawStones(
             AVENUE + (side * Math.PI) / 2,
           ),
         );
-      if (p.lintels && k % 2 === 1)
+      }
+      if (p.lintels && k % 2 === 1) {
         lintels.push([stones.length - 2, stones.length - 1]);
+      }
     }
     center = at(length / 2 + spacing * 1.1, 0);
   } else if (p.arrangement === "dolmen") {
@@ -4427,7 +4485,7 @@ function drawStones(
       );
     }
     // The east uprights lean outward once the capstone has tipped off.
-    for (const [fx, fz] of legs)
+    for (const [fx, fz] of legs) {
       stones.push({
         X: fx * capL,
         Z: fz * capW,
@@ -4439,6 +4497,7 @@ function drawStones(
         snapped: false,
         king: false,
       });
+    }
     cap = { X: 0, Z: 0, L: capL, W: capW, h: legH };
   } else if (p.arrangement === "cairn field") {
     const count = clamp(Math.round(n * 0.6), 3, 9);
@@ -4457,8 +4516,9 @@ function drawStones(
           ([cx, cz, ct]) =>
             Math.hypot(cx - X, cz - Z) < ct * 0.6 + tall * 0.6 + 0.8,
         )
-      )
+      ) {
         continue;
+      }
       cairns.push([X, Z, tall]);
       k++;
     }
@@ -4470,8 +4530,9 @@ function drawStones(
       const d = spread * Math.sqrt(noise(seed, tries + 810));
       const X = Math.cos(a) * d;
       const Z = Math.sin(a) * d * 0.8;
-      if (stones.some((st) => Math.hypot(st.X - X, st.Z - Z) < h * 0.9))
+      if (stones.some((st) => Math.hypot(st.X - X, st.Z - Z) < h * 0.9)) {
         continue;
+      }
       const leaning =
         noise(seed, tries + 820) < 0.45
           ? 0.08 + noise(seed, tries + 830) * 0.18
@@ -4574,11 +4635,12 @@ function drawStones(
       },
     });
   }
-  for (const [k, [X, Z, t]] of cairns.entries())
+  for (const [k, [X, Z, t]] of cairns.entries()) {
     things.push({
       depth: depthOf(X, Z),
       draw: () => drawCairn(pen, X, Z, t, grey, w, seed + k * 13),
     });
+  }
   if (cap !== null) {
     const c = cap;
     things.push({
@@ -4843,7 +4905,7 @@ function drawRotunda(
     }),
     covering,
   );
-  if (high && dome > 0.95)
+  if (high && dome > 0.95) {
     drum(
       pen,
       0,
@@ -4853,6 +4915,7 @@ function drawRotunda(
       foot * 0.12,
       stone,
     );
+  }
 }
 
 /** Each great tree form at size "vast": trunk height, girth, crown lobes as (east, up, radius) in units, main limbs and green. */
@@ -5042,12 +5105,13 @@ function dome(
       r * (0.85 + noise(seed, k + 900) * 0.3),
     ]);
   }
-  for (let k = rim; k < count; k++)
+  for (let k = rim; k < count; k++) {
     out.push([
       dx + (noise(seed, k + 910) - 0.5) * rx * 1.2,
       h + (noise(seed, k + 920) - 0.6) * ry * 0.8,
       r * (0.95 + noise(seed, k + 930) * 0.3),
     ]);
+  }
   return out;
 }
 
@@ -5460,19 +5524,23 @@ function inkedBox(
   const path = new Traced();
   const measure = new Proxy(path, {
     get: (target, key) => {
-      if (key !== "pts" && key in target)
+      if (key !== "pts" && key in target) {
         return (target[key as keyof Traced] as (...a: number[]) => void).bind(
           target,
         );
+      }
       if (key === "beginPath") return () => (target.pts.length = 0);
-      if (key === "fill" || key === "stroke")
+      if (key === "fill" || key === "stroke") {
         return (p?: unknown) => take(p instanceof Traced ? p.pts : target.pts);
-      if (key === "fillRect")
+      }
+      if (key === "fillRect") {
         return (x: number, y: number, w: number, h: number) =>
           take([x, y, x + w, y + h]);
+      }
       if (key === "getTransform") return () => ctx.getTransform();
-      if (key === "createLinearGradient")
+      if (key === "createLinearGradient") {
         return () => ({ addColorStop: () => {} });
+      }
       return () => {};
     },
     set: () => true,
@@ -5639,12 +5707,14 @@ function drawBuildingAt(
   }
   things.sort((p, q) => q.depth - p.depth).forEach((t) => t.draw());
   // Breaks the wall at the front corner nearest the weak corner.
-  const corners = blocks
-    .filter((k) => !k.round)
-    .flatMap((k) => [
-      { k, east: false, X: k.x0 },
-      { k, east: true, X: k.x1 },
-    ]);
+  const corners = blocks.flatMap((k) =>
+    k.round
+      ? []
+      : [
+          { k, east: false, X: k.x0 },
+          { k, east: true, X: k.x1 },
+        ],
+  );
   const broken = corners.reduce<(typeof corners)[number] | undefined>(
     (best, c) =>
       best === undefined ||
@@ -5654,7 +5724,7 @@ function drawBuildingAt(
         : best,
     undefined,
   );
-  if (broken !== undefined)
+  if (broken !== undefined) {
     breach(
       pen,
       broken.X,
@@ -5664,6 +5734,7 @@ function drawBuildingAt(
       w.breach,
       w.seed,
     );
+  }
   for (const d of parts.dressing) d.ink.draw(pen, house, look, d.p);
   if (stack.top !== null) smoke(pen, stack.top, w.smoke);
   const west = Math.min(...blocks.map((k) => k.x0));

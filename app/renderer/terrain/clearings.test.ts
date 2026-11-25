@@ -65,8 +65,9 @@ function cleared(
       len > 0
         ? Math.max(0, Math.min(1, ((x - c.ax) * abx + (z - c.az) * abz) / len))
         : 0;
-    if (Math.hypot(x - c.ax - abx * t, z - c.az - abz * t) < c.radius)
+    if (Math.hypot(x - c.ax - abx * t, z - c.az - abz * t) < c.radius) {
       return true;
+    }
   }
   return [...outlines, ...more].some((c) => within(c, x, z));
 }
@@ -103,11 +104,12 @@ function holds(
       )
         ? 255
         : 0;
-      if (data[r * side + c] !== expected)
+      if (data[r * side + c] !== expected) {
         expect(
           data[r * side + c],
           `texel (${c}, ${r}) around (${x}, ${z})`,
         ).toBe(expected);
+      }
       if (expected === 255) bare++;
     }
   }

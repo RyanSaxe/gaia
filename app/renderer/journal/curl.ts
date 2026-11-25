@@ -142,10 +142,11 @@ export function createCurl(
             : `translateX(${w}px) rotateY(${step.toFixed(2)}deg)`;
         // Darkens both faces of a strip by how far it is turned from flat.
         const dim = 0.22 * Math.abs(Math.sin((angle * Math.PI) / 180)) ** 1.6;
-        for (const face of [faces[2 * i], faces[2 * i + 1]])
+        for (const face of [faces[2 * i], faces[2 * i + 1]]) {
           (
             face?.lastElementChild as HTMLElement | undefined
           )?.style.setProperty("opacity", dim.toFixed(3));
+        }
       });
       // The shadow falls just past the leaf's edge on the page beneath: the right page before the leaf crosses the
       // spine, the left after. It is darkest when the leaf is upright and absent when it lies flat.

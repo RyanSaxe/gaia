@@ -473,7 +473,7 @@ export function layOutCottage(
         );
       });
     const add = (w: Wall, s: number, y: number, scale: number): void => {
-      if (fits(w, s, y, winW * scale, winH * scale))
+      if (fits(w, s, y, winW * scale, winH * scale)) {
         openings.push({
           kind: "window",
           mass: w.mass,
@@ -482,6 +482,7 @@ export function layOutCottage(
           width: winW * scale,
           height: winH * scale,
         });
+      }
     };
     for (const w of shownWalls(at)) {
       const m = massOf(at, w);
@@ -491,16 +492,18 @@ export function layOutCottage(
         w.mass === 0 &&
         blank !== 0 &&
         (w.n[0] * mainAxis[0] + w.n[2] * mainAxis[1]) * blank > 0.99
-      )
+      ) {
         continue;
+      }
       for (let k = 0; k < m.storeys; k++) {
         const y = at.floor + 0.86 + k * STOREY;
         const scale = k === 0 ? 1 : 0.85;
         if (m.round) {
           // A turret's narrow windows go on every other face. The top storey's sit 0.2 m higher, above the roofs.
           const round = Math.round(Math.atan2(w.n[0], w.n[2]) / (Math.PI / 4));
-          if ((round + k) % 2 === 0)
+          if ((round + k) % 2 === 0) {
             add(w, w.length / 2, y + (k === m.storeys - 1 ? 0.2 : 0), 0.62);
+          }
           continue;
         }
         const n = Math.max(1, Math.floor((w.length - 0.6) / spacing));
@@ -513,8 +516,9 @@ export function layOutCottage(
         peak.s > 0.3 * w.length &&
         peak.s < 0.7 * w.length &&
         peak.y - wallTop(at, m) > 1.75
-      )
+      ) {
         add(w, peak.s, wallTop(at, m) + 0.3, 0.7);
+      }
     }
     return openings;
   };

@@ -283,10 +283,12 @@ function traceOutlines(world: WorldPlaces, step: number): Outlines {
       for (let i = box[0] as number; i <= (box[2] as number); i++) {
         if (!inside(i, j)) continue;
         if (!inside(i, j - 1)) edges.push(corner(i, j), corner(i + 1, j));
-        if (!inside(i + 1, j))
+        if (!inside(i + 1, j)) {
           edges.push(corner(i + 1, j), corner(i + 1, j + 1));
-        if (!inside(i, j + 1))
+        }
+        if (!inside(i, j + 1)) {
           edges.push(corner(i + 1, j + 1), corner(i, j + 1));
+        }
         if (!inside(i - 1, j)) edges.push(corner(i, j + 1), corner(i, j));
       }
     }

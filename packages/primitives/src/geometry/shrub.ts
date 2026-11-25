@@ -517,8 +517,9 @@ export function buildLeafMound(
       const stray = tr.next() < look.strays;
       if (stray) depth = tr.range(1.2, 1.45);
       // Only the outer layer is notched, so notches open gaps in the outline, never holes through it.
-      if (depth >= 0.95 && !stray && notch(d) < -1 + 1.2 * look.notches)
+      if (depth >= 0.95 && !stray && notch(d) < -1 + 1.2 * look.notches) {
         continue;
+      }
       let goal = addScaled(
         clump.center,
         d,
@@ -598,8 +599,9 @@ export function buildLeafMound(
         if (
           at[1] + Math.min(0, dir[1]) * CARD_ALONG * size - CARD_ACROSS * size <
           SOIL
-        )
+        ) {
           dir[1] = Math.abs(dir[1]);
+        }
         const shallow = clamp(
           length(sub(at, clump.center)) / clump.radius,
           0,
@@ -628,13 +630,14 @@ export function buildLeafMound(
         );
       }
       // Flowers and berries hang among the outer clusters.
-      if (depth >= 0.95)
+      if (depth >= 0.95) {
         anchors.push({
           position: lerp(root, goal, Math.min(0.9, tip)),
           normal: d,
           size: 1,
           carry: { bough: b.bough, twig: root, droop: b.droop },
         });
+      }
     }
   });
   const parts = [twigs.part(), leaf.part()];

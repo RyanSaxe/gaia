@@ -49,11 +49,13 @@ export function closeEachFrame(close: (keep: number) => boolean): void {
 export function easeVitality(dt: number): void {
   if (dt <= 0 || closing.size === 0) return;
   const keep = lagKept(dt);
-  for (const close of [...closing]) if (!close(keep)) closing.delete(close);
+  for (const close of Array.from(closing)) {
+    if (!close(keep)) closing.delete(close);
+  }
 }
 
 /** Brings every change to rest at once, for a script that sets vitality and checks where it settles. */
 export function settleVitality(): void {
-  for (const close of [...closing]) close(0);
+  for (const close of Array.from(closing)) close(0);
   closing.clear();
 }

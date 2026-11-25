@@ -121,10 +121,11 @@ export function startOpenRouterStandIn(
       res.end(JSON.stringify(body));
     };
     void read(req).then(async (text) => {
-      if (req.method !== "POST" || req.url !== DECISIONS_PATH)
+      if (req.method !== "POST" || req.url !== DECISIONS_PATH) {
         return reply(404, {
           error: { code: 404, message: "Resource not found" },
         });
+      }
       const authorization = req.headers.authorization;
       let body: Record<string, unknown>;
       try {
@@ -135,26 +136,30 @@ export function startOpenRouterStandIn(
         });
       }
       received.push({ authorization, body });
-      if (authorization?.startsWith("Bearer ") !== true)
+      if (authorization?.startsWith("Bearer ") !== true) {
         return reply(401, {
           error: { code: 401, message: "Missing Authentication header" },
         });
+      }
       const questions = body.questions as
         | Record<string, JevQuestion>
         | undefined;
-      if (typeof body.model !== "string" || questions === undefined)
+      if (typeof body.model !== "string" || questions === undefined) {
         return reply(400, {
           error: { code: 400, message: "Invalid request parameters" },
         });
-      if (options.delayMs !== undefined)
+      }
+      if (options.delayMs !== undefined) {
         await new Promise((r) => setTimeout(r, options.delayMs));
-      if (options.refuse?.({ state: body.state, questions }) === true)
+      }
+      if (options.refuse?.({ state: body.state, questions }) === true) {
         return reply(400, {
           error: {
             code: 400,
             message: "Invalid request parameters (refused by the stand-in)",
           },
         });
+      }
       const inputTokens = Math.ceil(text.length / 1.8);
       reply(200, {
         answers: Object.fromEntries(

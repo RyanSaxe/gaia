@@ -50,13 +50,16 @@ describe("where the sheets letter areas' names", () => {
       .map((l) => l.area.path)
       .sort();
     expect(areas).not.toEqual([]);
-    for (const placed of sheets)
+    for (const placed of sheets) {
       expect(placed.places.map((p) => p.label.area.path).sort()).toEqual(areas);
+    }
     // When lots are so dense that no ground is clear of them, every name is still lettered, over the marks.
     const lots: LotPlace[] = [];
-    for (let x = -world.size / 2; x <= world.size / 2; x += 60)
-      for (let z = -world.size / 2; z <= world.size / 2; z += 60)
+    for (let x = -world.size / 2; x <= world.size / 2; x += 60) {
+      for (let z = -world.size / 2; z <= world.size / 2; z += 60) {
         lots.push({ x, z });
+      }
+    }
     const crowded = run(placeNames(landWith(lots), 800, measure));
     expect(crowded.places.map((p) => p.label.area.path).sort()).toEqual(areas);
   });
@@ -64,8 +67,9 @@ describe("where the sheets letter areas' names", () => {
   it("never lets one name cover another", () => {
     for (const placed of sheets) {
       const all = boxes(placed);
-      for (const [i, a] of all.entries())
+      for (const [i, a] of all.entries()) {
         expect(all.slice(i + 1).filter((b) => hits(a, b))).toEqual([]);
+      }
     }
   });
 });

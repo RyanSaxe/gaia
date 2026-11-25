@@ -40,8 +40,9 @@ export async function brandReady(): Promise<void> {
     new FontFace(G_FAMILY, `url(${G_FACE})`),
     new FontFace(NAME_FAMILY, `url(${NAME_FACE})`),
   ];
-  for (const face of await Promise.all(faces.map((f) => f.load())))
+  for (const face of await Promise.all(faces.map((f) => f.load()))) {
     document.fonts.add(face);
+  }
   const image = new Image();
   image.src = VIEW;
   await image.decode();
@@ -184,7 +185,7 @@ export function paintLockup(
   const pad = onPaper ? 0.5 : 0;
   const side = width / (1 + LOCKUP.gap + nameWidth + pad * 2);
   const [c, g] = canvasOf(width, side * (1 + pad * 2));
-  if (onPaper)
+  if (onPaper) {
     layGround(
       g,
       MAP_STYLE,
@@ -194,6 +195,7 @@ export function paintLockup(
       c.width,
       c.height,
     );
+  }
   const [x0, y0] = [side * pad, side * pad];
   g.drawImage(tile(side), x0, y0);
   writeName(

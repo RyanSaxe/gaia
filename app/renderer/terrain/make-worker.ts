@@ -60,9 +60,11 @@ function buffersOf(
   seen.add(x);
   if (ArrayBuffer.isView(x)) {
     if (x.buffer instanceof ArrayBuffer) found.add(x.buffer);
-  } else
-    for (const v of x instanceof Map ? x.values() : Object.values(x))
+  } else {
+    for (const v of x instanceof Map ? x.values() : Object.values(x)) {
       buffersOf(v, found, seen);
+    }
+  }
   return found;
 }
 

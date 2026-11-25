@@ -108,12 +108,14 @@ export function outlineOf(plant: Realized): Float32Array {
   }
   // Fill directions no vertex fell in from their neighbors.
   for (let pass = 0; pass < 2; pass++) {
-    for (let k = 0; k < 48; k++)
-      if (out[k] === 0)
+    for (let k = 0; k < 48; k++) {
+      if (out[k] === 0) {
         out[k] = Math.max(
           out[(k + 47) % 48] as number,
           out[(k + 1) % 48] as number,
         );
+      }
+    }
   }
   return out;
 }
@@ -232,10 +234,11 @@ export function createUnderstory(
   let copies: readonly { readonly key: string; readonly copy: number }[] = [];
   return {
     build(plants) {
-      if (built.length > 0)
+      if (built.length > 0) {
         throw new Error(
           "The understory builds a world's blueprints once, when it opens.",
         );
+      }
       built = GROUPS.map((g) => buildGroup(g, plants[g.id]));
     },
     farBuilds: () =>
@@ -312,8 +315,9 @@ export function createUnderstory(
           if (
             kept.has(key) ||
             !given.some((p) => p.rule === group.id && p.variant === variant)
-          )
+          ) {
             continue;
+          }
           const view = createCopies(plant(variant), light, [], far[variant]);
           plants[variant] = null;
           scene.add(view.object);

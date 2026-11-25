@@ -124,10 +124,11 @@ describe("a set's far forms in memory", () => {
     // A phone's trees bake at half the size, a quarter of the memory.
     expect(farSlotBytes(64, TURN.gone.end, 24)).toBeLessThanOrEqual(192 * MiB);
     // The coarsest level held draws a view no wider than a crown that is gone, so no card reads past it.
-    for (const frame of [32, 64, 128])
+    for (const frame of [32, 64, 128]) {
       expect(
         frame >> (farLevels(frame, TURN.gone.end) - 1),
       ).toBeLessThanOrEqual(TURN.gone.end);
+    }
   });
 });
 

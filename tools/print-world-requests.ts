@@ -26,10 +26,11 @@ const { values, positionals } = parseArgs({
   options: { graph: { type: "string" } },
 });
 const graphFile = resolve(values.graph ?? SNAPSHOT.graph);
-if (!existsSync(graphFile))
+if (!existsSync(graphFile)) {
   throw new Error(
     `No graph snapshot at ${graphFile}: write one with \`GAIA_DATA_DIR=dir pnpm graph-snapshot\`, or pass --graph.`,
   );
+}
 const graph = JSON.parse(readFileSync(graphFile, "utf8")) as CodeGraph;
 const facts = factsOf(graph);
 const planned = [
@@ -37,9 +38,9 @@ const planned = [
   ...planForms(facts, LOOKS, { graph }).requests,
 ];
 const out = positionals[0];
-if (out !== undefined)
+if (out !== undefined) {
   writeFileSync(out, `${JSON.stringify(planned, null, 2)}\n`);
-else
+} else {
   console.log(
     JSON.stringify(
       planned.map((p) => p.request),
@@ -47,6 +48,7 @@ else
       2,
     ),
   );
+}
 
 const env = cargoEnv();
 execFileSync("cargo", ["build", "-p", "gaia-engine", "--release", "--quiet"], {

@@ -14,9 +14,9 @@ free for any use, with no attribution required.
 
 | Library | By | Source | Licence | Instruments |
 | --- | --- | --- | --- | --- |
-| VSCO 2 Community Edition 1.1.0 | Versilian Studios | https://github.com/sgossner/VSCO-2-CE | CC0 1.0 | Clarinet, flute, oboe, bassoon, solo violin, the string section (violins, violas, cellos, double basses, held and pizzicato) |
-| Versilian Community Sample Library (VCSL) | Versilian Studios | https://github.com/sgossner/VCSL | CC0 1.0 | Concert harp, glockenspiel (soft mallets) |
-| Celesta, middle octave (sounds 420488, 420489, 420491, 420493, 420495, 420498) | Macsat-Rd | https://freesound.org/people/Macsat-Rd/packs/23781/ | CC0 1.0 | Celesta |
+| VSCO 2 Community Edition 1.1.0 | Versilian Studios | <https://github.com/sgossner/VSCO-2-CE> | CC0 1.0 | Clarinet, flute, oboe, bassoon, solo violin, the string section (violins, violas, cellos, double basses, held and pizzicato) |
+| Versilian Community Sample Library (VCSL) | Versilian Studios | <https://github.com/sgossner/VCSL> | CC0 1.0 | Concert harp, glockenspiel (soft mallets) |
+| Celesta, middle octave (sounds 420488, 420489, 420491, 420493, 420495, 420498) | Macsat-Rd | <https://freesound.org/people/Macsat-Rd/packs/23781/> | CC0 1.0 | Celesta |
 
 The instruments are played by [sfizz](https://github.com/sfztools/sfizz), the
 SFZ sample player (BSD 2-Clause). It is a tool, and none of its code is in the

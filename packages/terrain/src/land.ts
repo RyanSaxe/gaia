@@ -124,9 +124,11 @@ function gridOf(sites: readonly LandSite[]): Grid {
         for (let dj = -ring; dj <= ring; dj++) {
           for (let di = -ring; di <= ring; di++) {
             if (Math.max(Math.abs(di), Math.abs(dj)) !== ring) continue;
-            for (const k of bucket[(j + dj) * nx + (i + di)] ?? [])
-              if (i + di >= 0 && i + di < nx)
+            for (const k of bucket[(j + dj) * nx + (i + di)] ?? []) {
+              if (i + di >= 0 && i + di < nx) {
                 bestHi = Math.min(bestHi, hi(sites[k] as LandSite));
+              }
+            }
           }
         }
       }
@@ -136,8 +138,9 @@ function gridOf(sites: readonly LandSite[]): Grid {
         if (j + dj < 0 || j + dj >= nz) continue;
         for (let di = -reachOut; di <= reachOut; di++) {
           if (i + di < 0 || i + di >= nx) continue;
-          for (const k of bucket[(j + dj) * nx + (i + di)] as number[])
+          for (const k of bucket[(j + dj) * nx + (i + di)] as number[]) {
             near.push(k);
+          }
         }
       }
       for (const k of near) bestHi = Math.min(bestHi, hi(sites[k] as LandSite));
@@ -176,8 +179,9 @@ export function nearestSite(
     return best;
   }
   const c = j * g.nx + i;
-  for (let n = g.starts[c] as number; n < (g.starts[c + 1] as number); n++)
+  for (let n = g.starts[c] as number; n < (g.starts[c + 1] as number); n++) {
     visit(g.ids[n] as number);
+  }
   return best;
 }
 

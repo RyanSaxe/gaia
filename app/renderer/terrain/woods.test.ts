@@ -169,11 +169,12 @@ describe("a copy turning far", () => {
       return mesh.geometry.getAttribute("aMore").array[1] as number;
     };
     for (const setter of ["setVitality", "setVitalityAt"] as const) {
-      for (const before of [true, false])
+      for (const before of [true, false]) {
         expect(
           shownOnCard(setter, before),
           `${setter}, ${before ? "before" : "after"}`,
         ).toBeCloseTo(shownVitality(0.5), 6);
+      }
     }
   });
 });

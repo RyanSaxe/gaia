@@ -41,15 +41,19 @@ describe("the map table's layout", () => {
           expect(box[1]).toBeGreaterThan(l.say.y);
           expect(apart(box, logo)).toBe(true);
           expect(apart(box, words)).toBe(true);
-          for (const other of boxes.slice(i + 1))
+          for (const other of boxes.slice(i + 1)) {
             expect(apart(box, other)).toBe(true);
+          }
           expect(crosses(l.quill.nib, l.quill.tip, box)).toBe(false);
         }
         // Names side by side in a row never run into each other.
-        for (const a of l.cards)
-          for (const b of l.cards)
-            if (a !== b && Math.abs(a.y - b.y) < 1e-6)
+        for (const a of l.cards) {
+          for (const b of l.cards) {
+            if (a !== b && Math.abs(a.y - b.y) < 1e-6) {
               expect(Math.abs(a.x - b.x)).toBeGreaterThanOrEqual(a.nameWidth);
+            }
+          }
+        }
       });
     }
   }

@@ -176,8 +176,9 @@ export function healthColor(
     ) as [number, number, number];
   }
   let k = 1;
-  while (k < stops.length - 1 && v < (stops[k] as (typeof stops)[number])[0])
+  while (k < stops.length - 1 && v < (stops[k] as (typeof stops)[number])[0]) {
     k++;
+  }
   const [v0, c0, m0] = stops[k - 1] as (typeof stops)[number];
   const [v1, c1, m1] = stops[k] as (typeof stops)[number];
   const u = Math.max(0, Math.min(1, (v0 - v) / (v0 - v1)));

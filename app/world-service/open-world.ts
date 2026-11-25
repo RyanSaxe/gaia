@@ -75,8 +75,9 @@ export async function setSpendLimit(
   engine: EngineClient,
   usd: number,
 ): Promise<void> {
-  if (!Number.isFinite(usd) || usd < 0)
+  if (!Number.isFinite(usd) || usd < 0) {
     throw new Error(`Not a spend limit: ${usd}`);
+  }
   await engine.call("store.put", {
     project: APP_STORE,
     writes: [{ table: "settings", key: LIMIT_KEY, value: { usd } }],
@@ -247,10 +248,11 @@ export async function openWorld({
   const project = facts.projectId;
   const name = facts.repository.name;
   // A world is made of a codebase's files, so a folder with none has none to show.
-  if (facts.files.length === 0)
+  if (facts.files.length === 0) {
     throw new Error(
       `${name} has no files Gaia can read, so there is no world to make from it.`,
     );
+  }
   const land = landOf(facts, graph);
   progress({
     stage: "land",
@@ -289,8 +291,9 @@ export async function openWorld({
     healthSettled[path] = vitality;
   };
   const sendHealth = (): void => {
-    if (Object.keys(healthSettled).length > 0)
+    if (Object.keys(healthSettled).length > 0) {
       progress({ stage: "health", vitality: healthSettled });
+    }
     healthSettled = {};
   };
 
@@ -321,9 +324,11 @@ export async function openWorld({
   /** Look requests in flight at once, matched to how many the engine sends Jev at once. */
   let concurrency = 1;
   const status = await engine.call("jev.status", {});
-  if (!status.live)
+  if (!status.live) {
     unasked = "Jev is off: start Gaia with GAIA_JEV=live to judge it";
-  else if (!status.key) unasked = "set OPENROUTER_API_KEY before starting Gaia";
+  } else if (!status.key) {
+    unasked = "set OPENROUTER_API_KEY before starting Gaia";
+  }
   // Without Jev, a world opens only if every answer is stored. With no spend limit the understanding pass has no plan
   // yet, so it is planned now to count what is missing.
   if (unasked !== undefined) {
@@ -333,8 +338,9 @@ export async function openWorld({
         (n, p) => n + p.requests,
         0,
       );
-    if (missing.length + pending > 0)
+    if (missing.length + pending > 0) {
       throw new Error(`Gaia could not judge ${name}: ${unasked}.`);
+    }
   }
   // Jev is available. Estimate the cost when answers are missing, or when the understanding pass has no plan and will
   // find its requests as it goes.
@@ -394,10 +400,11 @@ export async function openWorld({
         limitUsd,
         endpoint: estimate.endpoint,
       }));
-    if (!ask)
+    if (!ask) {
       throw new Error(
         `Gaia did not judge ${name}: judging it costs about $${estimate.estimatedUsd.toFixed(3)}, over your $${limitUsd} limit, and you chose not to go ahead.`,
       );
+    }
   }
 
   // Jev's answers arrive in batches, and `keep` stores each batch in one `store.put`.
@@ -438,8 +445,9 @@ export async function openWorld({
       let p = area;
       p !== "";
       p = p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : ""
-    )
+    ) {
       if (regions.has(p)) return p;
+    }
     return "";
   };
   const regionsAnswered = new Set<string>();
@@ -550,11 +558,12 @@ export async function openWorld({
     for (;;) {
       const slice = await engine.call("understanding.next", { root });
       const failure = slice.failures[0];
-      if (failure !== undefined || slice.failed > 0)
+      if (failure !== undefined || slice.failed > 0) {
         throw new RequestFailed(
           `understanding ${failure?.unit ?? "part of the code"}`,
           failure?.error ?? `${plural(slice.failed, "request")} failed`,
         );
+      }
       // Reports the files and areas this slice read, so the wait can show which code Jev just covered. Then it sends
       // each file the slice finished, at the quality the finished world shows.
       const files = slice.settled.flatMap((id) =>
@@ -563,16 +572,22 @@ export async function openWorld({
       const areas = slice.settled.flatMap((id) =>
         id.startsWith("dir:") ? [id.slice(4)] : [],
       );
-      if (files.length > 0 || areas.length > 0)
+      if (files.length > 0 || areas.length > 0) {
         progress({ stage: "understood", files, areas });
-      for (const [path, quality] of Object.entries(slice.quality))
+      }
+      for (const [path, quality] of Object.entries(slice.quality)) {
         settleHealth(path, quality);
+      }
       sendHealth();
       understood += slice.sent;
       answered += slice.sent;
       total = Math.max(total, answered);
-      if (slice.left === 0 || (slice.sent === 0 && slice.settled.length === 0))
+      if (
+        slice.left === 0 ||
+        (slice.sent === 0 && slice.settled.length === 0)
+      ) {
         break;
+      }
       asking();
     }
     total = missing.length + understood;
@@ -686,7 +701,7 @@ export async function refreshWorld(
     if (v !== undefined && v !== was) vitality[id] = v;
   }
   const world = withVitality(shown.world, new Map(Object.entries(vitality)));
-  if (!sameLand(shown.world, next.world))
+  if (!sameLand(shown.world, next.world)) {
     return {
       update:
         Object.keys(vitality).length === 0
@@ -694,6 +709,7 @@ export async function refreshWorld(
           : { type: "world.vitality", vitality },
       shown: { ...shown, world },
     };
+  }
   const judged = Object.fromEntries(
     Object.entries(next.judged).filter(
       ([of, j]) => JSON.stringify(j) !== JSON.stringify(shown.judged[of]),

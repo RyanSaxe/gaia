@@ -58,8 +58,9 @@ async function renderWalk(
 ): Promise<AudioBuffer> {
   const first = moments[0];
   const last = moments.at(-1);
-  if (first === undefined || last === undefined)
+  if (first === undefined || last === undefined) {
     throw new Error("Nothing was recorded: call record(true) and walk first.");
+  }
   const seconds = last.t - first.t + 0.5;
   const ctx = new OfflineAudioContext({
     numberOfChannels: 2,
@@ -104,8 +105,11 @@ async function renderWalk(
 function wavBase64(b: AudioBuffer): string {
   const n = b.length;
   const view = new DataView(new ArrayBuffer(44 + n * 4));
-  const text = (at: number, s: string): void =>
-    [...s].forEach((c, i) => view.setUint8(at + i, c.charCodeAt(0)));
+  const text = (at: number, s: string): void => {
+    for (let i = 0; i < s.length; i++) {
+      view.setUint8(at + i, s.charCodeAt(i));
+    }
+  };
   text(0, "RIFF");
   view.setUint32(4, 36 + n * 4, true);
   text(8, "WAVEfmt ");
@@ -134,8 +138,9 @@ function wavBase64(b: AudioBuffer): string {
   }
   const bytes = new Uint8Array(view.buffer);
   let s = "";
-  for (let i = 0; i < bytes.length; i += 0x8000)
+  for (let i = 0; i < bytes.length; i += 0x8000) {
     s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
   return btoa(s);
 }
 
@@ -148,12 +153,13 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
   if (recording) {
     return {
       frame() {
-        if (keeping)
+        if (keeping) {
           moments.push({
             t: performance.now() / 1000,
             ear: world.earshot(),
             book: book(),
           });
+        }
       },
       hook: {
         /** Starts logging what the person hears each frame, clearing the log first, or stops. */
@@ -239,12 +245,13 @@ export function createSound(world: WorldHandle, book: () => BookState): Sound {
   const samples = new Float32Array(meter.fftSize);
   return {
     frame() {
-      if (listener !== null && ctx.state === "running")
+      if (listener !== null && ctx.state === "running") {
         listener.hear({
           t: ctx.currentTime,
           ear: world.earshot(),
           book: book(),
         });
+      }
     },
     hook: {
       /** The audio context's state: running, suspended until a touch, or closed. */

@@ -141,13 +141,14 @@ function addBox(
         [1, 1],
         [-1, 1],
       ] as const) {
-        for (let k = 0; k < 3; k++)
+        for (let k = 0; k < 3; k++) {
           out.pos.push(
             (c[k] as number) +
               (n[k] as number) * (half[i] as number) +
               (t1[k] as number) * u * h1 +
               (t2[k] as number) * v * h2,
           );
+        }
         out.nrm.push(...n);
         out.face.push(front ? 1 : 0);
         // On the front (+z) face, t1 is x and t2 is y.
@@ -160,9 +161,9 @@ function addBox(
           (az * bx - ax * bz) * (n[1] as number) +
           (ax * by - ay * bx) * (n[2] as number) >
         0;
-      if (facing)
+      if (facing) {
         out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      else out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+      } else out.idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
     }
   }
 }

@@ -516,8 +516,9 @@ function ribbon(stream: Terrain["streams"][number]): Ribbon {
     n - 1,
     (arrival[n - 1] as number) + RUN_ON / speed(n - 1),
   );
-  for (let k = 0; k + 1 < count; k++)
+  for (let k = 0; k + 1 < count; k++) {
     index.push(k * 2, k * 2 + 2, k * 2 + 1, k * 2 + 1, k * 2 + 2, k * 2 + 3);
+  }
   return { positions, flow, across, index };
 }
 
@@ -711,14 +712,16 @@ export function createWater(
   const group = new THREE.Group();
   const update = (next: Terrain): void => {
     terrain = next;
-    for (const child of [...group.children]) {
+    for (const child of group.children.slice()) {
       (child as THREE.Mesh).geometry.dispose();
       group.remove(child);
     }
-    for (const s of next.streams)
+    for (const s of next.streams) {
       group.add(new THREE.Mesh(streamGeometry(s), streamMaterial));
-    for (const p of next.ponds)
+    }
+    for (const p of next.ponds) {
       group.add(new THREE.Mesh(disc(p.x, p.z, p.reach, p.level), pondMaterial));
+    }
     for (const m of group.children) m.renderOrder = 2;
     level = Number.NaN;
   };
@@ -737,8 +740,9 @@ export function createWater(
       view.matrixWorldInverse,
     );
     frustum.setFromProjectionMatrix(viewProjection);
-    for (const m of group.children)
+    for (const m of group.children) {
       if (frustum.intersectsObject(m)) return true;
+    }
     return false;
   };
 
@@ -780,10 +784,12 @@ export function createWater(
       mirror.render(renderer, scene, view, level);
       mirrorCalls = renderer.info.render.calls;
       group.visible = water;
-      for (let i = 0; i < hide.length; i++)
+      for (let i = 0; i < hide.length; i++) {
         (hide[i] as THREE.Object3D).visible = hidden[i] ?? true;
-      for (let i = 0; i < show.length; i++)
+      }
+      for (let i = 0; i < show.length; i++) {
         (show[i] as THREE.Object3D).visible = shown[i] ?? false;
+      }
       return mirrorCalls;
     },
     wade(x, z, yaw, walked, dt) {

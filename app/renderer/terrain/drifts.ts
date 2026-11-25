@@ -454,7 +454,7 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
     return {
       points,
       uniforms,
-      slots: new Array<number | null>(CROWNS).fill(null),
+      slots: Array.from({ length: CROWNS }, (): number | null => null),
       full: [],
       spec,
       fillAt: null,
@@ -545,8 +545,9 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
       if (id !== null && c === undefined) {
         f.slots[s] = null;
         (of[s] as THREE.Vector4).x = 0;
-      } else if (c !== undefined)
+      } else if (c !== undefined) {
         (of[s] as THREE.Vector4).w = (f.full[c.region] ?? 0) * (1 - c.decline);
+      }
     });
     const held = new Set(f.slots);
     const waiting = mine
@@ -644,8 +645,9 @@ export function createDrifts(light: SceneLight, ground: GroundTexture): Drifts {
         f.uniforms.uPixels.value = focal;
         shine(f);
         if (FROM_TREES.has(form)) tend(f, near, eye.x, eye.z);
-        else if (world !== null && strayed(f, eye.x, eye.z))
+        else if (world !== null && strayed(f, eye.x, eye.z)) {
           fillAround(f, world, eye.x, eye.z);
+        }
       }
     },
   };

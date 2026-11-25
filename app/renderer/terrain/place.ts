@@ -212,7 +212,7 @@ export function landmarkBase(built: Pick<Built, "parts">): number {
   for (const part of built.parts) {
     for (let k = 0; k < part.positions.length; k += 3) {
       if ((part.channels.grow?.[k / 3] ?? 0) > 0) continue;
-      if ((part.positions[k + 1] as number) < 1)
+      if ((part.positions[k + 1] as number) < 1) {
         base = Math.max(
           base,
           Math.hypot(
@@ -220,6 +220,7 @@ export function landmarkBase(built: Pick<Built, "parts">): number {
             part.positions[k + 2] as number,
           ),
         );
+      }
     }
   }
   return base;
@@ -254,8 +255,9 @@ export function landmarkFeet(
       if (
         (part.channels.grow?.[v] ?? 0) > 0 ||
         (part.positions[v * 3 + 1] as number) >= 0.3
-      )
+      ) {
         continue;
+      }
       const id = part.piece[v * 2] as number;
       let points = pieces.get(id);
       if (points === undefined) pieces.set(id, (points = []));
@@ -275,11 +277,12 @@ export function landmarkFeet(
       const x = (x0 + x1) / 2;
       const z = (z0 + z1) / 2;
       let reach = 0;
-      for (let k = 0; k < points.length; k += 2)
+      for (let k = 0; k < points.length; k += 2) {
         reach = Math.max(
           reach,
           Math.hypot((points[k] as number) - x, (points[k + 1] as number) - z),
         );
+      }
       feet.push({ x, z, radius: reach + 0.2 });
     }
   }
@@ -479,8 +482,9 @@ function dryNear(t: Terrain, x: number, z: number): { x: number; z: number } {
       const a = (k / steps) * Math.PI * 2;
       if (
         !isWet(t, x + Math.cos(a) * r, z + Math.sin(a) * r, DRY_END.clearance)
-      )
+      ) {
         return { x: x + Math.cos(a) * r, z: z + Math.sin(a) * r };
+      }
     }
   }
   return { x, z };
@@ -552,8 +556,9 @@ function settleCode(
     toward: { x: number; z: number } | null,
   ): TrailEnd | null => {
     const home = homes.find((b) => b.id === id);
-    if (home !== undefined)
+    if (home !== undefined) {
       return { id, ...readingSpotOf(home.plan, home.site) };
+    }
     const k = ids.indexOf(id);
     const s = landmarks[k];
     if (s === undefined) {
@@ -672,8 +677,9 @@ export function placeWorld(t: Terrain, req: PlaceRequest): Placed {
       );
       if (bank === null) dry.push(b.name);
       else site = bank;
-    } else if (lot !== null && mine !== null && !mine(site.x, site.z))
+    } else if (lot !== null && mine !== null && !mine(site.x, site.z)) {
       offGround.push(lot.id);
+    }
     pads.push(levelPad(t, b.plan, site, b.beside));
     taken.push(site);
     sites[i] = site;

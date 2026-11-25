@@ -21,8 +21,9 @@ describe("the words Jev composes small things from", () => {
   const parts = new Map<string, AnyPrimitive>();
   for (const as of sizes) {
     const lib = COMPOSING.offered?.[as] ?? COMPOSING.lib;
-    for (const s of Object.values(COMPOSING[as].slots))
+    for (const s of Object.values(COMPOSING[as].slots)) {
       for (const p of lib.forRole(s.role)) parts.set(p.id, p);
+    }
   }
 
   it("describe a feel, and never name a kind of code", () => {

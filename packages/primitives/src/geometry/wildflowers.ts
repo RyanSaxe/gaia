@@ -150,8 +150,9 @@ function layout(
     const lz = Math.sin(a) * d * rz;
     const x = lx * Math.cos(turn) - lz * Math.sin(turn);
     const z = lx * Math.sin(turn) + lz * Math.cos(turn);
-    if (out.some((f) => Math.hypot(f.base[0] - x, f.base[2] - z) < gap))
+    if (out.some((f) => Math.hypot(f.base[0] - x, f.base[2] - z) < gap)) {
       continue;
+    }
     const fr = r.fork(`f${out.length}`);
     const height = p.height * s * fr.range(0.75, 1.12) * (1 - 0.3 * edge);
     const la = fr.next() * Math.PI * 2;
@@ -304,8 +305,9 @@ function emitDisc(
       ch,
     );
   }
-  for (let j = 0; j < 6; j++)
+  for (let j = 0; j < 6; j++) {
     out.triangle(hub, first + j, first + ((j + 1) % 6));
+  }
 }
 
 /** Many slim rays in the bloom swatch round a raised eye, like a daisy. */
@@ -381,8 +383,9 @@ function emitCup(
         ch,
       ),
     );
-    for (let j = 0; j < 3; j++)
+    for (let j = 0; j < 3; j++) {
       petals.triangle(base, ring[j] as number, ring[j + 1] as number);
+    }
   }
   emitDisc(
     eyes,
@@ -456,12 +459,13 @@ function emitBells(
         );
       }
     }
-    for (let j = 0; j < SIDES; j++)
+    for (let j = 0; j < SIDES; j++) {
       petals.triangle(
         top,
         (rings[0] as number) + ((j + 1) % SIDES),
         (rings[0] as number) + j,
       );
+    }
     for (let ring = 0; ring < rings.length - 1; ring++) {
       for (let j = 0; j < SIDES; j++) {
         const a = (rings[ring] as number) + j;
@@ -543,14 +547,16 @@ function emitSpike(
     };
     const shade = 0.6 + 0.3 * t;
     const first = petals.vertexCount;
-    for (const d of floret.dirs)
+    for (const d of floret.dirs) {
       petals.vertex(
         addScaled(c, d, rad * (light || d[1] === 0 ? 1 : 0.8)),
         normalize(add(d, normalize(out))),
         shade + 0.1 * d[1],
         ch,
       );
-    for (const [x, y, z] of floret.faces)
+    }
+    for (const [x, y, z] of floret.faces) {
       petals.triangle(first + x, first + y, first + z);
+    }
   }
 }

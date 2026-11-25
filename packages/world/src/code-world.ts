@@ -368,8 +368,9 @@ function directoriesOf(facts: CodeFacts, name: string): Map<string, Dir> {
     return dir;
   };
   ensure("");
-  for (const f of [...facts.files].sort(byPath))
+  for (const f of [...facts.files].sort(byPath)) {
     ensure(parentOf(f.path)).files.push(f);
+  }
   for (const d of dirs.values()) d.children.sort();
   return dirs;
 }
@@ -448,8 +449,9 @@ const SOURCE = new Set(["typescript", "javascript", "rust", "python", "go"]);
 /** Languages by lines, largest first. */
 function languagesOf(files: readonly FileFacts[]): string[] {
   const lines = new Map<string, number>();
-  for (const f of files)
+  for (const f of files) {
     lines.set(f.language, (lines.get(f.language) ?? 0) + f.lines);
+  }
   return [...lines]
     .filter(([l]) => SOURCE.has(l))
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
@@ -768,8 +770,9 @@ function regionFor(regions: ReadonlySet<string>, dir: string): string {
     let p: string | null = dir;
     p !== null;
     p = p === "" ? null : parentOf(p)
-  )
+  ) {
     if (regions.has(p)) return p;
+  }
   return "";
 }
 
@@ -844,8 +847,9 @@ export function planWorldRequests(
         },
       };
     }
-    if (Object.keys(questions).length > 0)
+    if (Object.keys(questions).length > 0) {
       ask("entity", e.path, { entity: entityWords(facts, e) }, questions);
+    }
   }
   return requests;
 }
@@ -978,10 +982,11 @@ export function planForms(
     target: string,
   ): JevQuestion | undefined => {
     const offered = formsFor(looks, ranks.get(id) ?? 0.5);
-    if (offered.length === 0)
+    if (offered.length === 0) {
       throw new Error(
         `No form is offered to ${id || "the repository's root"}: the forms' ranges must cover every rank.`,
       );
+    }
     if (offered.length === 1) {
       only[id] = offered[0] as string;
       return undefined;
@@ -1006,13 +1011,14 @@ export function planForms(
       questions[qid] = q;
       thingByQuestion[qid] = id;
     }
-    if (Object.keys(questions).length > 0)
+    if (Object.keys(questions).length > 0) {
       requests.push({
         about,
         target,
         request: { model: MODEL, state, questions },
         thingByQuestion,
       });
+    }
   };
   const defs = definitionsOf(facts, graph);
   for (const f of [...facts.files].sort(byPath)) {
@@ -1084,10 +1090,11 @@ const picked = (
   about: string,
 ): string => {
   const choice = pickOf(a[id]);
-  if (choice === undefined)
+  if (choice === undefined) {
     throw new Error(
       `Jev gave no choice for ${id} about ${about || "the repository's root"}.`,
     );
+  }
   return choice;
 };
 
@@ -1097,7 +1104,7 @@ async function inTurn<T, R>(
   concurrency: number,
   each: (item: T) => Promise<R>,
 ): Promise<R[]> {
-  const out: R[] = new Array(items.length);
+  const out: R[] = Array.from({ length: items.length });
   let next = 0;
   await Promise.all(
     Array.from(
@@ -1131,13 +1138,15 @@ export async function judgeWorld(
   planned.forEach((p, i) => {
     const a = answered[i] ?? {};
     if (p.about === "area") waters[p.target] = picked(a, "water", p.target);
-    for (const [id, answer] of Object.entries(a))
-      if (id.startsWith("trail:") && answer.type === "noul")
+    for (const [id, answer] of Object.entries(a)) {
+      if (id.startsWith("trail:") && answer.type === "noul") {
         trails.push({
           from: p.target,
           to: id.slice("trail:".length),
           want: answer.noul,
         });
+      }
+    }
   });
   // composeWorld fills in the sky, region lands, forms and trail routes after the understanding pass.
   return { lands: {}, things: {}, trails, waters };
@@ -1299,8 +1308,9 @@ export async function composeWorld(
     // `first` part is filled in.
     const look = form === undefined ? undefined : looks.form[form];
     const first = look?.first;
-    if (raisedAs(as) || look === undefined || first === undefined)
+    if (raisedAs(as) || look === undefined || first === undefined) {
       return { path: id, as, state, ...place };
+    }
     return {
       path: id,
       as,
@@ -1357,8 +1367,9 @@ export async function composeWorld(
         .then((blueprint) => (things[id] = { as, blueprint })),
     );
   };
-  for (const [id, t] of Object.entries(judged.things))
+  for (const [id, t] of Object.entries(judged.things)) {
     if (t.blueprint === undefined) compose(id, t.as);
+  }
   const raise = (id: string, form: string): void => {
     const as = looks.form[form]?.composes;
     if (as === undefined || judged.things[id] !== undefined) return;
@@ -1432,17 +1443,20 @@ function landTree(
     const d = dirs.get(path) as Dir;
     const own: LandNode[] = [];
     const lot = lots.get(path);
-    if (lot !== undefined)
+    if (lot !== undefined) {
       own.push({ id: `lot:${path}`, ground: lot, children: [], center: true });
-    for (const f of d.files)
+    }
+    for (const f of d.files) {
       own.push({
         id: `file:${f.path}`,
         ground: groundOfFile(f, defs.get(f.path)?.length ?? 0),
         children: [],
       });
+    }
     const subs = d.children.map(node);
-    if (subs.length === 0)
+    if (subs.length === 0) {
       return { id: `dir:${path}`, ground: 0, children: own };
+    }
     const children =
       own.length === 0
         ? subs
@@ -1739,8 +1753,9 @@ function layOut(
     if (
       (e.kind !== "calls" && e.kind !== "references") ||
       !e.to.startsWith("def:")
-    )
+    ) {
       continue;
+    }
     const set = dependentsOf.get(e.to) ?? new Set<string>();
     set.add(e.from);
     dependentsOf.set(e.to, set);
@@ -1838,13 +1853,14 @@ function layOut(
     const [kind, path] = leaf.id.split(/:(.*)/s) as [string, string];
     const area = kind === "lot" ? path : parentOf(path);
     const cell = cells.length;
-    for (const site of leaf.sites)
+    for (const site of leaf.sites) {
       cells.push({
         area,
         file: kind === "file" ? path : null,
         x: site.x,
         z: site.z,
       });
+    }
     const ri = regionOfDir(area);
     (regionSites[ri] as LandSite[]).push(...leaf.sites);
     const m = regionMass[ri] as { ground: number; x: number; z: number };
@@ -1869,7 +1885,7 @@ function layOut(
       lots.push({ x: leaf.x, z: leaf.z });
       const vitality = folderQuality(path) ?? judged.quality?.[path] ?? 1;
       const t = composed(path);
-      if (t !== undefined)
+      if (t !== undefined) {
         things.push({
           path,
           name: e.name,
@@ -1881,6 +1897,7 @@ function layOut(
           lot: LAYOUT.lotReach[t.as],
           vitality,
         });
+      }
       addNaturalThing(
         "entity",
         path,
@@ -1920,7 +1937,7 @@ function layOut(
       exports: f.symbols.filter((x) => x.exported).length,
       dependents: f.importedBy,
     };
-    if (own !== undefined)
+    if (own !== undefined) {
       things.push({
         path,
         of: "file",
@@ -1935,6 +1952,7 @@ function layOut(
         facts: fileFacts,
         vitality,
       });
+    }
     addNaturalThing(
       "file",
       path,
@@ -1956,7 +1974,7 @@ function layOut(
         exports: def.exported ? 1 : 0,
         dependents: [...(dependentsOf.get(`def:${def.id}`) ?? [])].sort(),
       };
-      if (t !== undefined)
+      if (t !== undefined) {
         things.push({
           path: def.id,
           of: "definition",
@@ -1971,6 +1989,7 @@ function layOut(
           facts: defFacts,
           vitality: mine,
         });
+      }
       symbols.push({
         id: def.id,
         file: path,
@@ -2052,8 +2071,9 @@ function layOut(
     for (const to of f.imports) {
       const o = owner(to);
       const key = `${from}\n${o}`;
-      if (o === undefined || o === from || counted.has(`${key}\n${f.path}`))
+      if (o === undefined || o === from || counted.has(`${key}\n${f.path}`)) {
         continue;
+      }
       counted.add(`${key}\n${f.path}`);
       weights.set(key, (weights.get(key) ?? 0) + 1);
     }

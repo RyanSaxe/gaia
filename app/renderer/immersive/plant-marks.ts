@@ -643,12 +643,13 @@ function thicketFrame(
   // Skirt lobes bring the leaves down to the soil around the stems, except on a vase or scrub habit, whose stems show bare.
   const skirt = form.base < 0.2 ? 4 : 0;
   const r = Math.max(0.12, Math.min(R, H) * 0.4);
-  for (let k = 0; k < skirt; k++)
+  for (let k = 0; k < skirt; k++) {
     lobes.push([
       (k / (skirt - 1) - 0.5) * 2 * (R * form.wide - r),
       r * 0.95,
       r * (0.9 + noise(seed, k + 90) * 0.25),
     ]);
+  }
   return { wood: stems, lobes, tiers: [], trunk: false };
 }
 
@@ -679,12 +680,13 @@ function brambleFrame(
     for (let i = 0; i + 1 < pts.length; i++) {
       const [ax, ah] = pts[i] as Pt;
       const [bx, bh] = pts[i + 1] as Pt;
-      for (const u of i === 0 ? [0.55, 1] : [0.5, 1])
+      for (const u of i === 0 ? [0.55, 1] : [0.5, 1]) {
         lobes.push([
           ax + (bx - ax) * u,
           Math.max(r * 0.8, ah + (bh - ah) * u),
           r * (0.85 + noise(seed, k * 9 + i) * 0.3),
         ]);
+      }
     }
   }
   return { wood: canes, lobes, tiers: [], trunk: false };
@@ -1167,10 +1169,11 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       const lobes = kept(frame.lobes, b.hues.g, 0.66 + 0.4 * p.fullness);
       const leaf = b.hues.of("leaf", "#6f9a48");
       if (p.leaves === "feathery") spiky(b, lobes, mix(leaf, "#fff4d6", 0.08));
-      else
+      else {
         crown(b, lobes, p.leaves === "glossy" ? mix(leaf, SHADE, 0.15) : leaf, {
           light: p.leaves === "glossy" ? 0.45 : 0.3,
         });
+      }
       return lobes;
     },
   }),
@@ -1179,7 +1182,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       const show = b.hues.g.leaf * (0.35 + 0.9 * p.count);
       if (show < 0.05) return;
       const r = Math.max(0.06, Math.min(0.22, (lobes[0]?.[2] ?? 1) * 0.1));
-      if (p.form === "berries")
+      if (p.form === "berries") {
         dots(
           b,
           lobes,
@@ -1189,7 +1192,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
           b.seed + 1,
           "#000000",
         );
-      else if (p.form === "pods")
+      } else if (p.form === "pods") {
         dots(
           b,
           lobes,
@@ -1198,7 +1201,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
           mix(b.hues.of("bloom", "#f2b84b"), "#fff6dc", 0.2),
           b.seed + 2,
         );
-      else
+      } else {
         dots(
           b,
           lobes,
@@ -1207,6 +1210,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
           b.hues.of("bloom", "#f4f1e6"),
           b.seed + 3,
         );
+      }
     },
   }),
   "fruit@1": ornament(fruitParams, {
@@ -1224,13 +1228,14 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       );
       if (p.fruit === "pears" && b.detail > 0.3) {
         // A pear's narrow neck above its round body.
-        for (const [x, y] of at)
+        for (const [x, y] of at) {
           dot(
             b,
             [x, y - r * b.pen.s * 0.9],
             r * 0.6,
             b.hues.of("fruit", "#dcc24e"),
           );
+        }
       }
     },
   }),
@@ -1358,13 +1363,14 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       if (b.detail > 0.1 && p.layering !== "massive") {
         ctx.beginPath();
         if (p.layering === "layered") {
-          for (const u of [0.35, 0.65])
+          for (const u of [0.35, 0.65]) {
             front.forEach(([fx, fy], i) => {
               const gy = (b.pen.at(X(i), -d, 0) as Pt)[1];
               const y = fy + (gy - fy) * u;
               if (i === 0) ctx.moveTo(fx, y);
               else ctx.lineTo(fx, y);
             });
+          }
         } else {
           for (const i of [2, 4, 7]) {
             const [fx, fy] = front[i] as Pt;
@@ -1475,7 +1481,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
       if (amount < 0.05) return;
       for (const [dx, h, r] of tops) {
         if (p.growth === "lichen") {
-          for (let i = 0; i < 4; i++)
+          for (let i = 0; i < 4; i++) {
             dot(
               b,
               up(b, [
@@ -1485,6 +1491,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
               r * 0.12 * amount + 0.03,
               mix(color, "#e8e4c8", 0.55),
             );
+          }
           continue;
         }
         // Moss caps the stone's top, larger as `amount` rises.
@@ -1524,8 +1531,9 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
         ] as Pt[];
         for (const [px, py] of cup) b.pen.reach(px, py);
         wash(b.pen, cup, b.hues.of("bloom", "#d2553a"), R * 0.5);
-        if (b.detail > 0.4)
+        if (b.detail > 0.4) {
           dot(b, [x, y], r * 0.3, b.hues.of("eye", "#3a2a20"));
+        }
       }),
   }),
   "bells@1": drift(driftParams, {
@@ -1549,7 +1557,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
         ctx.lineWidth = Math.max(0.5, b.pen.line * 0.5);
         ctx.strokeStyle = rgba(b.hues.of("stem", "#4f8a48"), 0.8);
         ctx.stroke();
-        for (const u of [0.45, 0.75, 1])
+        for (const u of [0.45, 0.75, 1]) {
           dot(
             b,
             [
@@ -1559,6 +1567,7 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
             r * 0.75,
             b.hues.of("bloom", "#8088dc"),
           );
+        }
       }),
   }),
   "spikes@1": drift(driftParams, {
@@ -1672,13 +1681,14 @@ export const PLANT_INKS: Readonly<Record<string, PlantInk>> = {
         for (const [px, py] of capPts) b.pen.reach(px, py);
         wash(b.pen, capPts, cap);
         ink(b.pen, capPts, true, 0.8);
-        if (b.detail > 0.4)
+        if (b.detail > 0.4) {
           dot(
             b,
             [top[0] - R * 0.25, top[1] - H2 * 0.5],
             h * 0.06,
             b.hues.of("spot", cap),
           );
+        }
       });
     },
   }),
@@ -1694,11 +1704,12 @@ function slotOf<R extends PlantInk["role"]>(
 ): { ink: Extract<PlantInk, { role: R }>; p: Values } | undefined {
   for (const slot of Object.values(plant.blueprint.slots)) {
     const entry = PLANT_INKS[slot.use];
-    if (entry?.role === role)
+    if (entry?.role === role) {
       return {
         ink: entry as Extract<PlantInk, { role: R }>,
         p: valuesOf(slot.use, slot.params),
       };
+    }
   }
   return undefined;
 }
@@ -1765,8 +1776,9 @@ export function drawPlant(
     const crownSlot = slotOf(plant, "Foliage");
     const lobes = crownSlot?.ink.draw(b, frame, crownSlot.p, size) ?? [];
     const bloom = slotOf(plant, "Ornament");
-    if (bloom !== undefined && lobes.length > 0)
+    if (bloom !== undefined && lobes.length > 0) {
       bloom.ink.draw(b, lobes, bloom.p);
+    }
   } else if (rockSlot !== undefined) {
     castShadow(
       pen,

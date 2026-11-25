@@ -406,17 +406,19 @@ export function createMinimap(
     if (area === null) return;
     const next = names[1 - current] as HTMLElement;
     const all = places();
-    if (tails?.of !== all)
+    if (tails?.of !== all) {
       tails = {
         of: all,
         above: nameTails(
           all.areas.filter((a) => a.depth > 0).map((a) => a.path),
         ),
       };
+    }
     const above = tails.above.get(area.path) ?? "";
     next.innerHTML = `${above === "" ? "" : `<span class="minimap-above"></span>`}<span class="minimap-area"></span>`;
-    if (above !== "")
+    if (above !== "") {
       (next.querySelector(".minimap-above") as HTMLElement).textContent = above;
+    }
     const label = next.querySelector(".minimap-area") as HTMLElement;
     label.textContent = area.name;
     label.style.fontSize = `${fitted(area.name.toUpperCase()).toFixed(1)}px`;
@@ -436,10 +438,11 @@ export function createMinimap(
         Math.max(Math.abs(x - anchor.x), Math.abs(z - anchor.z)) * SCALE;
       if (!(off < SLACK * 0.85)) redraw();
       else {
-        if (off > SLACK * 0.45 && idle === 0)
+        if (off > SLACK * 0.45 && idle === 0) {
           idle = window.requestIdleCallback(() => ((idle = 0), redraw()), {
             timeout: 2000,
           });
+        }
         place();
       }
       const lettered = namer.next(at.area, dt);

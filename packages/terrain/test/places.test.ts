@@ -69,8 +69,9 @@ describe("where a person is", () => {
       [0, -140],
       [120, 120],
       [900, 0],
-    ] as const)
+    ] as const) {
       expect(placeAt(world, x, z)).toEqual({ area: WILD_AREA, file: null });
+    }
     // Each area's outline includes its subdirectories, and each patch's outline is its own cell.
     const lines = outlinesOf(world, 4);
     const ring = (path: string, list: typeof lines.areas) =>
@@ -88,13 +89,15 @@ describe("whose ground a point is, and how alive it is", () => {
     // Cells every 16 m, as a world from code lays them: a patch at vitality 1 to the west, one at 0.1 to the east, and one at 0.45 inside the west.
     const size = 300;
     const sites: OwnedSite[] = [];
-    for (let x = -144; x <= 144; x += 16)
-      for (let z = -144; z <= 144; z += 16)
+    for (let x = -144; x <= 144; x += 16) {
+      for (let z = -144; z <= 144; z += 16) {
         sites.push({
           x,
           z,
           owner: Math.hypot(x + 72, z) < 20 ? 2 : x < 0 ? 0 : 1,
         });
+      }
+    }
     const vitality = [1, 0.1, 0.45];
     const own = ownershipOf(sites, { size }, size + 80);
     const values = vitalityOver(own, vitality);

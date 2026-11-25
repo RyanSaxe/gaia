@@ -29,12 +29,17 @@ const days: DaySpec[] = (() => {
   const f = daylight.params;
   const choices = (c: ChoiceField): string[] => Object.keys(c.options);
   const out: DaySpec[] = [];
-  for (const path of PATHS)
-    for (const warmth of choices(f.warmth as ChoiceField))
-      for (const brush of choices(f.brush as ChoiceField))
-        for (const moon of choices(f.moon as ChoiceField))
-          for (const stars of ends(f.stars as ScaleField))
+  for (const path of PATHS) {
+    for (const warmth of choices(f.warmth as ChoiceField)) {
+      for (const brush of choices(f.brush as ChoiceField)) {
+        for (const moon of choices(f.moon as ChoiceField)) {
+          for (const stars of ends(f.stars as ScaleField)) {
             out.push(build({ path, warmth, brush, moon, stars }));
+          }
+        }
+      }
+    }
+  }
   return out;
 })();
 

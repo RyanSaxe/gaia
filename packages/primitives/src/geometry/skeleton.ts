@@ -167,8 +167,9 @@ export function growBranching(
       here = end;
     }
     if (!willSplit) {
-      for (let c = chain; c >= 0; c = chainParent[c] ?? -1)
+      for (let c = chain; c >= 0; c = chainParent[c] ?? -1) {
         chainTips[c] = (chainTips[c] ?? 0) + 1;
+      }
       return;
     }
     split(r, here, heading, len, depth, prev, chain);
@@ -202,12 +203,13 @@ export function growBranching(
       const pull = habit.arch > 0 && depth >= 1 ? 0 : habit.tropism;
       childDir = normalize(addScaled(childDir, UP, pull * 0.6));
       // Weeping limbs never turn back upward once they arch over.
-      if (habit.arch > 0 && depth >= 1)
+      if (habit.arch > 0 && depth >= 1) {
         childDir = normalize([
           childDir[0],
           Math.min(childDir[1], heading[1] * 0.6 + 0.1),
           childDir[2],
         ]);
+      }
       const childLen =
         len * habit.ratio * (isLeader ? 1.05 : cr.range(0.82, 1.08));
       grow(cr, at, childDir, childLen, depth + 1, prev, chain);

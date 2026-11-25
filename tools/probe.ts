@@ -97,17 +97,21 @@ const { values, positionals } = parseArgs({
   },
 });
 const asked = positionals.length === 0 ? [...MEASURES] : positionals;
-for (const m of asked)
-  if (!(MEASURES as readonly string[]).includes(m))
+for (const m of asked) {
+  if (!(MEASURES as readonly string[]).includes(m)) {
     throw new Error(
       `No measure named ${m}; choose from ${MEASURES.join(", ")}.`,
     );
+  }
+}
 const measures = new Set(asked as Measure[]);
-for (const w of values.world ?? [])
-  if (!(w in SPOTS))
+for (const w of values.world ?? []) {
+  if (!(w in SPOTS)) {
     throw new Error(
       `No world named ${w}; choose from ${Object.keys(SPOTS).join(", ")}.`,
     );
+  }
+}
 const dpr = Number(values.dpr);
 
 /** One page load: the world to open, then each call's JavaScript, run in order with `T` as `__lab.terrain`. */
@@ -139,24 +143,27 @@ for (const [world, preset] of Object.entries(SPOTS)) {
   const spots = values.spot ?? preset;
   const calls: Call[] = [{ key: "open", js: OPEN }];
   for (const spot of spots) {
-    if (measures.has("drawn"))
+    if (measures.has("drawn")) {
       calls.push({
         key: `drawn ${spot}`,
         js: `(${go(spot)}, ${settle}, { ms: ${bench}, drawn: T.drawn(), woods: T.scale(), understory: T.understoryDrawn() })`,
       });
-    if (measures.has("steps"))
+    }
+    if (measures.has("steps")) {
       calls.push({
         key: `steps ${spot}`,
         js: `(${go(spot)}, ${settle}, T.steps(${WALK.meters}, ${WALK.step}, ${WALK.at}))`,
       });
+    }
   }
   if (measures.has("hitch")) {
-    for (let w = 0; w < HITCH_WINDOWS; w++)
+    for (let w = 0; w < HITCH_WINDOWS; w++) {
       calls.push({
         key: `hitch ${w}`,
         shown: true,
         js: `(${w === 0 ? `${go("valley")}, await __lab.frames(60), ` : ""}await T.wander(10), __lab.smoothness())`,
       });
+    }
   }
   if (calls.length > 1) jobs.push({ world, calls });
 }
@@ -309,14 +316,16 @@ const probed =
       })
     : null;
 rmSync(scratch, { recursive: true, force: true });
-if (probed === null)
+if (probed === null) {
   throw new Error(`Electron exited with ${run.status ?? run.signal}`);
+}
 const { results } = probed;
-if (values.json !== undefined)
+if (values.json !== undefined) {
   writeFileSync(
     values.json,
     JSON.stringify({ dpr, load: [load, loadavg()[0]], results }, null, 1),
   );
+}
 
 // ---------- the report ----------
 
@@ -389,18 +398,20 @@ for (const [world, calls] of Object.entries(results)) {
           `    ${k.padEnd(12)} ${m(at("view").triangles)} / ${m(at("mirror").triangles)} / ${m(at("shadow").triangles)}   calls ${at("view").calls} / ${at("mirror").calls} / ${at("shadow").calls}`,
         );
       }
-      if (woods !== undefined)
+      if (woods !== undefined) {
         line(
           `    trees in view: ${woods.treesDrawn - woods.treesInBand} full, ${woods.treesInBand} in the band, ${woods.treesFar} far; turning far at ${woods.swapPx} px`,
         );
+      }
       for (const [set, c] of [
         ["trees", woods?.treeCards],
         ["understory", woods?.bushCards],
       ] as const) {
-        if (c !== undefined)
+        if (c !== undefined) {
           line(
             `    far ${set}: ${c.held} of ${c.forms} forms in ${c.slots} slots (${c.mb} MB); ${c.carded} of ${c.farCopies} far copies as cards; ${c.read} read, ${c.baked} baked`,
           );
+        }
       }
       if (understory !== undefined) {
         const kinds = Object.entries(understory).sort(

@@ -114,12 +114,11 @@ impl Snapshot {
                 .filter(|(c, _)| *c == at.commit)
                 .map(|(_, t)| t.clone())
         };
-        let texts = match texts_cache().lock().ok().and_then(|c| cached(&c)) {
-            Some(t) => t,
-            None => {
-                self.files();
-                texts_cache().lock().ok().and_then(|c| cached(&c))?
-            }
+        let texts = if let Some(t) = texts_cache().lock().ok().and_then(|c| cached(&c)) {
+            t
+        } else {
+            self.files();
+            texts_cache().lock().ok().and_then(|c| cached(&c))?
         };
         texts.get(path).cloned().flatten()
     }
@@ -199,11 +198,11 @@ impl At {
         else {
             return Vec::new();
         };
-        let ids: String = self
-            .blobs
-            .iter()
-            .map(|(_, id, _)| format!("{id}\n"))
-            .collect();
+        let mut ids = String::new();
+        for (_, id, _) in &self.blobs {
+            ids.push_str(id);
+            ids.push('\n');
+        }
         let mut stdin = child.stdin.take();
         let writer = std::thread::spawn(move || {
             if let Some(s) = stdin.as_mut() {
@@ -230,7 +229,7 @@ impl At {
                     break;
                 }
                 bytes.pop();
-                out.push(walked(path.clone(), bytes));
+                out.push(walked(path.clone(), &bytes));
             }
         }
         let _ = writer.join();
@@ -240,13 +239,13 @@ impl At {
     }
 }
 
-fn walked(path: String, bytes: Vec<u8>) -> Walked {
+fn walked(path: String, bytes: &[u8]) -> Walked {
     let binary = bytes.iter().take(8000).any(|b| *b == 0);
     Walked {
         path,
         bytes: bytes.len() as u64,
-        hash: content_hash(&bytes),
-        text: (!binary).then(|| String::from_utf8_lossy(&bytes).into_owned()),
+        hash: content_hash(bytes),
+        text: (!binary).then(|| String::from_utf8_lossy(bytes).into_owned()),
     }
 }
 
@@ -310,7 +309,7 @@ fn disk(root: &Path) -> Vec<Walked> {
         let Ok(bytes) = std::fs::read(entry.path()) else {
             continue;
         };
-        out.push(walked(path, bytes));
+        out.push(walked(path, &bytes));
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
     out

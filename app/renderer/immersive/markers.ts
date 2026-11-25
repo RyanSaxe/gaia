@@ -442,9 +442,9 @@ function crossingsOf(
       last !== undefined &&
       last.area.path === area.path &&
       last.area.depth === area.depth
-    )
+    ) {
       last.end = i;
-    else runs.push({ area, start: i, end: i });
+    } else runs.push({ area, start: i, end: i });
   }
   // A short run is a wobble along a border, so it merges into the run before it.
   const kept: typeof runs = [];
@@ -454,16 +454,17 @@ function crossingsOf(
       last !== undefined &&
       (r.end - r.start < MIN_RUN ||
         (last.area.path === r.area.path && last.area.depth === r.area.depth))
-    )
+    ) {
       last.end = r.end;
-    else kept.push({ ...r });
+    } else kept.push({ ...r });
   }
   const out: { i: number; from: PlaceArea; to: PlaceArea }[] = [];
   for (let k = 1; k < kept.length; k++) {
     const a = kept[k - 1] as (typeof kept)[number];
     const b = kept[k] as (typeof kept)[number];
-    if (a.area.path !== b.area.path && a.area.depth >= 0 && b.area.depth >= 0)
+    if (a.area.path !== b.area.path && a.area.depth >= 0 && b.area.depth >= 0) {
       out.push({ i: b.start, from: a.area, to: b.area });
+    }
   }
   return out;
 }
@@ -547,8 +548,9 @@ export function createMarkers(light: SceneLight): Markers {
                 [f.from.path, f.to.path].sort().join("|") === pair &&
                 Math.hypot(f.x - x, f.z - z) < SPACING,
             )
-          )
+          ) {
             continue;
+          }
           const off = trail.style.width / 2 + 0.9;
           // Skips a crossing whose post or stone would stand in water or near a footbridge.
           const dry = (sx: number, sz: number): boolean =>
@@ -561,8 +563,9 @@ export function createMarkers(light: SceneLight): Markers {
           if (
             !dry(x + nx * off, z + nz * off) ||
             !dry(x - nx * off, z - nz * off)
-          )
+          ) {
             continue;
+          }
           found.push({
             x,
             z,
@@ -777,8 +780,9 @@ export function createMarkers(light: SceneLight): Markers {
       });
       armAtlas.texture.needsUpdate = true;
       stoneAtlas.texture.needsUpdate = true;
-      for (const m of [arms, posts, stones])
+      for (const m of [arms, posts, stones]) {
         m.instanceMatrix.needsUpdate = true;
+      }
       return { capsules, solids };
     },
     vitality(of) {
@@ -797,8 +801,9 @@ export function createMarkers(light: SceneLight): Markers {
         stoneMark?.setX(i, v);
         postMark?.setX(i, v);
       });
-      for (const a of [armMark, stoneMark, postMark])
+      for (const a of [armMark, stoneMark, postMark]) {
         if (a !== undefined) a.needsUpdate = true;
+      }
     },
     crossings: () => placed,
   };

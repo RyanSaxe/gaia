@@ -91,12 +91,14 @@ function prominentSpot(
         within !== null
           ? Math.hypot(x - within.x, z - within.z) > within.radius
           : t.region[iz * l.n + ix] !== region
-      )
+      ) {
         continue;
+      }
       if (own !== null && !own(x, z)) continue;
       if (!withinLand(t.spec, x, z, LANDMARK_SITE.margin + radius)) continue;
-      if (avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius))
+      if (avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius)) {
         continue;
+      }
       let steep = slopeAt(l, x, z);
       for (let k = 0; k < 8 && steep <= LANDMARK_SITE.maxSlope; k++) {
         const a = (k / 8) * Math.PI * 2;
@@ -153,7 +155,7 @@ export function findLandmarkSite(
         { ...within, radius: r },
         own,
       );
-      if (mine !== null)
+      if (mine !== null) {
         return {
           x: mine.x,
           z: mine.z,
@@ -161,10 +163,11 @@ export function findLandmarkSite(
           radius,
           region,
         };
+      }
     }
   }
   const best = prominentSpot(t, region, radius, avoid, within, null);
-  if (best !== null)
+  if (best !== null) {
     return {
       x: best.x,
       z: best.z,
@@ -172,16 +175,18 @@ export function findLandmarkSite(
       radius,
       region,
     };
+  }
   if (within === null) return null;
   // With no such spot on the lot, use the lot's center unless something already occupies it. Then retry on the lot
   // widened 6 m at a time, and at last take the free ground nearest the center, however steep or near the rim.
   const taken = (x: number, z: number): boolean =>
     avoid.some((o) => Math.hypot(o.x - x, o.z - z) < o.radius + radius);
-  if (taken(within.x, within.z) && within.radius < 60)
+  if (taken(within.x, within.z) && within.radius < 60) {
     return findLandmarkSite(t, region, radius, avoid, {
       ...within,
       radius: within.radius + 6,
     });
+  }
   let at = { x: within.x, z: within.z };
   if (taken(at.x, at.z)) {
     let near = Infinity;
@@ -197,8 +202,9 @@ export function findLandmarkSite(
           d > within.radius ||
           !withinLand(t.spec, x, z, radius) ||
           taken(x, z)
-        )
+        ) {
           continue;
+        }
         near = d;
         at = { x, z };
       }

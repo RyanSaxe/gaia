@@ -401,7 +401,7 @@ function* paintPaper(
   const patches: Paper["patches"][number][] = [];
   for (const [k, o] of traced.patches.entries()) {
     const p = patchOf.get(o.path);
-    if (p !== undefined)
+    if (p !== undefined) {
       patches.push({
         path: meterPath(o.rings.map(easeRing)),
         x: p.x,
@@ -410,6 +410,7 @@ function* paintPaper(
         name: p.name,
         area: p.area,
       });
+    }
     if (k % 60 === 59) yield;
   }
   yield;
@@ -490,7 +491,7 @@ export function shadeSlope(
   c: number,
 ): void {
   let tint = tints.get(style);
-  if (tint === undefined)
+  if (tint === undefined) {
     tints.set(
       style,
       (tint = [
@@ -498,6 +499,7 @@ export function shadeSlope(
         mixRgb(style.light, style.light, 0),
       ]),
     );
+  }
   const lit = (gx + gz) * style.relief;
   const [[sr, sg, sb], [lr, lg, lb]] = tint;
   shade.data.set(
@@ -591,8 +593,9 @@ export function* contoursOf(
     )) {
       const pts = simplified(line.map(m), 0.6);
       contour.moveTo(pts[0] as number, pts[1] as number);
-      for (let q = 2; q < pts.length; q += 2)
+      for (let q = 2; q < pts.length; q += 2) {
         contour.lineTo(pts[q] as number, pts[q + 1] as number);
+      }
     }
     contours.push({ path: contour, index });
     yield;
@@ -656,8 +659,9 @@ export function* paintRelief(
   }
   layShade(ctx, shadeImg, "multiply", style.shadowAlpha, style, side);
   yield;
-  if (style.lightAlpha > 0)
+  if (style.lightAlpha > 0) {
     layShade(ctx, lightImg, "screen", style.lightAlpha, style, side);
+  }
   yield;
 
   // Contours stop `RIM.held` meters inside the land's edge. Past that the heights are blended toward the rim, and
@@ -828,8 +832,9 @@ function whenIdle(step: (budget: number) => boolean, least = 0): () => void {
       : window.setTimeout(cb, 16);
   const run = (deadline?: IdleDeadline): void => {
     if (stopped) return;
-    if (!step(Math.max(least, deadline?.timeRemaining() ?? 4)))
+    if (!step(Math.max(least, deadline?.timeRemaining() ?? 4))) {
       handle = idle(run);
+    }
   };
   handle = idle(run);
   return () => {
@@ -1001,14 +1006,16 @@ export function riverStretches<S extends RiverStation>(
   for (let k = 1; k <= stations.length; k++) {
     const width = (s: number): number =>
       2 * (stations[s] as (typeof stations)[number]).halfWidth * zoom;
-    if (k < stations.length && Math.abs(width(k) - width(from)) < STRETCH_PX)
+    if (k < stations.length && Math.abs(width(k) - width(from)) < STRETCH_PX) {
       continue;
+    }
     const part = stations.slice(from, Math.min(stations.length, k + 1));
-    if (part.length > 1)
+    if (part.length > 1) {
       stretches.push({
         stations: part,
         width: Math.max(...part.map((q) => 2 * q.halfWidth * zoom)),
       });
+    }
     from = k;
   }
   return stretches;
@@ -1146,8 +1153,9 @@ export function* drawingPlants(
         y - t.build.height * s * 0.5,
         Math.max(t.build.height, t.build.radius * 2) * s,
       )
-    )
+    ) {
       marks.push({ x, y, s, plant: t, alpha: 1 });
+    }
   }
   for (const u of baked.understory) {
     const s = zoom * u.scale;
@@ -1155,7 +1163,7 @@ export function* drawingPlants(
     if (span < UNDERSTORY_SHOWS[0]) continue;
     const x = sx(u.x);
     const y = sy(u.z);
-    if (visible(x, y, span))
+    if (visible(x, y, span)) {
       marks.push({
         x,
         y,
@@ -1167,6 +1175,7 @@ export function* drawingPlants(
             (UNDERSTORY_SHOWS[1] - UNDERSTORY_SHOWS[0]),
         ),
       });
+    }
   }
   marks.sort((a, b) => a.y - b.y);
   let t0 = performance.now();
@@ -1408,7 +1417,7 @@ export function createFieldMap(
   function* paperAndInk(): Generator<void, Paper> {
     const fresh = yield* paintPaper(
       source.baked(),
-      source.placeAt,
+      (...args) => source.placeAt(...args),
       source.places(),
       style,
     );
@@ -1626,9 +1635,11 @@ export function createFieldMap(
       ctx.lineWidth = 1 / view.zoom;
       ctx.setLineDash([2.2 / view.zoom, 3.2 / view.zoom]);
       ctx.strokeStyle = `rgba(74,60,44,${(0.42 * close).toFixed(3)})`;
-      for (const p of paper.patches)
-        if (visible(sx(p.x), sy(p.z), p.radius * view.zoom * 2))
+      for (const p of paper.patches) {
+        if (visible(sx(p.x), sy(p.z), p.radius * view.zoom * 2)) {
           ctx.stroke(p.path);
+        }
+      }
       ctx.restore();
     }
 
@@ -1660,14 +1671,22 @@ export function createFieldMap(
         x + p.box[2] * shrink,
         y + p.box[3] * shrink,
       ];
-      alpha *= offRose(box);
-      if (alpha <= 0 || box[2] < 0 || box[0] > w || box[3] < 0 || box[1] > h)
+      const opacity = alpha * offRose(box);
+      if (
+        opacity <= 0 ||
+        box[2] < 0 ||
+        box[0] > w ||
+        box[3] < 0 ||
+        box[1] > h
+      ) {
         return false;
+      }
       taken.push(box);
-      if (alpha >= 0.5)
+      if (opacity >= 0.5) {
         names.push({ box, x: p.label.x, z: p.label.z, bounds: p.label.bounds });
+      }
       ctx.save();
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = opacity;
       ctx.translate(x, y);
       ctx.scale(shrink, shrink);
       letterName(ctx, p.label, 0, 0, p.size, style);
@@ -1709,8 +1728,9 @@ export function createFieldMap(
           x + halfW,
           y + 7,
         ];
-        if (!visible(x, y, -10) || !apart(box, [rose, ...marks, ...taken]))
+        if (!visible(x, y, -10) || !apart(box, [rose, ...marks, ...taken])) {
           continue;
+        }
         taken.push(box);
         names.push({ box, x: p.x, z: p.z });
         letter(ctx, p.name, x, y, "rgba(58,47,34,0.92)", halo, 2.5);
@@ -2091,8 +2111,9 @@ export function createFieldMap(
         (paper !== warmed.paper ||
           person.wild !== warmed.wild ||
           !(Math.hypot(x - warmed.x, z - warmed.z) < WARM_STEP))
-      )
+      ) {
         warm();
+      }
       const key = `${place.area.depth}|${place.area.path}|${place.file?.path ?? ""}`;
       if (key !== lastPlace) {
         lastPlace = key;

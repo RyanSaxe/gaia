@@ -3,7 +3,8 @@ import { type Board, letter } from "./lettering.ts";
 
 // Approximates a serif face: a letter is half as wide as the size, and a capital, `m`, `w` or `@` is 0.72 of it.
 const measure = (text: string, size: number): number =>
-  [...text].reduce((w, c) => w + (/[A-Z@mw]/.test(c) ? 0.72 : 0.5), 0) * size;
+  Array.from(text).reduce((w, c) => w + (/[A-Z@mw]/.test(c) ? 0.72 : 0.5), 0) *
+  size;
 const SIGNBOARD: Board = {
   width: 456,
   height: 150,
@@ -36,10 +37,11 @@ describe("lettering on a board", () => {
     for (const board of [SIGNBOARD, STONE]) {
       for (const name of NAMES) {
         const l = letter(name, board, measure);
-        for (const line of l.lines)
+        for (const line of l.lines) {
           expect(measure(line, l.size)).toBeLessThanOrEqual(
             board.width * l.widen + 1e-6,
           );
+        }
         expect(l.lines.join("").replace(/\s/g, "")).toBe(
           name.replace(/\s/g, ""),
         );

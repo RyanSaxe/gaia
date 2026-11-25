@@ -63,10 +63,11 @@ const HEAD = 9;
 const PER_SWATCH = 3;
 
 function swap(source: string, from: string, to: string): string {
-  if (!source.includes(from))
+  if (!source.includes(from)) {
     throw new Error(
       `The plant shader no longer contains "${from}"; update batch.ts.`,
     );
+  }
   return source.split(from).join(to);
 }
 
@@ -161,8 +162,8 @@ export function createPlantBatch(
   const prepared: Prepared[] = members.map((m) => {
     const parts = mergeParts(m.plant.parts);
     const box = new THREE.Box3();
-    for (const p of parts)
-      for (let i = 0; i < p.positions.length; i += 3)
+    for (const p of parts) {
+      for (let i = 0; i < p.positions.length; i += 3) {
         box.expandByPoint(
           new THREE.Vector3(
             p.positions[i],
@@ -170,6 +171,8 @@ export function createPlantBatch(
             p.positions[i + 2],
           ),
         );
+      }
+    }
     const height = Math.max(0.3, box.max.y);
     const matrix = placement(m);
     // Wind and decline move vertices a little past the built mesh, as a plant's own bounds allow for.
@@ -202,8 +205,9 @@ export function createPlantBatch(
     data.set(v, (member * width + x) * 4);
   members.forEach((m, i) => {
     const { matrix, height } = prepared[i] as Prepared;
-    for (let c = 0; c < 4; c++)
+    for (let c = 0; c < 4; c++) {
       texel(i, c, matrix.elements.slice(c * 4, c * 4 + 4));
+    }
     texel(i, 4, [shownVitality(m.vitality), 0, 0, height]);
     texel(i, 5, [m.plant.motion.sway, m.plant.motion.frequency, 0, 0]);
     const spray = sprayColors(m.plant);
@@ -286,13 +290,14 @@ export function createPlantBatch(
   const box = new THREE.Box3();
   const bound = (): void => {
     box.makeEmpty();
-    for (const p of prepared)
+    for (const p of prepared) {
       box.union(
         new THREE.Box3().setFromCenterAndSize(
           p.bounds.center,
           new THREE.Vector3().setScalar(p.bounds.radius * 2),
         ),
       );
+    }
     if (!box.isEmpty()) box.getBoundingSphere(sphere);
   };
   bound();
@@ -429,16 +434,18 @@ export function createPlantBatch(
       const before = p.matrix.clone().invert();
       p.matrix = placement(at);
       p.bounds = p.local.clone().applyMatrix4(p.matrix);
-      for (let c = 0; c < 4; c++)
+      for (let c = 0; c < 4; c++) {
         texel(member, c, p.matrix.elements.slice(c * 4, c * 4 + 4));
+      }
       texture.needsUpdate = true;
       bound();
       const moved = new THREE.Matrix4().multiplyMatrices(p.matrix, before);
       const group = picks[member];
       group?.applyMatrix4(moved);
       group?.updateMatrixWorld(true);
-      for (const v of veils)
+      for (const v of veils) {
         if (v.userData.member === member) v.applyMatrix4(moved);
+      }
     },
     pick(raycaster) {
       let best: { member: number; distance: number } | undefined;
@@ -447,8 +454,9 @@ export function createPlantBatch(
         if (
           hit !== undefined &&
           (best === undefined || hit.distance < best.distance)
-        )
+        ) {
           best = { member, distance: hit.distance };
+        }
       });
       return best;
     },
@@ -458,8 +466,9 @@ export function createPlantBatch(
     },
     dispose() {
       for (const g of geometries) g.dispose();
-      for (const group of picks)
+      for (const group of picks) {
         group.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
+      }
       for (const m of materials) m.dispose();
       texture.dispose();
       object.removeFromParent();

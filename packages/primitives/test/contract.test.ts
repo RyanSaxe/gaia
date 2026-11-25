@@ -85,15 +85,16 @@ function samples(p: AnyPrimitive): Stored[] {
   ).map((at, i) => {
     const out: Stored = {};
     for (const [name, f] of Object.entries(p.params) as [string, Field][]) {
-      if (f.type === "scale")
+      if (f.type === "scale") {
         out[name] =
           f.levels[Math.round(at * (f.levels.length - 1))]?.words ?? "";
-      else if (f.type === "choice") {
+      } else if (f.type === "choice") {
         const keys = Object.keys(f.options);
         out[name] = keys[i % keys.length] ?? "";
       } else if (f.type === "flag") out[name] = i % 2 === 0;
-      else
+      else {
         out[name] = Object.keys(f.members).filter((_, k) => (k + i) % 2 === 0);
+      }
     }
     return out;
   });
@@ -328,8 +329,9 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))(
                 if (
                   id(part.indices[t + 1] as number) !== a ||
                   id(part.indices[t + 2] as number) !== a
-                )
+                ) {
                   split++;
+                }
               }
               const sizes = new Map<number, number>();
               let mixed = 0;
@@ -364,8 +366,9 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))(
             if (
               !moved &&
               !healthy.colors.some((x, i) => x !== failing.colors[i])
-            )
+            ) {
               unchanged.push(`${part.swatch} on input ${k}`);
+            }
           }
         });
         expect(unchanged).toEqual([]);
@@ -373,6 +376,14 @@ describe.each(PRIMITIVES.map((p) => [p.id, p] as const))(
     );
   },
 );
+
+function memberSubsets(members: readonly string[]): string[][] {
+  const subsets: string[][] = [[]];
+  for (const m of members) {
+    subsets.push(...subsets.map((s) => [...s, m]));
+  }
+  return subsets;
+}
 
 /** Every combination of a primitive's choices, flags and sets, its scales at their middle level. */
 function combinations(p: AnyPrimitive): Stored[] {
@@ -385,10 +396,7 @@ function combinations(p: AnyPrimitive): Stored[] {
           ? Object.keys(f.options)
           : f.type === "flag"
             ? [false, true]
-            : Object.keys(f.members).reduce<string[][]>(
-                (subsets, m) => [...subsets, ...subsets.map((s) => [...s, m])],
-                [[]],
-              );
+            : memberSubsets(Object.keys(f.members));
     out = out.flatMap((s) => values.map((v) => ({ ...s, [name]: v })));
   }
   return out;
@@ -418,8 +426,9 @@ describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))(
           const plan = build(p, stored, null, seed) as BuildingPlan;
           const door = plan.openings.find((o) => o.kind === "door");
           const m = door === undefined ? undefined : plan.masses[door.mass];
-          if (door === undefined || m === undefined)
+          if (door === undefined || m === undefined) {
             throw new Error(`${JSON.stringify(stored)}: no door`);
+          }
           const [nx, , nz] = door.normal;
           const [ux, uz] = [nz, -nx];
           const half = (ax: number, az: number): number =>
@@ -458,10 +467,11 @@ describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))(
                 seed,
               ) as Built
             ).parts.find((part) => part.swatch === "wall");
-            if (fence === undefined)
+            if (fence === undefined) {
               throw new Error(
                 `${garden.id} ${JSON.stringify(stored)}: no fence`,
               );
+            }
             let across = 0;
             for (let t = 0; t < fence.indices.length; t += 3) {
               const vs = [0, 1, 2].map((k) => fence.indices[t + k] as number);
@@ -481,8 +491,9 @@ describe.each(lib.forRole("Footprint").map((p) => [p.id, p] as const))(
                 Math.min(...out) > 0 &&
                 Math.min(...side) < 0.25 &&
                 Math.max(...side) > -0.25
-              )
+              ) {
                 across++;
+              }
             }
             expect(across, `${garden.id} ${JSON.stringify(stored)}`).toBe(0);
           }
@@ -514,8 +525,9 @@ describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))(
               (part.normals[a * 3 + 1] as number) < 0.99 ||
               y < plan.floor - 0.06 ||
               y > plan.floor
-            )
+            ) {
               continue;
+            }
             floor.push(
               [a, b, c].flatMap((v) => [
                 part.positions[v * 3] as number,
@@ -554,8 +566,9 @@ describe.each(lib.forRole("Walls").map((p) => [p.id, p] as const))(
                 m.x - hx + (2 * hx * i) / nx,
                 m.z - hz + (2 * hz * k) / nz,
               ];
-              if (!covered(x, z))
+              if (!covered(x, z)) {
                 holes.push(`(${x.toFixed(2)}, ${z.toFixed(2)})`);
+              }
             }
           }
           expect(holes.slice(0, 5), `${holes.length} holes`).toEqual([]);
@@ -664,18 +677,20 @@ describe.each(lib.forRole("Landmark").map((p) => [p.id, p] as const))(
         // A measure set by a field has a band, or null, for every option of that field.
         const field = p.params[measure.by] as Field | undefined;
         expect(field?.type, name).toBe("choice");
-        if (field?.type === "choice")
+        if (field?.type === "choice") {
           expect(Object.keys(measure.bands).sort(), name).toEqual(
             Object.keys(field.options).sort(),
           );
+        }
         const set = Object.values(measure.bands)
           .filter((b) => b !== null)
           .sort((a, b) => a[0] - b[0]);
-        for (let k = 1; k < set.length; k++)
+        for (let k = 1; k < set.length; k++) {
           expect(
             (set[k - 1] as readonly [number, number])[1],
             name,
           ).toBeLessThan((set[k] as readonly [number, number])[0]);
+        }
       }
       for (const stored of combinations(p)) {
         for (let seed = 1; seed <= 16; seed++) {

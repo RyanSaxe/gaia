@@ -24,8 +24,9 @@ export function onTap(
     if (
       start !== undefined &&
       Math.hypot(e.clientX - start.x, e.clientY - start.y) > tapSlop(e)
-    )
+    ) {
       start.strayed = true;
+    }
   });
   const lift = (e: PointerEvent, counts: boolean): void => {
     const start = down.get(e.pointerId);
@@ -36,8 +37,9 @@ export function onTap(
       start !== undefined &&
       !start.strayed &&
       Math.hypot(e.clientX - start.x, e.clientY - start.y) <= tapSlop(e)
-    )
+    ) {
       tap(e);
+    }
     if (down.size === 0) pinched = false;
   };
   target.addEventListener("pointerup", (e) => lift(e, true));

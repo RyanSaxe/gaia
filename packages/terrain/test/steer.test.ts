@@ -29,8 +29,9 @@ function play(presses: readonly Press[], until: number) {
     for (const p of presses) {
       if (p.at >= t && p.at < t + DT) s = steerPress(s, p.key, p.at);
       const off = p.hold === undefined ? undefined : p.at + p.hold;
-      if (off !== undefined && off >= t && off < t + DT)
+      if (off !== undefined && off >= t && off < t + DT) {
         s = steerRelease(s, p.key);
+      }
     }
     const step = steerStep(s, t, yaw, DT);
     s = step.steering;
@@ -60,8 +61,9 @@ describe("walking comfortably", () => {
   ];
 
   it("never turns the view faster than the one steady rate, and never in a jump", () => {
-    for (const d of turns(play(gestures, 5).frames))
+    for (const d of turns(play(gestures, 5).frames)) {
       expect(Math.abs(d)).toBeLessThanOrEqual(RATE * DT + 1e-9);
+    }
     // Stepped as the page steps, a key pressed between frames is seen at the next frame, which steps from then.
     const step = 1 / 60;
     for (const pressed of [0.101, 0.105, 0.112]) {
@@ -69,8 +71,9 @@ describe("walking comfortably", () => {
       let yaw = 0;
       let fastest = 0;
       for (let t = 0; t < 1.5; t += step) {
-        if (t >= pressed && !s.down.has("left"))
+        if (t >= pressed && !s.down.has("left")) {
           s = steerPress(s, "left", pressed);
+        }
         const next = steerStep(s, t, yaw, step);
         fastest = Math.max(fastest, Math.abs(next.yaw - yaw) / step);
         s = next.steering;

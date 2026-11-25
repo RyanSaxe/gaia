@@ -243,8 +243,9 @@ const shot =
       })
     : null;
 rmSync(scratch, { recursive: true, force: true });
-if (shot === null)
+if (shot === null) {
   throw new Error(`Electron exited with ${run.status ?? run.signal}`);
+}
 console.log(`Saved ${shot.saved.length} shots in ${out}`);
 const errors = webglErrors();
 for (const message of shot.messages) errors.note(message);

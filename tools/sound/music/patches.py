@@ -10,34 +10,45 @@
 """
 
 import re
-import subprocess
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
-from cache import CELESTA, PATCHES, VCSL, VSCO
+from cache import CELESTA, PATCHES, VCSL, VSCO, run_command
 
 SR = 48000
 WIDTH = 18  # CC1 steps over which two neighbouring layers crossfade
+MIDI_MAX = 127
+MIN_MEASURE_SEGMENT = 4096
+FUNDAMENTAL_MIN_HZ = 60
+FUNDAMENTAL_MAX_HZ = 6000
+MAX_PITCH_DEVIATION = 0.6
+CELESTA_MIN_KEY = 57
 SUSTAINS = ["FluteSusVib", "SViolinVib", "ViolinEnsSusVib", "ViolaEnsSusVib", "CelloEnsSusVib", "ContrabassSusVB"]
 NAMES = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 RANGE = {"vcsl-harp": (24, 103), "vcsl-glock": (79, 108), "fs-celesta": (57, 108)}  # each one's playable keys
 CELESTA_NOTES = {420489: 69, 420488: 71, 420493: 75, 420491: 76, 420495: 77, 420498: 80}  # A4..G#5, tuned +10c
 
+RegionOpcodes = dict[str, str | int | float]
 
-def write_if_changed(path, text, encoding="utf-8"):
-    """Leaves a patch with the same text untouched, because another render may be reading it."""
+
+class _InvalidNoteNameError(ValueError):
+    def __init__(self, name: str) -> None:
+        super().__init__(f"Invalid note name: {name!r}")
+
+
+def write_if_changed(path: Path, text: str, *, encoding: str = "utf-8") -> None:
     if not path.exists() or path.read_text(encoding=encoding) != text:
         path.write_text(text, encoding=encoding)
 
 
-def parse(text):
-    """[(header, {opcode: value})] in file order, with comments dropped."""
+def parse(text: str) -> list[tuple[str, dict[str, str]]]:
     text = re.sub(r"//[^\n]*", "", text)
-    items = []
-    cur = None
-    for m in re.finditer(r"<(\w+)>|(\w+)=(.*?)(?=\s+\w+=|\s*<|\s*\n|\s*$)", text, flags=re.S):
+    items: list[tuple[str, dict[str, str]]] = []
+    cur: tuple[str, dict[str, str]] | None = None
+    for m in re.finditer(r"<(\w+)>|(\w+)=(.*?)(?=\s+\w+=|\s*<|\s*\n|\s*$)", text, flags=re.DOTALL):
         if m.group(1):
             cur = (m.group(1), {})
             items.append(cur)
@@ -46,105 +57,121 @@ def parse(text):
     return items
 
 
-def crossfaded(src: Path, dst: Path):
+def crossfaded(src: Path, dst: Path) -> None:
     items = parse(src.read_text(encoding="latin-1"))
     regions = [o for h, o in items if h == "region"]
-    groups = {}
+    groups: dict[tuple[str | None, str | None], list[dict[str, str]]] = {}
     for r in regions:
         k = (r.get("lokey", r.get("key")), r.get("hikey", r.get("key")))
         groups.setdefault(k, []).append(r)
     for rs in groups.values():
         for r in rs:
-            lo, hi = int(r.get("lovel", 0)), int(r.get("hivel", 127))
-            r["lovel"], r["hivel"] = "0", "127"
+            lo, hi = int(r.get("lovel", 0)), int(r.get("hivel", MIDI_MAX))
+            r["lovel"], r["hivel"] = "0", str(MIDI_MAX)
             if lo > 0:
                 r["xfin_locc1"] = str(max(0, lo - WIDTH))
-                r["xfin_hicc1"] = str(min(127, lo + WIDTH))
-            if hi < 127:
+                r["xfin_hicc1"] = str(min(MIDI_MAX, lo + WIDTH))
+            if hi < MIDI_MAX:
                 r["xfout_locc1"] = str(max(0, hi + 1 - WIDTH))
-                r["xfout_hicc1"] = str(min(127, hi + 1 + WIDTH))
+                r["xfout_hicc1"] = str(min(MIDI_MAX, hi + 1 + WIDTH))
             r["xf_cccurve"] = "power"
             r["amp_veltrack"] = "0"
             # louder as well as brighter as CC1 rises: -8 dB at 0, +4 dB at 127
             r["volume"] = str(float(r.get("volume", 0)) - 8)
             r["volume_oncc1"] = "12"
-    out = []
+    out: list[str] = []
     for h, o in items:
         out.append(f"<{h}>")
-        for k, v in o.items():
-            out.append(f"{k}={v}")
+        out.extend(f"{k}={v}" for k, v in o.items())
         out.append("")
     write_if_changed(dst, "\n".join(out), encoding="latin-1")
 
 
-def midi(name):
+def midi(name: str) -> int:
     m = re.match(r"([A-G])(#|b)?(-?\d)", name)
-    n = NAMES[m.group(1)] + (1 if m.group(2) == "#" else -1 if m.group(2) == "b" else 0)
-    return n + 12 * (int(m.group(3)) + 1)
+    if m is None:
+        raise _InvalidNoteNameError(name)
+    accidental = 1 if m.group(2) == "#" else -1 if m.group(2) == "b" else 0
+    return NAMES[m.group(1)] + accidental + 12 * (int(m.group(3)) + 1)
 
 
-def measure(path):
-    """Peak dBFS, onset (s) and fundamental as a fractional MIDI note."""
+def measure(path: Path) -> tuple[float, float, float]:
     x, sr = sf.read(path, always_2d=True)
     m = x.mean(axis=1)
-    pk = np.abs(m).max()
+    pk = float(np.abs(m).max())
     on = int(np.argmax(np.abs(m) > pk * 0.1))
     seg = m[on + int(0.05 * sr) : on + int(0.5 * sr)]
-    if len(seg) < 4096:
+    if len(seg) < MIN_MEASURE_SEGMENT:
         seg = m[on : on + 8192]
     sp = np.abs(np.fft.rfft(seg * np.hanning(len(seg)), n=1 << 17))
     fr = np.fft.rfftfreq(1 << 17, 1 / sr)
-    sel = (fr > 60) & (fr < 6000)
-    f0 = fr[sel][np.argmax(sp[sel])]
-    return 20 * np.log10(pk + 1e-12), on / sr, 69 + 12 * np.log2(f0 / 440)
+    sel = (fr > FUNDAMENTAL_MIN_HZ) & (fr < FUNDAMENTAL_MAX_HZ)
+    f0 = float(fr[sel][np.argmax(sp[sel])])
+    return float(20 * np.log10(pk + 1e-12)), on / sr, float(69 + 12 * np.log2(f0 / 440))
 
 
-def spans(centres):
-    """Key ranges that split the keyboard halfway between sampled notes."""
+def spans(centres: Iterable[int]) -> dict[int, tuple[int, int]]:
     cs = sorted(centres)
-    out = {}
+    out: dict[int, tuple[int, int]] = {}
     for i, c in enumerate(cs):
         lo = 0 if i == 0 else (cs[i - 1] + c) // 2 + 1
-        hi = 127 if i == len(cs) - 1 else (c + cs[i + 1]) // 2
+        hi = MIDI_MAX if i == len(cs) - 1 else (c + cs[i + 1]) // 2
         out[c] = (lo, hi)
     return out
 
 
-def write_patch(name, path, glob, regions):
+def write_patch(name: str, path: Path, *, glob: Mapping[str, str], regions: list[RegionOpcodes]) -> None:
     if name in RANGE:
         lo, hi = RANGE[name]
+        kept: list[RegionOpcodes] = []
         for r in regions:
-            if "lokey" in r:
-                r["lokey"], r["hikey"] = max(r["lokey"], lo), min(r["hikey"], hi)
-        regions = [r for r in regions if "lokey" not in r or r["lokey"] <= r["hikey"]]
-    lines = (
-        [f"// {name}: generated by tools/sound/music/patches.py", "<control>", f"default_path={path}/", "", "<global>"]
-        + [f"{k}={v}" for k, v in glob.items()]
-        + [""]
-    )
+            if "lokey" in r and "hikey" in r:
+                lokey = max(int(r["lokey"]), lo)
+                hikey = min(int(r["hikey"]), hi)
+                r["lokey"], r["hikey"] = lokey, hikey
+                if lokey <= hikey:
+                    kept.append(r)
+            else:
+                kept.append(r)
+        regions = kept
+    lines = [
+        f"// {name}: generated by tools/sound/music/patches.py",
+        "<control>",
+        f"default_path={path}/",
+        "",
+        "<global>",
+        *(f"{k}={v}" for k, v in glob.items()),
+        "",
+    ]
     for r in regions:
         lines.append("<region>")
-        lines += [f"{k}={v}" for k, v in r.items()]
+        lines.extend(f"{k}={v}" for k, v in r.items())
         lines.append("")
     write_if_changed(PATCHES / f"{name}.sfz", "\n".join(lines))
 
 
-def pitched(root, pat, layers, shift=0):
-    """root's WAVs, named by pat's groups (note, layer); layers: {layer: (lovel, hivel, volume offset dB)}."""
-    by_note = {}
+def pitched(
+    root: Path,
+    pat: str,
+    *,
+    layers: Mapping[str, tuple[int, int, float]],
+    shift: int = 0,
+) -> list[RegionOpcodes]:
+    by_note: dict[int, list[tuple[str, Path]]] = {}
     for f in sorted(root.glob("*.wav")):
         m = re.search(pat, f.name)
         if not m or m.group(2) not in layers:
             continue
         by_note.setdefault(midi(m.group(1)) + shift, []).append((m.group(2), f))
     rng = spans(by_note)
-    regions = []
+    regions: list[RegionOpcodes] = []
     for c, items in sorted(by_note.items()):
         k_lo, k_hi = rng[c]
         for layer, f in items:
-            pk, on, f0 = measure(f)
-            lv, hv = (0, 127) if len(items) == 1 else layers[layer][:2]  # a note sampled at one dynamic covers all
-            tune = int(round((c - f0) * 100)) if abs(f0 - c) < 0.6 else 0
+            pk, _on, f0 = measure(f)
+            # a note sampled at one dynamic covers all
+            lv, hv = (0, MIDI_MAX) if len(items) == 1 else layers[layer][:2]
+            tune = round((c - f0) * 100) if abs(f0 - c) < MAX_PITCH_DEVIATION else 0
             regions.append(
                 {
                     "sample": f.name,
@@ -160,7 +187,7 @@ def pitched(root, pat, layers, shift=0):
     return regions
 
 
-def write():
+def write() -> None:
     for name in SUSTAINS:
         crossfaded(VSCO / f"{name}.sfz", VSCO / f"gaia-{name}.sfz")
     PATCHES.mkdir(parents=True, exist_ok=True)
@@ -169,11 +196,11 @@ def write():
     write_patch(
         "vcsl-harp",
         harp,
-        {"ampeg_release": "4", "amp_veltrack": "70"},
-        pitched(
+        glob={"ampeg_release": "4", "amp_veltrack": "70"},
+        regions=pitched(
             harp,
             r"KSHarp_([A-G]#?\d)_(mf|f|p|mp)\d",
-            {"mp": (0, 80, -4), "p": (0, 80, -4), "mf": (0, 92, -4), "f": (93, 127, 0)},
+            layers={"mp": (0, 80, -4), "p": (0, 80, -4), "mf": (0, 92, -4), "f": (93, MIDI_MAX, 0)},
         ),
     )
 
@@ -182,20 +209,25 @@ def write():
     write_patch(
         "vcsl-glock",
         glock,
-        {"ampeg_release": "4", "amp_veltrack": "70"},
-        pitched(glock, r"glock_soft_([A-G]#?\d)_(\d+)", {k: (0, 127, 0) for k in ("01", "02", "03")}, shift=12),
+        glob={"ampeg_release": "4", "amp_veltrack": "70"},
+        regions=pitched(
+            glock,
+            r"glock_soft_([A-G]#?\d)_(\d+)",
+            layers=dict.fromkeys(("01", "02", "03"), (0, MIDI_MAX, 0)),
+            shift=12,
+        ),
     )
 
     wav = PATCHES / "wav"
     wav.mkdir(exist_ok=True)
-    rng = spans(list(CELESTA_NOTES.values()))
-    regions = []
+    rng = spans(CELESTA_NOTES.values())
+    regions: list[RegionOpcodes] = []
     for sid, c in CELESTA_NOTES.items():
         dst = wav / f"celesta-{sid}.wav"
         if not dst.exists():
-            subprocess.run(
+            run_command(
+                "ffmpeg",
                 [
-                    "ffmpeg",
                     "-v",
                     "error",
                     "-y",
@@ -209,19 +241,18 @@ def write():
                     "+bitexact",
                     str(dst),
                 ],
-                check=True,
             )
         pk, on, f0 = measure(dst)
         lo, hi = rng[c]
         regions.append(
             {
                 "sample": dst.name,
-                "lokey": max(lo, 57),
+                "lokey": max(lo, CELESTA_MIN_KEY),
                 "hikey": hi,
                 "pitch_keycenter": c,
                 "offset": max(0, int((on - 0.004) * SR)),
-                "tune": int(round((c - f0) * 100)),
+                "tune": round((c - f0) * 100),
                 "volume": round(-12 - pk, 1),
             }
         )
-    write_patch("fs-celesta", wav, {"ampeg_release": "1.2", "amp_veltrack": "75"}, regions)
+    write_patch("fs-celesta", wav, glob={"ampeg_release": "1.2", "amp_veltrack": "75"}, regions=regions)

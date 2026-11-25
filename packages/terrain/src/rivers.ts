@@ -132,8 +132,9 @@ function valleyOf(
   if (!lf.water.some((b) => b.kind === "stream")) return null;
   let found: { trough: Trough; depth: number } | null = null;
   const walk = (h: HeightField): void => {
-    if (h.op === "scale" && h.of.op === "trough")
+    if (h.op === "scale" && h.of.op === "trough") {
       found ??= { trough: h.of, depth: h.by };
+    }
     if (h.op === "sum" || h.op === "product") h.of.forEach(walk);
     if (h.op === "scale" || h.op === "terrace") walk(h.of);
   };
@@ -276,7 +277,7 @@ function wound(
     }),
     () => trough.halfWidth,
   );
-  const out = new Array<number>(line.length);
+  const out = Array.from<number>({ length: line.length });
   for (let k = 0; k < count; k++) {
     const [nx, nz] = leftOf(line, k);
     out[k * 2] =
@@ -452,8 +453,8 @@ function roundPonds(
   const count = course.length / 2;
   for (let pass = 0; pass < RIVERS.passes; pass++) {
     const walls = wallsAlong(out, trough, depth);
-    const pushX = new Array<number>(count).fill(0);
-    const pushZ = new Array<number>(count).fill(0);
+    const pushX = Array.from({ length: count }, () => 0);
+    const pushZ = Array.from({ length: count }, () => 0);
     let bent = false;
     for (const p of ponds) {
       for (let k = 0; k < count; k++) {
@@ -594,8 +595,9 @@ export function routeRivers(
     for (const dj of near) {
       for (const di of near) {
         const m = (j + dj) * n + (i + di);
-        if ((di === 0 && dj === 0) || inside[m] !== 1 || done[m] === 1)
+        if ((di === 0 && dj === 0) || inside[m] !== 1 || done[m] === 1) {
           continue;
+        }
         done[m] = 1;
         filled[m] = Math.max(
           h[m] as number,
@@ -617,13 +619,15 @@ export function routeRivers(
   // Each river runs from its spring down to the edge, a pond or an earlier river.
   const ponds: { x: number; z: number; radius: number }[] = [];
   spec.regions.forEach((r, ri) => {
-    for (const b of flat[ri]?.water ?? [])
-      if (b.kind === "pond")
+    for (const b of flat[ri]?.water ?? []) {
+      if (b.kind === "pond") {
         ponds.push({
           x: r.x + (b as PondBed).x,
           z: r.z + (b as PondBed).z,
           radius: (b as PondBed).radius,
         });
+      }
+    }
   });
   // The lowest ground on each pond's rim ring before any river is cut. A river that ends in the pond keeps its valley
   // floor at or above this, so its water meets the pond at the pond's surface and does not drain it.
@@ -632,7 +636,7 @@ export function routeRivers(
       let rim = Infinity;
       const reach = p.radius * POND_REACH;
       const steps = Math.ceil((Math.PI * 2 * reach) / 2);
-      for (let s = 0; s < steps; s++)
+      for (let s = 0; s < steps; s++) {
         rim = Math.min(
           rim,
           height(
@@ -640,6 +644,7 @@ export function routeRivers(
             p.z + Math.sin((s / steps) * Math.PI * 2) * reach,
           ),
         );
+      }
       return [p, rim] as const;
     }),
   );
@@ -688,9 +693,11 @@ export function routeRivers(
   // Lay the smallest regions' rivers first, while their ground is unowned. A river through a small area would
   // otherwise own all of it before the area's own river is laid.
   const extent = new Int32Array(spec.regions.length);
-  for (let k = 0; k < n * n; k++)
-    if (inside[k] === 1)
+  for (let k = 0; k < n * n; k++) {
+    if (inside[k] === 1) {
       extent[region[k] as number] = (extent[region[k] as number] as number) + 1;
+    }
+  }
   for (const ri of [...valleys.keys()].sort(
     (a, b) => (extent[a] as number) - (extent[b] as number) || a - b,
   )) {
@@ -712,9 +719,11 @@ export function routeRivers(
     // `RIVERS.banked` before meeting an earlier river, or as far as any cell in its region allows.
     let spring = -1;
     let longest = 0;
-    for (let k = 0; k < n * n; k++)
-      if (inside[k] === 1 && region[k] === ri)
+    for (let k = 0; k < n * n; k++) {
+      if (inside[k] === 1 && region[k] === ri) {
         longest = Math.max(longest, free[k] as number);
+      }
+    }
     for (const fromEdge of [
       RIVERS.springFromEdge,
       BUILDING_MARGIN + RIVERS.cell,
@@ -726,15 +735,17 @@ export function routeRivers(
           region[k] !== ri ||
           (free[k] as number) < Math.min(banked, longest) ||
           !withinLand(spec, at(k % n), at(Math.floor(k / n)), fromEdge)
-        )
+        ) {
           continue;
+        }
         if (
           spring < 0 ||
           (run[k] as number) > (run[spring] as number) ||
           ((run[k] as number) === (run[spring] as number) &&
             (h[k] as number) > (h[spring] as number))
-        )
+        ) {
           spring = k;
+        }
       }
       if (spring >= 0) break;
     }
@@ -800,8 +811,9 @@ export function routeRivers(
         region[k] !== ri ||
         (owner[k] as number) >= 0 ||
         !withinLand(spec, at(i), at(j), RIVERS.springFromEdge)
-      )
+      ) {
         break;
+      }
       if (
         cells.some(
           (c, ci) =>
@@ -809,8 +821,9 @@ export function routeRivers(
             Math.max(Math.abs((c % n) - i), Math.abs(Math.floor(c / n) - j)) <=
               reach,
         )
-      )
+      ) {
         break;
+      }
       head.push(k);
     }
     cells.unshift(...head.reverse());
@@ -833,8 +846,9 @@ export function routeRivers(
             j + dj < 0 ||
             j + dj >= n ||
             (owner[m] as number) >= 0
-          )
+          ) {
             continue;
+          }
           owner[m] = index;
           ownerAt[m] = c;
         }
@@ -906,9 +920,13 @@ export function routeRivers(
   });
   // The flow each river carries, as width squared, summed downstream. A river only joins an earlier one, so one backward pass suffices.
   const carried = rivers.map((rv, c) => {
-    const width = (
-      landforms[rv.source]?.water.find((b) => b.kind === "stream") as StreamBed
-    ).width;
+    const stream = landforms[rv.source]?.water.find(
+      (b) => b.kind === "stream",
+    ) as StreamBed | undefined;
+    if (stream === undefined) {
+      throw new Error(`river source ${rv.source} has no stream bed`);
+    }
+    const { width } = stream;
     return new Float64Array((courses[c] as number[]).length / 2).fill(
       width * width,
     );
@@ -919,8 +937,9 @@ export function routeRivers(
     const mine = carried[c] as Float64Array;
     const theirs = carried[into.river] as Float64Array;
     const from = Math.min(theirs.length - 1, joinIndex(into.river, into.at));
-    for (let k = from; k < theirs.length; k++)
+    for (let k = from; k < theirs.length; k++) {
       theirs[k] = (theirs[k] as number) + (mine[mine.length - 1] as number);
+    }
   }
 
   // The routing grid's height, bilinear between its points. Off the grid it is the composed height.
@@ -936,8 +955,9 @@ export function routeRivers(
       inside[k + 1] !== 1 ||
       inside[k + n] !== 1 ||
       inside[k + n + 1] !== 1
-    )
+    ) {
       return height(x, z);
+    }
     const u = fi - i;
     const w = fj - j;
     return (
@@ -947,8 +967,9 @@ export function routeRivers(
   };
   // No valley floor lies more than `RIVERS.budgetShare` of the relief range below the land's highest ground.
   let highest = -Infinity;
-  for (let k = 0; k < n * n; k++)
+  for (let k = 0; k < n * n; k++) {
     if (inside[k] === 1) highest = Math.max(highest, h[k] as number);
+  }
   const lowest = highest - RIVERS.budgetShare * RELIEF_BUDGET.range;
   const valleyCourses: ValleyCourse[] = [];
   const floorsOf: (Float32Array | undefined)[] = [];
@@ -986,15 +1007,16 @@ export function routeRivers(
           ? (aboveOf[rv.into.river] ?? -Infinity)
           : -Infinity;
     aboveOf[c] = above;
-    for (let k = 0; k < count; k++)
+    for (let k = 0; k < count; k++) {
       floors[k] = Math.max(floors[k] as number, above);
+    }
     // Toward a join, the floor descends to the other river's floor at no more than `RIVERS.joinGrade`, so it neither hangs above it nor runs in below it.
     const into = rv.into === null ? undefined : floorsOf[rv.into.river];
     if (rv.into !== null && into !== undefined) {
       const meet = into[
         Math.min(into.length - 1, joinIndex(rv.into.river, rv.into.at))
       ] as number;
-      for (let k = 0; k < count; k++)
+      for (let k = 0; k < count; k++) {
         floors[k] = Math.max(
           meet,
           Math.min(
@@ -1002,6 +1024,7 @@ export function routeRivers(
             meet + RIVERS.joinGrade * (count - 1 - k) * RIVERS.step,
           ),
         );
+      }
     }
     floorsOf[c] = floors;
     const walls = wallsAlong(course, v.trough, v.depth);
@@ -1024,8 +1047,9 @@ export function routeRivers(
           d < shoulder + RIVERS.farthest &&
           top + RIVERS.grade * (d - shoulder) <
             landAt(x + nx * side * d, z + nz * side * d)
-        )
+        ) {
           d += RIVERS.cell / 2;
+        }
         reach = Math.max(reach, d);
       }
       reaches[k] = reach;
@@ -1045,11 +1069,12 @@ export function routeRivers(
     const widths = Float32Array.from(carried[c] as Float64Array, (q) =>
       Math.sqrt(q),
     );
-    for (let k = 1; k < count; k++)
+    for (let k = 1; k < count; k++) {
       widths[k] = Math.min(
         widths[k] as number,
         (widths[k - 1] as number) + RIVERS.widening * RIVERS.step,
       );
+    }
     // The stream loops across its valley's floor as far as the valley's winding allows. Its bends lengthen as it widens
     // with no jump in phase, and a tributary's last stretch shifts to meet its river's stream.
     const r = spec.regions[rv.source] as WorldSpec["regions"][number];
@@ -1080,10 +1105,11 @@ export function routeRivers(
     const offs = held(
       course,
       Array.from({ length: count }, (_, k) => {
-        if (k > 0)
+        if (k > 0) {
           along =
             (along * (widths[k] as number)) / (widths[k - 1] as number) +
             RIVERS.step;
+        }
         return (
           bedBend(v.trough, along, widths[k] as number) * (fades[k] as number)
         );
@@ -1233,13 +1259,15 @@ function valleyNet(
   courses: readonly ValleyCourse[],
 ): ValleyNet {
   let out = spec.size / 2;
-  for (const c of courses)
-    for (let k = 0; k < c.points.length / 2; k++)
+  for (const c of courses) {
+    for (let k = 0; k < c.points.length / 2; k++) {
       out = Math.max(
         out,
         Math.abs(c.points[k * 2] as number) + (c.reaches[k] as number),
         Math.abs(c.points[k * 2 + 1] as number) + (c.reaches[k] as number),
       );
+    }
+  }
   const half = out + RIVERS.net;
   const cols = Math.ceil((half * 2) / RIVERS.net);
   const cells: number[][] = Array.from({ length: cols * cols }, () => []);

@@ -112,9 +112,11 @@ export function createThingTiles(focal: () => number): ThingTiles {
     const frame = frameOf(spec as WorldSpec);
     const per = Math.ceil(frame.n / TILE.size);
     const out: [number, number][] = [];
-    for (let tj = 0; tj < per; tj++)
-      for (let ti = 0; ti < per; ti++)
+    for (let tj = 0; tj < per; tj++) {
+      for (let ti = 0; ti < per; ti++) {
         if (distance(ti, tj, x, z) <= reach) out.push([ti, tj]);
+      }
+    }
     return out;
   };
   /** How far a layer's tiles reach: as far as its largest thing can be seen. */
@@ -174,18 +176,20 @@ export function createThingTiles(focal: () => number): ThingTiles {
         if (h.placed.has(key)) continue;
         const [ti, tj] = key.split(",").map(Number) as [number, number];
         const d = distance(ti, tj, person.x, person.z);
-        if (d < sight(h))
+        if (d < sight(h)) {
           lates.push({
             layer: h.layer.name,
             distance: Math.round(d),
             sight: Math.round(sight(h)),
           });
+        }
       }
     }
     h.placed = new Set(keys);
     const things: T[] = [];
-    for (const key of keys)
+    for (const key of keys) {
       for (const t of h.tiles.get(key) as readonly T[]) things.push(t);
+    }
     h.layer.place(things);
   };
   return {
@@ -208,8 +212,9 @@ export function createThingTiles(focal: () => number): ThingTiles {
         h.tiles.clear();
         h.pending.clear();
         h.placed = new Set();
-        for (const [key, things] of given?.get(h.layer.name) ?? [])
+        for (const [key, things] of given?.get(h.layer.name) ?? []) {
           h.tiles.set(key, things);
+        }
         h.dirty = true;
       }
     },
@@ -219,7 +224,7 @@ export function createThingTiles(focal: () => number): ThingTiles {
       if (!(Math.hypot(x - at.x, z - at.z) < STEP)) {
         at = { x, z };
         for (const h of all) {
-          for (const key of [...h.tiles.keys()]) {
+          for (const key of h.tiles.keys()) {
             const [ti, tj] = key.split(",").map(Number) as [number, number];
             if (distance(ti, tj, x, z) <= sight(h) + AHEAD + LET_GO) continue;
             h.tiles.delete(key);

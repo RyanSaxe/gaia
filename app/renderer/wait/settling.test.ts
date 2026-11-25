@@ -57,11 +57,13 @@ describe("health on the waiting sheet", () => {
       Math.min(...files.map((f) => f.vitality));
     for (const f of files) {
       health.settle({ [f.path]: f.vitality });
-      for (let c = 0; c < N * N; c++)
-        if (health.paint(c) === 1)
+      for (let c = 0; c < N * N; c++) {
+        if (health.paint(c) === 1) {
           expect(
             Math.abs(health.vitality(c) - final.vitality(c)),
           ).toBeLessThanOrEqual((1 - SHOWN[1]) * range + 1e-6);
+        }
+      }
     }
     const field = healthField(files, MAP_STYLE.spread);
     for (let c = 0; c < N * N; c++) {

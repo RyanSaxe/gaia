@@ -120,12 +120,12 @@ fn short(text: &str) -> String {
         .to_string()
 }
 
-fn scale_json(instructions: String, levels: &[String]) -> Value {
+fn scale_json(instructions: &str, levels: &[String]) -> Value {
     let names: Vec<String> = levels.iter().map(|l| short(l)).collect();
     json!({ "type": "score", "instructions": instructions, "criteria": names })
 }
 
-fn concept_json(c: &Concept, instructions: String) -> Value {
+fn concept_json(c: &Concept, instructions: &str) -> Value {
     if c.options.is_empty() {
         scale_json(instructions, &c.levels)
     } else {
@@ -229,7 +229,7 @@ fn importance_question(id: &str, about: &str, what: &str, line: Option<u32>) -> 
         about: about.to_string(),
         field: "axes.importance".into(),
         json: scale_json(
-            fill(&v.importance.instructions, &[("{what}", what.to_string())]),
+            &fill(&v.importance.instructions, &[("{what}", what.to_string())]),
             &v.importance.levels,
         ),
         line,
@@ -319,7 +319,7 @@ fn lines_around(ctx: &Ctx, path: &str, line: u32, around: u32) -> Option<String>
     Some(
         text.lines()
             .enumerate()
-            .map(|(i, l)| (i as u32 + 1, l))
+            .map(|(i, l)| (u32::try_from(i).unwrap_or(u32::MAX).saturating_add(1), l))
             .filter(|(n, _)| (from..=to).contains(n))
             .map(|(n, l)| format!("{n}: {l}"))
             .collect::<Vec<_>>()
@@ -424,14 +424,14 @@ fn add_readings(out: &mut Map<String, Value>, ctx: &Ctx, unit: Unit, budget: usi
     out.insert("readings".into(), Value::Object(got));
 }
 
-fn dir_of<'a>(unit: Unit<'a>) -> Option<&'a DirNode> {
+fn dir_of(unit: Unit<'_>) -> Option<&DirNode> {
     match unit {
         Unit::Dir(d) => Some(d),
         Unit::File(_) => None,
     }
 }
 
-fn file_of<'a>(unit: Unit<'a>) -> Option<&'a FileNode> {
+fn file_of(unit: Unit<'_>) -> Option<&FileNode> {
     match unit {
         Unit::File(f) => Some(f),
         Unit::Dir(_) => None,
@@ -552,7 +552,7 @@ impl Call for FolderAxes {
                 id: format!("own:{name}"),
                 about: dir.id.clone(),
                 field: format!("axes.{name}"),
-                json: concept_json(c, c.instructions.clone()),
+                json: concept_json(c, &c.instructions),
                 line: None,
             });
         }
@@ -643,7 +643,7 @@ impl Call for FileAxes {
                     id: format!("{concept}:{name}"),
                     about: d.id.clone(),
                     field: format!("axes.{concept}"),
-                    json: concept_json(c, fill(&c.instructions, &words)),
+                    json: concept_json(c, &fill(&c.instructions, &words)),
                     line: None,
                 });
             }
@@ -673,7 +673,7 @@ impl Call for FileAxes {
                 id: format!("own:{name}"),
                 about: file.id.clone(),
                 field: format!("axes.{name}"),
-                json: concept_json(c, c.instructions.clone()),
+                json: concept_json(c, &c.instructions),
                 line: None,
             });
         }
@@ -688,7 +688,8 @@ fn concept_value(c: &Concept, answer: &Value) -> Option<f64> {
         return c.values.get(choice).copied();
     }
     let score = answer["score"].as_f64()?;
-    Some((score / (c.levels.len().max(2) - 1) as f64).clamp(0.0, 1.0))
+    let max_level = f64::from(u32::try_from(c.levels.len().max(2) - 1).unwrap_or(u32::MAX));
+    Some((score / max_level).clamp(0.0, 1.0))
 }
 
 /// The weighted mean of the concepts answered about a node, from its `judged.axes`.
@@ -711,111 +712,147 @@ fn blend(parts: Option<f64>, own: Option<f64>) -> Option<f64> {
     }
 }
 
+struct NodeScores {
+    own: HashMap<String, Option<f64>>,
+    each: HashMap<String, Map<String, Value>>,
+    importance: HashMap<String, f64>,
+    parent: HashMap<String, String>,
+    depth: HashMap<String, usize>,
+    lines: HashMap<String, u32>,
+}
+
+impl NodeScores {
+    fn collect(graph: &CodeGraph, v: &Vocab) -> Self {
+        let importance_top =
+            f64::from(u32::try_from(v.importance.levels.len().max(2) - 1).unwrap_or(u32::MAX));
+        let mut own: HashMap<String, Option<f64>> = HashMap::new();
+        let mut each: HashMap<String, Map<String, Value>> = HashMap::new();
+        let mut importance: HashMap<String, f64> = HashMap::new();
+        let mut parent: HashMap<String, String> = HashMap::new();
+        let mut depth: HashMap<String, usize> = HashMap::new();
+        let mut lines: HashMap<String, u32> = HashMap::new();
+        for n in &graph.nodes {
+            let Some(entry) = node_entry(n, v) else {
+                continue;
+            };
+            let axes = entry.judged.as_ref().map_or(&Value::Null, |j| &j["axes"]);
+            if let Some(s) = axes["importance"]["score"].as_f64() {
+                importance.insert(entry.id.to_string(), (s / importance_top).clamp(0.0, 1.0));
+            }
+            own.insert(entry.id.to_string(), own_quality(entry.concepts, axes));
+            let answered: Map<String, Value> = entry
+                .concepts
+                .iter()
+                .filter(|(name, _)| !axes[name.as_str()].is_null())
+                .map(|(name, c)| (name.clone(), json!(concept_value(c, &axes[name.as_str()]))))
+                .collect();
+            if !answered.is_empty() {
+                each.insert(entry.id.to_string(), answered);
+            }
+            if !entry.parent.is_empty() {
+                parent.insert(entry.id.to_string(), entry.parent);
+            }
+            lines.insert(entry.id.to_string(), entry.size.max(1));
+            depth.insert(entry.id.to_string(), node_depth(entry.id));
+        }
+        importance.insert("dir:".into(), 1.0);
+        Self {
+            own,
+            each,
+            importance,
+            parent,
+            depth,
+            lines,
+        }
+    }
+
+    fn propagate_quality(&self) -> HashMap<String, (f64, u32)> {
+        let mut order: Vec<&String> = self.own.keys().collect();
+        order.sort_by(|a, b| self.depth[*b].cmp(&self.depth[*a]).then_with(|| a.cmp(b)));
+        let mut quality: HashMap<String, (f64, u32)> = HashMap::new();
+        let mut gathered: HashMap<String, (f64, f64)> = HashMap::new();
+        for id in order {
+            let parts = gathered.get(id).map(|(sum, w)| sum / w);
+            let q = if id.starts_with("def:") {
+                self.own[id]
+            } else {
+                blend(parts, self.own[id])
+            };
+            if let Some(q) = q {
+                quality.insert(id.clone(), (q, self.lines[id]));
+                if let Some(up) = self.parent.get(id) {
+                    let e = gathered.entry(up.clone()).or_insert((0.0, 0.0));
+                    e.0 += q * f64::from(self.lines[id]);
+                    e.1 += f64::from(self.lines[id]);
+                }
+            }
+        }
+        quality
+    }
+}
+
+struct NodeEntry<'a> {
+    id: &'a str,
+    judged: &'a Option<Value>,
+    concepts: &'a BTreeMap<String, Concept>,
+    parent: String,
+    size: u32,
+}
+
+fn node_entry<'a>(n: &'a Node, v: &'a Vocab) -> Option<NodeEntry<'a>> {
+    match n {
+        Node::Def(d) if is_code(d) => Some(NodeEntry {
+            id: &d.id,
+            judged: &d.judged,
+            concepts: &v.definition,
+            parent: if d.parent.is_none() {
+                d.file.clone()
+            } else {
+                String::new()
+            },
+            size: d.span.end.saturating_sub(d.span.start) + 1,
+        }),
+        Node::File(f) => Some(NodeEntry {
+            id: &f.id,
+            judged: &f.judged,
+            concepts: &v.file,
+            parent: format!("dir:{}", parent_dir(&f.path)),
+            size: f.measures.lines,
+        }),
+        Node::Dir(d) => Some(NodeEntry {
+            id: &d.id,
+            judged: &d.judged,
+            concepts: &v.folder,
+            parent: if d.path.is_empty() {
+                String::new()
+            } else {
+                format!("dir:{}", parent_dir(&d.path))
+            },
+            size: d.measures.lines,
+        }),
+        _ => None,
+    }
+}
+
+fn node_depth(id: &str) -> usize {
+    if id.starts_with("def:") {
+        return usize::MAX;
+    }
+    let path = id.split_once(':').map_or("", |(_, p)| p);
+    if path.is_empty() {
+        0
+    } else {
+        path.matches('/').count() + 1
+    }
+}
+
 /// Fills each node's `judged.value` with its importance and quality from 0
 /// to 1. Importance is Jev's score for it in its container's request, and 1
 /// for the root. Quality combines upward: each container blends its parts'
 /// quality, weighted by their lines, with its own.
 pub fn values(graph: &mut CodeGraph) {
-    let v = vocab();
-    let importance_top = (v.importance.levels.len().max(2) - 1) as f64;
-    let mut quality: HashMap<String, (f64, u32)> = HashMap::new();
-    let mut own: HashMap<String, Option<f64>> = HashMap::new();
-    let mut each: HashMap<String, Map<String, Value>> = HashMap::new();
-    let mut importance: HashMap<String, f64> = HashMap::new();
-    let mut parent: HashMap<String, String> = HashMap::new();
-    let mut depth: HashMap<String, usize> = HashMap::new();
-    let mut lines: HashMap<String, u32> = HashMap::new();
-    for n in &graph.nodes {
-        let (id, judged, concepts, up, size) = match n {
-            Node::Def(d) if is_code(d) => (
-                &d.id,
-                &d.judged,
-                Some(&v.definition),
-                // Only top-level definitions count toward their file, so nested code isn't counted twice.
-                if d.parent.is_none() {
-                    d.file.clone()
-                } else {
-                    String::new()
-                },
-                d.span.end.saturating_sub(d.span.start) + 1,
-            ),
-            Node::File(f) => (
-                &f.id,
-                &f.judged,
-                Some(&v.file),
-                format!("dir:{}", parent_dir(&f.path)),
-                f.measures.lines,
-            ),
-            Node::Dir(d) => (
-                &d.id,
-                &d.judged,
-                Some(&v.folder),
-                if d.path.is_empty() {
-                    String::new()
-                } else {
-                    format!("dir:{}", parent_dir(&d.path))
-                },
-                d.measures.lines,
-            ),
-            _ => continue,
-        };
-        let axes = judged.as_ref().map(|j| &j["axes"]).unwrap_or(&Value::Null);
-        if let Some(s) = axes["importance"]["score"].as_f64() {
-            importance.insert(id.clone(), (s / importance_top).clamp(0.0, 1.0));
-        }
-        own.insert(id.clone(), concepts.and_then(|c| own_quality(c, axes)));
-        // Each concept Jev answered, from 0 to 1, or null when the answer doesn't count, such as "nothing here can fail".
-        let answered: Map<String, Value> = concepts
-            .into_iter()
-            .flatten()
-            .filter(|(name, _)| !axes[name.as_str()].is_null())
-            .map(|(name, c)| (name.clone(), json!(concept_value(c, &axes[name.as_str()]))))
-            .collect();
-        if !answered.is_empty() {
-            each.insert(id.clone(), answered);
-        }
-        if !up.is_empty() {
-            parent.insert(id.clone(), up);
-        }
-        lines.insert(id.clone(), size.max(1));
-        // Definitions first, then files and folders from the deepest path up.
-        let path = id.split_once(':').map_or("", |(_, p)| p);
-        let segments = if path.is_empty() {
-            0
-        } else {
-            path.matches('/').count() + 1
-        };
-        depth.insert(
-            id.clone(),
-            if id.starts_with("def:") {
-                usize::MAX
-            } else {
-                segments
-            },
-        );
-    }
-    importance.insert("dir:".into(), 1.0);
-    // Deepest first, so every part is final before its container, and by id within a depth, so the sums always add
-    // in one order and the same answers give bit-identical values.
-    let mut order: Vec<&String> = own.keys().collect();
-    order.sort_by(|a, b| depth[*b].cmp(&depth[*a]).then_with(|| a.cmp(b)));
-    let mut gathered: HashMap<String, (f64, f64)> = HashMap::new();
-    for id in order {
-        let parts = gathered.get(id).map(|(sum, w)| sum / w);
-        let q = if id.starts_with("def:") {
-            own[id]
-        } else {
-            blend(parts, own[id])
-        };
-        if let Some(q) = q {
-            quality.insert(id.clone(), (q, lines[id]));
-            if let Some(up) = parent.get(id) {
-                let e = gathered.entry(up.clone()).or_insert((0.0, 0.0));
-                e.0 += q * f64::from(lines[id]);
-                e.1 += f64::from(lines[id]);
-            }
-        }
-    }
+    let mut scores = NodeScores::collect(graph, vocab());
+    let quality = scores.propagate_quality();
     for n in &mut graph.nodes {
         let (id, judged) = match n {
             Node::Def(d) => (&d.id, &mut d.judged),
@@ -823,8 +860,8 @@ pub fn values(graph: &mut CodeGraph) {
             Node::Dir(d) => (&d.id, &mut d.judged),
             Node::Block(_) => continue,
         };
-        let (i, q) = (importance.get(id), quality.get(id).map(|(q, _)| *q));
-        let concepts = each.remove(id.as_str()).unwrap_or_default();
+        let (i, q) = (scores.importance.get(id), quality.get(id).map(|(q, _)| *q));
+        let concepts = scores.each.remove(id.as_str()).unwrap_or_default();
         if i.is_none() && q.is_none() && concepts.is_empty() {
             continue;
         }
@@ -837,7 +874,7 @@ pub fn values(graph: &mut CodeGraph) {
 mod tests {
     use super::*;
 
-    fn set(graph: &mut CodeGraph, id: &str, judged: Value) {
+    fn set(graph: &mut CodeGraph, id: &str, judged: &Value) {
         for n in &mut graph.nodes {
             match n {
                 Node::Def(d) if d.id == id => d.judged = Some(judged.clone()),
@@ -858,8 +895,7 @@ mod tests {
                 Node::Dir(d) if d.id == id => d.judged.clone(),
                 _ => None,
             })
-            .map(|j| j["value"].clone())
-            .unwrap_or(Value::Null)
+            .map_or(Value::Null, |j| j["value"].clone())
     }
 
     #[test]
@@ -883,7 +919,7 @@ mod tests {
                 set(
                     &mut graph,
                     &format!("file:src/f{i}.ts"),
-                    json!({ "axes": { "readability": { "score": score }, "importance": { "score": 2.0 } } }),
+                    &json!({ "axes": { "readability": { "score": score }, "importance": { "score": 2.0 } } }),
                 );
             }
             values(&mut graph);

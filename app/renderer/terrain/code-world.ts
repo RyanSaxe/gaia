@@ -121,18 +121,19 @@ export function withWater(biome: Blueprint, water: string): Blueprint {
       relief: { use: use as typeof relief.use, params },
     },
   });
-  if (settled["relief.pond"] === true && relief.use !== "basin@1")
+  if (settled["relief.pond"] === true && relief.use !== "basin@1") {
     return swap("basin@1", {
       depth: "a shallow dip",
       size: "wide",
       rim: "melting into the land",
       pond: true,
     });
+  }
   if (
     typeof stream === "string" &&
     stream !== "dry bed" &&
     relief.use !== "valley@1"
-  )
+  ) {
     return swap("valley@1", {
       depth: "shallow",
       width: "broad",
@@ -141,6 +142,7 @@ export function withWater(biome: Blueprint, water: string): Blueprint {
       meander: "winding",
       stream,
     });
+  }
   return biome;
 }
 
@@ -191,10 +193,11 @@ export function plantGroup(
   as: Exclude<FormKind, "building" | "landmark">,
   blueprint: Blueprint,
 ): PlantGroup {
-  if (as === "flowers")
+  if (as === "flowers") {
     return blueprint.slots.drift?.use === "mushrooms@1"
       ? "mushrooms"
       : "flowers";
+  }
   return as === "tree" ? "trees" : as === "bush" ? "shrubs" : "rocks";
 }
 
@@ -240,15 +243,15 @@ function serviceWorld(
   return new Promise((resolve, reject) => {
     const off = service.on((m) => {
       if (m.type === "world.progress") veil.opening(m.opening);
-      else if (m.type === "world.start")
+      else if (m.type === "world.start") {
         void veil
           .choose(m.offer)
           .then((place) => service.send({ type: "world.choose", place }));
-      else if (m.type === "world.consent")
+      } else if (m.type === "world.consent") {
         void veil
           .ask(m.plan)
           .then((approve) => service.send({ type: "world.consent", approve }));
-      else if (m.type === "world.document") {
+      } else if (m.type === "world.document") {
         off();
         resolve(
           m.stood === undefined
@@ -287,13 +290,14 @@ function snapshotWorld(why: string, of: Snapshot): Promise<WorldDocument> {
     worker.onmessage = (e: MessageEvent<LayoutReply>) => {
       const reply = e.data;
       if ("failed" in reply) reject(failed(reply.failed));
-      else
+      else {
         resolve({
           root: facts.repository.name,
           facts,
           judged: SNAPSHOT_JUDGED[of] as Record<string, JudgedThing>,
           ...reply,
         });
+      }
     };
     worker.onerror = (e) => reject(failed(e.message));
     worker.postMessage({ why, of } satisfies LayoutRequest);
@@ -375,11 +379,12 @@ async function previewStart(veil: Veil): Promise<void> {
     },
   ];
   let place = await veil.choose({ recent });
-  while ("address" in place)
+  while ("address" in place) {
     place = await veil.choose({
       recent,
       refused: { address: place.address, why: "offline" },
     });
+  }
   veil.opening({ stage: "reading", root: facts.repository.name });
   // The chosen card rises into the wait screen's sheet before the land arrives.
   await new Promise((resolve) => setTimeout(resolve, CHOSEN_MS));
@@ -399,14 +404,15 @@ export async function codeWorld(veil: Veil): Promise<OpenedWorld> {
   // If the world cannot open, the wait screen shows why and stays. Nothing else replaces it.
   try {
     if (ASKS_PROVING) document = provingWorld();
-    else if (ASKS_SHOWCASE !== null)
+    else if (ASKS_SHOWCASE !== null) {
       document = await snapshotWorld("the showcase", ASKS_SHOWCASE);
-    else if (service === null) {
+    } else if (service === null) {
       if (
         typeof location !== "undefined" &&
         new URLSearchParams(location.search).has("start")
-      )
+      ) {
         await previewStart(veil);
+      }
       document = await snapshotWorld(
         "no engine on a standalone page",
         "showcase",
@@ -421,7 +427,7 @@ export async function codeWorld(veil: Veil): Promise<OpenedWorld> {
   // Trace the outlines once now, while the world loads, so the field map never traces them mid-walk.
   const outlines = outlinesOf(document.world);
   // A world laid out here, with no world service, shows its land only now.
-  if (!landed)
+  if (!landed) {
     veil.opening({
       stage: "land",
       name: document.world.name,
@@ -433,6 +439,7 @@ export async function codeWorld(veil: Veil): Promise<OpenedWorld> {
       patches: document.world.patches,
       lots: document.world.things.map(({ x, z }) => ({ x, z })),
     });
+  }
   veil.baking(
     Object.fromEntries(document.world.patches.map((p) => [p.path, p.vitality])),
   );
@@ -447,10 +454,11 @@ function routeOf(trail: {
   readonly to: string;
   readonly route?: Blueprint;
 }): RouteSpec {
-  if (trail.route === undefined)
+  if (trail.route === undefined) {
     throw new Error(
       `The trail from ${trail.from || "the root"} to ${trail.to || "the root"} has no route: Jev composes every trail's.`,
     );
+  }
   return buildSlots(trail.route, link, COMPOSING.lib, {
     seed: 1,
     facts: {},
@@ -472,17 +480,19 @@ const representNaturalThing = (
 ): Represented => {
   if (s.of === "file") {
     const f = files.get(s.path);
-    if (f === undefined)
+    if (f === undefined) {
       throw new Error(
         `${s.path} is placed in the world but is not among its files.`,
       );
+    }
     return representFile(f, s.vitality);
   }
   const e = entities.get(s.path);
-  if (e === undefined)
+  if (e === undefined) {
     throw new Error(
       `${s.path || "The repository's root"} is placed as an entity but is not one.`,
     );
+  }
   return representEntity(e, s.vitality);
 };
 
@@ -496,17 +506,19 @@ function thingOf(
   const of = t.of ?? "entity";
   if (of === "entity") {
     const e = entities.get(t.path);
-    if (e === undefined)
+    if (e === undefined) {
       throw new Error(
         `${t.path || "The repository's root"} is placed as an entity but is not one.`,
       );
+    }
     return { facts: e, represented: representEntity(e, t.vitality) };
   }
   const file = files.get(t.file ?? "");
-  if (file === undefined)
+  if (file === undefined) {
     throw new Error(
       `${t.path} is placed on ${t.file ?? "no file"}, which is not among the world's files.`,
     );
+  }
   const facts: ThingFacts = t.facts ?? {
     path: t.path,
     name: t.name,
@@ -514,11 +526,13 @@ function thingOf(
     exports: 0,
     dependents: [],
   };
-  if (of === "file")
+  if (of === "file") {
     return { facts, represented: representFile(file, t.vitality) };
+  }
   const sym = world.symbols.find((s) => s.id === t.path);
-  if (sym === undefined)
+  if (sym === undefined) {
     throw new Error(`${t.path} is placed as a definition but is not one.`);
+  }
   return { facts, represented: representSymbol(sym, file) };
 }
 
@@ -531,20 +545,23 @@ export function openedWorld({
 }: WorldDocument): OpenedWorld {
   // A world without a composed sky or land is an error, never a default.
   const sky = world.sky;
-  if (sky === undefined)
+  if (sky === undefined) {
     throw new Error(
       `${world.name} has no sky: Jev composes every world's light, sky and wind.`,
     );
+  }
   const wild = world.wild;
-  if (wild === undefined)
+  if (wild === undefined) {
     throw new Error(
       `${world.name} has no wild bushes: Jev composes the bush of each of the wild's grounds.`,
     );
+  }
   const landOf = (r: CodeWorld["regions"][number]): Blueprint => {
-    if (r.biome === undefined)
+    if (r.biome === undefined) {
       throw new Error(
         `${r.area || "The repository's root"} has no land: Jev composes every area's.`,
       );
+    }
     return r.biome;
   };
   const spec: WorldSpec = {
@@ -619,7 +636,7 @@ export function openedWorld({
   };
   const symbol = (s: Small, who: string): CodeLayout["symbols"][number] => {
     // A definition that appears as a building or landmark is one of the world's things and is placed with them.
-    if (COMPOSED_FORMS[s.form] !== undefined)
+    if (COMPOSED_FORMS[s.form] !== undefined) {
       return {
         x: s.x,
         z: s.z,
@@ -629,16 +646,18 @@ export function openedWorld({
         scale: 0,
         vitality: s.vitality,
       };
+    }
     // Every thing uses the blueprint Jev composed for it. One without a blueprint is an error, never a default form.
     if (
       s.as === undefined ||
       s.blueprint === undefined ||
       s.as === "building" ||
       s.as === "landmark"
-    )
+    ) {
       throw new Error(
         `${who} has the form "${s.form}" but no blueprint of a tree, a bush, a stone or flowers.`,
       );
+    }
     const group = plantGroup(s.as, s.blueprint);
     const patch = s.file === undefined ? undefined : patchOf.get(s.file);
     return {

@@ -19,8 +19,9 @@ export function tailscaleAddress(
         second !== undefined &&
         second >= 64 &&
         second <= 127
-      )
+      ) {
         return info.address;
+      }
     }
   }
   return null;

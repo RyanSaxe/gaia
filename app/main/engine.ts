@@ -45,8 +45,9 @@ export function superviseEngine(
     child = proc;
     // A write to an engine that just exited must not crash the main process.
     proc.stdin?.on("error", () => {});
-    if (proc.stdout !== null)
+    if (proc.stdout !== null) {
       createInterface({ input: proc.stdout }).on("line", on.line);
+    }
     proc.once("spawn", on.up);
 
     let ended = false;
@@ -76,8 +77,9 @@ export function superviseEngine(
   return {
     send(line) {
       const stdin = child?.stdin;
-      if (stdin === null || stdin === undefined || !stdin.writable)
+      if (stdin === null || stdin === undefined || !stdin.writable) {
         return false;
+      }
       stdin.write(`${line}\n`);
       return true;
     },

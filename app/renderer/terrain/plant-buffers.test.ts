@@ -63,9 +63,10 @@ describe("a plant's geometry as the GPU holds it", () => {
       geometryOf(part).index;
     expect(index(largest)?.array.BYTES_PER_ELEMENT).toBe(2);
     expect(index(merged)?.array.BYTES_PER_ELEMENT).toBe(4);
-    for (const part of [largest, merged])
+    for (const part of [largest, merged]) {
       expect(Array.from(index(part)?.array ?? [])).toEqual(
         Array.from(part.indices),
       );
+    }
   });
 });

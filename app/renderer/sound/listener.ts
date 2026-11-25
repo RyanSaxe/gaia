@@ -73,8 +73,9 @@ export function createListener(
         turnFrom !== null &&
         riffle === null &&
         m.t - turnFrom >= RIFFLE_AFTER
-      )
+      ) {
         riffle = scape.paper(m.t, "riffle");
+      }
       if (!book.turning) {
         riffle?.stop(m.t);
         riffle = null;

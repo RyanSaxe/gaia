@@ -60,7 +60,7 @@ export function buildGarden(
     ch: Channels,
   ): void => {
     const base = b.vertexCount;
-    for (const q of blob.points)
+    for (const q of blob.points) {
       b.vertex(
         [
           c[0] + q[0] * radii[0],
@@ -71,8 +71,10 @@ export function buildGarden(
         shade + 0.18 * q[1],
         ch,
       );
-    for (const [a, bb, cc] of blob.triangles)
+    }
+    for (const [a, bb, cc] of blob.triangles) {
       b.triangle(base + a, base + bb, base + cc);
+    }
   };
 
   // The walk is a line of stones leading out from the doorstep.
@@ -270,14 +272,17 @@ export function buildGarden(
         .filter((h) => h.y0 < 1.3 + plan.floor)
         .map((h) => [h.s0, h.s1] as const);
       // A stretch of wall that another mass or a lean-to hides is also a hole.
-      for (let s = 0.25; s < w.length; s += 0.5)
-        if (hidden(plan, w, s, 0.5) || hidden(plan, w, s, 1.2))
+      for (let s = 0.25; s < w.length; s += 0.5) {
+        if (hidden(plan, w, s, 0.5) || hidden(plan, w, s, 1.2)) {
           holes.push([s - 0.3, s + 0.3] as const);
+        }
+      }
       holes.sort((a, b) => a[0] - b[0]);
       let from = 0.25;
       for (const [h0, h1] of [...holes, [w.length - 0.25, w.length] as const]) {
-        if (h0 - from > (best === null ? 0 : best.s1 - best.s0))
+        if (h0 - from > (best === null ? 0 : best.s1 - best.s0)) {
           best = { w, s0: from, s1: h0 };
+        }
         from = Math.max(from, h1);
       }
     }
@@ -352,8 +357,9 @@ export function buildGarden(
       const pickets: { t: number; gives: number }[] = [];
       for (let i = 0; i <= count; i++) {
         const q = addScaled(a, u, (len * i) / count);
-        if (Math.abs(q[2] - front) < 0.01 && Math.abs(q[0] - gateX) < 0.62)
+        if (Math.abs(q[2] - front) < 0.01 && Math.abs(q[0] - gateX) < 0.62) {
           continue;
+        }
         const h = 0.78 + 0.06 * Math.sin(i * 0.9);
         const base: V3 = [q[0], -0.25, q[2]];
         // As vitality falls, pickets lean in random directions, then some fall.

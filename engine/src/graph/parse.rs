@@ -51,7 +51,7 @@ pub struct Def {
     pub exported: bool,
     /// It takes parameters, or its role is in `CALLABLES`.
     pub callable: bool,
-    /// A MinHash of its body's word shingles, which lineage uses to match moved definitions.
+    /// A `MinHash` of its body's word shingles, which lineage uses to match moved definitions.
     pub fingerprint: Vec<u16>,
     /// The name of its receiver in its body, when a grammar marks it with
     /// `@self`, such as `c` in Go's `func (c *Command)`.
@@ -112,7 +112,11 @@ pub enum Aliased {
 }
 
 /// The number of hashes in a fingerprint.
-const FINGERPRINT: usize = 64;
+const FINGERPRINT: u32 = 64;
+
+fn saturating_u32(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
 
 fn splitmix(mut x: u64) -> u64 {
     x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
@@ -121,7 +125,7 @@ fn splitmix(mut x: u64) -> u64 {
     x ^ (x >> 31)
 }
 
-/// A MinHash of a text's word 3-grams.
+/// A `MinHash` of a text's word 3-grams.
 pub fn fingerprint(text: &str) -> Vec<u16> {
     let words: Vec<&str> = text
         .split(|c: char| !(c.is_alphanumeric() || c == '_'))
@@ -139,7 +143,7 @@ pub fn fingerprint(text: &str) -> Vec<u16> {
         }
         shingles.insert(h);
     }
-    (0..FINGERPRINT as u64)
+    (0..u64::from(FINGERPRINT))
         .map(|seed| {
             let salt = splitmix(seed);
             shingles
@@ -153,8 +157,8 @@ pub fn fingerprint(text: &str) -> Vec<u16> {
 
 /// The share of hashes two fingerprints agree on, which estimates the overlap of their shingles.
 pub fn similarity(a: &[u16], b: &[u16]) -> f64 {
-    let same = a.iter().zip(b).filter(|(x, y)| x == y).count();
-    same as f64 / FINGERPRINT as f64
+    let same = saturating_u32(a.iter().zip(b).filter(|(x, y)| x == y).count());
+    f64::from(same) / f64::from(FINGERPRINT)
 }
 
 /// Roles that contain other definitions rather than run.
@@ -282,8 +286,8 @@ fn text<'a>(node: Node, src: &'a str) -> &'a str {
 
 fn span_of(node: Node) -> Span {
     Span {
-        start: node.start_position().row as u32 + 1,
-        end: node.end_position().row as u32 + 1,
+        start: saturating_u32(node.start_position().row).saturating_add(1),
+        end: saturating_u32(node.end_position().row).saturating_add(1),
     }
 }
 
@@ -459,135 +463,122 @@ fn count_unparsed(node: Node) -> u32 {
     count
 }
 
-/// Parses one file and reads everything its queries capture.
-pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
-    let mut parser = Parser::new();
-    if lang.wasm {
-        parser
-            .set_wasm_store(languages::wasm_store()?)
-            .map_err(|e| e.to_string())?;
-    }
-    parser
-        .set_language(&lang.language)
-        .map_err(|e| e.to_string())?;
-    let tree = parser
-        .parse(src, None)
-        .ok_or("tree-sitter returned no tree")?;
-    let root = tree.root_node();
-    let bytes = src.as_bytes();
+struct DefLayout<'t> {
+    found: Vec<(Node<'t>, String, String)>,
+    functions: Vec<Option<Node<'t>>>,
+    runs: Vec<bool>,
+    parent: Vec<Option<usize>>,
+    index_of: Vec<Option<usize>>,
+    order: Vec<usize>,
+}
 
-    let mut hits = Vec::new();
-    if let Some(tags) = &lang.tags {
-        collect(tags, root, bytes, true, &mut hits);
-    }
-    match &lang.ours {
-        Some(ours) => collect(ours, root, bytes, false, &mut hits),
-        None => fallback(root, lang.tags.is_none(), &mut hits),
-    }
-
-    // Definitions, each node once. A node two patterns capture keeps the more specific role.
-    let mut found: Vec<(Node, String, String)> = Vec::new();
-    let mut seen: HashMap<usize, usize> = HashMap::new();
-    for h in hits.iter().filter(|h| h.what.starts_with("definition.")) {
-        let role = h.what["definition.".len()..].to_string();
-        let Some(name) = h
-            .name
-            .map(|n| clean(text(n, src)))
-            .filter(|n| !n.is_empty())
-        else {
-            continue;
-        };
-        match seen.get(&h.node.id()) {
-            Some(&i) => {
+impl<'t> DefLayout<'t> {
+    fn from_hits(hits: &[Hit<'t>], src: &str) -> Self {
+        let mut found: Vec<(Node<'t>, String, String)> = Vec::new();
+        let mut seen: HashMap<usize, usize> = HashMap::new();
+        for h in hits.iter().filter(|h| h.what.starts_with("definition.")) {
+            let role = h.what["definition.".len()..].to_string();
+            let Some(name) = h
+                .name
+                .map(|n| clean(text(n, src)))
+                .filter(|n| !n.is_empty())
+            else {
+                continue;
+            };
+            if let Some(&i) = seen.get(&h.node.id()) {
                 if found[i].1 == "function" && role == "method" {
                     found[i].1 = role;
                 }
-            }
-            None => {
+            } else {
                 seen.insert(h.node.id(), found.len());
                 found.push((h.node, role, name));
             }
         }
-    }
-    found.sort_by_key(|(n, _, _)| (n.start_byte(), std::cmp::Reverse(n.end_byte())));
+        found.sort_by_key(|(n, _, _)| (n.start_byte(), std::cmp::Reverse(n.end_byte())));
 
-    // Parameters a grammar doesn't keep in a `parameters` field.
-    let mut param_lists: Vec<Node> = Vec::new();
-    let mut single_params: Vec<Node> = Vec::new();
-    for h in &hits {
-        match h.what.as_str() {
-            "params" => param_lists.push(h.node),
-            "param" => single_params.push(h.node),
-            _ => {}
-        }
-    }
-    let functions: Vec<Option<Node>> = found.iter().map(|(n, _, _)| function_node(*n)).collect();
-    // A definition runs when it takes parameters, or when its role is in `CALLABLES`.
-    let runs: Vec<bool> = (0..found.len())
-        .map(|i| {
-            let def = found[i].0;
-            let inner = |n: &Node| {
-                contains(def, *n)
-                    && !found.iter().any(|(o, _, _)| {
-                        o.id() != def.id() && contains(def, *o) && contains(*o, *n)
-                    })
-            };
-            functions[i].is_some_and(|f| f.child_by_field_name("parameters").is_some())
-                || param_lists.iter().chain(&single_params).any(inner)
-                || CALLABLES.contains(&found[i].1.as_str())
-        })
-        .collect();
-
-    // Assign parents and drop locals. A definition inside a function stays
-    // only when it runs or contains definitions itself.
-    let mut parent: Vec<Option<usize>> = vec![None; found.len()];
-    let mut stack: Vec<usize> = Vec::new();
-    for i in 0..found.len() {
-        while let Some(&top) = stack.last() {
-            if contains(found[top].0, found[i].0) {
-                break;
+        let mut param_lists: Vec<Node<'t>> = Vec::new();
+        let mut single_params: Vec<Node<'t>> = Vec::new();
+        for h in hits {
+            match h.what.as_str() {
+                "params" => param_lists.push(h.node),
+                "param" => single_params.push(h.node),
+                _ => {}
             }
-            stack.pop();
         }
-        parent[i] = stack.last().copied();
-        stack.push(i);
-    }
-    let keep: Vec<bool> = (0..found.len())
-        .map(|i| {
+        let functions: Vec<Option<Node<'t>>> =
+            found.iter().map(|(n, _, _)| function_node(*n)).collect();
+        let runs: Vec<bool> = (0..found.len())
+            .map(|i| {
+                let def = found[i].0;
+                let inner = |n: &Node| {
+                    contains(def, *n)
+                        && !found.iter().any(|(o, _, _)| {
+                            o.id() != def.id() && contains(def, *o) && contains(*o, *n)
+                        })
+                };
+                functions[i].is_some_and(|f| f.child_by_field_name("parameters").is_some())
+                    || param_lists.iter().chain(&single_params).any(inner)
+                    || CALLABLES.contains(&found[i].1.as_str())
+            })
+            .collect();
+
+        let mut parent: Vec<Option<usize>> = vec![None; found.len()];
+        let mut stack: Vec<usize> = Vec::new();
+        for i in 0..found.len() {
+            while let Some(&top) = stack.last() {
+                if contains(found[top].0, found[i].0) {
+                    break;
+                }
+                stack.pop();
+            }
+            parent[i] = stack.last().copied();
+            stack.push(i);
+        }
+        let mut index_of: Vec<Option<usize>> = vec![None; found.len()];
+        let mut order: Vec<usize> = Vec::new();
+        for i in 0..found.len() {
             let local = parent[i].is_some_and(|p| runs[p]);
-            !local || runs[i] || CONTAINERS.contains(&found[i].1.as_str())
-        })
-        .collect();
-    let mut index_of: Vec<Option<usize>> = vec![None; found.len()];
-    let mut order: Vec<usize> = Vec::new();
-    for i in 0..found.len() {
-        if keep[i] {
-            index_of[i] = Some(order.len());
-            order.push(i);
+            if !local || runs[i] || CONTAINERS.contains(&found[i].1.as_str()) {
+                index_of[i] = Some(order.len());
+                order.push(i);
+            }
+        }
+        Self {
+            found,
+            functions,
+            runs,
+            parent,
+            index_of,
+            order,
         }
     }
-    // A dropped definition's children belong to its nearest kept ancestor.
-    let kept_parent = |mut i: usize| -> Option<usize> {
-        while let Some(p) = parent[i] {
-            if let Some(k) = index_of[p] {
+
+    fn kept_parent(&self, mut i: usize) -> Option<usize> {
+        while let Some(p) = self.parent[i] {
+            if let Some(k) = self.index_of[p] {
                 return Some(k);
             }
             i = p;
         }
         None
-    };
+    }
 
-    // Owners from `@owner`/`@scope`, such as a Go receiver or a Rust impl.
-    let scopes: Vec<(Node, String)> = hits
+    fn innermost_def(&self, n: Node) -> Option<usize> {
+        self.order
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, i)| contains(self.found[**i].0, n))
+            .map(|(k, _)| k)
+    }
+}
+
+fn extract_blocks(hits: &[Hit<'_>], layout: &DefLayout<'_>) -> Vec<Block> {
+    let def_nodes: HashSet<usize> = layout
+        .order
         .iter()
-        .filter(|h| h.what == "scope")
-        .filter_map(|h| h.owner.map(|o| (h.node, clean_owner(text(o, src)))))
+        .map(|&i| layout.found[i].0.id())
         .collect();
-
-    // Blocks, each node once. A closure that is a definition's own body is not
-    // a block. A one-line literal is a value, not a table. Data or markup inside
-    // more of the same shape belongs to the outer block.
-    let def_nodes: HashSet<usize> = order.iter().map(|&i| found[i].0.id()).collect();
     let mut block_hits: Vec<(Node, String)> = Vec::new();
     let mut block_seen: HashSet<usize> = HashSet::new();
     for h in hits.iter().filter(|h| h.what.starts_with("block.")) {
@@ -622,27 +613,23 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             kept_blocks.push((n, shape));
         }
     }
-    let innermost_def = |n: Node| -> Option<usize> {
-        order
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, i)| contains(found[**i].0, n))
-            .map(|(k, _)| k)
-    };
     let mut blocks: Vec<Block> = Vec::new();
     let mut per_def: HashMap<Option<usize>, usize> = HashMap::new();
-    let block_defs: Vec<Option<usize>> =
-        kept_blocks.iter().map(|(n, _)| innermost_def(*n)).collect();
+    let block_defs: Vec<Option<usize>> = kept_blocks
+        .iter()
+        .map(|(n, _)| layout.innermost_def(*n))
+        .collect();
     for (k, (n, shape)) in kept_blocks.iter().enumerate() {
         let def = block_defs[k];
-        let depth = kept_blocks
-            .iter()
-            .enumerate()
-            .filter(|(j, (o, _))| {
-                *j != k && block_defs[*j] == def && contains(*o, *n) && o.id() != n.id()
-            })
-            .count() as u32;
+        let depth = saturating_u32(
+            kept_blocks
+                .iter()
+                .enumerate()
+                .filter(|(j, (o, _))| {
+                    *j != k && block_defs[*j] == def && contains(*o, *n) && o.id() != n.id()
+                })
+                .count(),
+        );
         let index = per_def.entry(def).or_insert(0);
         blocks.push(Block {
             def,
@@ -653,37 +640,44 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         });
         *index += 1;
     }
+    blocks
+}
 
-    // Name the definitions.
+fn build_defs(hits: &[Hit<'_>], layout: &DefLayout<'_>, src: &str) -> Vec<Def> {
+    let scopes: Vec<(Node, String)> = hits
+        .iter()
+        .filter(|h| h.what == "scope")
+        .filter_map(|h| h.owner.map(|o| (h.node, clean_owner(text(o, src)))))
+        .collect();
     let docstrings: Vec<Node> = hits
         .iter()
         .filter(|h| h.what == "doc" && !h.from_tags)
         .map(|h| h.node)
         .collect();
     let mut defs: Vec<Def> = Vec::new();
-    for (k, &i) in order.iter().enumerate() {
-        let (node, role, name) = &found[i];
-        let parent_k = kept_parent(i);
-        // The innermost `@owner` scope holding it inside its parent, such as
-        // a Rust impl inside `mod tests`.
-        let scoped = || {
+    for (k, &i) in layout.order.iter().enumerate() {
+        let (node, role, name) = &layout.found[i];
+        let parent_k = layout.kept_parent(i);
+        let enclosing_owner = || {
             scopes
                 .iter()
                 .filter(|(s, _)| contains(*s, *node))
-                .filter(|(s, _)| parent_k.is_none_or(|p| contains(found[order[p]].0, *s)))
+                .filter(|(s, _)| {
+                    parent_k.is_none_or(|p| contains(layout.found[layout.order[p]].0, *s))
+                })
                 .map(|(_, o)| o.clone())
                 .next_back()
         };
         let owner = match parent_k {
             Some(p) if CONTAINERS.contains(&defs[p].role.as_str()) => {
-                scoped().or_else(|| Some(defs[p].name.clone()))
+                enclosing_owner().or_else(|| Some(defs[p].name.clone()))
             }
             Some(_) => None,
-            None => scoped(),
+            None => enclosing_owner(),
         };
         let doc = docstrings
             .iter()
-            .find(|n| contains(*node, **n) && innermost_def(**n) == Some(k))
+            .find(|n| contains(*node, **n) && layout.innermost_def(**n) == Some(k))
             .map(|n| comment_words(text(*n, src)))
             .or_else(|| doc_above(*node, src));
         let qualified = match (parent_k, &owner) {
@@ -691,22 +685,22 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             (None, Some(o)) => format!("{o}.{name}"),
             (None, None) => name.clone(),
         };
-        // The body alone, so a copy under another name, or the same
-        // definition renamed, still matches.
         let body = node
             .child_by_field_name("body")
-            .or_else(|| functions[i].and_then(|f| f.child_by_field_name("body")))
+            .or_else(|| layout.functions[i].and_then(|f| f.child_by_field_name("body")))
             .unwrap_or(*node);
         let fingerprint = fingerprint(text(body, src));
         let self_name = hits
             .iter()
             .find(|h| {
-                h.what == "self" && contains(*node, h.node) && innermost_def(h.node) == Some(k)
+                h.what == "self"
+                    && contains(*node, h.node)
+                    && layout.innermost_def(h.node) == Some(k)
             })
             .map(|h| text(h.node, src).to_string());
         defs.push(Def {
             self_name,
-            callable: runs[i],
+            callable: layout.runs[i],
             fingerprint,
             name: name.clone(),
             qualified,
@@ -714,12 +708,11 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             parent: parent_k,
             owner,
             span: span_of(*node),
-            signature: signature(*node, functions[i], src),
+            signature: signature(*node, layout.functions[i], src),
             doc,
             exported: exported(*node, src),
         });
     }
-    // A repeated qualified name in the same file gets a `~2`, `~3` suffix in order.
     let mut counts: HashMap<String, usize> = HashMap::new();
     for def in &mut defs {
         let n = counts.entry(def.qualified.clone()).or_insert(0);
@@ -728,7 +721,10 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             def.qualified = format!("{}~{}", def.qualified, n);
         }
     }
+    defs
+}
 
+fn extract_refs(hits: &[Hit<'_>], layout: &DefLayout<'_>, src: &str) -> Vec<Ref> {
     let mut refs: Vec<(&Hit, Ref)> = hits
         .iter()
         .filter_map(|h| {
@@ -740,10 +736,6 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 _ => return None,
             };
             let at = h.name.unwrap_or(h.node);
-            // The qualifier is the text before the name in the expression that
-            // contains both. That expression is the match itself, or the name's
-            // parent when a tags query captures a call by its arguments
-            // (`ctx.lineTo`).
             let before = h
                 .name
                 .and_then(|n| {
@@ -754,8 +746,6 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                     };
                     holder.map(|p| (p, n))
                 })
-                // Only text that ends in a member or path separator qualifies a
-                // name: `ctx.` and `Batch::` do, `new ` and `impl ` don't.
                 .map(|(p, n)| src[p.start_byte()..n.start_byte()].trim_end())
                 .filter(|q| q.ends_with('.') || q.ends_with("::") || q.ends_with("->"));
             let path = before.is_some_and(|q| q.ends_with("::"));
@@ -772,7 +762,7 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
                 kind,
                 text,
                 at: span_of(at),
-                from: innermost_def(h.node),
+                from: layout.innermost_def(h.node),
                 qualifier,
                 path,
                 macro_call: h.node.kind().contains("macro"),
@@ -784,10 +774,12 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         })
         .collect();
 
-    // Attach each alias, and each name an import passes on, to the import that
-    // contains it. When one statement has several imports, as in Python's
-    // `import a as x, b as y`, it attaches to the one it renames.
-    for h in hits.iter() {
+    attach_aliases(hits, &mut refs, src);
+    refs.into_iter().map(|(_, r)| r).collect()
+}
+
+fn attach_aliases(hits: &[Hit<'_>], refs: &mut [(&Hit, Ref)], src: &str) {
+    for h in hits {
         let Some((group @ ("alias" | "reexport"), form)) = h.what.split_once('.') else {
             continue;
         };
@@ -825,6 +817,38 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
             _ => {}
         }
     }
+}
+
+/// Parses one file and reads everything its queries capture.
+pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
+    let mut parser = Parser::new();
+    if lang.wasm {
+        parser
+            .set_wasm_store(languages::wasm_store()?)
+            .map_err(|e| e.to_string())?;
+    }
+    parser
+        .set_language(&lang.language)
+        .map_err(|e| e.to_string())?;
+    let tree = parser
+        .parse(src, None)
+        .ok_or("tree-sitter returned no tree")?;
+    let root = tree.root_node();
+    let bytes = src.as_bytes();
+
+    let mut hits = Vec::new();
+    if let Some(tags) = &lang.tags {
+        collect(tags, root, bytes, true, &mut hits);
+    }
+    match &lang.ours {
+        Some(ours) => collect(ours, root, bytes, false, &mut hits),
+        None => fallback(root, lang.tags.is_none(), &mut hits),
+    }
+
+    let layout = DefLayout::from_hits(&hits, src);
+    let blocks = extract_blocks(&hits, &layout);
+    let defs = build_defs(&hits, &layout, src);
+    let refs = extract_refs(&hits, &layout, src);
     let default_export = hits
         .iter()
         .find(|h| h.what == "export.default")
@@ -832,10 +856,10 @@ pub fn parse(lang: &Loaded, src: &str) -> Result<FileParse, String> {
         .map(|n| clean(text(n, src)));
     Ok(FileParse {
         unparsed: count_unparsed(root),
-        lines: src.lines().count() as u32,
+        lines: saturating_u32(src.lines().count()),
         defs,
         blocks,
-        refs: refs.into_iter().map(|(_, r)| r).collect(),
+        refs,
         default_export,
     })
 }

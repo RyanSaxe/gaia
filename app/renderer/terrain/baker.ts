@@ -176,12 +176,13 @@ export function createBaker(
       ask(finisher, { kind: "finish", world, parts, toPlace }, moved),
       own(world, toPlace, workers.length > 1 ? workers.slice(1) : [finisher]),
     ]);
-    if (reply.kind !== "finished")
+    if (reply.kind !== "finished") {
       throw new Error(
         reply.kind === "failed"
           ? reply.message
           : "The bake finished without a terrain.",
       );
+    }
     return {
       land: reply.land,
       report: reply.report,

@@ -119,7 +119,7 @@ export function createFarStream(
   let undecided = true;
 
   const formOf = (k: number): Form => {
-    while (state.length <= k)
+    while (state.length <= k) {
       state.push({
         slot: -1,
         turn: 0,
@@ -129,6 +129,7 @@ export function createFarStream(
         held: 0,
         failed: false,
       });
+    }
     return state[k] as Form;
   };
   /**
@@ -152,8 +153,9 @@ export function createFarStream(
     const t0 = performance.now();
     const f = formOf(k);
     const entry = forms.plants[k];
-    if (entry === undefined)
+    if (entry === undefined) {
       throw new Error(`No far form ${k}; there are ${forms.count}.`);
+    }
     const kept = await store;
     let plant = entry.plant;
     if (f.key === null) {
@@ -349,15 +351,17 @@ export function createFarStream(
             eye.y - weighedAt.y,
             eye.z - weighedAt.z,
           ) >= FAR_TURN.weighAfter
-        )
+        ) {
           weigh(eye, focal);
+        }
         if (undecided && bringing === null) {
           undecided = false;
           decide();
         }
       }
-      if (opened && waiting.length > 0 && idle(moving))
+      if (opened && waiting.length > 0 && idle(moving)) {
         for (const wake of waiting.splice(0)) wake();
+      }
     },
     async hold(k) {
       const f = formOf(k);

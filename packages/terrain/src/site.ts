@@ -167,8 +167,9 @@ function yardSamples(
   const y = yardOf(plan, beside);
   const out: [number, number][] = [];
   for (let lz = y.z0 - grow; lz <= y.z1 + grow + 1e-6; lz += step) {
-    for (let lx = y.x0 - grow; lx <= y.x1 + grow + 1e-6; lx += step)
+    for (let lx = y.x0 - grow; lx <= y.x1 + grow + 1e-6; lx += step) {
       out.push(siteToWorld(site, lx, lz));
+    }
   }
   return out;
 }
@@ -185,8 +186,9 @@ function ringSpots(lot: Circle, r0: number, r1: number): Spot[] {
       const a = (k / count) * Math.PI * 2;
       const x = lot.x + Math.cos(a) * r;
       const z = lot.z + Math.sin(a) * r;
-      for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2])
+      for (const yaw of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
         spots.push({ x, z, yaw: yaw + Math.atan2(-lot.x, -lot.z) });
+      }
     }
   }
   return spots;
@@ -218,10 +220,13 @@ export function findSite(
   const half = t.spec.size / 2 - BUILDING_MARGIN;
   const everywhere = (): Spot[] => {
     const spots: Spot[] = [];
-    for (let z = -half; z <= half; z += 12)
-      for (let x = -half; x <= half; x += 12)
-        if (withinLand(t.spec, x, z, BUILDING_MARGIN))
+    for (let z = -half; z <= half; z += 12) {
+      for (let x = -half; x <= half; x += 12) {
+        if (withinLand(t.spec, x, z, BUILDING_MARGIN)) {
           spots.push({ x, z, yaw: Math.atan2(-x, -z) });
+        }
+      }
+    }
     return spots;
   };
   if (within !== null) {
@@ -379,8 +384,12 @@ function gentlest(
   let best: BuildingSite | null = null;
   let bestScore = Infinity;
   for (const c of candidates) {
-    if (Math.abs(c.x) > half || !withinLand(t.spec, c.x, c.z, BUILDING_MARGIN))
+    if (
+      Math.abs(c.x) > half ||
+      !withinLand(t.spec, c.x, c.z, BUILDING_MARGIN)
+    ) {
       continue;
+    }
     if (taken.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < apart)) continue;
     const site: BuildingSite = { ...c, level: 0 };
     if (laid.some((p) => yardsMeet(p, { site, yard }))) continue;
@@ -389,8 +398,9 @@ function gentlest(
       yardSamples(plan, site, 2, 2.5, beside).some(
         ([x, z]) => heightAt(t.lattice, x, z, t.waterLevel) > DRY / 2,
       )
-    )
+    ) {
       continue;
+    }
     let lo = Infinity;
     let hi = -Infinity;
     let sum = 0;
@@ -540,8 +550,9 @@ export function bankSpots(
         while (
           edge < 15 &&
           waterDepthAt(t, s.x + nx * edge, s.z + nz * edge) > 0
-        )
+        ) {
           edge += 0.25;
+        }
         if (edge >= 15) continue;
         for (const gap of BANK_SITE.gaps) {
           const off = edge + gap + plan.width / 2;
@@ -551,8 +562,9 @@ export function bankSpots(
             Math.abs(x) > half ||
             Math.abs(z) > half ||
             !withinLand(t.spec, x, z, BUILDING_MARGIN)
-          )
+          ) {
             continue;
+          }
           if (taken.some((o) => Math.hypot(o.x - x, o.z - z) < 12)) continue;
           // Turn the wheel's side to face the water. The house's +x runs along (cos yaw, -sin yaw).
           const yaw = Math.atan2(nz / side, -nx / side);
@@ -567,8 +579,12 @@ export function bankSpots(
             lz: number,
             deeper: number = BANK_SITE.foot,
           ): boolean => waterDepthAt(t, ...site(lx, lz)) > deeper;
-          if (!wet(wheelX, wheelZ, foot) || !wet(side * (reach + 0.6), wheelZ))
+          if (
+            !wet(wheelX, wheelZ, foot) ||
+            !wet(side * (reach + 0.6), wheelZ)
+          ) {
             continue;
+          }
           // The house must be dry, and the yard keeps `BANK_SITE.margin` from water except on the wheel's side.
           const y = yardOf(plan, null);
           let dry = true;
@@ -593,8 +609,9 @@ export function bankSpots(
             let lz = -plan.depth / 2;
             lz <= plan.depth / 2 + 1e-6 && dry;
             lz += 0.5
-          )
+          ) {
             if (waterDepthAt(t, ...site(wall, lz)) > 0) dry = false;
+          }
           if (!dry) continue;
           // The pad is the ground's mean under the house, capped low enough over the water that the wheel dips in.
           const water = heightAt(
@@ -672,8 +689,9 @@ export function findBankSite(
           taken,
           within,
           laid,
-        }))
+        })) {
           if (best === null || spot.score < best.score) best = spot;
+        }
         if (best !== null) return best.site;
       }
     }
@@ -689,8 +707,9 @@ export function findBankSite(
           taken,
           within,
           laid,
-        }))
+        })) {
           if (best === null || spot.score < best.score) best = spot;
+        }
         if (best !== null) return best.site;
       }
     }

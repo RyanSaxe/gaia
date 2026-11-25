@@ -43,7 +43,11 @@ const meshes = batch.object.children.filter(
     c instanceof THREE.Mesh && c.geometry.getAttribute("aBatch") !== undefined,
 );
 /** What the batch's shaders read for each building, such as its placement and how its vitality shows. */
-const texture = (meshes[0]?.material as THREE.ShaderMaterial).uniforms.uBatch
+const firstMesh = meshes[0];
+if (firstMesh === undefined) {
+  throw new Error("expected a batched mesh");
+}
+const texture = (firstMesh.material as THREE.ShaderMaterial).uniforms.uBatch
   ?.value as THREE.DataTexture;
 
 describe("a batch of buildings", () => {
@@ -107,11 +111,12 @@ describe("a batch of buildings", () => {
     batch.move(1, { x: 300, y: 0, z: 300, yaw: 0 });
     expect(batch.pick(down(300, 300))?.member).toBe(1);
     // Every mesh's bounds include the building at its new position, so no pass culls it.
-    for (const m of meshes)
+    for (const m of meshes) {
       expect(
         m.geometry.boundingSphere?.containsPoint(
           new THREE.Vector3(300, 3, 300),
         ),
       ).toBe(true);
+    }
   });
 });

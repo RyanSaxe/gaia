@@ -109,10 +109,11 @@ function piecesOf(
   const root = (a: number): number => {
     let r = a;
     while (parent[r] !== r) r = parent[r] as number;
-    while (parent[a] !== r) {
-      const next = parent[a] as number;
-      parent[a] = r;
-      a = next;
+    let cur = a;
+    while (parent[cur] !== r) {
+      const next = parent[cur] as number;
+      parent[cur] = r;
+      cur = next;
     }
     return r;
   };
@@ -296,9 +297,11 @@ export function emitCard(
 ): void {
   const first = out.vertexCount;
   const cols = rows[0]?.length ?? 0;
-  for (const row of rows)
-    for (const v of row)
+  for (const row of rows) {
+    for (const v of row) {
       out.vertex(v.p, v.n, v.shade, ch, [v.across, v.along, cut]);
+    }
+  }
   for (let i = 0; i + 1 < rows.length; i++) {
     for (let j = 0; j + 1 < cols; j++) {
       const a = first + i * cols + j;
@@ -321,7 +324,7 @@ export function icosphere(subdivisions: number): SphereTemplate {
   const cached = sphereCache.get(subdivisions);
   if (cached !== undefined) return cached;
   const t = (1 + Math.sqrt(5)) / 2;
-  let points: V3[] = (
+  const points: V3[] = (
     [
       [-1, t, 0],
       [1, t, 0],
@@ -367,7 +370,7 @@ export function icosphere(subdivisions: number): SphereTemplate {
       if (hit !== undefined) return hit;
       const pa = points[a] as V3;
       const pb = points[b] as V3;
-      points = [...points, normalize(lerp(pa, pb, 0.5))];
+      points.push(normalize(lerp(pa, pb, 0.5)));
       mids.set(key, points.length - 1);
       return points.length - 1;
     };

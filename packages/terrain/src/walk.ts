@@ -265,8 +265,9 @@ export function planWalk(
     tz += ((from.z - tz) / left) * 0.1;
   }
   const target = { x: tx, z: tz };
-  if (clearWay(solids, from.x, from.z, tx, tz, BODY_RADIUS))
+  if (clearWay(solids, from.x, from.z, tx, tz, BODY_RADIUS)) {
     return { target, way: [from, target], leg: 0 };
+  }
   const way = routeAround(solids, from, target);
   return { target: way[way.length - 1] as Walker, way, leg: 0 };
 }
@@ -368,13 +369,19 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
       for (let du = -1; du <= 1; du++) {
         const u = iu + du;
         const v = iv + dv;
-        if ((du === 0 && dv === 0) || u < 0 || u >= nu || v < 0 || v >= nv)
+        if ((du === 0 && dv === 0) || u < 0 || u >= nu || v < 0 || v >= nv) {
           continue;
+        }
         const j = v * nu + u;
         if (done[j] === 1 || !open(j)) continue;
         // Do not cut a corner between two closed cells.
-        if (du !== 0 && dv !== 0 && (!open(iv * nu + u) || !open(v * nu + iu)))
+        if (
+          du !== 0 &&
+          dv !== 0 &&
+          (!open(iv * nu + u) || !open(v * nu + iu))
+        ) {
           continue;
+        }
         const cost = (g[i] as number) + (du !== 0 && dv !== 0 ? Math.SQRT2 : 1);
         if (cost >= (g[j] as number)) continue;
         g[j] = cost;
@@ -408,9 +415,9 @@ function routeAround(solids: Solids, from: Walker, to: Walker): Walker[] {
           q.z,
           BODY_RADIUS + WALK_TO.clearance / 2,
         )
-      )
+      ) {
         lo = mid;
-      else hi = mid - 1;
+      } else hi = mid - 1;
     }
     way.push(points[lo] as Walker);
     a = lo;

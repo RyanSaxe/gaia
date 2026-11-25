@@ -88,8 +88,9 @@ export function pieceFrames(part: Part): PieceFrames {
     const id = part.piece[i * 2] as number;
     const a = lo.get(id) as [number, number, number];
     const b = hi.get(id) as [number, number, number];
-    for (let k = 0; k < 3; k++)
+    for (let k = 0; k < 3; k++) {
       center[i * 3 + k] = ((a[k] as number) + (b[k] as number)) / 2;
+    }
     const r = pieceReach(part.piece[i * 2 + 1] as number, id);
     reach[i * 2] = r.start;
     reach[i * 2 + 1] = r.leave;
@@ -111,8 +112,9 @@ export function detailAt(part: Part, distance: number): Part {
     if (
       pieceReach(part.piece[i * 2 + 1] as number, part.piece[i * 2] as number)
         .leave <= distance
-    )
+    ) {
       continue;
+    }
     keep[i] = 1;
     map[i] = kept++;
   }
@@ -121,8 +123,9 @@ export function detailAt(part: Part, distance: number): Part {
     const out = new Float32Array(kept * width);
     for (let i = 0; i < n; i++) {
       if (keep[i] === 0) continue;
-      for (let k = 0; k < width; k++)
+      for (let k = 0; k < width; k++) {
         out[(map[i] as number) * width + k] = a[i * width + k] as number;
+      }
     }
     return out;
   };

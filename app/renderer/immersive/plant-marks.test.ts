@@ -50,8 +50,9 @@ function recorder(): {
   const clips: boolean[] = [];
   let clipped = false;
   const paint = (p?: unknown): void => {
-    if (!clipped)
+    if (!clipped) {
       points.push(...(p instanceof Path2DRecorder ? p.placed : current));
+    }
   };
   const ctx = new Proxy(path, {
     get: (target, key) => {
@@ -62,9 +63,10 @@ function recorder(): {
       if (key === "restore") return () => (clipped = clips.pop() ?? false);
       if (key === "clip") return () => (clipped = true);
       if (key === "getTransform") return () => ({ a: 2, b: 0 });
-      if (key === "fillRect")
+      if (key === "fillRect") {
         return (x: number, y: number, w: number, h: number) =>
           clipped ? undefined : points.push([x, y], [x + w, y + h]);
+      }
       return () => {};
     },
     set: () => true,

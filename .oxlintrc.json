@@ -10,7 +10,7 @@
     "engine/tests/fixtures/**",
     "tools/**/*.html"
   ],
-  "plugins": ["typescript", "unicorn", "oxc", "import", "vitest"],
+  "plugins": ["typescript", "unicorn", "oxc", "import"],
   "categories": {
     "correctness": "error",
     "perf": "error"
@@ -23,6 +23,9 @@
     // CLI tools, tests, and sequential Electron/IPC/worker flows intentionally
     // await step-by-step inside loops.
     "no-await-in-loop": "off",
+    // Pure/immutable transforms use object and array spreads in `.map()` and
+    // `.flatMap()` for copy-on-write semantics where in-place mutation is unsafe.
+    "oxc/no-map-spread": "off",
     "no-unused-vars": [
       "error",
       { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
@@ -260,15 +263,6 @@
                 "message": "Test through the package's entry point (@gaia/<name>), never its internals."
               }
             ]
-          }
-        ],
-        "vitest/no-restricted-matchers": [
-          "error",
-          {
-            "toMatchSnapshot": "No snapshots: they freeze whatever the code printed. Assert the behavior that matters.",
-            "toMatchInlineSnapshot": "No snapshots: they freeze whatever the code printed. Assert the behavior that matters.",
-            "toThrowErrorMatchingSnapshot": "No snapshots: they freeze whatever the code printed. Assert the behavior that matters.",
-            "toThrowErrorMatchingInlineSnapshot": "No snapshots: they freeze whatever the code printed. Assert the behavior that matters."
           }
         ]
       }

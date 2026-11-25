@@ -150,7 +150,7 @@ export function headsOf(stream: SolvedStream): readonly Head[] {
       0.6,
     ),
   ];
-  if (stream.seep === true)
+  if (stream.seep === true) {
     heads.push(
       head(
         st[n - 1] as Station,
@@ -160,6 +160,7 @@ export function headsOf(stream: SolvedStream): readonly Head[] {
         0.3,
       ),
     );
+  }
   return heads;
 }
 
@@ -512,8 +513,9 @@ export function solvePond(
     rim = Math.min(rim, heightAt(l, px, pz, heights));
   }
   const surface = rim - POND_FREEBOARD;
-  if (!Number.isFinite(surface) || heightAt(l, x, z, heights) > surface - 0.2)
+  if (!Number.isFinite(surface) || heightAt(l, x, z, heights) > surface - 0.2) {
     return null;
+  }
   return { x, z, radius, reach, level: surface };
 }
 
@@ -593,8 +595,9 @@ export function nearPond(
           Math.hypot(worldOf(l, ix) - pond.x, worldOfZ(l, iz) - pond.z) <=
             pond.reach &&
           (level[i] as number) === Math.fround(pond.level)
-        )
+        ) {
           pondLevel[i] = pond.level;
+        }
       }
     }
   }
@@ -638,11 +641,16 @@ export function shoreField(
       let deepest = 0;
       const r = Math.floor(1 / spacing);
       for (let jz = Math.max(0, iz - r); jz <= Math.min(n - 1, iz + r); jz++) {
-        for (let jx = Math.max(0, ix - r); jx <= Math.min(n - 1, ix + r); jx++)
+        for (
+          let jx = Math.max(0, ix - r);
+          jx <= Math.min(n - 1, ix + r);
+          jx++
+        ) {
           deepest = Math.max(
             deepest,
             (level[jz * n + jx] as number) - (heights[jz * n + jx] as number),
           );
+        }
       }
       d[i] = SHALLOW_BANK * Math.max(0, 1 - deepest / BANKED);
     }
@@ -658,8 +666,15 @@ export function shoreField(
         for (let dx = -1; dx <= 1; dx++) {
           const jx = ix + dx;
           const jz = iz + dz;
-          if ((dx === 0 && dz === 0) || jx < 0 || jz < 0 || jx >= n || jz >= n)
+          if (
+            (dx === 0 && dz === 0) ||
+            jx < 0 ||
+            jz < 0 ||
+            jx >= n ||
+            jz >= n
+          ) {
             continue;
+          }
           const j = jz * n + jx;
           if (!wet(j)) continue;
           const under = (level[j] as number) - (heights[j] as number);

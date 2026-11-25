@@ -79,14 +79,19 @@ export function clearOfCode(
   x: number,
   z: number,
 ): boolean {
-  for (const t of code.things)
-    if (Math.hypot(t.x - x, t.z - z) < (t.lot ?? 0) + OPENING.pastLot)
+  for (const t of code.things) {
+    if (Math.hypot(t.x - x, t.z - z) < (t.lot ?? 0) + OPENING.pastLot) {
       return false;
-  for (const s of code.symbols)
-    if (s.form !== "" && Math.hypot(s.x - x, s.z - z) < OPENING.clear)
+    }
+  }
+  for (const s of code.symbols) {
+    if (s.form !== "" && Math.hypot(s.x - x, s.z - z) < OPENING.clear) {
       return false;
-  for (const s of code.naturalThings ?? [])
+    }
+  }
+  for (const s of code.naturalThings ?? []) {
     if (Math.hypot(s.x - x, s.z - z) < OPENING.clear) return false;
+  }
   return true;
 }
 
@@ -114,12 +119,13 @@ export function openingView(
   const fz = -Math.cos(yaw);
   const eye = heightAt(t.lattice, x, z) + EYE_HEIGHT;
   let rise = -90;
-  for (let d = OPENING.near; d <= OPENING.far; d += 4)
+  for (let d = OPENING.near; d <= OPENING.far; d += 4) {
     rise = Math.max(
       rise,
       (Math.atan2(heightAt(t.lattice, x + fx * d, z + fz * d) - eye, d) * 180) /
         Math.PI,
     );
+  }
   const cos = Math.cos((OPENING.halfView * Math.PI) / 180);
   const inView = (p: { readonly x: number; readonly z: number }): boolean => {
     const d = Math.hypot(p.x - x, p.z - z);
@@ -183,16 +189,18 @@ export function openingSpot(
         run === 0 ||
         !amongCode(world, here.x, here.z) ||
         Math.hypot(end.x - here.x, end.z - here.z) < run
-      )
+      ) {
         continue;
+      }
       let ahead = k;
       while (
         Math.hypot(
           (st[ahead] as typeof here).x - here.x,
           (st[ahead] as typeof here).z - here.z,
         ) < run
-      )
+      ) {
         ahead++;
+      }
       const there = st[ahead] as typeof here;
       const along = Math.atan2(-(there.x - here.x), -(there.z - here.z));
       const out = surfaceHalfWidth(here) + OPENING.bank;
@@ -200,17 +208,20 @@ export function openingSpot(
       for (const side of [1, -1]) {
         const x = here.x + Math.cos(along) * out * side;
         const z = here.z - Math.sin(along) * out * side;
-        if (dryAmong(x, z))
+        if (dryAmong(x, z)) {
           banks.push({ x, z, yaw: Math.atan2(-(there.x - x), -(there.z - z)) });
+        }
       }
     }
   }
   const nearest = Math.min(
     ...banks.map((b) => Math.hypot(b.x - root.x, b.z - root.z)),
   );
-  for (const b of banks)
-    if (Math.hypot(b.x - root.x, b.z - root.z) <= nearest + OPENING.nearer)
+  for (const b of banks) {
+    if (Math.hypot(b.x - root.x, b.z - root.z) <= nearest + OPENING.nearer) {
       weigh(b.x, b.z, b.yaw);
+    }
+  }
   if (best === null) {
     for (let r = 0; r <= OPENING.around; r += OPENING.ring) {
       const count = r === 0 ? 1 : Math.round((Math.PI * 2 * r) / OPENING.ring);
@@ -218,9 +229,11 @@ export function openingSpot(
         const a = (k / count) * Math.PI * 2;
         const x = root.x + Math.cos(a) * r;
         const z = root.z + Math.sin(a) * r;
-        if (dryAmong(x, z))
-          for (let w = 0; w < OPENING.ways; w++)
+        if (dryAmong(x, z)) {
+          for (let w = 0; w < OPENING.ways; w++) {
             weigh(x, z, (w / OPENING.ways) * Math.PI * 2);
+          }
+        }
       }
     }
   }
@@ -278,8 +291,9 @@ export function layoutKey(world: CodeMarks): string {
   // FNV-1a over the layout as text, with positions to the centimeter.
   let h = 0x811c9dc5;
   const add = (s: string): void => {
-    for (let i = 0; i < s.length; i++)
+    for (let i = 0; i < s.length; i++) {
       h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+    }
   };
   const at = (x: number, z: number): string =>
     `${Math.round(x * 100)},${Math.round(z * 100)};`;
@@ -318,8 +332,9 @@ export function returnTo(
   stood: LastSpot | undefined,
 ): Return | null {
   if (stood === undefined) return null;
-  if (stood.layout === layoutKey(world))
+  if (stood.layout === layoutKey(world)) {
     return { x: stood.x, z: stood.z, yaw: stood.yaw, exact: true };
+  }
   if (stood.by === null) return null;
   const path = stood.by.path;
   const now =

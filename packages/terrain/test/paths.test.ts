@@ -46,7 +46,7 @@ function everyPair(t: Terrain): TrailRequest[] {
   }));
   const out: TrailRequest[] = [];
   for (let a = 0; a < ends.length; a++) {
-    for (let b = a + 1; b < ends.length; b++)
+    for (let b = a + 1; b < ends.length; b++) {
       out.push({
         id: `${a}-${b}`,
         from: ends[a] as TrailEnd,
@@ -54,6 +54,7 @@ function everyPair(t: Terrain): TrailRequest[] {
         style: STYLE,
         want: 1 - (a + b) / 20,
       });
+    }
   }
   return out;
 }
@@ -187,11 +188,12 @@ describe("trails", { timeout: 20_000 }, () => {
           );
         };
         // Check only where there is water to cross. A course's dry spring or seep needs no crossing.
-        for (const at of over.filter((at) => waterDepthAt(t, ...at) > 0.1))
+        for (const at of over.filter((at) => waterDepthAt(t, ...at) > 0.1)) {
           expect(
             way.crossings.some((c) => onDeck(c, at)),
-            `${way.id} crosses a stream at ${at.map((v) => v.toFixed(1))} with nothing to cross on`,
+            `${way.id} crosses a stream at ${at.map((v) => v.toFixed(1)).join(", ")} with nothing to cross on`,
           ).toBe(true);
+        }
         for (const c of way.crossings) {
           crossings++;
           const where = `${way.id}'s crossing at ${c.x.toFixed(1)}, ${c.z.toFixed(1)}`;
@@ -199,11 +201,12 @@ describe("trails", { timeout: 20_000 }, () => {
             over.some((at) => onDeck(c, at)),
             `${where} crosses a stream`,
           ).toBe(true);
-          for (const end of [-c.span / 2, c.span / 2])
+          for (const end of [-c.span / 2, c.span / 2]) {
             expect(
               waterDepthAt(t, ...deck(c, end)),
               `${where} ends on dry ground`,
             ).toBeLessThan(0.01);
+          }
           const depths = Array.from({ length: 21 }, (_, i) =>
             waterDepthAt(t, ...deck(c, -c.span / 2 + (c.span * i) / 20)),
           );
@@ -233,10 +236,11 @@ describe("trails", { timeout: 20_000 }, () => {
       before = w;
     }
     // A trail between entities at higher vitality is never less worn.
-    for (let v = 0; v < 1; v += 0.05)
+    for (let v = 0; v < 1; v += 0.05) {
       expect(trailWearAt(wear, v + 0.05, v + 0.05, 0.5)).toBeGreaterThanOrEqual(
         trailWearAt(wear, v, v, 0.5) - 1e-9,
       );
+    }
     expect(trailWearAt(wear, 1, 1, 0.5)).toBeGreaterThan(
       trailWearAt(wear, 0, 0, 0.5),
     );
@@ -265,10 +269,11 @@ describe("trails", { timeout: 20_000 }, () => {
     both.forEach((w, s) =>
       expect(w).toBeGreaterThanOrEqual((first[s] as number) - 1e-9),
     );
-    for (let a = 0; a <= 1; a += 0.1)
+    for (let a = 0; a <= 1; a += 0.1) {
       expect(wayWearAt(both, a)).toBeGreaterThanOrEqual(
         wayWearAt(first, a) - 1e-9,
       );
+    }
     // With every entity at vitality 0.02, the way grows over.
     const failing = wayWear(network, shared, () => 0.02);
     failing.forEach((w, s) => expect(w).toBeLessThan(both[s] as number));

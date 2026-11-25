@@ -23,8 +23,9 @@ describe("the ring round a thing walked up to", () => {
               inside(ring[1] - r, ring[1] + r) &&
               inside(name[0], name[0] + w) &&
               inside(name[1], name[1] + h);
-            if (!kept || !apart)
+            if (!kept || !apart) {
               off.push(`${w}x${h} by a ring of ${r} px at (${x}, ${y})`);
+            }
           }
         }
       }

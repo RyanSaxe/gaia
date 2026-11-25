@@ -193,8 +193,9 @@ function settle(
       }
     }
     let off = 0;
-    for (let j = 0; j < k; j++)
+    for (let j = 0; j < k; j++) {
       off += ((count[j] as number) - (targets[j] as number)) ** 2;
+    }
     return off;
   };
   // A site with no cells gains cells at about the rate of a lone disc. Other sites get 5% of that rate so the Newton
@@ -212,12 +213,14 @@ function settle(
       off = assign(weight);
     }
     let settled = pass >= MOVES;
-    for (let j = 0; j < k && settled; j++)
+    for (let j = 0; j < k && settled; j++) {
       if (
         Math.abs((count[j] as number) - (targets[j] as number)) >
         Math.max(1, 0.005 * (targets[j] as number))
-      )
+      ) {
         settled = false;
+      }
+    }
     if (settled || pass >= PASSES) return;
     const step = newtonStep(
       trade,
@@ -227,7 +230,7 @@ function settle(
     // Scale the step so no weight changes by more than a lone disc's weight for half of max(target, count) plus two
     // cells. Then halve it until the counts move closer to their targets, and give up below 1/20 of that scale.
     let fits = 1;
-    for (let j = 0; j < k; j++)
+    for (let j = 0; j < k; j++) {
       fits = Math.min(
         fits,
         ((0.5 * Math.max(targets[j] as number, count[j] as number) + 2) *
@@ -235,6 +238,7 @@ function settle(
           Math.PI /
           Math.max(1e-9, Math.abs(step[j] as number)),
       );
+    }
     let better = false;
     for (let scale = fits; scale > fits / 20 && !better; scale /= 2) {
       const tried = Float64Array.from(
@@ -288,8 +292,9 @@ function newtonStep(
   for (let it = 0; it < 2 * k + 8 && rr > enough; it++) {
     times(dir, turned);
     let dq = 0;
-    for (let i = 0; i < k; i++)
+    for (let i = 0; i < k; i++) {
       dq += (dir[i] as number) * (turned[i] as number);
+    }
     if (dq <= 0) break;
     const alpha = rr / dq;
     let next = 0;
@@ -298,8 +303,9 @@ function newtonStep(
       rest[i] = (rest[i] as number) - alpha * (turned[i] as number);
       next += (rest[i] as number) ** 2;
     }
-    for (let i = 0; i < k; i++)
+    for (let i = 0; i < k; i++) {
       dir[i] = (rest[i] as number) + (next / rr) * (dir[i] as number);
+    }
     rr = next;
   }
   return x;
@@ -460,8 +466,9 @@ function divide(
     if ((held[j] as number) >= need) return;
     if ((held[j] as number) === 0) {
       let richest = -1;
-      for (let o = 0; o < kids.length; o++)
+      for (let o = 0; o < kids.length; o++) {
         if (o !== j && (richest < 0 || spare(o) > spare(richest))) richest = o;
+      }
       let far = -1;
       for (let c = 0; c < cells.length; c++) {
         if (owner[c] !== richest) continue;
@@ -588,7 +595,7 @@ function sitesOf(
       }
       picks.push(best);
     }
-    for (const q of picks)
+    for (const q of picks) {
       out.push({
         site: {
           x: Math.round((r.wx[q] as number) * 100) / 100,
@@ -596,6 +603,7 @@ function sitesOf(
         },
         leaf: li,
       });
+    }
   });
   return out;
 }
@@ -613,12 +621,13 @@ export function divideLand(root: LandNode, land: LandOutline): Land {
   const sites = drawn.map((d) => d.site);
   // Final ownership uses `nearestSite`, the same rule as `siteAt` and the terrain regions.
   const owner = new Int32Array(r.px.length);
-  for (let q = 0; q < owner.length; q++)
+  for (let q = 0; q < owner.length; q++) {
     owner[q] = (
       drawn[nearestSite(sites, r.wx[q] as number, r.wz[q] as number)] as {
         leaf: number;
       }
     ).leaf;
+  }
   const cells: number[][] = leaves.map(() => []);
   owner.forEach((o, q) => (cells[o] as number[]).push(q));
   const out: LeafLand[] = leaves.map((leaf, j) => {
@@ -699,7 +708,11 @@ export function dividePlots(
   // With fewer cells than plots, split each cell in four until every plot can have one.
   let points = cells;
   let step = cellStep;
-  for (const wanted = leavesOf(root).length; points.length < wanted; step /= 2)
+  for (
+    const wanted = leavesOf(root).length;
+    points.length < wanted;
+    step /= 2
+  ) {
     points = points.flatMap(([x, z]) =>
       [-1, 1].flatMap((dz) =>
         [-1, 1].map(
@@ -707,6 +720,7 @@ export function dividePlots(
         ),
       ),
     );
+  }
   const px = Float64Array.from(points, (p) => p[0]);
   const pz = Float64Array.from(points, (p) => p[1]);
   const warped = points.map((p) => warpPoint(p[0], p[1]));

@@ -42,8 +42,9 @@ export function tallyFrame(
       drawable.isPoints !== true &&
       drawable.isLine !== true &&
       drawable.isSprite !== true
-    )
+    ) {
       return;
+    }
     let kind = "other";
     for (let a: THREE.Object3D | null = o; a !== null; a = a.parent) {
       const k = kinds.get(a);
@@ -52,7 +53,9 @@ export function tallyFrame(
         break;
       }
     }
+    // oxlint-disable-next-line typescript/unbound-method -- re-bound via .apply(this, args) and restored verbatim
     const before = o.onBeforeRender;
+    // oxlint-disable-next-line typescript/unbound-method -- re-bound via .apply(this, args) and restored verbatim
     const after = o.onAfterRender;
     let calls = 0;
     let triangles = 0;
@@ -113,8 +116,9 @@ export function pictureChange(
   block = 64,
   rect?: PixelRect,
 ): Change {
-  if (a.length !== width * height * 4 || b.length !== a.length)
+  if (a.length !== width * height * 4 || b.length !== a.length) {
     throw new Error(`Frames must both hold ${width}x${height} RGBA pixels.`);
+  }
   const [x0, y0, x1, y1] = rect ?? [0, 0, width, height];
   const cols = Math.ceil(width / block);
   const sums = new Float64Array(cols * Math.ceil(height / block));

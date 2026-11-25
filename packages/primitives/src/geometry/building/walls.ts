@@ -241,8 +241,9 @@ function timberFrame(
       const next = sorted[i + 1];
       if (next === undefined) return;
       const n = Math.floor((next - s) / gap);
-      for (let k = 1; k < n + 1 && n > 0; k++)
+      for (let k = 1; k < n + 1 && n > 0; k++) {
         filled.push(s + ((next - s) * k) / (n + 1));
+      }
     });
     const blocked = (s: number, y0: number, y1: number): boolean =>
       holes.some(
@@ -387,7 +388,7 @@ function timberFrame(
             0.44 + 0.08 * r.next(),
             member(c, s, s, a, b2),
           );
-        } else
+        } else {
           beam(
             timber,
             lean(s, a),
@@ -398,6 +399,7 @@ function timberFrame(
             0.44 + 0.08 * r.next(),
             member(ch(s, 0, (a + b2) / 2), s, s, a, b2),
           );
+        }
       }
     }
     // Floor beams at every storey, rails at window-sill height between posts, and braces in the end bays.
@@ -405,7 +407,7 @@ function timberFrame(
     for (const y of floors) {
       for (let i = 0; i + 1 < all.length; i++) {
         const mid = ((all[i] as number) + (all[i + 1] as number)) / 2;
-        if (!blocked(mid, y - 0.08, y + 0.08))
+        if (!blocked(mid, y - 0.08, y + 0.08)) {
           beam(
             timber,
             lean(all[i] as number, y),
@@ -416,6 +418,7 @@ function timberFrame(
             0.44,
             member(ch(mid, 0, y), all[i] as number, all[i + 1] as number, y, y),
           );
+        }
       }
     }
     if (p.framing !== "close studding") {
@@ -425,7 +428,7 @@ function timberFrame(
           const a = all[i] as number;
           const b2 = all[i + 1] as number;
           const mid = (a + b2) / 2;
-          if (!blocked(mid, rail - 0.08, rail + 0.08))
+          if (!blocked(mid, rail - 0.08, rail + 0.08)) {
             beam(
               timber,
               lean(a, rail),
@@ -436,6 +439,7 @@ function timberFrame(
               0.42,
               member(ch(mid, 0, rail), a, b2, rail, rail),
             );
+          }
           if (
             p.framing === "crossed braces" &&
             (i === 0 || i === all.length - 2) &&
@@ -463,8 +467,9 @@ function timberFrame(
       let s0 = peak.s;
       let s1 = peak.s;
       while (s0 > 0.1 && topAt(plan, w, s0 - 0.05) > collar + 0.12) s0 -= 0.05;
-      while (s1 < w.length - 0.1 && topAt(plan, w, s1 + 0.05) > collar + 0.12)
+      while (s1 < w.length - 0.1 && topAt(plan, w, s1 + 0.05) > collar + 0.12) {
         s1 += 0.05;
+      }
       beam(
         timber,
         lean(peak.s, top),
@@ -475,7 +480,7 @@ function timberFrame(
         0.44,
         member(ch(peak.s, 0, peak.y), peak.s, peak.s, top, peak.y),
       );
-      if (s1 - s0 > 0.4)
+      if (s1 - s0 > 0.4) {
         beam(
           timber,
           lean(s0, collar),
@@ -486,6 +491,7 @@ function timberFrame(
           0.42,
           member(ch(peak.s, 0, collar), s0, s1, collar, collar),
         );
+      }
     }
 
     // Plaster panels between the timbers. Some are loose and fall away as vitality falls.

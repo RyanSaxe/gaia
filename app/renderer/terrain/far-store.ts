@@ -100,10 +100,11 @@ export async function openFarStore(version: number): Promise<FarStore | null> {
       const form = await request("forms", "readonly", (forms) =>
         forms.get(key),
       );
-      if (form !== undefined)
+      if (form !== undefined) {
         void request("used", "readwrite", (used) => used.put(visit, key)).catch(
           () => undefined,
         );
+      }
       return form;
     },
     put: (key, data) =>
@@ -126,8 +127,9 @@ function openDatabase(version: number): Promise<IDBDatabase | null> {
       const open = indexedDB.open(NAME, version);
       open.onupgradeneeded = () => {
         const db = open.result;
-        for (const name of ["forms", "used"])
+        for (const name of ["forms", "used"]) {
           if (db.objectStoreNames.contains(name)) db.deleteObjectStore(name);
+        }
         db.createObjectStore("forms");
         // Maps each form's key to the time of the last visit that read or stored it.
         db.createObjectStore("used");

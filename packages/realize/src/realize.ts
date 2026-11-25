@@ -54,8 +54,9 @@ export function resolveParams(
   const out: Record<string, unknown> = {};
   for (const [name, field] of Object.entries(p.params)) {
     const value = stored[name];
-    if (!isStoredValue(field, value))
+    if (!isStoredValue(field, value)) {
       throw new Error(`${where}.${name} has an invalid value for ${p.id}.`);
+    }
     out[name] =
       field.type === "scale"
         ? resolveScale(
@@ -95,21 +96,24 @@ export function buildSlots(
   lib: Library,
   opts: RealizeOptions,
 ): Map<string, BuiltSlot> {
-  if (bp.kind !== k.id)
+  if (bp.kind !== k.id) {
     throw new Error(`Blueprint ${bp.id} is a ${bp.kind}, not a ${k.id}.`);
+  }
   const root = rand(opts.seed);
   const built = new Map<string, BuiltSlot>();
   for (const name of slotOrder(k)) {
     const slot = k.slots[name];
     const filled = bp.slots[name];
     if (slot === undefined || filled === undefined) continue;
-    if (filled.slots !== undefined)
+    if (filled.slots !== undefined) {
       throw new Error(
         `${name}: nested slots are not supported by this realizer yet.`,
       );
+    }
     const p = lib.get(filled.use);
-    if (p.role !== slot.role)
+    if (p.role !== slot.role) {
       throw new Error(`${name} needs a ${slot.role}, not ${p.id}.`);
+    }
     let input: unknown = null;
     if (slot.on !== undefined) {
       const source = built.get(slot.on)?.output;
@@ -142,8 +146,9 @@ export function realize(
     else if (role === "Palette") palette = output as Palette;
     else if (isBuilt(output)) parts.push(...output.parts);
   }
-  if (palette === undefined)
+  if (palette === undefined) {
     throw new Error(`Blueprint ${bp.id} has no Palette slot to color it.`);
+  }
   return { parts, motion: motion ?? STILL, palette, slots };
 }
 
@@ -181,8 +186,9 @@ export function mergeParts(parts: readonly Part[]): Part[] {
     let at = 0;
     let base = 0;
     for (const p of list) {
-      for (let i = 0; i < p.indices.length; i++)
+      for (let i = 0; i < p.indices.length; i++) {
         indices[at + i] = (p.indices[i] as number) + base;
+      }
       at += p.indices.length;
       base += p.shade.length;
     }

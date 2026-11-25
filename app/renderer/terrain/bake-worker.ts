@@ -141,8 +141,9 @@ scope.onmessage = (e) => {
       source = { world: req.world, source: req.source };
       reply = { id: req.id, kind: "kept" };
     } else if (req.kind === "chunk") {
-      if (source === null || source.world !== req.world)
+      if (source === null || source.world !== req.world) {
         throw new Error(`No land source for world ${req.world}.`);
+      }
       const chunk =
         whole === null
           ? bakeChunk(source.source, req.k, req.cx, req.cz)

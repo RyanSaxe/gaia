@@ -90,8 +90,9 @@ export function emptyChunk(
 ): Chunk {
   const count = CHUNK * CHUNK;
   const ground = new Float32Array(count * 4);
-  for (let i = 0; i < count; i++)
+  for (let i = 0; i < count; i++) {
     ground.set([plan.mean, DRY, SHORE_CAP, TRAILS.reach], i * 4);
+  }
   const shares = new Uint8Array(count * 4);
   for (let i = 0; i < count; i++) shares[i * 4] = 255;
   return {

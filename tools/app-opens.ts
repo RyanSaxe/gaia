@@ -140,19 +140,26 @@ const problems = [
 ];
 // Main, the world service and the engine report their errors on Electron's output, each line beginning "gaia:" or
 // "gaia-engine:".
-for (const l of said.split("\n"))
+for (const l of said.split("\n")) {
   if (/^gaia(-engine)?:/.test(l.trim())) problems.push(`output: ${l.trim()}`);
+}
 const errors = webglErrors();
 for (const message of result?.messages ?? []) errors.note(message);
 if (errors.count() > 0) problems.push(errors.summary());
 
-if (result?.opened != null)
+if (result?.opened !== undefined && result.opened !== null) {
   console.log(
     `app-opens: the showcase opened in the app; ${result.opened.status}; the window reads "${result.opened.title}".`,
   );
+}
 for (const p of problems) console.log(`app-opens: ${p}`);
-if (result?.opened == null || problems.length > 0) {
-  if (said.trim() !== "")
+if (
+  result?.opened === undefined ||
+  result.opened === null ||
+  problems.length > 0
+) {
+  if (said.trim() !== "") {
     console.log(`app-opens: Electron printed:\n${said.trim()}`);
+  }
   process.exitCode = 1;
 }

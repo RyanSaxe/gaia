@@ -189,14 +189,22 @@ export function createImmersive(
   }
   const map = createFieldMap(
     layer,
-    { baked: world.baked, placeAt: world.placeAt, places: world.places },
+    {
+      baked: () => world.baked(),
+      placeAt: (...args) => world.placeAt(...args),
+      places: () => world.places(),
+    },
     (open) => {
       if (open) setSlip(false);
     },
     jump,
   );
-  const minimap = createMinimap(layer, map, world.baked, world.places, () =>
-    journal.open(),
+  const minimap = createMinimap(
+    layer,
+    map,
+    () => world.baked(),
+    () => world.places(),
+    () => journal.open(),
   );
 
   // ---------- the journal, shut in the corner with the minimap on its cover ----------
@@ -217,7 +225,7 @@ export function createImmersive(
   const keyOf = (thing: string, wide: boolean): string | null => {
     const code = world.code();
     if (code === null || words === null) return null;
-    if (formCache?.code !== code)
+    if (formCache?.code !== code) {
       formCache = {
         code,
         as: new Map([
@@ -228,6 +236,7 @@ export function createImmersive(
           ...code.things.map((t) => [t.path, t.blueprint.id] as const),
         ]),
       };
+    }
     const of =
       words.journal.entry(entityOf(thing)) !== undefined
         ? entityOf(thing)
@@ -243,7 +252,7 @@ export function createImmersive(
   };
   /** Paints each thing from the world's view before its page opens, only while the person is not walking, and stores the paintings in `browserPaintings`. */
   const paintings = createPaintings({
-    view: world.view,
+    view: (...args) => world.view(...args),
     store: browserPaintings(),
     keyOf,
     idle: () => !world.person().walking,
@@ -262,8 +271,9 @@ export function createImmersive(
       paintable.length === 0 ||
       p.walking ||
       Math.hypot(p.x - paintedFrom.x, p.z - paintedFrom.z) < NEAR.moved
-    )
+    ) {
       return;
+    }
     paintedFrom = { x: p.x, z: p.z };
     const by = (t: { x: number; z: number }): number =>
       Math.hypot(t.x - p.x, t.z - p.z);
@@ -292,15 +302,15 @@ export function createImmersive(
     const paper = map.paper();
     if (paper === null) return maps?.drawn.get(area) ?? null;
     if (maps?.paper !== paper) maps = { paper, drawn: new Map() };
-    if (!maps.drawn.has(area))
+    if (!maps.drawn.has(area)) {
       maps.drawn.set(
         area,
         drawMapPage(
           {
-            paper: map.paper,
-            baked: world.baked,
-            places: world.places,
-            placeAt: world.placeAt,
+            paper: () => map.paper(),
+            baked: () => world.baked(),
+            places: () => world.places(),
+            placeAt: (...args) => world.placeAt(...args),
           },
           area,
           w,
@@ -308,6 +318,7 @@ export function createImmersive(
           fold,
         ),
       );
+    }
     return maps.drawn.get(area) ?? null;
   }
   const pages = journalPages({
@@ -396,7 +407,10 @@ export function createImmersive(
     if (kept === null) return null;
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
+      reader.onload = () => {
+        if (typeof reader.result === "string") resolve(reader.result);
+        else reject(new Error("the painting could not be read"));
+      };
       reader.onerror = () =>
         reject(reader.error ?? new Error("the painting could not be read"));
       reader.readAsDataURL(kept);
@@ -425,8 +439,9 @@ export function createImmersive(
         if (
           Math.hypot(p.x - kept.x, p.z - kept.z) < KEEP.moved &&
           turned < KEEP.turned
-        )
+        ) {
           return;
+        }
         if (p.walking && now - kept.at < KEEP.every) return;
       }
       kept = { x: p.x, z: p.z, yaw: p.yaw, at: now };
@@ -463,8 +478,9 @@ export function createImmersive(
         if (
           Math.hypot(p.x - painted.x, p.z - painted.z) < KEEP.moved &&
           turned < KEEP.turned
-        )
+        ) {
           return;
+        }
       }
       painted = { x: p.x, z: p.z, yaw: p.yaw };
       painting = true;
@@ -615,8 +631,9 @@ export function createImmersive(
   function setSlip(on: boolean): void {
     if (on) map.open(false);
     // A slider left focused would take the keys meant for walking.
-    if (!on && slip.contains(document.activeElement))
+    if (!on && slip.contains(document.activeElement)) {
       (document.activeElement as HTMLElement).blur();
+    }
     slip.classList.toggle("open", on);
     menuButton.setAttribute("aria-expanded", String(on));
   }
@@ -636,8 +653,9 @@ export function createImmersive(
     layer,
     () => {
       if (words === null) return [];
-      if (findable?.words !== words)
+      if (findable?.words !== words) {
         findable = { words, items: findablesOf(words.journal) };
+      }
       return findable.items;
     },
     (at) => journal.open(at),
@@ -713,10 +731,11 @@ export function createImmersive(
         const arrived = watching.at.done;
         const opening = watchedOpening;
         watching = null;
-        if (arrived)
+        if (arrived) {
           void world.around(p.x, p.z).then(() => {
             if (watching === null && openings === opening) journal.close();
           });
+        }
       }
       // During any trip, lab.css darkens the wash over the world under the open book.
       layer.classList.toggle("travelling", world.trip() !== null);

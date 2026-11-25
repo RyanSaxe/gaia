@@ -93,7 +93,7 @@ export function buildCasements(
         0.4,
         wood(),
       );
-      for (const sign of [-1, 1])
+      for (const sign of [-1, 1]) {
         box(
           frame,
           at(sign * (hw + fw / 2), o.height / 2, 0.07),
@@ -102,6 +102,7 @@ export function buildCasements(
           0.42,
           wood(),
         );
+      }
       const bars =
         p.panes === "four panes"
           ? { v: 1, h: 1 }
@@ -112,7 +113,7 @@ export function buildCasements(
         ...wood(),
         loss: wr.next() < 0.6 ? lossThreshold(wr.next(), 0.3, 0.05) : 0,
       });
-      for (let i = 1; i <= bars.v; i++)
+      for (let i = 1; i <= bars.v; i++) {
         box(
           frame,
           at(-hw + (o.width * i) / (bars.v + 1), o.height / 2, 0.06),
@@ -121,7 +122,8 @@ export function buildCasements(
           0.5,
           bar(),
         );
-      for (let i = 1; i <= bars.h; i++)
+      }
+      for (let i = 1; i <= bars.h; i++) {
         box(
           frame,
           at(0, (o.height * i) / (bars.h + 1), 0.06),
@@ -130,6 +132,7 @@ export function buildCasements(
           0.5,
           bar(),
         );
+      }
       // As vitality falls, boards cover about half the windows. Each board
       // grows in from the side it is nailed to first.
       if (wr.next() < 0.55) {
@@ -267,7 +270,7 @@ export function buildCasements(
           leaf(0.55),
         );
       }
-      for (const ly of [0.28, 0.74])
+      for (const ly of [0.28, 0.74]) {
         box(
           frame,
           at(0, h * ly, 0.08),
@@ -276,13 +279,14 @@ export function buildCasements(
           0.48,
           leaf(0.5),
         );
+      }
       const knob = at(hw * 0.62, h * 0.48, 0.11);
       box(frame, knob, axes, [0.03, 0.03, 0.03], 0.3, leaf(0.5));
       // Frame and lintel. An arched door's frame is a ring of short beams.
       const fw = 0.11;
       if (arched) {
         const spring = h - hw;
-        for (const sign of [-1, 1])
+        for (const sign of [-1, 1]) {
           box(
             frame,
             at(sign * (hw + fw / 2), spring / 2, 0.075),
@@ -291,6 +295,7 @@ export function buildCasements(
             0.42,
             wood(),
           );
+        }
         const steps = 6;
         for (let i = 0; i < steps; i++) {
           const t0 = (i / steps) * Math.PI;
@@ -308,7 +313,7 @@ export function buildCasements(
           );
         }
       } else {
-        for (const sign of [-1, 1])
+        for (const sign of [-1, 1]) {
           box(
             frame,
             at(sign * (hw + fw / 2), h / 2, 0.075),
@@ -317,6 +322,7 @@ export function buildCasements(
             0.42,
             wood(),
           );
+        }
         box(
           frame,
           at(0, h + fw / 2, 0.08),
@@ -355,7 +361,7 @@ export function buildCasements(
             still(at(0, peak, 0), 0.55, { droop: 0.05 }),
           );
         }
-        for (const sign of [-1, 1])
+        for (const sign of [-1, 1]) {
           beam(
             frame,
             at(sign * (hw + 0.16), h - 0.3, 0.02),
@@ -366,6 +372,7 @@ export function buildCasements(
             0.4,
             wood(),
           );
+        }
       }
       // Steps up to the floor.
       const n = Math.max(1, Math.round(plan.floor / 0.2));

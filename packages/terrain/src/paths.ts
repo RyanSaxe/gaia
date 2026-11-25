@@ -323,8 +323,9 @@ function gridOf(t: Terrain, seed: number, avoid: readonly Occupied[]): Grid {
             origin + i * TRAILS.cell - o.x,
             origin + j * TRAILS.cell - o.z,
           ) < o.radius
-        )
+        ) {
           blocked[j * n + i] = 1;
+        }
       }
     }
   }
@@ -437,8 +438,9 @@ function search(
       if ((ways & (1 << d)) !== 0) step *= TRAILS.join;
       else {
         const near = g.near[m] as number;
-        if (near > 0 && near <= TRAILS.besideCells && m !== goal)
+        if (near > 0 && near <= TRAILS.besideCells && m !== goal) {
           step *= TRAILS.beside;
+        }
       }
       const next = (cost[k] as number) + step;
       if (next < costOf(m)) {
@@ -535,8 +537,9 @@ function smoothLine(points: [number, number][], spacing: number): Float32Array {
       last[1] - (out[out.length - 1] as number),
     ) >
     spacing * 0.3
-  )
+  ) {
     out.push(last[0], last[1]);
+  }
   return new Float32Array(out);
 }
 
@@ -600,8 +603,9 @@ function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
         Math.min(px(k), px(k + 1)) > maxX ||
         Math.max(pz(k), pz(k + 1)) < minZ ||
         Math.min(pz(k), pz(k + 1)) > maxZ
-      )
+      ) {
         continue;
+      }
       for (let j = 0; j + 1 < st.length; j++) {
         const a = st[j] as (typeof st)[number];
         const b = st[j + 1] as (typeof st)[number];
@@ -629,8 +633,9 @@ function crossingsOf(t: Terrain, points: Float32Array): Crossing[] {
     if (within % 2 === 0) continue;
     // Water under `WADE_DEPTH`, such as a damp spot or the thin end of a spring or seep, gets no crossing.
     let deepest = 0;
-    for (let k = a; k <= b; k++)
+    for (let k = a; k <= b; k++) {
       deepest = Math.max(deepest, waterDepthAt(t, px(k), pz(k)));
+    }
     if (deepest < WADE_DEPTH) continue;
     const ax = px(a);
     const az = pz(a);
@@ -736,16 +741,19 @@ function cairnOf(
   if (
     heightAt(t.lattice, cx, cz, t.waterLevel) > DRY / 2 ||
     heightAt(t.lattice, cx, cz, t.shore) < 2
-  )
+  ) {
     return null;
+  }
   for (const w of ways) {
     const p = w.points;
-    for (let k = 0; k < p.length; k += 2)
+    for (let k = 0; k < p.length; k += 2) {
       if (
         Math.hypot((p[k] as number) - cx, (p[k + 1] as number) - cz) <
         w.style.width / 2 + TRAILS.cairnClear
-      )
+      ) {
         return null;
+      }
+    }
   }
   return { x: cx, z: cz, y: heightAt(t.lattice, cx, cz) };
 }
@@ -896,8 +904,9 @@ function networkOf(
       if (isNode(next)) break;
       const back = OPPOSITE[dir] as number;
       let out = -1;
-      for (let e = 0; e < NEIGHBORS.length; e++)
+      for (let e = 0; e < NEIGHBORS.length; e++) {
         if (e !== back && ((g.edges[next] as number) & (1 << e)) !== 0) out = e;
+      }
       cur = next;
       dir = out;
     }
@@ -971,8 +980,9 @@ function networkOf(
       .sort((a, b) => (trails[b]?.want ?? 0) - (trails[a]?.want ?? 0) || a - b);
     const points = lines[w] as Float32Array;
     const regions = new Set<number>();
-    for (let k = 0; k < points.length; k += 2)
+    for (let k = 0; k < points.length; k += 2) {
       regions.add(regionIndex(t, points[k] as number, points[k + 1] as number));
+    }
     return {
       id: `way:${nodeId(chain[0] as number)}~${nodeId(chain[chain.length - 1] as number)}`,
       from: nodeId(chain[0] as number),
@@ -989,9 +999,11 @@ function networkOf(
   const places = [...ends.values()];
   const meeting = new Map<string, number[]>();
   ways.forEach((w, i) => {
-    for (const id of [w.from, w.to])
-      if (id.startsWith("junction@"))
+    for (const id of [w.from, w.to]) {
+      if (id.startsWith("junction@")) {
         meeting.set(id, [...(meeting.get(id) ?? []), i]);
+      }
+    }
   });
   const traffic = (ids: readonly number[]): number =>
     new Set(ids.flatMap((i) => ways[i]?.carries.map((c) => c.trail) ?? []))
@@ -1175,8 +1187,9 @@ function wayEdit(l: Lattice, trail: Way): WayEdit {
   const pts = trail.points;
   const count = pts.length / 2;
   const ground = new Float32Array(count);
-  for (let k = 0; k < count; k++)
+  for (let k = 0; k < count; k++) {
     ground[k] = heightAt(l, pts[k * 2] as number, pts[k * 2 + 1] as number);
+  }
   const grade = new Float32Array(count);
   for (let k = 0; k < count; k++) {
     let sum = 0;
@@ -1364,8 +1377,9 @@ export function trailPlacesOn(
         Math.min(az, bz) - near > z1 ||
         Math.max(ax, bx) + near < x0 ||
         Math.min(ax, bx) - near > x1
-      )
+      ) {
         continue;
+      }
       const c0 = from(
         columns,
         Math.max(
@@ -1405,8 +1419,9 @@ export function trailPlacesOn(
             Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2),
           );
           const d = Math.hypot(x - ax - dx * u, z - az - dz * u);
-          if (d > near || (t.waterLevel[j * l.n + i] as number) > DRY / 2)
+          if (d > near || (t.waterLevel[j * l.n + i] as number) > DRY / 2) {
             continue;
+          }
           const s = r * width + c;
           if ((mine[s] as number) === Infinity) touched.push(s);
           if (d - half < (mine[s] as number)) {
@@ -1541,7 +1556,7 @@ export function wayVitalityAt(
   let best = 0;
   for (const c of network.ways[way]?.carries ?? []) {
     const tr = network.trails[c.trail];
-    if (tr !== undefined)
+    if (tr !== undefined) {
       best = Math.max(
         best,
         trailVitalityAt(
@@ -1550,6 +1565,7 @@ export function wayVitalityAt(
           c.from + (c.to - c.from) * along,
         ),
       );
+    }
   }
   return best;
 }
@@ -1578,16 +1594,19 @@ export function trailDiscs(network: TrailNetwork, margin: number): Occupied[] {
   const out: Occupied[] = [];
   for (const way of network.ways) {
     const pts = way.points;
-    for (let k = 0; k < pts.length / 2; k += 2)
+    for (let k = 0; k < pts.length / 2; k += 2) {
       out.push({
         x: pts[k * 2] as number,
         z: pts[k * 2 + 1] as number,
         radius: way.style.width / 2 + margin,
       });
+    }
   }
-  for (const j of network.junctions)
-    if (j.cairn !== null)
+  for (const j of network.junctions) {
+    if (j.cairn !== null) {
       out.push({ x: j.cairn.x, z: j.cairn.z, radius: 0.6 + margin });
+    }
+  }
   return out;
 }
 
@@ -1634,8 +1653,9 @@ export function edgeStones(t: Terrain, trail: Way, seed: number): EdgeStone[] {
       if (
         heightAt(t.lattice, x, z, t.waterLevel) > DRY / 2 ||
         heightAt(t.lattice, x, z, t.shore) < 1.2
-      )
+      ) {
         continue;
+      }
       out.push({
         x,
         y: heightAt(t.lattice, x, z),

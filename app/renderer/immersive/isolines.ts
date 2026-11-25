@@ -164,8 +164,9 @@ export function chained(segments: readonly number[]): number[][] {
     const back: number[] = [];
     walk(k, 0, back);
     const head: number[] = [];
-    for (let i = back.length - 2; i >= 0; i -= 2)
+    for (let i = back.length - 2; i >= 0; i -= 2) {
       head.push(back[i] as number, back[i + 1] as number);
+    }
     lines.push([...head, ...forward]);
   }
   return lines;
@@ -212,9 +213,11 @@ export function simplified(
     }
   }
   const out: number[] = [];
-  for (let i = 0; i < n; i++)
-    if (keep[i] === 1)
+  for (let i = 0; i < n; i++) {
+    if (keep[i] === 1) {
       out.push(line[i * 2] as number, line[i * 2 + 1] as number);
+    }
+  }
   return out;
 }
 
@@ -226,10 +229,11 @@ export function slopes(h: Float32Array, n: number, cell: number): Float32Array {
     ] as number;
   const grade = new Float32Array(n * n);
   for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++)
+    for (let i = 0; i < n; i++) {
       grade[j * n + i] =
         Math.hypot(at(i + 1, j) - at(i - 1, j), at(i, j + 1) - at(i, j - 1)) /
         (2 * cell);
+    }
   }
   const broad = new Float32Array(n * n);
   for (let j = 0; j < n; j++) {
@@ -279,8 +283,9 @@ export function contourLines(
       (thin.slopes[
         Math.round((y0 + y1) / 2) * n + Math.round((x0 + x1) / 2)
       ] as number) > thin.steepest
-    )
+    ) {
       return;
+    }
     segments.push(x0, y0, x1, y1);
   });
   const lines = chained(segments);
@@ -292,11 +297,12 @@ export function contourLines(
         (line[1] as number) - (line[line.length - 1] as number),
       ) < 1e-3;
     let length = 0;
-    for (let q = 2; q < line.length; q += 2)
+    for (let q = 2; q < line.length; q += 2) {
       length += Math.hypot(
         (line[q] as number) - (line[q - 2] as number),
         (line[q + 1] as number) - (line[q - 1] as number),
       );
+    }
     return closed || length >= STUB;
   });
 }

@@ -95,7 +95,7 @@ export function decksOf(ways: readonly Way[]): Deck[] {
         half: c.span / 2,
         halfWidth: deck.halfWidth,
         base: c.bank,
-        topAt: deck.topAt,
+        topAt: (...args) => deck.topAt(...args),
         way: i,
         crossing: c,
         holds: footbridgeHolds(c.span, crossingSeed(way, k)),
@@ -166,8 +166,9 @@ export function floorOf(
         part.indices[t + 1] as number,
         part.indices[t + 2] as number,
       ];
-      if (vs.reduce((up, v) => up + (n[v * 3 + 1] as number), 0) < 1.5)
+      if (vs.reduce((up, v) => up + (n[v * 3 + 1] as number), 0) < 1.5) {
         continue;
+      }
       for (const v of vs) {
         const lx = p[v * 3] as number;
         const lz = p[v * 3 + 2] as number;
@@ -264,8 +265,9 @@ export function deckAt(
     if ("tops" in d) {
       const i = Math.floor((x - d.x0) / FLOOR_CELL);
       const j = Math.floor((z - d.z0) / FLOOR_CELL);
-      if (i >= 0 && j >= 0 && i < d.cols && j < d.rows)
+      if (i >= 0 && j >= 0 && i < d.cols && j < d.rows) {
         top = Math.max(top, d.tops[j * d.cols + i] as number);
+      }
       continue;
     }
     const dx = x - d.x;
@@ -273,8 +275,9 @@ export function deckAt(
     // Local +x runs along the span as Three's rotation about y turns it.
     const u = dx * d.cos - dz * d.sin;
     const v = dx * d.sin + dz * d.cos;
-    if (Math.abs(u) <= d.half && Math.abs(v) <= d.halfWidth)
+    if (Math.abs(u) <= d.half && Math.abs(v) <= d.halfWidth) {
       top = Math.max(top, d.base + d.topAt(u));
+    }
   }
   return top;
 }
@@ -289,7 +292,7 @@ export function footingAt(
   const stance = stanceAt(t, x, z);
   const ground = groundHeightAt(t, x, z);
   const top = decks.length === 0 ? -Infinity : deckAt(decks, x, z);
-  if (top > ground + stance.depth)
+  if (top > ground + stance.depth) {
     return {
       eye: top + EYE_HEIGHT,
       depth: 0,
@@ -297,6 +300,7 @@ export function footingAt(
       ground: top,
       deck: true,
     };
+  }
   return { ...stance, ground, deck: false };
 }
 
@@ -384,8 +388,9 @@ function rideTarget(
 ): number {
   const r = GAIT.footprint;
   let sum = 0;
-  for (const [ox, oz, w] of FOOTPRINT)
+  for (const [ox, oz, w] of FOOTPRINT) {
     sum += footingAt(t, decks, x + ox * r, z + oz * r).eye * w;
+  }
   return sum / FOOTPRINT_WEIGHT;
 }
 

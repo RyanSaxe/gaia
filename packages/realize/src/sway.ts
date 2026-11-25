@@ -305,7 +305,7 @@ export function swayAt(
         amp * Math.min(1, WIND.leaf.reach / Math.max(d, 1e-4)),
       );
     }
-    if (!same(twig, i, bough, i))
+    if (!same(twig, i, bough, i)) {
       bendAt(
         p,
         j(twig, 0),
@@ -318,7 +318,8 @@ export function swayAt(
         WIND.twig.reach,
         jointPhase(j(twig, 0), j(twig, 1), j(twig, 2), s.seed),
       );
-    if (Math.hypot(j(bough, 0), j(bough, 1), j(bough, 2)) > 1e-4)
+    }
+    if (Math.hypot(j(bough, 0), j(bough, 1), j(bough, 2)) > 1e-4) {
       bendAt(
         p,
         j(bough, 0),
@@ -331,6 +332,7 @@ export function swayAt(
         boughReach,
         jointPhase(j(bough, 0), j(bough, 1), j(bough, 2), s.seed),
       );
+    }
     // The whole plant bends from its base. Each point leans by its height and drops to keep its length.
     const y = Math.max(0, p[1] as number);
     const k = (y * y) / Math.max(s.height, 0.3);

@@ -185,8 +185,9 @@ export function readStructure(
 ): Structure {
   const out: Record<string, string> = {};
   const offered = wave.offered;
-  if (offered === undefined)
+  if (offered === undefined) {
     throw new Error("readStructure reads the wave planStructure made.");
+  }
   for (const name of slotOrder(k)) {
     const s = k.slots[name] as AnyKind["slots"][string];
     const candidates = offered[name] ?? [];
@@ -356,13 +357,16 @@ export function validate(bp: Blueprint, k: AnyKind, lib: Library): string[] {
       problems.push(`${name} uses unknown primitive ${filled.use}.`);
       continue;
     }
-    if (p.role !== s.role)
+    if (p.role !== s.role) {
       problems.push(`${name} needs a ${s.role}, not ${p.id}.`);
-    if (s.on !== undefined && bp.slots[s.on] === undefined)
+    }
+    if (s.on !== undefined && bp.slots[s.on] === undefined) {
       problems.push(`${name} is on ${s.on}, which is absent.`);
+    }
     for (const [param, field] of Object.entries(p.params)) {
-      if (!isStoredValue(field, filled.params[param]))
+      if (!isStoredValue(field, filled.params[param])) {
         problems.push(`${name}.${param} is not a valid value.`);
+      }
     }
   }
   for (const name of Object.keys(bp.slots)) {

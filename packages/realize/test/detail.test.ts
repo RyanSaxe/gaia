@@ -51,8 +51,9 @@ describe("detailAt", () => {
       for (const distance of [20, 50, 120, 300, 800]) {
         const far = detailAt(part, distance);
         const kept = new Set<number>();
-        for (let v = 0; v < far.shade.length; v++)
+        for (let v = 0; v < far.shade.length; v++) {
           kept.add(far.piece[v * 2] as number);
+        }
         // Each step out leaves out more whole pieces and brings none back.
         expect(
           [...kept].every((k) => before.has(k)),
@@ -66,9 +67,11 @@ describe("detailAt", () => {
         const same = (full: Float32Array, reduced: Float32Array): boolean => {
           const width = full.length / n;
           return from.every((v, k) => {
-            for (let c = 0; c < width; c++)
-              if (!Object.is(reduced[k * width + c], full[v * width + c]))
+            for (let c = 0; c < width; c++) {
+              if (!Object.is(reduced[k * width + c], full[v * width + c])) {
                 return false;
+              }
+            }
             return true;
           });
         };

@@ -624,8 +624,9 @@ function grid(
   const first = into.pos.length / 3;
   const side = quads + 1;
   const h = quads / 2;
-  for (let j = 0; j <= quads; j++)
+  for (let j = 0; j <= quads; j++) {
     for (let i = 0; i <= quads; i++) into.pos.push(i - h, level, j - h);
+  }
   for (let j = 0; j < quads; j++) {
     for (let i = 0; i < quads; i++) {
       if (!keep(i - h, j - h)) continue;

@@ -15,6 +15,7 @@ use crate::store;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -27,8 +28,8 @@ const BUDGET: usize = 30_000;
 /// Billed tokens per estimated token until a project's first answers report
 /// billing. It is the median of the bench's first 720 requests.
 const START_BILLED_PER_ESTIMATED: f64 = 0.73;
-/// How much of a request the outline of a file's definitions may take.
-const OUTLINE_SHARE: f64 = 0.2;
+/// How many tokens of a request the outline of a file's definitions may take (20% of `BUDGET`).
+const OUTLINE_BUDGET: usize = BUDGET / 5;
 /// After a slice with no overload from Jev, the runner sends this many more requests at once.
 const CONCURRENCY_STEP: usize = 8;
 const DEFAULT_SLICE: usize = 256;
@@ -71,12 +72,37 @@ fn concurrency_of(root: &Path) -> Result<usize, String> {
     Ok(all.get(root).copied().unwrap_or(client::CONCURRENCY))
 }
 
+fn saturating_u32(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+fn u64_to_f64(n: u64) -> f64 {
+    let hi = u32::try_from(n >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(n & 0xffff_ffff).unwrap_or(u32::MAX);
+    f64::from(hi) * 4_294_967_296.0 + f64::from(lo)
+}
+
+fn usize_to_f64(n: usize) -> f64 {
+    u64_to_f64(u64::try_from(n).unwrap_or(u64::MAX))
+}
+
+fn f64_to_u64(v: f64) -> u64 {
+    if !v.is_finite() || v <= 0.0 {
+        return 0;
+    }
+    format!("{:.0}", v.round()).parse().unwrap_or(u64::MAX)
+}
+
+fn hex_bytes(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        let _ = write!(out, "{b:02x}");
+    }
+    out
+}
+
 fn hash(request: &Value) -> String {
-    Sha256::digest(request.to_string().as_bytes())
-        .iter()
-        .take(16)
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    hex_bytes(&Sha256::digest(request.to_string().as_bytes())[..16])
 }
 
 fn now() -> u64 {
@@ -103,11 +129,7 @@ fn billed_per_estimated(project: &str) -> f64 {
 /// answer for each set, so applying one never undoes the other.
 fn link_key<S: AsRef<str>>(reference: &str, candidates: &[S]) -> String {
     let joined: Vec<&str> = candidates.iter().map(AsRef::as_ref).collect();
-    let digest: String = Sha256::digest(joined.join("\n").as_bytes())
-        .iter()
-        .take(4)
-        .map(|b| format!("{b:02x}"))
-        .collect();
+    let digest = hex_bytes(&Sha256::digest(joined.join("\n").as_bytes())[..4]);
     format!("{LINK}|{reference}|~{digest}")
 }
 
@@ -192,7 +214,7 @@ fn chunks(
     first: usize,
 ) -> Vec<(u32, u32)> {
     let lines: Vec<&str> = text.lines().collect();
-    let total = lines.len() as u32;
+    let total = saturating_u32(lines.len());
     let mut cuts: Vec<u32> = starts
         .iter()
         .copied()
@@ -234,7 +256,7 @@ fn outline(ctx: &Ctx, file: &str, (start, end): (u32, u32), piece: bool, limit: 
     let inside = |d: &Value| {
         d["lines"][0]
             .as_u64()
-            .is_some_and(|l| (start as u64..=end as u64).contains(&l))
+            .is_some_and(|l| (u64::from(start)..=u64::from(end)).contains(&l))
     };
     let ordered: Vec<&Value> = all
         .iter()
@@ -285,7 +307,7 @@ fn pieces_of(text: &str, ranges: &[(u32, u32)], limit: usize) -> Vec<Piece> {
             .unwrap_or(text.len())
     };
     // The 1-based line a byte is on.
-    let line_at = |byte: usize| starts.partition_point(|&s| s <= byte) as u32;
+    let line_at = |byte: usize| saturating_u32(starts.partition_point(|&s| s <= byte));
     let limit = limit.max(1);
     let mut out = Vec::new();
     for &(first, last) in ranges {
@@ -421,7 +443,7 @@ fn questions_of(ctx: &Ctx, unit: Unit, calls: &[&dyn Call]) -> Vec<Asked> {
 fn pack(
     pass: &'static str,
     unit: &str,
-    state: Value,
+    state: &Value,
     weight: f64,
     questions: &[&Asked],
     out: &mut Vec<Planned>,
@@ -493,7 +515,7 @@ fn dir_requests(ctx: &Ctx, repository: &str, dir: &DirNode, calls: &[&dyn Call])
     }
     let questions = questions_of(ctx, unit, &calls);
     let mut out = Vec::new();
-    let room = (BUDGET as f64 * 0.9) as usize;
+    let room = BUDGET * 9 / 10;
     // A folder with more parts than one request fits goes out in several requests. Each has a run of its parts,
     // the questions about them, and which parts the run covers. The folder's own questions go with the first.
     let listed = calls.iter().find_map(|c| {
@@ -505,7 +527,7 @@ fn dir_requests(ctx: &Ctx, repository: &str, dir: &DirNode, calls: &[&dyn Call])
         pack(
             first.pass(),
             &dir.id,
-            whole,
+            &whole,
             1.0,
             &questions.iter().collect::<Vec<_>>(),
             &mut out,
@@ -540,13 +562,138 @@ fn dir_requests(ctx: &Ctx, repository: &str, dir: &DirNode, calls: &[&dyn Call])
         pack(
             first.pass(),
             &dir.id,
-            Value::Object(held),
+            &Value::Object(held),
             1.0,
             &mine,
             &mut out,
         );
     }
     out
+}
+
+fn node_spans<'a>(ctx: &'a Ctx<'a>, file_id: &str) -> HashMap<&'a str, (u32, u32)> {
+    ctx.defs_of
+        .get(file_id)
+        .into_iter()
+        .flatten()
+        .map(|d| (d.id.as_str(), (d.span.start, d.span.end)))
+        .chain(
+            ctx.blocks_of
+                .get(file_id)
+                .into_iter()
+                .flatten()
+                .map(|(id, _, s, e, _)| (*id, (*s, *e))),
+        )
+        .collect()
+}
+
+fn question_line(spans: &HashMap<&str, (u32, u32)>, q: &Asked) -> Option<u32> {
+    spans.get(q.about.as_str()).map(|(s, _)| *s).or(q.line)
+}
+
+fn plan_file_pieces(
+    ctx: &Ctx,
+    file: &FileNode,
+    text: &str,
+    base: &Map<String, Value>,
+    questions: &[Asked],
+    spans: &HashMap<&str, (u32, u32)>,
+) -> Vec<Piece> {
+    let fixed = tokens(&Value::Object(base.clone()).to_string()) + OUTLINE_BUDGET;
+    let size_of = |q: &Asked| tokens(&q.id) + tokens(&q.json.to_string()) + 3;
+    let line_count = text.lines().count().max(1);
+    let mut load = vec![0usize; line_count];
+    let mut whole_file = 0usize;
+    for q in questions {
+        match question_line(spans, q) {
+            Some(s) => load[(s as usize).clamp(1, line_count) - 1] += size_of(q),
+            None => whole_file += size_of(q),
+        }
+    }
+    let all_questions: usize = load.iter().sum::<usize>() + whole_file;
+    let limit = (BUDGET * 9 / 10).saturating_sub(fixed).max(2048);
+    let first = limit.saturating_sub(whole_file).max(2048);
+    let ranges = if fixed + tokens(text) + all_questions <= BUDGET {
+        vec![(1, saturating_u32(line_count))]
+    } else {
+        let starts: Vec<u32> = ctx
+            .defs_of
+            .get(file.id.as_str())
+            .into_iter()
+            .flatten()
+            .filter(|d| d.parent.is_none())
+            .map(|d| d.span.start)
+            .collect();
+        chunks(text, &starts, &load, limit, first)
+    };
+    pieces_of(text, &ranges, limit)
+}
+
+fn assign_question_pieces(
+    ctx: &Ctx,
+    file: &FileNode,
+    text: &str,
+    pieces: &[Piece],
+    line_start: &[usize],
+    questions: &[Asked],
+    spans: &HashMap<&str, (u32, u32)>,
+) -> Vec<Option<usize>> {
+    let holding = |line: u32| {
+        (0..pieces.len()).filter(move |&i| pieces[i].first <= line && line <= pieces[i].last)
+    };
+    let mut signature_at: HashMap<&str, usize> = HashMap::new();
+    let mut searched: HashMap<u32, usize> = HashMap::new();
+    for d in ctx.defs_of.get(file.id.as_str()).into_iter().flatten() {
+        let line = d.span.start;
+        if holding(line).nth(1).is_none() {
+            continue;
+        }
+        let end = line_start.get(line as usize).copied().unwrap_or(text.len());
+        let from = searched
+            .entry(line)
+            .or_insert(line_start[(line - 1) as usize]);
+        let anchor: String = d.signature.trim().chars().take(60).collect();
+        if let Some(i) = (!anchor.is_empty())
+            .then(|| text[*from..end].find(&anchor))
+            .flatten()
+        {
+            *from += i;
+            signature_at.insert(d.id.as_str(), *from);
+        }
+    }
+    questions
+        .iter()
+        .map(|q| {
+            let line = question_line(spans, q)?;
+            let at = signature_at.get(q.about.as_str());
+            holding(line)
+                .find(|&i| at.is_none_or(|&at| pieces[i].start <= at && at < pieces[i].end))
+                .or_else(|| holding(line).next())
+        })
+        .collect()
+}
+
+fn chunk_metadata(text: &str, line_start: &[usize], piece: Piece, total_lines: u32) -> Value {
+    let mut chunk = json!({ "lines": [piece.first, piece.last], "of": total_lines });
+    if piece.cut {
+        let first_at = line_start
+            .get((piece.first - 1) as usize)
+            .copied()
+            .unwrap_or(0);
+        let last_at = line_start
+            .get((piece.last - 1) as usize)
+            .copied()
+            .unwrap_or(0);
+        let last = &text[last_at..piece.end];
+        let last = last
+            .strip_suffix('\n')
+            .map_or(last, |l| l.strip_suffix('\r').unwrap_or(l));
+        chunk["characters"] = json!([
+            text[first_at..piece.start].chars().count(),
+            last.chars().count()
+        ]);
+    }
+    chunk
 }
 
 /// The requests one pass makes about a file: its source, an outline of its
@@ -571,7 +718,6 @@ fn file_requests(
     let Some(text) = ctx.text(&file.path) else {
         return Vec::new();
     };
-    let budget = BUDGET;
     let mut base = Map::new();
     base.insert("repository".into(), json!(repository));
     base.insert("path".into(), json!(file.path));
@@ -579,113 +725,24 @@ fn file_requests(
     if !file.conventions.is_empty() {
         base.insert("conventions".into(), json!(file.conventions));
     }
-    // Blocks need no part of their own, because their questions name each block's shape, lines and definition.
     for c in &calls {
-        if let Some(part) = c.part(ctx, unit, budget / 8) {
+        if let Some(part) = c.part(ctx, unit, BUDGET / 8) {
             base.insert(c.id().into(), part);
         }
     }
     let questions = questions_of(ctx, unit, &calls);
     let pass = calls[0].pass();
-
-    // The source, whole or in pieces at its top-level definitions, sized by
-    // the source and the questions together.
-    let fixed =
-        tokens(&Value::Object(base.clone()).to_string()) + (budget as f64 * OUTLINE_SHARE) as usize;
-    let spans: HashMap<&str, (u32, u32)> = ctx
-        .defs_of
-        .get(file.id.as_str())
-        .into_iter()
-        .flatten()
-        .map(|d| (d.id.as_str(), (d.span.start, d.span.end)))
-        .chain(
-            ctx.blocks_of
-                .get(file.id.as_str())
-                .into_iter()
-                .flatten()
-                .map(|(id, _, s, e, _)| (*id, (*s, *e))),
-        )
-        .collect();
-    let size_of = |q: &Asked| tokens(&q.id) + tokens(&q.json.to_string()) + 3;
-    // The line a question is about: its node's first line, or a reference's own line.
-    let line_of = |q: &Asked| spans.get(q.about.as_str()).map(|(s, _)| *s).or(q.line);
-    let line_count = text.lines().count().max(1);
-    let mut load = vec![0usize; line_count];
-    let mut whole_file = 0usize;
-    for q in &questions {
-        match line_of(q) {
-            Some(s) => load[(s as usize).clamp(1, line_count) - 1] += size_of(q),
-            None => whole_file += size_of(q),
-        }
-    }
-    let all_questions: usize = load.iter().sum::<usize>() + whole_file;
-    // The whole-file questions go only in the first piece, so only the first
-    // piece makes room for them.
-    let limit = ((budget as f64 * 0.9) as usize)
-        .saturating_sub(fixed)
-        .max(2048);
-    let first = limit.saturating_sub(whole_file).max(2048);
-    let ranges = if fixed + tokens(&text) + all_questions <= budget {
-        vec![(1, line_count as u32)]
-    } else {
-        let starts: Vec<u32> = ctx
-            .defs_of
-            .get(file.id.as_str())
-            .into_iter()
-            .flatten()
-            .filter(|d| d.parent.is_none())
-            .map(|d| d.span.start)
-            .collect();
-        chunks(&text, &starts, &load, limit, first)
-    };
-    let pieces = pieces_of(&text, &ranges, limit);
-    let total_lines = text.lines().count() as u32;
+    let spans = node_spans(ctx, &file.id);
+    let pieces = plan_file_pieces(ctx, file, &text, &base, &questions, &spans);
+    let total_lines = saturating_u32(text.lines().count());
     let line_start: Vec<usize> = std::iter::once(0)
         .chain(text.match_indices('\n').map(|(i, _)| i + 1))
         .collect();
-    let mut out = Vec::new();
-    let pieces = &pieces;
-    let holding = |line: u32| {
-        (0..pieces.len()).filter(move |&i| pieces[i].first <= line && line <= pieces[i].last)
-    };
-    // Where each definition on a cut line starts, at its signature. Each search
-    // starts after the previous definition on the line, so the line is scanned once.
-    let mut signature_at: HashMap<&str, usize> = HashMap::new();
-    let mut searched: HashMap<u32, usize> = HashMap::new();
-    for d in ctx.defs_of.get(file.id.as_str()).into_iter().flatten() {
-        let line = d.span.start;
-        if holding(line).nth(1).is_none() {
-            continue;
-        }
-        let end = line_start.get(line as usize).copied().unwrap_or(text.len());
-        let from = searched
-            .entry(line)
-            .or_insert(line_start[(line - 1) as usize]);
-        let anchor: String = d.signature.trim().chars().take(60).collect();
-        if let Some(i) = (!anchor.is_empty())
-            .then(|| text[*from..end].find(&anchor))
-            .flatten()
-        {
-            *from += i;
-            signature_at.insert(d.id.as_str(), *from);
-        }
-    }
-    // Each question about a line goes to the first piece that contains the line,
-    // and a question about a definition on a cut line goes to the piece with its
-    // signature, so each piece's questions are about the source it shows.
-    let question_pieces: Vec<Option<usize>> = questions
-        .iter()
-        .map(|q| {
-            let line = line_of(q)?;
-            let at = signature_at.get(q.about.as_str());
-            holding(line)
-                .find(|&i| at.is_none_or(|&at| pieces[i].start <= at && at < pieces[i].end))
-                .or_else(|| holding(line).next())
-        })
-        .collect();
-    // The pieces with at least one question about their own source.
+    let question_pieces =
+        assign_question_pieces(ctx, file, &text, &pieces, &line_start, &questions, &spans);
     let pieces_with_questions: HashSet<usize> = question_pieces.iter().flatten().copied().collect();
-    for (index, piece) in pieces.iter().enumerate() {
+    let mut out = Vec::new();
+    for (index, &piece) in pieces.iter().enumerate() {
         let mut state = base.clone();
         state.insert(
             "definitions".into(),
@@ -694,55 +751,29 @@ fn file_requests(
                 &file.id,
                 (piece.first, piece.last),
                 pieces.len() > 1,
-                (budget as f64 * OUTLINE_SHARE) as usize,
+                OUTLINE_BUDGET,
             ),
         );
         if pieces.len() == 1 {
             state.insert("source".into(), json!(&*text));
         } else {
             state.insert("source".into(), json!(&text[piece.start..piece.end]));
-            let mut chunk = json!({ "lines": [piece.first, piece.last], "of": total_lines });
-            // A piece of a cut line states which characters of the line it
-            // contains, from the start of its first line to the end of its last,
-            // not counting the line break.
-            if piece.cut {
-                let first_at = line_start
-                    .get((piece.first - 1) as usize)
-                    .copied()
-                    .unwrap_or(0);
-                let last_at = line_start
-                    .get((piece.last - 1) as usize)
-                    .copied()
-                    .unwrap_or(0);
-                let last = &text[last_at..piece.end];
-                let last = last
-                    .strip_suffix('\n')
-                    .map_or(last, |l| l.strip_suffix('\r').unwrap_or(l));
-                chunk["characters"] = json!([
-                    text[first_at..piece.start].chars().count(),
-                    last.chars().count()
-                ]);
-            }
-            state.insert("chunk".into(), chunk);
+            state.insert(
+                "chunk".into(),
+                chunk_metadata(&text, &line_start, piece, total_lines),
+            );
         }
-        let weight = state["source"].as_str().map_or(0, str::len) as f64;
-        // A question about a line goes in the piece that contains it. A question
-        // about the whole file goes in the first piece, which has the file's
-        // whole outline. It also goes in any piece with no other question, such
-        // as the middle of a long definition or of a generated file's one line,
-        // so Jev reads every character and `hold::combine` weights the answers
-        // by each piece's bytes.
+        let weight = usize_to_f64(state["source"].as_str().map_or(0, str::len));
         let mine: Vec<&Asked> = questions
             .iter()
             .zip(&question_pieces)
-            .filter(|(q, assigned)| match (line_of(q), assigned) {
+            .filter(|(q, assigned)| match (question_line(&spans, q), assigned) {
                 (Some(_), Some(h)) => *h == index,
                 (Some(_), None) => true,
                 (None, _) => index == 0 || !pieces_with_questions.contains(&index),
             })
             .map(|(q, _)| q)
             .collect();
-        // A piece includes only the parts of the calls whose questions it has.
         if pieces.len() > 1 {
             let asking: HashSet<&str> = mine
                 .iter()
@@ -757,7 +788,7 @@ fn file_requests(
         pack(
             pass,
             &file.id,
-            Value::Object(state),
+            &Value::Object(state),
             weight,
             &mine,
             &mut out,
@@ -850,7 +881,9 @@ fn understanding(
         let mut reqs = dir_requests(ctx, &graph.name, d, &of("folders"));
         let ready = links_done && (d.path.is_empty() || dir_done.contains(&parent(&d.path)));
         if !ready {
-            reqs.iter_mut().for_each(|p| p.waiting = true);
+            for p in &mut reqs {
+                p.waiting = true;
+            }
         } else if done(&reqs) {
             dir_done.insert(d.path.clone());
         }
@@ -859,7 +892,9 @@ fn understanding(
     for f in files {
         let mut reqs = file_requests(ctx, &graph.name, f, &of("files"));
         if !(links_done && dir_done.contains(&parent(&f.path))) {
-            reqs.iter_mut().for_each(|p| p.waiting = true);
+            for p in &mut reqs {
+                p.waiting = true;
+            }
         }
         out.extend(reqs);
     }
@@ -881,8 +916,8 @@ fn summary(w: &Wanted) -> Value {
     // The estimate counts tokens as `tokens.rs` does, scaled by what Jev billed this project so far.
     let mut estimate = client::dry_run(&pending);
     let estimated: usize = pending.iter().map(|r| tokens(&r.to_string())).sum();
-    let billed = (estimated as f64 * billed_per_estimated(&w.project)).round();
-    estimate["estimatedTokens"] = json!(billed as u64);
+    let billed = (usize_to_f64(estimated) * billed_per_estimated(&w.project)).round();
+    estimate["estimatedTokens"] = json!(f64_to_u64(billed));
     estimate["estimatedUsd"] = json!(billed * client::USD_PER_MILLION_INPUT / 1e6);
     json!({
         "pending": by_pass.iter().map(|(pass, (requests, kept))| json!({ "pass": pass, "requests": requests, "kept": kept })).collect::<Vec<_>>(),
@@ -896,6 +931,189 @@ pub fn plan(root: &Path) -> Result<Value, String> {
     Ok(summary(&wanted(root)?))
 }
 
+struct BatchRecord<'a> {
+    writes: Vec<Value>,
+    fresh: HashMap<String, Value>,
+    failed: usize,
+    failures: Vec<Value>,
+    touched: BTreeSet<(&'a str, &'static str)>,
+}
+
+fn record_answers<'a>(w: &'a Wanted, ready: &[usize], answers: &[Value]) -> BatchRecord<'a> {
+    let mut writes: Vec<Value> = Vec::new();
+    let mut fresh: HashMap<String, Value> = HashMap::new();
+    let (mut failed, mut estimated, mut billed) = (0usize, 0usize, 0u64);
+    let mut failures: Vec<Value> = Vec::new();
+    let mut touched: BTreeSet<(&'a str, &'static str)> = BTreeSet::new();
+    for (&i, answer) in ready.iter().zip(answers) {
+        let p = &w.planned[i];
+        if let Some(e) = answer.get("error") {
+            let error: String = e.as_str().unwrap_or("").chars().take(300).collect();
+            if failed < 3 {
+                eprintln!("gaia-engine: a request about {} failed: {}", p.unit, error);
+                failures.push(json!({ "unit": p.unit, "error": error }));
+            }
+            failed += 1;
+            continue;
+        }
+        let calls: BTreeSet<&str> = p.questions.iter().map(|q| q.call.as_str()).collect();
+        let kept = json!({ "answers": answer["answers"], "calls": calls, "unit": p.unit, "at": now(), "inputTokens": answer["inputTokens"], "costUsd": answer["costUsd"] });
+        writes.push(json!({ "table": "calls", "key": p.hash, "value": kept }));
+        fresh.insert(p.hash.clone(), answer["answers"].clone());
+        estimated += tokens(&p.request.to_string());
+        billed += answer["inputTokens"].as_u64().unwrap_or(0);
+        touched.insert((p.unit.as_str(), p.pass));
+    }
+    if billed > 0 && estimated > 0 {
+        writes.push(json!({
+            "table": "settings",
+            "key": "jev.billedPerEstimated",
+            "value": u64_to_f64(billed) / usize_to_f64(estimated),
+        }));
+    }
+    BatchRecord {
+        writes,
+        fresh,
+        failed,
+        failures,
+        touched,
+    }
+}
+
+fn lineage_map(graph: &CodeGraph) -> HashMap<&str, &str> {
+    graph
+        .nodes
+        .iter()
+        .map(|n| match n {
+            Node::Dir(d) => (d.id.as_str(), d.lineage.as_str()),
+            Node::File(f) => (f.id.as_str(), f.lineage.as_str()),
+            Node::Def(d) => (d.id.as_str(), d.lineage.as_str()),
+            Node::Block(b) => (b.id.as_str(), b.lineage.as_str()),
+        })
+        .collect()
+}
+
+fn settle_units(
+    w: &Wanted,
+    touched: BTreeSet<(&str, &str)>,
+    fresh: &HashMap<String, Value>,
+    stored: &Value,
+    held: &Value,
+    writes: &mut Vec<Value>,
+) -> BTreeSet<String> {
+    let lineage = lineage_map(&w.graph);
+    let by_ref = candidates_by_ref(&w.graph);
+    let answered = |h: &str| w.answered.contains(h) || fresh.contains_key(h);
+    let mut settled: BTreeSet<String> = BTreeSet::new();
+    for (unit, pass) in touched {
+        let mine: Vec<&Planned> = w
+            .planned
+            .iter()
+            .filter(|p| p.unit == unit && p.pass == pass && !p.waiting)
+            .collect();
+        if !mine.iter().all(|p| answered(&p.hash)) {
+            continue;
+        }
+        let mut gathered: BTreeMap<(String, String, String), Vec<(f64, Value)>> = BTreeMap::new();
+        let mut offered: HashMap<String, Vec<&str>> = HashMap::new();
+        for p in &mine {
+            let answers = fresh
+                .get(&p.hash)
+                .cloned()
+                .or_else(|| stored.get(&p.hash).map(|k| k["answers"].clone()))
+                .unwrap_or(Value::Null);
+            for q in &p.questions {
+                if q.field == "link" {
+                    offered.insert(q.about.clone(), held_candidates(&by_ref, q));
+                }
+                if let Some(a) = hold::normalize(&q.json, &answers[&q.id]) {
+                    gathered
+                        .entry((q.about.clone(), q.call.clone(), q.field.clone()))
+                        .or_default()
+                        .push((p.weight, a));
+                }
+            }
+        }
+        for ((node, call, field), answers) in gathered {
+            let Some(fresh_answer) = hold::combine(&answers) else {
+                continue;
+            };
+            let call_id = call.split('@').next().unwrap_or(&call);
+            let key = if field == "link" {
+                link_key(&node, offered.get(&node).map_or(&[][..], Vec::as_slice))
+            } else {
+                let Some(l) = lineage.get(node.as_str()) else {
+                    continue;
+                };
+                format!("{l}|{call_id}|{field}")
+            };
+            let mut value = json!({ "answer": fresh_answer, "call": call });
+            if field == "link" {
+                value["candidates"] = json!(offered.get(&node));
+            }
+            let keep = held.get(&key).is_some_and(|h| {
+                h["candidates"] == value["candidates"]
+                    && (field != "link" || h["call"] == value["call"])
+                    && !hold::replaces(&h["answer"], &fresh_answer)
+            });
+            if !keep {
+                writes.push(json!({ "table": "held", "key": key, "value": value }));
+            }
+            if field != "link" {
+                settled.insert(node);
+            }
+        }
+        settled.insert(unit.to_string());
+    }
+    settled
+}
+
+fn settled_file_quality(
+    root: &Path,
+    mut graph: CodeGraph,
+    project: &str,
+    settled: &BTreeSet<String>,
+    answered: &dyn Fn(&str) -> bool,
+) -> Result<Map<String, Value>, String> {
+    let mut quality = Map::new();
+    if !settled.iter().any(|s| s.starts_with("file:")) {
+        return Ok(quality);
+    }
+    let held = store::read(project, "held")?;
+    let final_files: HashSet<String> = {
+        let ctx = Ctx::new(&graph, root, &held);
+        let files: Vec<&dyn Call> = calls::registry()
+            .into_iter()
+            .filter(|c| c.pass() == "files")
+            .collect();
+        graph
+            .nodes
+            .iter()
+            .filter_map(|n| if let Node::File(f) = n { Some(f) } else { None })
+            .filter(|f| settled.contains(&f.id))
+            .filter(|f| {
+                file_requests(&ctx, &graph.name, f, &files)
+                    .iter()
+                    .all(|p| answered(&p.hash))
+            })
+            .map(|f| f.id.clone())
+            .collect()
+    };
+    judge(&mut graph, &held);
+    for n in &graph.nodes {
+        if let Node::File(f) = n
+            && final_files.contains(&f.id)
+            && let Some(q) = f
+                .judged
+                .as_ref()
+                .and_then(|j| j["value"]["quality"].as_f64())
+        {
+            quality.insert(f.path.clone(), json!(q));
+        }
+    }
+    Ok(quality)
+}
+
 /// Sends up to `max` ready requests, and holds the answers of every file or
 /// directory whose requests in a pass are now all answered.
 pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
@@ -905,11 +1123,9 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
         .filter(|&i| !w.planned[i].waiting && !w.answered.contains(&w.planned[i].hash))
         .take(max.unwrap_or(DEFAULT_SLICE))
         .collect();
-    let unsettled = unsettled(
-        &w,
-        &store::read(&w.project, "held")?,
-        &store::read(&w.project, "calls")?,
-    );
+    let stored = store::read(&w.project, "calls")?;
+    let held = store::read(&w.project, "held")?;
+    let unsettled = unsettled(&w, &held, &stored);
     if ready.is_empty() && unsettled.is_empty() {
         return Ok(
             json!({ "sent": 0, "failed": 0, "failures": [], "left": 0, "settled": [], "quality": {} }),
@@ -931,7 +1147,7 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     } else {
         client::send_all(requests, concurrency)?
     };
-    let concurrency = if overloaded {
+    let next_concurrency = if overloaded {
         (concurrency / 2).max(1)
     } else if ready.is_empty() {
         concurrency
@@ -941,170 +1157,33 @@ pub fn next(root: &Path, max: Option<usize>) -> Result<Value, String> {
     concurrencies()
         .lock()
         .map_err(|e| e.to_string())?
-        .insert(root.to_path_buf(), concurrency);
+        .insert(root.to_path_buf(), next_concurrency);
 
-    let mut writes: Vec<Value> = Vec::new();
-    let mut fresh: HashMap<String, Value> = HashMap::new();
-    let (mut failed, mut estimated, mut billed) = (0usize, 0usize, 0u64);
-    // Which requests failed after the client's retries, and why. A caller fails the world with them.
-    let mut failures: Vec<Value> = Vec::new();
-    let mut touched: BTreeSet<(&str, &str)> = BTreeSet::new();
-    for (&i, answer) in ready.iter().zip(&answers) {
-        let p = &w.planned[i];
-        if let Some(e) = answer.get("error") {
-            let error: String = e.as_str().unwrap_or("").chars().take(300).collect();
-            if failed < 3 {
-                eprintln!("gaia-engine: a request about {} failed: {}", p.unit, error);
-                failures.push(json!({ "unit": p.unit, "error": error }));
-            }
-            failed += 1;
-            continue;
-        }
-        let calls: BTreeSet<&str> = p.questions.iter().map(|q| q.call.as_str()).collect();
-        let kept = json!({ "answers": answer["answers"], "calls": calls, "unit": p.unit, "at": now(), "inputTokens": answer["inputTokens"], "costUsd": answer["costUsd"] });
-        writes.push(json!({ "table": "calls", "key": p.hash, "value": kept }));
-        fresh.insert(p.hash.clone(), answer["answers"].clone());
-        estimated += tokens(&p.request.to_string());
-        billed += answer["inputTokens"].as_u64().unwrap_or(0);
-        touched.insert((p.unit.as_str(), p.pass));
-    }
-    if billed > 0 && estimated > 0 {
-        writes.push(json!({ "table": "settings", "key": "jev.billedPerEstimated", "value": billed as f64 / estimated as f64 }));
-    }
-
-    // Hold the answers of every unit whose requests in a pass are now all answered.
-    let lineage: HashMap<&str, &str> = w
-        .graph
-        .nodes
-        .iter()
-        .map(|n| match n {
-            Node::Dir(d) => (d.id.as_str(), d.lineage.as_str()),
-            Node::File(f) => (f.id.as_str(), f.lineage.as_str()),
-            Node::Def(d) => (d.id.as_str(), d.lineage.as_str()),
-            Node::Block(b) => (b.id.as_str(), b.lineage.as_str()),
-        })
-        .collect();
-    let stored = store::read(&w.project, "calls")?;
-    let held = store::read(&w.project, "held")?;
-    let by_ref = candidates_by_ref(&w.graph);
-    let answered = |h: &str| w.answered.contains(h) || fresh.contains_key(h);
-    let mut settled: BTreeSet<String> = BTreeSet::new();
+    let BatchRecord {
+        mut writes,
+        fresh,
+        failed,
+        failures,
+        mut touched,
+    } = record_answers(&w, &ready, &answers);
     touched.extend(unsettled);
-    for (unit, pass) in touched {
-        let mine: Vec<&Planned> = w
-            .planned
-            .iter()
-            .filter(|p| p.unit == unit && p.pass == pass && !p.waiting)
-            .collect();
-        if !mine.iter().all(|p| answered(&p.hash)) {
-            continue;
-        }
-        let mut gathered: BTreeMap<(String, String, String), Vec<(f64, Value)>> = BTreeMap::new();
-        // The candidates each link question chose among, sorted, held with its answer.
-        let mut offered: HashMap<String, Vec<&str>> = HashMap::new();
-        for p in &mine {
-            let answers = fresh
-                .get(&p.hash)
-                .cloned()
-                .or_else(|| stored.get(&p.hash).map(|k| k["answers"].clone()))
-                .unwrap_or(Value::Null);
-            for q in &p.questions {
-                if q.field == "link" {
-                    offered.insert(q.about.clone(), held_candidates(&by_ref, q));
-                }
-                if let Some(a) = hold::normalize(&q.json, &answers[&q.id]) {
-                    gathered
-                        .entry((q.about.clone(), q.call.clone(), q.field.clone()))
-                        .or_default()
-                        .push((p.weight, a));
-                }
-            }
-        }
-        for ((node, call, field), answers) in gathered {
-            let Some(fresh) = hold::combine(&answers) else {
-                continue;
-            };
-            let call_id = call.split('@').next().unwrap_or(&call);
-            let key = if field == "link" {
-                link_key(&node, offered.get(&node).map_or(&[][..], Vec::as_slice))
-            } else {
-                let Some(l) = lineage.get(node.as_str()) else {
-                    continue;
-                };
-                format!("{l}|{call_id}|{field}")
-            };
-            let mut value = json!({ "answer": fresh, "call": call });
-            if field == "link" {
-                value["candidates"] = json!(offered.get(&node));
-            }
-            // A held link answer chosen among other candidates, or by an earlier
-            // version of its call, is never kept, because the graph reads only
-            // current ones.
-            let keep = held.get(&key).is_some_and(|h| {
-                h["candidates"] == value["candidates"]
-                    && (field != "link" || h["call"] == value["call"])
-                    && !hold::replaces(&h["answer"], &fresh)
-            });
-            if !keep {
-                writes.push(json!({ "table": "held", "key": key, "value": value }));
-            }
-            if field != "link" {
-                settled.insert(node);
-            }
-        }
-        settled.insert(unit.to_string());
-    }
+    let settled = settle_units(&w, touched, &fresh, &stored, &held, &mut writes);
     let held_anew = writes.iter().any(|w| w["table"] == "held");
     store::put(&w.project, &writes)?;
     let sent = ready.len() - failed;
-    // `left` counts only requests already planned. Answers can add more, such
-    // as a request with the readings Jev asked for, and so can newly held
-    // answers.
+    let answered_before = &w.answered;
+    let answered = |h: &str| answered_before.contains(h) || fresh.contains_key(h);
     let left = w.planned.iter().filter(|p| !answered(&p.hash)).count()
         + usize::from(sent > 0 || held_anew);
-    // Each file this slice finished has its quality now, so a caller can show it as the file's health at once rather
-    // than after the whole pass. A file is finished once no more requests will be sent about it. Its answers can ask
-    // for readings, which a further request then sends, so its requests are planned again from what is held now and
-    // each must be answered.
-    let mut quality = serde_json::Map::new();
-    if settled.iter().any(|s| s.starts_with("file:")) {
-        let held = store::read(&w.project, "held")?;
-        let final_files: HashSet<String> = {
-            let ctx = Ctx::new(&w.graph, root, &held);
-            let files: Vec<&dyn Call> = calls::registry()
-                .into_iter()
-                .filter(|c| c.pass() == "files")
-                .collect();
-            w.graph
-                .nodes
-                .iter()
-                .filter_map(|n| if let Node::File(f) = n { Some(f) } else { None })
-                .filter(|f| settled.contains(&f.id))
-                .filter(|f| {
-                    file_requests(&ctx, &w.graph.name, f, &files)
-                        .iter()
-                        .all(|p| answered(&p.hash))
-                })
-                .map(|f| f.id.clone())
-                .collect()
-        };
-        let mut graph = w.graph;
-        judge(&mut graph, &held);
-        for n in &graph.nodes {
-            if let Node::File(f) = n
-                && final_files.contains(&f.id)
-                && let Some(q) = f
-                    .judged
-                    .as_ref()
-                    .and_then(|j| j["value"]["quality"].as_f64())
-            {
-                quality.insert(f.path.clone(), json!(q));
-            }
-        }
-    }
-    Ok(
-        json!({ "sent": sent, "failed": failed, "failures": failures, "left": left, "settled": settled, "quality": quality }),
-    )
+    let quality = settled_file_quality(root, w.graph, &w.project, &settled, &answered)?;
+    Ok(json!({
+        "sent": sent,
+        "failed": failed,
+        "failures": failures,
+        "left": left,
+        "settled": settled,
+        "quality": quality,
+    }))
 }
 
 /// Units whose requests are all answered but whose answers aren't held in
@@ -1179,7 +1258,7 @@ fn judge(graph: &mut CodeGraph, held: &Value) {
     let current: HashSet<&str> = calls::registry()
         .into_iter()
         .filter(|c| c.pass() != LINK)
-        .map(|c| c.id())
+        .map(Call::id)
         .collect();
     let mut by_lineage: HashMap<&str, Vec<(&str, &Value)>> = HashMap::new();
     for (key, value) in held.as_object().into_iter().flatten() {
@@ -1288,20 +1367,22 @@ mod tests {
         out
     }
 
-    #[test]
-    fn however_large_a_line_definition_folder_or_candidate_list_every_request_fits_and_asks_each_thing_once()
-     {
-        // A minified bundle: one line of 200,000 characters, with a character of two bytes in every function.
+    fn budget_fixture_files() -> Vec<(String, String)> {
         let mut line = String::new();
         let mut i = 0;
         while line.chars().count() < 199_000 {
-            line += &format!("function f{i}(x){{return \"é\"+x{}}}", "+1".repeat(400));
+            let _ = write!(
+                line,
+                "function f{i}(x){{return \"é\"+x{}}}",
+                "+1".repeat(400)
+            );
             i += 1;
         }
         line += &"/".repeat(200_000 - line.chars().count());
-        let body: String = (0..3000)
-            .map(|i| format!("  x = x + {i} * 2 + 1;\n"))
-            .collect();
+        let mut body = String::new();
+        for i in 0..3000 {
+            let _ = writeln!(body, "  x = x + {i} * 2 + 1;");
+        }
         let mut files: Vec<(String, String)> = vec![
             ("bundle.js".into(), format!("{line}\n")),
             (
@@ -1313,13 +1394,42 @@ mod tests {
                 "export function go() {\n  return run();\n}\n".into(),
             ),
         ];
-        // Every other file beside the caller defines `run`, so its call has thousands of candidates.
         files.extend((0..3000).map(|i| {
             (
                 format!("wide/f{i}.ts"),
                 format!("export function run() {{\n  return {i};\n}}\n"),
             )
         }));
+        files
+    }
+
+    fn assert_requests_fit(planned: &[Planned], what: &str) {
+        for p in planned {
+            let size = tokens(&p.request.to_string());
+            assert!(size <= BUDGET, "{what}: a request of {size} tokens");
+        }
+    }
+
+    fn assert_asked_once(planned: &[Planned], what: &str) -> HashSet<String> {
+        let mut asked = HashSet::new();
+        for q in planned
+            .iter()
+            .flat_map(|p| p.questions.iter().filter(|q| q.about != p.unit))
+        {
+            assert!(
+                asked.insert((q.about.clone(), q.field.clone())),
+                "{what}: {} is asked {} twice",
+                q.about,
+                q.field
+            );
+        }
+        asked.into_iter().map(|(about, _)| about).collect()
+    }
+
+    #[test]
+    fn however_large_a_line_definition_folder_or_candidate_list_every_request_fits_and_asks_each_thing_once()
+     {
+        let files = budget_fixture_files();
         let root = repository("budget", &files);
         let graph = crate::graph::build(&root).unwrap();
         let call = graph
@@ -1330,29 +1440,6 @@ mod tests {
         assert_eq!(call.candidates.len(), 3000);
         let held = json!({});
         let ctx = Ctx::new(&graph, &root, &held);
-        let fits = |planned: &[Planned], what: &str| {
-            for p in planned {
-                let size = tokens(&p.request.to_string());
-                assert!(size <= BUDGET, "{what}: a request of {size} tokens");
-            }
-        };
-        // Nothing inside a file or folder gets the same question twice, however its requests are cut. A file cut into
-        // pieces is asked about itself in each, and those answers combine into one judgment.
-        let asked_once = |planned: &[Planned], what: &str| -> HashSet<String> {
-            let mut asked = HashSet::new();
-            for q in planned
-                .iter()
-                .flat_map(|p| p.questions.iter().filter(|q| q.about != p.unit))
-            {
-                assert!(
-                    asked.insert((q.about.clone(), q.field.clone())),
-                    "{what}: {} is asked {} twice",
-                    q.about,
-                    q.field
-                );
-            }
-            asked.into_iter().map(|(about, _)| about).collect()
-        };
         let mut linked_in_files = HashSet::new();
         for (what, path) in [
             ("a line of 200,000 characters", "bundle.js"),
@@ -1366,8 +1453,8 @@ mod tests {
                 .unwrap();
             let read = file_plan(&graph, &root, path, "files");
             let linked = file_plan(&graph, &root, path, LINK);
-            fits(&read, what);
-            fits(&linked, what);
+            assert_requests_fit(&read, what);
+            assert_requests_fit(&linked, what);
             assert_eq!(
                 pieces_sent(&read)
                     .iter()
@@ -1384,12 +1471,12 @@ mod tests {
                     _ => None,
                 })
                 .collect();
-            let about = asked_once(&read, what);
+            let about = assert_asked_once(&read, what);
             assert!(
                 defs.iter().all(|d| about.contains(d)),
                 "{what}: every definition is asked about"
             );
-            linked_in_files.extend(asked_once(&linked, what));
+            linked_in_files.extend(assert_asked_once(&linked, what));
         }
         assert!(
             linked_in_files.contains(&crate::graph::ref_key(call)),
@@ -1412,10 +1499,10 @@ mod tests {
         };
         let wide = dir_requests(&ctx, &graph.name, dir("wide"), &calls_of("folders"));
         let above = dir_requests(&ctx, &graph.name, dir(""), &calls_of("folders"));
-        fits(&wide, "a folder of 3,001 files");
-        fits(&above, "the folder that holds it");
-        asked_once(&above, "the folder that holds it");
-        let parts = asked_once(&wide, "a folder of 3,001 files");
+        assert_requests_fit(&wide, "a folder of 3,001 files");
+        assert_requests_fit(&above, "the folder that holds it");
+        assert_asked_once(&above, "the folder that holds it");
+        let parts = assert_asked_once(&wide, "a folder of 3,001 files");
         let in_wide = files.iter().filter(|(p, _)| p.starts_with("wide/")).count();
         assert_eq!(
             parts.iter().filter(|p| p.starts_with("file:wide/")).count(),

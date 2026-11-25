@@ -117,8 +117,9 @@ export function crosses(
       x < box[2] + 0.03 &&
       y > box[1] - 0.03 &&
       y < box[3] + 0.03
-    )
+    ) {
       return true;
+    }
   }
   return false;
 }
@@ -156,8 +157,9 @@ export function tableLayout(phone: boolean, n: number): TableLayout {
           ],
         ),
       )
-    )
+    ) {
       tipY += 0.01;
+    }
     return {
       phone,
       table: { w: 1.85, d: 1.4 },

@@ -111,11 +111,13 @@ function recorder(): {
       if (key in target) return target[key as keyof typeof path];
       if (key === "fill" || key === "stroke") return drawn;
       if (key === "getTransform") return () => ({ a: 1, b: 0 });
-      if (key === "createLinearGradient")
+      if (key === "createLinearGradient") {
         return () => ({ addColorStop: () => {} });
-      if (key === "fillRect")
+      }
+      if (key === "fillRect") {
         return (x: number, y: number, w: number, h: number) =>
           points.push([x, y], [x + w, y + h]);
+      }
       return () => {};
     },
     set: () => true,

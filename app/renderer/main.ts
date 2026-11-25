@@ -26,13 +26,15 @@ setFavicon();
 
 const shell = document.getElementById("shell");
 const root = document.querySelector<HTMLElement>(".world");
-if (shell === null || root === null)
+if (shell === null || root === null) {
   throw new Error("Missing the world's container.");
+}
 
 // The first touch shows the touch controls, even where the primary pointer is a mouse.
 window.addEventListener("pointerdown", (e) => {
-  if (e.pointerType === "touch")
+  if (e.pointerType === "touch") {
     document.documentElement.classList.add("touch");
+  }
 });
 
 /** The last engine status text from the world service. */
@@ -44,8 +46,9 @@ watchEngine((text) => {
 const clock = createClock();
 // `?hour=22` pins the hour from the start, so a phone can see the world at night.
 const askedHour = new URLSearchParams(location.search).get("hour");
-if (askedHour !== null && Number.isFinite(Number(askedHour)))
+if (askedHour !== null && Number.isFinite(Number(askedHour))) {
   clock.pin(Number(askedHour));
+}
 
 const stats = createStats();
 
@@ -150,10 +153,11 @@ declare global {
 window.__lab = {
   /** Resolves once the first world is ready and three frames have drawn. The only view is "immersive". */
   open: async (view = "immersive") => {
-    if (view !== "immersive")
+    if (view !== "immersive") {
       throw new Error(
         `No view named ${view}: the page shows only the world, "immersive".`,
       );
+    }
     const made = await opened;
     await made.ready;
     await frames(3);

@@ -230,7 +230,6 @@ fn run(mut cmd: Command, seconds: u64, watch: Option<&Path>) -> Ran {
 /// Classifies git's error output as `missing`, for no public repository, or `offline`, for no way to reach GitHub.
 /// Unrecognized output counts as `missing`.
 fn why_failed(stderr: &str) -> &'static str {
-    let s = stderr.to_ascii_lowercase();
     const MISSING: [&str; 5] = [
         "repository not found",
         "could not read username",
@@ -246,6 +245,7 @@ fn why_failed(stderr: &str) -> &'static str {
         "timed out",
         "network is unreachable",
     ];
+    let s = stderr.to_ascii_lowercase();
     if MISSING.iter().any(|m| s.contains(m)) {
         "missing"
     } else if OFFLINE.iter().any(|m| s.contains(m)) {

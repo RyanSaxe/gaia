@@ -160,9 +160,11 @@ export function* settlingHealth(
   };
   // An area with no files has its ground vitality from the start.
   let first: CellBox | null = null;
-  for (const [k, path] of areas.entries())
-    if ((waiting.get(path)?.size ?? 0) === 0)
+  for (const [k, path] of areas.entries()) {
+    if ((waiting.get(path)?.size ?? 0) === 0) {
       first = grow(first, settleGround(k, path));
+    }
+  }
   void first;
 
   return {
@@ -186,8 +188,9 @@ export function* settlingHealth(
           done.push(area);
         }
       }
-      for (const area of done)
+      for (const area of done) {
         cells = grow(cells, settleGround(areas.indexOf(area), area));
+      }
       return { cells, grounds: done };
     },
     settled: (c) => Math.min(1, (weight[c] as number) / (whole[c] as number)),

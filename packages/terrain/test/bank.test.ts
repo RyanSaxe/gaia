@@ -131,13 +131,14 @@ describe("a building whose wheel needs running water", () => {
         const at = (lx: number, lz: number): [number, number] =>
           siteToWorld(site, lx, lz);
         // The house is on dry ground, and its pad is close enough to all the ground under it.
-        for (let lx = -plan.width / 2; lx <= plan.width / 2; lx += 1)
+        for (let lx = -plan.width / 2; lx <= plan.width / 2; lx += 1) {
           for (let lz = -plan.depth / 2; lz <= plan.depth / 2; lz += 1) {
             expect(waterDepthAt(t, ...at(lx, lz))).toBe(0);
             expect(
               Math.abs(heightAt(t.lattice, ...at(lx, lz)) - site.level),
             ).toBeLessThanOrEqual(BANK_SITE.blended + 1e-6);
           }
+        }
         // Its wheel's paddles reach below the water's surface where the wheel turns.
         const terrain = {
           ...t,

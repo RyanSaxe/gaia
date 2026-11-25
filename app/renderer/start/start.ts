@@ -48,9 +48,9 @@ export function withStart(wait: Wait, veil: HTMLElement): WaitWithStart {
     cover();
     return createTable(veil, {
       hour,
-      sheet: wait.sheet,
-      chosen: wait.chosen,
-      face: wait.face,
+      sheet: (...args) => wait.sheet(...args),
+      chosen: (...args) => wait.chosen(...args),
+      face: (...args) => wait.face(...args),
       landed: () => uncover(),
     });
   };
